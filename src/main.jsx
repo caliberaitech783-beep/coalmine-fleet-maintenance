@@ -34,8 +34,19 @@ import "./style.css";
 
 const vehicles = [];
 const breakdowns = [];
-let authToken = "";
-let currentEmployeeName = "";
+const storedSession = (() => {
+  try {
+    return JSON.parse(
+      localStorage.getItem("nerveCenterSession") ||
+        sessionStorage.getItem("nerveCenterSession") ||
+        "null",
+    );
+  } catch {
+    return null;
+  }
+})();
+let authToken = storedSession?.token || "";
+let currentEmployeeName = storedSession?.name || "";
 const subsidiaryData = [
   {
     name: "Western Coalfields Limited",
@@ -56,7 +67,7 @@ const nav = [
   ["Vehicle transfers", ArrowRightLeft],
   ["Breakdown master", Wrench],
   ["Users & employees", Users],
-  ["Subsidiaries", Building2],
+  ["Region master", Building2],
   ["Hierarchy master", Network],
   ["OEM master", ShieldCheck],
   ["Reports", FileBarChart],
@@ -75,6 +86,7 @@ function Login({ onLogin }) {
   const [role, setRole] = useState("super");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const signIn = async () => {
@@ -90,6 +102,18 @@ function Login({ onLogin }) {
       if (!response.ok) throw new Error(data.error || "Could not sign in.");
       authToken = data.token;
       currentEmployeeName = data.name;
+      const session = JSON.stringify({
+        token: data.token,
+        role: data.role,
+        name: data.name,
+      });
+      if (rememberMe) {
+        localStorage.setItem("nerveCenterSession", session);
+        sessionStorage.removeItem("nerveCenterSession");
+      } else {
+        sessionStorage.setItem("nerveCenterSession", session);
+        localStorage.removeItem("nerveCenterSession");
+      }
       onLogin(data.role);
     } catch (loginError) {
       setError(loginError.message);
@@ -118,12 +142,19 @@ function Login({ onLogin }) {
         </div>
       </section>
       <main>
-        <div className="loginbox">
+        <form
+          className="loginbox"
+          onSubmit={(event) => {
+            event.preventDefault();
+            signIn();
+          }}
+        >
           <small>SECURE OPERATIONS PORTAL</small>
           <h2>Welcome back</h2>
           <p>Choose your access role to continue.</p>
           <div className="rolepick">
             <button
+              type="button"
               className={role === "super" ? "sel" : ""}
               onClick={() => setRole("super")}
             >
@@ -132,6 +163,7 @@ function Login({ onLogin }) {
               <span>Full administration access</span>
             </button>
             <button
+              type="button"
               className={role === "normal" ? "sel" : ""}
               onClick={() => setRole("normal")}
             >
@@ -160,15 +192,23 @@ function Login({ onLogin }) {
               autoComplete="current-password"
             />
           </label>
+          <label className="remember-me">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => setRememberMe(event.target.checked)}
+            />
+            Remember me
+          </label>
           {error && <p className="login-error">{error}</p>}
           <button
+            type="submit"
             className="primary"
-            onClick={signIn}
             disabled={working || !username.trim() || !password.trim()}
           >
             {working ? "Signing in…" : "Sign in"} <ChevronRight />
           </button>
-        </div>
+        </form>
       </main>
     </div>
   );
@@ -275,10 +315,6 @@ function Dashboard({ goto, gotoEquipment }) {
           <h1>Fleet operations dashboard</h1>
           <p>Live data will appear as records are added.</p>
         </div>
-        <button className="primary" onClick={() => goto("Breakdown master")}>
-          <Plus />
-          New breakdown case
-        </button>
       </div>
       <div className="stats">
         {cards.map(([I, l, n, s, c, target]) => (
@@ -300,21 +336,14 @@ function Dashboard({ goto, gotoEquipment }) {
           </button>
         ))}
       </div>
-      <div className="road-rule">
-        <CheckCircle2 />
-        <span>
-          <b>Automatic road status</b>New or active breakdown → Off Road ·
-          Completed or closed breakdown → On Road
-        </span>
-      </div>
       <section className="subsidiary-section">
         <header>
           <div>
-            <h3>Subsidiary and sites</h3>
+            <h3>Regions and sites</h3>
             <p>Site-wise equipment and vehicle road status</p>
           </div>
-          <button className="link" onClick={() => goto("Subsidiaries")}>
-            View subsidiaries <ChevronRight />
+          <button className="link" onClick={() => goto("Region master")}>
+            View regions <ChevronRight />
           </button>
         </header>
         <div className="site-fleet-grid">
@@ -561,18 +590,19 @@ const masterFields = {
     ["role", "Role"],
     ["userType", "User type (Normal User / Super Admin)"],
   ],
-  Subsidiaries: [
-    ["name", "CIL subsidiary name"],
+  "Region master": [
+    ["name", "Region name"],
     ["code", "Short name"],
     ["state", "State code"],
     ["sites", "Sites (separate with |)"],
   ],
   "Hierarchy master": [
-    ["subsidiary", "Subsidiary"],
+    ["subsidiary", "Region"],
     ["area", "Area"],
     ["site", "Site / Mine"],
     ["department", "Department"],
     ["head", "Reporting head"],
+    ["level", "User level (L1 / L2 / L3 / L4)"],
   ],
   "OEM master": [
     ["oem", "OEM name"],
@@ -676,11 +706,24 @@ function MasterActions({ name, onAdd }) {
               {fields.map(([key, label]) => (
                 <label key={key}>
                   {label} *
-                  <input
-                    name={key}
-                    required={key === fields[0][0]}
-                    placeholder={"Enter " + label.toLowerCase()}
-                  />
+                  {name === "Hierarchy master" && key === "level" ? (
+                    <select name={key} required defaultValue="">
+                      <option value="" disabled>
+                        Select user level
+                      </option>
+                      {["L1", "L2", "L3", "L4"].map((level) => (
+                        <option key={level} value={level}>
+                          {level}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      name={key}
+                      required={key === fields[0][0]}
+                      placeholder={"Enter " + label.toLowerCase()}
+                    />
+                  )}
                 </label>
               ))}
             </div>
@@ -1383,9 +1426,9 @@ function Subsidiaries({ gotoEquipment }) {
     <section className="panel pagepanel generic">
       <header>
         <div>
-          <h1>Subsidiaries</h1>
+          <h1>Region master</h1>
           <p>
-            Click a subsidiary, then select Total, On Road or Off Road for any
+            Click a region, then select Total, On Road or Off Road for any
             site
           </p>
         </div>
@@ -1398,7 +1441,7 @@ function Subsidiaries({ gotoEquipment }) {
         <div>
           <Search />
           <input
-            placeholder="Search subsidiaries or sites"
+            placeholder="Search regions or sites"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -1408,7 +1451,7 @@ function Subsidiaries({ gotoEquipment }) {
         <table>
           <thead>
             <tr>
-              <th>CIL subsidiary name</th>
+              <th>Region name</th>
               <th>Short name</th>
               <th>State code</th>
               <th>Sites</th>
@@ -1527,7 +1570,7 @@ function Generic({ name }) {
       "User type (Normal User / Super Admin)",
     ],
     "Hierarchy master": [
-      "Subsidiary",
+      "Region",
       "Area",
       "Site / Mine",
       "Department",
@@ -1544,7 +1587,7 @@ function Generic({ name }) {
     Reports: [
       "Report name",
       "Category",
-      "Subsidiary",
+      "Region",
       "Period",
       "Generated by",
       "Last generated",
@@ -1570,7 +1613,7 @@ function Generic({ name }) {
     ["Breakdown downtime & responsibility analysis", "Breakdown master"],
     ["Preventive maintenance report", "Breakdown master"],
     ["Users & employees directory", "Users & employees"],
-    ["Subsidiary and site-wise fleet report", "Subsidiaries"],
+    ["Region and site-wise fleet report", "Region master"],
     ["Organisation hierarchy report", "Hierarchy master"],
     ["OEM contact and responsibility report", "OEM master"],
     ["Audit activity report", "Audit Trail"],
@@ -1592,7 +1635,7 @@ function Generic({ name }) {
     ? reportNames.map(([report, category]) => [
         report,
         category,
-        "All subsidiaries",
+        "All regions",
         "Select period",
         "—",
         "Not generated",
@@ -1633,7 +1676,7 @@ function Generic({ name }) {
         </div>
         {isReport && (
           <select>
-            <option>All subsidiaries</option>
+            <option>All regions</option>
             <option>WCL</option>
             <option>NCL</option>
           </select>
@@ -1797,7 +1840,7 @@ const OriginalGeneric = Generic;
 Generic = function GenericWithMasters(props) {
   const name = props.name,
     seed =
-      name === "Subsidiaries"
+      name === "Region master"
         ? subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") }))
         : [],
     [records, onAdd] = useMasterRecords(name, seed);
@@ -1810,10 +1853,10 @@ Generic = function GenericWithMasters(props) {
 const OriginalSubsidiaries = Subsidiaries;
 Subsidiaries = function SubsidiariesWithImport() {
   const [records, onAdd] = useMasterRecords(
-    "Subsidiaries",
+    "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
-  return <MasterPage name="Subsidiaries" records={records} onAdd={onAdd} />;
+  return <MasterPage name="Region master" records={records} onAdd={onAdd} />;
 };
 function Modal({ title, close, children }) {
   return (
@@ -1902,7 +1945,7 @@ function Normal({ logout, requests, onCreate }) {
   );
 }
 function App() {
-  const [role, setRole] = useState(null),
+  const [role, setRole] = useState(storedSession?.role || null),
     [active, setActive] = useState("Dashboard"),
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
@@ -1921,6 +1964,13 @@ function App() {
       setEquipmentFilter(filter);
       setEquipmentLocation(location);
       setActive("Equipment master");
+    },
+    logout = () => {
+      authToken = "";
+      currentEmployeeName = "";
+      localStorage.removeItem("nerveCenterSession");
+      sessionStorage.removeItem("nerveCenterSession");
+      setRole(null);
     },
     addRequest = (request) => {
       setRequests((current) => [request, ...current]);
@@ -1945,7 +1995,7 @@ function App() {
       <Normal
         requests={requests}
         onCreate={addRequest}
-        logout={() => setRole(null)}
+        logout={logout}
       />
     );
   return (
@@ -1960,7 +2010,7 @@ function App() {
           }
           setMenu(false);
         }}
-        logout={() => setRole(null)}
+        logout={logout}
         open={menu}
       />
       <main className="content">
@@ -1991,7 +2041,7 @@ function App() {
             />
           ) : active === "Breakdown master" ? (
             <Breakdown requests={requests} />
-          ) : active === "Subsidiaries" ? (
+          ) : active === "Region master" ? (
             <Subsidiaries gotoEquipment={gotoEquipment} />
           ) : (
             <Generic name={active} />
