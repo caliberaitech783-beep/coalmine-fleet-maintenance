@@ -169,7 +169,7 @@ function Login({ onLogin }) {
               onClick={() => setRole("normal")}
             >
               <UserRound />
-              <b>Normal User</b>
+              <b>Mobile User</b>
               <span>Raise maintenance request</span>
             </button>
           </div>
@@ -589,7 +589,7 @@ const masterFields = {
     ["email", "Mail ID"],
     ["phone", "Phone no."],
     ["role", "Role"],
-    ["userType", "User type (Normal User / Super Admin)"],
+    ["userType", "User type (Mobile User / Super Admin)"],
   ],
   "Region master": [
     ["name", "Region name"],
@@ -918,7 +918,7 @@ function Breakdown({ requests = [] }) {
     <section className="panel table pagepanel">
       <header>
         <div>
-          <h1>Normal User requests</h1>
+          <h1>Mobile User requests</h1>
           <p>
             Read-only view · Super Users cannot edit or delete submitted
             requests
@@ -1318,7 +1318,7 @@ function MaintenanceForm({ close, normal = false, onSubmit }) {
         start: fd.get("date") + " · " + fd.get("time"),
         hours: "—",
         status: "Open",
-        owner: "Normal User",
+        owner: "Mobile User",
         reg: v?.reg || "",
       };
     onSubmit?.(request);
@@ -1568,7 +1568,7 @@ function Generic({ name }) {
       "Mail ID",
       "Phone no.",
       "Role",
-      "User type (Normal User / Super Admin)",
+      "User type (Mobile User / Super Admin)",
     ],
     "Hierarchy master": [
       "Region",
@@ -1811,7 +1811,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
       <header>
         <div>
           <h1>Breakdown master</h1>
-          <p>Normal User requests and Super Admin-created breakdown records</p>
+          <p>Mobile User requests and Super Admin-created breakdown records</p>
         </div>
         <MasterActions name="Breakdown master" onAdd={onAdd} />
       </header>
@@ -1897,7 +1897,7 @@ function Normal({ logout, requests, onCreate }) {
         <div>
           <Bell />
           <span>
-            <b>Normal User</b>
+            <b>Mobile User</b>
             <small>Maintenance requester</small>
           </span>
           <button onClick={logout}>
