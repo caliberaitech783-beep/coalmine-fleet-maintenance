@@ -2,12 +2,14 @@ import express from 'express';
 import pg from 'pg';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {randomUUID} from 'node:crypto';
 
 const {Pool}=pg;
 const app=express();
 const port=Number(process.env.PORT||3000);
 const root=path.dirname(fileURLToPath(import.meta.url));
 const connectionString=process.env.DATABASE_URL;
+const sessions=new Map();
 
 if(!connectionString)throw new Error('DATABASE_URL is required');
 
@@ -49,6 +51,32 @@ async function migrate(){
 
 app.use(express.json({limit:'256kb'}));
 
+app.post('/api/login',async(req,res,next)=>{
+  try{
+    const username=String(req.body?.username||'').trim().toLowerCase();
+    const password=String(req.body?.password||'').trim();
+    const requestedRole=req.body?.role==='normal'?'normal':'super';
+    if(!username||!password)return res.status(400).json({error:'Employee first name and phone number are required.'});
+    const {rows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+    const employee=rows.map(row=>row.record_data).find(record=>{
+      const firstName=String(record.employee||'').trim().split(/\s+/)[0].toLowerCase();
+      const type=String(record.userType||record.role||'').toLowerCase();
+      const roleMatches=requestedRole==='super'?type.includes('super'):type.includes('normal');
+      return firstName===username&&String(record.phone||'').trim()===password&&roleMatches;
+    });
+    if(!employee)return res.status(401).json({error:'Invalid employee first name, phone number, or access type.'});
+    const token=randomUUID();
+    sessions.set(token,{role:requestedRole,name:employee.employee,createdAt:Date.now()});
+    res.json({token,role:requestedRole,name:employee.employee});
+  }catch(error){next(error)}
+});
+
+function requireSuper(req,res,next){
+  const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
+  if(sessions.get(token)?.role!=='super')return res.status(403).json({error:'Only a Super Admin can create master records.'});
+  next();
+}
+
 app.get('/api/health',async(_req,res,next)=>{
   try{const result=await pool.query('SELECT NOW() AS database_time');res.json({status:'ok',database:'connected',databaseTime:result.rows[0].database_time})}catch(error){next(error)}
 });
@@ -86,7 +114,7 @@ app.get('/api/masters',async(_req,res,next)=>{
   }catch(error){next(error)}
 });
 
-app.post('/api/masters/:master',async(req,res,next)=>{
+app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
     const records=Array.isArray(req.body)?req.body:[req.body];
@@ -106,4 +134,4 @@ app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(root,'dist','index.htm
 app.use((error,_req,res,_next)=>{console.error(error);res.status(500).json({error:'Server error'});});
 
 await migrate();
-app.listen(port,()=>console.log(`CoalMine Fleet listening on port ${port}`));
+app.listen(port,()=>console.log(`Nerve Center listening on port ${port}`));
