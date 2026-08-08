@@ -1,0 +1,80 @@
+.app > aside {
+  position: fixed;
+  inset: 0 0 auto 0;
+  width: 100%;
+  height: 76px;
+  padding: 10px 22px;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  overflow: visible;
+}
+
+.app > aside .logo {
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.app > aside nav {
+  min-width: 0;
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.app > aside nav button {
+  flex: 0 0 auto;
+  padding: 9px 10px;
+  white-space: nowrap;
+}
+
+.app > aside .user {
+  flex: 0 0 auto;
+  min-width: 190px;
+  border-top: 0;
+  border-left: 1px solid #2d4264;
+  padding: 0 0 0 16px;
+}
+
+.app > .content {
+  width: 100%;
+  margin-left: 0;
+  margin-top: 76px;
+}
+
+@media (max-width: 900px) {
+  .app > aside {
+    transform: translateY(-110%);
+    width: 100%;
+    height: auto;
+    max-height: 80vh;
+    padding: 18px;
+    flex-direction: column;
+    align-items: stretch;
+    overflow-y: auto;
+  }
+
+  .app > aside.open {
+    transform: none;
+  }
+
+  .app > aside nav {
+    flex-direction: column;
+    align-items: stretch;
+    overflow: visible;
+  }
+
+  .app > aside .user {
+    min-width: 0;
+    border-left: 0;
+    border-top: 1px solid #2d4264;
+    padding: 16px 0 0;
+  }
+
+  .app > .content {
+    margin-top: 0;
+  }
+}
