@@ -36,6 +36,14 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS maintenance_requests_created_at_idx
       ON maintenance_requests (created_at DESC);
+    CREATE TABLE IF NOT EXISTS master_records (
+      id BIGSERIAL PRIMARY KEY,
+      master_name TEXT NOT NULL,
+      record_data JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS master_records_master_name_idx
+      ON master_records (master_name, created_at DESC);
   `);
 }
 
@@ -66,6 +74,30 @@ app.post('/api/requests',async(req,res,next)=>{
         to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,'—' AS hours,status,owner_name AS owner`,
       [ref,door,reg,site,category,complaint,Number.isNaN(startedAt.getTime())?new Date():startedAt,status,owner]);
     res.status(201).json(rows[0]);
+  }catch(error){next(error)}
+});
+
+app.get('/api/masters',async(_req,res,next)=>{
+  try{
+    const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
+    const grouped={};
+    for(const row of rows)(grouped[row.master_name]??=[]).push({id:row.id,...row.record_data});
+    res.json(grouped);
+  }catch(error){next(error)}
+});
+
+app.post('/api/masters/:master',async(req,res,next)=>{
+  try{
+    const master=decodeURIComponent(req.params.master);
+    const records=Array.isArray(req.body)?req.body:[req.body];
+    if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
+      return res.status(400).json({error:'A master name and one or more records are required.'});
+    const saved=[];
+    for(const record of records){
+      const {rows}=await pool.query('INSERT INTO master_records (master_name,record_data) VALUES ($1,$2::jsonb) RETURNING id,record_data',[master,JSON.stringify(record)]);
+      saved.push({id:rows[0].id,...rows[0].record_data});
+    }
+    res.status(201).json(saved);
   }catch(error){next(error)}
 });
 
