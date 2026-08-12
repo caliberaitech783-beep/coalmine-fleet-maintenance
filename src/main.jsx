@@ -404,6 +404,23 @@ function Side({ active, setActive, logout, open }) {
 }
 function Dashboard({ goto, gotoEquipment }) {
   const [usersAndEmployees] = useMasterRecords("Users & employees");
+  const [showUserBreakdown, setShowUserBreakdown] = useState(false);
+  const userCounts = usersAndEmployees.reduce(
+    (counts, record) => {
+      const accessType = String(record.userType || record.role || "")
+        .trim()
+        .toLowerCase();
+      if (accessType.includes("mobile") || accessType.includes("normal")) {
+        counts.mobile += 1;
+      } else if (accessType.includes("super")) {
+        counts.super += 1;
+      } else if (accessType.includes("admin")) {
+        counts.admin += 1;
+      }
+      return counts;
+    },
+    { mobile: 0, super: 0, admin: 0 },
+  );
   const now = new Date(),
     dateLabel = new Intl.DateTimeFormat(undefined, {
       weekday: "long",
@@ -486,7 +503,7 @@ function Dashboard({ goto, gotoEquipment }) {
               target === "breakdown"
                 ? goto("Breakdown master")
                 : target === "users"
-                  ? goto("Users & employees")
+                  ? setShowUserBreakdown(true)
                 : gotoEquipment(target, "")
             }
           >
@@ -500,6 +517,34 @@ function Dashboard({ goto, gotoEquipment }) {
           </button>
         ))}
       </div>
+      {showUserBreakdown && (
+        <Modal
+          title="Users & employees breakdown"
+          close={() => setShowUserBreakdown(false)}
+        >
+          <div className="user-count-drilldown">
+            <button onClick={() => goto("Users & employees")}>
+              <Users />
+              <span>Mobile Users</span>
+              <strong>{userCounts.mobile}</strong>
+            </button>
+            <button onClick={() => goto("Users & employees")}>
+              <ShieldCheck />
+              <span>Super Users</span>
+              <strong>{userCounts.super}</strong>
+            </button>
+            <button onClick={() => goto("Users & employees")}>
+              <UserRound />
+              <span>Admins</span>
+              <strong>{userCounts.admin}</strong>
+            </button>
+          </div>
+          <div className="user-count-total">
+            <span>Total users & employees</span>
+            <strong>{usersAndEmployees.length}</strong>
+          </div>
+        </Modal>
+      )}
       <section className="subsidiary-section">
         <header>
           <div>
