@@ -980,7 +980,7 @@ function Equipment({
             <tr>
               <th>Door / Registration</th>
               <th>Location</th>
-              <th>Equipment</th>
+              <th>Equipment category</th>
               <th>Make & model</th>
               <th>Asset no.</th>
               <th>Acquired</th>
