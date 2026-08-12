@@ -450,14 +450,6 @@ function Dashboard({ goto, gotoEquipment }) {
     ],
     [
       AlertTriangle,
-      "Off Road",
-      equipmentKpis.offRoad,
-      "In maintenance or breakdown",
-      "red",
-      "offroad",
-    ],
-    [
-      AlertTriangle,
       "Active breakdowns",
       breakdowns.filter((v) => v.status !== "Closed").length,
       "Open cases",
