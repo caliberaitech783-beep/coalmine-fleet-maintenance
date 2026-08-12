@@ -7,6 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {matchesRequestedRole} from './auth-role.mjs';
 import {createSessionStore} from './auth-session.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
+import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -61,6 +62,13 @@ async function migrate(){
       employee_name TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS password_change_sessions (
+      token UUID PRIMARY KEY,
+      master_record_id BIGINT NOT NULL REFERENCES master_records(id) ON DELETE CASCADE,
+      role TEXT NOT NULL,
+      employee_name TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS app_metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -108,16 +116,52 @@ app.post('/api/login',async(req,res,next)=>{
     const password=String(req.body?.password||'').trim();
     const requestedRole=req.body?.role==='normal'?'normal':'super';
     if(!username||!password)return res.status(400).json({error:'Employee first name and phone number are required.'});
-    const {rows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
-    const employee=rows.map(row=>row.record_data).find(record=>{
+    const {rows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
+    const employeeRow=rows.find(row=>{
+      const record=row.record_data;
       const firstName=String(record.employee||'').trim().split(/\s+/)[0].toLowerCase();
       const roleMatches=matchesRequestedRole(record.userType||record.role,requestedRole);
-      return firstName===username&&String(record.phone||'').trim()===password&&roleMatches;
+      const passwordMatches=record.passwordHash
+        ? verifyPassword(password,record.passwordHash)
+        : String(record.phone||'').trim()===password;
+      return firstName===username&&passwordMatches&&roleMatches;
     });
-    if(!employee)return res.status(401).json({error:'Invalid employee first name, phone number, or access type.'});
+    if(!employeeRow)return res.status(401).json({error:'Invalid employee first name, password, or access type.'});
+    const employee=employeeRow.record_data;
+    if(employee.mustChangePassword===true){
+      const changeToken=randomUUID();
+      await pool.query(`INSERT INTO password_change_sessions (token,master_record_id,role,employee_name)
+        VALUES ($1,$2,$3,$4)`,[changeToken,employeeRow.id,requestedRole,employee.employee]);
+      return res.json({requiresPasswordChange:true,changeToken,name:employee.employee});
+    }
     const token=randomUUID();
     await sessionStore.create({token,role:requestedRole,name:employee.employee});
     res.json({token,role:requestedRole,name:employee.employee});
+  }catch(error){next(error)}
+});
+
+app.post('/api/change-initial-password',async(req,res,next)=>{
+  try{
+    const changeToken=String(req.body?.changeToken||'');
+    const password=String(req.body?.password||'');
+    const confirmation=String(req.body?.confirmation||'');
+    if(password.length<8)return res.status(400).json({error:'The new password must contain at least 8 characters.'});
+    if(password!==confirmation)return res.status(400).json({error:'The password confirmation does not match.'});
+    const {rows}=await pool.query(`SELECT token,master_record_id,role,employee_name
+      FROM password_change_sessions WHERE token=$1 AND created_at>NOW()-INTERVAL '30 minutes'`,[changeToken]);
+    const reset=rows[0];
+    if(!reset)return res.status(401).json({error:'This password-change session has expired. Please sign in again.'});
+    const userResult=await pool.query(`SELECT record_data FROM master_records
+      WHERE id=$1 AND master_name='Users & employees'`,[reset.master_record_id]);
+    const user=userResult.rows[0]?.record_data;
+    if(!user)return res.status(404).json({error:'The user account no longer exists.'});
+    if(password===String(user.phone||'').trim())return res.status(400).json({error:'Choose a password different from your registered phone number.'});
+    const updated={...user,passwordHash:hashPassword(password),mustChangePassword:false};
+    await pool.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(updated),reset.master_record_id]);
+    await pool.query('DELETE FROM password_change_sessions WHERE master_record_id=$1',[reset.master_record_id]);
+    const token=randomUUID();
+    await sessionStore.create({token,role:reset.role,name:reset.employee_name});
+    res.json({token,role:reset.role,name:reset.employee_name});
   }catch(error){next(error)}
 });
 
@@ -193,7 +237,10 @@ app.get('/api/masters',async(_req,res,next)=>{
   try{
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={};
-    for(const row of rows)(grouped[row.master_name]??=[]).push({id:row.id,...row.record_data});
+    for(const row of rows){
+      const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
+      (grouped[row.master_name]??=[]).push({id:row.id,...record});
+    }
     res.json(grouped);
   }catch(error){next(error)}
 });
@@ -206,8 +253,9 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
       return res.status(400).json({error:'A master name and one or more records are required.'});
     const saved=[];
     for(const record of records){
-      const {rows}=await pool.query('INSERT INTO master_records (master_name,record_data) VALUES ($1,$2::jsonb) RETURNING id,record_data',[master,JSON.stringify(record)]);
-      saved.push({id:rows[0].id,...rows[0].record_data});
+      const storedRecord=master==='Users & employees'?initializeUserCredentials(record):record;
+      const {rows}=await pool.query('INSERT INTO master_records (master_name,record_data) VALUES ($1,$2::jsonb) RETURNING id,record_data',[master,JSON.stringify(storedRecord)]);
+      saved.push({id:rows[0].id,...(master==='Users & employees'?publicUserRecord(rows[0].record_data):rows[0].record_data)});
     }
     res.status(201).json(saved);
   }catch(error){next(error)}
@@ -220,12 +268,18 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const record=req.body;
     if(!master||!Number.isInteger(id)||id<=0||!record||typeof record!=='object'||Array.isArray(record))
       return res.status(400).json({error:'A valid master record is required.'});
+    let storedRecord=record;
+    if(master==='Users & employees'){
+      const existing=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
+      if(!existing.rows.length)return res.status(404).json({error:'Master record not found.'});
+      storedRecord={...record,passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
+    }
     const {rows}=await pool.query(
       'UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name=$3 RETURNING id,record_data',
-      [JSON.stringify(record),id,master]
+      [JSON.stringify(storedRecord),id,master]
     );
     if(!rows.length)return res.status(404).json({error:'Master record not found.'});
-    res.json({id:rows[0].id,...rows[0].record_data});
+    res.json({id:rows[0].id,...(master==='Users & employees'?publicUserRecord(rows[0].record_data):rows[0].record_data)});
   }catch(error){next(error)}
 });
 

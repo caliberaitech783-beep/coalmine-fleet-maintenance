@@ -110,6 +110,22 @@ function Login({ onLogin }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
+  const [passwordChange, setPasswordChange] = useState(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const saveSession = (data) => {
+    authToken = data.token;
+    currentEmployeeName = data.name;
+    const session = JSON.stringify({ token: data.token, role: data.role, name: data.name });
+    if (rememberMe) {
+      localStorage.setItem("nerveCenterSession", session);
+      sessionStorage.removeItem("nerveCenterSession");
+    } else {
+      sessionStorage.setItem("nerveCenterSession", session);
+      localStorage.removeItem("nerveCenterSession");
+    }
+    onLogin(data.role);
+  };
   const signIn = async () => {
     setWorking(true);
     setError("");
@@ -121,23 +137,31 @@ function Login({ onLogin }) {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not sign in.");
-      authToken = data.token;
-      currentEmployeeName = data.name;
-      const session = JSON.stringify({
-        token: data.token,
-        role: data.role,
-        name: data.name,
-      });
-      if (rememberMe) {
-        localStorage.setItem("nerveCenterSession", session);
-        sessionStorage.removeItem("nerveCenterSession");
-      } else {
-        sessionStorage.setItem("nerveCenterSession", session);
-        localStorage.removeItem("nerveCenterSession");
+      if (data.requiresPasswordChange) {
+        setPasswordChange({ changeToken: data.changeToken, name: data.name });
+        return;
       }
-      onLogin(data.role);
+      saveSession(data);
     } catch (loginError) {
       setError(loginError.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+  const changeInitialPassword = async () => {
+    setWorking(true);
+    setError("");
+    try {
+      const response = await fetch("/api/change-initial-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ changeToken: passwordChange.changeToken, password: newPassword, confirmation }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not change password.");
+      saveSession(data);
+    } catch (changeError) {
+      setError(changeError.message);
     } finally {
       setWorking(false);
     }
@@ -174,7 +198,22 @@ function Login({ onLogin }) {
         </div>
       </section>
       <main>
-        <form
+        {passwordChange ? <form
+          className="loginbox password-change-box"
+          onSubmit={(event) => { event.preventDefault(); changeInitialPassword(); }}
+        >
+          <div className="login-mobile-brand"><div className="brandmark">CM</div><strong>Nerve Center</strong></div>
+          <small className="login-kicker"><LockKeyhole /> FIRST LOGIN SECURITY</small>
+          <h2>Create your password</h2>
+          <p>Welcome, {passwordChange.name}. You must replace your temporary phone-number password before continuing.</p>
+          <label className="login-label" htmlFor="new-password">New password</label>
+          <div className="login-input"><LockKeyhole /><input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Minimum 8 characters" /></div>
+          <label className="login-label" htmlFor="confirm-password">Confirm new password</label>
+          <div className="login-input"><LockKeyhole /><input id="confirm-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Re-enter new password" /></div>
+          <div className="login-feedback" aria-live="polite">{error && <p className="login-error" role="alert">{error}</p>}</div>
+          <button type="submit" className="primary" disabled={working || newPassword.length < 8 || confirmation.length < 8}>{working ? "Updating password…" : "Change password and continue"}<ChevronRight /></button>
+          <p className="login-help">This required step cannot be skipped.</p>
+        </form> : <form
           className="loginbox"
           onSubmit={(event) => {
             event.preventDefault();
@@ -260,7 +299,7 @@ function Login({ onLogin }) {
             {working ? "Signing in…" : "Sign in"} <ChevronRight />
           </button>
           <p className="login-help">Having trouble signing in? Contact your site administrator.</p>
-        </form>
+        </form>}
       </main>
     </div>
   );
