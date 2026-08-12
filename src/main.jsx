@@ -450,6 +450,14 @@ function Dashboard({ goto, gotoEquipment }) {
     ],
     [
       AlertTriangle,
+      "Off Road",
+      0,
+      "Parameter pending",
+      "red",
+      "offroad",
+    ],
+    [
+      AlertTriangle,
       "Active breakdowns",
       breakdowns.filter((v) => v.status !== "Closed").length,
       "Open cases",
