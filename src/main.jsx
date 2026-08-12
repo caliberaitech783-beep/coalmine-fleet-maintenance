@@ -1043,6 +1043,7 @@ function Equipment({
               <th>Current location</th>
               <th>Equipment name</th>
               <th>Item name / equipment category</th>
+              <th>Equipment group</th>
               <th>Item specification name</th>
               <th>Acquisition date</th>
               <th>Make</th>
@@ -1070,8 +1071,8 @@ function Equipment({
                   </td>
                   <td>
                     {v.category}
-                    <small>{v.group}</small>
                   </td>
+                  <td>{v.group}</td>
                   <td>{v.itemSpecification}</td>
                   <td>{v.acquisitionDate || v.acquired}</td>
                   <td>{v.make}</td>
@@ -1084,7 +1085,7 @@ function Equipment({
               ))
             ) : (
               <tr>
-                <td colSpan="11" className="empty-state">
+                <td colSpan="12" className="empty-state">
                   No equipment or vehicle records for this selection
                 </td>
               </tr>
