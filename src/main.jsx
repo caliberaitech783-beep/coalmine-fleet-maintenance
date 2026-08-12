@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
+import { batchMasterRecords } from "../record-batches.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -2005,19 +2006,26 @@ function useMasterRecords(name, seed = []) {
       });
   }, [name]);
   const add = async (incoming) => {
-    const response = await fetch("/api/masters/" + encodeURIComponent(name), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${authToken}`,
-      },
-      body: JSON.stringify(incoming),
-    });
-    if (!response.ok) {
-      const details = await response.json().catch(() => ({}));
-      throw new Error(details.error || "Could not save records. Please retry.");
+    const batches = batchMasterRecords(incoming);
+    const saved = [];
+    for (let index = 0; index < batches.length; index += 1) {
+      const response = await fetch("/api/masters/" + encodeURIComponent(name), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(batches[index]),
+      });
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}));
+        throw new Error(
+          details.error ||
+            `Could not save import batch ${index + 1} of ${batches.length}. Please retry.`,
+        );
+      }
+      saved.push(...(await response.json()));
     }
-    const saved = await response.json();
     setRecords((current) => [...current, ...saved]);
     alert(
       saved.length +
