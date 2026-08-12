@@ -696,12 +696,9 @@ const masterFields = {
   "Users & employees": [
     ["login", "Login name"],
     ["employee", "Employee name"],
-    ["site", "Site name"],
-    ["department", "Department"],
-    ["designation", "Designation"],
+    ["site", "Location"],
     ["email", "Mail ID"],
     ["phone", "Phone no."],
-    ["role", "Role"],
     ["userType", "User type (Mobile User / Super Admin)"],
   ],
   "Region master": [
@@ -785,16 +782,6 @@ function MasterActions({ name, onAdd }) {
     try {
       const records = parseCsv(await file.text(), fields);
       if (!records.length) throw new Error("No usable rows were found.");
-      if (name === "Users & employees") {
-        const allowedDepartments = ["Maintenance User", "Production User", "MIS User"];
-        const invalid = records.find((record) =>
-          record.department && !allowedDepartments.includes(record.department),
-        );
-        if (invalid)
-          throw new Error(
-            "Department must be Maintenance User, Production User, or MIS User.",
-          );
-      }
       await onAdd(records);
       setMode(null);
     } catch (error) {
@@ -840,13 +827,6 @@ function MasterActions({ name, onAdd }) {
                         <option key={level} value={level}>
                           {level}
                         </option>
-                      ))}
-                    </select>
-                  ) : key === "department" && name === "Users & employees" ? (
-                    <select name={key} required defaultValue="">
-                      <option value="" disabled>Select department</option>
-                      {["Maintenance User", "Production User", "MIS User"].map((department) => (
-                        <option key={department} value={department}>{department}</option>
                       ))}
                     </select>
                   ) : (
@@ -1678,12 +1658,9 @@ function Generic({ name, requests = [] }) {
     "Users & employees": [
       "Login name",
       "Employee name",
-      "Site name",
-      "Department",
-      "Designation",
+      "Location",
       "Mail ID",
       "Phone no.",
-      "Role",
       "User type (Mobile User / Super Admin)",
     ],
     "Hierarchy master": [
@@ -1957,13 +1934,6 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete }) {
                   <select name={key} required defaultValue={editing[key] || ""}>
                     <option value="" disabled>Select level</option>
                     {["L1", "L2", "L3", "L4"].map((level) => <option key={level}>{level}</option>)}
-                  </select>
-                ) : key === "department" && name === "Users & employees" ? (
-                  <select name={key} required defaultValue={editing[key] || ""}>
-                    <option value="" disabled>Select department</option>
-                    {["Maintenance User", "Production User", "MIS User"].map((department) => (
-                      <option key={department} value={department}>{department}</option>
-                    ))}
                   </select>
                 ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
               </label>
