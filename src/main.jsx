@@ -1061,8 +1061,6 @@ function Equipment({
               <th>Engine no.</th>
               <th>Chassis no.</th>
               <th>Document status</th>
-              <th>Road status</th>
-              <th>Equipment status</th>
             </tr>
           </thead>
           <tbody>
@@ -1092,17 +1090,11 @@ function Equipment({
                   <td>{v.engineNo}</td>
                   <td>{v.chassisNo}</td>
                   <td>{v.documentStatus}</td>
-                  <td>
-                    <Status>{roadStatus(v)}</Status>
-                  </td>
-                  <td>
-                    <Status>{v.status || "Operational"}</Status>
-                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="13" className="empty-state">
+                <td colSpan="11" className="empty-state">
                   No equipment or vehicle records for this selection
                 </td>
               </tr>
