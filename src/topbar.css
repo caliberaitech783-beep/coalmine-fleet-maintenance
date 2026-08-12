@@ -21,14 +21,58 @@
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: visible;
 }
 
 .app > aside nav button {
   flex: 0 0 auto;
   padding: 9px 10px;
   white-space: nowrap;
+}
+
+.masters-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.masters-menu > button .masters-chevron {
+  width: 14px;
+  margin-left: 2px;
+  transition: transform 0.18s ease;
+}
+
+.masters-menu.open > button .masters-chevron,
+.masters-menu:hover > button .masters-chevron {
+  transform: rotate(180deg);
+}
+
+.masters-dropdown {
+  position: absolute;
+  top: calc(100% - 1px);
+  left: 0;
+  z-index: 30;
+  min-width: 210px;
+  padding: 7px;
+  border: 1px solid #30486e;
+  border-radius: 10px;
+  background: #10213f;
+  box-shadow: 0 14px 34px #07122555;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+}
+
+.masters-menu.open .masters-dropdown,
+.masters-menu:hover .masters-dropdown,
+.masters-menu:focus-within .masters-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.app > aside nav .masters-dropdown button {
+  width: 100%;
 }
 
 .app > aside .user {
@@ -65,6 +109,30 @@
     flex-direction: column;
     align-items: stretch;
     overflow: visible;
+  }
+
+  .masters-menu {
+    width: 100%;
+  }
+
+  .masters-menu > button {
+    width: 100%;
+  }
+
+  .masters-dropdown {
+    position: static;
+    display: none;
+    min-width: 0;
+    margin: 5px 0 0 12px;
+    box-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+  }
+
+  .masters-menu.open .masters-dropdown,
+  .masters-menu:focus-within .masters-dropdown {
+    display: block;
   }
 
   .app > aside .user {
