@@ -8,6 +8,7 @@ import {matchesRequestedRole} from './auth-role.mjs';
 import {createSessionStore} from './auth-session.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
+import {equipmentIdentity} from './equipment-identity.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -258,9 +259,48 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
     }catch(error){return res.status(400).json({error:error.message})}
-    const {rows}=await pool.query(`INSERT INTO master_records (master_name,record_data)
-      SELECT $1,value FROM jsonb_array_elements($2::jsonb) AS value
-      RETURNING id,record_data`,[master,JSON.stringify(prepared)]);
+    let rows;
+    if(master==='Equipment master'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const existing=await client.query(
+          'SELECT id,record_data FROM master_records WHERE master_name=$1 FOR UPDATE',
+          [master]
+        );
+        const byIdentity=new Map(
+          existing.rows.map(row=>[equipmentIdentity(row.record_data),row]).filter(([identity])=>identity)
+        );
+        rows=[];
+        for(const record of prepared){
+          const identity=equipmentIdentity(record);
+          const match=identity&&byIdentity.get(identity);
+          if(match){
+            const updated=await client.query(
+              'UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 RETURNING id,record_data',
+              [JSON.stringify(record),match.id]
+            );
+            rows.push(updated.rows[0]);
+            byIdentity.set(identity,updated.rows[0]);
+          }else{
+            const inserted=await client.query(
+              'INSERT INTO master_records (master_name,record_data) VALUES ($1,$2::jsonb) RETURNING id,record_data',
+              [master,JSON.stringify(record)]
+            );
+            rows.push(inserted.rows[0]);
+            if(identity)byIdentity.set(identity,inserted.rows[0]);
+          }
+        }
+        await client.query('COMMIT');
+      }catch(error){
+        await client.query('ROLLBACK');
+        throw error;
+      }finally{client.release()}
+    }else{
+      ({rows}=await pool.query(`INSERT INTO master_records (master_name,record_data)
+        SELECT $1,value FROM jsonb_array_elements($2::jsonb) AS value
+        RETURNING id,record_data`,[master,JSON.stringify(prepared)]));
+    }
     const saved=rows.map(row=>({id:row.id,...(master==='Users & employees'?publicUserRecord(row.record_data):row.record_data)}));
     res.status(201).json(saved);
   }catch(error){next(error)}

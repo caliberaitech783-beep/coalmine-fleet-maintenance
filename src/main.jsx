@@ -2097,12 +2097,22 @@ function useMasterRecords(name, seed = []) {
       }
       saved.push(...(await response.json()));
     }
-    setRecords((current) => [...current, ...saved]);
+    setRecords((current) => {
+      const next = [...current];
+      saved.forEach((record) => {
+        const existingIndex = next.findIndex((item) => item.id === record.id);
+        if (existingIndex >= 0) next[existingIndex] = record;
+        else next.push(record);
+      });
+      return next;
+    });
     alert(
       saved.length +
         " record" +
         (saved.length === 1 ? "" : "s") +
-        " added successfully.",
+        (name === "Equipment master"
+          ? " saved successfully. Matching rows were overwritten."
+          : " added successfully."),
     );
   };
   const edit = async (id, record) => {
