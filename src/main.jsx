@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
+import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -403,7 +404,9 @@ function Side({ active, setActive, logout, open }) {
   );
 }
 function Dashboard({ goto, gotoEquipment }) {
+  const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
+  const equipmentKpis = equipmentMetrics(equipmentRecords);
   const [showUserBreakdown, setShowUserBreakdown] = useState(false);
   const userCounts = usersAndEmployees.reduce(
     (counts, record) => {
@@ -432,7 +435,7 @@ function Dashboard({ goto, gotoEquipment }) {
     [
       Truck,
       "Total equipment",
-      vehicles.length,
+      equipmentKpis.total,
       "Registered assets",
       "blue",
       "all",
@@ -440,7 +443,7 @@ function Dashboard({ goto, gotoEquipment }) {
     [
       CheckCircle2,
       "On Road",
-      vehicles.filter((v) => v.status === "Operational").length,
+      equipmentKpis.onRoad,
       "Available for operation",
       "green",
       "onroad",
@@ -448,7 +451,7 @@ function Dashboard({ goto, gotoEquipment }) {
     [
       AlertTriangle,
       "Off Road",
-      vehicles.filter((v) => v.status !== "Operational").length,
+      equipmentKpis.offRoad,
       "In maintenance or breakdown",
       "red",
       "offroad",
@@ -566,8 +569,10 @@ function Dashboard({ goto, gotoEquipment }) {
                 </div>
               </header>
               <div>
-                {s.sites.map((site) => {
-                  const list = vehicles.filter((v) => v.location === site),
+                  {s.sites.map((site) => {
+                    const list = equipmentRecords.filter(
+                        (v) => (v.currentLocation || v.location) === site,
+                      ),
                     on = list.filter((v) => v.status === "Operational").length,
                     off = list.length - on;
                   return (
@@ -652,7 +657,7 @@ function Dashboard({ goto, gotoEquipment }) {
             <div>
               <h3>Fleet availability</h3>
               <p>
-                {vehicles.length
+                {equipmentRecords.length
                   ? "Live equipment road status"
                   : "No equipment records available"}
               </p>
@@ -661,14 +666,7 @@ function Dashboard({ goto, gotoEquipment }) {
           <div className="donut">
             <div>
               <strong>
-                {vehicles.length
-                  ? Math.round(
-                      (vehicles.filter((v) => v.status === "Operational")
-                        .length /
-                        vehicles.length) *
-                        100,
-                    )
-                  : 0}
+                  {equipmentKpis.availability}
                 %
               </strong>
               <span>On Road</span>
@@ -678,12 +676,12 @@ function Dashboard({ goto, gotoEquipment }) {
             <span>
               <i className="lg1" />
               On Road{" "}
-              <b>{vehicles.filter((v) => v.status === "Operational").length}</b>
+                <b>{equipmentKpis.onRoad}</b>
             </span>
             <span>
               <i className="lg3" />
               Off Road{" "}
-              <b>{vehicles.filter((v) => v.status !== "Operational").length}</b>
+                <b>{equipmentKpis.offRoad}</b>
             </span>
           </div>
         </section>
