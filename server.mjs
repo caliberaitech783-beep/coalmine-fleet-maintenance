@@ -328,6 +328,26 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
+  try{
+    const master=decodeURIComponent(req.params.master);
+    if(!master)return res.status(400).json({error:'A master name is required.'});
+    if(master==='Breakdown master'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const manual=await client.query('DELETE FROM master_records WHERE master_name=$1',[master]);
+        const requests=await client.query('DELETE FROM maintenance_requests');
+        await client.query('COMMIT');
+        return res.json({deleted:manual.rowCount+requests.rowCount});
+      }catch(error){await client.query('ROLLBACK');throw error}
+      finally{client.release()}
+    }
+    const result=await pool.query('DELETE FROM master_records WHERE master_name=$1',[master]);
+    res.json({deleted:result.rowCount});
+  }catch(error){next(error)}
+});
+
 app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);

@@ -17,6 +17,7 @@ export function equipmentIdentity(record = {}) {
     record.currentLocation || record.location,
     record.equipmentName,
     record.category,
+    record.itemName,
     record.itemSpecification,
     record.make,
     record.model,

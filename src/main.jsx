@@ -751,10 +751,11 @@ const masterFields = {
     ["reg", "Registration no."],
     ["currentLocation", "Current location"],
     ["equipmentName", "Equipment name"],
-    ["category", "Item name / equipment category"],
+    ["category", "Equipment category"],
+    ["group", "Equipment group"],
+    ["itemName", "Item name"],
     ["itemSpecification", "Item specification name"],
     ["acquisitionDate", "Acquisition date"],
-    ["group", "Equipment group"],
     ["make", "Make"],
     ["model", "Model"],
     ["manufacturerSerialNo", "Manufacturer serial no."],
@@ -845,6 +846,7 @@ function parseCsv(text, fields) {
     aliases.set("site location", "currentLocation");
     aliases.set("acquired", "acquisitionDate");
     aliases.set("acquired date", "acquisitionDate");
+    aliases.set("item name / equipment category", "category");
     aliases.set("manufacteror sr no.", "manufacturerSerialNo");
     aliases.set("chasis no", "chassisNo");
   }
@@ -861,7 +863,7 @@ function parseCsv(text, fields) {
     })
     .filter((record) => Object.values(record).some(Boolean));
 }
-function MasterActions({ name, onAdd }) {
+function MasterActions({ name, onAdd, onDeleteAll }) {
   const [mode, setMode] = useState(null),
     fields = masterFields[name];
   if (!fields) return null;
@@ -902,6 +904,11 @@ function MasterActions({ name, onAdd }) {
   return (
     <>
       <div className="master-actions">
+        {onDeleteAll && (
+          <button className="secondary danger" onClick={onDeleteAll}>
+            <Trash2 /> Delete all
+          </button>
+        )}
         <button className="secondary" onClick={() => setMode("import")}>
           <Upload />
           Import
@@ -973,6 +980,7 @@ function Equipment({
   initialLocation = "",
   records = [],
   onAdd,
+  onDeleteAll,
 }) {
   const [q, setQ] = useState(""),
     [road, setRoad] = useState(initialFilter),
@@ -1010,7 +1018,7 @@ function Equipment({
             · {rows.length} records shown
           </p>
         </div>
-        <MasterActions name="Equipment master" onAdd={onAdd} />
+        <MasterActions name="Equipment master" onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
       <div className="toolbar">
         <div>
@@ -1042,8 +1050,9 @@ function Equipment({
             <tr>
               <th>Current location</th>
               <th>Equipment name</th>
-              <th>Item name / equipment category</th>
+              <th>Equipment category</th>
               <th>Equipment group</th>
+              <th>Item name</th>
               <th>Item specification name</th>
               <th>Acquisition date</th>
               <th>Make</th>
@@ -1073,6 +1082,7 @@ function Equipment({
                     {v.category}
                   </td>
                   <td>{v.group}</td>
+                  <td>{v.itemName}</td>
                   <td>{v.itemSpecification}</td>
                   <td>{v.acquisitionDate || v.acquired}</td>
                   <td>{v.make}</td>
@@ -1085,7 +1095,7 @@ function Equipment({
               ))
             ) : (
               <tr>
-                <td colSpan="12" className="empty-state">
+                <td colSpan="13" className="empty-state">
                   No equipment or vehicle records for this selection
                 </td>
               </tr>
@@ -1947,7 +1957,7 @@ function Generic({ name, requests = [] }) {
     </section>
   );
 }
-function MasterPage({ name, records = [], onAdd, onEdit, onDelete }) {
+function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
     fields = masterFields[name],
@@ -1978,7 +1988,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete }) {
           <h1>{name}</h1>
           <p>{rows.length} records shown · import CSV or add one manually</p>
         </div>
-        <MasterActions name={name} onAdd={onAdd} />
+        <MasterActions name={name} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
       <div className="toolbar">
         <div>
@@ -2127,7 +2137,18 @@ function useMasterRecords(name, seed = []) {
     }
     setRecords((current) => current.filter((item) => item.id !== id));
   };
-  return [records, add, loaded, edit, remove];
+  const removeAll = async () => {
+    if (!confirm(`Delete all records from ${name}? This cannot be undone.`)) return;
+    const response = await fetch(`/api/masters/${encodeURIComponent(name)}/all`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    const details = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(details.error || "Could not delete all records.");
+    setRecords([]);
+    alert(`${details.deleted ?? records.length} records deleted successfully.`);
+  };
+  return [records, add, loaded, edit, remove, removeAll];
 }
 function WhatsAppReport({type, requests = []}) {
   const isSite = type === "Daily site-wise report";
@@ -2338,7 +2359,7 @@ function WhatsAppAlertHistory() {
 }
 const OriginalBreakdown = Breakdown;
 Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
-  const [manualRecords, onAdd] = useMasterRecords("Breakdown master");
+  const [manualRecords, onAdd, , , , onDeleteAll] = useMasterRecords("Breakdown master");
   const rows = [...requests, ...manualRecords];
   const count = (status) => rows.filter((record) => record.status === status).length;
   return (
@@ -2348,7 +2369,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
           <h1>Breakdown master</h1>
           <p>Mobile User requests and Super Admin-created breakdown records</p>
         </div>
-        <MasterActions name="Breakdown master" onAdd={onAdd} />
+        <MasterActions name="Breakdown master" onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
       <div className="tabs">
         {[
@@ -2369,7 +2390,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
 };
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
-  const [records, onAdd] = useMasterRecords("Equipment master", vehicles);
+  const [records, onAdd, , , , onDeleteAll] = useMasterRecords("Equipment master", vehicles);
   const addEquipment = (incoming) =>
     onAdd(
       incoming.map((record) => ({
@@ -2385,6 +2406,7 @@ Equipment = function EquipmentWithData(props) {
       {...props}
       records={records}
       onAdd={addEquipment}
+      onDeleteAll={onDeleteAll}
     />
   );
 };
@@ -2395,20 +2417,20 @@ Generic = function GenericWithMasters(props) {
       name === "Region master"
         ? subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") }))
         : [],
-    [records, onAdd, , onEdit, onDelete] = useMasterRecords(name, seed);
+    [records, onAdd, , onEdit, onDelete, onDeleteAll] = useMasterRecords(name, seed);
   return masterFields[name] ? (
-    <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />
+    <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
   ) : (
     <OriginalGeneric {...props} />
   );
 };
 const OriginalSubsidiaries = Subsidiaries;
 Subsidiaries = function SubsidiariesWithImport() {
-  const [records, onAdd, , onEdit, onDelete] = useMasterRecords(
+  const [records, onAdd, , onEdit, onDelete, onDeleteAll] = useMasterRecords(
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
-  return <MasterPage name="Region master" records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} />;
+  return <MasterPage name="Region master" records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />;
 };
 function Modal({ title, close, children }) {
   return (
