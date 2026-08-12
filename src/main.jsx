@@ -759,13 +759,19 @@ const masterFields = {
   "Equipment master": [
     ["door", "Door / registration"],
     ["reg", "Registration no."],
-    ["location", "Site location"],
-    ["category", "Equipment category"],
+    ["currentLocation", "Current location"],
+    ["equipmentName", "Equipment name"],
+    ["category", "Item name / equipment category"],
+    ["itemSpecification", "Item specification name"],
+    ["acquisitionDate", "Acquisition date"],
     ["group", "Equipment group"],
     ["make", "Make"],
     ["model", "Model"],
+    ["manufacturerSerialNo", "Manufacturer serial no."],
+    ["engineNo", "Engine no."],
+    ["chassisNo", "Chassis no."],
+    ["documentStatus", "Document status"],
     ["asset", "Asset no."],
-    ["acquired", "Acquired date"],
     ["status", "Equipment status"],
   ],
   "Vehicle transfers": [
@@ -844,6 +850,14 @@ function parseCsv(text, fields) {
         [label.toLowerCase(), key],
       ]),
     );
+  if (fields === masterFields["Equipment master"]) {
+    aliases.set("location", "currentLocation");
+    aliases.set("site location", "currentLocation");
+    aliases.set("acquired", "acquisitionDate");
+    aliases.set("acquired date", "acquisitionDate");
+    aliases.set("manufacteror sr no.", "manufacturerSerialNo");
+    aliases.set("chasis no", "chassisNo");
+  }
   return lines
     .slice(1)
     .map((line) => {
@@ -979,14 +993,16 @@ function Equipment({
     locations = [
       ...new Set([
         ...subsidiaryData.flatMap((s) => s.sites),
-        ...records.map((v) => v.location).filter(Boolean),
+        ...records
+          .map((v) => v.currentLocation || v.location)
+          .filter(Boolean),
       ]),
     ];
   let rows = records.filter(
     (v) =>
       (road === "all" ||
         roadStatus(v).toLowerCase().replace(" ", "") === road) &&
-      (!location || v.location === location) &&
+      (!location || (v.currentLocation || v.location) === location) &&
       Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()),
   );
   return (
@@ -1010,7 +1026,7 @@ function Equipment({
         <div>
           <Search />
           <input
-            placeholder="Search door no., registration, asset..."
+            placeholder="Search equipment, category, serial no...."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -1021,7 +1037,7 @@ function Equipment({
           <option value="offroad">Off Road</option>
         </select>
         <select value={location} onChange={(e) => setLocation(e.target.value)}>
-          <option value="">All sites</option>
+          <option value="">All locations</option>
           {locations.map((site) => (
             <option key={site}>{site}</option>
           ))}
@@ -1034,12 +1050,17 @@ function Equipment({
         <table>
           <thead>
             <tr>
-              <th>Door / Registration</th>
-              <th>Location</th>
-              <th>Equipment category</th>
-              <th>Make & model</th>
-              <th>Asset no.</th>
-              <th>Acquired</th>
+              <th>Current location</th>
+              <th>Equipment name</th>
+              <th>Item name / equipment category</th>
+              <th>Item specification name</th>
+              <th>Acquisition date</th>
+              <th>Make</th>
+              <th>Model</th>
+              <th>Manufacturer serial no.</th>
+              <th>Engine no.</th>
+              <th>Chassis no.</th>
+              <th>Document status</th>
               <th>Road status</th>
               <th>Equipment status</th>
             </tr>
@@ -1053,22 +1074,24 @@ function Equipment({
                   className="click"
                 >
                   <td>
-                    <b>{v.door}</b>
-                    <small>{v.reg}</small>
+                    <MapPin /> {v.currentLocation || v.location}
                   </td>
                   <td>
-                    <MapPin /> {v.location}
+                    <b>{v.equipmentName || v.door}</b>
+                    <small>{v.reg}</small>
                   </td>
                   <td>
                     {v.category}
                     <small>{v.group}</small>
                   </td>
-                  <td>
-                    {v.make}
-                    <small>{v.model}</small>
-                  </td>
-                  <td>{v.asset}</td>
-                  <td>{v.acquired}</td>
+                  <td>{v.itemSpecification}</td>
+                  <td>{v.acquisitionDate || v.acquired}</td>
+                  <td>{v.make}</td>
+                  <td>{v.model}</td>
+                  <td>{v.manufacturerSerialNo}</td>
+                  <td>{v.engineNo}</td>
+                  <td>{v.chassisNo}</td>
+                  <td>{v.documentStatus}</td>
                   <td>
                     <Status>{roadStatus(v)}</Status>
                   </td>
@@ -1079,7 +1102,7 @@ function Equipment({
               ))
             ) : (
               <tr>
-                <td colSpan="8" className="empty-state">
+                <td colSpan="13" className="empty-state">
                   No equipment or vehicle records for this selection
                 </td>
               </tr>
@@ -1094,7 +1117,7 @@ function Equipment({
               <Truck />
             </div>
             <div>
-              <h2>{detail.door}</h2>
+              <h2>{detail.equipmentName || detail.door}</h2>
               <p>
                 {detail.make} {detail.model} · {detail.reg}
               </p>
@@ -2354,7 +2377,23 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
   const [records, onAdd] = useMasterRecords("Equipment master", vehicles);
-  return <OriginalEquipment {...props} records={records} onAdd={onAdd} />;
+  const addEquipment = (incoming) =>
+    onAdd(
+      incoming.map((record) => ({
+        ...record,
+        location: record.currentLocation || record.location || "",
+        currentLocation: record.currentLocation || record.location || "",
+        acquired: record.acquisitionDate || record.acquired || "",
+        acquisitionDate: record.acquisitionDate || record.acquired || "",
+      })),
+    );
+  return (
+    <OriginalEquipment
+      {...props}
+      records={records}
+      onAdd={addEquipment}
+    />
+  );
 };
 const OriginalGeneric = Generic;
 Generic = function GenericWithMasters(props) {
