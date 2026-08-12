@@ -146,6 +146,9 @@ function Login({ onLogin }) {
     <div className="login">
       <section className="login-visual" aria-label="Nerve Center fleet operations">
         <div className="login-grid" aria-hidden="true" />
+        <div className="login-schematic" aria-hidden="true">
+          <i /><i /><i /><i />
+        </div>
         <div className="login-brand">
           <div className="brandmark">CM</div>
           <div><strong>Nerve Center</strong><span>Fleet operations platform</span></div>
@@ -165,6 +168,9 @@ function Login({ onLogin }) {
         <div className="mine-art">
           <Truck size={64} />
           <span className="route-line" />
+        </div>
+        <div className="login-environment" aria-hidden="true">
+          <span>OPS / CENTRAL INDIA</span><span>SECURE NODE 01</span>
         </div>
       </section>
       <main>
@@ -212,6 +218,9 @@ function Login({ onLogin }) {
               onChange={(event) => setUsername(event.target.value)}
               placeholder="Enter your user name"
               autoComplete="username"
+              spellCheck="false"
+              aria-invalid={Boolean(error)}
+              required
               autoFocus
             />
           </div>
@@ -225,8 +234,10 @@ function Login({ onLogin }) {
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Enter your password"
               autoComplete="current-password"
+              aria-invalid={Boolean(error)}
+              required
             />
-            <button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"}>
+            <button type="button" className="password-toggle" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Hide password" : "Show password"} title={showPassword ? "Hide password" : "Show password"}>
               {showPassword ? <EyeOff /> : <Eye />}
             </button>
           </div>
@@ -238,7 +249,9 @@ function Login({ onLogin }) {
             />
             Remember me
           </label>
-          {error && <p className="login-error" role="alert">{error}</p>}
+          <div className="login-feedback" aria-live="polite">
+            {error && <p className="login-error" role="alert">{error}</p>}
+          </div>
           <button
             type="submit"
             className="primary"
