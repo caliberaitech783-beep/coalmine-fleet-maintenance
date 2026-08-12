@@ -15,8 +15,11 @@ export function verifyPassword(password, encoded) {
 }
 
 export function initializeUserCredentials(record) {
+  const accountType = String(record?.userType || record?.role || "").trim().toLowerCase();
+  const isApplicationUser = ["mobile user", "normal user", "super admin", "super admin user", "super user"].includes(accountType);
+  if (!isApplicationUser) return { ...record };
   const phone = String(record?.phone || "").trim();
-  if (!phone) throw new Error("A phone number is required to create a user.");
+  if (!phone) throw new Error("A phone number is required for Mobile User and Super Admin records.");
   return {
     ...record,
     passwordHash: hashPassword(phone),

@@ -103,7 +103,7 @@ async function migrate(){
   }finally{client.release()}
 }
 
-app.use(express.json({limit:'256kb'}));
+app.use(express.json({limit:'8mb'}));
 
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
@@ -251,12 +251,17 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     const records=Array.isArray(req.body)?req.body:[req.body];
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
-    const saved=[];
-    for(const record of records){
-      const storedRecord=master==='Users & employees'?initializeUserCredentials(record):record;
-      const {rows}=await pool.query('INSERT INTO master_records (master_name,record_data) VALUES ($1,$2::jsonb) RETURNING id,record_data',[master,JSON.stringify(storedRecord)]);
-      saved.push({id:rows[0].id,...(master==='Users & employees'?publicUserRecord(rows[0].record_data):rows[0].record_data)});
-    }
+    let prepared;
+    try{
+      prepared=records.map((record,index)=>{
+        try{return master==='Users & employees'?initializeUserCredentials(record):record}
+        catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
+      });
+    }catch(error){return res.status(400).json({error:error.message})}
+    const {rows}=await pool.query(`INSERT INTO master_records (master_name,record_data)
+      SELECT $1,value FROM jsonb_array_elements($2::jsonb) AS value
+      RETURNING id,record_data`,[master,JSON.stringify(prepared)]);
+    const saved=rows.map(row=>({id:row.id,...(master==='Users & employees'?publicUserRecord(row.record_data):row.record_data)}));
     res.status(201).json(saved);
   }catch(error){next(error)}
 });
@@ -296,7 +301,11 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
 
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
-app.use((error,_req,res,_next)=>{console.error(error);res.status(500).json({error:'Server error'});});
+app.use((error,_req,res,_next)=>{
+  console.error(error);
+  if(error?.type==='entity.too.large')return res.status(413).json({error:'The CSV is too large to import. Split it into smaller files.'});
+  res.status(500).json({error:'Server error'});
+});
 
 app.listen(port,()=>console.log(`Nerve Center listening on port ${port}`));
 
