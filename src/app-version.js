@@ -1,1 +1,1 @@
-export const APP_VERSION = "d90a8148-4673-4c21-8c46-d7c5a61b4dbe";
+export const APP_VERSION = "f1462ad5-f685-480a-8ca8-9ef5e3a00169";

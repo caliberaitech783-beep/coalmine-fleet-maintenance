@@ -67,13 +67,24 @@ const subsidiaryData = [
     name: "Western Coalfields Limited",
     code: "WCL",
     state: "MH / MP",
-    sites: ["Sasti II", "Majri II", "Dhoptala II", "Gouri Pouni", "Lalpeth II"],
+    sites: [
+      "Sasti OB",
+      "Majri OB",
+      "Dhoptala OB (2nd)",
+      "Gauri Pauni OB (2nd)",
+      "Lalpeth OB",
+    ],
   },
   {
     name: "Northern Coalfields Limited",
     code: "NCL",
     state: "MP / UP",
-    sites: ["Jayant", "Dudhichua West", "Dudhichua East"],
+    sites: [
+      "Jayant OB",
+      "Jayant OB 2nd",
+      "Dudhichua OB",
+      "Dudhichua East OB",
+    ],
   },
 ];
 const nav = [
