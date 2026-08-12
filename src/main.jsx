@@ -403,6 +403,7 @@ function Side({ active, setActive, logout, open }) {
   );
 }
 function Dashboard({ goto, gotoEquipment }) {
+  const [usersAndEmployees] = useMasterRecords("Users & employees");
   const now = new Date(),
     dateLabel = new Intl.DateTimeFormat(undefined, {
       weekday: "long",
@@ -459,6 +460,14 @@ function Dashboard({ goto, gotoEquipment }) {
       "green",
       "breakdown",
     ],
+    [
+      Users,
+      "Users & employees",
+      usersAndEmployees.length,
+      "Registered people",
+      "blue",
+      "users",
+    ],
   ];
   return (
     <>
@@ -476,6 +485,8 @@ function Dashboard({ goto, gotoEquipment }) {
             onClick={() =>
               target === "breakdown"
                 ? goto("Breakdown master")
+                : target === "users"
+                  ? goto("Users & employees")
                 : gotoEquipment(target, "")
             }
           >
