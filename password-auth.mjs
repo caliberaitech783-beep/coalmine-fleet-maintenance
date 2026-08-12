@@ -19,7 +19,10 @@ export function initializeUserCredentials(record) {
   const isApplicationUser = ["mobile user", "normal user", "super admin", "super admin user", "super user"].includes(accountType);
   if (!isApplicationUser) return { ...record };
   const phone = String(record?.phone || "").trim();
-  if (!phone) throw new Error("A phone number is required for Mobile User and Super Admin records.");
+  // Keep incomplete CSV rows importable. An application user without a phone
+  // remains a stored employee record but cannot use phone-based login until an
+  // administrator adds a phone number.
+  if (!phone) return { ...record };
   return {
     ...record,
     passwordHash: hashPassword(phone),

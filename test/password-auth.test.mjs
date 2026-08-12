@@ -22,10 +22,10 @@ test("employee-only CSV rows do not require login credentials", () => {
   );
 });
 
-test("application users still require a registered phone number", () => {
-  assert.throws(
-    () => initializeUserCredentials({ employee: "Amit", phone: "", userType: "Super Admin" }),
-    /phone number is required/i,
+test("incomplete application-user CSV rows remain importable", () => {
+  assert.deepEqual(
+    initializeUserCredentials({ employee: "Amit", phone: "", userType: "Super Admin" }),
+    { employee: "Amit", phone: "", userType: "Super Admin" },
   );
 });
 
