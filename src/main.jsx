@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
@@ -34,6 +34,9 @@ import {
   Download,
   Upload,
   ChevronDown,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Pencil,
   Trash2,
   MessageCircle,
@@ -51,6 +54,7 @@ import "./dashboard-charts.css";
 import "./master-loader.css";
 import "./import-dropzone.css";
 import "./privilege.css";
+import "./sortable-table.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -742,24 +746,25 @@ function Dashboard({ goto, gotoEquipment }) {
   );
 }
 function BreakdownTable({ rows = breakdowns }) {
+  const columns = [
+      ["ref", "Job reference"], ["door", "Door no."], ["site", "Site location"],
+      ["category", "Repair category"], ["start", "Started"], ["hours", "Downtime"],
+      ["status", "Status"], ["owner", "Responsibility"],
+    ],
+    [sortedRows, sort, changeSort] = useSortableRows(rows);
   return (
     <div className="scroll">
       <table>
         <thead>
           <tr>
-            <th>Job reference</th>
-            <th>Door no.</th>
-            <th>Site location</th>
-            <th>Repair category</th>
-            <th>Started</th>
-            <th>Downtime</th>
-            <th>Status</th>
-            <th>Responsibility</th>
+            {columns.map(([key, label]) => (
+              <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} />
+            ))}
           </tr>
         </thead>
         <tbody>
-          {rows.length ? (
-            rows.map((r) => (
+          {sortedRows.length ? (
+            sortedRows.map((r) => (
               <tr key={r.ref}>
                 <td>
                   <b>{r.ref}</b>
@@ -875,6 +880,50 @@ const masterFields = {
 };
 const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
+const sortCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
+function comparableValue(value) {
+  if (typeof value === "boolean") return value ? 1 : 0;
+  if (typeof value === "number") return value;
+  const text = String(value ?? "").trim();
+  const indianDate = text.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(.*))?$/);
+  if (indianDate) {
+    const [, day, month, year, time = "00:00:00"] = indianDate;
+    const timestamp = Date.parse(`${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${time}`);
+    if (!Number.isNaN(timestamp)) return timestamp;
+  }
+  return text;
+}
+function useSortableRows(rows, defaultKey = "", valueForKey = (row, key) => row[key]) {
+  const [sort, setSort] = useState({ key: defaultKey, direction: "asc" });
+  const sortedRows = useMemo(() => {
+    if (!sort.key) return rows;
+    return rows.map((row, index) => ({ row, index })).sort((left, right) => {
+      const a = comparableValue(valueForKey(left.row, sort.key));
+      const b = comparableValue(valueForKey(right.row, sort.key));
+      let result;
+      if (typeof a === "number" && typeof b === "number") result = a - b;
+      else result = sortCollator.compare(String(a), String(b));
+      if (!result) result = left.index - right.index;
+      return sort.direction === "asc" ? result : -result;
+    }).map(({ row }) => row);
+  }, [rows, sort, valueForKey]);
+  const changeSort = (key) => setSort((current) => ({
+    key,
+    direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+  }));
+  return [sortedRows, sort, changeSort];
+}
+function SortableHeader({ label, sortKey, sort, onSort }) {
+  const active = sort.key === sortKey,
+    Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <th aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+      <button className={`sort-header ${active ? "active" : ""}`} onClick={() => onSort(sortKey)} type="button">
+        <span>{label}</span><Icon aria-hidden="true" />
+      </button>
+    </th>
+  );
+}
 function parseCsv(text, fields) {
   const lines = text
       .replace(/^\uFEFF/, "")
@@ -1183,6 +1232,20 @@ function Equipment({
       (!location || (v.currentLocation || v.location) === location) &&
       Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()),
   );
+  const equipmentColumns = [
+      ["currentLocation", "Current location"], ["equipmentName", "Equipment name"],
+      ["category", "Equipment category"], ["group", "Equipment group"],
+      ["itemName", "Item name"], ["itemSpecification", "Item specification name"],
+      ["acquisitionDate", "Acquisition date"], ["make", "Make"], ["model", "Model"],
+      ["manufacturerSerialNo", "Manufacturer serial no."], ["engineNo", "Engine no."],
+      ["chassisNo", "Chassis no."], ["documentStatus", "Document status"],
+    ],
+    [sortedRows, sort, changeSort] = useSortableRows(rows, "", (record, key) => {
+      if (key === "currentLocation") return record.currentLocation || record.location;
+      if (key === "equipmentName") return record.equipmentName || record.door;
+      if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
+      return record[key];
+    });
   return (
     <section className="panel table pagepanel">
       <header>
@@ -1228,24 +1291,14 @@ function Equipment({
         <table>
           <thead>
             <tr>
-              <th>Current location</th>
-              <th>Equipment name</th>
-              <th>Equipment category</th>
-              <th>Equipment group</th>
-              <th>Item name</th>
-              <th>Item specification name</th>
-              <th>Acquisition date</th>
-              <th>Make</th>
-              <th>Model</th>
-              <th>Manufacturer serial no.</th>
-              <th>Engine no.</th>
-              <th>Chassis no.</th>
-              <th>Document status</th>
+              {equipmentColumns.map(([key, label]) => (
+                <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {rows.length ? (
-              rows.map((v, i) => (
+            {sortedRows.length ? (
+              sortedRows.map((v, i) => (
                 <tr
                   key={v.id || v.door || i}
                   onClick={() => setDetail(v)}
@@ -2143,9 +2196,13 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     [savingCell, setSavingCell] = useState(""),
     fields = masterFields[name],
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege",
-    rows = records.filter((record) =>
+    filteredRows = records.filter((record) =>
       Object.values(record).join(" ").toLowerCase().includes(q.toLowerCase()),
-    );
+    ),
+    [rows, sort, changeSort] = useSortableRows(filteredRows, "", (record, key) => {
+      const type = fields.find(([field]) => field === key)?.[2];
+      return type === "checkbox" ? isCheckedValue(record[key]) : record[key];
+    });
   const saveEdit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -2200,8 +2257,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <table>
           <thead>
             <tr>
-              {fields.map(([, label]) => (
-                <th key={label}>{label}</th>
+              {fields.map(([key, label]) => (
+                <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} />
               ))}
               {canManageRows && <th>Actions</th>}
             </tr>
