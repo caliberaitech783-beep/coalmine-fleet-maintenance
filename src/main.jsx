@@ -46,6 +46,8 @@ import {
   LockKeyhole,
   User,
   Activity,
+  Sun,
+  Moon,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -55,6 +57,7 @@ import "./master-loader.css";
 import "./import-dropzone.css";
 import "./privilege.css";
 import "./sortable-table.css";
+import "./theme.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -126,7 +129,25 @@ function Status({ children }) {
     </span>
   );
 }
-function Login({ onLogin }) {
+function ThemeToggle({ theme, onToggle, className = "" }) {
+  const isDark = theme === "dark";
+  return (
+    <button
+      type="button"
+      className={`theme-toggle ${className}`.trim()}
+      onClick={onToggle}
+      aria-label={`Switch to ${isDark ? "day" : "night"} theme`}
+      title={`Switch to ${isDark ? "day" : "night"} theme`}
+      aria-pressed={isDark}
+    >
+      <span className="theme-toggle-track" aria-hidden="true">
+        <span className="theme-toggle-thumb">{isDark ? <Moon /> : <Sun />}</span>
+      </span>
+      <span className="theme-toggle-label">{isDark ? "Night" : "Day"}</span>
+    </button>
+  );
+}
+function Login({ onLogin, theme, toggleTheme }) {
   const [role, setRole] = useState("super");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -222,6 +243,7 @@ function Login({ onLogin }) {
         </div>
       </section>
       <main>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} className="login-theme-toggle" />
         {passwordChange ? <form
           className="loginbox password-change-box"
           onSubmit={(event) => { event.preventDefault(); changeInitialPassword(); }}
@@ -2816,7 +2838,7 @@ function Modal({ title, close, children }) {
     </div>
   );
 }
-function Normal({ logout, requests, onCreate }) {
+function Normal({ logout, requests, onCreate, theme, toggleTheme }) {
   const [show, setShow] = useState(false);
   const dateLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
@@ -2839,6 +2861,7 @@ function Normal({ logout, requests, onCreate }) {
             <b>Mobile User</b>
             <small>Maintenance requester</small>
           </span>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <button onClick={logout}>
             <LogOut />
           </button>
@@ -2891,8 +2914,19 @@ function App() {
     [equipmentLocation, setEquipmentLocation] = useState(""),
     [requests, setRequests] = useState([]),
     [menu, setMenu] = useState(false),
-    [loadTime, setLoadTime] = useState(null);
+    [loadTime, setLoadTime] = useState(null),
+    [theme, setTheme] = useState(() => {
+      const saved = localStorage.getItem("nerveCenterTheme");
+      if (saved === "light" || saved === "dark") return saved;
+      return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    });
   const menuLoadStartedAt = useRef(performance.now());
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    localStorage.setItem("nerveCenterTheme", theme);
+  }, [theme]);
+  const toggleTheme = () => setTheme((current) => current === "dark" ? "light" : "dark");
   useEffect(() => {
     let stopped = false;
     const checkVersion = async () => {
@@ -2980,13 +3014,15 @@ function App() {
           );
         });
     };
-  if (!role) return <Login onLogin={setRole} />;
+  if (!role) return <Login onLogin={setRole} theme={theme} toggleTheme={toggleTheme} />;
   if (role === "normal")
     return (
       <Normal
         requests={requests}
         onCreate={addRequest}
         logout={logout}
+        theme={theme}
+        toggleTheme={toggleTheme}
       />
     );
   return (
@@ -3013,6 +3049,7 @@ function App() {
             Operations <ChevronRight /> <b>{active}</b>
           </div>
           <div>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button>
               <Search />
             </button>
