@@ -88,17 +88,6 @@ async function migrate(){
     CREATE INDEX IF NOT EXISTS whatsapp_alert_history_created_at_idx
       ON whatsapp_alert_history (created_at DESC);
   `);
-  await pool.query(`
-    DELETE FROM master_records duplicate
-    USING master_records original
-    WHERE duplicate.master_name='Privilege'
-      AND original.master_name='Privilege'
-      AND LOWER(TRIM(duplicate.record_data->>'username'))=LOWER(TRIM(original.record_data->>'username'))
-      AND duplicate.id>original.id;
-    CREATE UNIQUE INDEX IF NOT EXISTS master_records_privilege_username_unique
-      ON master_records (LOWER(TRIM(record_data->>'username')))
-      WHERE master_name='Privilege' AND TRIM(record_data->>'username')<>'';
-  `);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -248,9 +237,23 @@ app.post('/api/requests',async(req,res,next)=>{
 app.get('/api/masters',async(_req,res,next)=>{
   try{
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
-    const grouped={};
+    const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
+      if(row.master_name==='Privilege'){
+        const username=String(record.username||'').trim().toLowerCase();
+        const existing=username&&privilegesByUsername.get(username);
+        if(existing){
+          for(const permission of ['accessType','location','read','edit','delete','verify','print'])
+            existing[permission]=Boolean(existing[permission]||record[permission]);
+          if(!existing.userGroup&&record.userGroup)existing.userGroup=record.userGroup;
+          continue;
+        }
+        const privilege={id:row.id,...record};
+        if(username)privilegesByUsername.set(username,privilege);
+        (grouped[row.master_name]??=[]).push(privilege);
+        continue;
+      }
       (grouped[row.master_name]??=[]).push({id:row.id,...record});
     }
     res.json(grouped);
