@@ -862,7 +862,7 @@ const masterFields = {
     ["level", "Level (L1 / L2 / L3 / L4)"],
   ],
   Privilege: [
-    ["username", "Username"],
+    ["username", "Username", "user-select"],
     ["userGroup", "User Group"],
     ["accessType", "Super User / Mobile User", "checkbox"],
     ["location", "Location", "checkbox"],
@@ -920,7 +920,7 @@ function parseCsv(text, fields) {
     })
     .filter((record) => Object.values(record).some(Boolean));
 }
-function MasterActions({ name, onAdd, onDeleteAll }) {
+function MasterActions({ name, onAdd, onDeleteAll, userOptions = [] }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
@@ -1014,6 +1014,16 @@ function MasterActions({ name, onAdd, onDeleteAll }) {
                         <small>Enable this privilege</small>
                       </span>
                     </span>
+                  ) : type === "user-select" ? (
+                    <>{label} *
+                    <select name={key} required defaultValue="">
+                      <option value="" disabled>Select a user</option>
+                      {userOptions.map((user) => (
+                        <option key={user.id || `${user.login}-${user.employee}`} value={user.login || user.employee}>
+                          {user.employee || user.login}{user.login && user.employee ? ` (${user.login})` : ""}
+                        </option>
+                      ))}
+                    </select></>
                   ) : key === "level" ? (
                     <>{label} *
                     <select name={key} required defaultValue="">
@@ -2127,7 +2137,7 @@ function Generic({ name, requests = [] }) {
     </section>
   );
 }
-function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }) {
+function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [] }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
     fields = masterFields[name],
@@ -2161,7 +2171,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }
           <h1>{name}</h1>
           <p>{rows.length} records shown · import CSV or add one manually</p>
         </div>
-        <MasterActions name={name} onAdd={onAdd} onDeleteAll={onDeleteAll} />
+        <MasterActions name={name} onAdd={onAdd} onDeleteAll={onDeleteAll} userOptions={userOptions} />
       </header>
       <div className="toolbar">
         <div>
@@ -2227,6 +2237,18 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }
                     <input type="checkbox" name={key} defaultChecked={isCheckedValue(editing[key])} />
                     <span><b>{label}</b><small>Enable this privilege</small></span>
                   </span>
+                ) : type === "user-select" ? (
+                  <select name={key} required defaultValue={editing[key] || ""}>
+                    <option value="" disabled>Select a user</option>
+                    {editing[key] && !userOptions.some((user) => (user.login || user.employee) === editing[key]) && (
+                      <option value={editing[key]}>{editing[key]}</option>
+                    )}
+                    {userOptions.map((user) => (
+                      <option key={user.id || `${user.login}-${user.employee}`} value={user.login || user.employee}>
+                        {user.employee || user.login}{user.login && user.employee ? ` (${user.login})` : ""}
+                      </option>
+                    ))}
+                  </select>
                 ) : key === "level" ? (
                   <select name={key} required defaultValue={editing[key] || ""}>
                     <option value="" disabled>Select level</option>
@@ -2625,6 +2647,18 @@ Equipment = function EquipmentWithData(props) {
   );
 };
 const OriginalGeneric = Generic;
+function PrivilegeMasterPage(props) {
+  const [users, , usersLoaded] = useMasterRecords("Users & employees");
+  if (!usersLoaded) return <MasterLoader name="Privilege" />;
+  const userOptions = Array.from(
+    new Map(
+      users
+        .filter((user) => user.login || user.employee)
+        .map((user) => [String(user.login || user.employee).trim().toLowerCase(), user]),
+    ).values(),
+  );
+  return <MasterPage {...props} userOptions={userOptions} />;
+}
 Generic = function GenericWithMasters(props) {
   const name = props.name,
     seed =
@@ -2634,7 +2668,11 @@ Generic = function GenericWithMasters(props) {
     [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(name, seed);
   if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
   return masterFields[name] ? (
-    <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
+    name === "Privilege" ? (
+      <PrivilegeMasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
+    ) : (
+      <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
+    )
   ) : (
     <OriginalGeneric {...props} />
   );
