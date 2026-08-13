@@ -23,3 +23,12 @@ export function calculateBreakdownDays(dateValue, timeValue, now = new Date()) {
   if (!Number.isFinite(startedAt) || !Number.isFinite(currentTime)) return 0;
   return Math.max(0, Math.floor((currentTime - startedAt) / DAY_MS));
 }
+
+export function calculateBreakdownDaysFromStart(startValue, now = new Date()) {
+  const match = String(startValue || "").trim().match(
+    /^(\d{4}-\d{2}-\d{2})\D+((?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)$/,
+  );
+  if (!match) return 0;
+  const time = match[2].length === 5 ? `${match[2]}:00` : match[2];
+  return calculateBreakdownDays(match[1], time, now);
+}

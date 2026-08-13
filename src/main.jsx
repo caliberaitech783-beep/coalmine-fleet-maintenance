@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
-import { calculateBreakdownDays } from "../breakdown-duration.mjs";
+import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
@@ -773,15 +773,28 @@ function Dashboard({ goto, gotoEquipment }) {
     </>
   );
 }
-function BreakdownTable({ rows = breakdowns }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false }) {
+  const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!showBreakdownDays) return undefined;
+    const timer = window.setInterval(() => setBreakdownNow(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, [showBreakdownDays]);
   const columns = [
       ["ref", "Job reference"], ["equipment", "Equipment"], ["door", "Door no."], ["site", "Site location"],
+      ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
       ["category", "Repair category"], ["start", "Started"], ["hours", "Downtime"],
       ["status", "Status"], ["owner", "Responsibility"],
     ],
-    [sortedRows, sort, changeSort] = useSortableRows(rows);
+    displayRows = showBreakdownDays
+      ? rows.map((row) => ({
+          ...row,
+          breakdownDays: calculateBreakdownDaysFromStart(row.start, breakdownNow),
+        }))
+      : rows,
+    [sortedRows, sort, changeSort] = useSortableRows(displayRows);
   return (
-    <div className="scroll">
+    <div className={showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}>
       <table>
         <thead>
           <tr>
@@ -802,6 +815,11 @@ function BreakdownTable({ rows = breakdowns }) {
                 <td>
                   <MapPin /> {r.site}
                 </td>
+                {showBreakdownDays && (
+                  <td>
+                    <b>{r.breakdownDays} {r.breakdownDays === 1 ? "day" : "days"}</b>
+                  </td>
+                )}
                 <td>{r.category}</td>
                 <td>{r.start}</td>
                 <td>{r.hours}</td>
@@ -813,7 +831,7 @@ function BreakdownTable({ rows = breakdowns }) {
             ))
           ) : (
             <tr>
-              <td colSpan="9" className="empty-state">
+              <td colSpan={columns.length} className="empty-state">
                 No records available
               </td>
             </tr>
@@ -1892,14 +1910,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
     v = findRequestEquipment(equipmentRecords, equipmentId),
     equipmentDetails = requestEquipmentDetails(v || {});
-  const [requestDate, setRequestDate] = useState(systemDate),
-    [requestTime, setRequestTime] = useState(systemTime),
-    [breakdownNow, setBreakdownNow] = useState(() => Date.now()),
-    breakdownDays = calculateBreakdownDays(requestDate, requestTime, breakdownNow);
-  useEffect(() => {
-    const timer = window.setInterval(() => setBreakdownNow(Date.now()), 60000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const [requestTime, setRequestTime] = useState(systemTime);
   const submit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget),
@@ -1977,13 +1988,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </datalist>
           </label>
           <label>
-            Date *
-            <input
-              name="date"
-              type="date"
-              value={requestDate}
-              onChange={(event) => setRequestDate(event.target.value)}
-            />
+            Date *<input name="date" type="date" defaultValue={systemDate} />
           </label>
           {!normal && (
             <label>
@@ -2019,16 +2024,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               readOnly
             />
           </label>
-          {normal && (
-            <label>
-              Days of breakdown
-              <input
-                value={`${breakdownDays} ${breakdownDays === 1 ? "day" : "days"}`}
-                readOnly
-                aria-live="polite"
-              />
-            </label>
-          )}
           {normal && (
             <label>
               Registration number
@@ -3107,7 +3102,7 @@ function Normal({ logout, requests, onCreate, theme, toggleTheme }) {
         </div>
         <h3 className="sectiontitle">Your submitted requests · Read only</h3>
         <section className="panel table">
-          <BreakdownTable rows={requests} />
+          <BreakdownTable rows={requests} showBreakdownDays />
         </section>
       </main>
       {show && (
