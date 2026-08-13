@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
+import { recordBelongsToSite } from "../site-location.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -581,8 +582,8 @@ function Dashboard({ goto, gotoEquipment }) {
               </header>
               <div>
                   {s.sites.map((site) => {
-                    const list = equipmentRecords.filter(
-                        (v) => (v.currentLocation || v.location) === site,
+                    const list = equipmentRecords.filter((record) =>
+                        recordBelongsToSite(record, site),
                       ),
                     on = list.filter((v) => v.status === "Operational").length,
                     off = list.length - on;
