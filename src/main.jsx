@@ -5,6 +5,11 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import {
+  findRequestEquipment,
+  requestEquipmentDetails,
+  requestEquipmentOptionLabel,
+} from "../request-equipment.mjs";
+import {
   LayoutDashboard,
   Truck,
   Wrench,
@@ -769,7 +774,7 @@ function Dashboard({ goto, gotoEquipment }) {
 }
 function BreakdownTable({ rows = breakdowns }) {
   const columns = [
-      ["ref", "Job reference"], ["door", "Door no."], ["site", "Site location"],
+      ["ref", "Job reference"], ["equipment", "Equipment"], ["door", "Door no."], ["site", "Site location"],
       ["category", "Repair category"], ["start", "Started"], ["hours", "Downtime"],
       ["status", "Status"], ["owner", "Responsibility"],
     ],
@@ -791,6 +796,7 @@ function BreakdownTable({ rows = breakdowns }) {
                 <td>
                   <b>{r.ref}</b>
                 </td>
+                <td>{r.equipment || "—"}</td>
                 <td>{r.door}</td>
                 <td>
                   <MapPin /> {r.site}
@@ -806,7 +812,7 @@ function BreakdownTable({ rows = breakdowns }) {
             ))
           ) : (
             <tr>
-              <td colSpan="8" className="empty-state">
+              <td colSpan="9" className="empty-state">
                 No records available
               </td>
             </tr>
@@ -1876,28 +1882,31 @@ function EnhancedSpeechComplaint() {
   );
 }
 SpeechComplaint = EnhancedSpeechComplaint;
-function MaintenanceForm({ close, normal = false, onSubmit }) {
-  const [door, setDoor] = useState("");
+function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false }) {
+  const [equipmentId, setEquipmentId] = useState(""),
+    [door, setDoor] = useState("");
   const [openedAt] = useState(() => new Date());
   const pad = (n) => String(n).padStart(2, "0");
   const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
     systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
-    v = vehicles.find((x) => x.door === door);
+    v = findRequestEquipment(equipmentRecords, equipmentId),
+    equipmentDetails = requestEquipmentDetails(v || {});
   const [requestTime, setRequestTime] = useState(systemTime);
   const submit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget),
       request = {
         ref: "REQ-" + Date.now(),
+        equipment: equipmentDetails.equipment,
         door: fd.get("door"),
-        site: v?.location || "Not assigned",
+        site: equipmentDetails.site || "Not assigned",
         category: "Maintenance request",
         complaint: fd.get("complaint"),
         start: fd.get("date") + " · " + fd.get("time"),
         hours: "—",
         status: "Open",
         owner: "Mobile User",
-        reg: v?.reg || "",
+        reg: equipmentDetails.reg,
       };
     onSubmit?.(request);
     close();
@@ -1913,18 +1922,49 @@ function MaintenanceForm({ close, normal = false, onSubmit }) {
       <form className="form" onSubmit={submit}>
         <div className="formgrid">
           <label>
+            Equipment *
+            <select
+              name="equipmentId"
+              required
+              value={equipmentId}
+              disabled={!equipmentLoaded || !equipmentRecords.length}
+              aria-busy={!equipmentLoaded}
+              onChange={(event) => {
+                const selectedId = event.target.value,
+                  selected = findRequestEquipment(equipmentRecords, selectedId),
+                  details = requestEquipmentDetails(selected || {});
+                setEquipmentId(selectedId);
+                setDoor(details.door);
+              }}
+            >
+              <option value="" disabled>
+                {!equipmentLoaded
+                  ? "Loading equipment..."
+                  : equipmentRecords.length
+                    ? "Select equipment"
+                    : "No equipment available"}
+              </option>
+              {equipmentRecords.filter((record) => record.id != null).map((record) => (
+                <option key={record.id} value={String(record.id)}>
+                  {requestEquipmentOptionLabel(record)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             Door number *
             <input
               name="door"
               required
               value={door}
               onChange={(e) => setDoor(e.target.value)}
+              readOnly={Boolean(v?.door)}
               list="door-numbers"
-              placeholder="Enter door number"
+              placeholder={v?.door ? "Auto-filled from equipment" : "Enter door number"}
             />
             <datalist id="door-numbers">
-              {vehicles.map((v) => (
-                <option key={v.door} value={v.door} />
+              {equipmentRecords.filter((record) => record.door).map((record) => (
+                <option key={record.id || record.door} value={record.door} />
               ))}
             </datalist>
           </label>
@@ -1954,12 +1994,12 @@ function MaintenanceForm({ close, normal = false, onSubmit }) {
           </label>
           <label>
             Registration number
-            <input value={v?.reg || "Auto-fetched when available"} readOnly />
+            <input value={equipmentDetails.reg || "Auto-fetched when available"} readOnly />
           </label>
           <label>
             Site location
             <input
-              value={v?.location || "Auto-fetched when available"}
+              value={equipmentDetails.site || "Auto-fetched when available"}
               readOnly
             />
           </label>
@@ -1969,8 +2009,8 @@ function MaintenanceForm({ close, normal = false, onSubmit }) {
           <div className="autofetch">
             <CheckCircle2 />
             <span>
-              <b>Vehicle details fetched</b>
-              {v.make} {v.model} · KMR {v.kmr} · HMR {v.hmr}
+              <b>Equipment details fetched</b>
+              {[v.make, v.model, v.category, equipmentDetails.site].filter(Boolean).join(" · ")}
             </span>
           </div>
         )}
@@ -2979,7 +3019,8 @@ function Modal({ title, close, children }) {
   );
 }
 function Normal({ logout, requests, onCreate, theme, toggleTheme }) {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(false),
+    [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", vehicles);
   const dateLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "long",
     day: "numeric",
@@ -3041,6 +3082,8 @@ function Normal({ logout, requests, onCreate, theme, toggleTheme }) {
         <MaintenanceForm
           normal
           onSubmit={onCreate}
+          equipmentRecords={equipmentRecords}
+          equipmentLoaded={equipmentLoaded}
           close={() => setShow(false)}
         />
       )}

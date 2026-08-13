@@ -38,6 +38,7 @@ async function migrate(){
     CREATE TABLE IF NOT EXISTS maintenance_requests (
       id BIGSERIAL PRIMARY KEY,
       reference TEXT NOT NULL UNIQUE,
+      equipment_name TEXT NOT NULL DEFAULT '',
       door_number TEXT NOT NULL,
       registration_number TEXT NOT NULL DEFAULT '',
       site TEXT NOT NULL DEFAULT 'Not assigned',
@@ -50,6 +51,8 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS maintenance_requests_created_at_idx
       ON maintenance_requests (created_at DESC);
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS equipment_name TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS master_records (
       id BIGSERIAL PRIMARY KEY,
       master_name TEXT NOT NULL,
@@ -213,7 +216,7 @@ app.get('/api/health',async(_req,res)=>{
 
 app.get('/api/requests',async(_req,res,next)=>{
   try{
-    const {rows}=await pool.query(`SELECT reference AS ref, door_number AS door, registration_number AS reg,
+    const {rows}=await pool.query(`SELECT reference AS ref, equipment_name AS equipment, door_number AS door, registration_number AS reg,
       site, category, complaint, to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
       '—' AS hours, status, owner_name AS owner FROM maintenance_requests ORDER BY created_at DESC`);
     res.json(rows);
@@ -222,15 +225,15 @@ app.get('/api/requests',async(_req,res,next)=>{
 
 app.post('/api/requests',async(req,res,next)=>{
   try{
-    const {ref,door,reg='',site='Not assigned',category='Maintenance request',complaint,start,status='Open',owner='Normal User'}=req.body||{};
+    const {ref,equipment='',door,reg='',site='Not assigned',category='Maintenance request',complaint,start,status='Open',owner='Normal User'}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     const startedAt=parseIndiaRequestDateTime(start);
     const {rows}=await pool.query(`INSERT INTO maintenance_requests
-      (reference,door_number,registration_number,site,category,complaint,started_at,status,owner_name)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      RETURNING reference AS ref,door_number AS door,registration_number AS reg,site,category,complaint,
+      (reference,equipment_name,door_number,registration_number,site,category,complaint,started_at,status,owner_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING reference AS ref,equipment_name AS equipment,door_number AS door,registration_number AS reg,site,category,complaint,
         to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,'—' AS hours,status,owner_name AS owner`,
-      [ref,door,reg,site,category,complaint,startedAt,status,owner]);
+      [ref,equipment,door,reg,site,category,complaint,startedAt,status,owner]);
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });
