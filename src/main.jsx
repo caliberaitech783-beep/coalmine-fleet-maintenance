@@ -47,6 +47,7 @@ import {
 import "./style.css";
 import "./topbar.css";
 import "./site-counts.css";
+import "./dashboard-charts.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -645,8 +646,14 @@ function Dashboard({ goto, gotoEquipment }) {
             ].map((a, i) => {
               const n = breakdowns.filter((b) => b.status === a).length;
               return (
-                <button key={a}>
-                  <span>{a}</span>
+                <button
+                  key={a}
+                  onClick={() => goto("Breakdown master")}
+                  title={`${a}: ${n} case${n === 1 ? "" : "s"}`}
+                  aria-label={`View ${a.toLowerCase()} breakdown cases: ${n}`}
+                  style={{ "--bar-value": breakdowns.length ? n / breakdowns.length : 0 }}
+                >
+                  <span><i className={`status-dot b${i}`} />{a}</span>
                   <div>
                     <i
                       style={{
@@ -675,26 +682,39 @@ function Dashboard({ goto, gotoEquipment }) {
               </p>
             </div>
           </header>
-          <div className="donut">
-            <div>
+          <div className="availability-chart">
+            <button
+              className="donut"
+              onClick={() => gotoEquipment("all", "")}
+              title={`${equipmentKpis.availability}% of equipment is currently on road`}
+              aria-label={`Fleet availability ${equipmentKpis.availability} percent. View all equipment.`}
+              style={{ "--availability": `${equipmentKpis.availability}%` }}
+            >
+              <div>
               <strong>
                   {equipmentKpis.availability}
                 %
               </strong>
               <span>On Road</span>
+              </div>
+            </button>
+            <div className="availability-summary">
+              <strong>{equipmentRecords.length}</strong>
+              <span>Total equipment</span>
+              <small>Click chart to view fleet</small>
             </div>
           </div>
           <div className="legend">
-            <span>
+            <button onClick={() => gotoEquipment("onroad", "")}>
               <i className="lg1" />
-              On Road{" "}
-                <b>{equipmentKpis.onRoad}</b>
-            </span>
-            <span>
+              <span>On Road</span>
+              <b>{equipmentKpis.onRoad}</b>
+            </button>
+            <button onClick={() => gotoEquipment("offroad", "")}>
               <i className="lg3" />
-              Off Road{" "}
-                <b>{equipmentKpis.offRoad}</b>
-            </span>
+              <span>Off Road</span>
+              <b>{equipmentKpis.offRoad}</b>
+            </button>
           </div>
         </section>
       </div>
