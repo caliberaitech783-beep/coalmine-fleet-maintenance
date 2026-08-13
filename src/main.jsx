@@ -2311,7 +2311,7 @@ function useMasterRecords(name, seed = []) {
         }));
       });
   }, [name]);
-  const add = async (incoming) => {
+  const add = async (incoming, { silent = false } = {}) => {
     const batches = batchMasterRecords(incoming);
     const saved = [];
     for (let index = 0; index < batches.length; index += 1) {
@@ -2341,14 +2341,16 @@ function useMasterRecords(name, seed = []) {
       });
       return next;
     });
-    alert(
-      saved.length +
-        " record" +
-        (saved.length === 1 ? "" : "s") +
-        (name === "Equipment master"
-          ? " saved successfully. Matching rows were overwritten."
-          : " added successfully."),
-    );
+    if (!silent) {
+      alert(
+        saved.length +
+          " record" +
+          (saved.length === 1 ? "" : "s") +
+          (name === "Equipment master"
+            ? " saved successfully. Matching rows were overwritten."
+            : " added successfully."),
+      );
+    }
   };
   const edit = async (id, record) => {
     const response = await fetch(`/api/masters/${encodeURIComponent(name)}/${id}`, {
@@ -2649,14 +2651,45 @@ Equipment = function EquipmentWithData(props) {
 const OriginalGeneric = Generic;
 function PrivilegeMasterPage(props) {
   const [users, , usersLoaded] = useMasterRecords("Users & employees");
-  if (!usersLoaded) return <MasterLoader name="Privilege" />;
+  const syncing = useRef(""),
+    [failedSync, setFailedSync] = useState("");
   const userOptions = Array.from(
     new Map(
       users
-        .filter((user) => user.login || user.employee)
-        .map((user) => [String(user.login || user.employee).trim().toLowerCase(), user]),
+        .filter((user) => String(user.login || "").trim())
+        .map((user) => [String(user.login).trim().toLowerCase(), user]),
     ).values(),
-  );
+  ),
+    existingUsernames = new Set(
+      props.records.map((record) => String(record.username || "").trim().toLowerCase()).filter(Boolean),
+    ),
+    missingUsers = userOptions.filter(
+      (user) => !existingUsernames.has(String(user.login).trim().toLowerCase()),
+    ),
+    syncKey = missingUsers.map((user) => String(user.login).trim().toLowerCase()).sort().join("|");
+  useEffect(() => {
+    if (!usersLoaded || !syncKey || syncing.current === syncKey || failedSync === syncKey) return;
+    syncing.current = syncKey;
+    props.onAdd(
+      missingUsers.map((user) => ({
+        username: String(user.login).trim(),
+        userGroup: "",
+        accessType: false,
+        location: false,
+        read: false,
+        edit: false,
+        delete: false,
+        verify: false,
+        print: false,
+      })),
+      { silent: true },
+    ).catch((error) => {
+      setFailedSync(syncKey);
+      alert(error.message || "Could not load users into Privilege.");
+    });
+  }, [syncKey, failedSync]);
+  if (!usersLoaded) return <MasterLoader name="Privilege" />;
+  if (missingUsers.length && failedSync !== syncKey) return <MasterLoader name="Privilege" />;
   return <MasterPage {...props} userOptions={userOptions} />;
 }
 Generic = function GenericWithMasters(props) {
