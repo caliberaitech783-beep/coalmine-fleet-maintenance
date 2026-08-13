@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
+import { calculateBreakdownDays } from "../breakdown-duration.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
@@ -1891,7 +1892,14 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
     v = findRequestEquipment(equipmentRecords, equipmentId),
     equipmentDetails = requestEquipmentDetails(v || {});
-  const [requestTime, setRequestTime] = useState(systemTime);
+  const [requestDate, setRequestDate] = useState(systemDate),
+    [requestTime, setRequestTime] = useState(systemTime),
+    [breakdownNow, setBreakdownNow] = useState(() => Date.now()),
+    breakdownDays = calculateBreakdownDays(requestDate, requestTime, breakdownNow);
+  useEffect(() => {
+    const timer = window.setInterval(() => setBreakdownNow(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
   const submit = (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget),
@@ -1969,7 +1977,13 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </datalist>
           </label>
           <label>
-            Date *<input name="date" type="date" defaultValue={systemDate} />
+            Date *
+            <input
+              name="date"
+              type="date"
+              value={requestDate}
+              onChange={(event) => setRequestDate(event.target.value)}
+            />
           </label>
           {!normal && (
             <label>
@@ -1992,10 +2006,12 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               required
             />
           </label>
-          <label>
-            Registration number
-            <input value={equipmentDetails.reg || "Auto-fetched when available"} readOnly />
-          </label>
+          {!normal && (
+            <label>
+              Registration number
+              <input value={equipmentDetails.reg || "Auto-fetched when available"} readOnly />
+            </label>
+          )}
           <label>
             Site location
             <input
@@ -2003,6 +2019,22 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               readOnly
             />
           </label>
+          {normal && (
+            <label>
+              Days of breakdown
+              <input
+                value={`${breakdownDays} ${breakdownDays === 1 ? "day" : "days"}`}
+                readOnly
+                aria-live="polite"
+              />
+            </label>
+          )}
+          {normal && (
+            <label>
+              Registration number
+              <input value={equipmentDetails.reg || "Auto-fetched when available"} readOnly />
+            </label>
+          )}
           <SpeechComplaint />
         </div>
         {v && (
