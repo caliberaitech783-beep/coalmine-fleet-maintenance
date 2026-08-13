@@ -50,6 +50,7 @@ import "./site-counts.css";
 import "./dashboard-charts.css";
 import "./master-loader.css";
 import "./import-dropzone.css";
+import "./privilege.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -105,6 +106,7 @@ const masterNav = [
   ["Vehicle transfers", ArrowRightLeft],
   ["Hierarchy master", Network],
   ["OEM master", ShieldCheck],
+  ["Privilege", LockKeyhole],
 ];
 const whatsappNav = [
   ["Daily site-wise report", Building2],
@@ -859,7 +861,20 @@ const masterFields = {
     ["location", "Location"],
     ["level", "Level (L1 / L2 / L3 / L4)"],
   ],
+  Privilege: [
+    ["username", "Username"],
+    ["userGroup", "User Group"],
+    ["accessType", "Super User / Mobile User", "checkbox"],
+    ["location", "Location", "checkbox"],
+    ["read", "Read", "checkbox"],
+    ["edit", "Edit", "checkbox"],
+    ["delete", "Delete", "checkbox"],
+    ["verify", "Verify", "checkbox"],
+    ["print", "Print", "checkbox"],
+  ],
 };
+const isCheckedValue = (value) =>
+  value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 function parseCsv(text, fields) {
   const lines = text
       .replace(/^\uFEFF/, "")
@@ -917,7 +932,10 @@ function MasterActions({ name, onAdd, onDeleteAll }) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget),
       record = Object.fromEntries(
-        fields.map(([key]) => [key, String(fd.get(key) || "").trim()]),
+        fields.map(([key, , type]) => [
+          key,
+          type === "checkbox" ? fd.has(key) : String(fd.get(key) || "").trim(),
+        ]),
       );
     if (name === "Equipment master" && !record.status)
       record.status = "Operational";
@@ -986,10 +1004,18 @@ function MasterActions({ name, onAdd, onDeleteAll }) {
         <Modal title={"Add to " + name} close={() => setMode(null)}>
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
-              {fields.map(([key, label]) => (
+              {fields.map(([key, label, type]) => (
                 <label key={key}>
-                  {label} *
-                  {key === "level" ? (
+                  {type === "checkbox" ? (
+                    <span className="privilege-checkbox-field">
+                      <input type="checkbox" name={key} />
+                      <span>
+                        <b>{label}</b>
+                        <small>Enable this privilege</small>
+                      </span>
+                    </span>
+                  ) : key === "level" ? (
+                    <>{label} *
                     <select name={key} required defaultValue="">
                       <option value="" disabled>
                         Select level
@@ -1000,12 +1026,15 @@ function MasterActions({ name, onAdd, onDeleteAll }) {
                         </option>
                       ))}
                     </select>
+                    </>
                   ) : (
+                    <>{label} *
                     <input
                       name={key}
                       required={key === fields[0][0]}
                       placeholder={"Enter " + label.toLowerCase()}
                     />
+                    </>
                   )}
                 </label>
               ))}
@@ -2102,21 +2131,24 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
     fields = masterFields[name],
-    canManageRows = name === "OEM master" || name === "Users & employees",
+    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege",
     rows = records.filter((record) =>
       Object.values(record).join(" ").toLowerCase().includes(q.toLowerCase()),
     );
   const saveEdit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const updated = Object.fromEntries(fields.map(([key]) => [key, String(form.get(key) || "").trim()]));
+    const updated = Object.fromEntries(fields.map(([key, , type]) => [
+      key,
+      type === "checkbox" ? form.has(key) : String(form.get(key) || "").trim(),
+    ]));
     try {
       await onEdit(editing.id, updated);
       setEditing(null);
     } catch (error) { alert(error.message); }
   };
   const deleteRow = async (record) => {
-    const recordName = record.oem || record.employee || record.login || "this record";
+    const recordName = record.oem || record.employee || record.login || record.username || "this record";
     if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
     try { await onDelete(record.id); }
     catch (error) { alert(error.message); }
@@ -2155,13 +2187,20 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }
             {rows.length ? (
               rows.map((row, ri) => (
                 <tr key={row.id || ri}>
-                  {fields.map(([key], ci) => (
-                    <td key={key}>{ci === 0 ? <b>{row[key]}</b> : row[key]}</td>
+                  {fields.map(([key, , type], ci) => (
+                    <td key={key}>
+                      {type === "checkbox" ? (
+                        <span className={`privilege-value ${isCheckedValue(row[key]) ? "enabled" : "disabled"}`}>
+                          {isCheckedValue(row[key]) ? <CheckCircle2 /> : <X />}
+                          {isCheckedValue(row[key]) ? "Yes" : "No"}
+                        </span>
+                      ) : ci === 0 ? <b>{row[key]}</b> : row[key]}
+                    </td>
                   ))}
                   {canManageRows && (
                     <td className="row-actions">
-                      <button aria-label={`Edit ${row.oem || row.employee || row.login || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
-                      <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
+                      <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
+                      <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
                     </td>
                   )}
                 </tr>
@@ -2181,9 +2220,14 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }
       <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : "OEM"} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
-            {fields.map(([key, label]) => (
+            {fields.map(([key, label, type]) => (
               <label key={key}>{label} *
-                {key === "level" ? (
+                {type === "checkbox" ? (
+                  <span className="privilege-checkbox-field">
+                    <input type="checkbox" name={key} defaultChecked={isCheckedValue(editing[key])} />
+                    <span><b>{label}</b><small>Enable this privilege</small></span>
+                  </span>
+                ) : key === "level" ? (
                   <select name={key} required defaultValue={editing[key] || ""}>
                     <option value="" disabled>Select level</option>
                     {["L1", "L2", "L3", "L4"].map((level) => <option key={level}>{level}</option>)}
