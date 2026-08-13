@@ -607,6 +607,13 @@ function Dashboard({ goto, gotoEquipment }) {
                         <strong>{on}</strong>
                         <span>On Road</span>
                       </button>
+                      <button
+                        className="off"
+                        onClick={() => gotoEquipment("offroad", site)}
+                      >
+                        <strong>0</strong>
+                        <span>Off Road</span>
+                      </button>
                       <ChevronRight />
                     </div>
                   );

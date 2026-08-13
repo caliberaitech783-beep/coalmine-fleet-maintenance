@@ -1,9 +1,9 @@
 .site-fleet-row {
-  grid-template-columns: minmax(130px, 1fr) 58px 65px 14px;
+  grid-template-columns: minmax(130px, 1fr) 58px 65px 65px 14px;
 }
 
 @media (max-width: 600px) {
   .site-fleet-row {
-    grid-template-columns: minmax(105px, 1fr) 45px 52px;
+    grid-template-columns: minmax(105px, 1fr) 45px 52px 52px;
   }
 }
