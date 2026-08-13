@@ -46,6 +46,7 @@ import {
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
+import "./site-counts.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -585,8 +586,7 @@ function Dashboard({ goto, gotoEquipment }) {
                     const list = equipmentRecords.filter((record) =>
                         recordBelongsToSite(record, site),
                       ),
-                    on = list.filter((v) => v.status === "Operational").length,
-                    off = list.length - on;
+                    on = list.filter((v) => v.status === "Operational").length;
                   return (
                     <div className="site-fleet-row" key={site}>
                       <button
@@ -606,13 +606,6 @@ function Dashboard({ goto, gotoEquipment }) {
                       >
                         <strong>{on}</strong>
                         <span>On Road</span>
-                      </button>
-                      <button
-                        className="off"
-                        onClick={() => gotoEquipment("offroad", site)}
-                      >
-                        <strong>{off}</strong>
-                        <span>Off Road</span>
                       </button>
                       <ChevronRight />
                     </div>
