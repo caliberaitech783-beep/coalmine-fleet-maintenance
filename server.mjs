@@ -88,6 +88,17 @@ async function migrate(){
     CREATE INDEX IF NOT EXISTS whatsapp_alert_history_created_at_idx
       ON whatsapp_alert_history (created_at DESC);
   `);
+  await pool.query(`
+    DELETE FROM master_records duplicate
+    USING master_records original
+    WHERE duplicate.master_name='Privilege'
+      AND original.master_name='Privilege'
+      AND LOWER(TRIM(duplicate.record_data->>'username'))=LOWER(TRIM(original.record_data->>'username'))
+      AND duplicate.id>original.id;
+    CREATE UNIQUE INDEX IF NOT EXISTS master_records_privilege_username_unique
+      ON master_records (LOWER(TRIM(record_data->>'username')))
+      WHERE master_name='Privilege' AND TRIM(record_data->>'username')<>'';
+  `);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -289,6 +300,38 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
             );
             rows.push(inserted.rows[0]);
             if(identity)byIdentity.set(identity,inserted.rows[0]);
+          }
+        }
+        await client.query('COMMIT');
+      }catch(error){
+        await client.query('ROLLBACK');
+        throw error;
+      }finally{client.release()}
+    }else if(master==='Privilege'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        await client.query('LOCK TABLE master_records IN SHARE ROW EXCLUSIVE MODE');
+        const existing=await client.query(
+          'SELECT id,record_data FROM master_records WHERE master_name=$1',
+          [master]
+        );
+        const byUsername=new Map(existing.rows.map(row=>[
+          String(row.record_data.username||'').trim().toLowerCase(),row
+        ]).filter(([username])=>username));
+        rows=[];
+        for(const record of prepared){
+          const username=String(record.username||'').trim().toLowerCase();
+          const match=username&&byUsername.get(username);
+          if(match){
+            rows.push(match);
+          }else{
+            const inserted=await client.query(
+              'INSERT INTO master_records (master_name,record_data) VALUES ($1,$2::jsonb) RETURNING id,record_data',
+              [master,JSON.stringify(record)]
+            );
+            rows.push(inserted.rows[0]);
+            if(username)byUsername.set(username,inserted.rows[0]);
           }
         }
         await client.query('COMMIT');

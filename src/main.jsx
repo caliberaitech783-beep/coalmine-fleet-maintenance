@@ -2140,6 +2140,7 @@ function Generic({ name, requests = [] }) {
 function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [] }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
+    [savingCell, setSavingCell] = useState(""),
     fields = masterFields[name],
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege",
     rows = records.filter((record) =>
@@ -2150,7 +2151,9 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     const form = new FormData(event.currentTarget);
     const updated = Object.fromEntries(fields.map(([key, , type]) => [
       key,
-      type === "checkbox" ? form.has(key) : String(form.get(key) || "").trim(),
+      name === "Privilege" && type === "checkbox"
+        ? isCheckedValue(editing[key])
+        : type === "checkbox" ? form.has(key) : String(form.get(key) || "").trim(),
     ]));
     try {
       await onEdit(editing.id, updated);
@@ -2162,6 +2165,16 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
     try { await onDelete(record.id); }
     catch (error) { alert(error.message); }
+  };
+  const togglePrivilege = async (record, key, checked) => {
+    const cell = `${record.id}-${key}`;
+    setSavingCell(cell);
+    const updated = Object.fromEntries(
+      fields.map(([field]) => [field, field === key ? checked : record[field]]),
+    );
+    try { await onEdit(record.id, updated); }
+    catch (error) { alert(error.message); }
+    finally { setSavingCell(""); }
   };
   return (
     <>
@@ -2199,7 +2212,16 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 <tr key={row.id || ri}>
                   {fields.map(([key, , type], ci) => (
                     <td key={key}>
-                      {type === "checkbox" ? (
+                      {name === "Privilege" && type === "checkbox" ? (
+                        <input
+                          className="privilege-inline-checkbox"
+                          type="checkbox"
+                          checked={isCheckedValue(row[key])}
+                          disabled={savingCell === `${row.id}-${key}`}
+                          aria-label={`${fields[ci][1]} for ${row.username}`}
+                          onChange={(event) => togglePrivilege(row, key, event.target.checked)}
+                        />
+                      ) : type === "checkbox" ? (
                         <span className={`privilege-value ${isCheckedValue(row[key]) ? "enabled" : "disabled"}`}>
                           {isCheckedValue(row[key]) ? <CheckCircle2 /> : <X />}
                           {isCheckedValue(row[key]) ? "Yes" : "No"}
@@ -2227,10 +2249,10 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       </div>
     </section>
     {editing && (
-      <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : "OEM"} record`} close={() => setEditing(null)}>
+      <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : "OEM"} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
-            {fields.map(([key, label, type]) => (
+            {fields.filter(([, , type]) => name !== "Privilege" || type !== "checkbox").map(([key, label, type]) => (
               <label key={key}>{label} *
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">

@@ -37,3 +37,16 @@
 .privilege-value svg { width: 12px; height: 12px; }
 .privilege-value.enabled { background: #e8f7f1; color: #268662; }
 .privilege-value.disabled { background: #f1f3f6; color: #7d899b; }
+
+.privilege-inline-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #315fd3;
+}
+
+.privilege-inline-checkbox:disabled {
+  cursor: wait;
+  opacity: .55;
+}
