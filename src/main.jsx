@@ -49,6 +49,7 @@ import "./topbar.css";
 import "./site-counts.css";
 import "./dashboard-charts.css";
 import "./master-loader.css";
+import "./import-dropzone.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -906,6 +907,10 @@ function parseCsv(text, fields) {
 }
 function MasterActions({ name, onAdd, onDeleteAll }) {
   const [mode, setMode] = useState(null),
+    [selectedFile, setSelectedFile] = useState(null),
+    [importing, setImporting] = useState(false),
+    [dragActive, setDragActive] = useState(false),
+    fileInput = useRef(null),
     fields = masterFields[name];
   if (!fields) return null;
   const saveManual = (e) => {
@@ -919,17 +924,35 @@ function MasterActions({ name, onAdd, onDeleteAll }) {
     onAdd([record]);
     setMode(null);
   };
-  const importFile = async (e) => {
-    const file = e.target.files?.[0];
+  const chooseFile = (file) => {
     if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      alert("Please select a CSV file.");
+      return;
+    }
+    setSelectedFile(file);
+  };
+  const importFile = async () => {
+    const file = selectedFile;
+    if (!file || importing) return;
+    setImporting(true);
     try {
       const records = parseCsv(await file.text(), fields);
       if (!records.length) throw new Error("No usable rows were found.");
       await onAdd(records);
+      setSelectedFile(null);
       setMode(null);
     } catch (error) {
       alert(error.message);
+    } finally {
+      setImporting(false);
     }
+  };
+  const closeImport = () => {
+    if (importing) return;
+    setSelectedFile(null);
+    setDragActive(false);
+    setMode(null);
   };
   const template = () => {
     const csv =
@@ -997,19 +1020,96 @@ function MasterActions({ name, onAdd, onDeleteAll }) {
         </Modal>
       )}
       {mode === "import" && (
-        <Modal title={"Import " + name} close={() => setMode(null)}>
-          <div className="import-box">
-            <Upload />
-            <h3>Upload a CSV file</h3>
-            <p>
-              The first row must contain the field headings. Download the
-              template for the correct format.
-            </p>
-            <input type="file" accept=".csv,text/csv" onChange={importFile} />
-            <button type="button" className="secondary" onClick={template}>
-              <Download />
-              Download CSV template
-            </button>
+        <Modal title={"Import " + name} close={closeImport}>
+          <div className="import-dropbox">
+            <div
+              className={`import-dropzone${dragActive ? " drag-active" : ""}`}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                setDragActive(true);
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDragLeave={(event) => {
+                event.preventDefault();
+                if (!event.currentTarget.contains(event.relatedTarget)) setDragActive(false);
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragActive(false);
+                chooseFile(event.dataTransfer.files?.[0]);
+              }}
+            >
+              <div className="import-file-icons" aria-hidden="true">
+                <FileBarChart />
+                <Upload />
+                <Download />
+              </div>
+              <h3>Drop your CSV file here</h3>
+              <p>
+                or{" "}
+                <button type="button" onClick={() => fileInput.current?.click()}>
+                  Browse file
+                </button>
+              </p>
+              <div className="import-file-notes">
+                <span>CSV files only</span>
+                <span>Uses the master template</span>
+              </div>
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => chooseFile(event.target.files?.[0])}
+              />
+            </div>
+
+            {selectedFile && (
+              <div className={`import-selected-file${importing ? " uploading" : ""}`}>
+                <div className="import-file-type"><FileBarChart /></div>
+                <div>
+                  <strong>{selectedFile.name}</strong>
+                  <span>{(selectedFile.size / 1024).toFixed(1)} KB</span>
+                </div>
+                {importing ? (
+                  <div className="import-progress" aria-label="Importing CSV records">
+                    <span />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label="Remove selected file"
+                    onClick={() => setSelectedFile(null)}
+                  >
+                    <X />
+                  </button>
+                )}
+              </div>
+            )}
+
+            {importing && (
+              <div className="import-loading" role="status" aria-live="polite">
+                <div className="import-loading-spinner" aria-hidden="true" />
+                <div>
+                  <strong>Importing records...</strong>
+                  <span>Please keep this window open while data is saved.</span>
+                </div>
+              </div>
+            )}
+
+            <div className="import-actions">
+              <button type="button" className="secondary" onClick={template} disabled={importing}>
+                <Download /> Download CSV template
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={importFile}
+                disabled={!selectedFile || importing}
+              >
+                {importing ? "Importing..." : "Import records"}
+                {!importing && <Upload />}
+              </button>
+            </div>
           </div>
         </Modal>
       )}
