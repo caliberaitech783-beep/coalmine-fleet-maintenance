@@ -48,6 +48,7 @@ import "./style.css";
 import "./topbar.css";
 import "./site-counts.css";
 import "./dashboard-charts.css";
+import "./master-loader.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -2101,6 +2102,33 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll }
     </>
   );
 }
+
+function MasterLoader({ name }) {
+  return (
+    <section className="panel pagepanel master-loading" aria-live="polite" aria-busy="true">
+      <header>
+        <div>
+          <h1>{name}</h1>
+          <p>Loading the latest records...</p>
+        </div>
+      </header>
+      <div className="master-loader-content" role="status">
+        <div className="master-loader-spinner" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <strong>Loading {name.toLowerCase()}</strong>
+        <p>Please wait while the live data is retrieved.</p>
+        <div className="master-loader-lines" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+      </div>
+    </section>
+  );
+}
 function useMasterRecords(name, seed = []) {
   const [records, setRecords] = useState(seed),
     [loaded, setLoaded] = useState(false);
@@ -2399,7 +2427,8 @@ function WhatsAppAlertHistory() {
 }
 const OriginalBreakdown = Breakdown;
 Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
-  const [manualRecords, onAdd, , , , onDeleteAll] = useMasterRecords("Breakdown master");
+  const [manualRecords, onAdd, loaded, , , onDeleteAll] = useMasterRecords("Breakdown master");
+  if (!loaded) return <MasterLoader name="Breakdown master" />;
   const rows = [...requests, ...manualRecords];
   const count = (status) => rows.filter((record) => record.status === status).length;
   return (
@@ -2430,7 +2459,8 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
 };
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
-  const [records, onAdd, , , , onDeleteAll] = useMasterRecords("Equipment master", vehicles);
+  const [records, onAdd, loaded, , , onDeleteAll] = useMasterRecords("Equipment master", vehicles);
+  if (!loaded) return <MasterLoader name="Equipment master" />;
   const addEquipment = (incoming) =>
     onAdd(
       incoming.map((record) => ({
@@ -2457,7 +2487,8 @@ Generic = function GenericWithMasters(props) {
       name === "Region master"
         ? subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") }))
         : [],
-    [records, onAdd, , onEdit, onDelete, onDeleteAll] = useMasterRecords(name, seed);
+    [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(name, seed);
+  if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
   return masterFields[name] ? (
     <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
   ) : (
@@ -2466,10 +2497,11 @@ Generic = function GenericWithMasters(props) {
 };
 const OriginalSubsidiaries = Subsidiaries;
 Subsidiaries = function SubsidiariesWithImport() {
-  const [records, onAdd, , onEdit, onDelete, onDeleteAll] = useMasterRecords(
+  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
+  if (!loaded) return <MasterLoader name="Region master" />;
   return <MasterPage name="Region master" records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />;
 };
 function Modal({ title, close, children }) {
