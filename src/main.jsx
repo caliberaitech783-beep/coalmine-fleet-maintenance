@@ -891,8 +891,8 @@ const masterFields = {
   Privilege: [
     ["username", "Username", "user-select"],
     ["userGroup", "User Group"],
-    ["accessType", "Super User / Mobile User", "checkbox"],
-    ["location", "Location", "checkbox"],
+    ["accessType", "Super User / Mobile User", "role-radio"],
+    ["location", "Location", "site-select"],
     ["read", "Read", "checkbox"],
     ["edit", "Edit", "checkbox"],
     ["delete", "Delete", "checkbox"],
@@ -902,6 +902,31 @@ const masterFields = {
 };
 const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
+const privilegeAccessOptions = ["Super User", "Mobile User"];
+const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
+const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
+function privilegeSelectionValue(value) {
+  if (typeof value !== "string") return "";
+  const selected = value.trim();
+  return legacyPrivilegeFlagValues.has(selected.toLowerCase()) ? "" : selected;
+}
+function privilegeAccessValue(value) {
+  const normalized = privilegeSelectionValue(value).toLowerCase();
+  if (normalized.includes("mobile") || normalized.includes("normal")) return "Mobile User";
+  if (normalized.includes("super") || normalized === "admin") return "Super User";
+  return "";
+}
+function normalizeEquipmentRecord(record = {}) {
+  const currentLocation = record.currentLocation || record.location || "";
+  const acquisitionDate = record.acquisitionDate || record.acquired || "";
+  return {
+    ...record,
+    location: currentLocation,
+    currentLocation,
+    acquired: acquisitionDate,
+    acquisitionDate,
+  };
+}
 const sortCollator = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 function comparableValue(value) {
   if (typeof value === "boolean") return value ? 1 : 0;
@@ -991,7 +1016,7 @@ function parseCsv(text, fields) {
     })
     .filter((record) => Object.values(record).some(Boolean));
 }
-function MasterActions({ name, onAdd, onDeleteAll, userOptions = [] }) {
+function MasterActions({ name, onAdd, onDeleteAll, userOptions = [], siteOptions = [] }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
@@ -1075,7 +1100,20 @@ function MasterActions({ name, onAdd, onDeleteAll, userOptions = [] }) {
         <Modal title={"Add to " + name} close={() => setMode(null)}>
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
-              {fields.map(([key, label, type]) => (
+              {fields.map(([key, label, type]) =>
+                type === "role-radio" ? (
+                  <fieldset key={key} className="privilege-role-field">
+                    <legend>{label} *</legend>
+                    <div>
+                      {privilegeAccessOptions.map((option) => (
+                        <label key={option}>
+                          <input type="radio" name={key} value={option} required />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ) : (
                 <label key={key}>
                   {type === "checkbox" ? (
                     <span className="privilege-checkbox-field">
@@ -1085,6 +1123,12 @@ function MasterActions({ name, onAdd, onDeleteAll, userOptions = [] }) {
                         <small>Enable this privilege</small>
                       </span>
                     </span>
+                  ) : type === "site-select" ? (
+                    <>{label} *
+                    <select name={key} required defaultValue="">
+                      <option value="" disabled>Select a site</option>
+                      {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
+                    </select></>
                   ) : type === "user-select" ? (
                     <>{label} *
                     <select name={key} required defaultValue="">
@@ -1118,7 +1162,8 @@ function MasterActions({ name, onAdd, onDeleteAll, userOptions = [] }) {
                     </>
                   )}
                 </label>
-              ))}
+                ),
+              )}
             </div>
             <footer>
               <button type="button" onClick={() => setMode(null)}>
@@ -1231,12 +1276,16 @@ function Equipment({
   initialLocation = "",
   records = [],
   onAdd,
+  onEdit,
+  onDelete,
   onDeleteAll,
 }) {
   const [q, setQ] = useState(""),
     [road, setRoad] = useState(initialFilter),
     [location, setLocation] = useState(initialLocation),
-    [detail, setDetail] = useState(null);
+    [detail, setDetail] = useState(null),
+    [editing, setEditing] = useState(null),
+    [savingEdit, setSavingEdit] = useState(false);
   const roadStatus = (v) =>
       v.status === "Operational" ? "On Road" : "Off Road",
     locations = [
@@ -1268,6 +1317,36 @@ function Equipment({
       if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
       return record[key];
     });
+  const equipmentEditFields = masterFields["Equipment master"].filter(([key]) => key !== "status");
+  const saveEquipmentEdit = async (event) => {
+    event.preventDefault();
+    if (!editing?.id || savingEdit) return;
+    const form = new FormData(event.currentTarget),
+      values = Object.fromEntries(
+        equipmentEditFields.map(([key]) => [key, String(form.get(key) || "").trim()]),
+      ),
+      { id, ...existing } = editing;
+    setSavingEdit(true);
+    try {
+      await onEdit(id, normalizeEquipmentRecord({ ...existing, ...values }));
+      setEditing(null);
+    } catch (error) {
+      alert(error.message || "Could not update this equipment record.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+  const deleteEquipment = async (record) => {
+    if (!record.id) return;
+    const recordName = record.equipmentName || record.door || record.manufacturerSerialNo || "this equipment record";
+    if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
+    try {
+      await onDelete(record.id);
+      if (detail?.id === record.id) setDetail(null);
+    } catch (error) {
+      alert(error.message || "Could not delete this equipment record.");
+    }
+  };
   return (
     <section className="panel table pagepanel">
       <header>
@@ -1316,6 +1395,7 @@ function Equipment({
               {equipmentColumns.map(([key, label]) => (
                 <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} />
               ))}
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -1346,11 +1426,23 @@ function Equipment({
                   <td>{v.engineNo}</td>
                   <td>{v.chassisNo}</td>
                   <td>{v.documentStatus}</td>
+                  <td className="row-actions" onClick={(event) => event.stopPropagation()}>
+                    {v.id ? (
+                      <>
+                        <button type="button" aria-label={`Edit ${v.equipmentName || v.door || "equipment"}`} onClick={() => setEditing(normalizeEquipmentRecord(v))}>
+                          <Pencil /> Edit
+                        </button>
+                        <button type="button" className="delete" aria-label={`Delete ${v.equipmentName || v.door || "equipment"}`} onClick={() => deleteEquipment(v)}>
+                          <Trash2 /> Delete
+                        </button>
+                      </>
+                    ) : "—"}
+                  </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="13" className="empty-state">
+                <td colSpan="14" className="empty-state">
                   No equipment or vehicle records for this selection
                 </td>
               </tr>
@@ -1382,6 +1474,23 @@ function Equipment({
                 </div>
               ))}
           </div>
+        </Modal>
+      )}
+      {editing && (
+        <Modal title="Edit equipment record" close={() => !savingEdit && setEditing(null)}>
+          <form className="form master-form" onSubmit={saveEquipmentEdit}>
+            <div className="formgrid">
+              {equipmentEditFields.map(([key, label]) => (
+                <label key={key}>{label}
+                  <input name={key} defaultValue={editing[key] || ""} />
+                </label>
+              ))}
+            </div>
+            <footer>
+              <button type="button" disabled={savingEdit} onClick={() => setEditing(null)}>Cancel</button>
+              <button className="primary" disabled={savingEdit}>{savingEdit ? "Saving..." : "Save changes"}</button>
+            </footer>
+          </form>
         </Modal>
       )}
     </section>
@@ -2212,7 +2321,7 @@ function Generic({ name, requests = [] }) {
     </section>
   );
 }
-function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [] }) {
+function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [] }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
     [savingCell, setSavingCell] = useState(""),
@@ -2230,8 +2339,14 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     const form = new FormData(event.currentTarget);
     const updated = Object.fromEntries(fields.map(([key, , type]) => [
       key,
-      name === "Privilege" && type === "checkbox"
+      name === "Privilege" && key === "username"
+        ? String(editing.username || "").trim()
+      : name === "Privilege" && type === "checkbox"
         ? isCheckedValue(editing[key])
+        : name === "Privilege" && type === "role-radio"
+          ? privilegeAccessValue(editing[key])
+        : name === "Privilege" && type === "site-select"
+          ? privilegeSelectionValue(editing[key])
         : type === "checkbox" ? form.has(key) : String(form.get(key) || "").trim(),
     ]));
     try {
@@ -2245,11 +2360,11 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     try { await onDelete(record.id); }
     catch (error) { alert(error.message); }
   };
-  const togglePrivilege = async (record, key, checked) => {
+  const savePrivilegeField = async (record, key, value) => {
     const cell = `${record.id}-${key}`;
     setSavingCell(cell);
     const updated = Object.fromEntries(
-      fields.map(([field]) => [field, field === key ? checked : record[field]]),
+      fields.map(([field]) => [field, field === key ? value : record[field]]),
     );
     try { await onEdit(record.id, updated); }
     catch (error) { alert(error.message); }
@@ -2263,7 +2378,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           <h1>{name}</h1>
           <p>{rows.length} records shown · import CSV or add one manually</p>
         </div>
-        <MasterActions name={name} onAdd={onAdd} onDeleteAll={onDeleteAll} userOptions={userOptions} />
+        <MasterActions name={name} onAdd={onAdd} onDeleteAll={onDeleteAll} userOptions={userOptions} siteOptions={siteOptions} />
       </header>
       <div className="toolbar">
         <div>
@@ -2291,14 +2406,43 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 <tr key={row.id || ri}>
                   {fields.map(([key, , type], ci) => (
                     <td key={key}>
-                      {name === "Privilege" && type === "checkbox" ? (
+                      {name === "Privilege" && type === "role-radio" ? (
+                        <div className="privilege-inline-role" role="radiogroup" aria-label={`Access type for ${row.username}`}>
+                          {privilegeAccessOptions.map((option) => (
+                            <label key={option} title={option}>
+                              <input
+                                type="radio"
+                                name={`access-type-${row.id}`}
+                                checked={privilegeAccessValue(row[key]) === option}
+                                disabled={savingCell.startsWith(`${row.id}-`)}
+                                onChange={() => savePrivilegeField(row, key, option)}
+                              />
+                              <span>{option === "Super User" ? "Super" : "Mobile"}</span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : name === "Privilege" && type === "site-select" ? (
+                        <select
+                          className="privilege-site-select"
+                          value={privilegeSelectionValue(row[key])}
+                          disabled={savingCell.startsWith(`${row.id}-`)}
+                          aria-label={`Location for ${row.username}`}
+                          onChange={(event) => savePrivilegeField(row, key, event.target.value)}
+                        >
+                          <option value="">Select site</option>
+                          {privilegeSelectionValue(row[key]) && !siteOptions.includes(privilegeSelectionValue(row[key])) && (
+                            <option value={privilegeSelectionValue(row[key])}>{privilegeSelectionValue(row[key])}</option>
+                          )}
+                          {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
+                        </select>
+                      ) : name === "Privilege" && type === "checkbox" ? (
                         <input
                           className="privilege-inline-checkbox"
                           type="checkbox"
                           checked={isCheckedValue(row[key])}
-                          disabled={savingCell === `${row.id}-${key}`}
+                          disabled={savingCell.startsWith(`${row.id}-`)}
                           aria-label={`${fields[ci][1]} for ${row.username}`}
-                          onChange={(event) => togglePrivilege(row, key, event.target.checked)}
+                          onChange={(event) => savePrivilegeField(row, key, event.target.checked)}
                         />
                       ) : type === "checkbox" ? (
                         <span className={`privilege-value ${isCheckedValue(row[key]) ? "enabled" : "disabled"}`}>
@@ -2331,7 +2475,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : "OEM"} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
-            {fields.filter(([, , type]) => name !== "Privilege" || type !== "checkbox").map(([key, label, type]) => (
+            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "site-select"].includes(type))).map(([key, label, type]) => (
               <label key={key}>{label} *
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">
@@ -2728,23 +2872,19 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
 };
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
-  const [records, onAdd, loaded, , , onDeleteAll] = useMasterRecords("Equipment master", vehicles);
+  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords("Equipment master", vehicles);
   if (!loaded) return <MasterLoader name="Equipment master" />;
   const addEquipment = (incoming) =>
     onAdd(
-      incoming.map((record) => ({
-        ...record,
-        location: record.currentLocation || record.location || "",
-        currentLocation: record.currentLocation || record.location || "",
-        acquired: record.acquisitionDate || record.acquired || "",
-        acquisitionDate: record.acquisitionDate || record.acquired || "",
-      })),
+      incoming.map(normalizeEquipmentRecord),
     );
   return (
     <OriginalEquipment
       {...props}
       records={records}
       onAdd={addEquipment}
+      onEdit={(id, record) => onEdit(id, normalizeEquipmentRecord(record))}
+      onDelete={onDelete}
       onDeleteAll={onDeleteAll}
     />
   );
@@ -2775,8 +2915,8 @@ function PrivilegeMasterPage(props) {
       missingUsers.map((user) => ({
         username: String(user.login).trim(),
         userGroup: "",
-        accessType: false,
-        location: false,
+        accessType: "",
+        location: "",
         read: false,
         edit: false,
         delete: false,
@@ -2791,7 +2931,7 @@ function PrivilegeMasterPage(props) {
   }, [syncKey, failedSync]);
   if (!usersLoaded) return <MasterLoader name="Privilege" />;
   if (missingUsers.length && failedSync !== syncKey) return <MasterLoader name="Privilege" />;
-  return <MasterPage {...props} userOptions={userOptions} />;
+  return <MasterPage {...props} userOptions={userOptions} siteOptions={privilegeSiteOptions} />;
 }
 Generic = function GenericWithMasters(props) {
   const name = props.name,

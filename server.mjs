@@ -9,6 +9,7 @@ import {createSessionStore} from './auth-session.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
+import {mergePrivilegeRecords} from './privilege-record.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -244,9 +245,7 @@ app.get('/api/masters',async(_req,res,next)=>{
         const username=String(record.username||'').trim().toLowerCase();
         const existing=username&&privilegesByUsername.get(username);
         if(existing){
-          for(const permission of ['accessType','location','read','edit','delete','verify','print'])
-            existing[permission]=Boolean(existing[permission]||record[permission]);
-          if(!existing.userGroup&&record.userGroup)existing.userGroup=record.userGroup;
+          Object.assign(existing,mergePrivilegeRecords(existing,record));
           continue;
         }
         const privilege={id:row.id,...record};
@@ -327,7 +326,19 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
           const username=String(record.username||'').trim().toLowerCase();
           const match=username&&byUsername.get(username);
           if(match){
-            rows.push(match);
+            const matchingIds=[...new Set([
+              match.id,
+              ...existing.rows
+                .filter(row=>String(row.record_data.username||'').trim().toLowerCase()===username)
+                .map(row=>row.id)
+            ])];
+            const updated=await client.query(
+              'UPDATE master_records SET record_data=$1::jsonb WHERE master_name=$2 AND id=ANY($3::bigint[]) RETURNING id,record_data',
+              [JSON.stringify(record),master,matchingIds]
+            );
+            const saved=updated.rows.find(row=>Number(row.id)===Number(match.id))||updated.rows[0];
+            rows.push(saved);
+            byUsername.set(username,saved);
           }else{
             const inserted=await client.query(
               'INSERT INTO master_records (master_name,record_data) VALUES ($1,$2::jsonb) RETURNING id,record_data',
@@ -365,6 +376,44 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       if(!existing.rows.length)return res.status(404).json({error:'Master record not found.'});
       storedRecord={...record,passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
     }
+    if(master==='Privilege'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const existing=await client.query(
+          'SELECT id,record_data FROM master_records WHERE master_name=$1 FOR UPDATE',
+          [master]
+        );
+        const target=existing.rows.find(row=>Number(row.id)===id);
+        if(!target){
+          await client.query('ROLLBACK');
+          return res.status(404).json({error:'Master record not found.'});
+        }
+        const currentUsername=String(target.record_data.username||'').trim().toLowerCase();
+        const requestedUsername=String(record.username||'').trim().toLowerCase();
+        if(!currentUsername||requestedUsername!==currentUsername){
+          await client.query('ROLLBACK');
+          return res.status(400).json({error:'Privilege usernames cannot be changed. Select the correct user instead.'});
+        }
+        const matchingIds=existing.rows
+          .filter(row=>{
+            if(Number(row.id)===id)return true;
+            const username=String(row.record_data.username||'').trim().toLowerCase();
+            return Boolean(username&&username===currentUsername);
+          })
+          .map(row=>row.id);
+        const updated=await client.query(
+          'UPDATE master_records SET record_data=$1::jsonb WHERE master_name=$2 AND id=ANY($3::bigint[]) RETURNING id,record_data',
+          [JSON.stringify(storedRecord),master,matchingIds]
+        );
+        await client.query('COMMIT');
+        const saved=updated.rows.find(row=>Number(row.id)===id)||updated.rows[0];
+        return res.json({id:saved.id,...saved.record_data});
+      }catch(error){
+        await client.query('ROLLBACK');
+        throw error;
+      }finally{client.release()}
+    }
     const {rows}=await pool.query(
       'UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name=$3 RETURNING id,record_data',
       [JSON.stringify(storedRecord),id,master]
@@ -399,6 +448,36 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const master=decodeURIComponent(req.params.master);
     const id=Number(req.params.id);
     if(!master||!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid master record is required.'});
+    if(master==='Privilege'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const existing=await client.query(
+          'SELECT id,record_data FROM master_records WHERE master_name=$1 FOR UPDATE',
+          [master]
+        );
+        const target=existing.rows.find(row=>Number(row.id)===id);
+        if(!target){
+          await client.query('ROLLBACK');
+          return res.status(404).json({error:'Master record not found.'});
+        }
+        const targetUsername=String(target.record_data.username||'').trim().toLowerCase();
+        const matchingIds=existing.rows
+          .filter(row=>Number(row.id)===id||(
+            targetUsername&&String(row.record_data.username||'').trim().toLowerCase()===targetUsername
+          ))
+          .map(row=>row.id);
+        await client.query(
+          'DELETE FROM master_records WHERE master_name=$1 AND id=ANY($2::bigint[])',
+          [master,matchingIds]
+        );
+        await client.query('COMMIT');
+        return res.status(204).end();
+      }catch(error){
+        await client.query('ROLLBACK');
+        throw error;
+      }finally{client.release()}
+    }
     const result=await pool.query('DELETE FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     if(!result.rowCount)return res.status(404).json({error:'Master record not found.'});
     res.status(204).end();

@@ -248,6 +248,15 @@ textarea {
 }
 :root[data-theme="dark"] .privilege-checkbox-field b { color: #cbd6e7; }
 :root[data-theme="dark"] .privilege-value.disabled { background: #1d293b; color: #8d9bb0; }
+:root[data-theme="dark"] .privilege-inline-role label,
+:root[data-theme="dark"] .privilege-role-field label { color: #c0ccdd; }
+:root[data-theme="dark"] .privilege-site-select,
+:root[data-theme="dark"] .privilege-role-field > div {
+  background: #0d1829;
+  border-color: #34435a;
+  color: #d7e0ed;
+}
+:root[data-theme="dark"] .privilege-role-field legend { color: #bdc8d8; }
 
 :root[data-theme="dark"] .master-loader-content strong { color: var(--ink); }
 :root[data-theme="dark"] .master-loader-lines i {
