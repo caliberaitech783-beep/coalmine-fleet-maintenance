@@ -11,10 +11,26 @@ test("stores login sessions in PostgreSQL", async () => {
     }
   });
 
-  await store.create({token: "token-1", role: "super", name: "Anoop Paul"});
+  await store.create({
+    token: "token-1",
+    role: "normal",
+    name: "Anoop Paul",
+    login: "anoop",
+    userType: "Mobile User",
+    assignedRole: "Maintenance User",
+    permissions: {readRequests: true, createRequest: true},
+  });
 
   assert.match(calls[0].sql, /INSERT INTO auth_sessions/);
-  assert.deepEqual(calls[0].params, ["token-1", "super", "Anoop Paul"]);
+  assert.deepEqual(calls[0].params, [
+    "token-1",
+    "normal",
+    "Anoop Paul",
+    "anoop",
+    "Mobile User",
+    "Maintenance User",
+    '{"readRequests":true,"createRequest":true}',
+  ]);
 });
 
 test("loads an existing session from PostgreSQL", async () => {
@@ -22,11 +38,25 @@ test("loads an existing session from PostgreSQL", async () => {
     async query(sql, params) {
       assert.match(sql, /FROM auth_sessions/);
       assert.deepEqual(params, ["token-1"]);
-      return {rows: [{role: "super", name: "Anoop Paul"}]};
+      return {rows: [{
+        role: "normal",
+        name: "Anoop Paul",
+        login: "anoop",
+        userType: "Mobile User",
+        assignedRole: "MIS User",
+        permissions: {readRequests: true, viewReports: true},
+      }]};
     }
   });
 
-  assert.deepEqual(await store.get("token-1"), {role: "super", name: "Anoop Paul"});
+  assert.deepEqual(await store.get("token-1"), {
+    role: "normal",
+    name: "Anoop Paul",
+    login: "anoop",
+    userType: "Mobile User",
+    assignedRole: "MIS User",
+    permissions: {readRequests: true, viewReports: true},
+  });
 });
 
 test("does not query PostgreSQL when no token is supplied", async () => {
