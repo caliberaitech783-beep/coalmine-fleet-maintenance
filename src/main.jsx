@@ -66,6 +66,7 @@ import "./privilege.css";
 import "./sortable-table.css";
 import "./theme.css";
 import "./mobile-workflow.css";
+import "./dashboard-concept-a.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -466,8 +467,8 @@ function Side({ active, setActive, logout, open }) {
 function Dashboard({ goto, gotoEquipment }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
-  const equipmentKpis = equipmentMetrics(equipmentRecords);
   const [showUserBreakdown, setShowUserBreakdown] = useState(false);
+  const [dashboardRegion, setDashboardRegion] = useState("all");
   const userCounts = usersAndEmployees.reduce(
     (counts, record) => {
       const accessType = String(record.userType || record.role || "")
@@ -491,95 +492,73 @@ function Dashboard({ goto, gotoEquipment }) {
       month: "long",
       year: "numeric",
     }).format(now);
+  const selectedRegion = subsidiaryData.find((region) => region.code === dashboardRegion);
+  const selectedSites = selectedRegion?.sites || [];
+  const visibleEquipment = selectedRegion
+    ? equipmentRecords.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site)))
+    : equipmentRecords;
+  const visibleBreakdowns = selectedRegion
+    ? breakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site)))
+    : breakdowns;
+  const visibleEquipmentKpis = equipmentMetrics(visibleEquipment);
+  const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
+  const openRequests = visibleBreakdowns.filter((record) => String(record.status || "").toLowerCase() === "open").length;
+  const awaitingAction = visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length;
   const cards = [
-    [
-      Truck,
-      "Total equipment",
-      equipmentKpis.total,
-      "Registered assets",
-      "blue",
-      "all",
-    ],
-    [
-      CheckCircle2,
-      "On Road",
-      equipmentKpis.onRoad,
-      "Available for operation",
-      "green",
-      "onroad",
-    ],
-    [
-      AlertTriangle,
-      "Off Road",
-      0,
-      "Parameter pending",
-      "red",
-      "offroad",
-    ],
-    [
-      AlertTriangle,
-      "Active breakdowns",
-      breakdowns.filter((v) => v.status !== "Closed").length,
-      "Open cases",
-      "orange",
-      "breakdown",
-    ],
-    [
-      Clock,
-      "Awaiting action",
-      breakdowns.filter((v) => v.status?.startsWith("Awaiting")).length,
-      "Parts or approval",
-      "purple",
-      "breakdown",
-    ],
-    [
-      CheckCircle2,
-      "Closed this month",
-      breakdowns.filter((v) => v.status === "Closed").length,
-      "Completed cases",
-      "green",
-      "breakdown",
-    ],
-    [
-      Users,
-      "Users & employees",
-      usersAndEmployees.length,
-      "Registered people",
-      "blue",
-      "users",
-    ],
+    [Truck, "Total equipment", visibleEquipmentKpis.total, "Registered assets", "blue", () => gotoEquipment("all", "")],
+    [AlertTriangle, "Active breakdowns", activeBreakdowns, "Open cases", "orange", () => goto("Breakdown master")],
+    [Wrench, "Open requests", openRequests, "Awaiting maintenance", "purple", () => goto("Breakdown master")],
+    [Users, "Users & employees", usersAndEmployees.length, "Registered people", "blue", () => setShowUserBreakdown(true)],
+    [CheckCircle2, "On road", visibleEquipmentKpis.onRoad, "Available for operation", "green", () => gotoEquipment("onroad", "")],
+    [Clock, "Awaiting action", awaitingAction, "Parts or approval", "gold", () => goto("Breakdown master")],
   ];
+  const statuses = ["Open", "In progress", "Awaiting parts", "Awaiting approval", "Closed"];
+  const regionSummaries = subsidiaryData
+    .filter((region) => !selectedRegion || region.code === selectedRegion.code)
+    .map((region) => {
+      const records = equipmentRecords.filter((record) =>
+        region.sites.some((site) => recordBelongsToSite(record, site)),
+      );
+      const cases = breakdowns.filter((record) =>
+        region.sites.some((site) => recordBelongsToSite(record, site)),
+      );
+      return {
+        ...region,
+        equipment: records.length,
+        onRoad: records.filter((record) => record.status === "Operational").length,
+        active: cases.filter((record) => record.status !== "Closed").length,
+        open: cases.filter((record) => String(record.status || "").toLowerCase() === "open").length,
+      };
+    });
   return (
-    <>
-      <div className="hero">
+    <div className="dashboard-preview">
+      <section className="dashboard-preview-toolbar">
         <div>
-          <span>{dateLabel}</span>
-          <h1>Fleet operations dashboard</h1>
-          <p>Live data will appear as records are added.</p>
+          <span className="dashboard-eyebrow">Operations overview</span>
+          <h1>Dashboard</h1>
+          <p>Real-time fleet health, requests and site performance.</p>
         </div>
-      </div>
-      <div className="stats">
-        {cards.map(([I, l, n, s, c, target]) => (
-          <button
-            key={l}
-            onClick={() =>
-              target === "breakdown"
-                ? goto("Breakdown master")
-                : target === "users"
-                  ? setShowUserBreakdown(true)
-                : gotoEquipment(target, "")
-            }
-          >
-            <div className={c}>
-              <I />
-            </div>
-            <span>{l}</span>
-            <strong>{n}</strong>
-            <small>{s}</small>
-            <ChevronRight />
+        <div className="dashboard-toolbar-actions">
+          <label className="dashboard-region-select">
+            <span>Region</span>
+            <select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}>
+              <option value="all">All regions</option>
+              {subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code} · {region.name}</option>)}
+            </select>
+          </label>
+          <div className="dashboard-live-status"><Activity /><span><b>Live data</b><small>Updated just now</small></span></div>
+          <div className="dashboard-date"><CalendarDays /><span>{dateLabel}</span></div>
+        </div>
+      </section>
+      <section className="dashboard-kpis" aria-label="Fleet key performance indicators">
+        {cards.map(([Icon, label, value, hint, tone, action]) => (
+          <button type="button" className="dashboard-kpi" key={label} onClick={action}>
+            <span className={`dashboard-kpi-icon ${tone}`}><Icon /></span>
+            <span className="dashboard-kpi-copy"><small>{label}</small><strong>{value.toLocaleString()}</strong><em>{hint}</em></span>
+            <ChevronRight className="dashboard-kpi-arrow" />
           </button>
         ))}
-      </div>
+      </section>
       {showUserBreakdown && (
         <Modal
           title="Users & employees breakdown"
@@ -608,179 +587,29 @@ function Dashboard({ goto, gotoEquipment }) {
           </div>
         </Modal>
       )}
-      <section className="subsidiary-section">
-        <header>
-          <div>
-            <h3>Regions and sites</h3>
-            <p>Site-wise equipment and vehicle road status</p>
-          </div>
-          <button className="link" onClick={() => goto("Region master")}>
-            View regions <ChevronRight />
-          </button>
-        </header>
-        <div className="site-fleet-grid">
-          {subsidiaryData.map((s) => (
-            <article key={s.code} className="site-fleet-card">
-              <header>
-                <div className="sub-code">{s.code}</div>
-                <div>
-                  <b>{s.name}</b>
-                  <small>{s.sites.length} sites</small>
-                </div>
-              </header>
-              <div>
-                  {s.sites.map((site) => {
-                    const list = equipmentRecords.filter((record) =>
-                        recordBelongsToSite(record, site),
-                      ),
-                    on = list.filter((v) => v.status === "Operational").length;
-                  return (
-                    <div className="site-fleet-row" key={site}>
-                      <button
-                        className="site-title"
-                        onClick={() => gotoEquipment("all", site)}
-                      >
-                        <MapPin />
-                        {site}
-                      </button>
-                      <button onClick={() => gotoEquipment("all", site)}>
-                        <strong>{list.length}</strong>
-                        <span>Total</span>
-                      </button>
-                      <button
-                        className="on"
-                        onClick={() => gotoEquipment("onroad", site)}
-                      >
-                        <strong>{on}</strong>
-                        <span>On Road</span>
-                      </button>
-                      <button
-                        className="off"
-                        onClick={() => gotoEquipment("offroad", site)}
-                      >
-                        <strong>0</strong>
-                        <span>Off Road</span>
-                      </button>
-                      <ChevronRight />
-                    </div>
-                  );
-                })}
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-      <div className="grid">
-        <section className="panel wide">
-          <header>
-            <div>
-              <h3>Breakdown overview</h3>
-              <p>
-                {breakdowns.length
-                  ? "Cases by current status"
-                  : "No breakdown records available"}
-              </p>
-            </div>
-          </header>
-          <div className="bars">
-            {[
-              "Open",
-              "In progress",
-              "Awaiting parts",
-              "Awaiting approval",
-              "Closed",
-            ].map((a, i) => {
-              const n = breakdowns.filter((b) => b.status === a).length;
-              return (
-                <button
-                  key={a}
-                  onClick={() => goto("Breakdown master")}
-                  title={`${a}: ${n} case${n === 1 ? "" : "s"}`}
-                  aria-label={`View ${a.toLowerCase()} breakdown cases: ${n}`}
-                  style={{ "--bar-value": breakdowns.length ? n / breakdowns.length : 0 }}
-                >
-                  <span><i className={`status-dot b${i}`} />{a}</span>
-                  <div>
-                    <i
-                      style={{
-                        width:
-                          (breakdowns.length
-                            ? (n / breakdowns.length) * 100
-                            : 0) + "%",
-                      }}
-                      className={"bar b" + i}
-                    />
-                  </div>
-                  <b>{n}</b>
-                </button>
-              );
+      <section className="dashboard-chart-grid">
+        <article className="dashboard-card dashboard-breakdown-card">
+          <header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Requests</span><h2>Breakdown status</h2><p>Current cases across your fleet</p></div><button type="button" onClick={() => goto("Breakdown master")}>View details <ChevronRight /></button></header>
+          <div className="dashboard-status-chart">
+            {statuses.map((status, index) => {
+              const count = visibleBreakdowns.filter((record) => record.status === status).length;
+              const percent = visibleBreakdowns.length ? Math.max((count / visibleBreakdowns.length) * 100, count ? 5 : 0) : 0;
+              return <button type="button" key={status} className="dashboard-status-row" onClick={() => goto("Breakdown master")}><span><i className={`status-dot b${index}`} />{status}</span><b>{count}</b><div><i className={`dashboard-status-fill fill-${index}`} style={{ width: `${percent}%` }} /></div></button>;
             })}
           </div>
-        </section>
-        <section className="panel">
-          <header>
-            <div>
-              <h3>Fleet availability</h3>
-              <p>
-                {equipmentRecords.length
-                  ? "Live equipment road status"
-                  : "No equipment records available"}
-              </p>
-            </div>
-          </header>
-          <div className="availability-chart">
-            <button
-              className="donut"
-              onClick={() => gotoEquipment("all", "")}
-              title={`${equipmentKpis.availability}% of equipment is currently on road`}
-              aria-label={`Fleet availability ${equipmentKpis.availability} percent. View all equipment.`}
-              style={{ "--availability": `${equipmentKpis.availability}%` }}
-            >
-              <div>
-              <strong>
-                  {equipmentKpis.availability}
-                %
-              </strong>
-              <span>On Road</span>
-              </div>
-            </button>
-            <div className="availability-summary">
-              <strong>{equipmentRecords.length}</strong>
-              <span>Total equipment</span>
-              <small>Click chart to view fleet</small>
-            </div>
-          </div>
-          <div className="legend">
-            <button onClick={() => gotoEquipment("onroad", "")}>
-              <i className="lg1" />
-              <span>On Road</span>
-              <b>{equipmentKpis.onRoad}</b>
-            </button>
-            <button onClick={() => gotoEquipment("offroad", "")}>
-              <i className="lg3" />
-              <span>Off Road</span>
-              <b>{equipmentKpis.offRoad}</b>
-            </button>
-          </div>
-        </section>
-      </div>
-      <section className="panel table">
-        <header>
-          <div>
-            <h3>Recent breakdown cases</h3>
-            <p>
-              {breakdowns.length
-                ? "Latest activity"
-                : "No breakdown records available"}
-            </p>
-          </div>
-          <button className="link" onClick={() => goto("Breakdown master")}>
-            View all cases <ChevronRight />
-          </button>
-        </header>
-        <BreakdownTable rows={breakdowns.slice(0, 5)} />
+        </article>
+        <article className="dashboard-card dashboard-availability-card">
+          <header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Fleet health</span><h2>Availability</h2><p>Live equipment road status</p></div><button type="button" onClick={() => gotoEquipment("all", "")} aria-label="View all equipment"><ChevronRight /></button></header>
+          <div className="dashboard-donut-wrap"><button type="button" className="dashboard-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#2f62d5 0 ${visibleEquipmentKpis.availability}%, #e9edf4 ${visibleEquipmentKpis.availability}% 100%)` }} aria-label={`${visibleEquipmentKpis.availability}% of equipment on road`}><span><strong>{visibleEquipmentKpis.availability}%</strong><small>On road</small></span></button><div className="dashboard-availability-total"><strong>{visibleEquipment.length.toLocaleString()}</strong><span>Total equipment</span><small>Across selected region</small></div></div>
+          <div className="dashboard-legend"><button type="button" onClick={() => gotoEquipment("onroad", "")}><i className="legend-on" />On road <b>{visibleEquipmentKpis.onRoad.toLocaleString()}</b></button><button type="button" onClick={() => gotoEquipment("offroad", "")}><i className="legend-off" />Off road <b>{visibleEquipmentKpis.offRoad.toLocaleString()}</b></button></div>
+        </article>
       </section>
-    </>
+      <section className="dashboard-card dashboard-region-overview">
+        <header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Coverage</span><h2>Region &amp; site overview</h2><p>Equipment and request activity by operating region</p></div><button type="button" onClick={() => goto("Region master")}>Manage regions <ChevronRight /></button></header>
+        <div className="dashboard-region-table-wrap"><table className="dashboard-region-table"><thead><tr><th>Region</th><th>Sites</th><th>Total equipment</th><th>On road</th><th>Active breakdowns</th><th>Open requests</th><th /></tr></thead><tbody>{regionSummaries.map((region) => <tr key={region.code}><td><span className="dashboard-region-name"><b>{region.code}</b><span>{region.name}</span></span></td><td>{region.sites.length}</td><td><strong>{region.equipment.toLocaleString()}</strong></td><td><strong className="metric-green">{region.onRoad.toLocaleString()}</strong></td><td><strong className="metric-orange">{region.active.toLocaleString()}</strong></td><td>{region.open.toLocaleString()}</td><td><button type="button" className="dashboard-row-arrow" onClick={() => gotoEquipment("all", region.sites[0] || "")}><ChevronRight /></button></td></tr>)}</tbody></table></div>
+      </section>
+      <section className="dashboard-card dashboard-recent-card"><header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest requests requiring attention" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all cases <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns.slice(0, 5)} /></section>
+    </div>
   );
 }
 function BreakdownTable({ rows = breakdowns, showBreakdownDays = false }) {
