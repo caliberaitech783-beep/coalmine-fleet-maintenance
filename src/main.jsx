@@ -469,146 +469,56 @@ function Dashboard({ goto, gotoEquipment }) {
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [showUserBreakdown, setShowUserBreakdown] = useState(false);
   const [dashboardRegion, setDashboardRegion] = useState("all");
-  const userCounts = usersAndEmployees.reduce(
-    (counts, record) => {
-      const accessType = String(record.userType || record.role || "")
-        .trim()
-        .toLowerCase();
-      if (accessType.includes("mobile") || accessType.includes("normal")) {
-        counts.mobile += 1;
-      } else if (accessType.includes("super")) {
-        counts.super += 1;
-      } else if (accessType.includes("admin")) {
-        counts.admin += 1;
-      }
-      return counts;
-    },
-    { mobile: 0, super: 0, admin: 0 },
-  );
-  const now = new Date(),
-    dateLabel = new Intl.DateTimeFormat(undefined, {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(now);
+  const now = new Date();
+  const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const selectedRegion = subsidiaryData.find((region) => region.code === dashboardRegion);
   const selectedSites = selectedRegion?.sites || [];
-  const visibleEquipment = selectedRegion
-    ? equipmentRecords.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site)))
-    : equipmentRecords;
-  const visibleBreakdowns = selectedRegion
-    ? breakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site)))
-    : breakdowns;
-  const visibleEquipmentKpis = equipmentMetrics(visibleEquipment);
-  const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
-  const openRequests = visibleBreakdowns.filter((record) => String(record.status || "").toLowerCase() === "open").length;
-  const awaitingAction = visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length;
-  const cards = [
-    [Truck, "Total equipment", visibleEquipmentKpis.total, "Registered assets", "blue", () => gotoEquipment("all", "")],
-    [AlertTriangle, "Active breakdowns", activeBreakdowns, "Open cases", "orange", () => goto("Breakdown master")],
-    [Wrench, "Open requests", openRequests, "Awaiting maintenance", "purple", () => goto("Breakdown master")],
-    [Users, "Users & employees", usersAndEmployees.length, "Registered people", "blue", () => setShowUserBreakdown(true)],
-    [CheckCircle2, "On road", visibleEquipmentKpis.onRoad, "Available for operation", "green", () => gotoEquipment("onroad", "")],
-    [Clock, "Awaiting action", awaitingAction, "Parts or approval", "gold", () => goto("Breakdown master")],
+  const visibleEquipment = selectedRegion ? equipmentRecords.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : equipmentRecords;
+  const visibleBreakdowns = selectedRegion ? breakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : breakdowns;
+  const kpis = equipmentMetrics(visibleEquipment);
+  const statusCounts = [
+    ["Operational", visibleEquipment.filter((record) => record.status === "Operational").length, "operational"],
+    ["In maintenance", visibleEquipment.filter((record) => String(record.status || "").toLowerCase().includes("maintenance")).length, "maintenance"],
+    ["Breakdown", visibleBreakdowns.filter((record) => record.status !== "Closed").length, "breakdown"],
   ];
-  const statuses = ["Open", "In progress", "Awaiting parts", "Awaiting approval", "Closed"];
-  const regionSummaries = subsidiaryData
-    .filter((region) => !selectedRegion || region.code === selectedRegion.code)
-    .map((region) => {
-      const records = equipmentRecords.filter((record) =>
-        region.sites.some((site) => recordBelongsToSite(record, site)),
-      );
-      const cases = breakdowns.filter((record) =>
-        region.sites.some((site) => recordBelongsToSite(record, site)),
-      );
-      return {
-        ...region,
-        equipment: records.length,
-        onRoad: records.filter((record) => record.status === "Operational").length,
-        active: cases.filter((record) => record.status !== "Closed").length,
-        open: cases.filter((record) => String(record.status || "").toLowerCase() === "open").length,
-      };
-    });
+  const userCounts = usersAndEmployees.reduce((counts, record) => {
+    const type = String(record.userType || record.role || "").toLowerCase();
+    if (type.includes("mobile") || type.includes("normal")) counts.mobile += 1;
+    else if (type.includes("super")) counts.super += 1;
+    else if (type.includes("admin")) counts.admin += 1;
+    return counts;
+  }, { mobile: 0, super: 0, admin: 0 });
+  const typeCounts = visibleEquipment.reduce((counts, record) => {
+    const value = String(record.group || record.category || record.itemName || "Unclassified").trim() || "Unclassified";
+    const normalized = value.toLowerCase();
+    const label = normalized.includes("trailer") ? "Semi-trailers" : normalized.includes("rigid") || normalized.includes("dumper") ? "Rigid trucks" : normalized.includes("box") ? "Box trucks" : normalized.includes("van") ? "Vans" : value;
+    counts[label] = (counts[label] || 0) + 1;
+    return counts;
+  }, {});
+  const vehicleTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
+  const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
+  const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
   return (
-    <div className="dashboard-preview">
-      <section className="dashboard-preview-toolbar">
-        <div>
-          <span className="dashboard-eyebrow">Operations overview</span>
-          <h1>Dashboard</h1>
-          <p>Real-time fleet health, requests and site performance.</p>
-        </div>
-        <div className="dashboard-toolbar-actions">
-          <label className="dashboard-region-select">
-            <span>Region</span>
-            <select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}>
-              <option value="all">All regions</option>
-              {subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code} · {region.name}</option>)}
-            </select>
-          </label>
-          <div className="dashboard-live-status"><Activity /><span><b>Live data</b><small>Updated just now</small></span></div>
-          <div className="dashboard-date"><CalendarDays /><span>{dateLabel}</span></div>
-        </div>
+    <div className="mine-dashboard">
+      <header className="mine-dashboard-head">
+        <div><span className="mine-brandmark">CM</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
+        <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">All regions</option>{subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
+      </header>
+      <section className="mine-counter-grid" aria-label="Mining fleet summary">
+        {[[Truck, kpis.total, "Equipment", "Registered fleet", () => gotoEquipment("all", "")], [Truck, typeCounts["Box trucks"] || 0, "Box trucks", "Fleet mix", () => gotoEquipment("all", "")], [Truck, typeCounts["Rigid trucks"] || 0, "Rigid trucks", "Fleet mix", () => gotoEquipment("all", "")], [Truck, typeCounts["Semi-trailers"] || 0, "Semi-trailers", "Fleet mix", () => gotoEquipment("all", "")]].map(([Icon, value, label, hint, action]) => <button type="button" key={label} onClick={action}><Icon /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>)}
       </section>
-      <section className="dashboard-kpis" aria-label="Fleet key performance indicators">
-        {cards.map(([Icon, label, value, hint, tone, action]) => (
-          <button type="button" className="dashboard-kpi" key={label} onClick={action}>
-            <span className={`dashboard-kpi-icon ${tone}`}><Icon /></span>
-            <span className="dashboard-kpi-copy"><small>{label}</small><strong>{value.toLocaleString()}</strong><em>{hint}</em></span>
-            <ChevronRight className="dashboard-kpi-arrow" />
-          </button>
-        ))}
+      <section className="mine-dashboard-grid">
+        <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Fleet status · all</span><h2>Vehicle status</h2><p>Availability across the selected operating region</p></div><button type="button" onClick={() => gotoEquipment("all", "")}>View fleet <ChevronRight /></button></header><div className="mine-status-body"><button type="button" className="mine-status-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#7ed6a3 0 ${kpis.availability}%, #26383c ${kpis.availability}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button><div className="mine-status-list">{statusCounts.map(([label, value, tone]) => <button type="button" key={label} onClick={() => gotoEquipment(tone === "operational" ? "onroad" : "all", "")}><i className={`mine-dot ${tone}`} /><span>{label}</span><b>{value.toLocaleString()}</b></button>)}</div></div></article>
+        <article className="mine-panel"><header><div><span className="mine-eyebrow">Maintenance workload</span><h2>Open cases</h2><p>Current action queue</p></div><button type="button" onClick={() => goto("Breakdown master")}><ChevronRight /></button></header><div className="mine-big-number"><strong>{activeBreakdowns.toLocaleString()}</strong><span>Active breakdowns</span><small>{visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length.toLocaleString()} awaiting action</small></div><div className="mine-mini-bars"><span><i style={{ width: `${activeBreakdowns ? 100 : 0}%` }} />Active</span><span><i className="mine-bar-orange" style={{ width: `${activeBreakdowns ? Math.min(100, visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length / activeBreakdowns * 100) : 0}%` }} />Awaiting</span></div></article>
+        <article className="mine-panel"><header><div><span className="mine-eyebrow">Equipment by region</span><h2>Operating regions</h2><p>Registered assets across sites</p></div><button type="button" onClick={() => goto("Region master")}><ChevronRight /></button></header><div className="mine-region-bars">{regionBars.map((region) => <button type="button" key={region.code} onClick={() => gotoEquipment("all", region.sites[0] || "")}><span>{region.code}</span><div><i style={{ width: `${(region.total / maxRegionTotal) * 100}%` }} /></div><b>{region.total.toLocaleString()}</b></button>)}</div></article>
+        <article className="mine-panel"><header><div><span className="mine-eyebrow">Vehicle status</span><h2>Availability mix</h2><p>Live maintenance signals</p></div></header><div className="mine-vertical-metrics"><div><span>On road</span><strong>{kpis.onRoad.toLocaleString()}</strong><i className="mine-bar-green" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Off road</span><strong>{kpis.offRoad.toLocaleString()}</strong><i className="mine-bar-grey" style={{ width: `${kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Breakdowns</span><strong>{activeBreakdowns.toLocaleString()}</strong><i className="mine-bar-red" style={{ width: `${activeBreakdowns ? 100 : 0}%` }} /></div></div></article>
+        <article className="mine-panel"><header><div><span className="mine-eyebrow">Fleet composition</span><h2>Vehicle by group</h2><p>Most represented equipment categories</p></div></header><div className="mine-type-bars">{vehicleTypes.length ? vehicleTypes.map(([label, value]) => <button type="button" key={label} onClick={() => gotoEquipment("all", "")}><span>{label}</span><div><i style={{ width: `${(value / Math.max(1, vehicleTypes[0][1])) * 100}%` }} /></div><b>{value.toLocaleString()}</b></button>) : <p className="mine-empty">No equipment records yet</p>}</div></article>
+        <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Requests</span><h2>Maintenance workload by status</h2><p>Open, in-progress and completed requests</p></div><button type="button" onClick={() => goto("Breakdown master")}>View requests <ChevronRight /></button></header><div className="mine-workload-grid">{["Open", "In progress", "Awaiting parts", "Awaiting approval", "Closed"].map((status) => { const count = visibleBreakdowns.filter((record) => record.status === status).length; const max = Math.max(1, visibleBreakdowns.length); return <button type="button" key={status} onClick={() => goto("Breakdown master")}><span>{status}</span><div><i style={{ width: `${(count / max) * 100}%` }} /></div><b>{count.toLocaleString()}</b></button>; })}</div></article>
+        <article className="mine-panel"><header><div><span className="mine-eyebrow">People</span><h2>Operations users</h2><p>Registered access profiles</p></div><button type="button" onClick={() => setShowUserBreakdown(true)}><ChevronRight /></button></header><div className="mine-people"><strong>{usersAndEmployees.length.toLocaleString()}</strong><span>Users &amp; employees</span><div><b>Mobile {userCounts.mobile}</b><b>Super {userCounts.super}</b><b>Admin {userCounts.admin}</b></div></div></article>
       </section>
-      {showUserBreakdown && (
-        <Modal
-          title="Users & employees breakdown"
-          close={() => setShowUserBreakdown(false)}
-        >
-          <div className="user-count-drilldown">
-            <button onClick={() => goto("Users & employees")}>
-              <Users />
-              <span>Mobile Users</span>
-              <strong>{userCounts.mobile}</strong>
-            </button>
-            <button onClick={() => goto("Users & employees")}>
-              <ShieldCheck />
-              <span>Super Users</span>
-              <strong>{userCounts.super}</strong>
-            </button>
-            <button onClick={() => goto("Users & employees")}>
-              <UserRound />
-              <span>Admins</span>
-              <strong>{userCounts.admin}</strong>
-            </button>
-          </div>
-          <div className="user-count-total">
-            <span>Total users & employees</span>
-            <strong>{usersAndEmployees.length}</strong>
-          </div>
-        </Modal>
-      )}
-      <section className="dashboard-chart-grid">
-        <article className="dashboard-card dashboard-breakdown-card">
-          <header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Requests</span><h2>Breakdown status</h2><p>Current cases across your fleet</p></div><button type="button" onClick={() => goto("Breakdown master")}>View details <ChevronRight /></button></header>
-          <div className="dashboard-status-chart">
-            {statuses.map((status, index) => {
-              const count = visibleBreakdowns.filter((record) => record.status === status).length;
-              const percent = visibleBreakdowns.length ? Math.max((count / visibleBreakdowns.length) * 100, count ? 5 : 0) : 0;
-              return <button type="button" key={status} className="dashboard-status-row" onClick={() => goto("Breakdown master")}><span><i className={`status-dot b${index}`} />{status}</span><b>{count}</b><div><i className={`dashboard-status-fill fill-${index}`} style={{ width: `${percent}%` }} /></div></button>;
-            })}
-          </div>
-        </article>
-        <article className="dashboard-card dashboard-availability-card">
-          <header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Fleet health</span><h2>Availability</h2><p>Live equipment road status</p></div><button type="button" onClick={() => gotoEquipment("all", "")} aria-label="View all equipment"><ChevronRight /></button></header>
-          <div className="dashboard-donut-wrap"><button type="button" className="dashboard-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#2f62d5 0 ${visibleEquipmentKpis.availability}%, #e9edf4 ${visibleEquipmentKpis.availability}% 100%)` }} aria-label={`${visibleEquipmentKpis.availability}% of equipment on road`}><span><strong>{visibleEquipmentKpis.availability}%</strong><small>On road</small></span></button><div className="dashboard-availability-total"><strong>{visibleEquipment.length.toLocaleString()}</strong><span>Total equipment</span><small>Across selected region</small></div></div>
-          <div className="dashboard-legend"><button type="button" onClick={() => gotoEquipment("onroad", "")}><i className="legend-on" />On road <b>{visibleEquipmentKpis.onRoad.toLocaleString()}</b></button><button type="button" onClick={() => gotoEquipment("offroad", "")}><i className="legend-off" />Off road <b>{visibleEquipmentKpis.offRoad.toLocaleString()}</b></button></div>
-        </article>
-      </section>
-      <section className="dashboard-card dashboard-region-overview">
-        <header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Coverage</span><h2>Region &amp; site overview</h2><p>Equipment and request activity by operating region</p></div><button type="button" onClick={() => goto("Region master")}>Manage regions <ChevronRight /></button></header>
-        <div className="dashboard-region-table-wrap"><table className="dashboard-region-table"><thead><tr><th>Region</th><th>Sites</th><th>Total equipment</th><th>On road</th><th>Active breakdowns</th><th>Open requests</th><th /></tr></thead><tbody>{regionSummaries.map((region) => <tr key={region.code}><td><span className="dashboard-region-name"><b>{region.code}</b><span>{region.name}</span></span></td><td>{region.sites.length}</td><td><strong>{region.equipment.toLocaleString()}</strong></td><td><strong className="metric-green">{region.onRoad.toLocaleString()}</strong></td><td><strong className="metric-orange">{region.active.toLocaleString()}</strong></td><td>{region.open.toLocaleString()}</td><td><button type="button" className="dashboard-row-arrow" onClick={() => gotoEquipment("all", region.sites[0] || "")}><ChevronRight /></button></td></tr>)}</tbody></table></div>
-      </section>
-      <section className="dashboard-card dashboard-recent-card"><header className="dashboard-card-header"><div><span className="dashboard-card-kicker">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest requests requiring attention" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all cases <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns.slice(0, 5)} /></section>
+      {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{usersAndEmployees.length}</strong></div></Modal>}
+      <section className="mine-panel mine-recent"><header><div><span className="mine-eyebrow">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest maintenance activity" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns.slice(0, 5)} /></section>
     </div>
   );
 }
