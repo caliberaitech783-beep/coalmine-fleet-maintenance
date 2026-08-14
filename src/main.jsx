@@ -1052,7 +1052,7 @@ function parseCsv(text, fields) {
     })
     .filter((record) => Object.values(record).some(Boolean));
 }
-function MasterActions({ name, onAdd, onDeleteAll, userOptions = [], siteOptions = [] }) {
+function MasterActions({ name, onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
@@ -1121,6 +1121,11 @@ function MasterActions({ name, onAdd, onDeleteAll, userOptions = [], siteOptions
         {onDeleteAll && (
           <button className="secondary danger" onClick={onDeleteAll}>
             <Trash2 /> Delete all
+          </button>
+        )}
+        {name === "Privilege" && onSaveAll && (
+          <button className="primary" type="button" onClick={onSaveAll} disabled={saveAllDisabled}>
+            <Save /> Save all
           </button>
         )}
         <button className="secondary" onClick={() => setMode("import")}>
@@ -2410,8 +2415,8 @@ function Generic({ name, requests = [] }) {
 function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [] }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
-    [savingCell, setSavingCell] = useState(""),
     [pendingPrivilegeRows, setPendingPrivilegeRows] = useState({}),
+    [savingAllPrivileges, setSavingAllPrivileges] = useState(false),
     fields = masterFields[name],
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege",
     filteredRows = records.filter((record) =>
@@ -2456,21 +2461,26 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       [record.id]: { ...(pending[record.id] || record), [key]: value },
     }));
   };
-  const savePrivilegeRow = async (record) => {
-    const draft = pendingPrivilegeRows[record.id];
-    if (!draft) return;
-    const cell = `${record.id}-row`;
-    setSavingCell(cell);
-    const updated = Object.fromEntries(fields.map(([field]) => [field, draft[field]]));
-    try {
-      await onEdit(record.id, updated);
+  const savePrivilegeRows = async () => {
+    const drafts = Object.values(pendingPrivilegeRows);
+    if (!drafts.length || savingAllPrivileges) return;
+    setSavingAllPrivileges(true);
+    const results = await Promise.allSettled(
+      drafts.map((draft) => onEdit(draft.id, Object.fromEntries(fields.map(([field]) => [field, draft[field]])))),
+    );
+    const savedIds = drafts
+      .filter((_, index) => results[index].status === "fulfilled")
+      .map((draft) => String(draft.id));
+    if (savedIds.length) {
       setPendingPrivilegeRows((pending) => {
         const next = { ...pending };
-        delete next[record.id];
+        savedIds.forEach((id) => delete next[id]);
         return next;
       });
-    } catch (error) { alert(error.message); }
-    finally { setSavingCell(""); }
+    }
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) alert(failed.reason?.message || "Could not save all privileges.");
+    setSavingAllPrivileges(false);
   };
   return (
     <>
@@ -2480,7 +2490,15 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           <h1>{name}</h1>
           <p>{rows.length} records shown · import CSV or add one manually</p>
         </div>
-        <MasterActions name={name} onAdd={onAdd} onDeleteAll={onDeleteAll} userOptions={userOptions} siteOptions={siteOptions} />
+        <MasterActions
+          name={name}
+          onAdd={onAdd}
+          onDeleteAll={onDeleteAll}
+          onSaveAll={name === "Privilege" ? savePrivilegeRows : undefined}
+          saveAllDisabled={savingAllPrivileges || !Object.keys(pendingPrivilegeRows).length}
+          userOptions={userOptions}
+          siteOptions={siteOptions}
+        />
       </header>
       <div className="toolbar">
         <div>
@@ -2505,8 +2523,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           <tbody>
             {rows.length ? (
                 rows.map((row, ri) => {
-                  const rowSaving = savingCell === `${row.id}-row`;
-                  const hasPendingPrivilege = name === "Privilege" && Boolean(pendingPrivilegeRows[row.id]);
+                  const rowSaving = savingAllPrivileges;
                   return (
                 <tr key={row.id || ri}>
                   {fields.map(([key, , type], ci) => {
@@ -2576,9 +2593,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                   })}
                   {canManageRows && (
                     <td className="row-actions">
-                      {name === "Privilege" ? (
-                        <button className="primary" type="button" aria-label={`Save privileges for ${row.username || "record"}`} disabled={!hasPendingPrivilege || rowSaving} onClick={() => savePrivilegeRow(row)}><Save /> Save</button>
-                      ) : (
+                      {name !== "Privilege" && (
                         <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
                       )}
                       <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
