@@ -3164,7 +3164,9 @@ function CloseRequestForm({ request, close, onSave }) {
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
+        <div><span>Registration number</span><b>{request.reg || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
+        <div><span>Category</span><b>{request.category || "Maintenance request"}</b></div>
         <div><span>Started</span><b>{request.start || "—"}</b></div>
         <div><span>Reason / complaint</span><b>{request.complaint || "—"}</b></div>
       </div>
@@ -3192,6 +3194,7 @@ function VerifyRequestForm({ request, close, onSave }) {
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
+        <div><span>Registration number</span><b>{request.reg || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
