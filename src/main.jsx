@@ -64,6 +64,7 @@ import "./import-dropzone.css";
 import "./privilege.css";
 import "./sortable-table.css";
 import "./theme.css";
+import "./mobile-workflow.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -167,7 +168,15 @@ function Login({ onLogin, theme, toggleTheme }) {
   const saveSession = (data) => {
     authToken = data.token;
     currentEmployeeName = data.name;
-    const session = JSON.stringify({ token: data.token, role: data.role, name: data.name });
+    const session = JSON.stringify({
+      token: data.token,
+      role: data.role,
+      name: data.name,
+      login: data.login || "",
+      userType: data.userType || "",
+      assignedRole: data.assignedRole || "",
+      permissions: data.permissions || {},
+    });
     if (rememberMe) {
       localStorage.setItem("nerveCenterSession", session);
       sessionStorage.removeItem("nerveCenterSession");
@@ -175,7 +184,7 @@ function Login({ onLogin, theme, toggleTheme }) {
       sessionStorage.setItem("nerveCenterSession", session);
       localStorage.removeItem("nerveCenterSession");
     }
-    onLogin(data.role);
+    onLogin(JSON.parse(session));
   };
   const signIn = async () => {
     setWorking(true);
@@ -915,7 +924,7 @@ const masterFields = {
   ],
   Privilege: [
     ["username", "Username", "user-select"],
-    ["userGroup", "User Group"],
+    ["userGroup", "User Group", "mobile-role-select"],
     ["accessType", "Super User / Mobile User", "role-radio"],
     ["location", "Location", "site-select"],
     ["read", "Read", "checkbox"],
@@ -928,6 +937,7 @@ const masterFields = {
 const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 const privilegeAccessOptions = ["Super User", "Mobile User"];
+const mobileUserRoleOptions = ["Production User", "Maintenance User", "MIS User"];
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
 const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
 function privilegeSelectionValue(value) {
@@ -1138,6 +1148,14 @@ function MasterActions({ name, onAdd, onDeleteAll, userOptions = [], siteOptions
                       ))}
                     </div>
                   </fieldset>
+                ) : type === "mobile-role-select" ? (
+                  <label key={key}>
+                    {label}
+                    <select name={key} defaultValue="">
+                      <option value="">Not assigned</option>
+                      {mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                    </select>
+                  </label>
                 ) : (
                 <label key={key}>
                   {type === "checkbox" ? (
@@ -1941,7 +1959,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       <form className="form" onSubmit={submit}>
         <div className="formgrid">
           <label>
-            Equipment *
+            Equipment group *
             <select
               name="equipmentId"
               required
@@ -2412,6 +2430,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         ? isCheckedValue(editing[key])
         : name === "Privilege" && type === "role-radio"
           ? privilegeAccessValue(editing[key])
+        : name === "Privilege" && type === "mobile-role-select"
+          ? privilegeSelectionValue(editing[key])
         : name === "Privilege" && type === "site-select"
           ? privilegeSelectionValue(editing[key])
         : type === "checkbox" ? form.has(key) : String(form.get(key) || "").trim(),
@@ -2488,6 +2508,20 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                             </label>
                           ))}
                         </div>
+                      ) : name === "Privilege" && type === "mobile-role-select" ? (
+                        <select
+                          className="privilege-site-select"
+                          value={privilegeSelectionValue(row[key])}
+                          disabled={savingCell.startsWith(`${row.id}-`)}
+                          aria-label={`User Group for ${row.username}`}
+                          onChange={(event) => savePrivilegeField(row, key, event.target.value)}
+                        >
+                          <option value="">Not assigned</option>
+                          {privilegeSelectionValue(row[key]) && !mobileUserRoleOptions.includes(privilegeSelectionValue(row[key])) && (
+                            <option value={privilegeSelectionValue(row[key])}>{privilegeSelectionValue(row[key])}</option>
+                          )}
+                          {mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
                       ) : name === "Privilege" && type === "site-select" ? (
                         <select
                           className="privilege-site-select"
@@ -2542,7 +2576,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : "OEM"} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
-            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "site-select"].includes(type))).map(([key, label, type]) => (
+            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "mobile-role-select", "site-select"].includes(type))).map(([key, label, type]) => (
               <label key={key}>{label} *
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">
@@ -2612,7 +2646,7 @@ function useMasterRecords(name, seed = []) {
     [loaded, setLoaded] = useState(false);
   useEffect(() => {
     const loadStartedAt = performance.now();
-    fetch("/api/masters")
+    fetch("/api/masters", {headers: {Authorization: `Bearer ${authToken}`}})
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setRecords([...seed, ...(data[name] || [])]))
       .catch(() => {})
@@ -3045,80 +3079,171 @@ function Modal({ title, close, children }) {
     </div>
   );
 }
-function Normal({ logout, requests, onCreate, theme, toggleTheme }) {
-  const [show, setShow] = useState(false),
-    [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", vehicles);
-  const dateLabel = new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
+function requestStartParts(start) {
+  const match = String(start || "").match(/^(\d{4}-\d{2}-\d{2})\s*(?:·|Â·|\s)\s*((?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)/);
+  if (match) return {date: match[1], time: match[2].length === 5 ? `${match[2]}:00` : match[2]};
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return {
+    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    time: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
+  };
+}
+
+function MobileWorkflowTable({ rows = [], showActions = false, onEdit, onDelete, onClose, onVerify }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
   return (
-    <div className="normal">
-      <header>
-        <div className="logo">
-          <b>CM</b>
-          <span>
-            Nerve Center<small>NORMAL USER PORTAL</small>
-          </span>
-        </div>
-        <div>
-          <Bell />
-          <span>
-            <b>Mobile User</b>
-            <small>Maintenance requester</small>
-          </span>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <button onClick={logout}>
-            <LogOut />
-          </button>
-        </div>
-      </header>
-      <main>
-        <div className="welcome">
-          <div>
-            <small>{dateLabel}</small>
-            <h1>Maintenance requests</h1>
-            <p>
-              Create and view your requests. Submitted requests cannot be
-              deleted.
-            </p>
-          </div>
-          <Wrench />
-        </div>
-        <div className="actioncard">
-          <div className="bigicon">
-            <Truck />
-          </div>
-          <div>
-            <h2>Push vehicle for maintenance</h2>
-            <p>Enter the vehicle details and submit the maintenance request.</p>
-          </div>
-          <button className="primary" onClick={() => setShow(true)}>
-            <Plus />
-            Create request
-          </button>
-        </div>
-        <h3 className="sectiontitle">Your submitted requests · Read only</h3>
-        <section className="panel table">
-          <BreakdownTable rows={requests} showBreakdownDays />
-        </section>
-      </main>
-      {show && (
-        <MaintenanceForm
-          normal
-          onSubmit={onCreate}
-          equipmentRecords={equipmentRecords}
-          equipmentLoaded={equipmentLoaded}
-          close={() => setShow(false)}
-        />
-      )}
+    <div className="scroll mobile-workflow-table">
+      <table className="workflow-table">
+        <thead><tr>
+          <th>Job reference</th><th>Equipment group</th><th>Door no.</th><th>Site location</th>
+          <th>Status</th><th>Started</th><th>Days of breakdown</th>{showActions && <th>Actions</th>}
+        </tr></thead>
+        <tbody>
+          {rows.length ? rows.map((row) => {
+            const days = calculateBreakdownDaysFromStart(row.start, now);
+            return <tr key={row.ref}>
+              <td><b>{row.ref}</b></td>
+              <td>{row.equipment || "—"}</td>
+              <td>{row.door || "—"}</td>
+              <td><MapPin /> {row.site || "Not assigned"}</td>
+              <td><Status>{row.status || "Open"}</Status></td>
+              <td>{row.start || "—"}</td>
+              <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
+              {showActions && <td className="row-actions">
+                {onEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
+                {onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
+                {onClose && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Close</button>}
+                {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
+              </td>}
+            </tr>;
+          }) : <tr><td colSpan={showActions ? 8 : 7} className="empty-state">No records available</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }
+
+function RequestEditForm({ request, close, onSave }) {
+  const parts = requestStartParts(request.start);
+  const [time, setTime] = useState(parts.time);
+  return <Modal title={`Edit request ${request.ref}`} close={close}>
+    <form className="form" onSubmit={(event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), reg: form.get("reg"), site: form.get("site"), complaint: form.get("complaint"), start: `${form.get("date")} · ${form.get("time")}`});
+    }}>
+      <div className="formgrid">
+        <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>
+        <label>Door number *<input name="door" required defaultValue={request.door || ""} /></label>
+        <label>Registration number<input name="reg" defaultValue={request.reg || ""} /></label>
+        <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
+        <label>Date *<input name="date" type="date" required defaultValue={parts.date} /></label>
+        <label>Timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
+      </div>
+      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save changes <ChevronRight /></button></footer>
+    </form>
+  </Modal>;
+}
+
+function CloseRequestForm({ request, close, onSave }) {
+  const opened = requestStartParts(request.start);
+  const now = requestStartParts("");
+  const [time, setTime] = useState(now.time);
+  return <Modal title={`Close request ${request.ref}`} close={close}>
+    <form className="form" onSubmit={(event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), maintenanceWork: form.get("maintenanceWork"), status: form.get("status")});
+    }}>
+      <div className="details request-linked-details">
+        <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
+        <div><span>Door number</span><b>{request.door || "—"}</b></div>
+        <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
+        <div><span>Started</span><b>{request.start || "—"}</b></div>
+        <div><span>Reason / complaint</span><b>{request.complaint || "—"}</b></div>
+      </div>
+      <div className="formgrid">
+        <label>Closing date *<input name="closingDate" type="date" required defaultValue={now.date} /></label>
+        <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        <label>Status *<select name="status" defaultValue={request.status === "Closed" ? "Closed" : "In progress"}><option>In progress</option><option>Awaiting parts</option><option>Closed</option></select></label>
+        <label className="full">Things done in maintenance *<textarea name="maintenanceWork" required placeholder="Describe the work completed" /></label>
+      </div>
+      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save maintenance update <ChevronRight /></button></footer>
+    </form>
+  </Modal>;
+}
+
+function VerifyRequestForm({ request, close, onSave }) {
+  const today = requestStartParts("");
+  const [firstTripDone, setFirstTripDone] = useState(false);
+  const [time, setTime] = useState(today.time);
+  return <Modal title={`Verify closed request ${request.ref}`} close={close}>
+    <form className="form" onSubmit={(event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime")});
+    }}>
+      <div className="details request-linked-details">
+        <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
+        <div><span>Door number</span><b>{request.door || "—"}</b></div>
+        <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
+        <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
+        <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
+      </div>
+      <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
+      {firstTripDone && <div className="formgrid">
+        <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
+        <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
+      </div>}
+      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Verify request <ChevronRight /></button></footer>
+    </form>
+  </Modal>;
+}
+
+function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, theme, toggleTheme }) {
+  const mobileRole = session?.assignedRole || "Mobile User";
+  const [show, setShow] = useState(false), [tab, setTab] = useState(mobileRole === "MIS User" ? "verify" : "requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null);
+  const permissions = session?.permissions || {};
+  const isProduction = mobileRole === "Production User";
+  const isMaintenance = mobileRole === "Maintenance User";
+  const isMis = mobileRole === "MIS User";
+  const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", isProduction ? vehicles : []);
+  const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
+  const saveEdit = async (payload) => { try { await onUpdateRequest(payload.ref, payload); setEditing(null); } catch (error) { alert(error.message); } };
+  const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
+  const verifyRequest = async (payload) => { try { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); } catch (error) { alert(error.message); } };
+  const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
+  const visibleRows = isMis ? requests.filter((row) => String(row.status).toLowerCase() === "closed" && !row.verifiedAt) : requests;
+  return <div className="normal">
+    <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><div><Bell /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>
+    <main>
+      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
+      <div className="mobile-tabs" role="tablist">
+        <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>
+        {isProduction && <button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
+        {isMaintenance && <button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
+        {isMis && <button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
+      </div>
+      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your submitted requests · Read only</h3><section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showActions={Boolean(permissions.editRequests || permissions.deleteRequests)} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showActions onClose={setClosing} /></section></>}
+      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
+      {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
+    </main>
+    {show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} close={() => setShow(false)} />}
+    {editing && <RequestEditForm request={editing} close={() => setEditing(null)} onSave={saveEdit} />}
+    {closing && <CloseRequestForm request={closing} close={() => setClosing(null)} onSave={closeRequest} />}
+    {verifying && <VerifyRequestForm request={verifying} close={() => setVerifying(null)} onSave={verifyRequest} />}
+  </div>;
+}
 function App() {
-  const [role, setRole] = useState(storedSession?.role || null),
+  const [session, setSession] = useState(storedSession?.token ? storedSession : null),
     [active, setActive] = useState("Dashboard"),
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
@@ -3187,14 +3312,18 @@ function App() {
     return () => clearTimeout(timer);
   }, [loadTime]);
   useEffect(() => {
-    fetch("/api/requests")
+    if (!session?.token) {
+      setRequests([]);
+      return undefined;
+    }
+    fetch("/api/requests", {headers: {Authorization: `Bearer ${session.token}`}})
       .then((r) => {
         if (!r.ok) throw new Error("Could not load requests");
         return r.json();
       })
       .then(setRequests)
       .catch((error) => console.error(error));
-  }, []);
+  }, [session?.token]);
   const gotoEquipment = (filter = "all", location = "") => {
       setEquipmentFilter(filter);
       setEquipmentLocation(location);
@@ -3205,31 +3334,49 @@ function App() {
       currentEmployeeName = "";
       localStorage.removeItem("nerveCenterSession");
       sessionStorage.removeItem("nerveCenterSession");
-      setRole(null);
+      setSession(null);
     },
-    addRequest = (request) => {
-      setRequests((current) => [request, ...current]);
-      fetch("/api/requests", {
+    addRequest = async (request) => {
+      setRequests((current) => [request, ...current.filter((row) => row.ref !== request.ref)]);
+      const response = await fetch("/api/requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(request),
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error("Could not save request");
-        })
-        .catch((error) => {
-          console.error(error);
-          alert(
-            "The request is visible now but could not be saved. Please retry.",
-          );
-        });
+      });
+      const saved = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setRequests((current) => current.filter((row) => row.ref !== request.ref));
+        throw new Error(saved.error || "Could not save request");
+      }
+      setRequests((current) => [saved, ...current.filter((row) => row.ref !== request.ref)]);
+    },
+    updateRequest = async (reference, payload, action = "edit") => {
+      const endpoint = action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : `/api/requests/${encodeURIComponent(reference)}`;
+      const response = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify(payload),
+      });
+      const saved = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(saved.error || "Could not update request");
+      setRequests((current) => current.map((row) => row.ref === reference ? saved : row));
+      return saved;
+    },
+    deleteRequest = async (reference) => {
+      const response = await fetch(`/api/requests/${encodeURIComponent(reference)}`, {method: "DELETE", headers: {Authorization: `Bearer ${authToken}`}});
+      const details = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(details.error || "Could not delete request");
+      setRequests((current) => current.filter((row) => row.ref !== reference));
     };
-  if (!role) return <Login onLogin={setRole} theme={theme} toggleTheme={toggleTheme} />;
-  if (role === "normal")
+  if (!session) return <Login onLogin={setSession} theme={theme} toggleTheme={toggleTheme} />;
+  if (session.role === "normal")
     return (
       <Normal
         requests={requests}
         onCreate={addRequest}
+        onUpdateRequest={updateRequest}
+        onDeleteRequest={deleteRequest}
+        session={session}
         logout={logout}
         theme={theme}
         toggleTheme={toggleTheme}
