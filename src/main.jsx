@@ -10,7 +10,6 @@ import {
   requestEquipmentDetails,
   requestEquipmentOptionLabel,
 } from "../request-equipment.mjs";
-import { MOBILE_ROLE_OPTIONS, normalizeAccountType } from "../access-control.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -82,7 +81,6 @@ const storedSession = (() => {
 })();
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
-let currentSession = storedSession || null;
 const subsidiaryData = [
   {
     name: "Western Coalfields Limited",
@@ -156,6 +154,7 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
   );
 }
 function Login({ onLogin, theme, toggleTheme }) {
+  const [role, setRole] = useState("super");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -168,16 +167,7 @@ function Login({ onLogin, theme, toggleTheme }) {
   const saveSession = (data) => {
     authToken = data.token;
     currentEmployeeName = data.name;
-    currentSession = {
-      token: data.token,
-      role: data.role,
-      name: data.name,
-      login: data.login,
-      userType: data.userType,
-      assignedRole: data.assignedRole,
-      permissions: data.permissions || {},
-    };
-    const session = JSON.stringify(currentSession);
+    const session = JSON.stringify({ token: data.token, role: data.role, name: data.name });
     if (rememberMe) {
       localStorage.setItem("nerveCenterSession", session);
       sessionStorage.removeItem("nerveCenterSession");
@@ -185,7 +175,7 @@ function Login({ onLogin, theme, toggleTheme }) {
       sessionStorage.setItem("nerveCenterSession", session);
       localStorage.removeItem("nerveCenterSession");
     }
-    onLogin(currentSession);
+    onLogin(data.role);
   };
   const signIn = async () => {
     setWorking(true);
@@ -194,7 +184,7 @@ function Login({ onLogin, theme, toggleTheme }) {
       const response = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, role }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not sign in.");
@@ -285,7 +275,32 @@ function Login({ onLogin, theme, toggleTheme }) {
           <div className="login-mobile-brand"><div className="brandmark">CM</div><strong>Nerve Center</strong></div>
           <small className="login-kicker"><LockKeyhole /> SECURE OPERATIONS PORTAL</small>
           <h2>Welcome back</h2>
-          <p>Your user type, Mobile User role, dashboard, and permissions are selected automatically when you sign in.</p>
+          <p>Sign in to access your fleet operations workspace.</p>
+          <fieldset className="role-fieldset">
+            <legend>Choose your access role</legend>
+            <div className="rolepick">
+            <button
+              type="button"
+              className={role === "super" ? "sel" : ""}
+              aria-pressed={role === "super"}
+              onClick={() => setRole("super")}
+            >
+              <ShieldCheck />
+              <b>Super User</b>
+              <span>Full administration access</span>
+            </button>
+            <button
+              type="button"
+              className={role === "normal" ? "sel" : ""}
+              aria-pressed={role === "normal"}
+              onClick={() => setRole("normal")}
+            >
+              <UserRound />
+              <b>Mobile User</b>
+              <span>Raise maintenance request</span>
+            </button>
+            </div>
+          </fieldset>
           <label className="login-label" htmlFor="login-username">User name</label>
           <div className="login-input">
             <User aria-hidden="true" />
@@ -873,7 +888,7 @@ const masterFields = {
     ["site", "Location"],
     ["email", "Mail ID"],
     ["phone", "Phone no."],
-    ["userType", "User type", "account-type-select"],
+    ["userType", "User type (Mobile User / Super Admin)"],
   ],
   "Region master": [
     ["name", "Region name"],
@@ -900,7 +915,7 @@ const masterFields = {
   ],
   Privilege: [
     ["username", "Username", "user-select"],
-    ["userGroup", "Assigned Mobile User role", "mobile-role-select"],
+    ["userGroup", "User Group"],
     ["accessType", "Super User / Mobile User", "role-radio"],
     ["location", "Location", "site-select"],
     ["read", "Read", "checkbox"],
@@ -913,7 +928,6 @@ const masterFields = {
 const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 const privilegeAccessOptions = ["Super User", "Mobile User"];
-const accountTypeOptions = ["Mobile User", "Super User"];
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
 const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
 function privilegeSelectionValue(value) {
@@ -1134,19 +1148,7 @@ function MasterActions({ name, onAdd, onDeleteAll, userOptions = [], siteOptions
                         <small>Enable this privilege</small>
                       </span>
                     </span>
-                ) : type === "mobile-role-select" ? (
-                  <>{label} *
-                  <select name={key} required defaultValue="">
-                    <option value="" disabled>Select a Mobile User role</option>
-                    {MOBILE_ROLE_OPTIONS.map((roleOption) => <option key={roleOption} value={roleOption}>{roleOption}</option>)}
-                  </select></>
-                ) : type === "account-type-select" ? (
-                  <>{label} *
-                  <select name={key} required defaultValue="">
-                    <option value="" disabled>Select a user type</option>
-                    {accountTypeOptions.map((accountType) => <option key={accountType} value={accountType}>{accountType}</option>)}
-                  </select></>
-                ) : type === "site-select" ? (
+                  ) : type === "site-select" ? (
                     <>{label} *
                     <select name={key} required defaultValue="">
                       <option value="" disabled>Select a site</option>
@@ -2410,8 +2412,6 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         ? isCheckedValue(editing[key])
         : name === "Privilege" && type === "role-radio"
           ? privilegeAccessValue(editing[key])
-        : name === "Privilege" && type === "mobile-role-select"
-          ? String(editing[key] || "").trim()
         : name === "Privilege" && type === "site-select"
           ? privilegeSelectionValue(editing[key])
         : type === "checkbox" ? form.has(key) : String(form.get(key) || "").trim(),
@@ -2488,18 +2488,6 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                             </label>
                           ))}
                         </div>
-                      ) : name === "Privilege" && type === "mobile-role-select" ? (
-                        <select
-                          className="privilege-site-select"
-                          value={row[key] || ""}
-                          disabled={savingCell.startsWith(`${row.id}-`)}
-                          aria-label={`Assigned Mobile User role for ${row.username}`}
-                          onChange={(event) => savePrivilegeField(row, key, event.target.value)}
-                        >
-                          <option value="">Not assigned</option>
-                          {row[key] && !MOBILE_ROLE_OPTIONS.includes(row[key]) && <option value={row[key]}>{row[key]}</option>}
-                          {MOBILE_ROLE_OPTIONS.map((roleOption) => <option key={roleOption} value={roleOption}>{roleOption}</option>)}
-                        </select>
                       ) : name === "Privilege" && type === "site-select" ? (
                         <select
                           className="privilege-site-select"
@@ -2554,7 +2542,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : "OEM"} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
-            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "mobile-role-select", "site-select"].includes(type))).map(([key, label, type]) => (
+            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "site-select"].includes(type))).map(([key, label, type]) => (
               <label key={key}>{label} *
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">
@@ -2572,12 +2560,6 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                         {user.employee || user.login}{user.login && user.employee ? ` (${user.login})` : ""}
                       </option>
                     ))}
-                  </select>
-                ) : type === "account-type-select" ? (
-                  <select name={key} required defaultValue={editing[key] || ""}>
-                    <option value="" disabled>Select a user type</option>
-                    {editing[key] && !accountTypeOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
-                    {accountTypeOptions.map((accountType) => <option key={accountType} value={accountType}>{accountType}</option>)}
                   </select>
                 ) : key === "level" ? (
                   <select name={key} required defaultValue={editing[key] || ""}>
@@ -2625,17 +2607,12 @@ function MasterLoader({ name }) {
     </section>
   );
 }
-function useMasterRecords(name, seed = [], enabled = true) {
+function useMasterRecords(name, seed = []) {
   const [records, setRecords] = useState(seed),
     [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    if (!enabled) {
-      setRecords(seed);
-      setLoaded(true);
-      return undefined;
-    }
     const loadStartedAt = performance.now();
-    fetch("/api/masters", { headers: { Authorization: `Bearer ${authToken}` } })
+    fetch("/api/masters")
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then((data) => setRecords([...seed, ...(data[name] || [])]))
       .catch(() => {})
@@ -2645,7 +2622,7 @@ function useMasterRecords(name, seed = [], enabled = true) {
           detail: {name, seconds: (performance.now() - loadStartedAt) / 1000},
         }));
       });
-  }, [name, enabled]);
+  }, [name]);
   const add = async (incoming, { silent = false } = {}) => {
     const batches = batchMasterRecords(incoming);
     const saved = [];
@@ -3005,7 +2982,7 @@ function PrivilegeMasterPage(props) {
       missingUsers.map((user) => ({
         username: String(user.login).trim(),
         userGroup: "",
-        accessType: normalizeAccountType(user.userType || user.role) === "super" ? "Super User" : "Mobile User",
+        accessType: "",
         location: "",
         read: false,
         edit: false,
@@ -3140,127 +3117,8 @@ function Normal({ logout, requests, onCreate, theme, toggleTheme }) {
     </div>
   );
 }
-const mobileRoleContent = {
-  "Production User": {
-    title: "Production maintenance dashboard",
-    description: "Record equipment issues from production operations and track your submitted requests.",
-    requestLabel: "Your submitted requests",
-  },
-  "Maintenance User": {
-    title: "Maintenance request dashboard",
-    description: "Create maintenance requests and follow the progress of your submitted work.",
-    requestLabel: "Your submitted requests",
-  },
-  "Maintenance Head": {
-    title: "Maintenance leadership dashboard",
-    description: "Review maintenance demand across the operation and use the live summary for coordination.",
-    requestLabel: "All maintenance requests",
-  },
-  "MIS User": {
-    title: "MIS reporting dashboard",
-    description: "Review live maintenance information and prepare operational reporting.",
-    requestLabel: "All maintenance requests",
-  },
-};
-function MobileReports({ requests = [], canPrint = false }) {
-  const counts = {
-    total: requests.length,
-    open: requests.filter((request) => request.status === "Open").length,
-    inProgress: requests.filter((request) => request.status === "In progress").length,
-    closed: requests.filter((request) => request.status === "Closed").length,
-  };
-  return <section className="panel pagepanel mobile-report-panel">
-    <header>
-      <div><h1>Maintenance reports</h1><p>Live information available for your assigned role.</p></div>
-      {canPrint && <button className="secondary" onClick={() => window.print()}><FileBarChart /> Print report</button>}
-    </header>
-    <div className="mobile-summary-grid">
-      {[
-        ["Total requests", counts.total, "blue"],
-        ["Open requests", counts.open, "orange"],
-        ["In progress", counts.inProgress, "purple"],
-        ["Closed requests", counts.closed, "green"],
-      ].map(([label, value, tone]) => <div className={`mobile-summary-card ${tone}`} key={label}><span>{label}</span><b>{value}</b></div>)}
-    </div>
-    <BreakdownTable rows={requests} showBreakdownDays />
-  </section>;
-}
-function RoleAwareNormal({ logout, requests, onCreate, theme, toggleTheme, session }) {
-  const [show, setShow] = useState(false);
-  const [screen, setScreen] = useState("Dashboard");
-  const permissions = session?.permissions || {};
-  const assignedRole = session?.assignedRole || "Mobile User";
-  const roleContent = mobileRoleContent[assignedRole] || {
-    title: "Mobile User dashboard",
-    description: "Your available maintenance workspace is determined by your assigned role.",
-    requestLabel: "Maintenance requests",
-  };
-  const canCreate = permissions.createRequest === true;
-  const canRead = permissions.readRequests === true;
-  const canViewReports = permissions.viewReports === true;
-  const [equipmentRecords, , equipmentLoaded] = useMasterRecords(
-    "Equipment master",
-    vehicles,
-    permissions.viewEquipment === true,
-  );
-  const availableScreens = [
-    ["Dashboard", LayoutDashboard],
-    ...(canRead ? [["Requests", History]] : []),
-    ...(canViewReports ? [["Reports", FileBarChart]] : []),
-  ];
-  const dateLabel = new Intl.DateTimeFormat(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
-  return <div className="normal role-aware-normal">
-    <header>
-      <div className="logo">
-        <b>CM</b>
-        <span>Nerve Center<small>MOBILE USER PORTAL</small></span>
-      </div>
-      <div>
-        <Bell />
-        <span><b>{assignedRole}</b><small>Mobile User</small></span>
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        <button onClick={logout} aria-label="Sign out"><LogOut /></button>
-      </div>
-    </header>
-    <main>
-      <nav className="mobile-workspace-nav" aria-label="Mobile User navigation">
-        {availableScreens.map(([label, Icon]) => <button key={label} className={screen === label ? "active" : ""} onClick={() => setScreen(label)}><Icon />{label}</button>)}
-      </nav>
-      {screen === "Dashboard" && <>
-        <div className="welcome">
-          <div><small>{dateLabel}</small><h1>{roleContent.title}</h1><p>{roleContent.description}</p></div>
-          <Wrench />
-        </div>
-        <div className="mobile-summary-grid compact">
-          <div className="mobile-summary-card blue"><span>Visible requests</span><b>{requests.length}</b></div>
-          <div className="mobile-summary-card orange"><span>Open requests</span><b>{requests.filter((request) => request.status === "Open").length}</b></div>
-          <div className="mobile-summary-card green"><span>Closed requests</span><b>{requests.filter((request) => request.status === "Closed").length}</b></div>
-        </div>
-        {canCreate ? <div className="actioncard">
-          <div className="bigicon"><Truck /></div>
-          <div><h2>Push vehicle for maintenance</h2><p>Enter the vehicle details and submit the maintenance request.</p></div>
-          <button className="primary" onClick={() => setShow(true)}><Plus />Create request</button>
-        </div> : <div className="actioncard mobile-readonly-action">
-          <div className="bigicon"><ShieldCheck /></div>
-          <div><h2>Read-only role access</h2><p>Your assigned role can review authorized information but cannot create a maintenance request.</p></div>
-        </div>}
-      </>}
-      {screen === "Requests" && canRead && <>
-        <h3 className="sectiontitle">{roleContent.requestLabel} · Read only</h3>
-        <section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section>
-      </>}
-      {screen === "Reports" && canViewReports && <MobileReports requests={requests} canPrint={permissions.printReports === true} />}
-    </main>
-    {show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} close={() => setShow(false)} />}
-  </div>;
-}
 function App() {
-  const [session, setSession] = useState(currentSession),
+  const [role, setRole] = useState(storedSession?.role || null),
     [active, setActive] = useState("Dashboard"),
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
@@ -3289,7 +3147,6 @@ function App() {
         if (!stopped && data.version && data.version !== APP_VERSION) {
           authToken = "";
           currentEmployeeName = "";
-          currentSession = null;
           localStorage.removeItem("nerveCenterSession");
           sessionStorage.removeItem("nerveCenterSession");
           window.location.replace(`/?updated=${encodeURIComponent(data.version)}`);
@@ -3330,25 +3187,14 @@ function App() {
     return () => clearTimeout(timer);
   }, [loadTime]);
   useEffect(() => {
-    if (!session?.token) {
-      setRequests([]);
-      return undefined;
-    }
-    let cancelled = false;
-    fetch("/api/requests", { headers: { Authorization: `Bearer ${authToken}` } })
+    fetch("/api/requests")
       .then((r) => {
         if (!r.ok) throw new Error("Could not load requests");
         return r.json();
       })
-      .then((data) => { if (!cancelled) setRequests(data); })
-      .catch((error) => {
-        if (!cancelled) {
-          console.error(error);
-          setRequests([]);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [session?.token]);
+      .then(setRequests)
+      .catch((error) => console.error(error));
+  }, []);
   const gotoEquipment = (filter = "all", location = "") => {
       setEquipmentFilter(filter);
       setEquipmentLocation(location);
@@ -3357,16 +3203,15 @@ function App() {
     logout = () => {
       authToken = "";
       currentEmployeeName = "";
-      currentSession = null;
       localStorage.removeItem("nerveCenterSession");
       sessionStorage.removeItem("nerveCenterSession");
-      setSession(null);
+      setRole(null);
     },
     addRequest = (request) => {
       setRequests((current) => [request, ...current]);
       fetch("/api/requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
       })
         .then((r) => {
@@ -3379,16 +3224,15 @@ function App() {
           );
         });
     };
-  if (!session) return <Login onLogin={setSession} theme={theme} toggleTheme={toggleTheme} />;
-  if (session.role === "normal")
+  if (!role) return <Login onLogin={setRole} theme={theme} toggleTheme={toggleTheme} />;
+  if (role === "normal")
     return (
-      <RoleAwareNormal
+      <Normal
         requests={requests}
         onCreate={addRequest}
         logout={logout}
         theme={theme}
         toggleTheme={toggleTheme}
-        session={session}
       />
     );
   return (
