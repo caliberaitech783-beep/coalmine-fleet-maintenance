@@ -495,7 +495,9 @@ function Dashboard({ goto, gotoEquipment }) {
     return counts;
   }, {});
   const vehicleTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const categoryCards = [["Equipment", kpis.total, "Registered fleet"], ...vehicleTypes.slice(0, 3).map(([label, value]) => [label, value, "Equipment group"])];
+  const categoryCards = vehicleTypes.length
+    ? vehicleTypes.map(([label, value]) => [label, value, "Equipment group"])
+    : [["No equipment group", 0, "Equipment group"]];
   const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
   const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
