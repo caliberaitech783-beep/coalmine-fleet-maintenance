@@ -32,6 +32,15 @@ export function userLoginCandidates(record = {}) {
   return [...new Set([login, firstName].filter(Boolean))];
 }
 
+// Restrict password verification to records that could actually match the
+// submitted login.  Verifying an scrypt hash is intentionally expensive; doing
+// it for every employee row made sign-in appear to hang when the master grew.
+export function loginRecordCandidates(rows = [], username = "") {
+  const normalized = String(username || "").trim().toLowerCase();
+  if (!normalized) return [];
+  return rows.filter((row) => userLoginCandidates(row?.record_data || row).includes(normalized));
+}
+
 export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
   const accountType = normalizeAccountType(
     user.userType || user.accessType || user.accountType || user.role || privilege.accessType,

@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {resolveMobileAccess, normalizeMobileUserRole} from "../mobile-access.mjs";
+import {loginRecordCandidates, resolveMobileAccess, normalizeMobileUserRole} from "../mobile-access.mjs";
+
+test("login candidate filtering avoids scanning unrelated employee hashes", () => {
+  const rows = [
+    {record_data: {login: "alice", employee: "Alice Smith"}},
+    {record_data: {login: "bob", employee: "Bob Jones"}},
+    {record_data: {employee: "Charlie Brown"}},
+  ];
+  assert.deepEqual(loginRecordCandidates(rows, "alice"), [rows[0]]);
+  assert.deepEqual(loginRecordCandidates(rows, "charlie"), [rows[2]]);
+  assert.deepEqual(loginRecordCandidates(rows, "missing"), []);
+});
 
 test("recognizes only the requested Mobile User groups", () => {
   assert.equal(normalizeMobileUserRole("Production User"), "Production User");

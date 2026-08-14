@@ -9,7 +9,7 @@ import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
-import {resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
+import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue} from './request-workflow.mjs';
 
 const {Pool}=pg;
@@ -193,7 +193,12 @@ app.post('/api/login',async(req,res,next)=>{
     const requestedRole=req.body?.role==='normal'?'normal':'super';
     if(!username||!password)return res.status(400).json({error:'Employee first name and phone number are required.'});
     const {rows:userRows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
-    const candidates=userRows.filter(row=>{
+    // Filter by the submitted login before verifying any password hashes. A
+    // scrypt verification is deliberately costly, so checking all employee
+    // records here makes login scale linearly with the entire master and can
+    // starve the single App Service worker.
+    const loginRows=loginRecordCandidates(userRows,username);
+    const candidates=loginRows.filter(row=>{
       const record=row.record_data;
       const passwordMatches=record.passwordHash
         ? verifyPassword(password,record.passwordHash)
