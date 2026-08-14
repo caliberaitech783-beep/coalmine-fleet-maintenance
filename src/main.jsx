@@ -539,7 +539,6 @@ function Dashboard({ goto, gotoEquipment }) {
           <p>Real-time fleet health, requests and site performance.</p>
         </div>
         <div className="dashboard-toolbar-actions">
-          <label className="dashboard-search"><Search /><input aria-label="Search dashboard" placeholder="Search dashboard..." readOnly /></label>
           <label className="dashboard-region-select">
             <span>Region</span>
             <select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}>
