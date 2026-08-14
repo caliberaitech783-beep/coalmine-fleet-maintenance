@@ -1052,7 +1052,7 @@ function parseCsv(text, fields) {
     })
     .filter((record) => Object.values(record).some(Boolean));
 }
-function MasterActions({ name, onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
+function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
@@ -1115,6 +1115,18 @@ function MasterActions({ name, onAdd, onDeleteAll, onSaveAll, saveAllDisabled = 
     link.click();
     URL.revokeObjectURL(link.href);
   };
+  const exportRecords = () => {
+    const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+    const csv = [
+      fields.map(([, label]) => quote(label)).join(","),
+      ...records.map((record) => fields.map(([key, , type]) => quote(type === "checkbox" ? isCheckedValue(record[key]) : record[key])).join(",")),
+    ].join("\n") + "\n";
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    link.download = name.toLowerCase().replaceAll(" ", "-") + "-export.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
   return (
     <>
       <div className="master-actions">
@@ -1131,6 +1143,10 @@ function MasterActions({ name, onAdd, onDeleteAll, onSaveAll, saveAllDisabled = 
         <button className="secondary" onClick={() => setMode("import")}>
           <Upload />
           Import
+        </button>
+        <button className="secondary" type="button" onClick={exportRecords}>
+          <Download />
+          Export
         </button>
         <button className="primary" onClick={() => setMode("manual")}>
           <Plus />
@@ -1411,7 +1427,7 @@ function Equipment({
             · {rows.length} records shown
           </p>
         </div>
-        <MasterActions name="Equipment master" onAdd={onAdd} onDeleteAll={onDeleteAll} />
+        <MasterActions name="Equipment master" records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
       <div className="toolbar">
         <div>
@@ -2492,6 +2508,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         </div>
         <MasterActions
           name={name}
+          records={records}
           onAdd={onAdd}
           onDeleteAll={onDeleteAll}
           onSaveAll={name === "Privilege" ? savePrivilegeRows : undefined}
@@ -2993,7 +3010,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
           <h1>Breakdown master</h1>
           <p>Mobile User requests and Super Admin-created breakdown records</p>
         </div>
-        <MasterActions name="Breakdown master" onAdd={onAdd} onDeleteAll={onDeleteAll} />
+        <MasterActions name="Breakdown master" records={rows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
       <div className="tabs">
         {[
