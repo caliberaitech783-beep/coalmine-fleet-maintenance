@@ -465,9 +465,10 @@ function Side({ active, setActive, logout, open }) {
     </aside>
   );
 }
-function Dashboard({ goto, gotoEquipment }) {
+function Dashboard({ goto, gotoEquipment, requests = [] }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
+  const [repairTypeRecords] = useMasterRecords("Repair type master");
   const [showUserBreakdown, setShowUserBreakdown] = useState(false);
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const now = new Date();
@@ -475,7 +476,7 @@ function Dashboard({ goto, gotoEquipment }) {
   const selectedRegion = subsidiaryData.find((region) => region.code === dashboardRegion);
   const selectedSites = selectedRegion?.sites || [];
   const visibleEquipment = selectedRegion ? equipmentRecords.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : equipmentRecords;
-  const visibleBreakdowns = selectedRegion ? breakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : breakdowns;
+  const visibleBreakdowns = selectedRegion ? requests.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : requests;
   const kpis = equipmentMetrics(visibleEquipment);
   const statusCounts = [
     ["Operational", visibleEquipment.filter((record) => record.status === "Operational").length, "operational"],
@@ -495,9 +496,16 @@ function Dashboard({ goto, gotoEquipment }) {
     return counts;
   }, {});
   const vehicleTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const categoryCards = vehicleTypes.length
-    ? vehicleTypes.map(([label, value]) => [label, value, "Equipment group"])
-    : [["No equipment group", 0, "Equipment group"]];
+  const repairTypeCards = [...new Map(
+    repairTypeRecords
+      .map((record) => String(record.repairType || "").trim())
+      .filter(Boolean)
+      .map((label) => [label.toLowerCase(), label]),
+  ).values()].map((label) => [
+    label,
+    visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === label.toLowerCase()).length,
+    "Breakdown requests",
+  ]);
   const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
   const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
@@ -508,7 +516,7 @@ function Dashboard({ goto, gotoEquipment }) {
         <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">All regions</option>{subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
       </header>
       <section className="mine-counter-grid" aria-label="Mining fleet summary">
-        {categoryCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => gotoEquipment("all", "")}><Truck /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>)}
+        {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => goto("Breakdown master")}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
       </section>
       <section className="mine-dashboard-grid">
         <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Fleet status · all</span><h2>Vehicle status</h2><p>Availability across the selected operating region</p></div><button type="button" onClick={() => gotoEquipment("all", "")}>View fleet <ChevronRight /></button></header><div className="mine-status-body"><button type="button" className="mine-status-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#7ed6a3 0 ${kpis.availability}%, #26383c ${kpis.availability}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button><div className="mine-status-list">{statusCounts.map(([label, value, tone]) => <button type="button" key={label} onClick={() => gotoEquipment(tone === "operational" ? "onroad" : "all", "")}><i className={`mine-dot ${tone}`} /><span>{label}</span><b>{value.toLocaleString()}</b></button>)}</div></div></article>
@@ -3223,7 +3231,7 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} />
+            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}
