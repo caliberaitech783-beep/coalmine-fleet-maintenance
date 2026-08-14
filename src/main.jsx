@@ -118,6 +118,7 @@ const masterNav = [
   ["Users & employees", Users],
   ["Equipment master", Truck],
   ["Breakdown master", Wrench],
+  ["Repair type master", Wrench],
   ["Region master", Building2],
   ["Vehicle transfers", ArrowRightLeft],
   ["Hierarchy master", Network],
@@ -489,13 +490,12 @@ function Dashboard({ goto, gotoEquipment }) {
     return counts;
   }, { mobile: 0, super: 0, admin: 0 });
   const typeCounts = visibleEquipment.reduce((counts, record) => {
-    const value = String(record.group || record.category || record.itemName || "Unclassified").trim() || "Unclassified";
-    const normalized = value.toLowerCase();
-    const label = normalized.includes("trailer") ? "Semi-trailers" : normalized.includes("rigid") || normalized.includes("dumper") ? "Rigid trucks" : normalized.includes("box") ? "Box trucks" : normalized.includes("van") ? "Vans" : value;
+    const label = String(record.group || record.category || record.itemName || "Unclassified").trim() || "Unclassified";
     counts[label] = (counts[label] || 0) + 1;
     return counts;
   }, {});
   const vehicleTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const categoryCards = [["Equipment", kpis.total, "Registered fleet"], ...vehicleTypes.slice(0, 3).map(([label, value]) => [label, value, "Equipment group"])];
   const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
   const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
@@ -506,7 +506,7 @@ function Dashboard({ goto, gotoEquipment }) {
         <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">All regions</option>{subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
       </header>
       <section className="mine-counter-grid" aria-label="Mining fleet summary">
-        {[[Truck, kpis.total, "Equipment", "Registered fleet", () => gotoEquipment("all", "")], [Truck, typeCounts["Box trucks"] || 0, "Box trucks", "Fleet mix", () => gotoEquipment("all", "")], [Truck, typeCounts["Rigid trucks"] || 0, "Rigid trucks", "Fleet mix", () => gotoEquipment("all", "")], [Truck, typeCounts["Semi-trailers"] || 0, "Semi-trailers", "Fleet mix", () => gotoEquipment("all", "")]].map(([Icon, value, label, hint, action]) => <button type="button" key={label} onClick={action}><Icon /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>)}
+        {categoryCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => gotoEquipment("all", "")}><Truck /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>)}
       </section>
       <section className="mine-dashboard-grid">
         <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Fleet status · all</span><h2>Vehicle status</h2><p>Availability across the selected operating region</p></div><button type="button" onClick={() => gotoEquipment("all", "")}>View fleet <ChevronRight /></button></header><div className="mine-status-body"><button type="button" className="mine-status-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#7ed6a3 0 ${kpis.availability}%, #26383c ${kpis.availability}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button><div className="mine-status-list">{statusCounts.map(([label, value, tone]) => <button type="button" key={label} onClick={() => gotoEquipment(tone === "operational" ? "onroad" : "all", "")}><i className={`mine-dot ${tone}`} /><span>{label}</span><b>{value.toLocaleString()}</b></button>)}</div></div></article>
@@ -630,6 +630,9 @@ const masterFields = {
     ["hours", "Downtime"],
     ["status", "Status"],
     ["owner", "Responsibility"],
+  ],
+  "Repair type master": [
+    ["repairType", "Repair type"],
   ],
   "Users & employees": [
     ["login", "Login name"],
@@ -2173,7 +2176,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     [pendingPrivilegeRows, setPendingPrivilegeRows] = useState({}),
     [savingAllPrivileges, setSavingAllPrivileges] = useState(false),
     fields = masterFields[name],
-    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege",
+    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege" || name === "Repair type master",
     filteredRows = records.filter((record) =>
       Object.values(record).join(" ").toLowerCase().includes(q.toLowerCase()),
     ),
@@ -2370,7 +2373,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       </div>
     </section>
     {editing && (
-      <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : "OEM"} record`} close={() => setEditing(null)}>
+    <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : name} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
             {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "mobile-role-select", "site-select"].includes(type))).map(([key, label, type]) => (

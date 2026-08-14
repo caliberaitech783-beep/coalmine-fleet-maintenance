@@ -17,6 +17,7 @@ const {Pool}=pg;
 const app=express();
 const port=Number(process.env.PORT||3000);
 const root=path.dirname(fileURLToPath(import.meta.url));
+const repairTypeDefaults=['Breakdown','Accidental','Preventive','Aggregate Repair','Super Structure','WGM'];
 const staticRoot=existsSync(path.join(root,'dist','index.html'))?path.join(root,'dist'):root;
 const versionFile=path.join(staticRoot,'app-version.txt');
 const currentAppVersion=existsSync(versionFile)
@@ -150,6 +151,21 @@ async function migrate(){
       await client.query('DELETE FROM auth_sessions');
       await client.query(`INSERT INTO app_metadata (key,value,updated_at) VALUES ('ui_version',$1,NOW())
         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[currentAppVersion]);
+    }
+    const {rows:repairSeed}=await client.query("SELECT value FROM app_metadata WHERE key='repair_type_defaults_seeded' FOR UPDATE");
+    if(!repairSeed.length){
+      for(const repairType of repairTypeDefaults){
+        await client.query(`INSERT INTO master_records (master_name,record_data)
+          SELECT $1,$2::jsonb
+          WHERE NOT EXISTS (
+            SELECT 1 FROM master_records
+            WHERE master_name=$1
+              AND lower(trim(record_data->>'repairType'))=lower(trim($3))
+          )`,['Repair type master',JSON.stringify({repairType}),repairType]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('repair_type_defaults_seeded','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
     }
     await client.query('COMMIT');
   }catch(error){
