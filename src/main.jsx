@@ -44,6 +44,7 @@ import {
   ArrowUp,
   ArrowDown,
   Pencil,
+  Save,
   Trash2,
   MessageCircle,
   Send,
@@ -2410,6 +2411,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
     [savingCell, setSavingCell] = useState(""),
+    [pendingPrivilegeRows, setPendingPrivilegeRows] = useState({}),
     fields = masterFields[name],
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege",
     filteredRows = records.filter((record) =>
@@ -2447,14 +2449,27 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     try { await onDelete(record.id); }
     catch (error) { alert(error.message); }
   };
-  const savePrivilegeField = async (record, key, value) => {
-    const cell = `${record.id}-${key}`;
+  const privilegeValue = (record, key) => pendingPrivilegeRows[record.id]?.[key] ?? record[key];
+  const stagePrivilegeField = (record, key, value) => {
+    setPendingPrivilegeRows((pending) => ({
+      ...pending,
+      [record.id]: { ...(pending[record.id] || record), [key]: value },
+    }));
+  };
+  const savePrivilegeRow = async (record) => {
+    const draft = pendingPrivilegeRows[record.id];
+    if (!draft) return;
+    const cell = `${record.id}-row`;
     setSavingCell(cell);
-    const updated = Object.fromEntries(
-      fields.map(([field]) => [field, field === key ? value : record[field]]),
-    );
-    try { await onEdit(record.id, updated); }
-    catch (error) { alert(error.message); }
+    const updated = Object.fromEntries(fields.map(([field]) => [field, draft[field]]));
+    try {
+      await onEdit(record.id, updated);
+      setPendingPrivilegeRows((pending) => {
+        const next = { ...pending };
+        delete next[record.id];
+        return next;
+      });
+    } catch (error) { alert(error.message); }
     finally { setSavingCell(""); }
   };
   return (
@@ -2489,9 +2504,14 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           </thead>
           <tbody>
             {rows.length ? (
-              rows.map((row, ri) => (
+                rows.map((row, ri) => {
+                  const rowSaving = savingCell === `${row.id}-row`;
+                  const hasPendingPrivilege = name === "Privilege" && Boolean(pendingPrivilegeRows[row.id]);
+                  return (
                 <tr key={row.id || ri}>
-                  {fields.map(([key, , type], ci) => (
+                  {fields.map(([key, , type], ci) => {
+                    const value = name === "Privilege" ? privilegeValue(row, key) : row[key];
+                    return (
                     <td key={key}>
                       {name === "Privilege" && type === "role-radio" ? (
                         <div className="privilege-inline-role" role="radiogroup" aria-label={`Access type for ${row.username}`}>
@@ -2500,9 +2520,9 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                               <input
                                 type="radio"
                                 name={`access-type-${row.id}`}
-                                checked={privilegeAccessValue(row[key]) === option}
-                                disabled={savingCell.startsWith(`${row.id}-`)}
-                                onChange={() => savePrivilegeField(row, key, option)}
+                                checked={privilegeAccessValue(value) === option}
+                                disabled={rowSaving}
+                                onChange={() => stagePrivilegeField(row, key, option)}
                               />
                               <span>{option === "Super User" ? "Super" : "Mobile"}</span>
                             </label>
@@ -2511,28 +2531,28 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                       ) : name === "Privilege" && type === "mobile-role-select" ? (
                         <select
                           className="privilege-site-select"
-                          value={privilegeSelectionValue(row[key])}
-                          disabled={savingCell.startsWith(`${row.id}-`)}
+                          value={privilegeSelectionValue(value)}
+                          disabled={rowSaving}
                           aria-label={`User Group for ${row.username}`}
-                          onChange={(event) => savePrivilegeField(row, key, event.target.value)}
+                          onChange={(event) => stagePrivilegeField(row, key, event.target.value)}
                         >
                           <option value="">Not assigned</option>
-                          {privilegeSelectionValue(row[key]) && !mobileUserRoleOptions.includes(privilegeSelectionValue(row[key])) && (
-                            <option value={privilegeSelectionValue(row[key])}>{privilegeSelectionValue(row[key])}</option>
+                          {privilegeSelectionValue(value) && !mobileUserRoleOptions.includes(privilegeSelectionValue(value)) && (
+                            <option value={privilegeSelectionValue(value)}>{privilegeSelectionValue(value)}</option>
                           )}
                           {mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       ) : name === "Privilege" && type === "site-select" ? (
                         <select
                           className="privilege-site-select"
-                          value={privilegeSelectionValue(row[key])}
-                          disabled={savingCell.startsWith(`${row.id}-`)}
+                          value={privilegeSelectionValue(value)}
+                          disabled={rowSaving}
                           aria-label={`Location for ${row.username}`}
-                          onChange={(event) => savePrivilegeField(row, key, event.target.value)}
+                          onChange={(event) => stagePrivilegeField(row, key, event.target.value)}
                         >
                           <option value="">Select site</option>
-                          {privilegeSelectionValue(row[key]) && !siteOptions.includes(privilegeSelectionValue(row[key])) && (
-                            <option value={privilegeSelectionValue(row[key])}>{privilegeSelectionValue(row[key])}</option>
+                          {privilegeSelectionValue(value) && !siteOptions.includes(privilegeSelectionValue(value)) && (
+                            <option value={privilegeSelectionValue(value)}>{privilegeSelectionValue(value)}</option>
                           )}
                           {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
                         </select>
@@ -2540,27 +2560,33 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                         <input
                           className="privilege-inline-checkbox"
                           type="checkbox"
-                          checked={isCheckedValue(row[key])}
-                          disabled={savingCell.startsWith(`${row.id}-`)}
+                          checked={isCheckedValue(value)}
+                          disabled={rowSaving}
                           aria-label={`${fields[ci][1]} for ${row.username}`}
-                          onChange={(event) => savePrivilegeField(row, key, event.target.checked)}
+                          onChange={(event) => stagePrivilegeField(row, key, event.target.checked)}
                         />
                       ) : type === "checkbox" ? (
                         <span className={`privilege-value ${isCheckedValue(row[key]) ? "enabled" : "disabled"}`}>
                           {isCheckedValue(row[key]) ? <CheckCircle2 /> : <X />}
                           {isCheckedValue(row[key]) ? "Yes" : "No"}
                         </span>
-                      ) : ci === 0 ? <b>{row[key]}</b> : row[key]}
+                      ) : ci === 0 ? <b>{value}</b> : value}
                     </td>
-                  ))}
+                    );
+                  })}
                   {canManageRows && (
                     <td className="row-actions">
-                      <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
+                      {name === "Privilege" ? (
+                        <button className="primary" type="button" aria-label={`Save privileges for ${row.username || "record"}`} disabled={!hasPendingPrivilege || rowSaving} onClick={() => savePrivilegeRow(row)}><Save /> Save</button>
+                      ) : (
+                        <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
+                      )}
                       <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
                     </td>
                   )}
                 </tr>
-              ))
+                  );
+                })
             ) : (
               <tr>
                 <td colSpan={fields.length + (canManageRows ? 1 : 0)} className="empty-state">
