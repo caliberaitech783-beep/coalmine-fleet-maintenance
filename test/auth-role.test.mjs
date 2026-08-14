@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {matchesRequestedRole} from '../auth-role.mjs';
+import {filterRowsByRequestedRole, matchesRequestedRole} from '../auth-role.mjs';
+
+test('narrows duplicate login names to the selected access type', () => {
+  const rows = [
+    {record_data: {login: 'sanskar', userType: 'Super Admin User'}},
+    {record_data: {login: 'sanskar', userType: 'Mobile User'}},
+  ];
+  assert.deepEqual(filterRowsByRequestedRole(rows, 'super'), [rows[0]]);
+  assert.deepEqual(filterRowsByRequestedRole(rows, 'normal'), [rows[1]]);
+});
 
 test('accepts Mobile User records for mobile login', () => {
   assert.equal(matchesRequestedRole('Mobile User', 'normal'), true);

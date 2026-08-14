@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {existsSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
+import {filterRowsByRequestedRole} from './auth-role.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -197,7 +198,7 @@ app.post('/api/login',async(req,res,next)=>{
     // scrypt verification is deliberately costly, so checking all employee
     // records here makes login scale linearly with the entire master and can
     // starve the single App Service worker.
-    const loginRows=loginRecordCandidates(userRows,username);
+    const loginRows=filterRowsByRequestedRole(loginRecordCandidates(userRows,username),requestedRole);
     const candidates=loginRows.filter(row=>{
       const record=row.record_data;
       const passwordMatches=record.passwordHash
