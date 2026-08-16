@@ -8,7 +8,7 @@ import { recordBelongsToSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
   requestEquipmentDetails,
-  requestVehicleOptionLabel,
+  requestEquipmentGroupOptionLabel,
 } from "../request-equipment.mjs";
 import {
   LayoutDashboard,
@@ -1755,9 +1755,9 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                     ? "Select equipment"
                     : "No equipment available"}
               </option>
-              {equipmentRecords.filter((record) => record.id != null && requestVehicleOptionLabel(record)).map((record) => (
+              {equipmentRecords.filter((record) => record.id != null && requestEquipmentGroupOptionLabel(record)).map((record) => (
                 <option key={record.id} value={String(record.id)}>
-                  {requestVehicleOptionLabel(record)}
+                  {requestEquipmentGroupOptionLabel(record)}
                 </option>
               ))}
             </select>

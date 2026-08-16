@@ -4,6 +4,7 @@ import {
   findRequestEquipment,
   requestEquipmentDetails,
   requestEquipmentOptionLabel,
+  requestEquipmentGroupOptionLabel,
   requestVehicleOptionLabel,
 } from "../request-equipment.mjs";
 
@@ -43,7 +44,19 @@ test("equipment option labels include context that distinguishes duplicate names
   );
 });
 
-test("production vehicle option labels contain only the vehicle name", () => {
+test("production equipment group option labels use the Equipment Master group", () => {
+  assert.equal(
+    requestEquipmentGroupOptionLabel({
+      group: "EXCAVATOR",
+      equipmentName: "VPC48 - 62534",
+      currentLocation: "Jayant OB",
+    }),
+    "EXCAVATOR",
+  );
+  assert.equal(requestEquipmentGroupOptionLabel({ equipmentName: "VPC48 - 62534" }), "");
+});
+
+test("legacy vehicle option labels remain compatible", () => {
   assert.equal(
     requestVehicleOptionLabel({
       equipmentName: "VPC48 - 62534",

@@ -36,9 +36,15 @@ export function requestEquipmentOptionLabel(record = {}) {
   return context.length ? `${details.equipment} — ${context.join(" — ")}` : details.equipment;
 }
 
-// Production users choose a vehicle, so keep the selector label limited to
-// the vehicle name. The selected record still supplies door, site, and
-// registration details through requestEquipmentDetails.
+// Production users see the Equipment Master group in the selector rather
+// than a vehicle number. The option value remains the record id, so the
+// selected record still supplies door, site, and registration details through
+// requestEquipmentDetails.
+export function requestEquipmentGroupOptionLabel(record = {}) {
+  return text(record.group);
+}
+
+// Kept for compatibility with older callers/imported deployment helpers.
 export function requestVehicleOptionLabel(record = {}) {
   return text(record.equipmentName);
 }
