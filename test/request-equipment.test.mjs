@@ -4,6 +4,7 @@ import {
   findRequestEquipment,
   requestEquipmentDetails,
   requestEquipmentOptionLabel,
+  requestVehicleOptionLabel,
 } from "../request-equipment.mjs";
 
 test("selects request equipment by stable id when names are duplicated", () => {
@@ -40,4 +41,16 @@ test("equipment option labels include context that distinguishes duplicate names
     }),
     "Excavator — Door EX-2 — Dudhichua OB — S/N SN-99",
   );
+});
+
+test("production vehicle option labels contain only the vehicle name", () => {
+  assert.equal(
+    requestVehicleOptionLabel({
+      equipmentName: "VPC48 - 62534",
+      currentLocation: "Jayant OB",
+      manufacturerSerialNo: "SN-99",
+    }),
+    "VPC48 - 62534",
+  );
+  assert.equal(requestVehicleOptionLabel({ itemName: "Excavator", door: "D-1" }), "");
 });

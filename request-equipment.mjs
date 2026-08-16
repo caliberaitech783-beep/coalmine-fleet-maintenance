@@ -35,3 +35,10 @@ export function requestEquipmentOptionLabel(record = {}) {
   ].filter(Boolean);
   return context.length ? `${details.equipment} — ${context.join(" — ")}` : details.equipment;
 }
+
+// Production users choose a vehicle, so keep the selector label limited to
+// the vehicle name. The selected record still supplies door, site, and
+// registration details through requestEquipmentDetails.
+export function requestVehicleOptionLabel(record = {}) {
+  return text(record.equipmentName);
+}
