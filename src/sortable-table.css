@@ -42,3 +42,30 @@
   outline-offset: 4px;
   border-radius: 2px;
 }
+
+/* Column menus mirror the table-header filters used in the operations UI. */
+.column-filter-header{position:relative;min-width:160px;z-index:2}
+.column-filter-header.open{z-index:20}
+.column-filter-header .sort-header{position:relative}
+.column-filter-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#315fd3;margin-left:2px}
+.column-filter-popover{position:absolute;top:calc(100% + 8px);left:8px;width:280px;max-width:calc(100vw - 32px);padding:10px;background:#fff;border:1px solid #d9e1ef;border-radius:9px;box-shadow:0 14px 32px #17233c30;text-transform:none;letter-spacing:normal;z-index:30;color:#45546d;white-space:normal;font-size:12px;line-height:1.4}
+.column-filter-header:nth-last-child(-n+4) .column-filter-popover{left:auto;right:8px}
+.column-filter-popover-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:1px 2px 9px;border-bottom:1px solid #edf0f5;margin-bottom:8px;color:#34425a;font-size:12px}
+.column-filter-popover-head strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.column-filter-close{width:28px;height:28px;border:0;border-radius:5px;background:transparent;display:grid;place-items:center;color:#7c899c;padding:0;flex:0 0 auto}
+.column-filter-close:hover,.column-filter-close:focus-visible{background:#edf3ff;color:#2458d3;outline:0}
+.column-filter-close svg{width:13px;height:13px}
+.column-filter-sort{display:flex;gap:6px;border-bottom:1px solid #edf0f5;padding-bottom:8px;margin-bottom:8px}
+.column-filter-sort button{width:32px;height:32px;border:1px solid #dfe5ef;background:#fff;border-radius:5px;display:grid;place-items:center;color:#6a7890;padding:0}
+.column-filter-sort button:hover,.column-filter-sort button.active{background:#edf3ff;border-color:#a9bdec;color:#2458d3}
+.column-filter-sort svg{width:13px;height:13px}
+.column-filter-search{display:flex;align-items:center;gap:7px;border:1px solid #dfe5ef;border-radius:6px;padding:8px 9px;margin-bottom:7px;background:#fff}
+.column-filter-search svg{width:13px;height:13px;color:#8b98ac;flex:0 0 auto}
+.column-filter-search input{width:100%;min-width:0;border:0;outline:0;padding:0;font-size:12px;color:#34425a;background:transparent}
+.column-filter-all{display:block;width:100%;min-height:34px;border:0;background:transparent;text-align:left;padding:8px 9px;color:#315fd3;font-size:12px;line-height:1.4;font-weight:700;border-radius:5px}
+.column-filter-all:hover,.column-filter-values button:hover,.column-filter-values button.selected{background:#edf3ff;color:#2458d3}
+.column-filter-values{max-height:min(300px,calc(100vh - 340px));min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:2px;padding-right:3px;scrollbar-gutter:stable}
+.column-filter-values button{display:block;width:100%;min-height:34px;border:0;background:transparent;text-align:left;padding:8px 9px;border-radius:5px;color:#45546d;font-size:12px;line-height:1.4;white-space:normal;overflow-wrap:anywhere}
+.column-filter-values button:focus-visible{outline:2px solid #315fd3;outline-offset:-2px}
+.column-filter-empty{padding:9px;color:#8a96aa;font-size:12px}
+@media(max-width:600px){.column-filter-popover{position:fixed;top:auto;right:12px;bottom:12px;left:12px;width:auto;max-width:none}.column-filter-values{max-height:40vh}}
