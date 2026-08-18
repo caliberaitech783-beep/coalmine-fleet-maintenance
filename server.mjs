@@ -342,6 +342,29 @@ app.get('/api/health',async(_req,res)=>{
   }
 });
 
+// Return the signed-in employee's current master location without exposing
+// the Users & employees master to mobile users. This is intentionally read
+// live so a location update in the master is reflected on the next form open
+// (or page refresh) without putting sensitive account data in the session.
+app.get('/api/me/profile',requireSession,async(req,res,next)=>{
+  try{
+    const login=String(req.session.login||'').trim().toLowerCase();
+    const name=String(req.session.name||'').trim().toLowerCase();
+    const {rows}=await pool.query(`SELECT record_data
+      FROM master_records
+      WHERE master_name='Users & employees'
+        AND (
+          ($1 <> '' AND lower(trim(record_data->>'login'))=$1)
+          OR ($2 <> '' AND lower(trim(record_data->>'employee'))=$2)
+        )
+      ORDER BY CASE WHEN lower(trim(record_data->>'login'))=$1 THEN 0 ELSE 1 END, created_at DESC
+      LIMIT 1`,[login,name]);
+    const record=rows[0]?.record_data||{};
+    const location=String(record.site||record.location||record.currentLocation||'').trim();
+    res.json({location});
+  }catch(error){next(error)}
+});
+
 const requestProjection=`reference AS ref, equipment_name AS equipment, door_number AS door,
   registration_number AS reg, site, category, complaint,
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,

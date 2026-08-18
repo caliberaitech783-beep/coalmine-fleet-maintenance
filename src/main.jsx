@@ -1844,7 +1844,7 @@ function EnhancedSpeechComplaint() {
   );
 }
 SpeechComplaint = EnhancedSpeechComplaint;
-function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false }) {
+function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "" }) {
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
     [door, setDoor] = useState("");
@@ -1862,7 +1862,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       }
       return unique;
     }, []),
-    equipmentDetails = requestEquipmentDetails(v || {});
+    equipmentDetails = requestEquipmentDetails(v || {}),
+    currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
   const [requestTime, setRequestTime] = useState(systemTime);
   const submit = (e) => {
     e.preventDefault();
@@ -1871,7 +1872,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         ref: "REQ-" + Date.now(),
         equipment: equipmentDetails.equipment,
         door: fd.get("door"),
-        site: equipmentDetails.site || "Not assigned",
+        site: currentLocation || "Not assigned",
         category: String(fd.get("category") || "").trim(),
         complaint: fd.get("complaint"),
         start: fd.get("date") + " · " + fd.get("time"),
@@ -2017,9 +2018,9 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </label>
           )}
           <label>
-            Site location
+            Current location
             <input
-              value={equipmentDetails.site || "Auto-fetched when available"}
+              value={currentLocation || "Auto-fetched when available"}
               readOnly
             />
           </label>
@@ -2036,7 +2037,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             <CheckCircle2 />
             <span>
               <b>Equipment details fetched</b>
-              {[v.make, v.model, v.category, equipmentDetails.site].filter(Boolean).join(" · ")}
+              {[v.make, v.model, v.category, currentLocation].filter(Boolean).join(" · ")}
             </span>
           </div>
         )}
@@ -3315,6 +3316,17 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const isMis = mobileRole === "MIS User";
   const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", isProduction ? vehicles : []);
   const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
+  const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
+  useEffect(() => {
+    let active = true;
+    fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session?.token || authToken}`}})
+      .then((response) => (response.ok ? response.json() : Promise.reject()))
+      .then((profile) => {
+        if (active) setAssignedLocation(String(profile.location || "").trim());
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [session?.token, session?.login, session?.name]);
   const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
   const saveEdit = async (payload) => { try { await onUpdateRequest(payload.ref, payload); setEditing(null); } catch (error) { alert(error.message); } };
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
@@ -3337,7 +3349,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
     </main>
-    {show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setShow(false)} />}
+    {show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {editing && <RequestEditForm request={editing} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} />}
     {closing && <CloseRequestForm request={closing} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} close={() => setVerifying(null)} onSave={verifyRequest} />}
