@@ -13,6 +13,7 @@ import {
   requestEquipmentGroupOptions,
   requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
+import { submitMaintenanceRequest } from "../request-submit.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -1866,8 +1867,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     equipmentDetails = requestEquipmentDetails(v || {}),
     currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
   const [requestTime, setRequestTime] = useState(systemTime);
-  const submit = (e) => {
+  const [submitting, setSubmitting] = useState(false);
+  const submit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     const fd = new FormData(e.currentTarget),
       request = {
         ref: "REQ-" + Date.now(),
@@ -1882,11 +1885,18 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         owner: "Mobile User",
         reg: equipmentDetails.reg,
       };
-    onSubmit?.(request);
-    close();
-    alert(
-      "Maintenance request submitted successfully. It is now visible to the Super User.",
-    );
+    setSubmitting(true);
+    try {
+      await submitMaintenanceRequest(onSubmit, request);
+      close();
+      alert(
+        "Maintenance request submitted successfully. It is now visible to the Super User.",
+      );
+    } catch (error) {
+      alert(error?.message || "Could not save request. Please retry.");
+    } finally {
+      setSubmitting(false);
+    }
   };
   return (
     <Modal
@@ -2046,8 +2056,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
           <button type="button" onClick={close}>
             Cancel
           </button>
-          <button className="primary">
-            Submit request <ChevronRight />
+          <button className="primary" disabled={submitting}>
+            {submitting ? "Submitting…" : "Submit request"} <ChevronRight />
           </button>
         </footer>
       </form>
@@ -3596,18 +3606,39 @@ function App() {
     const timer = setTimeout(() => setLoadTime(null), 3000);
     return () => clearTimeout(timer);
   }, [loadTime]);
+  const loadRequests = async () => {
+    if (!session?.token) {
+      setRequests([]);
+      return [];
+    }
+    const response = await fetch(`/api/requests?t=${Date.now()}`, {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+    if (!response.ok) throw new Error("Could not load requests");
+    const data = await response.json();
+    setRequests(data);
+    return data;
+  };
   useEffect(() => {
+    let stopped = false;
     if (!session?.token) {
       setRequests([]);
       return undefined;
     }
-    fetch("/api/requests", {headers: {Authorization: `Bearer ${session.token}`}})
-      .then((r) => {
-        if (!r.ok) throw new Error("Could not load requests");
-        return r.json();
-      })
-      .then(setRequests)
-      .catch((error) => console.error(error));
+    const refresh = async () => {
+      try {
+        if (!stopped) await loadRequests();
+      } catch (error) {
+        if (!stopped) console.error(error);
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 10000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
   }, [session?.token]);
   const gotoEquipment = (filter = "all", location = "") => {
       setEquipmentFilter(filter);
@@ -3625,7 +3656,7 @@ function App() {
       setRequests((current) => [request, ...current.filter((row) => row.ref !== request.ref)]);
       const response = await fetch("/api/requests", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
         body: JSON.stringify(request),
       });
       const saved = await response.json().catch(() => ({}));
@@ -3634,6 +3665,12 @@ function App() {
         throw new Error(saved.error || "Could not save request");
       }
       setRequests((current) => [saved, ...current.filter((row) => row.ref !== request.ref)]);
+      try {
+        await loadRequests();
+      } catch (error) {
+        // The POST succeeded; keep the saved row visible if a refresh is transiently unavailable.
+        console.warn("Request saved, but the list refresh failed.", error);
+      }
     },
     updateRequest = async (reference, payload, action = "edit") => {
       const endpoint = action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : `/api/requests/${encodeURIComponent(reference)}`;
