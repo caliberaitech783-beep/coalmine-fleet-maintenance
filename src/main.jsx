@@ -8,6 +8,7 @@ import { recordBelongsToSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
   requestEquipmentDetails,
+  requestEquipmentOptionLabel,
   requestEquipmentGroupOptions,
   requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
@@ -1854,10 +1855,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     v = findRequestEquipment(equipmentRecords, equipmentId),
     equipmentGroups = requestEquipmentGroupOptions(equipmentRecords),
     groupRecords = requestEquipmentRecordsForGroup(equipmentRecords, equipmentGroup),
-    doorRecords = groupRecords.reduce((unique, record) => {
-      const value = String(record.door || "").trim();
-      if (record.id != null && value && !unique.some((item) => item.door.toLowerCase() === value.toLowerCase())) {
-        unique.push({ record, door: value });
+    equipmentVehicleRecords = groupRecords.reduce((unique, record) => {
+      const label = requestEquipmentOptionLabel(record);
+      if (record.id != null && label && !unique.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
+        unique.push({ record, label });
       }
       return unique;
     }, []),
@@ -1950,11 +1951,11 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </select>
           </label>
           <label>
-            Door number *
-            {equipmentGroup && doorRecords.length ? (
+            Equipment / vehicle *
+            {equipmentGroup && equipmentVehicleRecords.length ? (
               <>
                 <select
-                  aria-label="Door number"
+                  aria-label="Equipment or vehicle"
                   value={equipmentId}
                   required
                   onChange={(event) => {
@@ -1965,10 +1966,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                     setDoor(details.door);
                   }}
                 >
-                  <option value="" disabled>Select door number</option>
-                  {doorRecords.map(({ record, door: doorNumber }) => (
+                  <option value="" disabled>Select equipment or vehicle</option>
+                  {equipmentVehicleRecords.map(({ record, label }) => (
                     <option key={String(record.id)} value={String(record.id)}>
-                      {doorNumber}
+                      {label}
                     </option>
                   ))}
                 </select>
@@ -1981,7 +1982,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                 value={door}
                 onChange={(e) => setDoor(e.target.value)}
                 readOnly={Boolean(v?.door)}
-                placeholder={v?.door ? "Auto-filled from equipment" : "Enter door number"}
+                placeholder={v?.door ? "Auto-filled from equipment" : "Select equipment group first"}
               />
             )}
           </label>
