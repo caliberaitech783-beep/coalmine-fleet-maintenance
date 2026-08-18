@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
+import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
@@ -2392,6 +2393,177 @@ function Generic({ name, requests = [] }) {
     </section>
   );
 }
+
+function ReportsPage({ requests = [], goto }) {
+  const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master");
+  const [userRecords, , usersLoaded] = useMasterRecords("Users & employees");
+  const [transferRecords, , transfersLoaded] = useMasterRecords("Vehicle transfers");
+  const [privilegeRecords, , privilegesLoaded] = useMasterRecords("Privilege");
+  const [selectedReport, setSelectedReport] = useState("offroad");
+  const [query, setQuery] = useState("");
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const eventReports = useMemo(() => [
+    {
+      id: "offroad",
+      title: "Production User · Offroad",
+      description: "Vehicle requests created when production marks equipment offroad.",
+      timestampKey: "start",
+      actorKey: "owner",
+      rows: requests.filter((request) => String(request.start || "").trim()),
+    },
+    {
+      id: "onroad",
+      title: "Maintenance User · Onroad",
+      description: "Maintenance closure events that return a vehicle to service.",
+      timestampKey: "closedAt",
+      actorKey: "closedBy",
+      rows: requests.filter((request) => String(request.closedAt || "").trim()),
+    },
+    {
+      id: "verified",
+      title: "MIS User · Verified",
+      description: "Verification events recorded after the maintenance request is closed.",
+      timestampKey: "verifiedAt",
+      actorKey: "verifiedBy",
+      rows: requests.filter((request) => String(request.verifiedAt || "").trim()),
+    },
+  ], [requests]);
+  const selectedEvent = eventReports.find((report) => report.id === selectedReport) || eventReports[0];
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleEventRows = (selectedEvent?.rows || []).filter((request) =>
+    !normalizedQuery || Object.values(request).join(" ").toLowerCase().includes(normalizedQuery),
+  );
+  const elapsedRows = requests.filter((request) => request.start || request.closedAt || request.verifiedAt);
+  const loading = !(equipmentLoaded && usersLoaded && transfersLoaded && privilegesLoaded);
+  const count = (records, loaded) => loaded ? records.length.toLocaleString("en-IN") : "—";
+  const masterTotals = [
+    {label: "Total equipment", value: count(equipmentRecords, equipmentLoaded), source: "Equipment master", target: "Equipment master"},
+    {label: "Total users", value: count(userRecords, usersLoaded), source: "Users & employees master", target: "Users & employees"},
+    {label: "Total breakdown", value: requests.length.toLocaleString("en-IN"), source: "All maintenance requests", target: "Breakdown master"},
+    {label: "Vehicle transfer", value: count(transferRecords, transfersLoaded), source: "Vehicle transfers master", target: "Vehicle transfers"},
+    {label: "Privilege transfer", value: count(privilegeRecords, privilegesLoaded), source: "Privilege master", target: "Privilege"},
+    {label: "Audit trail", value: "View", source: "Recorded user activity", target: "Audit Trail", unavailable: true},
+  ];
+  const reportCatalog = [
+    ["Production User marks vehicle Offroad", eventReports[0]?.rows.length || 0, "Workflow event"],
+    ["Maintenance User marks vehicle Onroad", eventReports[1]?.rows.length || 0, "Workflow event"],
+    ["MIS User verifies request / vehicle", eventReports[2]?.rows.length || 0, "Workflow event"],
+    ["Offroad → Onroad time difference", elapsedRows.filter((row) => row.start && row.closedAt).length, "Elapsed time"],
+    ["Onroad → MIS verification time difference", elapsedRows.filter((row) => row.closedAt && row.verifiedAt).length, "Elapsed time"],
+    ["Offroad → MIS verification total time", elapsedRows.filter((row) => row.start && row.verifiedAt).length, "Elapsed time"],
+    ["Total equipment", equipmentLoaded ? equipmentRecords.length : "—", "Equipment master"],
+    ["Total users", usersLoaded ? userRecords.length : "—", "Users & employees master"],
+    ["Total breakdown", requests.length, "Requests"],
+    ["Vehicle transfer", transfersLoaded ? transferRecords.length : "—", "Vehicle transfers master"],
+    ["Privilege transfer", privilegesLoaded ? privilegeRecords.length : "—", "Privilege master"],
+    ["Audit trail", "View", "Audit Trail"],
+  ];
+  const formatTimestamp = (value) => String(value || "—").trim() || "—";
+  const exportReports = () => {
+    const lines = [
+      ["Report", "Reference", "Equipment", "Site", "Production offroad", "Maintenance onroad", "MIS verified", "Offroad to onroad", "Onroad to verified", "Total elapsed"],
+      ...elapsedRows.map((row) => [
+        "Workflow timing",
+        row.ref || "",
+        row.equipment || row.door || "",
+        row.site || "",
+        row.start || "",
+        row.closedAt || "",
+        row.verifiedAt || "",
+        elapsedLabel(row.start, row.closedAt),
+        elapsedLabel(row.closedAt, row.verifiedAt),
+        elapsedLabel(row.start, row.verifiedAt),
+      ]),
+    ];
+    const csv = lines.map((line) => line.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `nerve-center-reports-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <section className="reports-page panel pagepanel">
+      <header>
+        <div>
+          <h1>Reports</h1>
+          <p>Workflow events, elapsed time, and live master totals.</p>
+        </div>
+        <button className="primary" type="button" onClick={exportReports}>
+          <Download /> Export reports
+        </button>
+      </header>
+      <div className="toolbar reports-toolbar">
+        <div><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
+        {loading && <span className="reports-loading" role="status">Updating live totals…</span>}
+      </div>
+      <div className="reports-section reports-kpis">
+        <div className="reports-section-heading"><div><h2>Control totals</h2><p>Live values are read from the current masters and request register.</p></div></div>
+        <div className="reports-kpi-grid">
+          {masterTotals.map((card) => (
+            <button key={card.label} type="button" className={`reports-kpi ${card.unavailable ? "unavailable" : ""}`} onClick={() => card.target && goto?.(card.target)}>
+              <span>{card.label}</span><strong>{card.value}</strong><small>{card.source}</small>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="reports-section">
+        <div className="reports-section-heading"><div><h2>Workflow event reports</h2><p>Each report is driven by the timestamp recorded by the responsible role.</p></div></div>
+        <div className="reports-event-grid">
+          {eventReports.map((report) => (
+            <button key={report.id} type="button" className={`reports-event-card ${selectedReport === report.id ? "selected" : ""}`} onClick={() => setSelectedReport(report.id)}>
+              <span>{report.title}</span><strong>{report.rows.length.toLocaleString("en-IN")}</strong><small>{report.description}</small><em>Latest: {latestTimestamp(report.rows.map((row) => row[report.timestampKey]))}</em>
+            </button>
+          ))}
+        </div>
+        <div className="reports-detail-table emptytable">
+          <div className="reports-detail-heading"><h3>{selectedEvent?.title || "Workflow events"}</h3><span>{selectedEvent?.rows.length || 0} events</span></div>
+          <table>
+            <thead><tr><th>Job reference</th><th>Equipment / vehicle</th><th>Site</th><th>User</th><th>Recorded at</th><th>Status</th></tr></thead>
+            <tbody>
+              {visibleEventRows.length ? visibleEventRows.map((request) => (
+                <tr key={`${selectedEvent.id}-${request.ref}`}><td><b>{request.ref}</b></td><td>{request.equipment || request.door || "—"}</td><td>{request.site || "—"}</td><td>{request[selectedEvent.actorKey] || "—"}</td><td>{formatTimestamp(request[selectedEvent.timestampKey])}</td><td><Status>{request.status}</Status></td></tr>
+              )) : <tr><td colSpan="6" className="empty-state">No events recorded for this report</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="reports-section">
+        <div className="reports-section-heading"><div><h2>Workflow timing</h2><p>Durations are calculated from Production offroad, Maintenance onroad, and MIS verification timestamps.</p></div></div>
+        <div className="reports-detail-table emptytable">
+          <table>
+            <thead><tr><th>Job reference</th><th>Production offroad</th><th>Maintenance onroad</th><th>MIS verified</th><th>Offroad → Onroad</th><th>Onroad → Verified</th><th>Total elapsed</th></tr></thead>
+            <tbody>
+              {elapsedRows.length ? elapsedRows.map((request) => (
+                <tr key={`elapsed-${request.ref}`}><td><b>{request.ref}</b></td><td>{formatTimestamp(request.start)}</td><td>{formatTimestamp(request.closedAt)}</td><td>{formatTimestamp(request.verifiedAt)}</td><td><strong>{elapsedLabel(request.start, request.closedAt)}</strong></td><td><strong>{elapsedLabel(request.closedAt, request.verifiedAt)}</strong></td><td><strong>{elapsedLabel(request.start, request.verifiedAt)}</strong></td></tr>
+              )) : <tr><td colSpan="7" className="empty-state">No workflow timings available</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="reports-section">
+        <div className="reports-section-heading"><div><h2>Report catalogue</h2><p>All requested report outputs are available from this section.</p></div></div>
+        <div className="reports-catalogue emptytable">
+          <table><thead><tr><th>Report</th><th>Records / value</th><th>Source</th></tr></thead><tbody>{reportCatalog.map(([label, value, source]) => <tr key={label}><td><b>{label}</b></td><td>{value}</td><td>{source}</td></tr>)}</tbody></table>
+        </div>
+      </div>
+      <div className="reports-section request-age-report">
+        <div className="request-age-heading"><div><h2>Service and maintenance request ageing</h2><p>Requests are highlighted automatically according to their age.</p></div><div className="request-age-legend"><span className="yellow">1 day</span><span className="orange">2–4 days</span><span className="red">More than 5 days</span></div></div>
+        <div className="emptytable"><table><thead><tr><th>Job reference</th><th>Door no.</th><th>Site</th><th>Complaint</th><th>Created</th><th>Age</th><th>Status</th></tr></thead><tbody>
+          {requests.length ? requests.map((request) => { const age = Math.max(0, Math.floor((now - (new Date(String(request.start || "").replace(" ", "T")).getTime() || now)) / 86400000)); const ageClass = age > 5 ? "request-age-red" : age >= 2 && age <= 4 ? "request-age-orange" : age === 1 ? "request-age-yellow" : ""; return <tr key={`age-${request.ref}`} className={ageClass}><td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td><td>{request.start}</td><td><b>{age} {age === 1 ? "day" : "days"}</b></td><td><Status>{request.status}</Status></td></tr>; }) : <tr><td colSpan="7" className="empty-state">No service or maintenance requests available</td></tr>}
+        </tbody></table></div>
+      </div>
+    </section>
+  );
+}
+
 function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [] }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
@@ -3543,6 +3715,8 @@ function App() {
             <Subsidiaries gotoEquipment={gotoEquipment} />
           ) : active === "WhatsApp alert history" ? (
             <WhatsAppAlertHistory />
+          ) : active === "Reports" ? (
+            <ReportsPage requests={requests} goto={selectMenu} />
           ) : whatsappNav.some(([name]) => name === active) ? (
             <WhatsAppReport type={active} requests={requests} />
           ) : (

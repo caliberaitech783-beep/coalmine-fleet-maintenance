@@ -307,6 +307,14 @@ textarea {
 :root[data-theme="dark"] .column-filter-values button,:root[data-theme="dark"] .column-filter-all{color:#dce7f7}
 :root[data-theme="dark"] .column-filter-all:hover,:root[data-theme="dark"] .column-filter-values button:hover,:root[data-theme="dark"] .column-filter-values button.selected{background:#223e64;color:#fff}
 
+:root[data-theme="dark"] .reports-section{background:#111d30;border-color:#2c415e;box-shadow:0 3px 12px #0003}
+:root[data-theme="dark"] .reports-section-heading,:root[data-theme="dark"] .reports-detail-heading{border-color:#2c415e;background:#152238}
+:root[data-theme="dark"] .reports-kpi,:root[data-theme="dark"] .reports-event-card{background:#17243a;border-color:#34435a;color:#e4ebf5}
+:root[data-theme="dark"] .reports-kpi:hover,:root[data-theme="dark"] .reports-event-card:hover{background:#1d2d47;border-color:#55709b}
+:root[data-theme="dark"] .reports-event-card.selected{background:#203766;border-color:#6690ff;box-shadow:0 0 0 2px #6690ff28}
+:root[data-theme="dark"] .reports-kpi strong,:root[data-theme="dark"] .reports-event-card strong,:root[data-theme="dark"] .reports-section-heading h2,:root[data-theme="dark"] .reports-detail-heading h3{color:#eef3fb}
+:root[data-theme="dark"] .reports-detail-table,:root[data-theme="dark"] .reports-catalogue{border-color:#2c415e}
+
 @media (max-width: 600px) {
   .theme-toggle { min-width: 36px; width: 36px; padding: 4px !important; }
   .theme-toggle-label { display: none; }
