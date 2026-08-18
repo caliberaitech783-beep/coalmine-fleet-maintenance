@@ -3326,7 +3326,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       })
       .catch(() => {});
     return () => { active = false; };
-  }, [session?.token, session?.login, session?.name]);
+  }, [session?.token, session?.login, session?.name, show]);
   const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
   const saveEdit = async (payload) => { try { await onUpdateRequest(payload.ref, payload); setEditing(null); } catch (error) { alert(error.message); } };
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
