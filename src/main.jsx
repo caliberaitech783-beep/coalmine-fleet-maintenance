@@ -8,7 +8,8 @@ import { recordBelongsToSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
   requestEquipmentDetails,
-  requestEquipmentGroupOptionLabel,
+  requestEquipmentGroupOptions,
+  requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
 import {
   LayoutDashboard,
@@ -371,11 +372,17 @@ function Login({ onLogin, theme, toggleTheme }) {
 function Side({ active, setActive, logout, open }) {
   const [mastersOpen, setMastersOpen] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
-  const selectPage = (page) => {
+  const closeMenus = () => {
     setMastersOpen(false);
     setWhatsappOpen(false);
+  };
+  const selectPage = (page) => {
+    closeMenus();
     setActive(page);
   };
+  useEffect(() => {
+    closeMenus();
+  }, [active]);
   return (
     <aside className={open ? "open" : ""}>
       <div className="logo">
@@ -412,6 +419,7 @@ function Side({ active, setActive, logout, open }) {
                 key={name}
                 role="menuitem"
                 className={active === name ? "active" : ""}
+                onPointerDown={closeMenus}
                 onClick={() => selectPage(name)}
               >
                 <Icon />
@@ -433,7 +441,7 @@ function Side({ active, setActive, logout, open }) {
           </button>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
             {whatsappNav.map(([name, Icon]) => (
-              <button key={name} role="menuitem" className={active === name ? "active" : ""} onClick={() => selectPage(name)}>
+              <button key={name} role="menuitem" className={active === name ? "active" : ""} onPointerDown={closeMenus} onClick={() => selectPage(name)}>
                 <Icon />{name}
               </button>
             ))}
@@ -465,7 +473,7 @@ function Side({ active, setActive, logout, open }) {
     </aside>
   );
 }
-function Dashboard({ goto, gotoEquipment, requests = [] }) {
+function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
@@ -509,12 +517,34 @@ function Dashboard({ goto, gotoEquipment, requests = [] }) {
   const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
   const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
+  // Equipment master is the fleet registry used by the application today. Keep
+  // the summary cards data-driven without inventing a second vehicle source:
+  // every registered fleet asset is counted as a vehicle, while the all-total
+  // card represents the combined registry total.
+  const totalEquipment = visibleEquipment.length;
+  const totalVehicles = visibleEquipment.length;
+  const allTotal = totalEquipment;
+  const summaryCards = [
+    ["Total equipment", totalEquipment, "Registered equipment", Truck, () => gotoEquipment("all", "")],
+    ["Total vehicles", totalVehicles, "Fleet vehicles", Truck, () => gotoEquipment("all", "")],
+    ["All total", allTotal, "Equipment + vehicles", Activity, () => gotoEquipment("all", "")],
+    ["On road", kpis.onRoad, "Available for operation", CheckCircle2, () => gotoEquipment("onroad", "")],
+    ["Off road", kpis.offRoad, "In maintenance or breakdown", AlertTriangle, () => gotoEquipment("offroad", "")],
+  ];
   return (
-    <div className="mine-dashboard">
+    <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
         <div><span className="mine-brandmark">CM</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">All regions</option>{subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
       </header>
+      <section className="mine-summary-grid" aria-label="Fleet totals">
+        {summaryCards.map(([label, value, hint, Icon, onClick]) => (
+          <button type="button" key={label} onClick={onClick}>
+            <Icon />
+            <span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span>
+          </button>
+        ))}
+      </section>
       <section className="mine-counter-grid" aria-label="Mining fleet summary">
         {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => goto("Breakdown master")}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
       </section>
@@ -621,15 +651,19 @@ const masterFields = {
     ["status", "Equipment status"],
   ],
   "Vehicle transfers": [
-    ["door", "Door no."],
-    ["registration", "Registration no."],
-    ["transferDate", "Transfer date"],
-    ["source", "Source location"],
-    ["destination", "Destination"],
-    ["openingMeter", "Opening KMR/HMR"],
-    ["closingMeter", "Closing KMR/HMR"],
-    ["creator", "Creator"],
-    ["status", "Status"],
+    ["transferNo", "Equipment Transfer No."],
+    ["transferDate", "Equipment Transfer Date"],
+    ["source", "From Location"],
+    ["destination", "To Location"],
+    ["equipment", "Equipment"],
+    ["modelNo", "Model No."],
+    ["manufacturerSerialNo", "Manufacturing Serial No."],
+    ["lastMaintenanceDate", "Last Maintenance Date"],
+    ["driver", "Driver"],
+    ["chassisNo", "Chasis No"],
+    ["dieselQty", "Diesel QTY"],
+    ["kmr", "KMR"],
+    ["hmr", "HMR"],
   ],
   "Breakdown master": [
     ["ref", "Job reference"],
@@ -691,6 +725,7 @@ const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 const privilegeAccessOptions = ["Super User", "Mobile User"];
 const mobileUserRoleOptions = ["Production User", "Maintenance User", "MIS User"];
+const userTypeOptions = ["Mobile User", "Super Admin"];
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
 const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
 function privilegeSelectionValue(value) {
@@ -742,9 +777,9 @@ function useSortableRows(rows, defaultKey = "", valueForKey = (row, key) => row[
       return sort.direction === "asc" ? result : -result;
     }).map(({ row }) => row);
   }, [rows, sort, valueForKey]);
-  const changeSort = (key) => setSort((current) => ({
+  const changeSort = (key, direction) => setSort((current) => ({
     key,
-    direction: current.key === key && current.direction === "asc" ? "desc" : "asc",
+    direction: direction || (current.key === key && current.direction === "asc" ? "desc" : "asc"),
   }));
   return [sortedRows, sort, changeSort];
 }
@@ -756,6 +791,67 @@ function SortableHeader({ label, sortKey, sort, onSort }) {
       <button className={`sort-header ${active ? "active" : ""}`} onClick={() => onSort(sortKey)} type="button">
         <span>{label}</span><Icon aria-hidden="true" />
       </button>
+    </th>
+  );
+}
+function FilterableHeader({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  open = false,
+  onToggle,
+  values = [],
+  filterValue = "",
+  onFilterChange,
+}) {
+  const [valueSearch, setValueSearch] = useState("");
+  const active = sort.key === sortKey,
+    Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown,
+    normalizedSearch = valueSearch.trim().toLowerCase(),
+    visibleValues = values.filter((value) => !normalizedSearch || String(value || "").toLowerCase().includes(normalizedSearch));
+  useEffect(() => {
+    if (!open) setValueSearch("");
+  }, [open]);
+  return (
+    <th className={`column-filter-header ${open ? "open" : ""}`} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+      <button
+        className={`sort-header ${active ? "active" : ""} ${filterValue ? "filtered" : ""}`}
+        onClick={(event) => { event.stopPropagation(); onToggle(sortKey); }}
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        <span>{label}</span><Icon aria-hidden="true" />
+        {filterValue && <i className="column-filter-dot" aria-label="Filtered" />}
+      </button>
+      {open && (
+        <div className="column-filter-popover" role="dialog" aria-label={`${label} filter`} onClick={(event) => event.stopPropagation()}>
+          <div className="column-filter-popover-head">
+            <strong>{label}</strong>
+            <button type="button" className="column-filter-close" onClick={() => onToggle(sortKey)} aria-label={`Close ${label} filter`} title="Close">
+              <X aria-hidden="true" />
+            </button>
+          </div>
+          <div className="column-filter-sort" aria-label={`Sort ${label}`}>
+            <button type="button" className={active && sort.direction === "asc" ? "active" : ""} onClick={() => onSort(sortKey, "asc")} title="Sort ascending"><ArrowUp /></button>
+            <button type="button" className={active && sort.direction === "desc" ? "active" : ""} onClick={() => onSort(sortKey, "desc")} title="Sort descending"><ArrowDown /></button>
+            <button type="button" onClick={() => onFilterChange("")} title="Clear this filter"><X /></button>
+          </div>
+          <label className="column-filter-search">
+            <Search aria-hidden="true" />
+            <input autoFocus value={valueSearch} onChange={(event) => setValueSearch(event.target.value)} placeholder="Filter..." />
+          </label>
+          <button type="button" className={`column-filter-all ${!filterValue ? "selected" : ""}`} onClick={() => onFilterChange("")}>All values</button>
+          <div className="column-filter-values">
+            {visibleValues.length ? visibleValues.map((value) => (
+              <button type="button" key={value || "__blank__"} className={filterValue === value ? "selected" : ""} onClick={() => onFilterChange(filterValue === value ? "" : value)}>
+                {value || "(Blank)"}
+              </button>
+            )) : <span className="column-filter-empty">No matching values</span>}
+          </div>
+        </div>
+      )}
     </th>
   );
 }
@@ -928,6 +1024,22 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                     <select name={key} defaultValue="">
                       <option value="">Not assigned</option>
                       {mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </label>
+                ) : name === "Users & employees" && key === "site" ? (
+                  <label key={key}>
+                    {label} *
+                    <select name={key} required defaultValue="">
+                      <option value="" disabled>Select location</option>
+                      {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
+                    </select>
+                  </label>
+                ) : name === "Users & employees" && key === "userType" ? (
+                  <label key={key}>
+                    {label} *
+                    <select name={key} required defaultValue="">
+                      <option value="" disabled>Select user type</option>
+                      {userTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </label>
                 ) : (
@@ -1100,9 +1212,48 @@ function Equipment({
   const [q, setQ] = useState(""),
     [road, setRoad] = useState(initialFilter),
     [location, setLocation] = useState(initialLocation),
+    [columnFilters, setColumnFilters] = useState({}),
+    [openFilter, setOpenFilter] = useState(null),
     [detail, setDetail] = useState(null),
     [editing, setEditing] = useState(null),
     [savingEdit, setSavingEdit] = useState(false);
+  const equipmentColumns = [
+      ["currentLocation", "Current location"], ["equipmentName", "Equipment name"],
+      ["category", "Equipment category"], ["group", "Equipment group"],
+      ["itemName", "Item name"], ["itemSpecification", "Item specification name"],
+      ["acquisitionDate", "Acquisition date"], ["make", "Make"], ["model", "Model"],
+      ["manufacturerSerialNo", "Manufacturer serial no."], ["engineNo", "Engine no."],
+      ["chassisNo", "Chassis no."], ["documentStatus", "Document status"],
+    ],
+    equipmentValue = (record, key) => {
+      if (key === "currentLocation") return record.currentLocation || record.location;
+      if (key === "equipmentName") return record.equipmentName || record.door;
+      if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
+      return record[key];
+    },
+    filterText = (value) => String(value ?? "").trim(),
+    equipmentColumnValues = Object.fromEntries(
+      equipmentColumns.map(([key]) => [
+        key,
+        [...new Set(records.map((record) => filterText(equipmentValue(record, key))))].sort((a, b) => sortCollator.compare(a, b)),
+      ]),
+    );
+  const updateColumnFilter = (key, value) => {
+    setColumnFilters((current) => {
+      const next = { ...current };
+      if (value) next[key] = value;
+      else delete next[key];
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (!openFilter) return undefined;
+    const closeFilter = (event) => {
+      if (!event.target.closest?.(".column-filter-header")) setOpenFilter(null);
+    };
+    document.addEventListener("mousedown", closeFilter);
+    return () => document.removeEventListener("mousedown", closeFilter);
+  }, [openFilter]);
   const roadStatus = (v) =>
       v.status === "Operational" ? "On Road" : "Off Road",
     locations = [
@@ -1118,22 +1269,10 @@ function Equipment({
       (road === "all" ||
         roadStatus(v).toLowerCase().replace(" ", "") === road) &&
       (!location || (v.currentLocation || v.location) === location) &&
-      Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()),
+      Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()) &&
+      equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
   );
-  const equipmentColumns = [
-      ["currentLocation", "Current location"], ["equipmentName", "Equipment name"],
-      ["category", "Equipment category"], ["group", "Equipment group"],
-      ["itemName", "Item name"], ["itemSpecification", "Item specification name"],
-      ["acquisitionDate", "Acquisition date"], ["make", "Make"], ["model", "Model"],
-      ["manufacturerSerialNo", "Manufacturer serial no."], ["engineNo", "Engine no."],
-      ["chassisNo", "Chassis no."], ["documentStatus", "Document status"],
-    ],
-    [sortedRows, sort, changeSort] = useSortableRows(rows, "", (record, key) => {
-      if (key === "currentLocation") return record.currentLocation || record.location;
-      if (key === "equipmentName") return record.equipmentName || record.door;
-      if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
-      return record[key];
-    });
+  const [sortedRows, sort, changeSort] = useSortableRows(rows, "", equipmentValue);
   const equipmentEditFields = masterFields["Equipment master"].filter(([key]) => key !== "status");
   const saveEquipmentEdit = async (event) => {
     event.preventDefault();
@@ -1205,12 +1344,23 @@ function Equipment({
           <option>All categories</option>
         </select>
       </div>
-      <div className="scroll">
+      <div className="scroll" onClick={() => setOpenFilter(null)}>
         <table>
           <thead>
             <tr>
               {equipmentColumns.map(([key, label]) => (
-                <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} />
+                <FilterableHeader
+                  key={key}
+                  label={label}
+                  sortKey={key}
+                  sort={sort}
+                  onSort={changeSort}
+                  open={openFilter === key}
+                  onToggle={(column) => setOpenFilter((current) => current === column ? null : column)}
+                  values={equipmentColumnValues[key]}
+                  filterValue={columnFilters[key] || ""}
+                  onFilterChange={(value) => updateColumnFilter(key, value)}
+                />
               ))}
               <th>Actions</th>
             </tr>
@@ -1693,14 +1843,24 @@ function EnhancedSpeechComplaint() {
   );
 }
 SpeechComplaint = EnhancedSpeechComplaint;
-function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false }) {
-  const [equipmentId, setEquipmentId] = useState(""),
+function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false }) {
+  const [equipmentGroup, setEquipmentGroup] = useState(""),
+    [equipmentId, setEquipmentId] = useState(""),
     [door, setDoor] = useState("");
   const [openedAt] = useState(() => new Date());
   const pad = (n) => String(n).padStart(2, "0");
   const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
     systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
     v = findRequestEquipment(equipmentRecords, equipmentId),
+    equipmentGroups = requestEquipmentGroupOptions(equipmentRecords),
+    groupRecords = requestEquipmentRecordsForGroup(equipmentRecords, equipmentGroup),
+    doorRecords = groupRecords.reduce((unique, record) => {
+      const value = String(record.door || "").trim();
+      if (record.id != null && value && !unique.some((item) => item.door.toLowerCase() === value.toLowerCase())) {
+        unique.push({ record, door: value });
+      }
+      return unique;
+    }, []),
     equipmentDetails = requestEquipmentDetails(v || {});
   const [requestTime, setRequestTime] = useState(systemTime);
   const submit = (e) => {
@@ -1711,7 +1871,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         equipment: equipmentDetails.equipment,
         door: fd.get("door"),
         site: equipmentDetails.site || "Not assigned",
-        category: "Maintenance request",
+        category: String(fd.get("category") || "").trim(),
         complaint: fd.get("complaint"),
         start: fd.get("date") + " · " + fd.get("time"),
         hours: "—",
@@ -1735,49 +1895,95 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
           <label>
             Equipment group *
             <select
-              name="equipmentId"
+              name="equipmentGroup"
               required
-              value={equipmentId}
-              disabled={!equipmentLoaded || !equipmentRecords.length}
+              value={equipmentGroup}
+              disabled={!equipmentLoaded || !equipmentGroups.length}
               aria-busy={!equipmentLoaded}
               onChange={(event) => {
-                const selectedId = event.target.value,
-                  selected = findRequestEquipment(equipmentRecords, selectedId),
-                  details = requestEquipmentDetails(selected || {});
-                setEquipmentId(selectedId);
+                const selectedGroup = event.target.value,
+                  matches = requestEquipmentRecordsForGroup(equipmentRecords, selectedGroup),
+                  onlyRecord = matches.length === 1 ? matches[0] : null,
+                  details = requestEquipmentDetails(onlyRecord || {});
+                setEquipmentGroup(selectedGroup);
+                setEquipmentId(onlyRecord?.id != null ? String(onlyRecord.id) : "");
                 setDoor(details.door);
               }}
             >
               <option value="" disabled>
                 {!equipmentLoaded
                   ? "Loading equipment..."
-                  : equipmentRecords.length
-                    ? "Select equipment"
+                  : equipmentGroups.length
+                    ? "Select equipment group"
                     : "No equipment available"}
               </option>
-              {equipmentRecords.filter((record) => record.id != null && requestEquipmentGroupOptionLabel(record)).map((record) => (
-                <option key={record.id} value={String(record.id)}>
-                  {requestEquipmentGroupOptionLabel(record)}
+              {equipmentGroups.map((group) => (
+                <option key={group.key} value={group.label}>
+                  {group.label}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Door number *
-            <input
-              name="door"
+            Type of breakdown *
+            <select
+              name="category"
               required
-              value={door}
-              onChange={(e) => setDoor(e.target.value)}
-              readOnly={Boolean(v?.door)}
-              list="door-numbers"
-              placeholder={v?.door ? "Auto-filled from equipment" : "Enter door number"}
-            />
-            <datalist id="door-numbers">
-              {equipmentRecords.filter((record) => record.door).map((record) => (
-                <option key={record.id || record.door} value={record.door} />
-              ))}
-            </datalist>
+              defaultValue=""
+              disabled={!repairTypesLoaded || !repairTypeRecords.length}
+              aria-busy={!repairTypesLoaded}
+            >
+              <option value="" disabled>
+                {!repairTypesLoaded
+                  ? "Loading repair types..."
+                  : repairTypeRecords.length
+                    ? "Select repair type"
+                    : "No repair types available"}
+              </option>
+              {repairTypeRecords
+                .filter((record) => record.id != null && String(record.repairType || "").trim())
+                .map((record) => (
+                  <option key={record.id} value={String(record.repairType).trim()}>
+                    {String(record.repairType).trim()}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label>
+            Door number *
+            {equipmentGroup && doorRecords.length ? (
+              <>
+                <select
+                  aria-label="Door number"
+                  value={equipmentId}
+                  required
+                  onChange={(event) => {
+                    const selectedId = event.target.value,
+                      selected = findRequestEquipment(equipmentRecords, selectedId),
+                      details = requestEquipmentDetails(selected || {});
+                    setEquipmentId(selectedId);
+                    setDoor(details.door);
+                  }}
+                >
+                  <option value="" disabled>Select door number</option>
+                  {doorRecords.map(({ record, door: doorNumber }) => (
+                    <option key={String(record.id)} value={String(record.id)}>
+                      {doorNumber}
+                    </option>
+                  ))}
+                </select>
+                <input type="hidden" name="door" value={door} />
+              </>
+            ) : (
+              <input
+                name="door"
+                required
+                value={door}
+                onChange={(e) => setDoor(e.target.value)}
+                readOnly={Boolean(v?.door)}
+                placeholder={v?.door ? "Auto-filled from equipment" : "Enter door number"}
+              />
+            )}
           </label>
           <label>
             Date *<input name="date" type="date" defaultValue={systemDate} />
@@ -1980,15 +2186,19 @@ function Generic({ name, requests = [] }) {
     isAudit = name === "Audit Trail";
   const columns = {
     "Vehicle transfers": [
-      "Door no.",
-      "Registration no.",
-      "Transfer date",
-      "Source location",
-      "Destination",
-      "Opening KMR/HMR",
-      "Closing KMR/HMR",
-      "Creator",
-      "Status",
+      "Equipment Transfer No.",
+      "Equipment Transfer Date",
+      "From Location",
+      "To Location",
+      "Equipment",
+      "Model No.",
+      "Manufacturing Serial No.",
+      "Last Maintenance Date",
+      "Driver",
+      "Chasis No",
+      "Diesel QTY",
+      "KMR",
+      "HMR",
     ],
     "Users & employees": [
       "Login name",
@@ -2185,15 +2395,44 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     [editing, setEditing] = useState(null),
     [pendingPrivilegeRows, setPendingPrivilegeRows] = useState({}),
     [savingAllPrivileges, setSavingAllPrivileges] = useState(false),
-    fields = masterFields[name],
+    [columnFilters, setColumnFilters] = useState({}),
+    [openFilter, setOpenFilter] = useState(null);
+  const fields = masterFields[name],
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege" || name === "Repair type master",
+    masterValue = (record, key) => {
+      const type = fields.find(([field]) => field === key)?.[2];
+      return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
+    },
+    columnValues = Object.fromEntries(
+      fields.map(([key]) => [
+        key,
+        [...new Set(records.map((record) => masterValue(record, key)))].sort((a, b) => sortCollator.compare(a, b)),
+      ]),
+    ),
     filteredRows = records.filter((record) =>
-      Object.values(record).join(" ").toLowerCase().includes(q.toLowerCase()),
+      Object.values(record).join(" ").toLowerCase().includes(q.toLowerCase()) &&
+      fields.every(([key]) => !columnFilters[key] || masterValue(record, key) === columnFilters[key]),
     ),
     [rows, sort, changeSort] = useSortableRows(filteredRows, "", (record, key) => {
       const type = fields.find(([field]) => field === key)?.[2];
       return type === "checkbox" ? isCheckedValue(record[key]) : record[key];
     });
+  const updateColumnFilter = (key, value) => {
+    setColumnFilters((current) => {
+      const next = { ...current };
+      if (value) next[key] = value;
+      else delete next[key];
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (!openFilter) return undefined;
+    const closeFilter = (event) => {
+      if (!event.target.closest?.(".column-filter-header")) setOpenFilter(null);
+    };
+    document.addEventListener("mousedown", closeFilter);
+    return () => document.removeEventListener("mousedown", closeFilter);
+  }, [openFilter]);
   const saveEdit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -2279,12 +2518,23 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           />
         </div>
       </div>
-      <div className="emptytable">
+      <div className="emptytable" onClick={() => setOpenFilter(null)}>
         <table>
           <thead>
             <tr>
               {fields.map(([key, label]) => (
-                <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} />
+                <FilterableHeader
+                  key={key}
+                  label={label}
+                  sortKey={key}
+                  sort={sort}
+                  onSort={changeSort}
+                  open={openFilter === key}
+                  onToggle={(column) => setOpenFilter((current) => current === column ? null : column)}
+                  values={columnValues[key]}
+                  filterValue={columnFilters[key] || ""}
+                  onFilterChange={(value) => updateColumnFilter(key, value)}
+                />
               ))}
               {canManageRows && <th>Actions</th>}
             </tr>
@@ -2409,6 +2659,18 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                   <select name={key} required defaultValue={editing[key] || ""}>
                     <option value="" disabled>Select level</option>
                     {["L1", "L2", "L3", "L4"].map((level) => <option key={level}>{level}</option>)}
+                  </select>
+                ) : name === "Users & employees" && key === "site" ? (
+                  <select name={key} required defaultValue={editing[key] || ""}>
+                    <option value="" disabled>Select location</option>
+                    {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
+                    {editing[key] && !siteOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
+                  </select>
+                ) : name === "Users & employees" && key === "userType" ? (
+                  <select name={key} required defaultValue={editing[key] || ""}>
+                    <option value="" disabled>Select user type</option>
+                    {userTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                    {editing[key] && !userTypeOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
                   </select>
                 ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
               </label>
@@ -2851,12 +3113,18 @@ Generic = function GenericWithMasters(props) {
         ? subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") }))
         : [],
     [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(name, seed);
+  const masterSiteOptions = name === "Users & employees"
+    ? [...new Set([
+        ...privilegeSiteOptions,
+        ...records.map((record) => String(record.site || "").trim()).filter(Boolean),
+      ])]
+    : [];
   if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
   return masterFields[name] ? (
     name === "Privilege" ? (
       <PrivilegeMasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
     ) : (
-      <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
+      <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} siteOptions={masterSiteOptions} />
     )
   ) : (
     <OriginalGeneric {...props} />
@@ -2938,17 +3206,35 @@ function MobileWorkflowTable({ rows = [], showActions = false, onEdit, onDelete,
   );
 }
 
-function RequestEditForm({ request, close, onSave }) {
+function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repairTypesLoaded = false }) {
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
   return <Modal title={`Edit request ${request.ref}`} close={close}>
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), reg: form.get("reg"), site: form.get("site"), complaint: form.get("complaint"), start: `${form.get("date")} · ${form.get("time")}`});
+      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), reg: form.get("reg"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), start: `${form.get("date")} · ${form.get("time")}`});
     }}>
       <div className="formgrid">
         <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>
+        <label>
+          Type of breakdown *
+          <select name="category" required defaultValue={request.category || ""} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
+            <option value="" disabled>
+              {!repairTypesLoaded ? "Loading repair types..." : repairTypeRecords.length ? "Select repair type" : "No repair types available"}
+            </option>
+            {request.category && !repairTypeRecords.some((record) => String(record.repairType || "").trim() === String(request.category).trim()) && (
+              <option value={request.category}>{request.category}</option>
+            )}
+            {repairTypeRecords
+              .filter((record) => record.id != null && String(record.repairType || "").trim())
+              .map((record) => (
+                <option key={record.id} value={String(record.repairType).trim()}>
+                  {String(record.repairType).trim()}
+                </option>
+              ))}
+          </select>
+        </label>
         <label>Door number *<input name="door" required defaultValue={request.door || ""} /></label>
         <label>Registration number<input name="reg" defaultValue={request.reg || ""} /></label>
         <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
@@ -3027,6 +3313,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const isMaintenance = mobileRole === "Maintenance User";
   const isMis = mobileRole === "MIS User";
   const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", isProduction ? vehicles : []);
+  const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
   const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
   const saveEdit = async (payload) => { try { await onUpdateRequest(payload.ref, payload); setEditing(null); } catch (error) { alert(error.message); } };
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
@@ -3049,8 +3336,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
     </main>
-    {show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} close={() => setShow(false)} />}
-    {editing && <RequestEditForm request={editing} close={() => setEditing(null)} onSave={saveEdit} />}
+    {show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setShow(false)} />}
+    {editing && <RequestEditForm request={editing} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} />}
     {closing && <CloseRequestForm request={closing} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} close={() => setVerifying(null)} onSave={verifyRequest} />}
   </div>;
@@ -3231,7 +3518,7 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} />
+            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}

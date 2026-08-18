@@ -5,6 +5,8 @@ import {
   requestEquipmentDetails,
   requestEquipmentOptionLabel,
   requestEquipmentGroupOptionLabel,
+  requestEquipmentGroupOptions,
+  requestEquipmentRecordsForGroup,
   requestVehicleOptionLabel,
 } from "../request-equipment.mjs";
 
@@ -54,6 +56,20 @@ test("production equipment group option labels use the Equipment Master group", 
     "EXCAVATOR",
   );
   assert.equal(requestEquipmentGroupOptionLabel({ equipmentName: "VPC48 - 62534" }), "");
+});
+
+test("equipment group options are unique but retain all related vehicles", () => {
+  const records = [
+    { id: 1, group: "EXCAVATOR", door: "EX-01" },
+    { id: 2, group: "excavator", door: "EX-02" },
+    { id: 3, group: "DOZER", door: "DZ-01" },
+  ];
+  const options = requestEquipmentGroupOptions(records);
+  assert.deepEqual(options.map((option) => option.label), ["EXCAVATOR", "DOZER"]);
+  assert.deepEqual(
+    requestEquipmentRecordsForGroup(records, "excavator").map((record) => record.door),
+    ["EX-01", "EX-02"],
+  );
 });
 
 test("legacy vehicle option labels remain compatible", () => {

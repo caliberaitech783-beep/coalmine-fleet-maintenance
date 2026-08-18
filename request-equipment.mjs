@@ -44,6 +44,35 @@ export function requestEquipmentGroupOptionLabel(record = {}) {
   return text(record.group);
 }
 
+/**
+ * Return one option per equipment group, while retaining every source record
+ * for the dependent door-number selector.  Equipment master imports can
+ * contain hundreds of vehicles in the same group (for example, DOZERS), so
+ * grouping is case-insensitive and whitespace-normalized for display.
+ */
+export function requestEquipmentGroupOptions(records = []) {
+  const groups = new Map();
+  for (const record of records) {
+    if (record?.id == null) continue;
+    const label = requestEquipmentGroupOptionLabel(record);
+    const key = label.toLocaleLowerCase().replace(/\s+/g, " ");
+    if (!label || groups.has(key)) {
+      if (groups.has(key)) groups.get(key).records.push(record);
+      continue;
+    }
+    groups.set(key, { key, label, records: [record] });
+  }
+  return [...groups.values()];
+}
+
+export function requestEquipmentRecordsForGroup(records = [], group = "") {
+  const key = text(group).toLocaleLowerCase().replace(/\s+/g, " ");
+  if (!key) return [];
+  return records.filter(
+    (record) => requestEquipmentGroupOptionLabel(record).toLocaleLowerCase().replace(/\s+/g, " ") === key,
+  );
+}
+
 // Kept for compatibility with older callers/imported deployment helpers.
 export function requestVehicleOptionLabel(record = {}) {
   return text(record.equipmentName);

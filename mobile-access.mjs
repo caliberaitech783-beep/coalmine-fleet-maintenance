@@ -59,6 +59,7 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
         closeRequests: true,
         verifyRequests: true,
         viewEquipment: true,
+        viewRepairTypes: true,
       },
     };
   }
@@ -89,6 +90,7 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
       closeRequests: maintenance,
       verifyRequests: assignedRole === "MIS User",
       viewEquipment: assignedRole === "Production User",
+      viewRepairTypes: assignedRole === "Production User" || assignedRole === "Maintenance User",
     },
   };
 }

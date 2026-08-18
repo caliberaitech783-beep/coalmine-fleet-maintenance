@@ -438,12 +438,18 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
 
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
-    if(req.session.role!=='super'&&req.session.permissions?.viewEquipment!==true)
-      return res.status(403).json({error:'Your assigned role is not authorized to view equipment records.'});
+    const canViewEquipment=req.session.role==='super'||req.session.permissions?.viewEquipment===true;
+    const canViewRepairTypes=req.session.role==='super'||req.session.permissions?.viewRepairTypes===true;
+    if(!canViewEquipment&&!canViewRepairTypes)
+      return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
-      if(req.session.role!=='super'&&row.master_name!=='Equipment master')continue;
+      if(req.session.role!=='super'){
+        if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
+        if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
+        if(row.master_name!=='Equipment master'&&row.master_name!=='Repair type master')continue;
+      }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
       if(row.master_name==='Privilege'){
         const username=String(record.username||'').trim().toLowerCase();

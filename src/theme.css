@@ -299,6 +299,13 @@ textarea {
 :root[data-theme="dark"] .login-input input { color: #e3eaf5; }
 :root[data-theme="dark"] .password-toggle:hover { background: #17243a; }
 :root[data-theme="dark"] .login-mobile-brand { color: #eef3fb; }
+:root[data-theme="dark"] .column-filter-popover{background:#17253a;border-color:#2c415e;color:#dce7f7;box-shadow:0 14px 30px #0008}
+:root[data-theme="dark"] .column-filter-sort button,:root[data-theme="dark"] .column-filter-search{background:#1d2d45;border-color:#36516f;color:#dce7f7}
+:root[data-theme="dark"] .column-filter-popover-head{border-color:#2c415e;color:#dce7f7}
+:root[data-theme="dark"] .column-filter-close:hover,:root[data-theme="dark"] .column-filter-close:focus-visible{background:#223e64;color:#fff}
+:root[data-theme="dark"] .column-filter-search input{color:#dce7f7}
+:root[data-theme="dark"] .column-filter-values button,:root[data-theme="dark"] .column-filter-all{color:#dce7f7}
+:root[data-theme="dark"] .column-filter-all:hover,:root[data-theme="dark"] .column-filter-values button:hover,:root[data-theme="dark"] .column-filter-values button.selected{background:#223e64;color:#fff}
 
 @media (max-width: 600px) {
   .theme-toggle { min-width: 36px; width: 36px; padding: 4px !important; }
