@@ -84,12 +84,12 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
     permissions: {
       readRequests: true,
       viewAllRequests: assignedRole !== "Production User",
-      createRequests: assignedRole === "Production User",
+      createRequests: assignedRole === "Production User" || maintenance,
       editRequests: maintenance,
       deleteRequests: maintenance && permissionEnabled(privilege.delete),
       closeRequests: maintenance,
       verifyRequests: assignedRole === "MIS User",
-      viewEquipment: assignedRole === "Production User",
+      viewEquipment: assignedRole === "Production User" || maintenance,
       viewRepairTypes: assignedRole === "Production User" || assignedRole === "Maintenance User",
     },
   };

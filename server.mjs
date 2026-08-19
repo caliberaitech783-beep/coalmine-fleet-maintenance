@@ -389,7 +389,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-app.post('/api/requests',requireSession,requirePermission('createRequests',{role:'Production User'}),async(req,res,next)=>{
+app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
     const {ref,equipment='',door,reg='',site='Not assigned',category='Maintenance request',complaint,start}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
@@ -398,7 +398,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests',{role
       (reference,equipment_name,door_number,registration_number,site,category,complaint,started_at,status,owner_name,requester_login)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Open',$9,$10)
       RETURNING ${requestProjection}`,
-      [ref,equipment,door,reg,site,category,complaint,startedAt,req.session.name||'Production User',String(req.session.login||'').trim().toLowerCase()]);
+      [ref,equipment,door,reg,site,category,complaint,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });

@@ -20,7 +20,7 @@ test("recognizes only the requested Mobile User groups", () => {
   assert.equal(normalizeMobileUserRole("Maintenance Head"), "");
 });
 
-test("Production User alone can create requests", () => {
+test("Production User can create requests", () => {
   const profile = resolveMobileAccess({user: {userType: "Mobile User"}, privilege: {userGroup: "Production User"}});
   assert.equal(profile.permissions.createRequests, true);
   assert.equal(profile.permissions.editRequests, false);
@@ -32,7 +32,8 @@ test("Maintenance actions use the assigned edit and delete permissions", () => {
     user: {userType: "Mobile User"},
     privilege: {userGroup: "Maintenance User", edit: true, delete: "yes"},
   });
-  assert.equal(profile.permissions.createRequests, false);
+  assert.equal(profile.permissions.createRequests, true);
+  assert.equal(profile.permissions.viewEquipment, true);
   assert.equal(profile.permissions.closeRequests, true);
   assert.equal(profile.permissions.editRequests, true);
   assert.equal(profile.permissions.deleteRequests, true);
