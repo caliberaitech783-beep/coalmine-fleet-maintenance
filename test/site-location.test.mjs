@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canonicalSiteName, recordBelongsToSite } from "../site-location.mjs";
+import { canonicalSiteName, recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 
 test("legacy WCL locations match their renamed dashboard sites", () => {
   assert.equal(canonicalSiteName("Sasti II"), canonicalSiteName("Sasti OB"));
@@ -42,4 +42,18 @@ test("site matching accepts current and legacy equipment location fields", () =>
   assert.equal(recordBelongsToSite({ currentLocation: "Sasti II" }, "Sasti OB"), true);
   assert.equal(recordBelongsToSite({ location: "Majri II" }, "Majri OB"), true);
   assert.equal(recordBelongsToSite({ currentLocation: "Jayant" }, "Jayant OB 2nd"), false);
+});
+
+test("mobile equipment options include only records at the user's current site", () => {
+  const records = [
+    { id: 1, equipmentName: "PL73", currentLocation: "LINGRAJ SIDING" },
+    { id: 2, equipmentName: "PL74", currentLocation: "GOURI POUNI OB (2ND)" },
+    { id: 3, equipmentName: "PL75", location: "Lingraj Siding" },
+  ];
+
+  assert.deepEqual(
+    recordsForSite(records, "LINGRAJ SIDING").map((record) => record.id),
+    [1, 3],
+  );
+  assert.deepEqual(recordsForSite(records, ""), []);
 });

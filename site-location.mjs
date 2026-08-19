@@ -31,3 +31,9 @@ export function recordBelongsToSite(record, site) {
     canonicalSiteName(site)
   );
 }
+
+export function recordsForSite(records = [], site = "") {
+  const selectedSite = canonicalSiteName(site);
+  if (!selectedSite) return [];
+  return records.filter((record) => recordBelongsToSite(record, selectedSite));
+}

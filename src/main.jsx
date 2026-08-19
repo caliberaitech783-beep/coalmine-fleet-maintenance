@@ -5,7 +5,7 @@ import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts } from "../dashboard-equipment-metrics.mjs";
-import { recordBelongsToSite } from "../site-location.mjs";
+import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
   requestEquipmentDetails,
@@ -1857,9 +1857,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const pad = (n) => String(n).padStart(2, "0");
   const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
     systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
-    v = findRequestEquipment(equipmentRecords, equipmentId),
-    equipmentGroups = requestEquipmentGroupOptions(equipmentRecords),
-    groupRecords = requestEquipmentRecordsForGroup(equipmentRecords, equipmentGroup),
+    locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
+    v = findRequestEquipment(locationEquipmentRecords, equipmentId),
+    equipmentGroups = requestEquipmentGroupOptions(locationEquipmentRecords),
+    groupRecords = requestEquipmentRecordsForGroup(locationEquipmentRecords, equipmentGroup),
     equipmentVehicleRecords = groupRecords.reduce((unique, record) => {
       const label = requestEquipmentOptionLabel(record);
       if (record.id != null && label && !unique.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
@@ -1918,7 +1919,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               aria-busy={!equipmentLoaded}
               onChange={(event) => {
                 const selectedGroup = event.target.value,
-                  matches = requestEquipmentRecordsForGroup(equipmentRecords, selectedGroup),
+                  matches = requestEquipmentRecordsForGroup(locationEquipmentRecords, selectedGroup),
                   onlyRecord = matches.length === 1 ? matches[0] : null,
                   details = requestEquipmentDetails(onlyRecord || {});
                 setEquipmentGroup(selectedGroup);
@@ -1975,7 +1976,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                   required
                   onChange={(event) => {
                     const selectedId = event.target.value,
-                      selected = findRequestEquipment(equipmentRecords, selectedId),
+                      selected = findRequestEquipment(locationEquipmentRecords, selectedId),
                       details = requestEquipmentDetails(selected || {});
                     setEquipmentId(selectedId);
                     setDoor(details.door);
