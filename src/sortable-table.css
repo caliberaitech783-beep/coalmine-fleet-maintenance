@@ -49,6 +49,7 @@
 .column-filter-header .sort-header{position:relative}
 .column-filter-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#315fd3;margin-left:2px}
 .column-filter-popover{position:absolute;top:calc(100% + 5px);left:8px;width:210px;max-width:min(240px,calc(100vw - 24px));padding:7px;background:#fff;border:1px solid #d9e1ef;border-radius:7px;box-shadow:0 10px 22px #17233c2e;text-transform:none;letter-spacing:normal;z-index:30;color:#45546d;white-space:normal}
+.column-filter-popover-portal{position:fixed;width:240px;z-index:1000}
 .column-filter-popover-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px 6px;border-bottom:1px solid #edf0f5;margin-bottom:6px;color:#34425a;font-size:10px}
 .column-filter-popover-head strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .column-filter-close{width:22px;height:22px;border:0;border-radius:4px;background:transparent;display:grid;place-items:center;color:#7c899c;padding:0;flex:0 0 auto}

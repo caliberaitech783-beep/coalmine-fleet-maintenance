@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
@@ -823,6 +824,8 @@ function FilterableHeader({
   onFilterChange,
 }) {
   const [valueSearch, setValueSearch] = useState("");
+  const triggerRef = useRef(null);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const active = sort.key === sortKey,
     Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown,
     normalizedSearch = valueSearch.trim().toLowerCase(),
@@ -830,9 +833,29 @@ function FilterableHeader({
   useEffect(() => {
     if (!open) setValueSearch("");
   }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const positionPopover = () => {
+      const bounds = triggerRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const width = Math.min(240, window.innerWidth - 24);
+      setPopoverPosition({
+        top: bounds.bottom + 5,
+        left: Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12)),
+      });
+    };
+    positionPopover();
+    window.addEventListener("resize", positionPopover);
+    window.addEventListener("scroll", positionPopover, true);
+    return () => {
+      window.removeEventListener("resize", positionPopover);
+      window.removeEventListener("scroll", positionPopover, true);
+    };
+  }, [open]);
   return (
     <th className={`column-filter-header ${open ? "open" : ""}`} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
       <button
+        ref={triggerRef}
         className={`sort-header ${active ? "active" : ""} ${filterValue ? "filtered" : ""}`}
         onClick={(event) => { event.stopPropagation(); onToggle(sortKey); }}
         type="button"
@@ -842,8 +865,8 @@ function FilterableHeader({
         <span>{label}</span><Icon aria-hidden="true" />
         {filterValue && <i className="column-filter-dot" aria-label="Filtered" />}
       </button>
-      {open && (
-        <div className="column-filter-popover" role="dialog" aria-label={`${label} filter`} onClick={(event) => event.stopPropagation()}>
+      {open && createPortal(
+        <div className="column-filter-popover column-filter-popover-portal" style={popoverPosition} role="dialog" aria-label={`${label} filter`} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
           <div className="column-filter-popover-head">
             <strong>{label}</strong>
             <button type="button" className="column-filter-close" onClick={() => onToggle(sortKey)} aria-label={`Close ${label} filter`} title="Close">
@@ -867,7 +890,8 @@ function FilterableHeader({
               </button>
             )) : <span className="column-filter-empty">No matching values</span>}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </th>
   );
@@ -1266,7 +1290,7 @@ function Equipment({
   useEffect(() => {
     if (!openFilter) return undefined;
     const closeFilter = (event) => {
-      if (!event.target.closest?.(".column-filter-header")) setOpenFilter(null);
+      if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
     };
     document.addEventListener("mousedown", closeFilter);
     return () => document.removeEventListener("mousedown", closeFilter);
@@ -2625,7 +2649,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   useEffect(() => {
     if (!openFilter) return undefined;
     const closeFilter = (event) => {
-      if (!event.target.closest?.(".column-filter-header")) setOpenFilter(null);
+      if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
     };
     document.addEventListener("mousedown", closeFilter);
     return () => document.removeEventListener("mousedown", closeFilter);
