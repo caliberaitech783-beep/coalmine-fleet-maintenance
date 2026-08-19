@@ -4,7 +4,7 @@ import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
-import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
@@ -520,17 +520,11 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
   const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
-  // Equipment master is the fleet registry used by the application today. Keep
-  // the summary cards data-driven without inventing a second vehicle source:
-  // every registered fleet asset is counted as a vehicle, while the all-total
-  // card represents the combined registry total.
-  const totalEquipment = visibleEquipment.length;
-  const totalVehicles = visibleEquipment.length;
-  const allTotal = totalEquipment;
+  const assetCounts = fleetAssetCounts(visibleEquipment);
   const summaryCards = [
-    ["Total equipment", totalEquipment, "Registered equipment", Truck, () => gotoEquipment("all", "")],
-    ["Total vehicles", totalVehicles, "Fleet vehicles", Truck, () => gotoEquipment("all", "")],
-    ["All total", allTotal, "Equipment + vehicles", Activity, () => gotoEquipment("all", "")],
+    ["Total equipment", assetCounts.equipment, "Non-vehicle equipment", Truck, () => gotoEquipment("all", "")],
+    ["Total vehicles", assetCounts.vehicles, "Vehicles only", Truck, () => gotoEquipment("all", "")],
+    ["All total", assetCounts.total, "Equipment + vehicles", Activity, () => gotoEquipment("all", "")],
     ["On road", kpis.onRoad, "Available for operation", CheckCircle2, () => gotoEquipment("onroad", "")],
     ["Off road", kpis.offRoad, "In maintenance or breakdown", AlertTriangle, () => gotoEquipment("offroad", "")],
   ];
@@ -548,8 +542,9 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
           </button>
         ))}
       </section>
-      <section className="mine-counter-grid" aria-label="Mining fleet summary">
-        {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => goto("Breakdown master")}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
+      <section className="mine-repair-chart" aria-label="Top four repair types">
+        <header><div><span className="mine-eyebrow">Breakdown requests</span><h2>Top repair types</h2></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header>
+        {repairTypeCards.length ? <div>{repairTypeCards.slice().sort((left, right) => right[1] - left[1]).slice(0, 4).map(([label, value]) => { const max = Math.max(1, ...repairTypeCards.map((card) => card[1])); return <button type="button" key={label} onClick={() => goto("Breakdown master")}><span>{label}</span><i><b style={{ width: `${(value / max) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong></button>; })}</div> : <div className="mine-empty">No repair types configured</div>}
       </section>
       <section className="mine-dashboard-grid">
         <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Fleet status · all</span><h2>Vehicle status</h2><p>Availability across the selected operating region</p></div><button type="button" onClick={() => gotoEquipment("all", "")}>View fleet <ChevronRight /></button></header><div className="mine-status-body"><button type="button" className="mine-status-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#7ed6a3 0 ${kpis.availability}%, #26383c ${kpis.availability}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button><div className="mine-status-list">{statusCounts.map(([label, value, tone]) => <button type="button" key={label} onClick={() => gotoEquipment(tone === "operational" ? "onroad" : "all", "")}><i className={`mine-dot ${tone}`} /><span>{label}</span><b>{value.toLocaleString()}</b></button>)}</div></div></article>
@@ -1257,9 +1252,7 @@ function Equipment({
     document.addEventListener("mousedown", closeFilter);
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
-  const roadStatus = (v) =>
-      v.status === "Operational" ? "On Road" : "Off Road",
-    locations = [
+  const locations = [
       ...new Set([
         ...subsidiaryData.flatMap((s) => s.sites),
         ...records
@@ -1270,7 +1263,7 @@ function Equipment({
   let rows = records.filter(
     (v) =>
       (road === "all" ||
-        roadStatus(v).toLowerCase().replace(" ", "") === road) &&
+        equipmentRoadStatus(v) === road) &&
       (!location || (v.currentLocation || v.location) === location) &&
       Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()) &&
       equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
