@@ -4,7 +4,7 @@ import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
-import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
@@ -520,33 +520,38 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
   const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const activeBreakdowns = visibleBreakdowns.filter((record) => record.status !== "Closed").length;
-  // Equipment master is the fleet registry used by the application today. Keep
-  // the summary cards data-driven without inventing a second vehicle source:
-  // every registered fleet asset is counted as a vehicle, while the all-total
-  // card represents the combined registry total.
-  const totalEquipment = visibleEquipment.length;
-  const totalVehicles = visibleEquipment.length;
-  const allTotal = totalEquipment;
-  const summaryCards = [
-    ["Total equipment", totalEquipment, "Registered equipment", Truck, () => gotoEquipment("all", "")],
-    ["Total vehicles", totalVehicles, "Fleet vehicles", Truck, () => gotoEquipment("all", "")],
-    ["All total", allTotal, "Equipment + vehicles", Activity, () => gotoEquipment("all", "")],
-    ["On road", kpis.onRoad, "Available for operation", CheckCircle2, () => gotoEquipment("onroad", "")],
-    ["Off road", kpis.offRoad, "In maintenance or breakdown", AlertTriangle, () => gotoEquipment("offroad", "")],
-  ];
+  const assetCounts = fleetAssetCounts(visibleEquipment);
+  const equipmentShare = assetCounts.total ? (assetCounts.equipment / assetCounts.total) * 100 : 0;
+  const onRoadShare = kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0;
+  const offRoadShare = kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
         <div><span className="mine-brandmark">CM</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">All regions</option>{subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
       </header>
-      <section className="mine-summary-grid" aria-label="Fleet totals">
-        {summaryCards.map(([label, value, hint, Icon, onClick]) => (
-          <button type="button" key={label} onClick={onClick}>
-            <Icon />
-            <span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span>
-          </button>
-        ))}
+      <section className="mine-overview-charts" aria-label="Fleet overview charts">
+        <article className="mine-overview-chart">
+          <header><div><span className="mine-eyebrow">Fleet registry</span><h2>Equipment and vehicles</h2><p>Separate asset counts from Equipment Master</p></div></header>
+          <div className="mine-overview-chart-body">
+            <button type="button" className="mine-overview-donut" aria-label={`${assetCounts.total} total assets`} onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#4f86c6 0 ${equipmentShare}%, #72c99e ${equipmentShare}% 100%)` }}><span><strong>{assetCounts.total.toLocaleString()}</strong><small>All total</small></span></button>
+            <div className="mine-overview-legend">
+              <button type="button" onClick={() => gotoEquipment("all", "")}><i className="mine-chart-blue" /><span>Total equipment<small>Non-vehicle equipment</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoEquipment("all", "")}><i className="mine-chart-green" /><span>Total vehicles<small>Vehicles only</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong></button>
+            </div>
+          </div>
+        </article>
+        <article className="mine-overview-chart">
+          <header><div><span className="mine-eyebrow">Road availability</span><h2>On-road and off-road</h2><p>Only explicit fleet statuses are counted</p></div></header>
+          <div className="mine-overview-chart-body">
+            <button type="button" className="mine-overview-donut" aria-label={`${kpis.availability}% on road`} onClick={() => gotoEquipment("onroad", "")} style={{ background: `conic-gradient(#72c99e 0 ${onRoadShare}%, #df776e ${onRoadShare}% ${onRoadShare + offRoadShare}%, #d9e3e7 ${onRoadShare + offRoadShare}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button>
+            <div className="mine-overview-legend">
+              <button type="button" onClick={() => gotoEquipment("onroad", "")}><i className="mine-chart-green" /><span>On road<small>Available for operation</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoEquipment("offroad", "")}><i className="mine-chart-red" /><span>Off road<small>Maintenance or breakdown</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
+              {kpis.unknown > 0 && <div><i className="mine-chart-grey" /><span>Status not set<small>Not counted as off road</small></span><strong>{kpis.unknown.toLocaleString()}</strong></div>}
+            </div>
+          </div>
+        </article>
       </section>
       <section className="mine-counter-grid" aria-label="Mining fleet summary">
         {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => goto("Breakdown master")}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
@@ -1257,9 +1262,7 @@ function Equipment({
     document.addEventListener("mousedown", closeFilter);
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
-  const roadStatus = (v) =>
-      v.status === "Operational" ? "On Road" : "Off Road",
-    locations = [
+  const locations = [
       ...new Set([
         ...subsidiaryData.flatMap((s) => s.sites),
         ...records
@@ -1270,7 +1273,7 @@ function Equipment({
   let rows = records.filter(
     (v) =>
       (road === "all" ||
-        roadStatus(v).toLowerCase().replace(" ", "") === road) &&
+        equipmentRoadStatus(v) === road) &&
       (!location || (v.currentLocation || v.location) === location) &&
       Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()) &&
       equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),

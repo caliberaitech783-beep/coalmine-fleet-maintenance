@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { equipmentMetrics } from "../dashboard-equipment-metrics.mjs";
+import {
+  equipmentMetrics,
+  equipmentRoadStatus,
+  fleetAssetCounts,
+} from "../dashboard-equipment-metrics.mjs";
 
 test("dashboard equipment totals use all persisted master records", () => {
   assert.deepEqual(
@@ -9,7 +13,7 @@ test("dashboard equipment totals use all persisted master records", () => {
       { status: "Breakdown" },
       { status: "Operational" },
     ]),
-    { total: 3, onRoad: 2, offRoad: 1, availability: 67 },
+    { total: 3, onRoad: 2, offRoad: 1, unknown: 0, availability: 67 },
   );
 });
 
@@ -18,6 +22,31 @@ test("dashboard equipment totals handle an empty master", () => {
     total: 0,
     onRoad: 0,
     offRoad: 0,
+    unknown: 0,
     availability: 0,
   });
+});
+
+test("off-road totals exclude blank and neutral statuses", () => {
+  assert.deepEqual(
+    equipmentMetrics([
+      { status: "" },
+      { status: "Available" },
+      { status: "In maintenance" },
+      { status: "Off-road" },
+      { status: "Breakdown" },
+    ]),
+    { total: 5, onRoad: 0, offRoad: 3, unknown: 2, availability: 0 },
+  );
+  assert.equal(equipmentRoadStatus({ status: "" }), "unknown");
+});
+
+test("fleet totals count vehicles separately from other equipment", () => {
+  assert.deepEqual(fleetAssetCounts([
+    { group: "Excavator" },
+    { category: "Water truck" },
+    { itemName: "Office equipment" },
+    { equipmentName: "Pickup" },
+    { chassisNo: "CH-100", category: "Utility asset" },
+  ]), { equipment: 2, vehicles: 3, total: 5 });
 });
