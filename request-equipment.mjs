@@ -17,10 +17,18 @@ export function requestEquipmentDetails(record = {}) {
     text(record.reg) ||
     text(record.manufacturerSerialNo) ||
     (record.id != null ? `Equipment ${record.id}` : "");
+  const reg = text(record.registration) || text(record.reg);
+  const door =
+    text(record.door) ||
+    reg ||
+    text(record.equipmentName) ||
+    text(record.itemName) ||
+    text(record.manufacturerSerialNo) ||
+    equipment;
   return {
     equipment,
-    door: text(record.door),
-    reg: text(record.registration) || text(record.reg),
+    door,
+    reg,
     site: text(record.currentLocation) || text(record.location),
   };
 }

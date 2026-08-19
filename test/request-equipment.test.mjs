@@ -34,6 +34,25 @@ test("builds request details from current and legacy equipment fields", () => {
   assert.equal(requestEquipmentDetails({ itemName: "Dozer", location: "Lalpeth OB" }).site, "Lalpeth OB");
 });
 
+test("selected imported equipment supplies a door identifier when the door field is blank", () => {
+  assert.deepEqual(
+    requestEquipmentDetails({
+      id: 228,
+      equipmentName: "PL69–MP66ZB8422",
+      category: "EQUIPMENT",
+      currentLocation: "Gouri Pouni OB (2ND)",
+      door: "",
+      reg: "",
+    }),
+    {
+      equipment: "PL69–MP66ZB8422",
+      door: "PL69–MP66ZB8422",
+      reg: "",
+      site: "Gouri Pouni OB (2ND)",
+    },
+  );
+});
+
 test("equipment option labels include context that distinguishes duplicate names", () => {
   assert.equal(
     requestEquipmentOptionLabel({
