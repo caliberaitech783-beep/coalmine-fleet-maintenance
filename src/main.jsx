@@ -579,7 +579,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
@@ -600,7 +600,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false }) {
       : rows,
     [sortedRows, sort, changeSort] = useSortableRows(displayRows);
   return (
-    <div className={showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}>
+    <div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <table>
         <thead>
           <tr>
@@ -1359,7 +1359,7 @@ function Equipment({
           <option>All categories</option>
         </select>
       </div>
-      <div className="scroll" onClick={() => setOpenFilter(null)}>
+      <div className="scroll master-table-scroll" onClick={() => setOpenFilter(null)}>
         <table>
           <thead>
             <tr>
@@ -3236,7 +3236,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
           </button>
         ))}
       </div>
-      <BreakdownTable rows={rows} />
+      <BreakdownTable rows={rows} stickyHeader />
     </section>
   );
 };
