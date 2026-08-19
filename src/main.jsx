@@ -3469,11 +3469,25 @@ function VerifyRequestForm({ request, close, onSave }) {
   const today = requestStartParts("");
   const [firstTripDone, setFirstTripDone] = useState(false);
   const [time, setTime] = useState(today.time);
+  const [tripCardFile, setTripCardFile] = useState(null);
+  const [tripCardPreview, setTripCardPreview] = useState("");
+  useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
+  const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read the trip-card image."));
+    reader.readAsDataURL(file);
+  });
   return <Modal title={`Verify closed request ${request.ref}`} close={close}>
-    <form className="form" onSubmit={(event) => {
+    <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime")});
+      if (firstTripDone && !tripCardFile) return alert("Upload the first-trip card image.");
+      if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
+        return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
+      }
+      const firstTripCardImage = tripCardFile ? await fileAsDataUrl(tripCardFile) : "";
+      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
@@ -3487,6 +3501,16 @@ function VerifyRequestForm({ request, close, onSave }) {
       {firstTripDone && <div className="formgrid">
         <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
         <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        <label className="full">First trip card image *
+          <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
+            const file = event.target.files?.[0] || null;
+            if (tripCardPreview) URL.revokeObjectURL(tripCardPreview);
+            setTripCardFile(file);
+            setTripCardPreview(file ? URL.createObjectURL(file) : "");
+          }} />
+          <small>JPEG, PNG or WebP · maximum 5 MB</small>
+          {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
+        </label>
       </div>}
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Verify request <ChevronRight /></button></footer>
     </form>

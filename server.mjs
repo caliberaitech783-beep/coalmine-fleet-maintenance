@@ -11,7 +11,7 @@ import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} 
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
-import {REQUEST_CLOSE_STATUSES,requestDateTimeValue} from './request-workflow.mjs';
+import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validTripCardImageDataUrl} from './request-workflow.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -60,6 +60,7 @@ async function migrate(){
       first_trip_done BOOLEAN NOT NULL DEFAULT FALSE,
       first_trip_at TIMESTAMPTZ,
       first_trip_by TEXT NOT NULL DEFAULT '',
+      first_trip_card_image TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS maintenance_requests_created_at_idx
@@ -86,6 +87,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS first_trip_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS first_trip_by TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS maintenance_requests_requester_login_idx
       ON maintenance_requests (requester_login, created_at DESC);
     CREATE TABLE IF NOT EXISTS master_records (
@@ -374,7 +377,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, door_num
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
-  first_trip_by AS "firstTripBy"`;
+  first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded"`;
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{
@@ -450,10 +453,12 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const reference=String(req.params.reference||'').trim();
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
     const firstTripAt=firstTripDone?requestDateTimeValue(req.body?.firstTripDate,req.body?.firstTripTime):null;
+    const firstTripCardImage=firstTripDone?String(req.body?.firstTripCardImage||''):'';
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
+    if(firstTripDone&&!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4 WHERE reference=$5 AND status='Closed' AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',reference]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5 WHERE reference=$6 AND status='Closed' AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     res.json(rows[0]);
   }catch(error){next(error)}
