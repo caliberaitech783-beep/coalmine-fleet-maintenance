@@ -2715,7 +2715,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           />
         </div>
       </div>
-      <div className="emptytable" onClick={() => setOpenFilter(null)}>
+      <div className="emptytable master-table-scroll" onClick={() => setOpenFilter(null)}>
         <table>
           <thead>
             <tr>
