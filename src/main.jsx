@@ -593,7 +593,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
@@ -602,9 +602,10 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [showBreakdownDays]);
   const columns = [
       ["ref", "Job reference"], ["equipment", "Equipment"], ["door", "Door no."], ["site", "Site location"],
+      ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
       ["category", "Repair category"], ["start", "Started"], ["hours", "Downtime"],
-      ["status", "Status"], ["owner", "Responsibility"],
+      ["status", "Status"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"],
     ],
     displayRows = showBreakdownDays
       ? rows.map((row) => ({
@@ -635,6 +636,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <MapPin /> {r.site}
                 </td>
+                {showAudio && <td>{r.chassis || "—"}</td>}
                 {showBreakdownDays && (
                   <td>
                     <b>{r.breakdownDays} {r.breakdownDays === 1 ? "day" : "days"}</b>
@@ -646,6 +648,11 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <Status>{r.status}</Status>
                 </td>
+                {showAudio && <td><div className="request-audio-list">
+                  {r.complaintAudio && <label><span>Complaint</span><audio controls preload="none" src={r.complaintAudio}>Complaint audio</audio></label>}
+                  {r.maintenanceAudio && <label><span>Maintenance</span><audio controls preload="none" src={r.maintenanceAudio}>Maintenance audio</audio></label>}
+                  {!r.complaintAudio && !r.maintenanceAudio && "—"}
+                </div></td>}
                 <td>{r.owner}</td>
               </tr>
             ))
@@ -1548,27 +1555,13 @@ function Breakdown({ requests = [] }) {
           </button>
         ))}
       </div>
-      <BreakdownTable rows={requests} />
+      <BreakdownTable rows={requests} showAudio />
     </section>
   );
 }
 const speechLanguages = [
   ["hi-IN", "Hindi"],
   ["en-IN", "English"],
-  ["mr-IN", "Marathi"],
-  ["bn-IN", "Bengali"],
-  ["te-IN", "Telugu"],
-  ["ta-IN", "Tamil"],
-  ["gu-IN", "Gujarati"],
-  ["kn-IN", "Kannada"],
-  ["ml-IN", "Malayalam"],
-  ["pa-IN", "Punjabi"],
-  ["ur-IN", "Urdu"],
-  ["or-IN", "Odia"],
-  ["ne-NP", "Nepali"],
-  ["ar-SA", "Arabic"],
-  ["es-ES", "Spanish"],
-  ["fr-FR", "French"],
 ];
 function SpeechComplaint() {
   const [text, setText] = useState(""),
@@ -1762,24 +1755,74 @@ function normalizeComplaint(value) {
   if (text && !/[.!?]$/.test(text)) text += ".";
   return text ? text[0].toUpperCase() + text.slice(1) : "";
 }
-function EnhancedSpeechComplaint() {
+function EnhancedSpeechComplaint({
+  label = "Reason / complaint *",
+  name = "complaint",
+  audioName = "complaintAudio",
+  buttonLabel = "Speak complaint",
+  placeholder = "Type here, or select your language and speak. Clear English text will appear here.",
+}) {
   const [text, setText] = useState(""),
     [lang, setLang] = useState("hi-IN"),
     [listening, setListening] = useState(false),
     [working, setWorking] = useState(false),
-    [note, setNote] = useState("");
+    [note, setNote] = useState(""),
+    [audioData, setAudioData] = useState("");
   const recognition = useRef(null),
     silenceTimer = useRef(null),
-    maxTimer = useRef(null);
+    maxTimer = useRef(null),
+    recorder = useRef(null),
+    mediaStream = useRef(null),
+    audioChunks = useRef([]);
   const clearTimers = () => {
     clearTimeout(silenceTimer.current);
     clearTimeout(maxTimer.current);
   };
+  const stopAudio = () => {
+    if (recorder.current?.state === "recording") recorder.current.stop();
+    else mediaStream.current?.getTracks().forEach((track) => track.stop());
+  };
   const stop = () => recognition.current?.stop();
-  const start = () => {
+  useEffect(() => () => {
+    clearTimers();
+    recognition.current?.abort?.();
+    mediaStream.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+  const start = async () => {
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!Speech) {
       setNote("Speech recognition requires Chrome or Edge.");
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      setNote("Audio recording is not supported here. Please use current Chrome or Edge.");
+      return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStream.current = stream;
+      audioChunks.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      recorder.current = mediaRecorder;
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data?.size) audioChunks.current.push(event.data);
+      };
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(audioChunks.current, { type: mediaRecorder.mimeType.split(";")[0] || "audio/webm" });
+        if (blob.size > 3 * 1024 * 1024) {
+          setAudioData("");
+          setNote("Recording is too large. Please record a shorter message.");
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => setAudioData(String(reader.result || ""));
+        reader.readAsDataURL(blob);
+      };
+      mediaRecorder.start();
+    } catch {
+      setNote("Microphone permission is required to save the audio clip.");
       return;
     }
     const r = new Speech();
@@ -1809,6 +1852,7 @@ function EnhancedSpeechComplaint() {
     };
     r.onerror = (e) => {
       clearTimers();
+      stopAudio();
       setListening(false);
       setNote(
         e.error === "not-allowed"
@@ -1820,6 +1864,7 @@ function EnhancedSpeechComplaint() {
     };
     r.onend = async () => {
       clearTimers();
+      stopAudio();
       setListening(false);
       if (!final.trim()) return;
       setWorking(true);
@@ -1848,12 +1893,13 @@ function EnhancedSpeechComplaint() {
     try {
       r.start();
     } catch {
+      stopAudio();
       setNote("Could not start the microphone. Please try again.");
     }
   };
   return (
     <label className="full speechfield">
-      <span>Reason / complaint *</span>
+      <span>{label}</span>
       <div className="speechtools">
         <select
           aria-label="Spoken language"
@@ -1877,19 +1923,21 @@ function EnhancedSpeechComplaint() {
             ? "Stop recording"
             : working
               ? "Processing…"
-              : "Speak complaint"}
+              : buttonLabel}
         </button>
       </div>
       <textarea
-        name="complaint"
+        name={name}
         required
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Type here, or select your language and speak. Clear English text will appear here."
+        placeholder={placeholder}
       />
+      <input type="hidden" name={audioName} value={audioData} />
+      {audioData && <audio className="request-audio-preview" controls src={audioData}>Recorded complaint</audio>}
       <small className={listening ? "voice-note live" : "voice-note"}>
         {note ||
-          "Your microphone is used only while recording. Audio is not stored."}
+          "Choose Hindi or English. Your recording and transcript will be saved with this request."}
       </small>
     </label>
   );
@@ -1898,7 +1946,8 @@ SpeechComplaint = EnhancedSpeechComplaint;
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "" }) {
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
-    [door, setDoor] = useState("");
+    [door, setDoor] = useState(""),
+    [equipmentSearch, setEquipmentSearch] = useState("");
   const [openedAt] = useState(() => new Date());
   const pad = (n) => String(n).padStart(2, "0");
   const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
@@ -1914,6 +1963,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       }
       return unique;
     }, []),
+    visibleEquipmentVehicleRecords = equipmentVehicleRecords.filter(({ record, label }) => String(record.id) === equipmentId || label.toLowerCase().includes(equipmentSearch.trim().toLowerCase())),
     equipmentDetails = requestEquipmentDetails(v || {}),
     currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
   const [requestTime, setRequestTime] = useState(systemTime);
@@ -1929,12 +1979,18 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         site: currentLocation || "Not assigned",
         category: String(fd.get("category") || "").trim(),
         complaint: fd.get("complaint"),
+        complaintAudio: fd.get("complaintAudio"),
         start: fd.get("date") + " · " + fd.get("time"),
         hours: "—",
         status: "Open",
         owner: "Mobile User",
         reg: equipmentDetails.reg,
+        chassis: equipmentDetails.chassis,
       };
+    if (!request.chassis) {
+      alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
+      return;
+    }
     setSubmitting(true);
     try {
       await submitMaintenanceRequest(onSubmit, request);
@@ -1943,14 +1999,25 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         "Maintenance request submitted successfully. It is now visible to the Super User.",
       );
     } catch (error) {
-      alert(error?.message || "Could not save request. Please retry.");
+      if (error?.duplicate && window.confirm(`${error.message}\n\nDo you still want to add this request?`)) {
+        try {
+          await submitMaintenanceRequest(onSubmit, {...request, forceDuplicate: true});
+          close();
+          alert("Maintenance request submitted successfully.");
+          return;
+        } catch (retryError) {
+          alert(retryError?.message || "Could not save request. Please retry.");
+        }
+      } else if (!error?.duplicate) {
+        alert(error?.message || "Could not save request. Please retry.");
+      }
     } finally {
       setSubmitting(false);
     }
   };
   return (
     <Modal
-      title={normal ? "Push vehicle for maintenance" : "Create breakdown case"}
+      title={<span className="request-modal-title">{normal ? "Push vehicle for maintenance" : "Create breakdown case"}<small><MapPin /> {currentLocation || "Location not assigned"}</small></span>}
       close={close}
     >
       <form className="form" onSubmit={submit}>
@@ -1969,6 +2036,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                   onlyRecord = matches.length === 1 ? matches[0] : null,
                   details = requestEquipmentDetails(onlyRecord || {});
                 setEquipmentGroup(selectedGroup);
+                setEquipmentSearch("");
                 setEquipmentId(onlyRecord?.id != null ? String(onlyRecord.id) : "");
                 setDoor(details.door);
               }}
@@ -2016,6 +2084,14 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             Equipment / vehicle *
             {equipmentGroup && equipmentVehicleRecords.length ? (
               <>
+                <input
+                  className="equipment-request-search"
+                  type="search"
+                  value={equipmentSearch}
+                  onChange={(event) => setEquipmentSearch(event.target.value)}
+                  placeholder="Search equipment / vehicle"
+                  aria-label="Search equipment or vehicle"
+                />
                 <select
                   aria-label="Equipment or vehicle"
                   value={equipmentId}
@@ -2029,7 +2105,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                   }}
                 >
                   <option value="" disabled>Select equipment or vehicle</option>
-                  {equipmentVehicleRecords.map(({ record, label }) => (
+                  {visibleEquipmentVehicleRecords.map(({ record, label }) => (
                     <option key={String(record.id)} value={String(record.id)}>
                       {label}
                     </option>
@@ -2072,25 +2148,11 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               required
             />
           </label>
-          {!normal && (
-            <label>
-              Registration number
-              <input value={equipmentDetails.reg || "Auto-fetched when available"} readOnly />
-            </label>
-          )}
-          <label>
-            Current location
-            <input
-              value={currentLocation || "Auto-fetched when available"}
-              readOnly
-            />
+          <label className={v && !equipmentDetails.chassis ? "chassis-missing" : ""}>
+            Chassis number *
+            <input value={equipmentDetails.chassis || "Not available — contact admin team"} readOnly required aria-invalid={Boolean(v && !equipmentDetails.chassis)} />
+            {v && !equipmentDetails.chassis && <small>Contact the admin team to update the chassis number before creating a request.</small>}
           </label>
-          {normal && (
-            <label>
-              Registration number
-              <input value={equipmentDetails.reg || "Auto-fetched when available"} readOnly />
-            </label>
-          )}
           <SpeechComplaint />
         </div>
         {v && (
@@ -3447,7 +3509,7 @@ function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repai
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), reg: form.get("reg"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), start: `${form.get("date")} · ${form.get("time")}`});
+      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), start: `${form.get("date")} · ${form.get("time")}`});
     }}>
       <div className="formgrid">
         <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>
@@ -3470,7 +3532,7 @@ function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repai
           </select>
         </label>
         <label>Door number *<input name="door" required defaultValue={request.door || ""} /></label>
-        <label>Registration number<input name="reg" defaultValue={request.reg || ""} /></label>
+        <label>Chassis number *<input name="chassis" required defaultValue={request.chassis || ""} /></label>
         <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} /></label>
         <label>Timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
@@ -3489,12 +3551,12 @@ function CloseRequestForm({ request, close, onSave }) {
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), maintenanceWork: form.get("maintenanceWork"), status: form.get("status")});
+      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: form.get("status")});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
-        <div><span>Registration number</span><b>{request.reg || "—"}</b></div>
+        <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Category</span><b>{request.category || "Maintenance request"}</b></div>
         <div><span>Started</span><b>{request.start || "—"}</b></div>
@@ -3504,7 +3566,13 @@ function CloseRequestForm({ request, close, onSave }) {
         <label>Closing date *<input name="closingDate" type="date" required defaultValue={now.date} /></label>
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
         <label>Status *<select name="status" defaultValue={request.status === "Closed" ? "Closed" : "In progress"}><option>In progress</option><option>Awaiting parts</option><option>Closed</option></select></label>
-        <label className="full">Things done in maintenance *<textarea name="maintenanceWork" required placeholder="Describe the work completed" /></label>
+        <EnhancedSpeechComplaint
+          label="Things done in maintenance *"
+          name="maintenanceWork"
+          audioName="maintenanceAudio"
+          buttonLabel="Speak maintenance update"
+          placeholder="Describe the work completed, or choose Hindi/English and speak."
+        />
       </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save maintenance update <ChevronRight /></button></footer>
     </form>
@@ -3538,7 +3606,7 @@ function VerifyRequestForm({ request, close, onSave }) {
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
-        <div><span>Registration number</span><b>{request.reg || "—"}</b></div>
+        <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
@@ -3752,7 +3820,10 @@ function App() {
       const saved = await response.json().catch(() => ({}));
       if (!response.ok) {
         setRequests((current) => current.filter((row) => row.ref !== request.ref));
-        throw new Error(saved.error || "Could not save request");
+        const error = new Error(saved.error || "Could not save request");
+        error.duplicate = saved.duplicate === true;
+        error.existingReference = saved.existingReference || "";
+        throw error;
       }
       setRequests((current) => [saved, ...current.filter((row) => row.ref !== request.ref)]);
       try {

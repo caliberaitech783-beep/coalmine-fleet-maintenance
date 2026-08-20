@@ -26,10 +26,11 @@ test("builds request details from current and legacy equipment fields", () => {
       equipmentName: "PC200",
       door: "D-17",
       registration: "MH-01-AA-1010",
+      chassisNo: "CH-100",
       currentLocation: "Majri OB",
       location: "Legacy site",
     }),
-    { equipment: "PC200", door: "D-17", reg: "MH-01-AA-1010", site: "Majri OB" },
+    { equipment: "PC200", door: "D-17", reg: "MH-01-AA-1010", chassis: "CH-100", site: "Majri OB" },
   );
   assert.equal(requestEquipmentDetails({ itemName: "Dozer", location: "Lalpeth OB" }).site, "Lalpeth OB");
 });
@@ -48,6 +49,7 @@ test("selected imported equipment supplies a door identifier when the door field
       equipment: "PL69–MP66ZB8422",
       door: "PL69–MP66ZB8422",
       reg: "",
+      chassis: "",
       site: "Gouri Pouni OB (2ND)",
     },
   );

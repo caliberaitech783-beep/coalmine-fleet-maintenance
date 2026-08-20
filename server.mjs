@@ -11,7 +11,7 @@ import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} 
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
-import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -45,6 +45,8 @@ async function migrate(){
       requester_login TEXT NOT NULL DEFAULT '',
       door_number TEXT NOT NULL,
       registration_number TEXT NOT NULL DEFAULT '',
+      chassis_number TEXT NOT NULL DEFAULT '',
+      complaint_audio TEXT NOT NULL DEFAULT '',
       site TEXT NOT NULL DEFAULT 'Not assigned',
       category TEXT NOT NULL DEFAULT 'Maintenance request',
       complaint TEXT NOT NULL,
@@ -54,6 +56,7 @@ async function migrate(){
       closed_at TIMESTAMPTZ,
       closed_by TEXT NOT NULL DEFAULT '',
       maintenance_work TEXT NOT NULL DEFAULT '',
+      maintenance_audio TEXT NOT NULL DEFAULT '',
       verification_status TEXT NOT NULL DEFAULT 'Pending',
       verified_at TIMESTAMPTZ,
       verified_by TEXT NOT NULL DEFAULT '',
@@ -70,11 +73,17 @@ async function migrate(){
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS requester_login TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS chassis_number TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS complaint_audio TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS closed_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS maintenance_work TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS maintenance_audio TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'Pending';
     ALTER TABLE maintenance_requests
@@ -369,11 +378,11 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
 });
 
 const requestProjection=`reference AS ref, equipment_name AS equipment, door_number AS door,
-  registration_number AS reg, site, category, complaint,
+  registration_number AS reg, chassis_number AS chassis, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   '—' AS hours, status, owner_name AS owner, requester_login AS "requesterLogin",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "closedAt",
-  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", verification_status AS "verificationStatus",
+  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
@@ -394,14 +403,20 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',door,reg='',site='Not assigned',category='Maintenance request',complaint,start}=req.body||{};
+    const {ref,equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
+    if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
+    if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
+    if(forceDuplicate!==true){
+      const duplicate=await pool.query(`SELECT reference FROM maintenance_requests WHERE lower(trim(chassis_number))=lower(trim($1)) AND status<>'Closed' ORDER BY created_at DESC LIMIT 1`,[chassis]);
+      if(duplicate.rows.length)return res.status(409).json({duplicate:true,existingReference:duplicate.rows[0].reference,error:`Request ${duplicate.rows[0].reference} already exists for this equipment. Do you still want to add another request?`});
+    }
     const startedAt=parseIndiaRequestDateTime(start);
     const {rows}=await pool.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,door_number,registration_number,site,category,complaint,started_at,status,owner_name,requester_login)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Open',$9,$10)
+      (reference,equipment_name,door_number,registration_number,chassis_number,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Open',$11,$12)
       RETURNING ${requestProjection}`,
-      [ref,equipment,door,reg,site,category,complaint,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
+      [ref,equipment,door,reg,chassis,site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });
@@ -409,12 +424,12 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
-    const {equipment='',door,reg='',site='Not assigned',category='Maintenance request',complaint,start}=req.body||{};
-    if(!reference||!door||!complaint)return res.status(400).json({error:'Door number and complaint are required.'});
+    const {equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,start}=req.body||{};
+    if(!reference||!door||!complaint||!String(chassis).trim())return res.status(400).json({error:'Door number, chassis number and complaint are required.'});
     const startedAt=parseIndiaRequestDateTime(start);
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET equipment_name=$1,door_number=$2,registration_number=$3,
-      site=$4,category=$5,complaint=$6,started_at=$7 WHERE reference=$8 AND status<>'Closed' AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[equipment,door,reg,site,category,complaint,startedAt,reference]);
+    const {rows}=await pool.query(`UPDATE maintenance_requests SET equipment_name=$1,door_number=$2,registration_number=$3,chassis_number=$4,
+      site=$5,category=$6,complaint=$7,started_at=$8 WHERE reference=$9 AND status<>'Closed' AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,reference]);
     if(!rows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
     res.json(rows[0]);
   }catch(error){next(error)}
@@ -426,14 +441,16 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const closingDate=String(req.body?.closingDate||'');
     const closingTime=String(req.body?.closingTime||'');
     const maintenanceWork=String(req.body?.maintenanceWork||'').trim();
+    const maintenanceAudio=String(req.body?.maintenanceAudio||'');
     const status=String(req.body?.status||'Closed').trim();
     const closedAt=requestDateTimeValue(closingDate,closingTime);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
+    if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
     if(!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,status=$4
-      WHERE reference=$5 AND status<>'Closed' AND verified_at IS NULL RETURNING ${requestProjection}`,
-      [closedAt,req.session.name||'Maintenance User',maintenanceWork,status,reference]);
+    const {rows}=await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,status=$5
+      WHERE reference=$6 AND status<>'Closed' AND verified_at IS NULL RETURNING ${requestProjection}`,
+      [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,reference]);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
     res.json(rows[0]);
   }catch(error){next(error)}

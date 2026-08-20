@@ -29,6 +29,7 @@ export function requestEquipmentDetails(record = {}) {
     equipment,
     door,
     reg,
+    chassis: text(record.chassisNo) || text(record.chassis),
     site: text(record.currentLocation) || text(record.location),
   };
 }
