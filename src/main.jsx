@@ -3547,7 +3547,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, onEdit, onDelete,
               {showActions && <td className="row-actions">
                 {onEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
                 {onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
-                {onClose && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Close</button>}
+                {onClose && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
