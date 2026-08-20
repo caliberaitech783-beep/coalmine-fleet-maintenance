@@ -3408,7 +3408,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
           </button>
         ))}
       </div>
-      <BreakdownTable rows={rows} stickyHeader />
+      <BreakdownTable rows={rows} stickyHeader showAudio />
     </section>
   );
 };
