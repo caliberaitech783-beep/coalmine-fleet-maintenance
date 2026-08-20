@@ -313,6 +313,7 @@ textarea {
 :root[data-theme="dark"] .crumb .page-back:hover:not(:disabled){background:#223e64;border-color:#55709b;color:#fff}
 :root[data-theme="dark"] .user-access-field{border-color:#34435a}:root[data-theme="dark"] .user-access-field legend{color:#dce7f7}:root[data-theme="dark"] .user-access-field label{background:#17253a;border-color:#34435a;color:#dce7f7}
 :root[data-theme="dark"] .user-privilege-heading{border-color:#34435a}:root[data-theme="dark"] .user-privilege-heading h3{color:#eef3fb}:root[data-theme="dark"] .user-privilege-heading p{color:#9ba9bd}
+:root[data-theme="dark"] .access-section-card{background:#142136}:root[data-theme="dark"] .access-submenu-card{background:#172842;border-color:#3c5680;box-shadow:inset 3px 0 #6f96ff}:root[data-theme="dark"] .access-submenu-card:before{background:#49658e}:root[data-theme="dark"] .access-submenu-card legend{color:#9bb7ff}
 
 :root[data-theme="dark"] .reports-section{background:#111d30;border-color:#2c415e;box-shadow:0 3px 12px #0003}
 :root[data-theme="dark"] .reports-section-heading,:root[data-theme="dark"] .reports-detail-heading{border-color:#2c415e;background:#152238}

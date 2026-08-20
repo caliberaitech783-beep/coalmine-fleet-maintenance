@@ -787,7 +787,6 @@ const mobileRoleAuthority = {
 const userTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
-  ["accessType", "Desktop User / Mobile User", "role-radio"],
   ["location", "Privilege location", "site-select"],
   ["read", "Read", "checkbox"],
   ["edit", "Edit", "checkbox"],
@@ -1002,11 +1001,39 @@ function parseCsv(text, fields) {
 }
 function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
   return <>
-    <div className="user-privilege-heading full"><h3>Privileges</h3><p>Assign the user group, access type, location, and request authorities in the same user record.</p></div>
+    <div className="user-privilege-heading full"><h3>Privileges</h3><p>Assign the mobile user group, location, and request authorities in the same user record.</p></div>
     <label>User Group<select name="userGroup" defaultValue={privilegeSelectionValue(record.userGroup)}><option value="">Not assigned</option>{mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option} — {mobileRoleAuthority[option]}</option>)}</select></label>
-    <fieldset className="privilege-role-field"><legend>Desktop User / Mobile User</legend><div>{privilegeAccessOptions.map((option) => <label key={option}><input type="radio" name="accessType" value={option} defaultChecked={privilegeAccessValue(record.accessType) === option} /><span>{option}</span></label>)}</div></fieldset>
     <label>Privilege location<select name="location" defaultValue={privilegeSelectionValue(record.location)}><option value="">Not assigned</option>{privilegeSelectionValue(record.location) && !siteOptions.includes(privilegeSelectionValue(record.location)) && <option value={privilegeSelectionValue(record.location)}>{privilegeSelectionValue(record.location)}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
     {userPrivilegeFields.filter(([, , type]) => type === "checkbox").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
+  </>;
+}
+
+function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
+  const [userType, setUserType] = useState(record.userType || "");
+  const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
+  const toggleTab = (tab, checked) => setVisibleTabs((current) => checked ? [...new Set([...current, tab])] : current.filter((item) => item !== tab));
+  return <>
+    <label>User type *
+      <select name="userType" required value={userType} onChange={(event) => setUserType(event.target.value)}>
+        <option value="" disabled>Select user type</option>
+        {userTypeOptions.map((option) => <option key={option} value={option}>{option === "Super Admin" ? "Super User" : option}</option>)}
+        {userType && !userTypeOptions.includes(userType) && <option value={userType}>{userType}</option>}
+      </select>
+    </label>
+    {userType === "Super Admin" && <>
+      <div className="user-privilege-heading full"><h3>Menu visibility</h3><p>Choose the header tabs this Super User can open. Submenu choices appear only for selected tabs.</p></div>
+      <fieldset className="user-access-field full access-section-card">
+        <legend>Visible tabs</legend>
+        <p>Select the main header menus available to this user.</p>
+        <div>{ADMIN_TAB_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="tabAccess" value={option} checked={visibleTabs.includes(option)} onChange={(event) => toggleTab(option, event.target.checked)} /><span>{option}</span></label>)}</div>
+      </fieldset>
+      {visibleTabs.includes("Masters") && <fieldset className="user-access-field full access-section-card access-submenu-card">
+        <legend>Visible masters</legend>
+        <p>Choose the submenu items that will appear under Masters.</p>
+        <div>{ADMIN_MASTER_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="masterAccess" value={option} defaultChecked={selectedAccessValues(record, "masterAccess").includes(option)} /><span>{option}</span></label>)}</div>
+      </fieldset>}
+    </>}
+    {userType === "Mobile User" && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
 }
 
@@ -1125,7 +1152,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
               {fields.map(([key, label, type]) =>
-                type === "multi-checkbox" ? (
+                name === "Users & employees" && ["userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
                   <fieldset key={key} className="user-access-field full">
                     <legend>{label}</legend>
                     <p>Select exactly which {key === "masterAccess" ? "masters" : "navigation tabs"} this user can open.</p>
@@ -1225,7 +1252,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                 </label>
                 ),
               )}
-              {name === "Users & employees" && <UserPrivilegeFields siteOptions={siteOptions} />}
+              {name === "Users & employees" && <UserTypeAccessFields siteOptions={siteOptions} />}
             </div>
             <footer>
               <button type="button" onClick={() => setMode(null)}>
@@ -3017,7 +3044,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
             {fields.filter(([key]) => name !== "Privilege" || key !== "username").map(([key, label, type]) =>
-              type === "multi-checkbox" ? (
+              name === "Users & employees" && ["userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
                   <fieldset key={key} className="user-access-field full">
                     <legend>{label}</legend>
                     <div>
@@ -3077,7 +3104,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
               </label>)
             )}
-            {name === "Users & employees" && <UserPrivilegeFields record={editing} siteOptions={siteOptions} />}
+            {name === "Users & employees" && <UserTypeAccessFields record={editing} siteOptions={siteOptions} />}
           </div>
           <footer>
             <button type="button" onClick={() => setEditing(null)}>Cancel</button>
