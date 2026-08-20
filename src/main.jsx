@@ -3520,7 +3520,7 @@ function requestStartParts(start) {
   };
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, onEdit, onDelete, onClose, onVerify }) {
+function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, onEdit, onDelete, onClose, onVerify }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -3531,7 +3531,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, onEdit, onDelete,
       <table className="workflow-table">
         <thead><tr>
           <th>Job reference</th><th>Equipment group</th><th>Door no.</th><th>Site location</th>
-          <th>Status</th><th>Started</th><th>Days of breakdown</th>{showActions && <th>Actions</th>}
+          <th>Status</th><th>Started</th><th>Days of breakdown</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {rows.length ? rows.map((row) => {
@@ -3544,6 +3544,9 @@ function MobileWorkflowTable({ rows = [], showActions = false, onEdit, onDelete,
               <td><Status>{row.status || "Open"}</Status></td>
               <td>{row.start || "—"}</td>
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
+              {showComplaintAudio && <td className="maintenance-complaint-audio">
+                {row.complaintAudio ? <audio controls preload="none" src={row.complaintAudio}>Complaint audio</audio> : "—"}
+              </td>}
               {showActions && <td className="row-actions">
                 {onEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
                 {onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
@@ -3551,7 +3554,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, onEdit, onDelete,
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={showActions ? 8 : 7} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={7 + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div>
@@ -3617,6 +3620,7 @@ function CloseRequestForm({ request, close, onSave }) {
         <div><span>Category</span><b>{request.category || "Maintenance request"}</b></div>
         <div><span>Started</span><b>{request.start || "—"}</b></div>
         <div><span>Reason / complaint</span><b>{request.complaint || "—"}</b></div>
+        <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudio ? <audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
         <label>Closing date *<input name="closingDate" type="date" required defaultValue={now.date} /></label>
@@ -3725,8 +3729,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {isMis && <button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
       </div>
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your submitted requests · Read only</h3><section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showActions={Boolean(permissions.editRequests || permissions.deleteRequests)} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showActions onClose={setClosing} /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showComplaintAudio showActions={Boolean(permissions.editRequests || permissions.deleteRequests)} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showComplaintAudio showActions onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
     </main>
