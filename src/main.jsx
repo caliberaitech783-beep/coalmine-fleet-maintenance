@@ -21,6 +21,7 @@ import {
   Truck,
   Wrench,
   ArrowRightLeft,
+  ArrowLeft,
   Users,
   Building2,
   Network,
@@ -3619,12 +3620,14 @@ function App() {
     [requests, setRequests] = useState([]),
     [menu, setMenu] = useState(false),
     [loadTime, setLoadTime] = useState(null),
+    [canGoBack, setCanGoBack] = useState(false),
     [theme, setTheme] = useState(() => {
       const saved = localStorage.getItem("nerveCenterTheme");
       if (saved === "light" || saved === "dark") return saved;
       return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     });
   const menuLoadStartedAt = useRef(performance.now());
+  const pageHistory = useRef(["Dashboard"]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -3657,9 +3660,22 @@ function App() {
     };
   }, []);
   const selectMenu = (name) => {
+    if (name === active) return;
+    pageHistory.current.push(name);
+    setCanGoBack(pageHistory.current.length > 1);
     menuLoadStartedAt.current = performance.now();
     setLoadTime(null);
     setActive(name);
+  };
+  const goBack = () => {
+    if (pageHistory.current.length <= 1) return;
+    pageHistory.current.pop();
+    const previousPage = pageHistory.current.at(-1) || "Dashboard";
+    setCanGoBack(pageHistory.current.length > 1);
+    menuLoadStartedAt.current = performance.now();
+    setLoadTime(null);
+    setMenu(false);
+    setActive(previousPage);
   };
   useEffect(() => {
     const handleLoaded = (event) => {
@@ -3799,6 +3815,16 @@ function App() {
             <Menu />
           </button>
           <div className="crumb">
+            <button
+              type="button"
+              className="page-back"
+              onClick={goBack}
+              disabled={!canGoBack}
+              aria-label="Go back to previous page"
+              title={canGoBack ? "Back to previous page" : "No previous page"}
+            >
+              <ArrowLeft />
+            </button>
             Operations <ChevronRight /> <b>{active}</b>
           </div>
           <div>
