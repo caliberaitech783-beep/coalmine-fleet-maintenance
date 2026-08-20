@@ -306,7 +306,7 @@ function Login({ onLogin, theme, toggleTheme }) {
               onClick={() => setRole("super")}
             >
               <ShieldCheck />
-              <b>Super User</b>
+              <b>Desktop View</b>
               <span>Full administration access</span>
             </button>
             <button
@@ -316,7 +316,7 @@ function Login({ onLogin, theme, toggleTheme }) {
               onClick={() => setRole("normal")}
             >
               <UserRound />
-              <b>Mobile User</b>
+              <b>Mobile View</b>
               <span>Raise maintenance request</span>
             </button>
             </div>
