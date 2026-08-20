@@ -16,6 +16,8 @@ test("user modal sections follow the selected user type", () => {
   assert.match(source, /userType === "Super Admin"[\s\S]*Visible tabs[\s\S]*visibleTabs\.map\(\(tab\)/);
   assert.match(source, /userType === "Mobile User" && <UserPrivilegeFields/);
   assert.match(source, /visibleTabs\.map\(\(tab\)[\s\S]*ADMIN_SUBMENU_OPTIONS\[tab\]/);
+  assert.match(source, /userType === "Mobile User" && <label>Location \*[\s\S]*name="site"/);
+  assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
 });
 
 test("persisted user privileges override legacy separate privilege rows", () => {

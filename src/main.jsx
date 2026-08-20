@@ -1023,6 +1023,13 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
         {userType && !userTypeOptions.includes(userType) && <option value={userType}>{userType}</option>}
       </select>
     </label>
+    {userType === "Mobile User" && <label>Location *
+      <select name="site" required defaultValue={record.site || ""}>
+        <option value="" disabled>Select location</option>
+        {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
+        {record.site && !siteOptions.includes(record.site) && <option value={record.site}>{record.site}</option>}
+      </select>
+    </label>}
     {userType === "Super Admin" && <>
       <div className="user-privilege-heading full"><h3>Menu visibility</h3><p>Choose the header tabs this Super User can open. Submenu choices appear only for selected tabs.</p></div>
       <fieldset className="user-access-field full access-section-card">
@@ -1166,7 +1173,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
               {fields.map(([key, label, type]) =>
-                name === "Users & employees" && ["userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
+                name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
                   <fieldset key={key} className="user-access-field full">
                     <legend>{label}</legend>
                     <p>Select exactly which {key === "masterAccess" ? "masters" : "navigation tabs"} this user can open.</p>
@@ -3065,7 +3072,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
             {fields.filter(([key]) => name !== "Privilege" || key !== "username").map(([key, label, type]) =>
-              name === "Users & employees" && ["userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
+              name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
                   <fieldset key={key} className="user-access-field full">
                     <legend>{label}</legend>
                     <div>
