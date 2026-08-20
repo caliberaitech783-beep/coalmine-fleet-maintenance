@@ -39,6 +39,18 @@ test("Maintenance actions use the assigned edit and delete permissions", () => {
   assert.equal(profile.permissions.deleteRequests, true);
 });
 
+test("Super Admin sessions carry their selected master and tab visibility", () => {
+  const profile = resolveMobileAccess({
+    user: {
+      userType: "Super Admin",
+      masterAccess: "Equipment master",
+      tabAccess: "Audit Trail | Reports",
+    },
+  });
+  assert.deepEqual(profile.permissions.masterAccess, ["Equipment master"]);
+  assert.deepEqual(profile.permissions.tabAccess, ["Audit Trail", "Reports"]);
+});
+
 test("MIS can verify but cannot create or maintain requests", () => {
   const profile = resolveMobileAccess({user: {userType: "Mobile User"}, privilege: {userGroup: "MIS User"}});
   assert.equal(profile.permissions.verifyRequests, true);

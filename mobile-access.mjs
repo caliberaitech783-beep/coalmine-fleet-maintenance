@@ -46,6 +46,7 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
     user.userType || user.accessType || user.accountType || user.role || privilege.accessType,
   );
   if (accountType === "super") {
+    const adminAccess = adminAccessPermissions(user);
     return {
       sessionRole: "super",
       userType: "Super User",
@@ -60,6 +61,7 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
         verifyRequests: true,
         viewEquipment: true,
         viewRepairTypes: true,
+        ...adminAccess,
       },
     };
   }
@@ -94,3 +96,4 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
     },
   };
 }
+import {adminAccessPermissions} from "./admin-access.mjs";

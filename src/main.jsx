@@ -16,6 +16,7 @@ import {
   requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, accessAllows} from "../admin-access.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -375,7 +376,7 @@ function Login({ onLogin, theme, toggleTheme }) {
     </div>
   );
 }
-function Side({ active, setActive, logout, open }) {
+function Side({ active, setActive, logout, open, permissions = {} }) {
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
@@ -396,6 +397,9 @@ function Side({ active, setActive, logout, open }) {
   useEffect(() => {
     closeMenus();
   }, [active]);
+  const visibleMasterNav = masterNav.filter(([name]) => accessAllows(permissions.masterAccess, name));
+  const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name));
+  const canViewWhatsApp = accessAllows(permissions.tabAccess, "WhatsApp Integration");
   return (
     <aside className={open ? "open" : ""}>
       <div className="logo">
@@ -405,7 +409,7 @@ function Side({ active, setActive, logout, open }) {
         </span>
       </div>
       <nav>
-        {nav.slice(0, 1).map(([n, I]) => (
+        {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
           <button
             key={n}
             className={active === n ? "active" : ""}
@@ -415,12 +419,12 @@ function Side({ active, setActive, logout, open }) {
             {n}
           </button>
         ))}
-        <div
+        {visibleMasterNav.length > 0 && <div
           className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setMastersSelectionClosed(false)}
         >
           <button
-            className={masterNav.some(([name]) => name === active) ? "active" : ""}
+            className={visibleMasterNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
             aria-expanded={mastersOpen}
             onClick={() => {
@@ -433,7 +437,7 @@ function Side({ active, setActive, logout, open }) {
             <ChevronDown className="masters-chevron" />
           </button>
           <div className="masters-dropdown" role="menu">
-            {masterNav.map(([name, Icon]) => (
+            {visibleMasterNav.map(([name, Icon]) => (
               <button
                 key={name}
                 role="menuitem"
@@ -445,8 +449,8 @@ function Side({ active, setActive, logout, open }) {
               </button>
             ))}
           </div>
-        </div>
-        <div className={whatsappOpen ? "masters-menu open" : "masters-menu"}>
+        </div>}
+        {canViewWhatsApp && <div className={whatsappOpen ? "masters-menu open" : "masters-menu"}>
           <button
             className={whatsappNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
@@ -464,8 +468,8 @@ function Side({ active, setActive, logout, open }) {
               </button>
             ))}
           </div>
-        </div>
-        {nav.slice(1).map(([n, I]) => (
+        </div>}
+        {visibleNav.filter(([name]) => name !== "Dashboard").map(([n, I]) => (
           <button
             key={n}
             className={active === n ? "active" : ""}
@@ -723,6 +727,8 @@ const masterFields = {
     ["email", "Mail ID"],
     ["phone", "Phone no."],
     ["userType", "User type (Mobile User / Super Admin)"],
+    ["masterAccess", "Visible masters", "multi-checkbox"],
+    ["tabAccess", "Visible tabs", "multi-checkbox"],
   ],
   "Region master": [
     ["name", "Region name"],
@@ -764,6 +770,14 @@ const isCheckedValue = (value) =>
 const privilegeAccessOptions = ["Super User", "Mobile User"];
 const mobileUserRoleOptions = ["Production User", "Maintenance User", "MIS User"];
 const userTypeOptions = ["Mobile User", "Super Admin"];
+const userAccessOptions = {
+  masterAccess: ADMIN_MASTER_OPTIONS,
+  tabAccess: ADMIN_TAB_OPTIONS,
+};
+const selectedAccessValues = (record, key) => {
+  if (!Object.prototype.hasOwnProperty.call(record || {}, key)) return userAccessOptions[key] || [];
+  return String(record[key] || "").split(/\s*[|,]\s*/).filter(Boolean);
+};
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
 const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
 function privilegeSelectionValue(value) {
@@ -975,11 +989,19 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
       record = Object.fromEntries(
         fields.map(([key, , type]) => [
           key,
-          type === "checkbox" ? fd.has(key) : String(fd.get(key) || "").trim(),
+          type === "checkbox"
+            ? fd.has(key)
+            : type === "multi-checkbox"
+              ? fd.getAll(key).map(String).join(" | ")
+              : String(fd.get(key) || "").trim(),
         ]),
       );
     if (name === "Equipment master" && !record.status)
       record.status = "Operational";
+    if (name === "Users & employees" && record.userType === "Super Admin" && !record.masterAccess && !record.tabAccess) {
+      alert("Select at least one visible master or tab for this Super Admin.");
+      return;
+    }
     onAdd([record]);
     setMode(null);
   };
@@ -1067,7 +1089,20 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
               {fields.map(([key, label, type]) =>
-                type === "role-radio" ? (
+                type === "multi-checkbox" ? (
+                  <fieldset key={key} className="user-access-field full">
+                    <legend>{label}</legend>
+                    <p>Select exactly which {key === "masterAccess" ? "masters" : "navigation tabs"} this user can open.</p>
+                    <div>
+                      {userAccessOptions[key].map((option) => (
+                        <label key={option}>
+                          <input type="checkbox" name={key} value={option} />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ) : type === "role-radio" ? (
                   <fieldset key={key} className="privilege-role-field">
                     <legend>{label} *</legend>
                     <div>
@@ -2744,8 +2779,16 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           ? privilegeSelectionValue(editing[key])
         : name === "Privilege" && type === "site-select"
           ? privilegeSelectionValue(editing[key])
-        : type === "checkbox" ? form.has(key) : String(form.get(key) || "").trim(),
+        : type === "checkbox"
+          ? form.has(key)
+          : type === "multi-checkbox"
+            ? form.getAll(key).map(String).join(" | ")
+            : String(form.get(key) || "").trim(),
     ]));
+    if (name === "Users & employees" && updated.userType === "Super Admin" && !updated.masterAccess && !updated.tabAccess) {
+      alert("Select at least one visible master or tab for this Super Admin.");
+      return;
+    }
     try {
       await onEdit(editing.id, updated);
       setEditing(null);
@@ -2932,7 +2975,20 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : name} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
-            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "mobile-role-select", "site-select"].includes(type))).map(([key, label, type]) => (
+            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "mobile-role-select", "site-select"].includes(type))).map(([key, label, type]) =>
+              type === "multi-checkbox" ? (
+                  <fieldset key={key} className="user-access-field full">
+                    <legend>{label}</legend>
+                    <div>
+                      {userAccessOptions[key].map((option) => (
+                        <label key={option}>
+                          <input type="checkbox" name={key} value={option} defaultChecked={selectedAccessValues(editing, key).includes(option)} />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+              ) : (
               <label key={key}>{label} *
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">
@@ -2969,8 +3025,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                     {editing[key] && !userTypeOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
                   </select>
                 ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
-              </label>
-            ))}
+              </label>)
+            )}
           </div>
           <footer>
             <button type="button" onClick={() => setEditing(null)}>Cancel</button>
@@ -3702,6 +3758,19 @@ function App() {
     localStorage.setItem("nerveCenterTheme", theme);
   }, [theme]);
   const toggleTheme = () => setTheme((current) => current === "dark" ? "light" : "dark");
+  const adminPermissions = session?.permissions || {};
+  const canOpenAdminPage = (name) => {
+    if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.masterAccess, name);
+    if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration");
+    return accessAllows(adminPermissions.tabAccess, name);
+  };
+  const firstAccessibleAdminPage = () => {
+    if (canOpenAdminPage("Dashboard")) return "Dashboard";
+    const firstMaster = masterNav.find(([name]) => canOpenAdminPage(name))?.[0];
+    if (firstMaster) return firstMaster;
+    if (accessAllows(adminPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav[0][0];
+    return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
+  };
   useEffect(() => {
     let stopped = false;
     const checkVersion = async () => {
@@ -3728,6 +3797,7 @@ function App() {
     };
   }, []);
   const selectMenu = (name) => {
+    if (session?.role === "super" && !canOpenAdminPage(name)) return;
     if (name === active) return;
     pageHistory.current.push(name);
     setCanGoBack(pageHistory.current.length > 1);
@@ -3735,6 +3805,13 @@ function App() {
     setLoadTime(null);
     setActive(name);
   };
+  useEffect(() => {
+    if (session?.role !== "super" || canOpenAdminPage(active)) return;
+    const landingPage = firstAccessibleAdminPage();
+    pageHistory.current = [landingPage];
+    setCanGoBack(false);
+    setActive(landingPage);
+  }, [session?.token]);
   const goBack = () => {
     if (pageHistory.current.length <= 1) return;
     pageHistory.current.pop();
@@ -3879,6 +3956,7 @@ function App() {
         }}
         logout={logout}
         open={menu}
+        permissions={adminPermissions}
       />
       <main className="content">
         <div className="top">

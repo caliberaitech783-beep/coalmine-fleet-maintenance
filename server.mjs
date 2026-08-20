@@ -12,6 +12,7 @@ import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {accessAllows} from './admin-access.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -314,6 +315,11 @@ async function requireSuper(req,res,next){
   try{
     const session=await readSession(req);
     if(session?.role!=='super')return res.status(403).json({error:'Your sign-in has expired. Please sign in again as Super User.'});
+    const requestedMaster=req.params?.master?decodeURIComponent(req.params.master):'';
+    if(requestedMaster&&!accessAllows(session.permissions?.masterAccess,requestedMaster))
+      return res.status(403).json({error:'You do not have access to this master.'});
+    if(req.path.startsWith('/api/whatsapp')&&!accessAllows(session.permissions?.tabAccess,'WhatsApp Integration'))
+      return res.status(403).json({error:'You do not have access to WhatsApp Integration.'});
     req.session=session;
     next();
   }catch(error){next(error)}
@@ -483,14 +489,17 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
 
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
-    const canViewEquipment=req.session.role==='super'||req.session.permissions?.viewEquipment===true;
-    const canViewRepairTypes=req.session.role==='super'||req.session.permissions?.viewRepairTypes===true;
+    const superCanView=(master)=>req.session.role==='super'&&accessAllows(req.session.permissions?.masterAccess,master);
+    const canViewEquipment=superCanView('Equipment master')||req.session.permissions?.viewEquipment===true;
+    const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
     if(!canViewEquipment&&!canViewRepairTypes)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
-      if(req.session.role!=='super'){
+      if(req.session.role==='super'){
+        if(!accessAllows(req.session.permissions?.masterAccess,row.master_name))continue;
+      }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
         if(row.master_name!=='Equipment master'&&row.master_name!=='Repair type master')continue;
