@@ -42,7 +42,7 @@
 }
 
 .masters-menu.open > button .masters-chevron,
-.masters-menu:hover > button .masters-chevron {
+.masters-menu:not(.selection-closed):hover > button .masters-chevron {
   transform: rotate(180deg);
 }
 
@@ -64,8 +64,8 @@
 }
 
 .masters-menu.open .masters-dropdown,
-.masters-menu:hover .masters-dropdown,
-.masters-menu:focus-within .masters-dropdown {
+.masters-menu:not(.selection-closed):hover .masters-dropdown,
+.masters-menu:not(.selection-closed):focus-within .masters-dropdown {
   opacity: 1;
   visibility: visible;
   transform: translateY(0);
@@ -131,7 +131,7 @@
   }
 
   .masters-menu.open .masters-dropdown,
-  .masters-menu:focus-within .masters-dropdown {
+  .masters-menu:not(.selection-closed):focus-within .masters-dropdown {
     display: block;
   }
 

@@ -376,6 +376,7 @@ function Login({ onLogin, theme, toggleTheme }) {
 }
 function Side({ active, setActive, logout, open }) {
   const [mastersOpen, setMastersOpen] = useState(false);
+  const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const closeMenus = () => {
     setMastersOpen(false);
@@ -383,6 +384,12 @@ function Side({ active, setActive, logout, open }) {
   };
   const selectPage = (page) => {
     closeMenus();
+    setActive(page);
+  };
+  const selectMaster = (page, event) => {
+    setMastersOpen(false);
+    setMastersSelectionClosed(true);
+    event.currentTarget.blur();
     setActive(page);
   };
   useEffect(() => {
@@ -407,12 +414,18 @@ function Side({ active, setActive, logout, open }) {
             {n}
           </button>
         ))}
-        <div className={mastersOpen ? "masters-menu open" : "masters-menu"}>
+        <div
+          className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
+          onPointerLeave={() => setMastersSelectionClosed(false)}
+        >
           <button
             className={masterNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
             aria-expanded={mastersOpen}
-            onClick={() => setMastersOpen((value) => !value)}
+            onClick={() => {
+              setMastersSelectionClosed(false);
+              setMastersOpen((value) => !value);
+            }}
           >
             <Menu />
             Masters
@@ -424,8 +437,7 @@ function Side({ active, setActive, logout, open }) {
                 key={name}
                 role="menuitem"
                 className={active === name ? "active" : ""}
-                onPointerDown={closeMenus}
-                onClick={() => selectPage(name)}
+                onClick={(event) => selectMaster(name, event)}
               >
                 <Icon />
                 {name}
