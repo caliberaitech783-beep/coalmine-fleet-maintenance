@@ -17,6 +17,7 @@ import {
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, accessAllows} from "../admin-access.mjs";
+import {normalizeMobileNavigationVisibility} from "../navigation-visibility.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -376,10 +377,17 @@ function Login({ onLogin, theme, toggleTheme }) {
     </div>
   );
 }
-function Side({ active, setActive, logout, open, permissions = {} }) {
+function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVisibility, onMobileVisibilityChange }) {
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 900px)");
+    const update = () => setResponsiveMobile(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const closeMenus = () => {
     setMastersOpen(false);
     setWhatsappOpen(false);
@@ -397,9 +405,15 @@ function Side({ active, setActive, logout, open, permissions = {} }) {
   useEffect(() => {
     closeMenus();
   }, [active]);
-  const visibleMasterNav = masterNav.filter(([name]) => accessAllows(permissions.masterAccess, name));
-  const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name));
-  const canViewWhatsApp = accessAllows(permissions.tabAccess, "WhatsApp Integration");
+  const visibleOnMobile = (name) => !responsiveMobile || mobileMenuVisibility[name] !== false;
+  const visibleMasterNav = masterNav.filter(([name]) => accessAllows(permissions.masterAccess, name) && visibleOnMobile(name));
+  const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name) && visibleOnMobile(name));
+  const canViewMasters = visibleOnMobile("Masters") && visibleMasterNav.length > 0;
+  const visibleWhatsAppNav = whatsappNav.filter(([name]) => visibleOnMobile(name));
+  const canViewWhatsApp = accessAllows(permissions.tabAccess, "WhatsApp Integration") && visibleOnMobile("WhatsApp Integration") && visibleWhatsAppNav.length > 0;
+  const MobileToggle = ({ name }) => <label className="mobile-nav-toggle" title={`Show ${name} in responsive mobile navigation`} onClick={(event) => event.stopPropagation()}>
+    <input type="checkbox" checked={mobileMenuVisibility[name] !== false} onChange={(event) => onMobileVisibilityChange(name, event.target.checked)} aria-label={`Show ${name} in mobile view`} />
+  </label>;
   return (
     <aside className={open ? "open" : ""}>
       <div className="logo">
@@ -410,20 +424,19 @@ function Side({ active, setActive, logout, open, permissions = {} }) {
       </div>
       <nav>
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
-          <button
-            key={n}
+          <div className="nav-config-row" key={n}><button
             className={active === n ? "active" : ""}
             onClick={() => selectPage(n)}
           >
             <I />
             {n}
-          </button>
+          </button><MobileToggle name={n} /></div>
         ))}
-        {visibleMasterNav.length > 0 && <div
+        {canViewMasters && <div
           className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setMastersSelectionClosed(false)}
         >
-          <button
+          <div className="nav-config-row"><button
             className={visibleMasterNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
             aria-expanded={mastersOpen}
@@ -435,23 +448,22 @@ function Side({ active, setActive, logout, open, permissions = {} }) {
             <Menu />
             Masters
             <ChevronDown className="masters-chevron" />
-          </button>
+          </button><MobileToggle name="Masters" /></div>
           <div className="masters-dropdown" role="menu">
             {visibleMasterNav.map(([name, Icon]) => (
-              <button
-                key={name}
+              <div className="nav-config-row" key={name}><button
                 role="menuitem"
                 className={active === name ? "active" : ""}
                 onClick={(event) => selectMaster(name, event)}
               >
                 <Icon />
                 {name}
-              </button>
+              </button><MobileToggle name={name} /></div>
             ))}
           </div>
         </div>}
         {canViewWhatsApp && <div className={whatsappOpen ? "masters-menu open" : "masters-menu"}>
-          <button
+          <div className="nav-config-row"><button
             className={whatsappNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
             aria-expanded={whatsappOpen}
@@ -460,24 +472,23 @@ function Side({ active, setActive, logout, open, permissions = {} }) {
             <MessageCircle />
             WhatsApp Integration
             <ChevronDown className="masters-chevron" />
-          </button>
+          </button><MobileToggle name="WhatsApp Integration" /></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
-            {whatsappNav.map(([name, Icon]) => (
-              <button key={name} role="menuitem" className={active === name ? "active" : ""} onPointerDown={closeMenus} onClick={() => selectPage(name)}>
+            {visibleWhatsAppNav.map(([name, Icon]) => (
+              <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onPointerDown={closeMenus} onClick={() => selectPage(name)}>
                 <Icon />{name}
-              </button>
+              </button><MobileToggle name={name} /></div>
             ))}
           </div>
         </div>}
         {visibleNav.filter(([name]) => name !== "Dashboard").map(([n, I]) => (
-          <button
-            key={n}
+          <div className="nav-config-row" key={n}><button
             className={active === n ? "active" : ""}
             onClick={() => selectPage(n)}
           >
             <I />
             {n}
-          </button>
+          </button><MobileToggle name={n} /></div>
         ))}
       </nav>
       <div className="user">
@@ -3764,6 +3775,7 @@ function App() {
     [equipmentLocation, setEquipmentLocation] = useState(""),
     [requests, setRequests] = useState([]),
     [menu, setMenu] = useState(false),
+    [mobileMenuVisibility, setMobileMenuVisibility] = useState(() => normalizeMobileNavigationVisibility()),
     [loadTime, setLoadTime] = useState(null),
     [canGoBack, setCanGoBack] = useState(false),
     [theme, setTheme] = useState(() => {
@@ -3780,6 +3792,32 @@ function App() {
   }, [theme]);
   const toggleTheme = () => setTheme((current) => current === "dark" ? "light" : "dark");
   const adminPermissions = session?.permissions || {};
+  useEffect(() => {
+    if (session?.role !== "super") return undefined;
+    let activeRequest = true;
+    fetch("/api/navigation-settings", {headers: {Authorization: `Bearer ${session.token}`}})
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((settings) => { if (activeRequest) setMobileMenuVisibility(normalizeMobileNavigationVisibility(settings)); })
+      .catch(() => {});
+    return () => { activeRequest = false; };
+  }, [session?.token, session?.role]);
+  const updateMobileMenuVisibility = async (name, visible) => {
+    const previous = mobileMenuVisibility;
+    const next = {...previous, [name]: visible};
+    setMobileMenuVisibility(next);
+    try {
+      const response = await fetch("/api/navigation-settings", {
+        method: "PUT",
+        headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
+        body: JSON.stringify(next),
+      });
+      if (!response.ok) throw new Error("Could not save mobile menu visibility.");
+      setMobileMenuVisibility(normalizeMobileNavigationVisibility(await response.json()));
+    } catch (error) {
+      setMobileMenuVisibility(previous);
+      alert(error.message);
+    }
+  };
   const canOpenAdminPage = (name) => {
     if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration");
@@ -3978,6 +4016,8 @@ function App() {
         logout={logout}
         open={menu}
         permissions={adminPermissions}
+        mobileMenuVisibility={mobileMenuVisibility}
+        onMobileVisibilityChange={updateMobileMenuVisibility}
       />
       <main className="content">
         <div className="top">

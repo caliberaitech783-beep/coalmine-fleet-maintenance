@@ -13,6 +13,7 @@ import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {accessAllows} from './admin-access.mjs';
+import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -141,6 +142,11 @@ async function migrate(){
     CREATE TABLE IF NOT EXISTS app_metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS app_settings (
+      setting_key TEXT PRIMARY KEY,
+      setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS whatsapp_alert_history (
@@ -324,6 +330,22 @@ async function requireSuper(req,res,next){
     next();
   }catch(error){next(error)}
 }
+
+app.get('/api/navigation-settings',requireSuper,async(_req,res,next)=>{
+  try{
+    const {rows}=await pool.query("SELECT setting_value FROM app_settings WHERE setting_key='mobile_navigation'");
+    res.json(normalizeMobileNavigationVisibility(rows[0]?.setting_value||{}));
+  }catch(error){next(error)}
+});
+
+app.put('/api/navigation-settings',requireSuper,async(req,res,next)=>{
+  try{
+    const settings=normalizeMobileNavigationVisibility(req.body||{});
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ('mobile_navigation',$1::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[JSON.stringify(settings)]);
+    res.json(settings);
+  }catch(error){next(error)}
+});
 
 app.get('/api/whatsapp-alert-history',requireSuper,async(_req,res,next)=>{
   try{
