@@ -16,7 +16,7 @@ import {
   requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
-import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, accessAllows} from "../admin-access.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows} from "../admin-access.mjs";
 import {normalizeMobileNavigationVisibility} from "../navigation-visibility.mjs";
 import {
   LayoutDashboard,
@@ -406,9 +406,10 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
   }, [active]);
   const visibleOnMobile = (name) => !responsiveMobile || mobileMenuVisibility[name] !== false;
   const visibleMasterNav = masterNav.filter(([name]) => accessAllows(permissions.masterAccess, name) && visibleOnMobile(name));
-  const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name) && visibleOnMobile(name));
+  const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+  const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name) && accessAllows(permissions[directMenuAccess[name]], name) && visibleOnMobile(name));
   const canViewMasters = visibleOnMobile("Masters") && visibleMasterNav.length > 0;
-  const visibleWhatsAppNav = whatsappNav.filter(([name]) => visibleOnMobile(name));
+  const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(permissions.whatsappAccess, name) && visibleOnMobile(name));
   const canViewWhatsApp = accessAllows(permissions.tabAccess, "WhatsApp Integration") && visibleOnMobile("WhatsApp Integration") && visibleWhatsAppNav.length > 0;
   const MobileToggle = ({ name }) => <label className="mobile-nav-toggle" title={`Show ${name} in responsive mobile navigation`} onClick={(event) => event.stopPropagation()}>
     <input type="checkbox" checked={mobileMenuVisibility[name] !== false} onChange={(event) => onMobileVisibilityChange(name, event.target.checked)} aria-label={`Show ${name} in mobile view`} />
@@ -794,9 +795,11 @@ const userPrivilegeFields = [
   ["verify", "Verify", "checkbox"],
   ["print", "Print", "checkbox"],
 ];
+const userSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [field, label, "multi-checkbox"]);
 const userAccessOptions = {
   masterAccess: ADMIN_MASTER_OPTIONS,
   tabAccess: ADMIN_TAB_OPTIONS,
+  ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [field, options])),
 };
 const selectedAccessValues = (record, key) => {
   if (!Object.prototype.hasOwnProperty.call(record || {}, key)) return userAccessOptions[key] || [];
@@ -1027,11 +1030,15 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
         <p>Select the main header menus available to this user.</p>
         <div>{ADMIN_TAB_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="tabAccess" value={option} checked={visibleTabs.includes(option)} onChange={(event) => toggleTab(option, event.target.checked)} /><span>{option}</span></label>)}</div>
       </fieldset>
-      {visibleTabs.includes("Masters") && <fieldset className="user-access-field full access-section-card access-submenu-card">
-        <legend>Visible masters</legend>
-        <p>Choose the submenu items that will appear under Masters.</p>
-        <div>{ADMIN_MASTER_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="masterAccess" value={option} defaultChecked={selectedAccessValues(record, "masterAccess").includes(option)} /><span>{option}</span></label>)}</div>
-      </fieldset>}
+      {visibleTabs.map((tab) => {
+        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
+        if (!submenu) return null;
+        return <fieldset key={tab} className="user-access-field full access-section-card access-submenu-card">
+          <legend>{submenu.label}</legend>
+          <p>Choose the submenu items that will appear under {tab}.</p>
+          <div>{submenu.options.map((option) => <label key={option}><input type="checkbox" name={submenu.field} value={option} defaultChecked={selectedAccessValues(record, submenu.field).includes(option)} /><span>{option}</span></label>)}</div>
+        </fieldset>;
+      })}
     </>}
     {userType === "Mobile User" && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
@@ -1044,7 +1051,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     [dragActive, setDragActive] = useState(false),
     fileInput = useRef(null),
     fields = masterFields[name],
-    formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields] : fields;
+    formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields;
   if (!fields) return null;
   const saveManual = (e) => {
     e.preventDefault();
@@ -1064,6 +1071,13 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     if (name === "Users & employees" && record.userType === "Super Admin" && !record.masterAccess && !record.tabAccess) {
       alert("Select at least one visible master or tab for this Super Admin.");
       return;
+    }
+    if (name === "Users & employees" && record.userType === "Super Admin") {
+      const missing = String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean).find((tab) => {
+        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
+        return submenu && !record[submenu.field];
+      });
+      if (missing) { alert(`Select at least one submenu for ${missing}.`); return; }
     }
     onAdd([record]);
     setMode(null);
@@ -2793,7 +2807,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     [columnFilters, setColumnFilters] = useState({}),
     [openFilter, setOpenFilter] = useState(null);
   const fields = masterFields[name],
-    editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields] : fields,
+    editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master",
     masterValue = (record, key) => {
@@ -2854,6 +2868,13 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     if (name === "Users & employees" && updated.userType === "Super Admin" && !updated.masterAccess && !updated.tabAccess) {
       alert("Select at least one visible master or tab for this Super Admin.");
       return;
+    }
+    if (name === "Users & employees" && updated.userType === "Super Admin") {
+      const missing = String(updated.tabAccess || "").split(/\s*\|\s*/).filter(Boolean).find((tab) => {
+        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
+        return submenu && !updated[submenu.field];
+      });
+      if (missing) { alert(`Select at least one submenu for ${missing}.`); return; }
     }
     try {
       await onEdit(editing.id, updated);
@@ -3870,14 +3891,15 @@ function App() {
   };
   const canOpenAdminPage = (name) => {
     if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.masterAccess, name);
-    if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration");
-    return accessAllows(adminPermissions.tabAccess, name);
+    if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration") && accessAllows(adminPermissions.whatsappAccess, name);
+    const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+    return accessAllows(adminPermissions.tabAccess, name) && accessAllows(adminPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
     if (canOpenAdminPage("Dashboard")) return "Dashboard";
     const firstMaster = masterNav.find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
-    if (accessAllows(adminPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav[0][0];
+    if (accessAllows(adminPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => accessAllows(adminPermissions.whatsappAccess, name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
   };
   useEffect(() => {

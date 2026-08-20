@@ -1,12 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {ADMIN_MASTER_OPTIONS, accessAllows, adminAccessPermissions} from "../admin-access.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions} from "../admin-access.mjs";
 
 test("legacy administrators retain full access when allowlists are absent", () => {
   const permissions = adminAccessPermissions({userType: "Super Admin"});
   assert.equal(permissions.masterAccess, null);
   assert.equal(permissions.tabAccess, null);
   assert.equal(accessAllows(permissions.masterAccess, "Equipment master"), true);
+});
+
+test("every main header has a conditional submenu allowlist", () => {
+  assert.deepEqual(Object.keys(ADMIN_SUBMENU_OPTIONS), ["Dashboard", "Masters", "WhatsApp Integration", "Reports", "Audit Trail"]);
+  assert.ok(Object.values(ADMIN_SUBMENU_OPTIONS).every(({field, options}) => field && options.length));
 });
 
 test("new administrators receive only explicitly selected masters and tabs", () => {
