@@ -132,7 +132,6 @@ const masterNav = [
   ["Vehicle transfers", ArrowRightLeft],
   ["Hierarchy master", Network],
   ["OEM master", ShieldCheck],
-  ["Privilege", LockKeyhole],
 ];
 const whatsappNav = [
   ["Daily site-wise report", Building2],
@@ -786,6 +785,16 @@ const mobileRoleAuthority = {
   "MIS User": "Verify requests only",
 };
 const userTypeOptions = ["Mobile User", "Super Admin"];
+const userPrivilegeFields = [
+  ["userGroup", "User Group", "mobile-role-select"],
+  ["accessType", "Desktop User / Mobile User", "role-radio"],
+  ["location", "Privilege location", "site-select"],
+  ["read", "Read", "checkbox"],
+  ["edit", "Edit", "checkbox"],
+  ["delete", "Delete", "checkbox"],
+  ["verify", "Verify", "checkbox"],
+  ["print", "Print", "checkbox"],
+];
 const userAccessOptions = {
   masterAccess: ADMIN_MASTER_OPTIONS,
   tabAccess: ADMIN_TAB_OPTIONS,
@@ -991,19 +1000,30 @@ function parseCsv(text, fields) {
     })
     .filter((record) => Object.values(record).some(Boolean));
 }
+function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
+  return <>
+    <div className="user-privilege-heading full"><h3>Privileges</h3><p>Assign the user group, access type, location, and request authorities in the same user record.</p></div>
+    <label>User Group<select name="userGroup" defaultValue={privilegeSelectionValue(record.userGroup)}><option value="">Not assigned</option>{mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option} — {mobileRoleAuthority[option]}</option>)}</select></label>
+    <fieldset className="privilege-role-field"><legend>Desktop User / Mobile User</legend><div>{privilegeAccessOptions.map((option) => <label key={option}><input type="radio" name="accessType" value={option} defaultChecked={privilegeAccessValue(record.accessType) === option} /><span>{option}</span></label>)}</div></fieldset>
+    <label>Privilege location<select name="location" defaultValue={privilegeSelectionValue(record.location)}><option value="">Not assigned</option>{privilegeSelectionValue(record.location) && !siteOptions.includes(privilegeSelectionValue(record.location)) && <option value={privilegeSelectionValue(record.location)}>{privilegeSelectionValue(record.location)}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
+    {userPrivilegeFields.filter(([, , type]) => type === "checkbox").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
+  </>;
+}
+
 function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
     [dragActive, setDragActive] = useState(false),
     fileInput = useRef(null),
-    fields = masterFields[name];
+    fields = masterFields[name],
+    formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields] : fields;
   if (!fields) return null;
   const saveManual = (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget),
       record = Object.fromEntries(
-        fields.map(([key, , type]) => [
+        formFields.map(([key, , type]) => [
           key,
           type === "checkbox"
             ? fd.has(key)
@@ -1205,6 +1225,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                 </label>
                 ),
               )}
+              {name === "Users & employees" && <UserPrivilegeFields siteOptions={siteOptions} />}
             </div>
             <footer>
               <button type="button" onClick={() => setMode(null)}>
@@ -2620,7 +2641,7 @@ function ReportsPage({ requests = [], goto }) {
     {label: "Total users", value: count(userRecords, usersLoaded), source: "Users & employees master", target: "Users & employees"},
     {label: "Total breakdown", value: requests.length.toLocaleString("en-IN"), source: "All maintenance requests", target: "Breakdown master"},
     {label: "Vehicle transfer", value: count(transferRecords, transfersLoaded), source: "Vehicle transfers master", target: "Vehicle transfers"},
-    {label: "Privilege transfer", value: count(privilegeRecords, privilegesLoaded), source: "Privilege master", target: "Privilege"},
+    {label: "User privilege assignments", value: count(privilegeRecords, privilegesLoaded), source: "Users & employees", target: "Users & employees"},
     {label: "Audit trail", value: "View", source: "Recorded user activity", target: "Audit Trail", unavailable: true},
   ];
   const reportCatalog = [
@@ -2634,7 +2655,7 @@ function ReportsPage({ requests = [], goto }) {
     ["Total users", usersLoaded ? userRecords.length : "—", "Users & employees master"],
     ["Total breakdown", requests.length, "Requests"],
     ["Vehicle transfer", transfersLoaded ? transferRecords.length : "—", "Vehicle transfers master"],
-    ["Privilege transfer", privilegesLoaded ? privilegeRecords.length : "—", "Privilege master"],
+    ["User privilege assignments", privilegesLoaded ? privilegeRecords.length : "—", "Users & employees"],
     ["Audit trail", "View", "Audit Trail"],
   ];
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
@@ -2745,6 +2766,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     [columnFilters, setColumnFilters] = useState({}),
     [openFilter, setOpenFilter] = useState(null);
   const fields = masterFields[name],
+    editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master",
     masterValue = (record, key) => {
@@ -2784,7 +2806,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const saveEdit = async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const updated = Object.fromEntries(fields.map(([key, , type]) => [
+    const updated = Object.fromEntries(editFields.map(([key, , type]) => [
       key,
       name === "Privilege" && key === "username"
         ? String(editing.username || "").trim()
@@ -3055,6 +3077,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
               </label>)
             )}
+            {name === "Users & employees" && <UserPrivilegeFields record={editing} siteOptions={siteOptions} />}
           </div>
           <footer>
             <button type="button" onClick={() => setEditing(null)}>Cancel</button>

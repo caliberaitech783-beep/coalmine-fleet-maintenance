@@ -17,5 +17,5 @@ test("new administrators receive only explicitly selected masters and tabs", () 
   assert.deepEqual(permissions.masterAccess, ["Equipment master", "Region master"]);
   assert.deepEqual(permissions.tabAccess, ["Audit Trail"]);
   assert.equal(accessAllows(permissions.masterAccess, "OEM master"), false);
-  assert.equal(ADMIN_MASTER_OPTIONS.includes("Privilege"), true);
+  assert.equal(ADMIN_MASTER_OPTIONS.includes("Privilege"), false);
 });

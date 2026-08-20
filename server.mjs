@@ -253,7 +253,7 @@ app.post('/api/login',async(req,res,next)=>{
     const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers)});
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
     if(profile.sessionRole!==requestedRole)return res.status(403).json({error:`This account is assigned as ${profile.userType}. Select the matching access type to sign in.`});
-    if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. A Super User must choose Production User, Maintenance User, or MIS User in Privilege.'});
+    if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, or MIS User in Users & employees.'});
     if(employee.mustChangePassword===true){
       const changeToken=randomUUID();
       await pool.query(`INSERT INTO password_change_sessions

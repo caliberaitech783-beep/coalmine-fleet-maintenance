@@ -7,7 +7,6 @@ export const ADMIN_MASTER_OPTIONS = [
   "Vehicle transfers",
   "Hierarchy master",
   "OEM master",
-  "Privilege",
 ];
 
 export const ADMIN_TAB_OPTIONS = [

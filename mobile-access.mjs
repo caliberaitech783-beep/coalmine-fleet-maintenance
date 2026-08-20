@@ -67,7 +67,7 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
   }
 
   const assignedRole = normalizeMobileUserRole(
-    privilege.userGroup || user.mobileRole || user.assignedRole || user.department || user.userGroup,
+    user.userGroup || user.mobileRole || user.assignedRole || user.department || privilege.userGroup,
   );
   if (accountType !== "mobile" || !assignedRole) {
     return {
@@ -88,7 +88,7 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
       viewAllRequests: assignedRole !== "Production User",
       createRequests: assignedRole === "Production User" || maintenance,
       editRequests: maintenance,
-      deleteRequests: maintenance && permissionEnabled(privilege.delete),
+      deleteRequests: maintenance && permissionEnabled(Object.hasOwn(user, "delete") ? user.delete : privilege.delete),
       closeRequests: maintenance,
       verifyRequests: assignedRole === "MIS User",
       viewEquipment: assignedRole === "Production User" || maintenance,

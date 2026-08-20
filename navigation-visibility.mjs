@@ -9,7 +9,6 @@ export const MOBILE_NAVIGATION_ITEMS = [
   "Vehicle transfers",
   "Hierarchy master",
   "OEM master",
-  "Privilege",
   "WhatsApp Integration",
   "Daily site-wise report",
   "Daily OEM report",
