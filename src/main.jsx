@@ -769,6 +769,11 @@ const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 const privilegeAccessOptions = ["Super User", "Mobile User"];
 const mobileUserRoleOptions = ["Production User", "Maintenance User", "MIS User"];
+const mobileRoleAuthority = {
+  "Production User": "Create request only",
+  "Maintenance User": "Edit and delete requests",
+  "MIS User": "Verify requests only",
+};
 const userTypeOptions = ["Mobile User", "Super Admin"];
 const userAccessOptions = {
   masterAccess: ADMIN_MASTER_OPTIONS,
@@ -1119,7 +1124,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                     {label}
                     <select name={key} defaultValue="">
                       <option value="">Not assigned</option>
-                      {mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                      {mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option} — {mobileRoleAuthority[option]}</option>)}
                       </select>
                     </label>
                 ) : name === "Users & employees" && key === "site" ? (
@@ -2729,20 +2734,21 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     [columnFilters, setColumnFilters] = useState({}),
     [openFilter, setOpenFilter] = useState(null);
   const fields = masterFields[name],
-    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Privilege" || name === "Repair type master",
+    displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
+    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master",
     masterValue = (record, key) => {
       const type = fields.find(([field]) => field === key)?.[2];
       return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
     },
     columnValues = Object.fromEntries(
-      fields.map(([key]) => [
+      displayFields.map(([key]) => [
         key,
         [...new Set(records.map((record) => masterValue(record, key)))].sort((a, b) => sortCollator.compare(a, b)),
       ]),
     ),
     filteredRows = records.filter((record) =>
       Object.values(record).join(" ").toLowerCase().includes(q.toLowerCase()) &&
-      fields.every(([key]) => !columnFilters[key] || masterValue(record, key) === columnFilters[key]),
+      displayFields.every(([key]) => !columnFilters[key] || masterValue(record, key) === columnFilters[key]),
     ),
     [rows, sort, changeSort] = useSortableRows(filteredRows, "", (record, key) => {
       const type = fields.find(([field]) => field === key)?.[2];
@@ -2772,13 +2778,13 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       name === "Privilege" && key === "username"
         ? String(editing.username || "").trim()
       : name === "Privilege" && type === "checkbox"
-        ? isCheckedValue(editing[key])
+        ? form.has(key)
         : name === "Privilege" && type === "role-radio"
-          ? privilegeAccessValue(editing[key])
+          ? privilegeAccessValue(form.get(key))
         : name === "Privilege" && type === "mobile-role-select"
-          ? privilegeSelectionValue(editing[key])
+          ? privilegeSelectionValue(form.get(key))
         : name === "Privilege" && type === "site-select"
-          ? privilegeSelectionValue(editing[key])
+          ? privilegeSelectionValue(form.get(key))
         : type === "checkbox"
           ? form.has(key)
           : type === "multi-checkbox"
@@ -2841,8 +2847,6 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           records={records}
           onAdd={onAdd}
           onDeleteAll={onDeleteAll}
-          onSaveAll={name === "Privilege" ? savePrivilegeRows : undefined}
-          saveAllDisabled={savingAllPrivileges || !Object.keys(pendingPrivilegeRows).length}
           userOptions={userOptions}
           siteOptions={siteOptions}
         />
@@ -2861,7 +2865,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <table>
           <thead>
             <tr>
-              {fields.map(([key, label]) => (
+              {displayFields.map(([key, label]) => (
                 <FilterableHeader
                   key={key}
                   label={label}
@@ -2884,11 +2888,15 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                   const rowSaving = savingAllPrivileges;
                   return (
                 <tr key={row.id || ri}>
-                  {fields.map(([key, , type], ci) => {
+                  {displayFields.map(([key, , type], ci) => {
                     const value = name === "Privilege" ? privilegeValue(row, key) : row[key];
                     return (
                     <td key={key}>
-                      {name === "Privilege" && type === "role-radio" ? (
+                      {name === "Privilege" && key === "username" ? (
+                        <button type="button" className="privilege-user-link" onClick={() => setEditing(row)}>{value || "Unnamed user"}</button>
+                      ) : name === "Privilege" && type === "mobile-role-select" ? (
+                        <div className="privilege-group-authority"><b>{privilegeSelectionValue(value) || "Not assigned"}</b>{mobileRoleAuthority[privilegeSelectionValue(value)] && <small>{mobileRoleAuthority[privilegeSelectionValue(value)]}</small>}</div>
+                      ) : name === "Privilege" && type === "role-radio" ? (
                         <div className="privilege-inline-role" role="radiogroup" aria-label={`Access type for ${row.username}`}>
                           {privilegeAccessOptions.map((option) => (
                             <label key={option} title={option}>
@@ -2962,7 +2970,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 })
             ) : (
               <tr>
-                <td colSpan={fields.length + (canManageRows ? 1 : 0)} className="empty-state">
+                <td colSpan={displayFields.length + (canManageRows ? 1 : 0)} className="empty-state">
                   No records available
                 </td>
               </tr>
@@ -2975,7 +2983,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     <Modal title={`Edit ${name === "Users & employees" ? "user or employee" : name === "Privilege" ? "privilege user" : name} record`} close={() => setEditing(null)}>
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
-            {fields.filter(([key, , type]) => name !== "Privilege" || (key !== "username" && !["checkbox", "role-radio", "mobile-role-select", "site-select"].includes(type))).map(([key, label, type]) =>
+            {fields.filter(([key]) => name !== "Privilege" || key !== "username").map(([key, label, type]) =>
               type === "multi-checkbox" ? (
                   <fieldset key={key} className="user-access-field full">
                     <legend>{label}</legend>
@@ -2988,6 +2996,15 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                       ))}
                     </div>
                   </fieldset>
+              ) : type === "role-radio" ? (
+                <fieldset key={key} className="privilege-role-field">
+                  <legend>{label} *</legend>
+                  <div>{privilegeAccessOptions.map((option) => <label key={option}><input type="radio" name={key} value={option} required defaultChecked={privilegeAccessValue(editing[key]) === option} /><span>{option}</span></label>)}</div>
+                </fieldset>
+              ) : type === "mobile-role-select" ? (
+                <label key={key}>{label} *<select name={key} required defaultValue={privilegeSelectionValue(editing[key])}><option value="" disabled>Not assigned</option>{mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option} — {mobileRoleAuthority[option]}</option>)}</select></label>
+              ) : type === "site-select" ? (
+                <label key={key}>{label} *<select name={key} required defaultValue={privilegeSelectionValue(editing[key])}><option value="" disabled>Select site</option>{privilegeSelectionValue(editing[key]) && !siteOptions.includes(privilegeSelectionValue(editing[key])) && <option value={privilegeSelectionValue(editing[key])}>{privilegeSelectionValue(editing[key])}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
               ) : (
               <label key={key}>{label} *
                 {type === "checkbox" ? (

@@ -132,3 +132,28 @@
   margin: 0 !important;
   accent-color: #315fd3;
 }
+
+.privilege-user-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2458d3;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.privilege-user-link:hover { text-decoration: underline; }
+.privilege-user-link:focus-visible { outline: 3px solid #315fd326; outline-offset: 4px; }
+
+.privilege-group-authority { display: flex; align-items: center; gap: 10px; }
+.privilege-group-authority b { color: #243550; font-size: 10px; }
+.privilege-group-authority small {
+  padding: 5px 8px;
+  border-radius: 14px;
+  background: #edf3ff;
+  color: #315fc5;
+  font-size: 9px;
+  font-weight: 700;
+}

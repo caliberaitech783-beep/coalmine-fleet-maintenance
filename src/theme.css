@@ -257,6 +257,9 @@ textarea {
   color: #d7e0ed;
 }
 :root[data-theme="dark"] .privilege-role-field legend { color: #bdc8d8; }
+:root[data-theme="dark"] .privilege-user-link { color: #8fb1ff; }
+:root[data-theme="dark"] .privilege-group-authority b { color: #dce7f7; }
+:root[data-theme="dark"] .privilege-group-authority small { background: #203766; color: #b7ccff; }
 
 :root[data-theme="dark"] .master-loader-content strong { color: var(--ink); }
 :root[data-theme="dark"] .master-loader-lines i {
