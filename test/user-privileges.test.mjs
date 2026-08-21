@@ -17,11 +17,22 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /accountRoleOptions\.map[\s\S]*type="radio" name="userGroup"/);
   assert.match(source, /const userAuthorityOptions = \["Admin", "Manager"\]/);
   assert.match(source, /type="radio" name="adminLevel"/);
+  assert.match(source, /const managerRoleOptions = \["Production Manager", "Maintenance Manager", "MIS Manager"\]/);
+  assert.match(source, /type="radio" name="managerRole"/);
   assert.match(source, /accountRole && !isDesktopUser && <label>Location \*[\s\S]*name="site"/);
   assert.match(source, /accountRole && !isDesktopUser && <UserPrivilegeFields/);
   assert.match(source, /isAdmin && <div className="super-role-summary full"/);
   assert.match(source, /isManager && <>[\s\S]*Manager screen access/);
   assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
+});
+
+test("each Manager receives a role-specific dashboard", () => {
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(source, /function ManagerDashboard/);
+  assert.match(source, /Production Manager[\s\S]*On road[\s\S]*Off road/);
+  assert.match(source, /Maintenance Manager[\s\S]*Received for maintenance[\s\S]*Remaining/);
+  assert.match(source, /MIS Manager[\s\S]*Pending verification[\s\S]*Verified/);
+  assert.match(source, /adminPermissions\.adminLevel === "Manager"[\s\S]*<ManagerDashboard/);
 });
 
 test("Admin is automatically assigned every menu and submenu", () => {

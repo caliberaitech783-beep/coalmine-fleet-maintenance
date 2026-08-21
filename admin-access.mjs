@@ -39,6 +39,7 @@ export function accessAllows(selection, name) {
 export function adminAccessPermissions(user = {}) {
   return {
     adminLevel: String(user.adminLevel || "Admin").trim() === "Manager" ? "Manager" : "Admin",
+    managerRole: ["Production Manager", "Maintenance Manager", "MIS Manager"].includes(String(user.managerRole || "").trim()) ? String(user.managerRole).trim() : "",
     masterAccess: accessSelection(user, "masterAccess", ADMIN_MASTER_OPTIONS),
     tabAccess: accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS),
     dashboardAccess: accessSelection(user, "dashboardAccess", ADMIN_SUBMENU_OPTIONS.Dashboard.options),

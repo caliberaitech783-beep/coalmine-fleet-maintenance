@@ -505,6 +505,48 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
     </aside>
   );
 }
+function ManagerDashboard({ managerRole, requests = [], gotoEquipment }) {
+  const [equipmentRecords] = useMasterRecords("Equipment master");
+  const fleet = equipmentMetrics(equipmentRecords);
+  const openRequests = requests.filter((request) => String(request.status || "").toLowerCase() !== "closed");
+  const closedRequests = requests.filter((request) => String(request.status || "").toLowerCase() === "closed");
+  const pendingVerification = closedRequests.filter((request) => !request.verifiedAt);
+  const verifiedRequests = requests.filter((request) => Boolean(request.verifiedAt));
+  const cards = managerRole === "Production Manager"
+    ? [
+        ["Total equipment", fleet.total, "Registered fleet", "all"],
+        ["On road", fleet.onRoad, "Available for production", "onroad"],
+        ["Off road", fleet.offRoad, "Maintenance or breakdown", "offroad"],
+        ["Active breakdowns", openRequests.length, "Production interruptions", ""],
+      ]
+    : managerRole === "Maintenance Manager"
+      ? [
+          ["Received for maintenance", requests.length, "Total maintenance intake", ""],
+          ["Remaining", openRequests.length, "Still requiring action", ""],
+          ["Awaiting parts", requests.filter((request) => String(request.status || "").toLowerCase().includes("awaiting")).length, "Waiting for parts or approval", ""],
+          ["Completed", closedRequests.length, "Returned from maintenance", ""],
+        ]
+      : [
+          ["Pending verification", pendingVerification.length, "Closed requests awaiting MIS", ""],
+          ["Verified", verifiedRequests.length, "Completed MIS checks", ""],
+          ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", ""],
+          ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
+        ];
+  const detailRows = managerRole === "Production Manager" ? openRequests : managerRole === "Maintenance Manager" ? requests : pendingVerification;
+  const title = managerRole || "Manager";
+  const description = managerRole === "Production Manager"
+    ? "Live fleet availability, on-road and off-road equipment, and production interruptions."
+    : managerRole === "Maintenance Manager"
+      ? "Maintenance intake, remaining workload, awaiting items, and completed equipment."
+      : "MIS verification workload, pending checks, completed verification, and first-trip status.";
+  return <section className="manager-dashboard">
+    <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
+    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
+      <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>
+    </button>)}</div>
+    <article className="panel manager-detail-panel"><header><div><h2>{managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests pending MIS verification"}</h2><p>{detailRows.length} record{detailRows.length === 1 ? "" : "s"} currently in this queue</p></div></header><BreakdownTable rows={detailRows} showBreakdownDays={managerRole !== "MIS Manager"} /></article>
+  </section>;
+}
 function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
@@ -786,10 +828,12 @@ const mobileRoleAuthority = {
 };
 const accountRoleOptions = ["User", ...mobileUserRoleOptions];
 const userAuthorityOptions = ["Admin", "Manager"];
+const managerRoleOptions = ["Production Manager", "Maintenance Manager", "MIS Manager"];
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
   ["adminLevel", "User authority"],
+  ["managerRole", "Manager role"],
   ["location", "Privilege location", "site-select"],
   ["read", "Read", "checkbox"],
   ["edit", "Edit", "checkbox"],
@@ -1018,6 +1062,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
     : privilegeSelectionValue(record.userGroup);
   const [accountRole, setAccountRole] = useState(initialRole);
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
+  const [managerRole, setManagerRole] = useState(record.managerRole || "");
   const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
   const isDesktopUser = accountRole === "User";
   const isAdmin = isDesktopUser && userAuthority === "Admin";
@@ -1039,6 +1084,14 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
       <div>{userAuthorityOptions.map((option) => <label key={option} className={userAuthority === option ? "selected" : ""}>
         <input type="radio" name="adminLevel" value={option} required checked={userAuthority === option} onChange={() => setUserAuthority(option)} />
         <span><b>{option}</b><small>{option === "Admin" ? "All screens, menus and administrative functions" : "Only the selected menus and screens"}</small></span>
+      </label>)}</div>
+    </fieldset>}
+    {isManager && <fieldset className="account-role-field manager-role-field full">
+      <legend>Whose manager is this user? *</legend>
+      <p>Select the operational team this Manager supervises. Their dashboard will be tailored to this choice.</p>
+      <div>{managerRoleOptions.map((option) => <label key={option} className={managerRole === option ? "selected" : ""}>
+        <input type="radio" name="managerRole" value={option} required checked={managerRole === option} onChange={() => setManagerRole(option)} />
+        <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
       </label>)}</div>
     </fieldset>}
     {accountRole && !isDesktopUser && <label>Location *
@@ -1076,13 +1129,26 @@ function applyUserRoleDefaults(record) {
     record.site = "";
     record.location = "";
     if (record.adminLevel === "Admin") {
+      record.managerRole = "";
       record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
       record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
       Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[field] = options.join(" | "); });
+    } else if (!managerRoleOptions.includes(record.managerRole)) record.managerRole = "";
+    else {
+      const tabs = new Set(String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
+      tabs.add("Dashboard");
+      record.tabAccess = [...tabs].join(" | ");
+      record.dashboardAccess = "Dashboard";
+      if (record.managerRole !== "MIS Manager") {
+        const masters = new Set(String(record.masterAccess || "").split(/\s*\|\s*/).filter(Boolean));
+        masters.add("Equipment master");
+        record.masterAccess = [...masters].join(" | ");
+      }
     }
   } else if (mobileUserRoleOptions.includes(role)) {
     record.userType = "Mobile User";
     record.adminLevel = "";
+    record.managerRole = "";
     record.masterAccess = "";
     record.tabAccess = "";
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[field] = ""; });
@@ -4190,7 +4256,9 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
+            adminPermissions.adminLevel === "Manager"
+              ? <ManagerDashboard managerRole={adminPermissions.managerRole} requests={requests} gotoEquipment={gotoEquipment} />
+              : <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}
