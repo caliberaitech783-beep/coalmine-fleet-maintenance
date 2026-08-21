@@ -4,9 +4,14 @@ import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPe
 
 test("legacy administrators retain full access when allowlists are absent", () => {
   const permissions = adminAccessPermissions({userType: "Super Admin"});
+  assert.equal(permissions.adminLevel, "Admin");
   assert.equal(permissions.masterAccess, null);
   assert.equal(permissions.tabAccess, null);
   assert.equal(accessAllows(permissions.masterAccess, "Equipment master"), true);
+});
+
+test("manager authority is retained in the admin session permissions", () => {
+  assert.equal(adminAccessPermissions({adminLevel: "Manager"}).adminLevel, "Manager");
 });
 
 test("every main header has a conditional submenu allowlist", () => {

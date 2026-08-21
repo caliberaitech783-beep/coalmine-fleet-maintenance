@@ -13,18 +13,22 @@ test("user creation contains every existing privilege option", () => {
 
 test("user modal uses one role selector with role-specific sections", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /const accountRoleOptions = \["Super User", \.\.\.mobileUserRoleOptions\]/);
+  assert.match(source, /const accountRoleOptions = \["User", \.\.\.mobileUserRoleOptions\]/);
   assert.match(source, /accountRoleOptions\.map[\s\S]*type="radio" name="userGroup"/);
-  assert.match(source, /accountRole && !isSuperUser && <label>Location \*[\s\S]*name="site"/);
-  assert.match(source, /accountRole && !isSuperUser && <UserPrivilegeFields/);
-  assert.match(source, /isSuperUser && <div className="super-role-summary full"/);
+  assert.match(source, /const userAuthorityOptions = \["Admin", "Manager"\]/);
+  assert.match(source, /type="radio" name="adminLevel"/);
+  assert.match(source, /accountRole && !isDesktopUser && <label>Location \*[\s\S]*name="site"/);
+  assert.match(source, /accountRole && !isDesktopUser && <UserPrivilegeFields/);
+  assert.match(source, /isAdmin && <div className="super-role-summary full"/);
+  assert.match(source, /isManager && <>[\s\S]*Manager screen access/);
   assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
 });
 
-test("Super User is automatically assigned every menu and submenu", () => {
+test("Admin is automatically assigned every menu and submenu", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const defaults = source.match(/function applyUserRoleDefaults[\s\S]*?\n}/)?.[0] || "";
-  assert.match(defaults, /role === "Super User"/);
+  assert.match(defaults, /role === "User"/);
+  assert.match(defaults, /record\.adminLevel === "Admin"/);
   assert.match(defaults, /record\.masterAccess = ADMIN_MASTER_OPTIONS\.join/);
   assert.match(defaults, /record\.tabAccess = ADMIN_TAB_OPTIONS\.join/);
   assert.match(defaults, /Object\.values\(ADMIN_SUBMENU_OPTIONS\)/);

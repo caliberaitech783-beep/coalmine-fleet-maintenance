@@ -463,7 +463,7 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
             ))}
           </div>
         </div>}
-        <div className={workspacesOpen ? "masters-menu open" : "masters-menu"}>
+        {permissions.adminLevel !== "Manager" && <div className={workspacesOpen ? "masters-menu open" : "masters-menu"}>
           <div className="nav-config-row"><button
             className={operationalWorkspaceNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
@@ -479,7 +479,7 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
               <Icon />{name}
             </button></div>)}
           </div>
-        </div>
+        </div>}
         {visibleNav.filter(([name]) => name !== "Dashboard").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={active === n ? "active" : ""}
@@ -784,10 +784,12 @@ const mobileRoleAuthority = {
   "Maintenance User": "Edit and delete requests",
   "MIS User": "Verify requests only",
 };
-const accountRoleOptions = ["Super User", ...mobileUserRoleOptions];
+const accountRoleOptions = ["User", ...mobileUserRoleOptions];
+const userAuthorityOptions = ["Admin", "Manager"];
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
+  ["adminLevel", "User authority"],
   ["location", "Privilege location", "site-select"],
   ["read", "Read", "checkbox"],
   ["edit", "Edit", "checkbox"],
@@ -1012,44 +1014,75 @@ function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
 
 function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
-    ? "Super User"
+    ? "User"
     : privilegeSelectionValue(record.userGroup);
   const [accountRole, setAccountRole] = useState(initialRole);
-  const isSuperUser = accountRole === "Super User";
+  const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
+  const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
+  const isDesktopUser = accountRole === "User";
+  const isAdmin = isDesktopUser && userAuthority === "Admin";
+  const isManager = isDesktopUser && userAuthority === "Manager";
+  const toggleTab = (tab, checked) => setVisibleTabs((current) => checked ? [...new Set([...current, tab])] : current.filter((item) => item !== tab));
   return <>
-    <input type="hidden" name="userType" value={isSuperUser ? "Super Admin" : accountRole ? "Mobile User" : ""} />
+    <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole ? "Mobile User" : ""} />
     <fieldset className="account-role-field full">
       <legend>User role *</legend>
       <p>Select the workspace and built-in authority for this account.</p>
       <div>{accountRoleOptions.map((option) => <label key={option} className={accountRole === option ? "selected" : ""}>
         <input type="radio" name="userGroup" value={option} required checked={accountRole === option} onChange={() => setAccountRole(option)} />
-        <span><b>{option}</b><small>{option === "Super User" ? "All screens, menus and administrative functions" : mobileRoleAuthority[option]}</small></span>
+        <span><b>{option}</b><small>{option === "User" ? "Desktop administration or management access" : mobileRoleAuthority[option]}</small></span>
       </label>)}</div>
     </fieldset>
-    {accountRole && !isSuperUser && <label>Location *
+    {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
+      <legend>User authority *</legend>
+      <p>Choose whether this desktop user is a full Admin or a configurable Manager.</p>
+      <div>{userAuthorityOptions.map((option) => <label key={option} className={userAuthority === option ? "selected" : ""}>
+        <input type="radio" name="adminLevel" value={option} required checked={userAuthority === option} onChange={() => setUserAuthority(option)} />
+        <span><b>{option}</b><small>{option === "Admin" ? "All screens, menus and administrative functions" : "Only the selected menus and screens"}</small></span>
+      </label>)}</div>
+    </fieldset>}
+    {accountRole && !isDesktopUser && <label>Location *
       <select name="site" required defaultValue={record.site || ""}>
         <option value="" disabled>Select location</option>
         {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
         {record.site && !siteOptions.includes(record.site) && <option value={record.site}>{record.site}</option>}
       </select>
     </label>}
-    {isSuperUser && <div className="super-role-summary full"><ShieldCheck /><span><b>Full Super User access</b><small>This account will automatically see every screen, master, menu, report, audit feature and administrative function.</small></span></div>}
-    {accountRole && !isSuperUser && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
+    {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>Full Admin access</b><small>This account will automatically see every screen, master, operational workspace, report, audit feature and administrative function.</small></span></div>}
+    {isManager && <>
+      <div className="user-privilege-heading full"><h3>Manager screen access</h3><p>Choose the header menus this Manager can open. Related submenu choices appear below.</p></div>
+      <fieldset className="user-access-field full access-section-card">
+        <legend>Visible tabs</legend>
+        <div>{ADMIN_TAB_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="tabAccess" value={option} checked={visibleTabs.includes(option)} onChange={(event) => toggleTab(option, event.target.checked)} /><span>{option}</span></label>)}</div>
+      </fieldset>
+      {visibleTabs.map((tab) => {
+        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
+        if (!submenu) return null;
+        return <fieldset key={tab} className="user-access-field full access-section-card access-submenu-card">
+          <legend>{submenu.label}</legend>
+          <div>{submenu.options.map((option) => <label key={option}><input type="checkbox" name={submenu.field} value={option} defaultChecked={selectedAccessValues(record, submenu.field).includes(option)} /><span>{option}</span></label>)}</div>
+        </fieldset>;
+      })}
+    </>}
+    {accountRole && !isDesktopUser && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
 }
 
 function applyUserRoleDefaults(record) {
   const role = privilegeSelectionValue(record.userGroup);
-  if (role === "Super User") {
+  if (role === "User") {
     record.userType = "Super Admin";
     record.userGroup = "";
     record.site = "";
     record.location = "";
-    record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
-    record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
-    Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[field] = options.join(" | "); });
+    if (record.adminLevel === "Admin") {
+      record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
+      record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
+      Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[field] = options.join(" | "); });
+    }
   } else if (mobileUserRoleOptions.includes(role)) {
     record.userType = "Mobile User";
+    record.adminLevel = "";
     record.masterAccess = "";
     record.tabAccess = "";
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[field] = ""; });
@@ -2827,7 +2860,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     masterValue = (record, key) => {
       const type = fields.find(([field]) => field === key)?.[2];
       if (name === "Users & employees" && key === "userType")
-        return String(record.userGroup || (String(record.userType || "").toLowerCase().includes("super") ? "Super User" : record.userType) || "").trim();
+        return String(record.userGroup || (String(record.userType || "").toLowerCase().includes("super") ? `User — ${record.adminLevel || "Admin"}` : record.userType) || "").trim();
       return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
     },
     columnValues = Object.fromEntries(
@@ -3907,7 +3940,7 @@ function App() {
     }
   };
   const canOpenAdminPage = (name) => {
-    if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return true;
+    if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration") && accessAllows(adminPermissions.whatsappAccess, name);
     const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};

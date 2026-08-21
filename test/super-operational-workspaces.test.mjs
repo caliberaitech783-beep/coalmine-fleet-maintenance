@@ -17,6 +17,7 @@ test("operational workspaces render their full workflow inside the Super User pr
   assert.match(source, /!embedded && <header/);
 });
 
-test("Super Users can execute Maintenance and MIS role-gated request actions", () => {
-  assert.match(server, /role&&req\.session\?\.role!==['"]super['"]&&req\.session\?\.assignedRole!==role/);
+test("Admins can execute operational actions while Managers cannot bypass role gates", () => {
+  assert.match(server, /req\.session\?\.role===['"]super['"]&&req\.session\?\.permissions\?\.adminLevel===['"]Manager['"]/);
+  assert.match(source, /permissions\.adminLevel !== "Manager"[\s\S]*Operational Workspaces/);
 });
