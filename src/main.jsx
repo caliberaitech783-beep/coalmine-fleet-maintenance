@@ -512,6 +512,7 @@ function formatTwelveHourDateTime(value) {
 }
 
 function ManagerDashboard({ managerRole, managerLocation = "", requests = [], gotoEquipment }) {
+  const [queueTab,setQueueTab]=useState("active");
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const siteEquipment = equipmentRecords.filter((record) => recordBelongsToSite(record, managerLocation));
   const openRequests = requests.filter((request) => String(request.status || "").toLowerCase() !== "closed");
@@ -542,7 +543,10 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
           ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", ""],
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
-  const detailRows = managerRole === "Production Manager" ? openRequests : managerRole === "Maintenance Manager" ? requests : verifiedRequests;
+  const pendingVerification=closedRequests.filter((request)=>!request.verifiedAt);
+  const activeRows=managerRole==="MIS Manager"?pendingVerification:openRequests;
+  const historyRows=managerRole==="MIS Manager"?verifiedRequests:closedRequests;
+  const detailRows=queueTab==="history"?historyRows:activeRows;
   const title = managerRole || "Manager";
   const description = managerRole === "Production Manager"
     ? `Live fleet availability for ${managerLocation || "the assigned location"}.`
@@ -554,7 +558,8 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
       <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{managerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
-    <article className="panel manager-detail-panel"><header><div><h2>{managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Verified requests"}</h2><p>{detailRows.length} record{detailRows.length === 1 ? "" : "s"} currently in this queue</p></div></header><BreakdownTable rows={detailRows} showBreakdownDays={managerRole !== "MIS Manager"} showTurnaroundTime={managerRole === "MIS Manager"} /></article>
+    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button><button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{detailRows.length} record{detailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={detailRows} showReason={managerRole === "Production Manager"} showBreakdownDays={managerRole !== "MIS Manager"} showTurnaroundTime={managerRole === "MIS Manager"} /></article>
   </section>;
 }
 function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
@@ -659,7 +664,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
@@ -670,7 +675,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ["site", "Site location"],
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
-      ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
+      ["category", "Repair category"], ...(showReason ? [["complaint", "Reason"]] : []), ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"],
     ],
     displayRows = showBreakdownDays
@@ -709,6 +714,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                   </td>
                 )}
                 <td>{r.category}</td>
+                {showReason && <td>{r.complaint || "—"}</td>}
                 <td>{formatTwelveHourDateTime(r.start)}</td>
                 <td>{r.hours}</td>
                 <td>
@@ -864,9 +870,9 @@ const operationalViewFields = [
 userSubmenuFields.push(...operationalViewFields);
 const operationalMenuOptions=["Requests","Tickets"];
 const operationalRequestOptions={
-  "Production User":["View requests","Create request"],
-  "Maintenance User":["View requests","Create request","Close request form"],
-  "MIS User":["View requests","Verify closed requests"],
+  "Production User":["View requests","Create request","Closed history"],
+  "Maintenance User":["View requests","Create request","Close request form","Closed history"],
+  "MIS User":["View requests","Verify closed requests","Closed history"],
 };
 const userAccessOptions = {
   masterAccess: ADMIN_MASTER_OPTIONS,
@@ -4151,11 +4157,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const canCreate = isProduction || isMaintenance;
   const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets");
   useEffect(()=>{
-    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu("Verify closed requests"):true);
+    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu("Verify closed requests"):tab==="history"?canSeeRequestMenu("Closed history"):true);
     if(allowed)return;
     if(showRequestsMenu&&canSeeRequestMenu("View requests"))setTab("requests");
     else if(showRequestsMenu&&isMis&&canSeeRequestMenu("Verify closed requests"))setTab("verify");
     else if(showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form"))setTab("close");
+    else if(showRequestsMenu&&canSeeRequestMenu("Closed history"))setTab("history");
     else if(showTicketsMenu)setTab("tickets");
   },[responsiveMobile,showRequestsMenu,showTicketsMenu,visibleRequestMenus?.join("|"),mobileRole]);
   const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
@@ -4176,7 +4183,10 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
   const verifyRequest = async (payload) => { try { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); } catch (error) { alert(error.message); } };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
-  const visibleRows = isMis ? requests.filter((row) => String(row.status).toLowerCase() === "closed" && !row.verifiedAt) : requests;
+  const activeRequests=requests.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
+  const closedRequests=requests.filter((row)=>String(row.status||"").toLowerCase()==="closed");
+  const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt) : activeRequests;
+  const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
     {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav">{showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}><Wrench /> Requests</button>}{showTicketsMenu&&<button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => setTab(String(item?.ticketReference || "").startsWith("TIC/")&&showTicketsMenu ? "tickets" : "requests")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
@@ -4186,13 +4196,15 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu("Verify closed requests")&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
+        {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
       </div>
       {tab === "tickets" && <TicketPage session={session} />}
-      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your submitted requests · Read only</h3><section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
+      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showBreakdownDays /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt)} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
@@ -4488,7 +4500,7 @@ function App() {
             <button>
               <Search />
             </button>
-            <NotificationBell session={session} onOpenTickets={(item) => selectMenu(String(item?.ticketReference || "").startsWith("TIC/") ? "Tickets" : "Breakdown master")} />
+            <NotificationBell session={session} onOpenTickets={(item) => selectMenu(String(item?.ticketReference || "").startsWith("TIC/") ? "Tickets" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
           </div>
         </div>
         <div className="body">

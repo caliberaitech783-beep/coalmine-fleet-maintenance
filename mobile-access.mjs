@@ -83,10 +83,10 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
     ? [...new Set(String(user[key]||"").split(/\s*[|,]\s*/).map((value)=>value.trim()).filter(Boolean))]
     : fallback;
   const roleRequestMenus=assignedRole==="Production User"
-    ? ["View requests","Create request"]
+    ? ["View requests","Create request","Closed history"]
     : maintenance
-      ? ["View requests","Create request","Close request form"]
-      : ["View requests","Verify closed requests"];
+      ? ["View requests","Create request","Close request form","Closed history"]
+      : ["View requests","Verify closed requests","Closed history"];
   return {
     sessionRole: "normal",
     userType: "Mobile User",
@@ -102,9 +102,9 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
       viewEquipment: assignedRole === "Production User" || maintenance,
       viewRepairTypes: assignedRole === "Production User" || assignedRole === "Maintenance User",
       desktopUserMenuAccess:accessList("desktopUserMenuAccess",["Requests","Tickets"]),
-      desktopUserRequestAccess:accessList("desktopUserRequestAccess",roleRequestMenus),
+      desktopUserRequestAccess:[...new Set([...accessList("desktopUserRequestAccess",roleRequestMenus),"Closed history"])],
       mobileUserMenuAccess:accessList("mobileUserMenuAccess",accessList("desktopUserMenuAccess",["Requests","Tickets"])),
-      mobileUserRequestAccess:accessList("mobileUserRequestAccess",accessList("desktopUserRequestAccess",roleRequestMenus)),
+      mobileUserRequestAccess:[...new Set([...accessList("mobileUserRequestAccess",accessList("desktopUserRequestAccess",roleRequestMenus)),"Closed history"])],
     },
   };
 }

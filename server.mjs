@@ -503,6 +503,28 @@ async function ticketSuperRecipients(client,{creatorRole,site}){
   return {adminLogins,managerLogins};
 }
 
+function requestNotificationTime(value){
+  return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(new Date(value));
+}
+
+async function requestStakeholderLogins(client,{site,requesterLogin}){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const recipients=[String(requesterLogin||'').trim().toLowerCase()];
+  const requestSite=String(site||'').trim().toLowerCase();
+  for(const row of rows){
+    const user=row.record_data||{};
+    const login=String(user.login||'').trim().toLowerCase();
+    if(!login)continue;
+    const profile=resolveMobileAccess({user});
+    const userSite=String(user.site||user.location||user.currentLocation||'').trim().toLowerCase();
+    const siteMatches=Boolean(requestSite)&&userSite===requestSite;
+    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
+    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&siteMatches&&['Production Manager','Maintenance Manager','MIS Manager'].includes(profile.permissions.managerRole))recipients.push(login);
+    if(profile.sessionRole==='normal'&&siteMatches&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
+  }
+  return [...new Set(recipients.filter(Boolean))];
+}
+
 app.get('/api/tickets',requireSession,async(req,res,next)=>{
   try{
     const category=TICKET_CATEGORIES.includes(String(req.query.category||''))?String(req.query.category):'';
@@ -726,6 +748,8 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Open',$11,$12)
       RETURNING ${requestProjection}`,
       [ref,equipment,door,reg,chassis,site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
+    const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened at ${requestNotificationTime(startedAt)} for ${rows[0].site} by ${req.session.name||'Production User'}.`);
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });
@@ -761,6 +785,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       WHERE reference=$6 AND status<>'Closed' AND verified_at IS NULL RETURNING ${requestProjection}`,
       [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,reference]);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
+    const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed at ${requestNotificationTime(closedAt)} by ${req.session.name||'Maintenance User'}. It is now available in Closed History.`);
     res.json(rows[0]);
   }catch(error){next(error)}
 });
