@@ -664,9 +664,16 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     if(req.session.role!=='super'&&req.session.permissions?.readRequests!==true)
       return res.status(403).json({error:'Your assigned role is not authorized to view maintenance requests.'});
     const requesterLogin=String(req.session.login||'').trim().toLowerCase();
-    const query=req.session.role==='normal'&&req.session.assignedRole==='Production User'
+    let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
+    if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
+      const manager=await currentUserRecord(req.session);
+      const managerSite=String(manager.site||manager.location||'').trim();
+      query=managerSite
+        ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE lower(trim(site))=lower(trim($1)) ORDER BY created_at DESC`,values:[managerSite]}
+        : {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE FALSE`,values:[]};
+    }
     const {rows}=await pool.query(query);
     res.json(await attachDailyRemarks(rows));
   }catch(error){next(error)}
@@ -782,6 +789,8 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
     if(!canViewEquipment&&!canViewRepairTypes)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
+    const managerRecord=req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'?await currentUserRecord(req.session):null;
+    const managerSite=String(managerRecord?.site||managerRecord?.location||'').trim().toLowerCase();
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
@@ -793,6 +802,10 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
         if(row.master_name!=='Equipment master'&&row.master_name!=='Repair type master')continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
+      if(managerRecord&&row.master_name==='Equipment master'){
+        const equipmentSite=String(record.currentLocation||record.site||record.location||'').trim().toLowerCase();
+        if(!managerSite||equipmentSite!==managerSite)continue;
+      }
       if(row.master_name==='Privilege'){
         const username=String(record.username||'').trim().toLowerCase();
         const existing=username&&privilegesByUsername.get(username);

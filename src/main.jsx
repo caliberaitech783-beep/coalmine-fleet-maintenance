@@ -508,10 +508,20 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     </aside>
   );
 }
-function ManagerDashboard({ managerRole, requests = [], gotoEquipment }) {
+function formatTwelveHourDateTime(value) {
+  const match=String(value||"").match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if(!match)return value||"—";
+  const hour=Number(match[2]);
+  return `${match[1]} ${hour%12||12}:${match[3]} ${hour>=12?"PM":"AM"}`;
+}
+
+function ManagerDashboard({ managerRole, managerLocation = "", requests = [], gotoEquipment }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
-  const fleet = equipmentMetrics(equipmentRecords);
+  const siteEquipment = equipmentRecords.filter((record) => recordBelongsToSite(record, managerLocation));
   const openRequests = requests.filter((request) => String(request.status || "").toLowerCase() !== "closed");
+  const offRoadKeys = new Set(openRequests.map((request) => String(request.chassis || request.door || request.equipment || "").trim().toLowerCase()).filter(Boolean));
+  const offRoad = Math.min(siteEquipment.length, offRoadKeys.size);
+  const fleet = {total:siteEquipment.length,offRoad,onRoad:Math.max(0,siteEquipment.length-offRoad)};
   const closedRequests = requests.filter((request) => String(request.status || "").toLowerCase() === "closed");
   const pendingVerification = closedRequests.filter((request) => !request.verifiedAt);
   const verifiedRequests = requests.filter((request) => Boolean(request.verifiedAt));
@@ -519,8 +529,7 @@ function ManagerDashboard({ managerRole, requests = [], gotoEquipment }) {
     ? [
         ["Total equipment", fleet.total, "Registered fleet", "all"],
         ["On road", fleet.onRoad, "Available for production", "onroad"],
-        ["Off road", fleet.offRoad, "Maintenance or breakdown", "offroad"],
-        ["Active breakdowns", openRequests.length, "Production interruptions", ""],
+        ["Off road", fleet.offRoad, "Equipment currently in maintenance", "offroad"],
       ]
     : managerRole === "Maintenance Manager"
       ? [
@@ -538,7 +547,7 @@ function ManagerDashboard({ managerRole, requests = [], gotoEquipment }) {
   const detailRows = managerRole === "Production Manager" ? openRequests : managerRole === "Maintenance Manager" ? requests : pendingVerification;
   const title = managerRole || "Manager";
   const description = managerRole === "Production Manager"
-    ? "Live fleet availability, on-road and off-road equipment, and production interruptions."
+    ? `Live fleet availability for ${managerLocation || "the assigned location"}.`
     : managerRole === "Maintenance Manager"
       ? "Maintenance intake, remaining workload, awaiting items, and completed equipment."
       : "MIS verification workload, pending checks, completed verification, and first-trip status.";
@@ -702,7 +711,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                   </td>
                 )}
                 <td>{r.category}</td>
-                <td>{r.start}</td>
+                <td>{formatTwelveHourDateTime(r.start)}</td>
                 <td>{r.hours}</td>
                 <td>
                   <Status>{r.status}</Status>
@@ -3742,7 +3751,7 @@ function requestStartParts(start) {
 }
 
 function MaintenanceRemarks({ remarks = [] }) {
-  return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{item.createdAt} · {item.authorName}</b><p>{item.remark}</p><small>Delay: {item.delayReason}</small></article>)}</details> : "—";
+  return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{formatTwelveHourDateTime(item.createdAt)} · {item.authorName}</b><p>{item.remark}</p><small>Delay: {item.delayReason}</small></article>)}</details> : "—";
 }
 
 function DailyRemarkForm({ request, close, onSave }) {
@@ -4420,7 +4429,7 @@ function App() {
         <div className="body">
           {active === "Dashboard" ? (
             adminPermissions.adminLevel === "Manager"
-              ? <ManagerDashboard managerRole={adminPermissions.managerRole} requests={requests} gotoEquipment={gotoEquipment} />
+              ? <ManagerDashboard managerRole={adminPermissions.managerRole} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} />
               : <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
