@@ -712,7 +712,7 @@ const masterFields = {
     ["site", "Location"],
     ["email", "Mail ID"],
     ["phone", "Phone no."],
-    ["userType", "User type (Mobile User / Super Admin)"],
+    ["userType", "User role"],
     ["masterAccess", "Visible masters", "multi-checkbox"],
     ["tabAccess", "Visible tabs", "multi-checkbox"],
   ],
@@ -760,7 +760,8 @@ const mobileRoleAuthority = {
   "Maintenance User": "Edit and delete requests",
   "MIS User": "Verify requests only",
 };
-const userTypeOptions = ["Mobile User", "Super Admin"];
+const accountRoleOptions = ["Super User", ...mobileUserRoleOptions];
+const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
   ["location", "Privilege location", "site-select"],
@@ -979,51 +980,57 @@ function parseCsv(text, fields) {
 }
 function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
   return <>
-    <div className="user-privilege-heading full"><h3>Privileges</h3><p>Assign the mobile user group, location, and request authorities in the same user record.</p></div>
-    <label>User Group<select name="userGroup" defaultValue={privilegeSelectionValue(record.userGroup)}><option value="">Not assigned</option>{mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option} — {mobileRoleAuthority[option]}</option>)}</select></label>
+    <div className="user-privilege-heading full"><h3>Additional privileges</h3><p>Fine-tune the operational authorities for this user. Core access is assigned automatically from the selected role.</p></div>
     <label>Privilege location<select name="location" defaultValue={privilegeSelectionValue(record.location)}><option value="">Not assigned</option>{privilegeSelectionValue(record.location) && !siteOptions.includes(privilegeSelectionValue(record.location)) && <option value={privilegeSelectionValue(record.location)}>{privilegeSelectionValue(record.location)}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
     {userPrivilegeFields.filter(([, , type]) => type === "checkbox").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
   </>;
 }
 
 function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
-  const [userType, setUserType] = useState(record.userType || "");
-  const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
-  const toggleTab = (tab, checked) => setVisibleTabs((current) => checked ? [...new Set([...current, tab])] : current.filter((item) => item !== tab));
+  const initialRole = String(record.userType || "").toLowerCase().includes("super")
+    ? "Super User"
+    : privilegeSelectionValue(record.userGroup);
+  const [accountRole, setAccountRole] = useState(initialRole);
+  const isSuperUser = accountRole === "Super User";
   return <>
-    <label>User type *
-      <select name="userType" required value={userType} onChange={(event) => setUserType(event.target.value)}>
-        <option value="" disabled>Select user type</option>
-        {userTypeOptions.map((option) => <option key={option} value={option}>{option === "Super Admin" ? "Super User" : option}</option>)}
-        {userType && !userTypeOptions.includes(userType) && <option value={userType}>{userType}</option>}
-      </select>
-    </label>
-    {userType === "Mobile User" && <label>Location *
+    <input type="hidden" name="userType" value={isSuperUser ? "Super Admin" : accountRole ? "Mobile User" : ""} />
+    <fieldset className="account-role-field full">
+      <legend>User role *</legend>
+      <p>Select the workspace and built-in authority for this account.</p>
+      <div>{accountRoleOptions.map((option) => <label key={option} className={accountRole === option ? "selected" : ""}>
+        <input type="radio" name="userGroup" value={option} required checked={accountRole === option} onChange={() => setAccountRole(option)} />
+        <span><b>{option}</b><small>{option === "Super User" ? "All screens, menus and administrative functions" : mobileRoleAuthority[option]}</small></span>
+      </label>)}</div>
+    </fieldset>
+    {accountRole && !isSuperUser && <label>Location *
       <select name="site" required defaultValue={record.site || ""}>
         <option value="" disabled>Select location</option>
         {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
         {record.site && !siteOptions.includes(record.site) && <option value={record.site}>{record.site}</option>}
       </select>
     </label>}
-    {userType === "Super Admin" && <>
-      <div className="user-privilege-heading full"><h3>Menu visibility</h3><p>Choose the header tabs this Super User can open. Submenu choices appear only for selected tabs.</p></div>
-      <fieldset className="user-access-field full access-section-card">
-        <legend>Visible tabs</legend>
-        <p>Select the main header menus available to this user.</p>
-        <div>{ADMIN_TAB_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="tabAccess" value={option} checked={visibleTabs.includes(option)} onChange={(event) => toggleTab(option, event.target.checked)} /><span>{option}</span></label>)}</div>
-      </fieldset>
-      {visibleTabs.map((tab) => {
-        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
-        if (!submenu) return null;
-        return <fieldset key={tab} className="user-access-field full access-section-card access-submenu-card">
-          <legend>{submenu.label}</legend>
-          <p>Choose the submenu items that will appear under {tab}.</p>
-          <div>{submenu.options.map((option) => <label key={option}><input type="checkbox" name={submenu.field} value={option} defaultChecked={selectedAccessValues(record, submenu.field).includes(option)} /><span>{option}</span></label>)}</div>
-        </fieldset>;
-      })}
-    </>}
-    {userType === "Mobile User" && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
+    {isSuperUser && <div className="super-role-summary full"><ShieldCheck /><span><b>Full Super User access</b><small>This account will automatically see every screen, master, menu, report, audit feature and administrative function.</small></span></div>}
+    {accountRole && !isSuperUser && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
+}
+
+function applyUserRoleDefaults(record) {
+  const role = privilegeSelectionValue(record.userGroup);
+  if (role === "Super User") {
+    record.userType = "Super Admin";
+    record.userGroup = "";
+    record.site = "";
+    record.location = "";
+    record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
+    record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
+    Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[field] = options.join(" | "); });
+  } else if (mobileUserRoleOptions.includes(role)) {
+    record.userType = "Mobile User";
+    record.masterAccess = "";
+    record.tabAccess = "";
+    Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[field] = ""; });
+  }
+  return record;
 }
 
 function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
@@ -1048,6 +1055,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
               : String(fd.get(key) || "").trim(),
         ]),
       );
+    if (name === "Users & employees") applyUserRoleDefaults(record);
     if (name === "Equipment master" && !record.status)
       record.status = "Operational";
     if (name === "Users & employees" && record.userType === "Super Admin" && !record.masterAccess && !record.tabAccess) {
@@ -1194,7 +1202,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                     {label} *
                     <select name={key} required defaultValue="">
                       <option value="" disabled>Select user type</option>
-                      {userTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                      {persistedUserTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </label>
                 ) : (
@@ -2794,6 +2802,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master",
     masterValue = (record, key) => {
       const type = fields.find(([field]) => field === key)?.[2];
+      if (name === "Users & employees" && key === "userType")
+        return String(record.userGroup || (String(record.userType || "").toLowerCase().includes("super") ? "Super User" : record.userType) || "").trim();
       return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
     },
     columnValues = Object.fromEntries(
@@ -2847,6 +2857,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
             ? form.getAll(key).map(String).join(" | ")
             : String(form.get(key) || "").trim(),
     ]));
+    if (name === "Users & employees") applyUserRoleDefaults(updated);
     if (name === "Users & employees" && updated.userType === "Super Admin" && !updated.masterAccess && !updated.tabAccess) {
       alert("Select at least one visible master or tab for this Super Admin.");
       return;
@@ -3101,8 +3112,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 ) : name === "Users & employees" && key === "userType" ? (
                   <select name={key} required defaultValue={editing[key] || ""}>
                     <option value="" disabled>Select user type</option>
-                    {userTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                    {editing[key] && !userTypeOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
+                    {persistedUserTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                    {editing[key] && !persistedUserTypeOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
                   </select>
                 ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
               </label>)
