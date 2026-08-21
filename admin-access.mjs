@@ -45,6 +45,7 @@ export function adminAccessPermissions(user = {}) {
   const tabAccess = ticketAccount && selectedTabs != null
     ? [...new Set([...selectedTabs, "Tickets"])]
     : selectedTabs;
+  const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
   return {
     adminLevel,
     managerRole: ["Production Manager", "Maintenance Manager", "MIS Manager"].includes(String(user.managerRole || "").trim()) ? String(user.managerRole).trim() : "",
@@ -55,5 +56,25 @@ export function adminAccessPermissions(user = {}) {
     reportAccess: accessSelection(user, "reportAccess", ADMIN_SUBMENU_OPTIONS.Reports.options),
     auditAccess: accessSelection(user, "auditAccess", ADMIN_SUBMENU_OPTIONS["Audit Trail"].options),
     ticketAccess: accessSelection(user, "ticketAccess", ADMIN_SUBMENU_OPTIONS.Tickets.options),
+    mobileMasterAccess: mobileSelection("masterAccess",ADMIN_MASTER_OPTIONS,accessSelection(user,"masterAccess",ADMIN_MASTER_OPTIONS)),
+    mobileTabAccess: mobileSelection("tabAccess",ADMIN_TAB_OPTIONS,tabAccess),
+    mobileDashboardAccess: mobileSelection("dashboardAccess",ADMIN_SUBMENU_OPTIONS.Dashboard.options,accessSelection(user,"dashboardAccess",ADMIN_SUBMENU_OPTIONS.Dashboard.options)),
+    mobileWhatsappAccess: mobileSelection("whatsappAccess",ADMIN_SUBMENU_OPTIONS["WhatsApp Integration"].options,accessSelection(user,"whatsappAccess",ADMIN_SUBMENU_OPTIONS["WhatsApp Integration"].options)),
+    mobileReportAccess: mobileSelection("reportAccess",ADMIN_SUBMENU_OPTIONS.Reports.options,accessSelection(user,"reportAccess",ADMIN_SUBMENU_OPTIONS.Reports.options)),
+    mobileAuditAccess: mobileSelection("auditAccess",ADMIN_SUBMENU_OPTIONS["Audit Trail"].options,accessSelection(user,"auditAccess",ADMIN_SUBMENU_OPTIONS["Audit Trail"].options)),
+    mobileTicketAccess: mobileSelection("ticketAccess",ADMIN_SUBMENU_OPTIONS.Tickets.options,accessSelection(user,"ticketAccess",ADMIN_SUBMENU_OPTIONS.Tickets.options)),
+  };
+}
+
+export function navigationPermissionsForView(permissions={},mobile=false){
+  if(!mobile)return permissions;
+  return {...permissions,
+    masterAccess:permissions.mobileMasterAccess??permissions.masterAccess,
+    tabAccess:permissions.mobileTabAccess??permissions.tabAccess,
+    dashboardAccess:permissions.mobileDashboardAccess??permissions.dashboardAccess,
+    whatsappAccess:permissions.mobileWhatsappAccess??permissions.whatsappAccess,
+    reportAccess:permissions.mobileReportAccess??permissions.reportAccess,
+    auditAccess:permissions.mobileAuditAccess??permissions.auditAccess,
+    ticketAccess:permissions.mobileTicketAccess??permissions.ticketAccess,
   };
 }

@@ -16,8 +16,7 @@ import {
   requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
-import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows} from "../admin-access.mjs";
-import {normalizeMobileNavigationVisibility} from "../navigation-visibility.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, navigationPermissionsForView} from "../admin-access.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -359,7 +358,7 @@ function Login({ onLogin, theme, toggleTheme }) {
     </div>
   );
 }
-function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "", mobileMenuVisibility, onMobileVisibilityChange }) {
+function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "" }) {
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
@@ -389,16 +388,13 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   useEffect(() => {
     closeMenus();
   }, [active]);
-  const visibleOnMobile = (name) => !responsiveMobile || mobileMenuVisibility[name] !== false;
-  const visibleMasterNav = masterNav.filter(([name]) => accessAllows(permissions.masterAccess, name) && visibleOnMobile(name));
+  const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
+  const visibleMasterNav = masterNav.filter(([name]) => accessAllows(viewPermissions.masterAccess, name));
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
-  const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name) && accessAllows(permissions[directMenuAccess[name]], name) && visibleOnMobile(name));
-  const canViewMasters = accessAllows(permissions.tabAccess, "Masters") && visibleOnMobile("Masters") && visibleMasterNav.length > 0;
-  const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(permissions.whatsappAccess, name) && visibleOnMobile(name));
-  const canViewWhatsApp = accessAllows(permissions.tabAccess, "WhatsApp Integration") && visibleOnMobile("WhatsApp Integration") && visibleWhatsAppNav.length > 0;
-  const MobileToggle = ({ name }) => <label className="mobile-nav-toggle" title={`Show ${name} in responsive mobile navigation`} onClick={(event) => event.stopPropagation()}>
-    <input type="checkbox" checked={mobileMenuVisibility[name] !== false} onChange={(event) => onMobileVisibilityChange(name, event.target.checked)} aria-label={`Show ${name} in mobile view`} />
-  </label>;
+  const visibleNav = nav.filter(([name]) => accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name));
+  const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
+  const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
+  const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
   return (
     <aside className={open ? "open" : ""}>
       <div className="logo">
@@ -415,7 +411,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           >
             <I />
             {n}
-          </button><MobileToggle name={n} /></div>
+          </button></div>
         ))}
         {canViewMasters && <div
           className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
@@ -433,7 +429,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <Menu />
             Masters
             <ChevronDown className="masters-chevron" />
-          </button><MobileToggle name="Masters" /></div>
+          </button></div>
           <div className="masters-dropdown" role="menu">
             {visibleMasterNav.map(([name, Icon]) => (
               <div className="nav-config-row" key={name}><button
@@ -443,7 +439,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
               >
                 <Icon />
                 {name}
-              </button><MobileToggle name={name} /></div>
+              </button></div>
             ))}
           </div>
         </div>}
@@ -457,12 +453,12 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <MessageCircle />
             WhatsApp Integration
             <ChevronDown className="masters-chevron" />
-          </button><MobileToggle name="WhatsApp Integration" /></div>
+          </button></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
             {visibleWhatsAppNav.map(([name, Icon]) => (
               <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onPointerDown={closeMenus} onClick={() => selectPage(name)}>
                 <Icon />{name}
-              </button><MobileToggle name={name} /></div>
+              </button></div>
             ))}
           </div>
         </div>}
@@ -490,7 +486,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           >
             <I />
             {n}
-          </button><MobileToggle name={n} /></div>
+          </button></div>
         ))}
       </nav>
       <div className="user">
@@ -855,14 +851,19 @@ const userPrivilegeFields = [
   ["verify", "Verify", "checkbox"],
   ["print", "Print", "checkbox"],
 ];
-const userSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [field, label, "multi-checkbox"]);
+const mobileAccessKey=(key)=>`mobile${key[0].toUpperCase()}${key.slice(1)}`;
+const desktopSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [field, label, "multi-checkbox"]);
+const mobileSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [mobileAccessKey(field), `Mobile ${label}`, "multi-checkbox"]);
+const userSubmenuFields = [...desktopSubmenuFields, ...mobileSubmenuFields, ["mobileTabAccess", "Mobile visible tabs", "multi-checkbox"]];
 const userAccessOptions = {
   masterAccess: ADMIN_MASTER_OPTIONS,
   tabAccess: ADMIN_TAB_OPTIONS,
   ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [field, options])),
+  mobileTabAccess: ADMIN_TAB_OPTIONS,
+  ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [mobileAccessKey(field), options])),
 };
-const selectedAccessValues = (record, key) => {
-  if (!Object.prototype.hasOwnProperty.call(record || {}, key)) return userAccessOptions[key] || [];
+const selectedAccessValues = (record, key, fallbackKey = "") => {
+  if (!Object.prototype.hasOwnProperty.call(record || {}, key)) return fallbackKey ? selectedAccessValues(record,fallbackKey) : userAccessOptions[key] || [];
   return String(record[key] || "").split(/\s*[|,]\s*/).filter(Boolean);
 };
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
@@ -1069,6 +1070,26 @@ function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
   </>;
 }
 
+function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs,isManager=false}){
+  const prefix=view==="mobile"?"mobile":"";
+  const keyFor=(field)=>prefix?mobileAccessKey(field):field;
+  const requiredTabs=isManager?["Dashboard","Tickets"]:[];
+  const shownTabs=[...new Set([...visibleTabs,...requiredTabs])];
+  const toggleTab=(tab,checked)=>setVisibleTabs((current)=>checked?[...new Set([...current,tab])]:current.filter((item)=>item!==tab));
+  return <section className={`view-menu-access full ${view}-view-access`}>
+    <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{shownTabs.length} selected</span></header>
+    <fieldset className="user-access-field access-section-card">
+      <legend>Selected menus</legend>
+      {requiredTabs.map((tab)=><input key={tab} type="hidden" name={keyFor("tabAccess")} value={tab} />)}
+      <div>{ADMIN_TAB_OPTIONS.map((option)=>{const required=requiredTabs.includes(option);return <label key={option}><input type="checkbox" name={keyFor("tabAccess")} value={option} checked={shownTabs.includes(option)} disabled={required} onChange={(event)=>toggleTab(option,event.target.checked)} /><span>{option}{required?" · Required":""}</span></label>})}</div>
+    </fieldset>
+    {shownTabs.map((tab)=>{const submenu=ADMIN_SUBMENU_OPTIONS[tab];if(!submenu)return null;const field=keyFor(submenu.field);return <fieldset key={tab} className="user-access-field access-section-card access-submenu-card">
+      <legend>{tab} · Submenus</legend>
+      <div>{submenu.options.map((option)=><label key={option}><input type="checkbox" name={field} value={option} defaultChecked={selectedAccessValues(record,field,prefix?submenu.field:"").includes(option)} /><span>{option}</span></label>)}</div>
+    </fieldset>})}
+  </section>;
+}
+
 function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
     ? "User"
@@ -1077,11 +1098,10 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
   const [managerRole, setManagerRole] = useState(record.managerRole || "");
   const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
+  const [mobileVisibleTabs, setMobileVisibleTabs] = useState(selectedAccessValues(record,"mobileTabAccess","tabAccess"));
   const isDesktopUser = accountRole === "User";
   const isAdmin = isDesktopUser && userAuthority === "Admin";
   const isManager = isDesktopUser && userAuthority === "Manager";
-  const toggleTab = (tab, checked) => setVisibleTabs((current) => checked ? [...new Set([...current, tab])] : current.filter((item) => item !== tab));
-  const managerVisibleTabs = isManager ? [...new Set([...visibleTabs, "Tickets"])] : visibleTabs;
   return <>
     <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole ? "Mobile User" : ""} />
     <fieldset className="account-role-field full">
@@ -1115,22 +1135,11 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
         {(record.site || record.location) && !siteOptions.includes(record.site || record.location) && <option value={record.site || record.location}>{record.site || record.location}</option>}
       </select>
     </label>}
-    {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>Full Admin access</b><small>This account will automatically see every screen, master, operational workspace, report, audit feature and administrative function.</small></span></div>}
-    {isManager && <>
-      <div className="user-privilege-heading full"><h3>Manager screen access</h3><p>Choose the header menus this Manager can open. Related submenu choices appear below.</p></div>
-      <fieldset className="user-access-field full access-section-card">
-        <legend>Visible tabs</legend>
-        <input type="hidden" name="tabAccess" value="Tickets" />
-        <div>{ADMIN_TAB_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="tabAccess" value={option} checked={managerVisibleTabs.includes(option)} disabled={option === "Tickets"} onChange={(event) => toggleTab(option, event.target.checked)} /><span>{option}{option === "Tickets" ? " · Required" : ""}</span></label>)}</div>
-      </fieldset>
-      {managerVisibleTabs.map((tab) => {
-        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
-        if (!submenu) return null;
-        return <fieldset key={tab} className="user-access-field full access-section-card access-submenu-card">
-          <legend>{submenu.label}</legend>
-          <div>{submenu.options.map((option) => <label key={option}><input type="checkbox" name={submenu.field} value={option} defaultChecked={selectedAccessValues(record, submenu.field).includes(option)} /><span>{option}</span></label>)}</div>
-        </fieldset>;
-      })}
+    {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>Admin menu access</b><small>All menus are selected by default. You can tailor this Admin’s desktop and mobile menus below.</small></span></div>}
+    {isDesktopUser && <>
+      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Configure this user’s header menus and submenus separately for desktop and responsive mobile screens.</p></div>
+      <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager />
+      <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager />
     </>}
     {accountRole && !isDesktopUser && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
@@ -1145,9 +1154,13 @@ function applyUserRoleDefaults(record) {
     if (record.adminLevel === "Admin") {
       record.site = "";
       record.managerRole = "";
-      record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
-      record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
-      Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[field] = options.join(" | "); });
+      if(!Object.prototype.hasOwnProperty.call(record,"mobileTabAccess")&&!Object.prototype.hasOwnProperty.call(record,"dashboardAccess")){
+        record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
+        record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
+        Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[field] = options.join(" | "); });
+        record.mobileTabAccess = ADMIN_TAB_OPTIONS.join(" | ");
+        Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[mobileAccessKey(field)] = options.join(" | "); });
+      }
     } else if (!managerRoleOptions.includes(record.managerRole)) record.managerRole = "";
     else {
       const tabs = new Set(String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
@@ -1155,10 +1168,18 @@ function applyUserRoleDefaults(record) {
       tabs.add("Tickets");
       record.tabAccess = [...tabs].join(" | ");
       record.dashboardAccess = "Dashboard";
+      const mobileTabs = new Set(String(record.mobileTabAccess || record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
+      mobileTabs.add("Dashboard");
+      mobileTabs.add("Tickets");
+      record.mobileTabAccess = [...mobileTabs].join(" | ");
+      record.mobileDashboardAccess = "Dashboard";
       if (record.managerRole !== "MIS Manager") {
         const masters = new Set(String(record.masterAccess || "").split(/\s*\|\s*/).filter(Boolean));
         masters.add("Equipment master");
         record.masterAccess = [...masters].join(" | ");
+        const mobileMasters = new Set(String(record.mobileMasterAccess || record.masterAccess || "").split(/\s*\|\s*/).filter(Boolean));
+        mobileMasters.add("Equipment master");
+        record.mobileMasterAccess = [...mobileMasters].join(" | ");
       }
     }
   } else if (mobileUserRoleOptions.includes(role)) {
@@ -1168,8 +1189,22 @@ function applyUserRoleDefaults(record) {
     record.masterAccess = "";
     record.tabAccess = "";
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[field] = ""; });
+    record.mobileTabAccess = "";
+    Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
   }
   return record;
+}
+
+function missingViewSubmenu(record){
+  for(const [view,prefix] of [["Desktop View",""],["Mobile View","mobile"]]){
+    const tabField=prefix?"mobileTabAccess":"tabAccess";
+    const missing=String(record[tabField]||"").split(/\s*\|\s*/).filter(Boolean).find((tab)=>{
+      const submenu=ADMIN_SUBMENU_OPTIONS[tab];
+      return submenu&&!record[prefix?mobileAccessKey(submenu.field):submenu.field];
+    });
+    if(missing)return {view,tab:missing};
+  }
+  return null;
 }
 
 function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
@@ -1202,11 +1237,8 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
       return;
     }
     if (name === "Users & employees" && record.userType === "Super Admin") {
-      const missing = String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean).find((tab) => {
-        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
-        return submenu && !record[submenu.field];
-      });
-      if (missing) { alert(`Select at least one submenu for ${missing}.`); return; }
+      const missing = missingViewSubmenu(record);
+      if (missing) { alert(`Select at least one ${missing.tab} submenu for ${missing.view}.`); return; }
     }
     onAdd([record]);
     setMode(null);
@@ -3003,11 +3035,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       return;
     }
     if (name === "Users & employees" && updated.userType === "Super Admin") {
-      const missing = String(updated.tabAccess || "").split(/\s*\|\s*/).filter(Boolean).find((tab) => {
-        const submenu = ADMIN_SUBMENU_OPTIONS[tab];
-        return submenu && !updated[submenu.field];
-      });
-      if (missing) { alert(`Select at least one submenu for ${missing}.`); return; }
+      const missing = missingViewSubmenu(updated);
+      if (missing) { alert(`Select at least one ${missing.tab} submenu for ${missing.view}.`); return; }
     }
     try {
       await onEdit(editing.id, updated);
@@ -4124,7 +4153,6 @@ function App() {
     [equipmentLocation, setEquipmentLocation] = useState(""),
     [requests, setRequests] = useState([]),
     [menu, setMenu] = useState(false),
-    [mobileMenuVisibility, setMobileMenuVisibility] = useState(() => normalizeMobileNavigationVisibility()),
     [loadTime, setLoadTime] = useState(null),
     [canGoBack, setCanGoBack] = useState(false),
     [theme, setTheme] = useState(() => {
@@ -4134,6 +4162,8 @@ function App() {
     });
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef(["Dashboard"]);
+  const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
+  useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -4141,6 +4171,7 @@ function App() {
   }, [theme]);
   const toggleTheme = () => setTheme((current) => current === "dark" ? "light" : "dark");
   const adminPermissions = session?.permissions || {};
+  const activeNavigationPermissions=navigationPermissionsForView(adminPermissions,responsiveMobile);
   const [profileLocation, setProfileLocation] = useState("");
   useEffect(() => {
     if (!session?.token) return undefined;
@@ -4151,44 +4182,18 @@ function App() {
       .catch(() => {});
     return () => { activeRequest = false; };
   }, [session?.token]);
-  useEffect(() => {
-    if (session?.role !== "super") return undefined;
-    let activeRequest = true;
-    fetch("/api/navigation-settings", {headers: {Authorization: `Bearer ${session.token}`}})
-      .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((settings) => { if (activeRequest) setMobileMenuVisibility(normalizeMobileNavigationVisibility(settings)); })
-      .catch(() => {});
-    return () => { activeRequest = false; };
-  }, [session?.token, session?.role]);
-  const updateMobileMenuVisibility = async (name, visible) => {
-    const previous = mobileMenuVisibility;
-    const next = {...previous, [name]: visible};
-    setMobileMenuVisibility(next);
-    try {
-      const response = await fetch("/api/navigation-settings", {
-        method: "PUT",
-        headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
-        body: JSON.stringify(next),
-      });
-      if (!response.ok) throw new Error("Could not save mobile menu visibility.");
-      setMobileMenuVisibility(normalizeMobileNavigationVisibility(await response.json()));
-    } catch (error) {
-      setMobileMenuVisibility(previous);
-      alert(error.message);
-    }
-  };
   const canOpenAdminPage = (name) => {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
-    if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.tabAccess, "Masters") && accessAllows(adminPermissions.masterAccess, name);
-    if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration") && accessAllows(adminPermissions.whatsappAccess, name);
+    if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && accessAllows(activeNavigationPermissions.masterAccess, name);
+    if (whatsappNav.some(([page]) => page === name)) return accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
-    return accessAllows(adminPermissions.tabAccess, name) && accessAllows(adminPermissions[directMenuAccess[name]], name);
+    return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
     if (canOpenAdminPage("Dashboard")) return "Dashboard";
     const firstMaster = masterNav.find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
-    if (accessAllows(adminPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => accessAllows(adminPermissions.whatsappAccess, name))?.[0];
+    if (accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => accessAllows(activeNavigationPermissions.whatsappAccess, name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
   };
   const selectedOperationalRole = operationalWorkspaceNav.find(([name]) => name === active)?.[2];
@@ -4248,7 +4253,7 @@ function App() {
     pageHistory.current = [landingPage];
     setCanGoBack(false);
     setActive(landingPage);
-  }, [session?.token]);
+  }, [session?.token,responsiveMobile]);
   const goBack = () => {
     if (pageHistory.current.length <= 1) return;
     pageHistory.current.pop();
@@ -4404,8 +4409,6 @@ function App() {
         permissions={adminPermissions}
         session={session}
         profileLocation={profileLocation}
-        mobileMenuVisibility={mobileMenuVisibility}
-        onMobileVisibilityChange={updateMobileMenuVisibility}
       />
       <main className="content">
         <div className="top">

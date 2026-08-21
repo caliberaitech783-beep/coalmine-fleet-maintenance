@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions} from "../admin-access.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions, navigationPermissionsForView} from "../admin-access.mjs";
 
 test("legacy administrators retain full access when allowlists are absent", () => {
   const permissions = adminAccessPermissions({userType: "Super Admin"});
@@ -15,6 +15,14 @@ test("manager authority is retained in the admin session permissions", () => {
   assert.equal(permissions.adminLevel, "Manager");
   assert.equal(permissions.managerRole, "Maintenance Manager");
   assert.deepEqual(permissions.tabAccess, ["Dashboard", "Tickets"]);
+});
+
+test("desktop and mobile menu selections remain independent per user",()=>{
+  const permissions=adminAccessPermissions({adminLevel:"Manager",tabAccess:"Dashboard | Tickets",masterAccess:"Equipment master",mobileTabAccess:"Masters | Tickets",mobileMasterAccess:"Region master",mobileDashboardAccess:"",mobileTicketAccess:"Tickets"});
+  assert.deepEqual(permissions.tabAccess,["Dashboard","Tickets"]);
+  assert.deepEqual(permissions.mobileTabAccess,["Masters","Tickets"]);
+  assert.deepEqual(navigationPermissionsForView(permissions,false).masterAccess,["Equipment master"]);
+  assert.deepEqual(navigationPermissionsForView(permissions,true).masterAccess,["Region master"]);
 });
 
 test("every main header has a conditional submenu allowlist", () => {

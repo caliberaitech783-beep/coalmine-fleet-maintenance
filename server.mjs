@@ -372,9 +372,9 @@ async function requireSuper(req,res,next){
     const session=await readSession(req);
     if(session?.role!=='super')return res.status(403).json({error:'Your sign-in has expired. Please sign in again as Super User.'});
     const requestedMaster=req.params?.master?decodeURIComponent(req.params.master):'';
-    if(requestedMaster&&!accessAllows(session.permissions?.masterAccess,requestedMaster))
+    if(requestedMaster&&!accessAllows(session.permissions?.masterAccess,requestedMaster)&&!accessAllows(session.permissions?.mobileMasterAccess,requestedMaster))
       return res.status(403).json({error:'You do not have access to this master.'});
-    if(req.path.startsWith('/api/whatsapp')&&!accessAllows(session.permissions?.tabAccess,'WhatsApp Integration'))
+    if(req.path.startsWith('/api/whatsapp')&&!accessAllows(session.permissions?.tabAccess,'WhatsApp Integration')&&!accessAllows(session.permissions?.mobileTabAccess,'WhatsApp Integration'))
       return res.status(403).json({error:'You do not have access to WhatsApp Integration.'});
     req.session=session;
     next();
@@ -795,7 +795,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
 
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
-    const superCanView=(master)=>req.session.role==='super'&&accessAllows(req.session.permissions?.masterAccess,master);
+    const superCanView=(master)=>req.session.role==='super'&&(accessAllows(req.session.permissions?.masterAccess,master)||accessAllows(req.session.permissions?.mobileMasterAccess,master));
     const canViewEquipment=superCanView('Equipment master')||req.session.permissions?.viewEquipment===true;
     const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
     if(!canViewEquipment&&!canViewRepairTypes)
@@ -806,7 +806,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
       if(req.session.role==='super'){
-        if(!accessAllows(req.session.permissions?.masterAccess,row.master_name))continue;
+        if(!accessAllows(req.session.permissions?.masterAccess,row.master_name)&&!accessAllows(req.session.permissions?.mobileMasterAccess,row.master_name))continue;
       }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;

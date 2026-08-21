@@ -23,7 +23,7 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /accountRole && \(!isDesktopUser \|\| isManager\) && <label>Location \*[\s\S]*name="site"/);
   assert.match(source, /accountRole && !isDesktopUser && <UserPrivilegeFields/);
   assert.match(source, /isAdmin && <div className="super-role-summary full"/);
-  assert.match(source, /isManager && <>[\s\S]*Manager screen access/);
+  assert.match(source, /isDesktopUser && <>[\s\S]*Selected menus for each view/);
   assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
 });
 
@@ -31,8 +31,8 @@ test("manager profile and navigation honor assigned role, location, and parent m
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /permissions\.adminLevel === "Manager" \? permissions\.managerRole \|\| "Manager" : "Super User"/);
   assert.match(source, /session\?\.name[\s\S]*profileLocation[\s\S]*\.join\(" · "\)/);
-  assert.match(source, /accessAllows\(permissions\.tabAccess, "Masters"\)[\s\S]*visibleMasterNav\.length > 0/);
-  assert.match(source, /accessAllows\(adminPermissions\.tabAccess, "Masters"\) && accessAllows\(adminPermissions\.masterAccess, name\)/);
+  assert.match(source, /accessAllows\(viewPermissions\.tabAccess, "Masters"\)[\s\S]*visibleMasterNav\.length > 0/);
+  assert.match(source, /accessAllows\(activeNavigationPermissions\.tabAccess, "Masters"\) && accessAllows\(activeNavigationPermissions\.masterAccess, name\)/);
 });
 
 test("each Manager receives a role-specific dashboard", () => {
