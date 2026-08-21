@@ -1,5 +1,6 @@
 export const MOBILE_NAVIGATION_ITEMS = [
   "Dashboard",
+  "Tickets",
   "Masters",
   "Users & employees",
   "Equipment master",

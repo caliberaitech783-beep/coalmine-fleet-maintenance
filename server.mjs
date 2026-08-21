@@ -13,6 +13,7 @@ import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './m
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {accessAllows} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
+import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -160,6 +161,36 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS whatsapp_alert_history_created_at_idx
       ON whatsapp_alert_history (created_at DESC);
+    CREATE TABLE IF NOT EXISTS crm_tickets (
+      id BIGSERIAL PRIMARY KEY,
+      reference TEXT UNIQUE,
+      creator_login TEXT NOT NULL,
+      creator_name TEXT NOT NULL,
+      creator_role TEXT NOT NULL DEFAULT '',
+      site TEXT NOT NULL DEFAULT 'Not assigned',
+      category TEXT NOT NULL DEFAULT 'General',
+      message TEXT NOT NULL DEFAULT '',
+      message_audio TEXT NOT NULL DEFAULT '',
+      attachment_data TEXT NOT NULL DEFAULT '',
+      attachment_name TEXT NOT NULL DEFAULT '',
+      attachment_type TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'Open',
+      resolution_message TEXT NOT NULL DEFAULT '',
+      resolved_by TEXT NOT NULL DEFAULT '',
+      resolved_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS crm_tickets_creator_idx ON crm_tickets (creator_login, created_at DESC);
+    CREATE INDEX IF NOT EXISTS crm_tickets_scope_idx ON crm_tickets (creator_role, site, created_at DESC);
+    CREATE TABLE IF NOT EXISTS crm_notifications (
+      id BIGSERIAL PRIMARY KEY,
+      recipient_login TEXT NOT NULL,
+      ticket_reference TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS crm_notifications_recipient_idx ON crm_notifications (recipient_login, is_read, created_at DESC);
   `);
   const client=await pool.connect();
   try{
@@ -192,7 +223,7 @@ async function migrate(){
   }finally{client.release()}
 }
 
-app.use(express.json({limit:'8mb'}));
+app.use(express.json({limit:'20mb'}));
 
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
@@ -399,6 +430,138 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
     const record=rows[0]?.record_data||{};
     const location=String(record.site||record.location||record.currentLocation||'').trim();
     res.json({location});
+  }catch(error){next(error)}
+});
+
+async function currentUserRecord(session,client=pool){
+  const login=String(session?.login||'').trim().toLowerCase();
+  const name=String(session?.name||'').trim().toLowerCase();
+  const {rows}=await client.query(`SELECT record_data FROM master_records
+    WHERE master_name='Users & employees' AND (
+      ($1 <> '' AND lower(trim(record_data->>'login'))=$1) OR
+      ($2 <> '' AND lower(trim(record_data->>'employee'))=$2)
+    ) ORDER BY CASE WHEN lower(trim(record_data->>'login'))=$1 THEN 0 ELSE 1 END,created_at DESC LIMIT 1`,[login,name]);
+  return rows[0]?.record_data||{};
+}
+
+function ticketProjection(){
+  return `reference,creator_login AS "creatorLogin",creator_name AS "creatorName",creator_role AS "creatorRole",site,category,
+    message,message_audio AS "messageAudio",attachment_data AS "attachmentData",attachment_name AS "attachmentName",
+    attachment_type AS "attachmentType",status,resolution_message AS "resolutionMessage",resolved_by AS "resolvedBy",
+    to_char(resolved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "resolvedAt",
+    to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"`;
+}
+
+function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
+
+async function addTicketNotifications(client,recipients,reference,message){
+  for(const login of [...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))]){
+    await client.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message) VALUES ($1,$2,$3)`,[login,reference,message]);
+  }
+}
+
+async function ticketSuperRecipients(client,{creatorRole,site}){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const adminLogins=[];
+  const managerLogins=[];
+  for(const row of rows){
+    const user=row.record_data||{};
+    const login=String(user.login||'').trim().toLowerCase();
+    if(!login)continue;
+    const profile=resolveMobileAccess({user});
+    if(profile.sessionRole!=='super')continue;
+    if(profile.permissions.adminLevel==='Admin')adminLogins.push(login);
+    else if(managerUserRole(profile.permissions.managerRole)===creatorRole&&String(user.site||user.location||'').trim().toLowerCase()===String(site||'').trim().toLowerCase())managerLogins.push(login);
+  }
+  return {adminLogins,managerLogins};
+}
+
+app.get('/api/tickets',requireSession,async(req,res,next)=>{
+  try{
+    const category=TICKET_CATEGORIES.includes(String(req.query.category||''))?String(req.query.category):'';
+    const values=[];
+    const conditions=[];
+    if(req.session.role!=='super'){
+      values.push(String(req.session.login||'').trim().toLowerCase());
+      conditions.push(`lower(creator_login)=$${values.length}`);
+    }else if(req.session.permissions?.adminLevel==='Manager'){
+      const user=await currentUserRecord(req.session);
+      values.push(managerUserRole(req.session.permissions?.managerRole));
+      conditions.push(`creator_role=$${values.length}`);
+      values.push(String(user.site||user.location||'').trim());
+      conditions.push(`lower(site)=lower($${values.length})`);
+    }
+    if(category){values.push(category);conditions.push(`category=$${values.length}`)}
+    const where=conditions.length?`WHERE ${conditions.join(' AND ')}`:'';
+    const {rows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets ${where} ORDER BY created_at DESC`,values);
+    res.json(rows);
+  }catch(error){next(error)}
+});
+
+app.post('/api/tickets',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    if(req.session.role==='super')return res.status(403).json({error:'Managers and Admins have view-only ticket intake access.'});
+    const category=TICKET_CATEGORIES.includes(String(req.body?.category||''))?String(req.body.category):'General';
+    const message=String(req.body?.message||'').trim();
+    const messageAudio=String(req.body?.messageAudio||'');
+    const attachmentData=String(req.body?.attachmentData||'');
+    const attachmentName=String(req.body?.attachmentName||'').slice(0,255);
+    const attachmentType=String(req.body?.attachmentType||'').slice(0,100);
+    if(!message&&!messageAudio)return res.status(400).json({error:'Write a message or record an audio message.'});
+    if(!validTicketMediaDataUrl(messageAudio,{kind:'audio'}))return res.status(400).json({error:'Ticket audio must be a supported recording up to 3 MB.'});
+    if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
+    const user=await currentUserRecord(req.session,client);
+    const site=String(user.site||user.location||user.currentLocation||'Not assigned').trim()||'Not assigned';
+    const creatorRole=req.session.role==='super'?(req.session.permissions?.managerRole||'Admin'):String(req.session.assignedRole||'User');
+    await client.query('BEGIN');
+    const inserted=await client.query(`INSERT INTO crm_tickets
+      (creator_login,creator_name,creator_role,site,category,message,message_audio,attachment_data,attachment_name,attachment_type)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,created_at`,[
+      String(req.session.login||'').trim().toLowerCase(),String(req.session.name||'User'),creatorRole,site,category,message,messageAudio,attachmentData,attachmentName,attachmentType
+    ]);
+    const reference=ticketReference({site,date:new Date(inserted.rows[0].created_at),number:inserted.rows[0].id});
+    const {rows}=await client.query(`UPDATE crm_tickets SET reference=$1 WHERE id=$2 RETURNING ${ticketProjection()}`,[reference,inserted.rows[0].id]);
+    const recipients=await ticketSuperRecipients(client,{creatorRole,site});
+    await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} created ticket ${reference}.`);
+    await client.query('COMMIT');
+    res.status(201).json(rows[0]);
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+
+app.patch('/api/tickets/:reference/resolve',requireSession,async(req,res,next)=>{
+  if(!isTicketAdmin(req.session))return res.status(403).json({error:'Only an Admin can resolve tickets.'});
+  const client=await pool.connect();
+  try{
+    const resolution=String(req.body?.resolutionMessage||'').trim();
+    if(!resolution)return res.status(400).json({error:'Enter a resolution message.'});
+    await client.query('BEGIN');
+    const result=await client.query(`UPDATE crm_tickets SET status='Resolved',resolution_message=$1,resolved_by=$2,resolved_at=NOW()
+      WHERE reference=$3 AND status<>'Resolved' RETURNING ${ticketProjection()}`,[resolution,String(req.session.name||'Admin'),req.params.reference]);
+    if(!result.rows.length){await client.query('ROLLBACK');return res.status(404).json({error:'Open ticket not found.'})}
+    const ticket=result.rows[0];
+    const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
+    await addTicketNotifications(client,[ticket.creatorLogin,...recipients.managerLogins],ticket.reference,`Ticket ${ticket.reference} was resolved by ${req.session.name||'Admin'}.`);
+    await client.query('COMMIT');
+    res.json(ticket);
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+
+app.get('/api/notifications',requireSession,async(req,res,next)=>{
+  try{
+    const login=String(req.session.login||'').trim().toLowerCase();
+    const {rows}=await pool.query(`SELECT id,ticket_reference AS "ticketReference",message,is_read AS "isRead",
+      to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
+      FROM crm_notifications WHERE recipient_login=$1 ORDER BY created_at DESC LIMIT 50`,[login]);
+    res.json(rows);
+  }catch(error){next(error)}
+});
+
+app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
+  try{
+    const login=String(req.session.login||'').trim().toLowerCase();
+    await pool.query('UPDATE crm_notifications SET is_read=TRUE WHERE recipient_login=$1',[login]);
+    res.json({ok:true});
   }catch(error){next(error)}
 });
 

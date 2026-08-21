@@ -64,6 +64,8 @@ import {
   Activity,
   Sun,
   Moon,
+  Ticket,
+  Paperclip,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -120,6 +122,7 @@ const subsidiaryData = [
 ];
 const nav = [
   ["Dashboard", LayoutDashboard],
+  ["Tickets", Ticket],
   ["Reports", FileBarChart],
   ["Audit Trail", History],
 ];
@@ -388,7 +391,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   }, [active]);
   const visibleOnMobile = (name) => !responsiveMobile || mobileMenuVisibility[name] !== false;
   const visibleMasterNav = masterNav.filter(([name]) => accessAllows(permissions.masterAccess, name) && visibleOnMobile(name));
-  const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+  const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
   const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name) && accessAllows(permissions[directMenuAccess[name]], name) && visibleOnMobile(name));
   const canViewMasters = accessAllows(permissions.tabAccess, "Masters") && visibleOnMobile("Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(permissions.whatsappAccess, name) && visibleOnMobile(name));
@@ -1066,6 +1069,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const isAdmin = isDesktopUser && userAuthority === "Admin";
   const isManager = isDesktopUser && userAuthority === "Manager";
   const toggleTab = (tab, checked) => setVisibleTabs((current) => checked ? [...new Set([...current, tab])] : current.filter((item) => item !== tab));
+  const managerVisibleTabs = isManager ? [...new Set([...visibleTabs, "Tickets"])] : visibleTabs;
   return <>
     <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole ? "Mobile User" : ""} />
     <fieldset className="account-role-field full">
@@ -1104,9 +1108,10 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
       <div className="user-privilege-heading full"><h3>Manager screen access</h3><p>Choose the header menus this Manager can open. Related submenu choices appear below.</p></div>
       <fieldset className="user-access-field full access-section-card">
         <legend>Visible tabs</legend>
-        <div>{ADMIN_TAB_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="tabAccess" value={option} checked={visibleTabs.includes(option)} onChange={(event) => toggleTab(option, event.target.checked)} /><span>{option}</span></label>)}</div>
+        <input type="hidden" name="tabAccess" value="Tickets" />
+        <div>{ADMIN_TAB_OPTIONS.map((option) => <label key={option}><input type="checkbox" name="tabAccess" value={option} checked={managerVisibleTabs.includes(option)} disabled={option === "Tickets"} onChange={(event) => toggleTab(option, event.target.checked)} /><span>{option}{option === "Tickets" ? " · Required" : ""}</span></label>)}</div>
       </fieldset>
-      {visibleTabs.map((tab) => {
+      {managerVisibleTabs.map((tab) => {
         const submenu = ADMIN_SUBMENU_OPTIONS[tab];
         if (!submenu) return null;
         return <fieldset key={tab} className="user-access-field full access-section-card access-submenu-card">
@@ -1135,6 +1140,7 @@ function applyUserRoleDefaults(record) {
     else {
       const tabs = new Set(String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
       tabs.add("Dashboard");
+      tabs.add("Tickets");
       record.tabAccess = [...tabs].join(" | ");
       record.dashboardAccess = "Dashboard";
       if (record.managerRole !== "MIS Manager") {
@@ -1985,6 +1991,7 @@ function EnhancedSpeechComplaint({
   audioName = "complaintAudio",
   buttonLabel = "Speak complaint",
   placeholder = "Type here, or select your language and speak. Clear English text will appear here.",
+  required = true,
 }) {
   const [text, setText] = useState(""),
     [lang, setLang] = useState("hi-IN"),
@@ -2152,7 +2159,7 @@ function EnhancedSpeechComplaint({
       </div>
       <textarea
         name={name}
-        required
+        required={required}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={placeholder}
@@ -3904,6 +3911,110 @@ function VerifyRequestForm({ request, close, onSave }) {
   </Modal>;
 }
 
+const ticketCategories = ["General", "Production", "Maintenance", "MIS", "Equipment", "System access"];
+function readTicketAttachment(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve("");
+    const supported = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"];
+    if (!supported.includes(file.type) || file.size > 10 * 1024 * 1024) return reject(new Error("Upload a JPEG, PNG, WebP, MP4, or WebM file up to 10 MB."));
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read the selected attachment."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function TicketCreateForm({ session, close, onCreated }) {
+  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault();
+    if (saving) return;
+    const form = new FormData(event.currentTarget);
+    const message = String(form.get("message") || "").trim();
+    const messageAudio = String(form.get("messageAudio") || "");
+    if (!message && !messageAudio) return alert("Write a message or record an audio message.");
+    setSaving(true);
+    try {
+      const attachmentData = await readTicketAttachment(attachment);
+      const response = await fetch("/api/tickets", {
+        method: "POST",
+        headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
+        body: JSON.stringify({category: form.get("category"), message, messageAudio, attachmentData, attachmentName: attachment?.name || "", attachmentType: attachment?.type || ""}),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not create the ticket.");
+      onCreated(result);
+      close();
+    } catch (error) { alert(error.message); }
+    finally { setSaving(false); }
+  };
+  return <Modal title="Create support ticket" close={close}>
+    <form className="form ticket-form" onSubmit={submit}>
+      <div className="formgrid">
+        <label>User name<input value={session?.name || ""} readOnly /></label>
+        <label>Category *<select name="category" required defaultValue="General">{ticketCategories.map((category) => <option key={category}>{category}</option>)}</select></label>
+        <EnhancedSpeechComplaint label="Ticket message" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Write the issue here or record an audio message." required={false} />
+        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, or WebM · maximum 10 MB"}</small></label>
+      </div>
+      <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
+    </form>
+  </Modal>;
+}
+
+function TicketAttachment({ ticket }) {
+  if (!ticket.attachmentData) return "—";
+  if (String(ticket.attachmentType).startsWith("video/")) return <video className="ticket-media" controls preload="metadata" src={ticket.attachmentData}>Ticket video</video>;
+  return <a href={ticket.attachmentData} target="_blank" rel="noreferrer" title={ticket.attachmentName || "Open attachment"}><img className="ticket-media" src={ticket.attachmentData} alt={ticket.attachmentName || "Ticket attachment"} /></a>;
+}
+
+function TicketPage({ session }) {
+  const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null);
+  const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
+  const canCreate = session?.role === "normal";
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/tickets${category ? `?category=${encodeURIComponent(category)}` : ""}`, {headers: {Authorization: `Bearer ${session.token}`}});
+      const result = await response.json().catch(() => ([]));
+      if (!response.ok) throw new Error(result.error || "Could not load tickets.");
+      setTickets(result);
+    } catch (error) { alert(error.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [category, session?.token]);
+  const resolveTicket = async (event) => {
+    event.preventDefault();
+    const resolutionMessage = String(new FormData(event.currentTarget).get("resolutionMessage") || "").trim();
+    const response = await fetch(`/api/tickets/${encodeURIComponent(resolving.reference)}/resolve`, {method: "PATCH", headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`}, body: JSON.stringify({resolutionMessage})});
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return alert(result.error || "Could not resolve the ticket.");
+    setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket));
+    setResolving(null);
+  };
+  return <section className="ticket-page">
+    <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div>{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</header>
+    <div className="ticket-toolbar"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
+    <div className="ticket-table-wrap"><table><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Message</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>{ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td className="ticket-message">{ticket.message || "Audio message"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage ? <span>{ticket.resolutionMessage}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 10 : 9} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></table></div>
+    {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}
+    {resolving && <Modal title={`Resolve ${resolving.reference}`} close={() => setResolving(null)}><form className="form ticket-resolution-form" onSubmit={resolveTicket}><label>Resolution message *<textarea name="resolutionMessage" required placeholder="Explain how this ticket was resolved." /></label><footer><button type="button" onClick={() => setResolving(null)}>Cancel</button><button className="primary">Resolve ticket <CheckCircle2 /></button></footer></form></Modal>}
+  </section>;
+}
+
+function NotificationBell({ session, onOpenTickets }) {
+  const [items, setItems] = useState([]), [open, setOpen] = useState(false);
+  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then(setItems).catch(() => {});
+  useEffect(() => { load(); const timer = window.setInterval(load, 30000); return () => window.clearInterval(timer); }, [session?.token]);
+  const unread = items.filter((item) => !item.isRead).length;
+  const toggle = async () => {
+    const next = !open; setOpen(next);
+    if (next && unread) {
+      await fetch("/api/notifications/read", {method: "PATCH", headers: {Authorization: `Bearer ${session.token}`}}).catch(() => {});
+      setItems((current) => current.map((item) => ({...item, isRead: true})));
+    }
+  };
+  return <div className="notification-center"><button type="button" onClick={toggle} aria-label={`${unread} unread notifications`}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover"><header><b>Notifications</b><span>{items.length}</span></header>{items.length ? items.map((item) => <button key={item.id} onClick={() => {setOpen(false); onOpenTickets?.();}}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div>}</div>;
+}
+
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, theme, toggleTheme, embedded = false }) {
   const mobileRole = session?.assignedRole || "Mobile User";
   const [show, setShow] = useState(false), [tab, setTab] = useState(mobileRole === "MIS User" ? "verify" : "requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null);
@@ -3932,15 +4043,17 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const visibleRows = isMis ? requests.filter((row) => String(row.status).toLowerCase() === "closed" && !row.verifiedAt) : requests;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><div><Bell /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><div><NotificationBell session={session} onOpenTickets={() => setTab("tickets")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
+        <button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button>
         <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>
         {canCreate && <button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
         {isMaintenance && <button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
         {isMis && <button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
       </div>
+      {tab === "tickets" && <TicketPage session={session} />}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your submitted requests · Read only</h3><section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showComplaintAudio showActions={Boolean(permissions.editRequests || permissions.deleteRequests)} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showComplaintAudio showActions onClose={setClosing} /></section></>}
@@ -4017,7 +4130,7 @@ function App() {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.tabAccess, "Masters") && accessAllows(adminPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration") && accessAllows(adminPermissions.whatsappAccess, name);
-    const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+    const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
     return accessAllows(adminPermissions.tabAccess, name) && accessAllows(adminPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
@@ -4258,10 +4371,7 @@ function App() {
             <button>
               <Search />
             </button>
-            <button>
-              <Bell />
-              <i />
-            </button>
+            <NotificationBell session={session} onOpenTickets={() => selectMenu("Tickets")} />
           </div>
         </div>
         <div className="body">
@@ -4269,6 +4379,8 @@ function App() {
             adminPermissions.adminLevel === "Manager"
               ? <ManagerDashboard managerRole={adminPermissions.managerRole} requests={requests} gotoEquipment={gotoEquipment} />
               : <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
+          ) : active === "Tickets" ? (
+            <TicketPage session={session} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}

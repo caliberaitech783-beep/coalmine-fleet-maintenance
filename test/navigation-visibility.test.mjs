@@ -5,7 +5,7 @@ import {MOBILE_NAVIGATION_ITEMS, normalizeMobileNavigationVisibility} from "../n
 
 test("all header menus and submenus default to visible on responsive mobile", () => {
   const settings = normalizeMobileNavigationVisibility();
-  assert.equal(MOBILE_NAVIGATION_ITEMS.length, 16);
+  assert.equal(MOBILE_NAVIGATION_ITEMS.length, 17);
   assert.equal(Object.values(settings).every(Boolean), true);
 });
 

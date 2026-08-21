@@ -11,13 +11,14 @@ test("legacy administrators retain full access when allowlists are absent", () =
 });
 
 test("manager authority is retained in the admin session permissions", () => {
-  const permissions = adminAccessPermissions({adminLevel: "Manager", managerRole: "Maintenance Manager"});
+  const permissions = adminAccessPermissions({adminLevel: "Manager", managerRole: "Maintenance Manager", tabAccess: "Dashboard"});
   assert.equal(permissions.adminLevel, "Manager");
   assert.equal(permissions.managerRole, "Maintenance Manager");
+  assert.deepEqual(permissions.tabAccess, ["Dashboard", "Tickets"]);
 });
 
 test("every main header has a conditional submenu allowlist", () => {
-  assert.deepEqual(Object.keys(ADMIN_SUBMENU_OPTIONS), ["Dashboard", "Masters", "WhatsApp Integration", "Reports", "Audit Trail"]);
+  assert.deepEqual(Object.keys(ADMIN_SUBMENU_OPTIONS), ["Dashboard", "Masters", "WhatsApp Integration", "Reports", "Audit Trail", "Tickets"]);
   assert.ok(Object.values(ADMIN_SUBMENU_OPTIONS).every(({field, options}) => field && options.length));
 });
 
