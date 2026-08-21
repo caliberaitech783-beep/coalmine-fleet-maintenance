@@ -522,20 +522,24 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
   const offRoadKeys = new Set(openRequests.map((request) => String(request.chassis || request.door || request.equipment || "").trim().toLowerCase()).filter(Boolean));
   const offRoad = Math.min(siteEquipment.length, offRoadKeys.size);
   const fleet = {total:siteEquipment.length,offRoad,onRoad:Math.max(0,siteEquipment.length-offRoad)};
+  const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
+  const totalTypes=typeSummary(siteEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
+  const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
+  const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
   const closedRequests = requests.filter((request) => String(request.status || "").toLowerCase() === "closed");
   const pendingVerification = closedRequests.filter((request) => !request.verifiedAt);
   const verifiedRequests = requests.filter((request) => Boolean(request.verifiedAt));
   const cards = managerRole === "Production Manager"
     ? [
-        ["Total equipment", fleet.total, "Registered fleet", "all"],
-        ["On road", fleet.onRoad, "Available for production", "onroad"],
-        ["Off road", fleet.offRoad, "Equipment currently in maintenance", "offroad"],
+        ["Total equipment", fleet.total, "Registered fleet", "all", totalTypes],
+        ["On road", fleet.onRoad, "Available for production", "onroad", onRoadTypes],
+        ["Off road", fleet.offRoad, "Equipment currently in maintenance", "offroad", offRoadTypes],
       ]
     : managerRole === "Maintenance Manager"
       ? [
+          ["Total equipment", fleet.total, "Equipment at the assigned location", "all"],
           ["Received for maintenance", requests.length, "Total maintenance intake", ""],
           ["Remaining", openRequests.length, "Still requiring action", ""],
-          ["Awaiting parts", requests.filter((request) => String(request.status || "").toLowerCase().includes("awaiting")).length, "Waiting for parts or approval", ""],
           ["Completed", closedRequests.length, "Returned from maintenance", ""],
         ]
       : [
@@ -549,12 +553,12 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
   const description = managerRole === "Production Manager"
     ? `Live fleet availability for ${managerLocation || "the assigned location"}.`
     : managerRole === "Maintenance Manager"
-      ? "Maintenance intake, remaining workload, awaiting items, and completed equipment."
+      ? "Site equipment, maintenance intake, remaining workload, and completed equipment."
       : "MIS verification workload, pending checks, completed verification, and first-trip status.";
   return <section className="manager-dashboard">
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
-    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
-      <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>
+    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
+      <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{managerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <article className="panel manager-detail-panel"><header><div><h2>{managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests pending MIS verification"}</h2><p>{detailRows.length} record{detailRows.length === 1 ? "" : "s"} currently in this queue</p></div></header><BreakdownTable rows={detailRows} showBreakdownDays={managerRole !== "MIS Manager"} /></article>
   </section>;
@@ -669,7 +673,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => window.clearInterval(timer);
   }, [showBreakdownDays]);
   const columns = [
-      ["ref", "Job reference"], ["equipment", "Equipment"], ["door", "Door no."], ["site", "Site location"],
+      ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ["site", "Site location"],
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
       ["category", "Repair category"], ["start", "Started"], ["hours", "Downtime"],
@@ -3845,12 +3849,15 @@ function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repai
 function CloseRequestForm({ request, close, onSave }) {
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
-  const [time, setTime] = useState(now.time);
-  return <Modal title={`Close request ${request.ref}`} close={close}>
+  const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date);
+  const openedAt=new Date(`${opened.date}T${opened.time}+05:30`),closingAt=new Date(`${closingDate}T${time}+05:30`),tatMilliseconds=Math.max(0,closingAt-openedAt);
+  const tatDays=Math.floor(tatMilliseconds/86400000),tatHours=Math.floor((tatMilliseconds%86400000)/3600000),tatMinutes=Math.floor((tatMilliseconds%3600000)/60000);
+  const turnaroundTime=`${tatDays}d ${tatHours}h ${tatMinutes}m`;
+  return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={close}>
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: form.get("status")});
+      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: form.get("status")});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
@@ -3863,9 +3870,10 @@ function CloseRequestForm({ request, close, onSave }) {
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudio ? <audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
-        <label>Closing date *<input name="closingDate" type="date" required defaultValue={now.date} /></label>
+        <label>Closing date *<input name="closingDate" type="date" required value={closingDate} onChange={(event)=>setClosingDate(event.target.value)} /></label>
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
-        <label>Status *<select name="status" defaultValue={request.status === "Closed" ? "Closed" : "In progress"}><option>In progress</option><option>Awaiting parts</option><option>Closed</option></select></label>
+        <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
+        <label>Status *<select name="status" defaultValue={request.status === "Closed" ? "Closed" : "In progress"}><option>In progress</option><option>Closed</option></select></label>
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
