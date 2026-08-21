@@ -664,7 +664,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
       ["category", "Repair category"], ["start", "Started"], ["hours", "Downtime"],
-      ["status", "Status"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"],
+      ["status", "Status"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"],
     ],
     displayRows = showBreakdownDays
       ? rows.map((row) => ({
@@ -707,6 +707,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <Status>{r.status}</Status>
                 </td>
+                <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>
                 {showAudio && <td><div className="request-audio-list">
                   {r.complaintAudio && <label><span>Complaint</span><audio controls preload="none" src={r.complaintAudio}>Complaint audio</audio></label>}
                   {r.maintenanceAudio && <label><span>Maintenance</span><audio controls preload="none" src={r.maintenanceAudio}>Maintenance audio</audio></label>}
@@ -3740,7 +3741,15 @@ function requestStartParts(start) {
   };
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, onEdit, onDelete, onClose, onVerify }) {
+function MaintenanceRemarks({ remarks = [] }) {
+  return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{item.createdAt} · {item.authorName}</b><p>{item.remark}</p><small>Delay: {item.delayReason}</small></article>)}</details> : "—";
+}
+
+function DailyRemarkForm({ request, close, onSave }) {
+  return <Modal title={`Daily update · ${request.ref}`} close={close}><form className="form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);onSave({remark:form.get("remark"),delayReason:form.get("delayReason")});}}><label>Today’s maintenance update *<textarea name="remark" required placeholder="What work was completed today?" /></label><label>Reason for delay *<textarea name="delayReason" required placeholder="Why is the vehicle still off-road?" /></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save daily update <ChevronRight /></button></footer></form></Modal>;
+}
+
+function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -3751,7 +3760,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
       <table className="workflow-table">
         <thead><tr>
           <th>Job reference</th><th>Equipment group</th><th>Door no.</th><th>Site location</th>
-          <th>Status</th><th>Started</th><th>Days of breakdown</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
+          <th>Status</th><th>Started</th><th>Days of breakdown</th><th>Daily remarks</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {rows.length ? rows.map((row) => {
@@ -3764,6 +3773,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
               <td><Status>{row.status || "Open"}</Status></td>
               <td>{row.start || "—"}</td>
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
+              <td><MaintenanceRemarks remarks={row.dailyRemarks} /></td>
               {showComplaintAudio && <td className="maintenance-complaint-audio">
                 {row.complaintAudio ? <audio controls preload="none" src={row.complaintAudio}>Complaint audio</audio> : "—"}
               </td>}
@@ -3771,10 +3781,11 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
                 {onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
                 {onClose && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
+                {onRemark && days >= 1 && String(row.status).toLowerCase() !== "closed" && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={7 + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={8 + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div>
@@ -4025,7 +4036,8 @@ function TicketPage({ session }) {
 
 function NotificationBell({ session, onOpenTickets }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false);
-  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then(setItems).catch(() => {});
+  const reminderShown = useRef("");
+  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then((next) => {setItems(next);const reminder=next.find((item)=>!item.isRead&&String(item.message).includes("reminder: add today’s maintenance update"));if(reminder&&reminderShown.current!==String(reminder.id)){reminderShown.current=String(reminder.id);setOpen(true)}}).catch(() => {});
   useEffect(() => { load(); const timer = window.setInterval(load, 30000); return () => window.clearInterval(timer); }, [session?.token]);
   const unread = items.filter((item) => !item.isRead).length;
   const toggle = async () => {
@@ -4035,12 +4047,12 @@ function NotificationBell({ session, onOpenTickets }) {
       setItems((current) => current.map((item) => ({...item, isRead: true})));
     }
   };
-  return <div className="notification-center"><button type="button" onClick={toggle} aria-label={`${unread} unread notifications`}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover"><header><b>Notifications</b><span>{items.length}</span></header>{items.length ? items.map((item) => <button key={item.id} onClick={() => {setOpen(false); onOpenTickets?.();}}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div>}</div>;
+  return <div className="notification-center"><button type="button" onClick={toggle} aria-label={`${unread} unread notifications`}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover"><header><b>Notifications</b><span>{items.length}</span></header>{items.length ? items.map((item) => <button key={item.id} onClick={() => {setOpen(false); onOpenTickets?.(item);}}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div>}</div>;
 }
 
-function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, theme, toggleTheme, embedded = false }) {
+function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
   const mobileRole = session?.assignedRole || "Mobile User";
-  const [show, setShow] = useState(false), [tab, setTab] = useState(mobileRole === "MIS User" ? "verify" : "requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null);
+  const [show, setShow] = useState(false), [tab, setTab] = useState(mobileRole === "MIS User" ? "verify" : "requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const permissions = session?.permissions || {};
   const isProduction = mobileRole === "Production User";
   const isMaintenance = mobileRole === "Maintenance User";
@@ -4066,7 +4078,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const visibleRows = isMis ? requests.filter((row) => String(row.status).toLowerCase() === "closed" && !row.verifiedAt) : requests;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button></nav><div><NotificationBell session={session} onOpenTickets={() => setTab("tickets")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button></nav><div><NotificationBell session={session} onOpenTickets={(item) => setTab(String(item?.ticketReference || "").startsWith("TIC/") ? "tickets" : "requests")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
@@ -4077,12 +4089,13 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       {tab === "tickets" && <TicketPage session={session} />}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your submitted requests · Read only</h3><section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showComplaintAudio showActions={Boolean(permissions.editRequests || permissions.deleteRequests)} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showComplaintAudio showActions onClose={setClosing} /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
+    {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
     {editing && <RequestEditForm request={editing} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} />}
     {closing && <CloseRequestForm request={closing} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} close={() => setVerifying(null)} onSave={verifyRequest} />}
@@ -4330,6 +4343,13 @@ function App() {
       setRequests((current) => current.map((row) => row.ref === reference ? saved : row));
       return saved;
     },
+    addDailyRemark = async (reference, payload) => {
+      const response = await fetch(`/api/requests/${encodeURIComponent(reference)}/daily-remarks`, {method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},body:JSON.stringify(payload)});
+      const saved=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(saved.error||"Could not save the daily update");
+      setRequests((current)=>current.map((row)=>row.ref===reference?saved:row));
+      return saved;
+    },
     deleteRequest = async (reference) => {
       const response = await fetch(`/api/requests/${encodeURIComponent(reference)}`, {method: "DELETE", headers: {Authorization: `Bearer ${authToken}`}});
       const details = await response.json().catch(() => ({}));
@@ -4344,6 +4364,7 @@ function App() {
         onCreate={addRequest}
         onUpdateRequest={updateRequest}
         onDeleteRequest={deleteRequest}
+        onAddDailyRemark={addDailyRemark}
         session={session}
         logout={logout}
         theme={theme}
@@ -4393,7 +4414,7 @@ function App() {
             <button>
               <Search />
             </button>
-            <NotificationBell session={session} onOpenTickets={() => selectMenu("Tickets")} />
+            <NotificationBell session={session} onOpenTickets={(item) => selectMenu(String(item?.ticketReference || "").startsWith("TIC/") ? "Tickets" : "Breakdown master")} />
           </div>
         </div>
         <div className="body">

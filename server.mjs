@@ -102,6 +102,16 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS maintenance_requests_requester_login_idx
       ON maintenance_requests (requester_login, created_at DESC);
+    CREATE TABLE IF NOT EXISTS maintenance_daily_remarks (
+      id BIGSERIAL PRIMARY KEY,
+      request_reference TEXT NOT NULL REFERENCES maintenance_requests(reference) ON DELETE CASCADE,
+      remark TEXT NOT NULL,
+      delay_reason TEXT NOT NULL,
+      author_login TEXT NOT NULL,
+      author_name TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS maintenance_daily_remarks_request_idx ON maintenance_daily_remarks (request_reference, created_at DESC);
     CREATE TABLE IF NOT EXISTS master_records (
       id BIGSERIAL PRIMARY KEY,
       master_name TEXT NOT NULL,
@@ -200,6 +210,8 @@ async function migrate(){
       is_read BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE crm_notifications ADD COLUMN IF NOT EXISTS notification_key TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS crm_notifications_key_idx ON crm_notifications (notification_key) WHERE notification_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS crm_notifications_recipient_idx ON crm_notifications (recipient_login, is_read, created_at DESC);
   `);
   const client=await pool.connect();
@@ -575,8 +587,40 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
 
+async function createMaintenanceReminderNotifications(){
+  const clock=await pool.query(`SELECT to_char(NOW() AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD') AS day,
+    EXTRACT(HOUR FROM NOW() AT TIME ZONE 'Asia/Kolkata')::int AS hour`);
+  const {day,hour}=clock.rows[0];
+  const slot=hour>=18?'18':hour>=9?'09':'';
+  if(!slot)return;
+  const {rows:requests}=await pool.query(`SELECT reference,site FROM maintenance_requests WHERE status<>'Closed' AND started_at<=NOW()-INTERVAL '1 day'`);
+  if(!requests.length)return;
+  const {rows:users}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  for(const request of requests){
+    const recipients=[];
+    for(const row of users){
+      const user=row.record_data||{};
+      const login=String(user.login||'').trim().toLowerCase();
+      if(!login)continue;
+      const profile=resolveMobileAccess({user});
+      const userSite=String(user.site||user.location||'').trim().toLowerCase();
+      const siteMatches=!userSite||userSite===String(request.site||'').trim().toLowerCase();
+      if(profile.assignedRole==='Maintenance User'&&siteMatches)recipients.push(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRole==='Maintenance Manager'&&siteMatches)recipients.push(login);
+    }
+    for(const login of [...new Set(recipients)]){
+      const key=`maintenance-reminder:${day}:${slot}:${request.reference}:${login}`;
+      await pool.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message,notification_key)
+        VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) DO NOTHING`,[login,request.reference,
+        `${slot}:00 reminder: add today’s maintenance update and delay reason for ${request.reference}.`,key]);
+    }
+  }
+}
+
 app.get('/api/notifications',requireSession,async(req,res,next)=>{
   try{
+    await createMaintenanceReminderNotifications();
     const login=String(req.session.login||'').trim().toLowerCase();
     const {rows}=await pool.query(`SELECT id,ticket_reference AS "ticketReference",message,is_read AS "isRead",
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
@@ -604,6 +648,17 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, door_num
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded"`;
 
+async function attachDailyRemarks(rows,client=pool){
+  if(!rows.length)return rows;
+  const refs=rows.map((row)=>row.ref);
+  const {rows:remarks}=await client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",
+    author_login AS "authorLogin",author_name AS "authorName",to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
+    FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) ORDER BY created_at DESC`,[refs]);
+  const grouped=new Map();
+  for(const remark of remarks){const list=grouped.get(remark.requestReference)||[];list.push(remark);grouped.set(remark.requestReference,list)}
+  return rows.map((row)=>({...row,dailyRemarks:grouped.get(row.ref)||[]}));
+}
+
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{
     if(req.session.role!=='super'&&req.session.permissions?.readRequests!==true)
@@ -613,7 +668,30 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
     const {rows}=await pool.query(query);
-    res.json(rows);
+    res.json(await attachDailyRemarks(rows));
+  }catch(error){next(error)}
+});
+
+app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermission('closeRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const remark=String(req.body?.remark||'').trim();
+    const delayReason=String(req.body?.delayReason||'').trim();
+    if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and the reason for delay.'});
+    const eligible=await pool.query(`SELECT reference,site,requester_login FROM maintenance_requests WHERE reference=$1 AND status<>'Closed' AND started_at<=NOW()-INTERVAL '1 day'`,[reference]);
+    if(!eligible.rows.length)return res.status(409).json({error:'Daily remarks are available only for open requests older than one day.'});
+    await pool.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name) VALUES ($1,$2,$3,$4,$5)`,
+      [reference,remark,delayReason,String(req.session.login||'').trim().toLowerCase(),req.session.name||'Maintenance User']);
+    const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+    const recipients=[String(eligible.rows[0].requester_login||'').trim().toLowerCase()];
+    for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
+      const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim().toLowerCase();const siteMatches=!userSite||userSite===String(eligible.rows[0].site||'').trim().toLowerCase();
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&['Maintenance Manager','Production Manager'].includes(profile.permissions.managerRole)&&siteMatches)recipients.push(login);
+    }
+    await addTicketNotifications(pool,recipients,reference,`${req.session.name||'Maintenance User'} added a daily maintenance update for ${reference}.`);
+    const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    res.status(201).json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
 });
 
