@@ -76,6 +76,7 @@ import "./privilege.css";
 import "./sortable-table.css";
 import "./theme.css";
 import "./mobile-workflow.css";
+import "./daily-updates.css";
 import "./dashboard-concept-a.css";
 import { APP_VERSION } from "./app-version.js";
 
@@ -3832,7 +3833,14 @@ function MaintenanceRemarks({ remarks = [] }) {
 }
 
 function DailyRemarkForm({ request, close, onSave }) {
-  return <Modal title={`Daily update · ${request.ref}`} close={close}><form className="form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);onSave({remark:form.get("remark"),delayReason:form.get("delayReason")});}}><label>Today’s maintenance update *<textarea name="remark" required placeholder="What work was completed today?" /></label><label>Reason for delay *<textarea name="delayReason" required placeholder="Why is the vehicle still off-road?" /></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save daily update <ChevronRight /></button></footer></form></Modal>;
+  const previous=[...(request.dailyRemarks||[])].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
+  const today=new Intl.DateTimeFormat("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date());
+  const todayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+  const alreadyUpdatedToday=previous.some((item)=>String(item.createdAt||"").slice(0,10)===todayKey);
+  return <Modal title={`Daily updates · ${request.ref}`} close={close}><div className="daily-update-journal">
+    {previous.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{previous.length} saved record{previous.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header>{previous.map((item,index)=><article key={`${item.createdAt}-${index}`}><time>{formatTwelveHourDateTime(item.createdAt)}</time><b>{item.authorName||"Maintenance User"}</b><dl><div><dt>Maintenance update</dt><dd>{item.remark}</dd></div><div><dt>Reason for delay</dt><dd>{item.delayReason}</dd></div></dl></article>)}</section>}
+    {alreadyUpdatedToday?<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update is saved</b><span>The record for {today} is read-only. A new entry form will appear tomorrow if this request remains open.</span></div></div>:<form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);onSave({remark:form.get("remark"),delayReason:form.get("delayReason")});}}><header><span>New daily record</span><b>{today}</b></header><label>Today’s maintenance update *<textarea name="remark" required placeholder="What work was completed today?" /></label><label>Reason for delay *<textarea name="delayReason" required placeholder="Why is the vehicle still off-road?" /></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save today’s update <ChevronRight /></button></footer></form>}
+  </div></Modal>;
 }
 
 function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
@@ -3868,7 +3876,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
                 {onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
                 {onClose && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
-                {onRemark && days >= 1 && String(row.status).toLowerCase() !== "closed" && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
+                {onRemark && String(row.status).toLowerCase() !== "closed" && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;

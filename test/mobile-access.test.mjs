@@ -61,7 +61,7 @@ test("MIS can verify but cannot create or maintain requests", () => {
 test("operational users keep independent desktop and mobile menu access",()=>{
   const profile=resolveMobileAccess({user:{userType:"Mobile User",userGroup:"Maintenance User",desktopUserMenuAccess:"Requests",desktopUserRequestAccess:"View requests | Close request form",mobileUserMenuAccess:"Tickets",mobileUserRequestAccess:""}});
   assert.deepEqual(profile.permissions.desktopUserMenuAccess,["Requests"]);
-  assert.deepEqual(profile.permissions.desktopUserRequestAccess,["View requests","Close request form"]);
+  assert.deepEqual(profile.permissions.desktopUserRequestAccess,["View requests","Close request form","Closed history"]);
   assert.deepEqual(profile.permissions.mobileUserMenuAccess,["Tickets"]);
-  assert.deepEqual(profile.permissions.mobileUserRequestAccess,[]);
+  assert.deepEqual(profile.permissions.mobileUserRequestAccess,["Closed history"]);
 });

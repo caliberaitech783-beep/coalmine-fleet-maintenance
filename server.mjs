@@ -715,8 +715,11 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     const remark=String(req.body?.remark||'').trim();
     const delayReason=String(req.body?.delayReason||'').trim();
     if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and the reason for delay.'});
-    const eligible=await pool.query(`SELECT reference,site,requester_login FROM maintenance_requests WHERE reference=$1 AND status<>'Closed' AND started_at<=NOW()-INTERVAL '1 day'`,[reference]);
-    if(!eligible.rows.length)return res.status(409).json({error:'Daily remarks are available only for open requests older than one day.'});
+    const eligible=await pool.query(`SELECT reference,site,requester_login FROM maintenance_requests WHERE reference=$1 AND status<>'Closed'`,[reference]);
+    if(!eligible.rows.length)return res.status(409).json({error:'Daily remarks are available only while the request is open.'});
+    const existingToday=await pool.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
+      AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
+    if(existingToday.rows.length)return res.status(409).json({error:'Today’s update is already saved. Previous daily updates are read-only.'});
     await pool.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name) VALUES ($1,$2,$3,$4,$5)`,
       [reference,remark,delayReason,String(req.session.login||'').trim().toLowerCase(),req.session.name||'Maintenance User']);
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
