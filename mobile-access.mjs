@@ -79,6 +79,14 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
   }
 
   const maintenance = assignedRole === "Maintenance User";
+  const accessList=(key,fallback=[])=>Object.hasOwn(user,key)
+    ? [...new Set(String(user[key]||"").split(/\s*[|,]\s*/).map((value)=>value.trim()).filter(Boolean))]
+    : fallback;
+  const roleRequestMenus=assignedRole==="Production User"
+    ? ["View requests","Create request"]
+    : maintenance
+      ? ["View requests","Create request","Close request form"]
+      : ["View requests","Verify closed requests"];
   return {
     sessionRole: "normal",
     userType: "Mobile User",
@@ -93,6 +101,10 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
       verifyRequests: assignedRole === "MIS User",
       viewEquipment: assignedRole === "Production User" || maintenance,
       viewRepairTypes: assignedRole === "Production User" || assignedRole === "Maintenance User",
+      desktopUserMenuAccess:accessList("desktopUserMenuAccess",["Requests","Tickets"]),
+      desktopUserRequestAccess:accessList("desktopUserRequestAccess",roleRequestMenus),
+      mobileUserMenuAccess:accessList("mobileUserMenuAccess",accessList("desktopUserMenuAccess",["Requests","Tickets"])),
+      mobileUserRequestAccess:accessList("mobileUserRequestAccess",accessList("desktopUserRequestAccess",roleRequestMenus)),
     },
   };
 }

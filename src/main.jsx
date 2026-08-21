@@ -855,12 +855,29 @@ const mobileAccessKey=(key)=>`mobile${key[0].toUpperCase()}${key.slice(1)}`;
 const desktopSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [field, label, "multi-checkbox"]);
 const mobileSubmenuFields = Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, label}) => [mobileAccessKey(field), `Mobile ${label}`, "multi-checkbox"]);
 const userSubmenuFields = [...desktopSubmenuFields, ...mobileSubmenuFields, ["mobileTabAccess", "Mobile visible tabs", "multi-checkbox"]];
+const operationalViewFields = [
+  ["desktopUserMenuAccess","Desktop user menus","multi-checkbox"],
+  ["desktopUserRequestAccess","Desktop request submenus","multi-checkbox"],
+  ["mobileUserMenuAccess","Mobile user menus","multi-checkbox"],
+  ["mobileUserRequestAccess","Mobile request submenus","multi-checkbox"],
+];
+userSubmenuFields.push(...operationalViewFields);
+const operationalMenuOptions=["Requests","Tickets"];
+const operationalRequestOptions={
+  "Production User":["View requests","Create request"],
+  "Maintenance User":["View requests","Create request","Close request form"],
+  "MIS User":["View requests","Verify closed requests"],
+};
 const userAccessOptions = {
   masterAccess: ADMIN_MASTER_OPTIONS,
   tabAccess: ADMIN_TAB_OPTIONS,
   ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [field, options])),
   mobileTabAccess: ADMIN_TAB_OPTIONS,
   ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [mobileAccessKey(field), options])),
+  desktopUserMenuAccess:operationalMenuOptions,
+  mobileUserMenuAccess:operationalMenuOptions,
+  desktopUserRequestAccess:[...new Set(Object.values(operationalRequestOptions).flat())],
+  mobileUserRequestAccess:[...new Set(Object.values(operationalRequestOptions).flat())],
 };
 const selectedAccessValues = (record, key, fallbackKey = "") => {
   if (!Object.prototype.hasOwnProperty.call(record || {}, key)) return fallbackKey ? selectedAccessValues(record,fallbackKey) : userAccessOptions[key] || [];
@@ -1090,6 +1107,19 @@ function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs
   </section>;
 }
 
+function OperationalViewMenuFields({record={},view="desktop",role=""}){
+  const menuField=view==="mobile"?"mobileUserMenuAccess":"desktopUserMenuAccess";
+  const requestField=view==="mobile"?"mobileUserRequestAccess":"desktopUserRequestAccess";
+  const [menus,setMenus]=useState(selectedAccessValues(record,menuField));
+  const requestOptions=operationalRequestOptions[role]||[];
+  const selectedRequests=selectedAccessValues(record,requestField).filter((option)=>requestOptions.includes(option));
+  return <section className={`view-menu-access full ${view}-view-access`}>
+    <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
+    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><div>{operationalMenuOptions.map((option)=><label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{option}</span></label>)}</div></fieldset>
+    {menus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div>{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} defaultChecked={selectedRequests.includes(option)}/><span>{option}</span></label>)}</div></fieldset>}
+  </section>;
+}
+
 function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
     ? "User"
@@ -1141,6 +1171,11 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
       <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager />
       <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager />
     </>}
+    {accountRole && !isDesktopUser && <>
+      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Choose this {accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.</p></div>
+      <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole}/>
+      <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole}/>
+    </>}
     {accountRole && !isDesktopUser && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
 }
@@ -1191,6 +1226,11 @@ function applyUserRoleDefaults(record) {
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[field] = ""; });
     record.mobileTabAccess = "";
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
+    for(const view of ["desktop","mobile"]){
+      const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
+      if(!record[menuField])record[menuField]=operationalMenuOptions.join(" | ");
+      if(!record[requestField])record[requestField]=(operationalRequestOptions[role]||[]).join(" | ");
+    }
   }
   return record;
 }
@@ -4097,12 +4137,27 @@ function NotificationBell({ session, onOpenTickets }) {
 
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
   const mobileRole = session?.assignedRole || "Mobile User";
-  const [show, setShow] = useState(false), [tab, setTab] = useState(mobileRole === "MIS User" ? "verify" : "requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
+  const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const permissions = session?.permissions || {};
+  const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
+  useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
+  const visibleUserMenus=responsiveMobile?permissions.mobileUserMenuAccess:permissions.desktopUserMenuAccess;
+  const visibleRequestMenus=responsiveMobile?permissions.mobileUserRequestAccess:permissions.desktopUserRequestAccess;
+  const canSeeUserMenu=(name)=>!Array.isArray(visibleUserMenus)||visibleUserMenus.includes(name);
+  const canSeeRequestMenu=(name)=>!Array.isArray(visibleRequestMenus)||visibleRequestMenus.includes(name);
   const isProduction = mobileRole === "Production User";
   const isMaintenance = mobileRole === "Maintenance User";
   const isMis = mobileRole === "MIS User";
   const canCreate = isProduction || isMaintenance;
+  const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets");
+  useEffect(()=>{
+    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu("Verify closed requests"):true);
+    if(allowed)return;
+    if(showRequestsMenu&&canSeeRequestMenu("View requests"))setTab("requests");
+    else if(showRequestsMenu&&isMis&&canSeeRequestMenu("Verify closed requests"))setTab("verify");
+    else if(showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form"))setTab("close");
+    else if(showTicketsMenu)setTab("tickets");
+  },[responsiveMobile,showRequestsMenu,showTicketsMenu,visibleRequestMenus?.join("|"),mobileRole]);
   const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
   const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
@@ -4123,14 +4178,14 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const visibleRows = isMis ? requests.filter((row) => String(row.status).toLowerCase() === "closed" && !row.verifiedAt) : requests;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button></nav><div><NotificationBell session={session} onOpenTickets={(item) => setTab(String(item?.ticketReference || "").startsWith("TIC/") ? "tickets" : "requests")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav">{showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}><Wrench /> Requests</button>}{showTicketsMenu&&<button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => setTab(String(item?.ticketReference || "").startsWith("TIC/")&&showTicketsMenu ? "tickets" : "requests")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
-        <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>
-        {canCreate && <button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
-        {isMaintenance && <button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
-        {isMis && <button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
+        {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
+        {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
+        {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
+        {showRequestsMenu&&isMis&&canSeeRequestMenu("Verify closed requests")&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
       </div>
       {tab === "tickets" && <TicketPage session={session} />}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your submitted requests · Read only</h3><section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section></>}

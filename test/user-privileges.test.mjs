@@ -24,6 +24,9 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /accountRole && !isDesktopUser && <UserPrivilegeFields/);
   assert.match(source, /isAdmin && <div className="super-role-summary full"/);
   assert.match(source, /isDesktopUser && <>[\s\S]*Selected menus for each view/);
+  assert.match(source, /accountRole && !isDesktopUser && <>[\s\S]*OperationalViewMenuFields/);
+  assert.match(source, /desktopUserMenuAccess[\s\S]*mobileUserMenuAccess/);
+  assert.match(source, /showRequestsMenu&&canCreate&&canSeeRequestMenu\("Create request"\)/);
   assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
 });
 
