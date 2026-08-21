@@ -5,7 +5,6 @@ import {fileURLToPath} from 'node:url';
 import {existsSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
-import {filterRowsByRequestedRole} from './auth-role.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -226,14 +225,13 @@ app.post('/api/login',async(req,res,next)=>{
   try{
     const username=String(req.body?.username||'').trim().toLowerCase();
     const password=String(req.body?.password||'').trim();
-    const requestedRole=req.body?.role==='normal'?'normal':'super';
-    if(!username||!password)return res.status(400).json({error:'Employee first name and phone number are required.'});
+    if(!username||!password)return res.status(400).json({error:'User name and password are required.'});
     const {rows:userRows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
     // Filter by the submitted login before verifying any password hashes. A
     // scrypt verification is deliberately costly, so checking all employee
     // records here makes login scale linearly with the entire master and can
     // starve the single App Service worker.
-    const loginRows=filterRowsByRequestedRole(loginRecordCandidates(userRows,username),requestedRole);
+    const loginRows=loginRecordCandidates(userRows,username);
     const candidates=loginRows.filter(row=>{
       const record=row.record_data;
       const passwordMatches=record.passwordHash
@@ -252,7 +250,6 @@ app.post('/api/login',async(req,res,next)=>{
     const {rows:privilegeRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`);
     const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers)});
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
-    if(profile.sessionRole!==requestedRole)return res.status(403).json({error:`This account is assigned as ${profile.userType}. Select the matching access type to sign in.`});
     if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, or MIS User in Users & employees.'});
     if(employee.mustChangePassword===true){
       const changeToken=randomUUID();

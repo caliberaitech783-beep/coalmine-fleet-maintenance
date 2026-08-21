@@ -166,7 +166,6 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
   );
 }
 function Login({ onLogin, theme, toggleTheme }) {
-  const [role, setRole] = useState("super");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -204,7 +203,7 @@ function Login({ onLogin, theme, toggleTheme }) {
       const response = await fetch("/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, role }),
+        body: JSON.stringify({ username, password }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not sign in.");
@@ -296,31 +295,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <small className="login-kicker"><LockKeyhole /> SECURE OPERATIONS PORTAL</small>
           <h2>Welcome back</h2>
           <p>Sign in to access your fleet operations workspace.</p>
-          <fieldset className="role-fieldset">
-            <legend>Choose your access role</legend>
-            <div className="rolepick">
-            <button
-              type="button"
-              className={role === "super" ? "sel" : ""}
-              aria-pressed={role === "super"}
-              onClick={() => setRole("super")}
-            >
-              <ShieldCheck />
-              <b>Desktop View</b>
-              <span>Full administration access</span>
-            </button>
-            <button
-              type="button"
-              className={role === "normal" ? "sel" : ""}
-              aria-pressed={role === "normal"}
-              onClick={() => setRole("normal")}
-            >
-              <UserRound />
-              <b>Mobile View</b>
-              <span>Raise maintenance request</span>
-            </button>
-            </div>
-          </fieldset>
+          <div className="single-login-note"><ShieldCheck /><span><b>One secure login</b><small>Your workspace and permissions are assigned by your administrator.</small></span></div>
           <label className="login-label" htmlFor="login-username">User name</label>
           <div className="login-input">
             <User aria-hidden="true" />

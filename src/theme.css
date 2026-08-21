@@ -298,6 +298,7 @@ textarea {
 :root[data-theme="dark"] .rolepick button.sel { background: #19294a; border-color: #6690ff; }
 :root[data-theme="dark"] .rolepick b { color: #e4ebf5; }
 :root[data-theme="dark"] .rolepick span { color: #93a2b7; }
+:root[data-theme="dark"] .single-login-note{background:#17243a;border-color:#344f76;color:#82a4ff}:root[data-theme="dark"] .single-login-note b{color:#e5edfb}:root[data-theme="dark"] .single-login-note small{color:#9aabc0}
 :root[data-theme="dark"] .login-input { background: #0d1829; border-color: #34435a; box-shadow: 0 1px 3px #0004; }
 :root[data-theme="dark"] .login-input input { color: #e3eaf5; }
 :root[data-theme="dark"] .password-toggle:hover { background: #17243a; }
