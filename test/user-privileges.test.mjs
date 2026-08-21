@@ -5,7 +5,8 @@ import {resolveMobileAccess} from "../mobile-access.mjs";
 
 test("user creation contains every existing privilege option", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /const userPrivilegeFields = \[[\s\S]*"userGroup"[\s\S]*"location"[\s\S]*"read"[\s\S]*"edit"[\s\S]*"delete"[\s\S]*"verify"[\s\S]*"print"/);
+  assert.match(source, /const userPrivilegeFields = \[[\s\S]*"userGroup"[\s\S]*"read"[\s\S]*"edit"[\s\S]*"delete"[\s\S]*"verify"[\s\S]*"print"/);
+  assert.doesNotMatch(source.match(/function UserPrivilegeFields[\s\S]*?\n}/)?.[0] || "", /Privilege location|name="location"/);
   assert.doesNotMatch(source.match(/function UserPrivilegeFields[\s\S]*?\n}/)?.[0] || "", /accessType|Desktop User \/ Mobile User/);
   assert.match(source, /<h3>Additional privileges<\/h3>/);
   assert.match(source, /formFields = name === "Users & employees" \? \[\.\.\.fields, \.\.\.userPrivilegeFields, \.\.\.userSubmenuFields\]/);
@@ -19,11 +20,19 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /type="radio" name="adminLevel"/);
   assert.match(source, /const managerRoleOptions = \["Production Manager", "Maintenance Manager", "MIS Manager"\]/);
   assert.match(source, /type="radio" name="managerRole"/);
-  assert.match(source, /accountRole && !isDesktopUser && <label>Location \*[\s\S]*name="site"/);
+  assert.match(source, /accountRole && \(!isDesktopUser \|\| isManager\) && <label>Location \*[\s\S]*name="site"/);
   assert.match(source, /accountRole && !isDesktopUser && <UserPrivilegeFields/);
   assert.match(source, /isAdmin && <div className="super-role-summary full"/);
   assert.match(source, /isManager && <>[\s\S]*Manager screen access/);
   assert.match(source, /\["site", "userType", "masterAccess", "tabAccess"\]\.includes\(key\)/);
+});
+
+test("manager profile and navigation honor assigned role, location, and parent menu access", () => {
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(source, /permissions\.adminLevel === "Manager" \? permissions\.managerRole \|\| "Manager" : "Super User"/);
+  assert.match(source, /session\?\.name[\s\S]*profileLocation[\s\S]*\.join\(" · "\)/);
+  assert.match(source, /accessAllows\(permissions\.tabAccess, "Masters"\)[\s\S]*visibleMasterNav\.length > 0/);
+  assert.match(source, /accessAllows\(adminPermissions\.tabAccess, "Masters"\) && accessAllows\(adminPermissions\.masterAccess, name\)/);
 });
 
 test("each Manager receives a role-specific dashboard", () => {

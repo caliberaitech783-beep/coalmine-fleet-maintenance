@@ -356,7 +356,7 @@ function Login({ onLogin, theme, toggleTheme }) {
     </div>
   );
 }
-function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVisibility, onMobileVisibilityChange }) {
+function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "", mobileMenuVisibility, onMobileVisibilityChange }) {
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
@@ -390,7 +390,7 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
   const visibleMasterNav = masterNav.filter(([name]) => accessAllows(permissions.masterAccess, name) && visibleOnMobile(name));
   const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
   const visibleNav = nav.filter(([name]) => accessAllows(permissions.tabAccess, name) && accessAllows(permissions[directMenuAccess[name]], name) && visibleOnMobile(name));
-  const canViewMasters = visibleOnMobile("Masters") && visibleMasterNav.length > 0;
+  const canViewMasters = accessAllows(permissions.tabAccess, "Masters") && visibleOnMobile("Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(permissions.whatsappAccess, name) && visibleOnMobile(name));
   const canViewWhatsApp = accessAllows(permissions.tabAccess, "WhatsApp Integration") && visibleOnMobile("WhatsApp Integration") && visibleWhatsAppNav.length > 0;
   const MobileToggle = ({ name }) => <label className="mobile-nav-toggle" title={`Show ${name} in responsive mobile navigation`} onClick={(event) => event.stopPropagation()}>
@@ -495,8 +495,8 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
           <UserRound />
         </div>
         <span>
-          <b>Super User</b>
-          <small>Administrator</small>
+          <b>{permissions.adminLevel === "Manager" ? permissions.managerRole || "Manager" : "Super User"}</b>
+          <small>{[session?.name || (permissions.adminLevel === "Manager" ? "Manager" : "Administrator"), profileLocation].filter(Boolean).join(" · ")}</small>
         </span>
         <button onClick={logout}>
           <LogOut />
@@ -834,7 +834,6 @@ const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
   ["adminLevel", "User authority"],
   ["managerRole", "Manager role"],
-  ["location", "Privilege location", "site-select"],
   ["read", "Read", "checkbox"],
   ["edit", "Edit", "checkbox"],
   ["delete", "Delete", "checkbox"],
@@ -1051,7 +1050,6 @@ function parseCsv(text, fields) {
 function UserPrivilegeFields({ record = {}, siteOptions = [] }) {
   return <>
     <div className="user-privilege-heading full"><h3>Additional privileges</h3><p>Fine-tune the operational authorities for this user. Core access is assigned automatically from the selected role.</p></div>
-    <label>Privilege location<select name="location" defaultValue={privilegeSelectionValue(record.location)}><option value="">Not assigned</option>{privilegeSelectionValue(record.location) && !siteOptions.includes(privilegeSelectionValue(record.location)) && <option value={privilegeSelectionValue(record.location)}>{privilegeSelectionValue(record.location)}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
     {userPrivilegeFields.filter(([, , type]) => type === "checkbox").map(([key, label]) => <label key={key}><span className="privilege-checkbox-field"><input type="checkbox" name={key} defaultChecked={isCheckedValue(record[key])} /><span><b>{label}</b><small>Enable this privilege</small></span></span></label>)}
   </>;
 }
@@ -1094,11 +1092,11 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
         <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
       </label>)}</div>
     </fieldset>}
-    {accountRole && !isDesktopUser && <label>Location *
-      <select name="site" required defaultValue={record.site || ""}>
+    {accountRole && (!isDesktopUser || isManager) && <label>Location *
+      <select name="site" required defaultValue={record.site || record.location || ""}>
         <option value="" disabled>Select location</option>
         {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
-        {record.site && !siteOptions.includes(record.site) && <option value={record.site}>{record.site}</option>}
+        {(record.site || record.location) && !siteOptions.includes(record.site || record.location) && <option value={record.site || record.location}>{record.site || record.location}</option>}
       </select>
     </label>}
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>Full Admin access</b><small>This account will automatically see every screen, master, operational workspace, report, audit feature and administrative function.</small></span></div>}
@@ -1126,9 +1124,9 @@ function applyUserRoleDefaults(record) {
   if (role === "User") {
     record.userType = "Super Admin";
     record.userGroup = "";
-    record.site = "";
     record.location = "";
     if (record.adminLevel === "Admin") {
+      record.site = "";
       record.managerRole = "";
       record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
       record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
@@ -3979,6 +3977,16 @@ function App() {
   }, [theme]);
   const toggleTheme = () => setTheme((current) => current === "dark" ? "light" : "dark");
   const adminPermissions = session?.permissions || {};
+  const [profileLocation, setProfileLocation] = useState("");
+  useEffect(() => {
+    if (!session?.token) return undefined;
+    let activeRequest = true;
+    fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session.token}`}})
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((profile) => { if (activeRequest) setProfileLocation(String(profile.location || "").trim()); })
+      .catch(() => {});
+    return () => { activeRequest = false; };
+  }, [session?.token]);
   useEffect(() => {
     if (session?.role !== "super") return undefined;
     let activeRequest = true;
@@ -4007,7 +4015,7 @@ function App() {
   };
   const canOpenAdminPage = (name) => {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
-    if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.masterAccess, name);
+    if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.tabAccess, "Masters") && accessAllows(adminPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration") && accessAllows(adminPermissions.whatsappAccess, name);
     const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
     return accessAllows(adminPermissions.tabAccess, name) && accessAllows(adminPermissions[directMenuAccess[name]], name);
@@ -4222,6 +4230,8 @@ function App() {
         logout={logout}
         open={menu}
         permissions={adminPermissions}
+        session={session}
+        profileLocation={profileLocation}
         mobileMenuVisibility={mobileMenuVisibility}
         onMobileVisibilityChange={updateMobileMenuVisibility}
       />
