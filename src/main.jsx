@@ -527,7 +527,6 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
   const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
   const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
   const closedRequests = requests.filter((request) => String(request.status || "").toLowerCase() === "closed");
-  const pendingVerification = closedRequests.filter((request) => !request.verifiedAt);
   const verifiedRequests = requests.filter((request) => Boolean(request.verifiedAt));
   const cards = managerRole === "Production Manager"
     ? [
@@ -543,24 +542,23 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
           ["Completed", closedRequests.length, "Returned from maintenance", ""],
         ]
       : [
-          ["Pending verification", pendingVerification.length, "Closed requests awaiting MIS", ""],
-          ["Verified", verifiedRequests.length, "Completed MIS checks", ""],
+          ["Total requests", verifiedRequests.length, "Requests verified at this location", ""],
           ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", ""],
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
-  const detailRows = managerRole === "Production Manager" ? openRequests : managerRole === "Maintenance Manager" ? requests : pendingVerification;
+  const detailRows = managerRole === "Production Manager" ? openRequests : managerRole === "Maintenance Manager" ? requests : verifiedRequests;
   const title = managerRole || "Manager";
   const description = managerRole === "Production Manager"
     ? `Live fleet availability for ${managerLocation || "the assigned location"}.`
     : managerRole === "Maintenance Manager"
       ? "Site equipment, maintenance intake, remaining workload, and completed equipment."
-      : "MIS verification workload, pending checks, completed verification, and first-trip status.";
+      : "Location-wise verified requests and first-trip status.";
   return <section className="manager-dashboard">
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
       <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{managerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
-    <article className="panel manager-detail-panel"><header><div><h2>{managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests pending MIS verification"}</h2><p>{detailRows.length} record{detailRows.length === 1 ? "" : "s"} currently in this queue</p></div></header><BreakdownTable rows={detailRows} showBreakdownDays={managerRole !== "MIS Manager"} /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Verified requests"}</h2><p>{detailRows.length} record{detailRows.length === 1 ? "" : "s"} currently in this queue</p></div></header><BreakdownTable rows={detailRows} showBreakdownDays={managerRole !== "MIS Manager"} showTurnaroundTime={managerRole === "MIS Manager"} /></article>
   </section>;
 }
 function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
@@ -665,7 +663,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
@@ -676,7 +674,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ["site", "Site location"],
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
-      ["category", "Repair category"], ["start", "Started"], ["hours", "Downtime"],
+      ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"],
     ],
     displayRows = showBreakdownDays
@@ -3762,7 +3760,7 @@ function DailyRemarkForm({ request, close, onSave }) {
   return <Modal title={`Daily update · ${request.ref}`} close={close}><form className="form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);onSave({remark:form.get("remark"),delayReason:form.get("delayReason")});}}><label>Today’s maintenance update *<textarea name="remark" required placeholder="What work was completed today?" /></label><label>Reason for delay *<textarea name="delayReason" required placeholder="Why is the vehicle still off-road?" /></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save daily update <ChevronRight /></button></footer></form></Modal>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -3773,7 +3771,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
       <table className="workflow-table">
         <thead><tr>
           <th>Job reference</th><th>Equipment group</th><th>Door no.</th><th>Site location</th>
-          <th>Status</th><th>Started</th><th>Days of breakdown</th><th>Daily remarks</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
+          <th>Status</th><th>Started</th>{showTurnaroundTime && <th>Turn around time (TAT)</th>}<th>Days of breakdown</th><th>Daily remarks</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {rows.length ? rows.map((row) => {
@@ -3784,7 +3782,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
               <td>{row.door || "—"}</td>
               <td><MapPin /> {row.site || "Not assigned"}</td>
               <td><Status>{row.status || "Open"}</Status></td>
-              <td>{row.start || "—"}</td>
+              <td>{formatTwelveHourDateTime(row.start)}</td>
+              {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
               <td><MaintenanceRemarks remarks={row.dailyRemarks} /></td>
               {showComplaintAudio && <td className="maintenance-complaint-audio">
@@ -3798,7 +3797,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={8 + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={8 + (showTurnaroundTime ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div>
@@ -4108,8 +4107,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your submitted requests · Read only</h3><section className="panel table"><BreakdownTable rows={requests} showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={requests} showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={requests.filter((row) => String(row.status).toLowerCase() !== "closed" && !row.verifiedAt)} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
-      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
-      {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showActions onVerify={setVerifying} /></section></>}
+      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
+      {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}

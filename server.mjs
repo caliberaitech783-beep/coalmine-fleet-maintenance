@@ -668,6 +668,13 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
+    if(req.session.role==='normal'&&req.session.assignedRole==='MIS User'){
+      const misUser=await currentUserRecord(req.session);
+      const misSite=String(misUser.site||misUser.location||'').trim();
+      query=misSite
+        ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE lower(trim(site))=lower(trim($1)) ORDER BY created_at DESC`,values:[misSite]}
+        : {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE FALSE`,values:[]};
+    }
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
       const manager=await currentUserRecord(req.session);
       const managerSite=String(manager.site||manager.location||'').trim();
@@ -775,9 +782,12 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const firstTripCardImage=firstTripDone?String(req.body?.firstTripCardImage||''):'';
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
     if(firstTripDone&&!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
+    const misUser=await currentUserRecord(req.session);
+    const misSite=String(misUser.site||misUser.location||'').trim();
+    if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
       first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5 WHERE reference=$6 AND status='Closed' AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference]);
+      AND lower(trim(site))=lower(trim($7)) RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference,misSite]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     res.json(rows[0]);
   }catch(error){next(error)}
