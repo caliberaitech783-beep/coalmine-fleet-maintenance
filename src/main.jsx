@@ -3939,7 +3939,7 @@ function TicketCreateForm({ session, close, onCreated }) {
       const response = await fetch("/api/tickets", {
         method: "POST",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
-        body: JSON.stringify({category: form.get("category"), message, messageAudio, attachmentData, attachmentName: attachment?.name || "", attachmentType: attachment?.type || ""}),
+        body: JSON.stringify({message, messageAudio, attachmentData, attachmentName: attachment?.name || "", attachmentType: attachment?.type || ""}),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not create the ticket.");
@@ -3951,8 +3951,6 @@ function TicketCreateForm({ session, close, onCreated }) {
   return <Modal title="Create support ticket" close={close}>
     <form className="form ticket-form" onSubmit={submit}>
       <div className="formgrid">
-        <label>User name<input value={session?.name || ""} readOnly /></label>
-        <label>Category *<select name="category" required defaultValue="General">{ticketCategories.map((category) => <option key={category}>{category}</option>)}</select></label>
         <EnhancedSpeechComplaint label="Ticket message" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Write the issue here or record an audio message." required={false} />
         <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, or WebM · maximum 10 MB"}</small></label>
       </div>
@@ -3965,6 +3963,39 @@ function TicketAttachment({ ticket }) {
   if (!ticket.attachmentData) return "—";
   if (String(ticket.attachmentType).startsWith("video/")) return <video className="ticket-media" controls preload="metadata" src={ticket.attachmentData}>Ticket video</video>;
   return <a href={ticket.attachmentData} target="_blank" rel="noreferrer" title={ticket.attachmentName || "Open attachment"}><img className="ticket-media" src={ticket.attachmentData} alt={ticket.attachmentName || "Ticket attachment"} /></a>;
+}
+
+function TicketResolutionForm({ ticket, session, close, onResolved }) {
+  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false);
+  const submit = async (event) => {
+    event.preventDefault();
+    if (saving) return;
+    const form = new FormData(event.currentTarget);
+    const resolutionMessage = String(form.get("resolutionMessage") || "").trim();
+    const resolutionAudio = String(form.get("resolutionAudio") || "");
+    if (!resolutionMessage && !resolutionAudio) return alert("Write a resolution message or record resolution audio.");
+    setSaving(true);
+    try {
+      const resolutionAttachmentData = await readTicketAttachment(attachment);
+      const response = await fetch("/api/tickets/resolve", {
+        method: "PATCH",
+        headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
+        body: JSON.stringify({reference: ticket.reference, resolutionMessage, resolutionAudio, resolutionAttachmentData, resolutionAttachmentName: attachment?.name || "", resolutionAttachmentType: attachment?.type || ""}),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not resolve the ticket.");
+      onResolved(result);
+      close();
+    } catch (error) { alert(error.message); }
+    finally { setSaving(false); }
+  };
+  return <Modal title={`Resolve ${ticket.reference}`} close={close}>
+    <form className="form ticket-resolution-form" onSubmit={submit}>
+      <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain how this ticket was resolved or record an audio message." required={false} />
+      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, or WebM · maximum 10 MB"}</small></label>
+      <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
+    </form>
+  </Modal>;
 }
 
 function TicketPage({ session }) {
@@ -3982,21 +4013,12 @@ function TicketPage({ session }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [category, session?.token]);
-  const resolveTicket = async (event) => {
-    event.preventDefault();
-    const resolutionMessage = String(new FormData(event.currentTarget).get("resolutionMessage") || "").trim();
-    const response = await fetch("/api/tickets/resolve", {method: "PATCH", headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`}, body: JSON.stringify({reference: resolving.reference, resolutionMessage})});
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) return alert(result.error || "Could not resolve the ticket.");
-    setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket));
-    setResolving(null);
-  };
   return <section className="ticket-page">
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div>{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</header>
     <div className="ticket-toolbar"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
-    <div className="ticket-table-wrap"><table><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Message</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>{ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td className="ticket-message">{ticket.message || "Audio message"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage ? <span>{ticket.resolutionMessage}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 10 : 9} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></table></div>
+    <div className="ticket-table-wrap"><table><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Message</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td className="ticket-message">{ticket.message || "Audio message"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && (String(ticket.resolutionAttachmentType).startsWith("video/") ? <video className="ticket-media" controls preload="metadata" src={ticket.resolutionAttachmentData}>Resolution video</video> : <a href={ticket.resolutionAttachmentData} target="_blank" rel="noreferrer"><img className="ticket-media" src={ticket.resolutionAttachmentData} alt={ticket.resolutionAttachmentName || "Resolution attachment"} /></a>)}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 10 : 9} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></table></div>
     {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}
-    {resolving && <Modal title={`Resolve ${resolving.reference}`} close={() => setResolving(null)}><form className="form ticket-resolution-form" onSubmit={resolveTicket}><label>Resolution message *<textarea name="resolutionMessage" required placeholder="Explain how this ticket was resolved." /></label><footer><button type="button" onClick={() => setResolving(null)}>Cancel</button><button className="primary">Resolve ticket <CheckCircle2 /></button></footer></form></Modal>}
+    {resolving && <TicketResolutionForm ticket={resolving} session={session} close={() => setResolving(null)} onResolved={(result) => setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket))} />}
   </section>;
 }
 
