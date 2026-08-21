@@ -3985,7 +3985,7 @@ function TicketPage({ session }) {
   const resolveTicket = async (event) => {
     event.preventDefault();
     const resolutionMessage = String(new FormData(event.currentTarget).get("resolutionMessage") || "").trim();
-    const response = await fetch(`/api/tickets/${encodeURIComponent(resolving.reference)}/resolve`, {method: "PATCH", headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`}, body: JSON.stringify({resolutionMessage})});
+    const response = await fetch("/api/tickets/resolve", {method: "PATCH", headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`}, body: JSON.stringify({reference: resolving.reference, resolutionMessage})});
     const result = await response.json().catch(() => ({}));
     if (!response.ok) return alert(result.error || "Could not resolve the ticket.");
     setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket));
@@ -4043,11 +4043,10 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const visibleRows = isMis ? requests.filter((row) => String(row.status).toLowerCase() === "closed" && !row.verifiedAt) : requests;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><div><NotificationBell session={session} onOpenTickets={() => setTab("tickets")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button></nav><div><NotificationBell session={session} onOpenTickets={() => setTab("tickets")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
-        <button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button>
         <button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>
         {canCreate && <button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
         {isMaintenance && <button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}

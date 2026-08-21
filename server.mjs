@@ -488,8 +488,8 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
       const user=await currentUserRecord(req.session);
       values.push(managerUserRole(req.session.permissions?.managerRole));
       conditions.push(`creator_role=$${values.length}`);
-      values.push(String(user.site||user.location||'').trim());
-      conditions.push(`lower(site)=lower($${values.length})`);
+      const managerSite=String(user.site||user.location||'').trim();
+      if(managerSite){values.push(managerSite);conditions.push(`lower(site)=lower($${values.length})`)}
     }
     if(category){values.push(category);conditions.push(`category=$${values.length}`)}
     const where=conditions.length?`WHERE ${conditions.join(' AND ')}`:'';
@@ -529,15 +529,17 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
 
-app.patch('/api/tickets/:reference/resolve',requireSession,async(req,res,next)=>{
+app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
   if(!isTicketAdmin(req.session))return res.status(403).json({error:'Only an Admin can resolve tickets.'});
   const client=await pool.connect();
   try{
     const resolution=String(req.body?.resolutionMessage||'').trim();
+    const reference=String(req.body?.reference||'').trim();
+    if(!reference)return res.status(400).json({error:'Ticket reference is required.'});
     if(!resolution)return res.status(400).json({error:'Enter a resolution message.'});
     await client.query('BEGIN');
     const result=await client.query(`UPDATE crm_tickets SET status='Resolved',resolution_message=$1,resolved_by=$2,resolved_at=NOW()
-      WHERE reference=$3 AND status<>'Resolved' RETURNING ${ticketProjection()}`,[resolution,String(req.session.name||'Admin'),req.params.reference]);
+      WHERE reference=$3 AND status<>'Resolved' RETURNING ${ticketProjection()}`,[resolution,String(req.session.name||'Admin'),reference]);
     if(!result.rows.length){await client.query('ROLLBACK');return res.status(404).json({error:'Open ticket not found.'})}
     const ticket=result.rows[0];
     const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
