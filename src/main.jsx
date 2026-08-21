@@ -138,6 +138,11 @@ const whatsappNav = [
   ["Daily OEM report", ShieldCheck],
   ["WhatsApp alert history", History],
 ];
+const operationalWorkspaceNav = [
+  ["Production workspace", Truck, "Production User"],
+  ["Maintenance workspace", Wrench, "Maintenance User"],
+  ["MIS workspace", ShieldCheck, "MIS User"],
+];
 function Status({ children }) {
   let c = children.toLowerCase().replaceAll(" ", "-");
   return (
@@ -355,6 +360,7 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [workspacesOpen, setWorkspacesOpen] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 900px)");
@@ -365,6 +371,7 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
   const closeMenus = () => {
     setMastersOpen(false);
     setWhatsappOpen(false);
+    setWorkspacesOpen(false);
   };
   const selectPage = (page) => {
     closeMenus();
@@ -456,6 +463,23 @@ function Side({ active, setActive, logout, open, permissions = {}, mobileMenuVis
             ))}
           </div>
         </div>}
+        <div className={workspacesOpen ? "masters-menu open" : "masters-menu"}>
+          <div className="nav-config-row"><button
+            className={operationalWorkspaceNav.some(([name]) => name === active) ? "active" : ""}
+            aria-haspopup="menu"
+            aria-expanded={workspacesOpen}
+            onClick={() => setWorkspacesOpen((value) => !value)}
+          >
+            <Users />
+            Operational Workspaces
+            <ChevronDown className="masters-chevron" />
+          </button></div>
+          <div className="masters-dropdown operational-workspaces-dropdown" role="menu">
+            {operationalWorkspaceNav.map(([name, Icon]) => <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={() => selectPage(name)}>
+              <Icon />{name}
+            </button></div>)}
+          </div>
+        </div>
         {visibleNav.filter(([name]) => name !== "Dashboard").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={active === n ? "active" : ""}
@@ -3783,7 +3807,7 @@ function VerifyRequestForm({ request, close, onSave }) {
   </Modal>;
 }
 
-function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, theme, toggleTheme }) {
+function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, theme, toggleTheme, embedded = false }) {
   const mobileRole = session?.assignedRole || "Mobile User";
   const [show, setShow] = useState(false), [tab, setTab] = useState(mobileRole === "MIS User" ? "verify" : "requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null);
   const permissions = session?.permissions || {};
@@ -3810,8 +3834,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const verifyRequest = async (payload) => { try { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); } catch (error) { alert(error.message); } };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const visibleRows = isMis ? requests.filter((row) => String(row.status).toLowerCase() === "closed" && !row.verifiedAt) : requests;
-  return <div className="normal">
-    <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><div><Bell /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>
+  return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
+    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><div><Bell /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
@@ -3883,6 +3907,7 @@ function App() {
     }
   };
   const canOpenAdminPage = (name) => {
+    if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return true;
     if (masterNav.some(([master]) => master === name)) return accessAllows(adminPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(adminPermissions.tabAccess, "WhatsApp Integration") && accessAllows(adminPermissions.whatsappAccess, name);
     const directMenuAccess = {Dashboard: "dashboardAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
@@ -3895,6 +3920,23 @@ function App() {
     if (accessAllows(adminPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => accessAllows(adminPermissions.whatsappAccess, name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
   };
+  const selectedOperationalRole = operationalWorkspaceNav.find(([name]) => name === active)?.[2];
+  const operationalSession = selectedOperationalRole ? {
+    ...session,
+    assignedRole: selectedOperationalRole,
+    permissions: {
+      ...session?.permissions,
+      readRequests: true,
+      viewAllRequests: true,
+      createRequests: true,
+      editRequests: true,
+      deleteRequests: true,
+      closeRequests: true,
+      verifyRequests: true,
+      viewEquipment: true,
+      viewRepairTypes: true,
+    },
+  } : null;
   useEffect(() => {
     let stopped = false;
     const checkVersion = async () => {
@@ -4129,6 +4171,18 @@ function App() {
             <WhatsAppAlertHistory />
           ) : active === "Reports" ? (
             <ReportsPage requests={requests} goto={selectMenu} />
+          ) : operationalSession ? (
+            <Normal
+              embedded
+              requests={requests}
+              onCreate={addRequest}
+              onUpdateRequest={updateRequest}
+              onDeleteRequest={deleteRequest}
+              session={operationalSession}
+              logout={logout}
+              theme={theme}
+              toggleTheme={toggleTheme}
+            />
           ) : whatsappNav.some(([name]) => name === active) ? (
             <WhatsAppReport type={active} requests={requests} />
           ) : (

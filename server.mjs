@@ -308,7 +308,7 @@ async function requireSession(req,res,next){
 
 function requirePermission(permission,{role}={}){
   return (req,res,next)=>{
-    if(role&&req.session?.assignedRole!==role)return res.status(403).json({error:'Your assigned Mobile User role is not authorized for this action.'});
+    if(role&&req.session?.role!=='super'&&req.session?.assignedRole!==role)return res.status(403).json({error:'Your assigned Mobile User role is not authorized for this action.'});
     if(req.session?.permissions?.[permission]===true)return next();
     return res.status(403).json({error:'Your Maintenance Head has not granted this permission.'});
   };
