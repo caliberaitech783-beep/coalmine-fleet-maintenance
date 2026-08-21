@@ -169,6 +169,7 @@ async function migrate(){
       creator_role TEXT NOT NULL DEFAULT '',
       site TEXT NOT NULL DEFAULT 'Not assigned',
       category TEXT NOT NULL DEFAULT 'General',
+      priority TEXT NOT NULL DEFAULT 'Medium',
       message TEXT NOT NULL DEFAULT '',
       message_audio TEXT NOT NULL DEFAULT '',
       attachment_data TEXT NOT NULL DEFAULT '',
@@ -184,6 +185,7 @@ async function migrate(){
       resolved_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'Medium';
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_audio TEXT NOT NULL DEFAULT '';
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_data TEXT NOT NULL DEFAULT '';
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_name TEXT NOT NULL DEFAULT '';
@@ -453,7 +455,7 @@ async function currentUserRecord(session,client=pool){
 }
 
 function ticketProjection(){
-  return `reference,creator_login AS "creatorLogin",creator_name AS "creatorName",creator_role AS "creatorRole",site,category,
+  return `reference,creator_login AS "creatorLogin",creator_name AS "creatorName",creator_role AS "creatorRole",site,category,priority,
     message,message_audio AS "messageAudio",attachment_data AS "attachmentData",attachment_name AS "attachmentName",
     attachment_type AS "attachmentType",status,resolution_message AS "resolutionMessage",resolution_audio AS "resolutionAudio",
     resolution_attachment_data AS "resolutionAttachmentData",resolution_attachment_name AS "resolutionAttachmentName",
@@ -516,11 +518,13 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
   try{
     if(req.session.role==='super')return res.status(403).json({error:'Managers and Admins have view-only ticket intake access.'});
     const category=TICKET_CATEGORIES.includes(String(req.session.assignedRole||'').replace(/ User$/,''))?String(req.session.assignedRole).replace(/ User$/,''):'General';
+    const priority=['Low','Medium','High'].includes(String(req.body?.priority||''))?String(req.body.priority):'';
     const message=String(req.body?.message||'').trim();
     const messageAudio=String(req.body?.messageAudio||'');
     const attachmentData=String(req.body?.attachmentData||'');
     const attachmentName=String(req.body?.attachmentName||'').slice(0,255);
     const attachmentType=String(req.body?.attachmentType||'').slice(0,100);
+    if(!priority)return res.status(400).json({error:'Select a ticket priority.'});
     if(!message&&!messageAudio)return res.status(400).json({error:'Write a message or record an audio message.'});
     if(!validTicketMediaDataUrl(messageAudio,{kind:'audio'}))return res.status(400).json({error:'Ticket audio must be a supported recording up to 3 MB.'});
     if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
@@ -529,9 +533,9 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const creatorRole=req.session.role==='super'?(req.session.permissions?.managerRole||'Admin'):String(req.session.assignedRole||'User');
     await client.query('BEGIN');
     const inserted=await client.query(`INSERT INTO crm_tickets
-      (creator_login,creator_name,creator_role,site,category,message,message_audio,attachment_data,attachment_name,attachment_type)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id,created_at`,[
-      String(req.session.login||'').trim().toLowerCase(),String(req.session.name||'User'),creatorRole,site,category,message,messageAudio,attachmentData,attachmentName,attachmentType
+      (creator_login,creator_name,creator_role,site,category,priority,message,message_audio,attachment_data,attachment_name,attachment_type)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id,created_at`,[
+      String(req.session.login||'').trim().toLowerCase(),String(req.session.name||'User'),creatorRole,site,category,priority,message,messageAudio,attachmentData,attachmentName,attachmentType
     ]);
     const reference=ticketReference({site,date:new Date(inserted.rows[0].created_at),number:inserted.rows[0].id});
     const {rows}=await client.query(`UPDATE crm_tickets SET reference=$1 WHERE id=$2 RETURNING ${ticketProjection()}`,[reference,inserted.rows[0].id]);

@@ -29,6 +29,8 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   assert.match(source, /function TicketCreateForm/);
   const createForm = source.slice(source.indexOf("function TicketCreateForm"), source.indexOf("function TicketAttachment"));
   assert.doesNotMatch(createForm, /User name|name="category"/);
+  assert.match(createForm, /Priority \*[\s\S]*<option>Low<\/option><option>Medium<\/option><option>High<\/option>/);
+  assert.match(createForm, /label="Description"/);
   assert.match(source, /EnhancedSpeechComplaint[\s\S]*messageAudio/);
   assert.match(source, /function TicketResolutionForm/);
   assert.match(source, /audioName="resolutionAudio"[\s\S]*Record resolution audio/);
@@ -38,6 +40,8 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   assert.match(server, /CREATE TABLE IF NOT EXISTS crm_tickets/);
   assert.match(server, /resolution_audio TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /resolution_attachment_data TEXT NOT NULL DEFAULT ''/);
+  assert.match(server, /priority TEXT NOT NULL DEFAULT 'Medium'/);
+  assert.match(server, /Select a ticket priority/);
   assert.match(server, /CREATE TABLE IF NOT EXISTS crm_notifications/);
   assert.match(server, /app\.get\('\/api\/tickets',requireSession/);
   assert.match(server, /app\.patch\('\/api\/tickets\/resolve'/);
