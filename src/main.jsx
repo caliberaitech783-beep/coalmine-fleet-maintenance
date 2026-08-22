@@ -1352,17 +1352,19 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     link.click();
     URL.revokeObjectURL(link.href);
   };
-  const syncOracleTransfers = async () => {
+  const syncOracle = async () => {
     if (syncingOracle) return;
     setSyncingOracle(true);
     try {
-      const response = await fetch("/api/oracle/equipment-transfers/sync", {
+      const response = await fetch(name === "Equipment master" ? "/api/oracle/equipment/sync" : "/api/oracle/equipment-transfers/sync", {
         method: "POST",
         headers: { Authorization: `Bearer ${authToken}` },
       });
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not synchronize equipment transfers.");
-      alert(`${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
+      alert(name === "Equipment master"
+        ? `${details.equipmentImported || 0} Oracle equipment records synchronized. ${details.equipmentUpdated || 0} updated and ${details.equipmentInserted || 0} added.`
+        : `${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
       window.location.reload();
     } catch (error) {
       alert(error.message || "Could not synchronize equipment transfers.");
@@ -1372,8 +1374,8 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
   return (
     <>
       <div className="master-actions">
-        {name === "Vehicle transfers" && (
-          <button className="secondary" type="button" onClick={syncOracleTransfers} disabled={syncingOracle}>
+        {["Equipment master", "Vehicle transfers"].includes(name) && (
+          <button className="secondary" type="button" onClick={syncOracle} disabled={syncingOracle}>
             <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : "Sync Oracle"}
           </button>
         )}

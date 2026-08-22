@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {applyLatestTransfer,latestTransferByEquipment,transferMasterRecord} from "../equipment-transfer-sync.mjs";
+import {applyLatestTransfer,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from "../equipment-transfer-sync.mjs";
 
 test("maps Oracle equipment transfers to the Vehicle transfers master", () => {
   assert.deepEqual(transferMasterRecord({
@@ -28,4 +28,19 @@ test("latest transfer updates matching Equipment Master current location", () =>
   assert.equal(updated.currentLocation, "MAJRI OB");
   assert.equal(updated.lastTransferNo, "ETR-2");
   assert.equal(updated.status, "Operational");
+});
+
+test("maps Oracle fleet assets without removing app-maintained status or latest transfer", () => {
+  const mapped = oracleEquipmentMasterRecord({
+    oracleEquipmentTno: "20", oracleEquipmentNo: "CMPL/M/1", equipmentId: "V1-100",
+    equipmentName: "V1-100", currentLocation: "SASTI OB", category: "Vehicle",
+    group: "Volvo Tipper", itemName: "Tipper", chassisNo: "CH-1",
+  }, {
+    status: "Off road", currentLocation: "MAJRI OB", lastTransferDate: "2026-08-22",
+  });
+  assert.equal(mapped.door, "V1-100");
+  assert.equal(mapped.group, "Volvo Tipper");
+  assert.equal(mapped.status, "Off road");
+  assert.equal(mapped.currentLocation, "MAJRI OB");
+  assert.equal(mapped.oracleSource, "EQUIPMENT");
 });

@@ -170,6 +170,68 @@ export async function oracleEquipmentTransfers() {
   }
 }
 
+export async function oracleEquipmentMasterRecords() {
+  const pool = await oraclePool();
+  const connection = await pool.getConnection();
+  try {
+    const result = await connection.execute(
+      `SELECT equipment.tno AS oracle_tno,
+              equipment.equipmentno AS oracle_equipment_no,
+              equipment.equipmentid AS equipment_id,
+              equipment.equipmentname AS equipment_name,
+              NVL((SELECT MAX(location.locationname) FROM cmpl.location location
+                   WHERE location.locationcode = equipment.locationcode), equipment.locationcode) AS current_location,
+              NVL((SELECT MAX(category.equipmentcategoryname) FROM cmpl.equipmentcategory category
+                   WHERE category.equipmentcategorycode = equipment.equipmentcategorycode), equipment.equipmentcategorycode) AS category_name,
+              NVL((SELECT MAX(equipment_group.equipmentgroupname) FROM cmpl.equipmentgroup equipment_group
+                   WHERE equipment_group.equipmentgroupcode = equipment.equipmentgroupcode), equipment.equipmentgroupcode) AS group_name,
+              NVL((SELECT MAX(item.itemname) FROM cmpl.item item
+                   WHERE item.itemcode = equipment.itemcode), equipment.itemcode) AS item_name,
+              NVL((SELECT MAX(specification.itemspecificationname) FROM cmpl.itemspecification specification
+                   WHERE specification.itemspecificationcode = equipment.itemspecificationcode), equipment.itemspecificationcode) AS item_specification,
+              TO_CHAR(equipment.equipmentacquisitiondate, 'YYYY-MM-DD') AS acquisition_date,
+              NVL(equipment.manufacturername, NVL(equipment.manufacturemakecode, equipment.manufacturermakecode)) AS make_name,
+              NVL(equipment.manufacturermodelno, equipment.manufacturemodelcode) AS model_name,
+              equipment.manufacturerserialno AS manufacturer_serial_no,
+              equipment.engineno AS engine_no,
+              equipment.chasisno AS chassis_no,
+              equipment.registrationno AS registration_no,
+              equipment.vrnno AS vrn_no,
+              equipment.assetno AS asset_no,
+              equipment.doctypecode AS document_status
+       FROM cmpl.equipment equipment
+       WHERE UPPER(TRIM(equipment.equipmenttypecode)) = 'ASSET'
+         AND UPPER(TRIM(equipment.equipmentcategorycode)) IN ('VEHICLE', 'EQUIPMENT')
+       ORDER BY equipment.tno ASC`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT, maxRows: 100000 },
+    );
+    return (result.rows || []).map((row) => ({
+      oracleEquipmentTno: String(row.ORACLE_TNO ?? ""),
+      oracleEquipmentNo: String(row.ORACLE_EQUIPMENT_NO ?? ""),
+      equipmentId: String(row.EQUIPMENT_ID ?? ""),
+      equipmentName: String(row.EQUIPMENT_NAME ?? ""),
+      currentLocation: String(row.CURRENT_LOCATION ?? ""),
+      category: String(row.CATEGORY_NAME ?? ""),
+      group: String(row.GROUP_NAME ?? ""),
+      itemName: String(row.ITEM_NAME ?? ""),
+      itemSpecification: String(row.ITEM_SPECIFICATION ?? ""),
+      acquisitionDate: String(row.ACQUISITION_DATE ?? ""),
+      make: String(row.MAKE_NAME ?? ""),
+      model: String(row.MODEL_NAME ?? ""),
+      manufacturerSerialNo: String(row.MANUFACTURER_SERIAL_NO ?? ""),
+      engineNo: String(row.ENGINE_NO ?? ""),
+      chassisNo: String(row.CHASSIS_NO ?? ""),
+      registrationNo: String(row.REGISTRATION_NO ?? ""),
+      vrnNo: String(row.VRN_NO ?? ""),
+      asset: String(row.ASSET_NO ?? ""),
+      documentStatus: String(row.DOCUMENT_STATUS ?? ""),
+    }));
+  } finally {
+    await connection.close();
+  }
+}
+
 export async function oracleHealth() {
   const pool = await oraclePool();
   const connection = await pool.getConnection();

@@ -25,6 +25,7 @@ export function transferMasterRecord(transfer = {}) {
 export function equipmentMatchKeys(record = {}) {
   return [
     record.oracleEquipmentTno,
+    record.oracleEquipmentNo,
     record.equipmentTno,
     record.equipmentId,
     record.equipmentNo,
@@ -54,5 +55,31 @@ export function applyLatestTransfer(record, latestByEquipment) {
     oracleEquipmentTno: transfer.equipmentTno || record.oracleEquipmentTno || "",
     lastTransferNo: transfer.transferNo || "",
     lastTransferDate: transfer.transferDate || "",
+  };
+}
+
+export function oracleEquipmentMasterRecord(equipment = {}, existing = {}) {
+  return {
+    ...existing,
+    door: equipment.equipmentId || equipment.equipmentName || existing.door || "",
+    reg: equipment.registrationNo || equipment.vrnNo || existing.reg || "",
+    currentLocation: existing.lastTransferDate ? existing.currentLocation : (equipment.currentLocation || existing.currentLocation || ""),
+    equipmentName: equipment.equipmentName || equipment.equipmentId || existing.equipmentName || "",
+    category: equipment.category || existing.category || "",
+    group: equipment.group || existing.group || "",
+    itemName: equipment.itemName || existing.itemName || "",
+    itemSpecification: equipment.itemSpecification || existing.itemSpecification || "",
+    acquisitionDate: equipment.acquisitionDate || existing.acquisitionDate || "",
+    make: equipment.make || existing.make || "",
+    model: equipment.model || existing.model || "",
+    manufacturerSerialNo: equipment.manufacturerSerialNo || existing.manufacturerSerialNo || "",
+    engineNo: equipment.engineNo || existing.engineNo || "",
+    chassisNo: equipment.chassisNo || existing.chassisNo || "",
+    documentStatus: equipment.documentStatus || existing.documentStatus || "",
+    asset: equipment.asset || existing.asset || "",
+    status: existing.status || "Operational",
+    oracleSource: "EQUIPMENT",
+    oracleEquipmentTno: equipment.oracleEquipmentTno || existing.oracleEquipmentTno || "",
+    oracleEquipmentNo: equipment.oracleEquipmentNo || existing.oracleEquipmentNo || "",
   };
 }

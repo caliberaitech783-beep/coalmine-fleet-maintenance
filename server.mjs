@@ -14,8 +14,8 @@ import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,val
 import {accessAllows} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
-import {oracleConfigured,oracleDriverLookup,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
-import {applyLatestTransfer,latestTransferByEquipment,transferMasterRecord} from './equipment-transfer-sync.mjs';
+import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
+import {applyLatestTransfer,equipmentMatchKeys,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -467,6 +467,70 @@ app.get('/api/oracle/driver',requireSession,async(req,res)=>{
 });
 
 let equipmentTransferSyncPromise;
+let equipmentMasterSyncPromise;
+async function syncOracleEquipmentMaster(){
+  if(equipmentMasterSyncPromise)return equipmentMasterSyncPromise;
+  equipmentMasterSyncPromise=(async()=>{
+    const oracleRecords=await oracleEquipmentMasterRecords();
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('oracle-equipment-master-sync'))");
+      const existingResult=await client.query(`SELECT id,record_data FROM master_records
+        WHERE master_name='Equipment master' FOR UPDATE`);
+      const byKey=new Map();
+      for(const row of existingResult.rows){
+        for(const key of equipmentMatchKeys(row.record_data))if(!byKey.has(key))byKey.set(key,row);
+      }
+      const updates=[],inserts=[];
+      for(const equipment of oracleRecords){
+        const match=equipmentMatchKeys(equipment).map(key=>byKey.get(key)).find(Boolean);
+        const record=oracleEquipmentMasterRecord(equipment,match?.record_data||{});
+        if(match){
+          updates.push({id:match.id,...record});
+          for(const key of equipmentMatchKeys(record))byKey.set(key,{id:match.id,record_data:record});
+        }else{
+          inserts.push(record);
+        }
+      }
+      if(updates.length){
+        await client.query(`UPDATE master_records AS target
+          SET record_data=incoming.value-'id'
+          FROM jsonb_array_elements($1::jsonb) AS incoming(value)
+          WHERE target.id=(incoming.value->>'id')::bigint
+            AND target.master_name='Equipment master'`,[JSON.stringify(updates)]);
+      }
+      if(inserts.length){
+        await client.query(`INSERT INTO master_records (master_name,record_data)
+          SELECT 'Equipment master',value FROM jsonb_array_elements($1::jsonb) AS value`,[JSON.stringify(inserts)]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('oracle_equipment_master_sync',$1,NOW())
+        ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[
+        JSON.stringify({oracleRecords:oracleRecords.length,updated:updates.length,inserted:inserts.length})
+      ]);
+      await client.query('COMMIT');
+      return {equipmentImported:oracleRecords.length,equipmentUpdated:updates.length,equipmentInserted:inserts.length};
+    }catch(error){
+      await client.query('ROLLBACK');
+      throw error;
+    }finally{client.release()}
+  })().finally(()=>{equipmentMasterSyncPromise=undefined});
+  return equipmentMasterSyncPromise;
+}
+
+app.post('/api/oracle/equipment/sync',requireSuper,async(_req,res)=>{
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle equipment sync is not configured.'});
+  try{
+    const equipment=await syncOracleEquipmentMaster();
+    const transfers=await syncOracleEquipmentTransfers();
+    res.json({...equipment,...transfers});
+  }catch(error){
+    console.error('Oracle equipment sync failed.',error);
+    res.status(503).json({error:'Equipment Master could not be synchronized from Oracle.'});
+  }
+});
+
 async function syncOracleEquipmentTransfers(){
   if(equipmentTransferSyncPromise)return equipmentTransferSyncPromise;
   equipmentTransferSyncPromise=(async()=>{
@@ -1195,9 +1259,13 @@ async function initializeDatabase(){
     databaseReady=true;
     databaseError='';
     console.log('Database initialization completed.');
-    if(oracleConfigured)void syncOracleEquipmentTransfers()
+    if(oracleConfigured)void syncOracleEquipmentMaster()
+      .then(result=>{
+        console.log('Oracle equipment sync completed.',result);
+        return syncOracleEquipmentTransfers();
+      })
       .then(result=>console.log('Oracle equipment-transfer sync completed.',result))
-      .catch(error=>console.error('Oracle equipment-transfer startup sync failed.',error));
+      .catch(error=>console.error('Oracle equipment startup sync failed.',error));
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database initialization failed.';
