@@ -45,10 +45,10 @@ test("maps Oracle fleet assets without removing app-maintained status or latest 
   assert.equal(mapped.oracleSource, "EQUIPMENT");
 });
 
-test("keeps only the requested Equipment Master groups or item types", () => {
+test("keeps only the requested Equipment Master groups", () => {
   assert.equal(isAllowedOracleEquipment({group: "VOLVO TIPPERS", itemName: "TRUCK"}), true);
   assert.equal(isAllowedOracleEquipment({group: "PAY LOADER", itemName: "BACKHOE LOADER"}), true);
-  assert.equal(isAllowedOracleEquipment({group: "SHIFT VAN", itemName: "HEAVY MOTOR VEHICLE"}), true);
+  assert.equal(isAllowedOracleEquipment({group: "SHIFT VAN", itemName: "HEAVY MOTOR VEHICLE"}), false);
   assert.equal(isAllowedOracleEquipment({group: "LIGHT MOTOR VEHICLE", itemName: "CAR"}), false);
   assert.equal(isAllowedOracleEquipment({group: "OFFICE EQUIPMENT", itemName: "PRINTER"}), false);
 });

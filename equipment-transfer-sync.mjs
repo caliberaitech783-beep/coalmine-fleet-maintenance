@@ -1,6 +1,6 @@
 const normalized = (value) => String(value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-export const allowedEquipmentTypes = [
+export const allowedEquipmentGroups = [
   "TIPPER", "TIPPERS", "EQUIPMENT", "EQUIPMENTS", "VEHICLE", "VEHICLES",
   "GRADER", "GRADERS", "DOZER", "DOZERS", "TRUCK", "TRUCKS",
   "HAULPAK", "HAULPACK", "DUMPER", "DRILL MACHINE", "EXCAVATOR",
@@ -10,10 +10,10 @@ export const allowedEquipmentTypes = [
 ];
 
 export function isAllowedOracleEquipment(record = {}) {
-  const values = [record.group, record.itemName].map(normalized).filter(Boolean);
-  const exactTypes = new Set(allowedEquipmentTypes.map(normalized));
+  const group = normalized(record.group);
+  const exactGroups = new Set(allowedEquipmentGroups.map(normalized));
   const familyTypes = ["TIPPER", "HAULPAK", "HAULPACK", "DUMPER"].map(normalized);
-  return values.some((value) => exactTypes.has(value) || familyTypes.some((type) => value.includes(type)));
+  return Boolean(group) && (exactGroups.has(group) || familyTypes.some((type) => group.includes(type)));
 }
 
 export function transferMasterRecord(transfer = {}) {
