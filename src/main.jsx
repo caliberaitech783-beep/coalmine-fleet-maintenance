@@ -4002,6 +4002,7 @@ function VerifyRequestForm({ request, close, onSave }) {
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
+        <div><span>Superior</span><b>{request.superior || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
