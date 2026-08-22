@@ -14,6 +14,7 @@ import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,val
 import {accessAllows} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
+import {oracleConfigured,oracleHealth} from './oracle-db.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -432,6 +433,15 @@ app.get('/api/health',async(_req,res)=>{
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database connection failed.';
     res.status(503).json({status:'degraded',database:'disconnected',error:databaseError});
+  }
+});
+
+app.get('/api/oracle/health',requireSuper,async(_req,res)=>{
+  if(!oracleConfigured)return res.status(503).json({configured:false,connected:false,error:'Oracle database settings are not configured.'});
+  try{
+    res.json(await oracleHealth());
+  }catch(error){
+    res.status(503).json({configured:true,connected:false,error:error instanceof Error?error.message:'Oracle connection failed.'});
   }
 });
 
