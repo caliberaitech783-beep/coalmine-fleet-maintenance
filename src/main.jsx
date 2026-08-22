@@ -1132,6 +1132,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
     ? "User"
     : privilegeSelectionValue(record.userGroup);
   const [accountRole, setAccountRole] = useState(initialRole);
+  const [roleSection, setRoleSection] = useState(initialRole && initialRole !== "User" ? "team" : "manager");
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
   const [managerRole, setManagerRole] = useState(record.managerRole || "");
   const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
@@ -1144,10 +1145,15 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
     <fieldset className="account-role-field full">
       <legend>User role *</legend>
       <p>Select the workspace and built-in authority for this account.</p>
-      <div>{accountRoleOptions.map((option) => <label key={option} className={accountRole === option ? "selected" : ""}>
+      <div className="role-category-tabs" role="tablist" aria-label="User category">
+        <button type="button" role="tab" aria-selected={roleSection === "manager"} className={roleSection === "manager" ? "active" : ""} onClick={() => { setRoleSection("manager"); setAccountRole("User"); }}>Manager User</button>
+        <button type="button" role="tab" aria-selected={roleSection === "team"} className={roleSection === "team" ? "active" : ""} onClick={() => { setRoleSection("team"); if (accountRole === "User") setAccountRole(""); }}>Team User</button>
+      </div>
+      {roleSection === "manager" && <input type="hidden" name="userGroup" value="User" />}
+      {roleSection === "team" && <div className="role-option-grid">{mobileUserRoleOptions.map((option) => <label key={option} className={accountRole === option ? "selected" : ""}>
         <input type="radio" name="userGroup" value={option} required checked={accountRole === option} onChange={() => setAccountRole(option)} />
-        <span><b>{option}</b><small>{option === "User" ? "Desktop administration or management access" : mobileRoleAuthority[option]}</small></span>
-      </label>)}</div>
+        <span><b>{option}</b><small>{mobileRoleAuthority[option]}</small></span>
+      </label>)}</div>}
     </fieldset>
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
       <legend>User authority *</legend>

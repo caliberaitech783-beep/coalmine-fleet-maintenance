@@ -15,7 +15,9 @@ test("user creation contains every existing privilege option", () => {
 test("user modal uses one role selector with role-specific sections", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /const accountRoleOptions = \["User", \.\.\.mobileUserRoleOptions\]/);
-  assert.match(source, /accountRoleOptions\.map[\s\S]*type="radio" name="userGroup"/);
+  assert.match(source, /Manager User[\s\S]*Team User/);
+  assert.match(source, /roleSection === "manager"[\s\S]*name="userGroup" value="User"/);
+  assert.match(source, /roleSection === "team"[\s\S]*mobileUserRoleOptions\.map[\s\S]*type="radio" name="userGroup"/);
   assert.match(source, /const userAuthorityOptions = \["Admin", "Manager"\]/);
   assert.match(source, /type="radio" name="adminLevel"/);
   assert.match(source, /const managerRoleOptions = \["Production Manager", "Maintenance Manager", "MIS Manager"\]/);
