@@ -1160,7 +1160,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
       <p>Choose whether this desktop user is a full Admin or a configurable Manager.</p>
       <div>{userAuthorityOptions.map((option) => <label key={option} className={userAuthority === option ? "selected" : ""}>
         <input type="radio" name="adminLevel" value={option} required checked={userAuthority === option} onChange={() => setUserAuthority(option)} />
-        <span><b>{option}</b><small>{option === "Admin" ? "All screens, menus and administrative functions" : "Only the selected menus and screens"}</small></span>
+        <span><b>{option === "Manager" ? "Non Admin" : option}</b><small>{option === "Admin" ? "All screens, menus and administrative functions" : "Only the selected menus and screens"}</small></span>
       </label>)}</div>
     </fieldset>}
     {isManager && <fieldset className="account-role-field manager-role-field full">

@@ -17,6 +17,7 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /const accountRoleOptions = \["User", \.\.\.mobileUserRoleOptions\]/);
   assert.match(source, /Manager User[\s\S]*Team User/);
   assert.match(source, /roleSection === "manager"[\s\S]*name="userGroup" value="User"/);
+  assert.match(source, /option === "Manager" \? "Non Admin" : option/);
   assert.match(source, /roleSection === "team"[\s\S]*mobileUserRoleOptions\.map[\s\S]*type="radio" name="userGroup"/);
   assert.match(source, /const userAuthorityOptions = \["Admin", "Manager"\]/);
   assert.match(source, /type="radio" name="adminLevel"/);
