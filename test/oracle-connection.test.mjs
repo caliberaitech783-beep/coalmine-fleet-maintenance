@@ -15,3 +15,22 @@ test("Oracle integration is read-only, lazy, protected, and environment configur
   assert.match(server, /app\.get\('\/api\/oracle\/health',requireSuper/);
   assert.doesNotMatch(example, /CMPLAI@123|13\.206\.103\.124/);
 });
+
+test("request forms fetch and persist Oracle logbook driver names", () => {
+  const oracle = fs.readFileSync(new URL("../oracle-db.mjs", import.meta.url), "utf8");
+  const server = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
+  const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(oracle, /equipmentlogbookdetail/i);
+  assert.match(oracle, /vehiclelogbookdetail/i);
+  assert.match(oracle, /cmpl\.employee/i);
+  assert.match(oracle, /request_date/);
+  assert.match(oracle, /request_time/);
+  assert.match(oracle, /location_key/);
+  assert.match(oracle, /equipment_key/);
+  assert.match(server, /app\.get\('\/api\/oracle\/driver',requireSession/);
+  assert.match(server, /driver_name TEXT NOT NULL DEFAULT ''/);
+  assert.match(server, /driver_name AS "driverName"/);
+  assert.match(client, /Driver \/ operator name/);
+  assert.match(client, /\/api\/oracle\/driver\?/);
+  assert.match(client, /driverName: driverLookup\.name/);
+});

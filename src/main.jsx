@@ -2296,7 +2296,32 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     equipmentDetails = requestEquipmentDetails(v || {}),
     currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
   const [requestTime, setRequestTime] = useState(systemTime);
+  const [requestDate, setRequestDate] = useState(systemDate);
+  const [driverLookup, setDriverLookup] = useState({status: "idle", name: "", source: ""});
   const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    const equipmentNo = equipmentDetails.door || equipmentDetails.equipment;
+    if (!equipmentNo || !currentLocation || !requestDate || !requestTime) {
+      setDriverLookup({status: "idle", name: "", source: ""});
+      return undefined;
+    }
+    let cancelled = false;
+    setDriverLookup({status: "loading", name: "", source: ""});
+    const timer = window.setTimeout(async () => {
+      try {
+        const query = new URLSearchParams({date: requestDate, time: requestTime, location: currentLocation, equipmentNo});
+        const response = await fetch(`/api/oracle/driver?${query}`, {headers: {Authorization: `Bearer ${authToken}`}});
+        const result = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!response.ok) setDriverLookup({status: "error", name: "", source: result.error || "Lookup unavailable"});
+        else if (result.found) setDriverLookup({status: "found", name: result.driverName || "", source: result.source || "Oracle logbook"});
+        else setDriverLookup({status: "missing", name: "", source: "No matching Oracle logbook entry"});
+      } catch {
+        if (!cancelled) setDriverLookup({status: "error", name: "", source: "Lookup unavailable"});
+      }
+    }, 350);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [equipmentDetails.door, equipmentDetails.equipment, currentLocation, requestDate, requestTime]);
   const submit = async (e) => {
     e.preventDefault();
     if (submitting) return;
@@ -2315,6 +2340,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         owner: "Mobile User",
         reg: equipmentDetails.reg,
         chassis: equipmentDetails.chassis,
+        driverName: driverLookup.name,
       };
     if (!request.chassis) {
       alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
@@ -2454,7 +2480,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             )}
           </label>
           <label>
-            Date *<input name="date" type="date" defaultValue={systemDate} />
+            Date *<input name="date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} />
           </label>
           {!normal && (
             <label>
@@ -2481,6 +2507,17 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             Chassis number *
             <input value={equipmentDetails.chassis || "Not available — contact admin team"} readOnly required aria-invalid={Boolean(v && !equipmentDetails.chassis)} />
             {v && !equipmentDetails.chassis && <small>Contact the admin team to update the chassis number before creating a request.</small>}
+          </label>
+          <label>
+            Driver / operator name
+            <input
+              name="driverName"
+              value={driverLookup.name}
+              readOnly
+              aria-busy={driverLookup.status === "loading"}
+              placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : driverLookup.status === "missing" ? "No matching logbook entry" : driverLookup.status === "error" ? "Lookup temporarily unavailable" : "Select equipment to fetch driver"}
+            />
+            {driverLookup.name && <small>Fetched from {driverLookup.source}</small>}
           </label>
           <SpeechComplaint />
         </div>
