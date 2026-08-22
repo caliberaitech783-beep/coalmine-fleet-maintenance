@@ -8,7 +8,7 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   const manager=source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard"));
   assert.match(server,/assignedRole==='MIS User'[\s\S]*maintenance_requests WHERE lower\(trim\(site\)\)=lower\(trim\(\$1\)\)/);
   assert.match(server,/A location must be assigned before this MIS user can verify requests/);
-  assert.match(server,/verified_at IS NULL[\s\S]*lower\(trim\(site\)\)=lower\(trim\(\$7\)\)/);
+  assert.match(server,/verified_at IS NULL[\s\S]*lower\(trim\(site\)\)=lower\(trim\(\$8\)\)/);
   assert.match(manager,/"Total requests", verifiedRequests\.length/);
   assert.doesNotMatch(manager,/"Pending verification"/);
   assert.doesNotMatch(manager,/\["Verified", verifiedRequests\.length/);

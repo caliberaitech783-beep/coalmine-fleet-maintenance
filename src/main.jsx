@@ -3996,17 +3996,17 @@ function VerifyRequestForm({ request, close, onSave }) {
         return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
       const firstTripCardImage = tripCardFile ? await fileAsDataUrl(tripCardFile) : "";
-      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage});
+      onSave({superior: String(form.get("superior") || "").trim(), firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
-        <div><span>Superior</span><b>{request.superior || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
       </div>
+      <label>Superior<input name="superior" type="text" defaultValue={request.superior || ""} placeholder="Enter superior name" maxLength={200} autoComplete="name" /></label>
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       {firstTripDone && <div className="formgrid">
         <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
