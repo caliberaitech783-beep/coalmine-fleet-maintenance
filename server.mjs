@@ -15,7 +15,7 @@ import {accessAllows} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
-import {applyLatestTransfer,equipmentMatchKeys,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
+import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -471,7 +471,8 @@ let equipmentMasterSyncPromise;
 async function syncOracleEquipmentMaster(){
   if(equipmentMasterSyncPromise)return equipmentMasterSyncPromise;
   equipmentMasterSyncPromise=(async()=>{
-    const oracleRecords=await oracleEquipmentMasterRecords();
+    const oracleSourceRecords=await oracleEquipmentMasterRecords();
+    const oracleRecords=oracleSourceRecords.filter(isAllowedOracleEquipment);
     const client=await pool.connect();
     try{
       await client.query('BEGIN');
@@ -482,17 +483,22 @@ async function syncOracleEquipmentMaster(){
       for(const row of existingResult.rows){
         for(const key of equipmentMatchKeys(row.record_data))if(!byKey.has(key))byKey.set(key,row);
       }
-      const updates=[],inserts=[];
+      const updates=[],inserts=[],retainedIds=[];
       for(const equipment of oracleRecords){
         const match=equipmentMatchKeys(equipment).map(key=>byKey.get(key)).find(Boolean);
         const record=oracleEquipmentMasterRecord(equipment,match?.record_data||{});
         if(match){
           updates.push({id:match.id,...record});
+          retainedIds.push(match.id);
           for(const key of equipmentMatchKeys(record))byKey.set(key,{id:match.id,record_data:record});
         }else{
           inserts.push(record);
         }
       }
+      await client.query(`DELETE FROM master_records
+        WHERE master_name='Equipment master'
+          AND record_data->>'oracleSource'='EQUIPMENT'
+          AND NOT (id=ANY($1::bigint[]))`,[retainedIds]);
       if(updates.length){
         await client.query(`UPDATE master_records AS target
           SET record_data=incoming.value-'id'
@@ -507,7 +513,7 @@ async function syncOracleEquipmentMaster(){
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('oracle_equipment_master_sync',$1,NOW())
         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[
-        JSON.stringify({oracleRecords:oracleRecords.length,updated:updates.length,inserted:inserts.length})
+        JSON.stringify({sourceRecords:oracleSourceRecords.length,oracleRecords:oracleRecords.length,updated:updates.length,inserted:inserts.length})
       ]);
       await client.query('COMMIT');
       return {equipmentImported:oracleRecords.length,equipmentUpdated:updates.length,equipmentInserted:inserts.length};

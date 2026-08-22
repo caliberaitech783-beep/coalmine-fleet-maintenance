@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {applyLatestTransfer,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from "../equipment-transfer-sync.mjs";
+import {applyLatestTransfer,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from "../equipment-transfer-sync.mjs";
 
 test("maps Oracle equipment transfers to the Vehicle transfers master", () => {
   assert.deepEqual(transferMasterRecord({
@@ -43,4 +43,12 @@ test("maps Oracle fleet assets without removing app-maintained status or latest 
   assert.equal(mapped.status, "Off road");
   assert.equal(mapped.currentLocation, "MAJRI OB");
   assert.equal(mapped.oracleSource, "EQUIPMENT");
+});
+
+test("keeps only the requested Equipment Master groups or item types", () => {
+  assert.equal(isAllowedOracleEquipment({group: "VOLVO TIPPERS", itemName: "TRUCK"}), true);
+  assert.equal(isAllowedOracleEquipment({group: "PAY LOADER", itemName: "BACKHOE LOADER"}), true);
+  assert.equal(isAllowedOracleEquipment({group: "SHIFT VAN", itemName: "HEAVY MOTOR VEHICLE"}), true);
+  assert.equal(isAllowedOracleEquipment({group: "LIGHT MOTOR VEHICLE", itemName: "CAR"}), false);
+  assert.equal(isAllowedOracleEquipment({group: "OFFICE EQUIPMENT", itemName: "PRINTER"}), false);
 });
