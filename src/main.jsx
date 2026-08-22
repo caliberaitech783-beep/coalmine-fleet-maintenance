@@ -2308,6 +2308,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         owner: "Mobile User",
         reg: equipmentDetails.reg,
         chassis: equipmentDetails.chassis,
+        superior: String(fd.get("superior") || "").trim(),
       };
     if (!request.chassis) {
       alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
@@ -2474,6 +2475,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             Chassis number *
             <input value={equipmentDetails.chassis || "Not available — contact admin team"} readOnly required aria-invalid={Boolean(v && !equipmentDetails.chassis)} />
             {v && !equipmentDetails.chassis && <small>Contact the admin team to update the chassis number before creating a request.</small>}
+          </label>
+          <label>
+            Superior
+            <input name="superior" type="text" placeholder="Enter superior name" maxLength={200} autoComplete="name" />
           </label>
           <SpeechComplaint />
         </div>

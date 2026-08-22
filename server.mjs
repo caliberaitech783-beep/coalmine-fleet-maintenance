@@ -49,6 +49,7 @@ async function migrate(){
       registration_number TEXT NOT NULL DEFAULT '',
       chassis_number TEXT NOT NULL DEFAULT '',
       complaint_audio TEXT NOT NULL DEFAULT '',
+      superior_name TEXT NOT NULL DEFAULT '',
       site TEXT NOT NULL DEFAULT 'Not assigned',
       category TEXT NOT NULL DEFAULT 'Maintenance request',
       complaint TEXT NOT NULL,
@@ -78,6 +79,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS chassis_number TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS complaint_audio TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS superior_name TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
@@ -660,7 +663,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 });
 
 const requestProjection=`reference AS ref, equipment_name AS equipment, door_number AS door,
-  registration_number AS reg, chassis_number AS chassis, site, category, complaint, complaint_audio AS "complaintAudio",
+  registration_number AS reg, chassis_number AS chassis, superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, owner_name AS owner, requester_login AS "requesterLogin",
@@ -737,7 +740,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
+    const {ref,equipment='',door,reg='',chassis='',superior='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
@@ -747,10 +750,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     }
     const startedAt=parseIndiaRequestDateTime(start);
     const {rows}=await pool.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,door_number,registration_number,chassis_number,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Open',$11,$12)
+      (reference,equipment_name,door_number,registration_number,chassis_number,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Open',$12,$13)
       RETURNING ${requestProjection}`,
-      [ref,equipment,door,reg,chassis,site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
+      [ref,equipment,door,reg,chassis,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened at ${requestNotificationTime(startedAt)} for ${rows[0].site} by ${req.session.name||'Production User'}.`);
     res.status(201).json(rows[0]);
