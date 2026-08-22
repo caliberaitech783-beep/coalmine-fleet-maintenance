@@ -117,6 +117,59 @@ export async function oracleDriverLookup({ date, time, location, equipmentNo }) 
   }
 }
 
+export async function oracleEquipmentTransfers() {
+  const pool = await oraclePool();
+  const connection = await pool.getConnection();
+  try {
+    const result = await connection.execute(
+      `SELECT transfer.tno AS oracle_tno,
+              transfer.equipmenttransferno AS transfer_no,
+              TO_CHAR(transfer.equipmenttransferdate, 'YYYY-MM-DD') AS transfer_date,
+              transfer.locationcode AS from_location,
+              transfer.tolocationcode AS to_location,
+              transfer.equipmenttno AS equipment_tno,
+              equipment.equipmentid AS equipment_id,
+              equipment.equipmentname AS equipment_name,
+              equipment.equipmentno AS equipment_no,
+              equipment.manufacturermodelno AS model_no,
+              equipment.manufacturerserialno AS manufacturer_serial_no,
+              transfer.chasisno AS chassis_no,
+              transfer.dieselquantity AS diesel_qty,
+              transfer.kmr AS kmr,
+              transfer.hmr AS hmr,
+              transfer.drivercode AS driver_code,
+              employee.employeename AS driver_name
+       FROM cmpl.equipmenttransfer transfer
+       LEFT JOIN cmpl.equipment equipment ON equipment.tno = transfer.equipmenttno
+       LEFT JOIN cmpl.employee employee ON employee.employeecode = transfer.drivercode
+       ORDER BY transfer.equipmenttransferdate ASC, transfer.tno ASC`,
+      [],
+      { outFormat: oracledb.OUT_FORMAT_OBJECT, maxRows: 100000 },
+    );
+    return (result.rows || []).map((row) => ({
+      oracleTno: String(row.ORACLE_TNO ?? ""),
+      transferNo: String(row.TRANSFER_NO ?? ""),
+      transferDate: String(row.TRANSFER_DATE ?? ""),
+      source: String(row.FROM_LOCATION ?? ""),
+      destination: String(row.TO_LOCATION ?? ""),
+      equipmentTno: String(row.EQUIPMENT_TNO ?? ""),
+      equipmentId: String(row.EQUIPMENT_ID ?? ""),
+      equipmentName: String(row.EQUIPMENT_NAME ?? ""),
+      equipmentNo: String(row.EQUIPMENT_NO ?? ""),
+      modelNo: String(row.MODEL_NO ?? ""),
+      manufacturerSerialNo: String(row.MANUFACTURER_SERIAL_NO ?? ""),
+      chassisNo: String(row.CHASSIS_NO ?? ""),
+      dieselQty: String(row.DIESEL_QTY ?? ""),
+      kmr: String(row.KMR ?? ""),
+      hmr: String(row.HMR ?? ""),
+      driverCode: String(row.DRIVER_CODE ?? ""),
+      driver: String(row.DRIVER_NAME ?? ""),
+    }));
+  } finally {
+    await connection.close();
+  }
+}
+
 export async function oracleHealth() {
   const pool = await oraclePool();
   const connection = await pool.getConnection();

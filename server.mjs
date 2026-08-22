@@ -14,7 +14,8 @@ import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,val
 import {accessAllows} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
-import {oracleConfigured,oracleDriverLookup,oracleHealth} from './oracle-db.mjs';
+import {oracleConfigured,oracleDriverLookup,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
+import {applyLatestTransfer,latestTransferByEquipment,transferMasterRecord} from './equipment-transfer-sync.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -462,6 +463,60 @@ app.get('/api/oracle/driver',requireSession,async(req,res)=>{
   }catch(error){
     console.error('Oracle driver lookup failed.',error);
     res.status(503).json({error:'Driver/operator lookup is temporarily unavailable.'});
+  }
+});
+
+let equipmentTransferSyncPromise;
+async function syncOracleEquipmentTransfers(){
+  if(equipmentTransferSyncPromise)return equipmentTransferSyncPromise;
+  equipmentTransferSyncPromise=(async()=>{
+    const transfers=await oracleEquipmentTransfers();
+    const transferRecords=transfers.map(transferMasterRecord);
+    const latest=latestTransferByEquipment(transfers);
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('oracle-equipment-transfer-sync'))");
+      await client.query(`DELETE FROM master_records
+        WHERE master_name='Vehicle transfers' AND record_data->>'oracleSource'='EQUIPMENTTRANSFER'`);
+      if(transferRecords.length){
+        await client.query(`INSERT INTO master_records (master_name,record_data)
+          SELECT 'Vehicle transfers',value FROM jsonb_array_elements($1::jsonb) AS value`,[JSON.stringify(transferRecords)]);
+      }
+      const equipmentRows=await client.query(`SELECT id,record_data FROM master_records
+        WHERE master_name='Equipment master' FOR UPDATE`);
+      const changed=[];
+      for(const row of equipmentRows.rows){
+        const updated=applyLatestTransfer(row.record_data,latest);
+        if(updated!==row.record_data&&JSON.stringify(updated)!==JSON.stringify(row.record_data))changed.push({id:row.id,...updated});
+      }
+      if(changed.length){
+        await client.query(`UPDATE master_records AS target
+          SET record_data=incoming.value-'id'
+          FROM jsonb_array_elements($1::jsonb) AS incoming(value)
+          WHERE target.id=(incoming.value->>'id')::bigint
+            AND target.master_name='Equipment master'`,[JSON.stringify(changed)]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('oracle_equipment_transfer_sync',$1,NOW())
+        ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[JSON.stringify({transfers:transferRecords.length,equipmentUpdated:changed.length})]);
+      await client.query('COMMIT');
+      return {transfersImported:transferRecords.length,equipmentUpdated:changed.length};
+    }catch(error){
+      await client.query('ROLLBACK');
+      throw error;
+    }finally{client.release()}
+  })().finally(()=>{equipmentTransferSyncPromise=undefined});
+  return equipmentTransferSyncPromise;
+}
+
+app.post('/api/oracle/equipment-transfers/sync',requireSuper,async(_req,res)=>{
+  if(!oracleConfigured)return res.status(503).json({error:'Oracle equipment-transfer sync is not configured.'});
+  try{
+    res.json(await syncOracleEquipmentTransfers());
+  }catch(error){
+    console.error('Oracle equipment-transfer sync failed.',error);
+    res.status(503).json({error:'Equipment transfers could not be synchronized from Oracle.'});
   }
 });
 
@@ -1140,6 +1195,9 @@ async function initializeDatabase(){
     databaseReady=true;
     databaseError='';
     console.log('Database initialization completed.');
+    if(oracleConfigured)void syncOracleEquipmentTransfers()
+      .then(result=>console.log('Oracle equipment-transfer sync completed.',result))
+      .catch(error=>console.error('Oracle equipment-transfer startup sync failed.',error));
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database initialization failed.';

@@ -65,6 +65,7 @@ import {
   Moon,
   Ticket,
   Paperclip,
+  RefreshCw,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -1266,6 +1267,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
     [dragActive, setDragActive] = useState(false),
+    [syncingOracle, setSyncingOracle] = useState(false),
     fileInput = useRef(null),
     fields = masterFields[name],
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields;
@@ -1350,9 +1352,31 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     link.click();
     URL.revokeObjectURL(link.href);
   };
+  const syncOracleTransfers = async () => {
+    if (syncingOracle) return;
+    setSyncingOracle(true);
+    try {
+      const response = await fetch("/api/oracle/equipment-transfers/sync", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      const details = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(details.error || "Could not synchronize equipment transfers.");
+      alert(`${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
+      window.location.reload();
+    } catch (error) {
+      alert(error.message || "Could not synchronize equipment transfers.");
+      setSyncingOracle(false);
+    }
+  };
   return (
     <>
       <div className="master-actions">
+        {name === "Vehicle transfers" && (
+          <button className="secondary" type="button" onClick={syncOracleTransfers} disabled={syncingOracle}>
+            <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : "Sync Oracle"}
+          </button>
+        )}
         {onDeleteAll && (
           <button className="secondary danger" onClick={onDeleteAll}>
             <Trash2 /> Delete all
