@@ -740,7 +740,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',door,reg='',chassis='',superior='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
+    const {ref,equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
@@ -749,6 +749,8 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       if(duplicate.rows.length)return res.status(409).json({duplicate:true,existingReference:duplicate.rows[0].reference,error:`Request ${duplicate.rows[0].reference} already exists for this equipment. Do you still want to add another request?`});
     }
     const startedAt=parseIndiaRequestDateTime(start);
+    const requester=await currentUserRecord(req.session);
+    const superior=String(requester.superior||'').trim().slice(0,200);
     const {rows}=await pool.query(`INSERT INTO maintenance_requests
       (reference,equipment_name,door_number,registration_number,chassis_number,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'Open',$12,$13)
@@ -812,15 +814,14 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
     const firstTripAt=firstTripDone?requestDateTimeValue(req.body?.firstTripDate,req.body?.firstTripTime):null;
     const firstTripCardImage=firstTripDone?String(req.body?.firstTripCardImage||''):'';
-    const superior=String(req.body?.superior||'').trim().slice(0,200);
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
     if(firstTripDone&&!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     const misUser=await currentUserRecord(req.session);
     const misSite=String(misUser.site||misUser.location||'').trim();
     if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,superior_name=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL
-      AND lower(trim(site))=lower(trim($8)) RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,superior,reference,misSite]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5 WHERE reference=$6 AND status='Closed' AND verified_at IS NULL
+      AND lower(trim(site))=lower(trim($7)) RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference,misSite]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     res.json(rows[0]);
   }catch(error){next(error)}

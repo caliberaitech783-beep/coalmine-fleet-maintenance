@@ -2,16 +2,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-test("production and maintenance save superior and MIS can view it",()=>{
+test("superior is maintained on the user record and copied into new requests",()=>{
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   assert.match(source,/function MaintenanceForm/);
-  assert.match(source,/Superior[\s\S]*name="superior"/);
-  assert.match(source,/superior: String\(fd\.get\("superior"\)/);
-  assert.match(source,/function VerifyRequestForm[\s\S]*name="superior"[\s\S]*defaultValue=\{request\.superior \|\| ""\}/);
-  assert.match(source,/onSave\(\{superior: String\(form\.get\("superior"\)/);
+  assert.match(source,/"Users & employees": \[[\s\S]*\["superior", "Superior"\]/);
+  const maintenanceForm=source.slice(source.indexOf("function MaintenanceForm"),source.indexOf("function RequestEditForm"));
+  const verifyForm=source.slice(source.indexOf("function VerifyRequestForm"),source.indexOf("const ticketCategories"));
+  assert.doesNotMatch(maintenanceForm,/name="superior"/);
+  assert.doesNotMatch(verifyForm,/name="superior"/);
   assert.match(server,/ADD COLUMN IF NOT EXISTS superior_name TEXT NOT NULL DEFAULT ''/);
   assert.match(server,/superior_name AS superior/);
   assert.match(server,/superior_name,site,category/);
-  assert.match(server,/first_trip_card_image=\$5,superior_name=\$6 WHERE reference=\$7/);
+  assert.match(server,/const requester=await currentUserRecord\(req\.session\)/);
+  assert.match(server,/const superior=String\(requester\.superior\|\|''\)/);
 });

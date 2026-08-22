@@ -793,6 +793,7 @@ const masterFields = {
   "Users & employees": [
     ["login", "Login name"],
     ["employee", "Employee name"],
+    ["superior", "Superior"],
     ["site", "Location"],
     ["email", "Mail ID"],
     ["phone", "Phone no."],
@@ -2314,7 +2315,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         owner: "Mobile User",
         reg: equipmentDetails.reg,
         chassis: equipmentDetails.chassis,
-        superior: String(fd.get("superior") || "").trim(),
       };
     if (!request.chassis) {
       alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
@@ -2481,10 +2481,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             Chassis number *
             <input value={equipmentDetails.chassis || "Not available — contact admin team"} readOnly required aria-invalid={Boolean(v && !equipmentDetails.chassis)} />
             {v && !equipmentDetails.chassis && <small>Contact the admin team to update the chassis number before creating a request.</small>}
-          </label>
-          <label>
-            Superior
-            <input name="superior" type="text" placeholder="Enter superior name" maxLength={200} autoComplete="name" />
           </label>
           <SpeechComplaint />
         </div>
@@ -4002,7 +3998,7 @@ function VerifyRequestForm({ request, close, onSave }) {
         return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
       const firstTripCardImage = tripCardFile ? await fileAsDataUrl(tripCardFile) : "";
-      onSave({superior: String(form.get("superior") || "").trim(), firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage});
+      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
@@ -4012,7 +4008,6 @@ function VerifyRequestForm({ request, close, onSave }) {
         <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
       </div>
-      <label>Superior<input name="superior" type="text" defaultValue={request.superior || ""} placeholder="Enter superior name" maxLength={200} autoComplete="name" /></label>
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       {firstTripDone && <div className="formgrid">
         <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
