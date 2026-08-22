@@ -11,11 +11,14 @@ const escapeHtml = (value) => clean(value)
 export function ticketEmailConfiguration(env = process.env) {
   const user = clean(env.GMAIL_USER || "breakdown.cmll@gmail.com");
   const appPassword = clean(env.GMAIL_APP_PASSWORD).replace(/\s+/g, "");
+  const host = clean(env.SMTP_HOST || "smtp.gmail.com");
+  const port = Number(env.SMTP_PORT || 587);
+  const secure = String(env.SMTP_SECURE || "false").toLowerCase() === "true";
   const recipients = clean(env.TICKET_EMAIL_TO || user)
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  return {user, appPassword, recipients, configured: Boolean(user && appPassword && recipients.length)};
+  return {user, appPassword, host, port, secure, recipients, configured: Boolean(user && appPassword && host && port && recipients.length)};
 }
 
 export function createTicketMailer(env = process.env) {
@@ -24,7 +27,10 @@ export function createTicketMailer(env = process.env) {
   return {
     config,
     transporter: nodemailer.createTransport({
-      service: "gmail",
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      requireTLS: !config.secure,
       auth: {user: config.user, pass: config.appPassword},
     }),
   };
