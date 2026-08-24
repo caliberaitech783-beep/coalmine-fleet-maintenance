@@ -743,20 +743,17 @@ function requestNotificationTime(value){
   return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(new Date(value));
 }
 
-async function requestStakeholderLogins(client,{site,requesterLogin}){
+async function requestStakeholderLogins(client,{requesterLogin}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
   const recipients=[String(requesterLogin||'').trim().toLowerCase()];
-  const requestSite=canonicalSiteName(site);
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
     if(!login)continue;
     const profile=resolveMobileAccess({user});
-    const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-    const siteMatches=Boolean(requestSite)&&userSite===requestSite;
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&siteMatches&&profile.permissions.managerRoles.length)recipients.push(login);
-    if(profile.sessionRole==='normal'&&siteMatches&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
+    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager')recipients.push(login);
+    if(profile.sessionRole==='normal'&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
   }
   return [...new Set(recipients.filter(Boolean))];
 }
