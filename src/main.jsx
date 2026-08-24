@@ -2339,11 +2339,11 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         const response = await fetch(`/api/oracle/driver?${query}`, {headers: {Authorization: `Bearer ${authToken}`}});
         const result = await response.json().catch(() => ({}));
         if (cancelled) return;
-        if (!response.ok) setDriverLookup({status: "error", name: "", source: result.error || "Lookup unavailable"});
+        if (!response.ok) setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
         else if (result.found) setDriverLookup({status: "found", name: result.driverName || "", source: result.source || "Oracle logbook"});
-        else setDriverLookup({status: "missing", name: "", source: "No matching Oracle logbook entry"});
+        else setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
       } catch {
-        if (!cancelled) setDriverLookup({status: "error", name: "", source: "Lookup unavailable"});
+        if (!cancelled) setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
       }
     }, 350);
     return () => { cancelled = true; window.clearTimeout(timer); };
@@ -2367,6 +2367,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         reg: equipmentDetails.reg,
         chassis: equipmentDetails.chassis,
         driverName: driverLookup.name,
+        driverNameSource: driverLookup.status === "found" ? `Oracle - ${driverLookup.source}` : driverLookup.source || "Demo",
       };
     if (!request.chassis) {
       alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
@@ -2539,11 +2540,13 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             <input
               name="driverName"
               value={driverLookup.name}
-              readOnly
+              readOnly={driverLookup.status === "found" || driverLookup.status === "loading" || driverLookup.status === "idle"}
+              onChange={(event) => setDriverLookup({status: "temporary", name: event.target.value, source: event.target.value.trim() === "Demo Driver" ? "Demo" : "Manual"})}
               aria-busy={driverLookup.status === "loading"}
-              placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : driverLookup.status === "missing" ? "No matching logbook entry" : driverLookup.status === "error" ? "Lookup temporarily unavailable" : "Select equipment to fetch driver"}
+              placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : "Select equipment to fetch driver"}
             />
-            {driverLookup.name && <small>Fetched from {driverLookup.source}</small>}
+            {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
+            {driverLookup.status === "temporary" && <small>Temporary name — enter the driver manually if known. It will be replaced automatically when Oracle supplies the actual driver during the two-hour sync.</small>}
           </label>
           <SpeechComplaint />
         </div>

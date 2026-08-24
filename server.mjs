@@ -29,6 +29,7 @@ const currentAppVersion=existsSync(versionFile)
   ? readFileSync(versionFile,'utf8').trim()
   : createHash('sha256').update(readFileSync(path.join(staticRoot,'index.html'))).digest('hex').slice(0,16);
 const connectionString=process.env.DATABASE_URL;
+const driverSyncIntervalMs=2*60*60*1000;
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
@@ -52,6 +53,8 @@ async function migrate(){
       registration_number TEXT NOT NULL DEFAULT '',
       chassis_number TEXT NOT NULL DEFAULT '',
       driver_name TEXT NOT NULL DEFAULT '',
+      driver_name_source TEXT NOT NULL DEFAULT '',
+      driver_synced_at TIMESTAMPTZ,
       complaint_audio TEXT NOT NULL DEFAULT '',
       superior_name TEXT NOT NULL DEFAULT '',
       site TEXT NOT NULL DEFAULT 'Not assigned',
@@ -83,6 +86,12 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS chassis_number TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS driver_name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS driver_name_source TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS driver_synced_at TIMESTAMPTZ;
+    UPDATE maintenance_requests SET driver_name_source='Legacy'
+      WHERE driver_name_source='' AND driver_name<>'';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS complaint_audio TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
@@ -820,7 +829,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 });
 
 const requestProjection=`reference AS ref, equipment_name AS equipment, door_number AS door,
-  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
+  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, owner_name AS owner, requester_login AS "requesterLogin",
@@ -830,6 +839,38 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, door_num
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded"`;
+
+let requestDriverSyncRunning=false;
+async function syncTemporaryRequestDrivers(){
+  if(!oracleConfigured||!databaseReady||requestDriverSyncRunning)return {skipped:true};
+  requestDriverSyncRunning=true;
+  let updated=0;
+  try{
+    const {rows}=await pool.query(`SELECT reference,door_number,equipment_name,site,
+      to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD') AS lookup_date,
+      to_char(started_at AT TIME ZONE 'Asia/Kolkata','HH24:MI:SS') AS lookup_time
+      FROM maintenance_requests
+      WHERE lower(driver_name_source) IN ('demo','manual')
+      ORDER BY created_at ASC LIMIT 500`);
+    for(const row of rows){
+      try{
+        const result=await oracleDriverLookup({
+          date:row.lookup_date,
+          time:row.lookup_time,
+          location:row.site,
+          equipmentNo:row.door_number||row.equipment_name
+        });
+        const actualName=String(result?.driverName||'').trim();
+        if(!result?.found||!actualName)continue;
+        const source=`Oracle${result.source?` - ${result.source}`:''}`.slice(0,200);
+        const response=await pool.query(`UPDATE maintenance_requests SET driver_name=$1,driver_name_source=$2,driver_synced_at=NOW()
+          WHERE reference=$3 AND lower(driver_name_source) IN ('demo','manual')`,[actualName,source,row.reference]);
+        updated+=response.rowCount;
+      }catch(error){console.error(`Oracle driver sync failed for ${row.reference}.`,error)}
+    }
+    return {checked:rows.length,updated};
+  }finally{requestDriverSyncRunning=false}
+}
 
 async function attachDailyRemarks(rows,client=pool){
   if(!rows.length)return rows;
@@ -897,7 +938,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',door,reg='',chassis='',driverName='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
+    const {ref,equipment='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
@@ -908,11 +949,13 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const startedAt=parseIndiaRequestDateTime(start);
     const requester=await currentUserRecord(req.session);
     const superior=String(requester.superior||'').trim().slice(0,200);
+    const storedDriverName=String(driverName).trim().slice(0,200)||'Demo Driver';
+    const storedDriverSource=String(driverNameSource).trim().slice(0,200)||(storedDriverName==='Demo Driver'?'Demo':'Manual');
     const {rows}=await pool.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,door_number,registration_number,chassis_number,driver_name,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'Open',$13,$14)
+      (reference,equipment_name,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Open',$14,$15)
       RETURNING ${requestProjection}`,
-      [ref,equipment,door,reg,chassis,String(driverName).trim().slice(0,200),String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
+      [ref,equipment,door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened at ${requestNotificationTime(startedAt)} for ${rows[0].site} by ${req.session.name||'Production User'}.`);
     res.status(201).json(rows[0]);
@@ -1274,6 +1317,9 @@ async function initializeDatabase(){
       })
       .then(result=>console.log('Oracle equipment-transfer sync completed.',result))
       .catch(error=>console.error('Oracle equipment startup sync failed.',error));
+    if(oracleConfigured)void syncTemporaryRequestDrivers()
+      .then(result=>console.log('Oracle request-driver sync completed.',result))
+      .catch(error=>console.error('Oracle request-driver startup sync failed.',error));
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database initialization failed.';
@@ -1283,3 +1329,9 @@ async function initializeDatabase(){
 }
 
 void initializeDatabase();
+const requestDriverSyncTimer=setInterval(()=>{
+  void syncTemporaryRequestDrivers()
+    .then(result=>console.log('Scheduled Oracle request-driver sync completed.',result))
+    .catch(error=>console.error('Scheduled Oracle request-driver sync failed.',error));
+},driverSyncIntervalMs);
+requestDriverSyncTimer.unref?.();

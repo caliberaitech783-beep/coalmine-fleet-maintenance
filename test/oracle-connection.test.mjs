@@ -29,8 +29,13 @@ test("request forms fetch and persist Oracle logbook driver names", () => {
   assert.match(oracle, /equipment_key/);
   assert.match(server, /app\.get\('\/api\/oracle\/driver',requireSession/);
   assert.match(server, /driver_name TEXT NOT NULL DEFAULT ''/);
+  assert.match(server, /driver_name_source TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /driver_name AS "driverName"/);
+  assert.match(server, /syncTemporaryRequestDrivers/);
+  assert.match(server, /2\*60\*60\*1000/);
   assert.match(client, /Driver \/ operator name/);
   assert.match(client, /\/api\/oracle\/driver\?/);
   assert.match(client, /driverName: driverLookup\.name/);
+  assert.match(client, /name: "Demo Driver", source: "Demo"/);
+  assert.match(client, /source: event\.target\.value\.trim\(\) === "Demo Driver" \? "Demo" : "Manual"/);
 });
