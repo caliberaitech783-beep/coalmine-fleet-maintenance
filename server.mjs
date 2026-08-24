@@ -17,7 +17,7 @@ import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUr
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
-import {metaWhatsAppStatus,sendMetaWhatsAppText} from './meta-whatsapp.mjs';
+import {metaWhatsAppStatus,sendMetaWhatsAppTemplate,sendMetaWhatsAppText} from './meta-whatsapp.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -685,7 +685,7 @@ function ticketProjection(){
 
 function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
 
-async function sendWhatsAppNotifications(client,recipients,reference,message){
+async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   if(!logins.length)return;
   const {rows}=await client.query(`SELECT record_data FROM master_records
@@ -699,7 +699,11 @@ async function sendWhatsAppNotifications(client,recipients,reference,message){
   }
   await Promise.allSettled([...contacts.entries()].map(async([login,contact])=>{
     let status='Sent';
-    try{await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`})}
+    try{
+      if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate})}
+      catch(templateError){console.warn(`WhatsApp template ${workflowTemplate.templateKey} unavailable; using text fallback:`,templateError.message);await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`})}
+      else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`});
+    }
     catch(error){status='Failed';console.error(`WhatsApp notification failed for ${login}:`,error.message)}
     await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -707,12 +711,12 @@ async function sendWhatsAppNotifications(client,recipients,reference,message){
   }));
 }
 
-async function addTicketNotifications(client,recipients,reference,message){
+async function addTicketNotifications(client,recipients,reference,message,workflowTemplate){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   for(const login of logins){
     await client.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message) VALUES ($1,$2,$3)`,[login,reference,message]);
   }
-  await sendWhatsAppNotifications(client,logins,reference,message);
+  await sendWhatsAppNotifications(client,logins,reference,message,workflowTemplate);
 }
 
 async function ticketSuperRecipients(client,{creatorRole,site}){
@@ -806,7 +810,8 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const {rows}=await client.query(`UPDATE crm_tickets SET reference=$1 WHERE id=$2 RETURNING ${ticketProjection()}`,[reference,inserted.rows[0].id]);
     const recipients=await ticketSuperRecipients(client,{creatorRole,site});
     const creatorLogin=String(req.session.login||'').trim().toLowerCase();
-    await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} (@${creatorLogin}) created ticket ${reference}.`);
+    await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} (@${creatorLogin}) created ticket ${reference}.`,
+      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]});
     await client.query('COMMIT');
     res.status(201).json(rows[0]);
     sendTicketRaisedEmail(rows[0]).catch((error)=>console.error(`Ticket email failed for ${reference}:`,error.message));
@@ -835,7 +840,8 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
     if(!result.rows.length){await client.query('ROLLBACK');return res.status(404).json({error:'Open ticket not found.'})}
     const ticket=result.rows[0];
     const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
-    await addTicketNotifications(client,[ticket.creatorLogin,...recipients.managerLogins],ticket.reference,`Ticket ${ticket.reference} was resolved by ${req.session.name||'Admin'}.`);
+    await addTicketNotifications(client,[ticket.creatorLogin,...recipients.managerLogins],ticket.reference,`Ticket ${ticket.reference} was resolved by ${req.session.name||'Admin'}.`,
+      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']});
     await client.query('COMMIT');
     res.json(ticket);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
@@ -871,7 +877,8 @@ async function createMaintenanceReminderNotifications(){
         VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) DO NOTHING RETURNING id`,[login,request.reference,message,key]);
       if(inserted.rowCount)newRecipients.push(login);
     }
-    await sendWhatsAppNotifications(pool,newRecipients,request.reference,message);
+    await sendWhatsAppNotifications(pool,newRecipients,request.reference,message,
+      {templateKey:'maintenanceReminder',parameters:[slot==='09'?'9:00 AM':'6:00 PM',request.reference]});
   }
 }
 
@@ -998,7 +1005,8 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&siteMatches)recipients.push(login);
     }
-    await addTicketNotifications(pool,recipients,reference,`${req.session.name||'Maintenance User'} added a daily maintenance update for ${reference}.`);
+    await addTicketNotifications(pool,recipients,reference,`${req.session.name||'Maintenance User'} added a daily maintenance update for ${reference}.`,
+      {templateKey:'dailyUpdate',parameters:[req.session.name||'Maintenance User',reference]});
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     res.status(201).json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
@@ -1025,7 +1033,8 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       RETURNING ${requestProjection}`,
       [ref,equipment,door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened at ${requestNotificationTime(startedAt)} for ${rows[0].site} by ${req.session.name||'Production User'}.`);
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened at ${requestNotificationTime(startedAt)} for ${rows[0].site} by ${req.session.name||'Production User'}.`,
+      {templateKey:'requestOpened',parameters:[rows[0].ref,requestNotificationTime(startedAt),rows[0].site,req.session.name||'Production User']});
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });
@@ -1071,10 +1080,12 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
       const recipients=[];
       for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim();if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userSite.toLowerCase()===String(rows[0].site||'').trim().toLowerCase())recipients.push(login)}
-      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Ideal by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`);
+      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Ideal by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
+        {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User']});
     }else{
       const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed at ${requestNotificationTime(closedAt)} by ${req.session.name||'Maintenance User'}. It is now available in Closed History.`);
+      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed at ${requestNotificationTime(closedAt)} by ${req.session.name||'Maintenance User'}. It is now available in Closed History.`,
+        {templateKey:'requestClosed',parameters:[rows[0].ref,requestNotificationTime(closedAt),req.session.name||'Maintenance User']});
     }
     res.json(rows[0]);
   }catch(error){next(error)}
@@ -1093,7 +1104,9 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
       AND lower(trim(site))=lower(trim($3)) RETURNING ${requestProjection}`,[req.session.name||'Maintenance Manager',reference,managerSite]);
     if(!rows.length)return res.status(409).json({error:'This Ideal request is no longer awaiting your approval or is outside your assigned location.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${requestNotificationTime(new Date())} by ${req.session.name||'Maintenance Manager'}. It is now awaiting MIS verification.`);
+    const approvedAt=requestNotificationTime(new Date());
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Maintenance Manager'}. It is now awaiting MIS verification.`,
+      {templateKey:'requestOnRoad',parameters:[rows[0].ref,approvedAt,req.session.name||'Maintenance Manager']});
     res.json(rows[0]);
   }catch(error){next(error)}
 });
@@ -1123,7 +1136,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
       AND lower(trim(site))=lower(trim($7)) RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference,misSite]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`);
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`,
+      {templateKey:'requestVerified',parameters:[rows[0].ref,req.session.name||'MIS User',firstTripDone?'Completed':'Pending']});
     res.json(rows[0]);
   }catch(error){next(error)}
 });

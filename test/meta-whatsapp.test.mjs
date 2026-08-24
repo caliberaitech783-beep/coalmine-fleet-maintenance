@@ -1,10 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {metaWhatsAppConfiguration,normalizeWhatsAppRecipient,sendMetaWhatsAppText} from '../meta-whatsapp.mjs';
+import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,normalizeWhatsAppRecipient,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from '../meta-whatsapp.mjs';
 
 test('Meta WhatsApp configuration remains disabled until token and phone id are present',()=>{
   assert.equal(metaWhatsAppConfiguration({}).configured,false);
   assert.equal(metaWhatsAppConfiguration({META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123'}).configured,true);
+});
+
+test('every workflow event has a Meta utility template',()=>{
+  assert.deepEqual(Object.keys(META_WORKFLOW_TEMPLATES),['ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestIdle','requestClosed','requestOnRoad','requestVerified']);
+  assert.ok(Object.values(META_WORKFLOW_TEMPLATES).every(({name,body,example})=>name.startsWith('nerve_')&&body&&example.length));
+});
+
+test('Cloud API template delivery uses approved template parameters',async()=>{
+  let request;
+  const result=await sendMetaWhatsAppTemplate({to:'9420476281',templateKey:'ticketResolved',parameters:['TIC/1','Admin']},{
+    env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123'},
+    fetchImpl:async(url,options)=>{request={url,options};return {ok:true,json:async()=>({messages:[{id:'wamid.template'}]})}},
+  });
+  assert.equal(result.template,'nerve_ticket_resolved');
+  assert.equal(JSON.parse(request.options.body).type,'template');
+  assert.deepEqual(JSON.parse(request.options.body).template.components[0].parameters,[{type:'text',text:'TIC/1'},{type:'text',text:'Admin'}]);
+});
+
+test('template submission creates missing utility templates and preserves existing ones',async()=>{
+  const requests=[];
+  const results=await submitMetaWhatsAppTemplates({
+    env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_BUSINESS_ACCOUNT_ID:'456'},
+    fetchImpl:async(url,options={})=>{requests.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>({data:[{id:'old',name:'nerve_ticket_created',status:'APPROVED',category:'UTILITY',language:'en_US'}]})};return {ok:true,json:async()=>({id:`new-${requests.length}`,status:'PENDING'})}},
+  });
+  assert.equal(results.length,9);
+  assert.equal(results.find((result)=>result.name==='nerve_ticket_created').existing,true);
+  assert.equal(requests.filter((request)=>request.options.method==='POST').length,8);
+  assert.ok(requests.filter((request)=>request.options.method==='POST').every((request)=>JSON.parse(request.options.body).category==='UTILITY'));
 });
 
 test('Indian WhatsApp recipients are normalized for Cloud API delivery',()=>{
