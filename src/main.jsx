@@ -3571,6 +3571,7 @@ function WhatsAppReport({type, requests = []}) {
   const [selectedSiteReports, setSelectedSiteReports] = useState(new Set());
   const [selectedOemReports, setSelectedOemReports] = useState(new Set());
   const [lastPrepared, setLastPrepared] = useState("");
+  const [metaConnection, setMetaConnection] = useState(null);
   const [oemRegion, setOemRegion] = useState("all");
   const today = new Intl.DateTimeFormat("en-IN", {day:"2-digit", month:"short", year:"numeric"}).format(new Date());
   const rows = isSite
@@ -3611,12 +3612,28 @@ function WhatsAppReport({type, requests = []}) {
   const dummyReportTypes = ["A/B", "B/C", "C/D"];
   const oemReportLevels = ["Daily", "L1", "L2", "L3", "L4"];
   const normalizeSite = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
-  const logAlert = (entry) => fetch("/api/whatsapp-alert-history", {
-    method:"POST",
-    headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},
-    body:JSON.stringify(entry),
-  }).catch((error) => console.error("Could not save WhatsApp alert history", error));
-  const sendDummySiteReport = (site, reportType, checked) => {
+  useEffect(() => {
+    let active = true;
+    fetch("/api/whatsapp/status", {headers:{Authorization:`Bearer ${authToken}`}})
+      .then(async (response) => {
+        const details = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(details.error || "Unable to verify Meta WhatsApp connection.");
+        if (active) setMetaConnection(details);
+      })
+      .catch((error) => active && setMetaConnection({connected:false,error:error.message}));
+    return () => { active = false; };
+  }, []);
+  const sendMetaReport = async (entry) => {
+    const response=await fetch("/api/whatsapp/send", {
+      method:"POST",
+      headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},
+      body:JSON.stringify(entry),
+    });
+    const details=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(details.error||"WhatsApp delivery failed.");
+    return details;
+  };
+  const sendDummySiteReport = async (site, reportType, checked) => {
     const key = `${site.name}-${reportType}`;
     setSelectedSiteReports((current) => {
       const next = new Set(current);
@@ -3631,19 +3648,25 @@ function WhatsAppReport({type, requests = []}) {
       "Nerve Center - Daily Site-wise Report",
       today,
       `Site: ${site.name}`,
-      `Report: ${reportType} (temporary dummy report)`,
+      `Report: ${reportType}`,
       `Total equipment: ${site.total}`,
       `On road: ${site.onRoad}`,
       `Off road: ${site.offRoad}`,
       `Idle: ${site.idle}`,
       `Open breakdowns: ${site.breakdowns}`,
     ].join("\n");
-    setLastPrepared(`${reportType} report prepared for ${site.name}${recipient ? ` (${recipient.employee || recipient.login})` : ""}`);
-    logAlert({reportType:"Daily site-wise report",targetName:site.name,reportLevel:reportType,
-      recipientName:recipient?.employee || recipient?.login || "WhatsApp recipient",recipientPhone:phone,status:"Prepared"});
-    window.open(`https://wa.me/${phone ? phone : ""}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    try{
+      if(!phone)throw new Error(`No WhatsApp phone number is assigned for ${site.name}.`);
+      await sendMetaReport({reportType:"Daily site-wise report",targetName:site.name,reportLevel:reportType,
+        recipientName:recipient?.employee || recipient?.login || "WhatsApp recipient",recipientPhone:phone,message});
+      setLastPrepared(`${reportType} report sent to ${site.name}${recipient ? ` (${recipient.employee || recipient.login})` : ""}`);
+    }catch(error){
+      setSelectedSiteReports((current)=>{const next=new Set(current);next.delete(key);return next});
+      setLastPrepared(error.message||"WhatsApp delivery failed.");
+      alert(error.message||"WhatsApp delivery failed.");
+    }
   };
-  const sendOemReport = (oem, reportLevel, checked) => {
+  const sendOemReport = async (oem, reportLevel, checked) => {
     const key = `${oem.name}-${reportLevel}`;
     setSelectedOemReports((current) => {
       const next = new Set(current);
@@ -3664,12 +3687,18 @@ function WhatsAppReport({type, requests = []}) {
       `Level: ${reportLevel}`,
       `Contacts: ${oem.contacts}`,
       `Locations: ${oem.locations || "Not assigned"}`,
-      "Temporary dummy report - final report format pending.",
+      "Generated from the current Nerve Center fleet data.",
     ].join("\n");
-    setLastPrepared(`${reportLevel} report prepared for ${oem.name}${recipient ? ` (${recipient.contact || "contact"})` : ""}`);
-    logAlert({reportType:"Daily OEM report",targetName:oem.name,reportLevel,
-      recipientName:recipient?.contact || "WhatsApp recipient",recipientPhone:phone,status:"Prepared"});
-    window.open(`https://wa.me/${phone ? phone : ""}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    try{
+      if(!phone)throw new Error(`No WhatsApp phone number is assigned for ${oem.name} ${reportLevel}.`);
+      await sendMetaReport({reportType:"Daily OEM report",targetName:oem.name,reportLevel,
+        recipientName:recipient?.contact || "WhatsApp recipient",recipientPhone:phone,message});
+      setLastPrepared(`${reportLevel} report sent to ${oem.name}${recipient ? ` (${recipient.contact || "contact"})` : ""}`);
+    }catch(error){
+      setSelectedOemReports((current)=>{const next=new Set(current);next.delete(key);return next});
+      setLastPrepared(error.message||"WhatsApp delivery failed.");
+      alert(error.message||"WhatsApp delivery failed.");
+    }
   };
   return (
     <section className="panel pagepanel generic whatsapp-report">
@@ -3683,12 +3712,17 @@ function WhatsAppReport({type, requests = []}) {
         </div>
       </header>
       <div className="report-summary">
-        <MessageCircle /><div><b>WhatsApp-ready daily report</b><span>Review the live data below, then share it using WhatsApp.</span></div>
+        <MessageCircle /><div>
+          <b>{metaConnection?.connected ? `Meta WhatsApp connected${metaConnection.verifiedName ? ` · ${metaConnection.verifiedName}` : ""}` : "WhatsApp-ready daily report"}</b>
+          <span>{metaConnection?.connected
+            ? `${metaConnection.displayPhoneNumber || "Business number connected"}${metaConnection.qualityRating ? ` · Quality ${metaConnection.qualityRating}` : ""}`
+            : metaConnection?.error || "Review the live data below, then share it using WhatsApp."}</span>
+        </div>
       </div>
       {isSite && (
         <div className="site-report-matrix">
           <div className="site-report-matrix-heading">
-            <div><h2>Daily site-wise report dispatch</h2><p>Temporary dummy reports will remain available until the final report formats are provided.</p></div>
+            <div><h2>Daily site-wise report dispatch</h2><p>Select a report to send it directly through the connected Meta WhatsApp Business number.</p></div>
             {lastPrepared && <span>{lastPrepared}</span>}
           </div>
           <div className="site-report-matrix-table">
@@ -3710,7 +3744,7 @@ function WhatsAppReport({type, requests = []}) {
       {!isSite && (
         <div className="site-report-matrix oem-report-matrix">
           <div className="site-report-matrix-heading">
-            <div><h2>Daily OEM report dispatch</h2><p>Select Daily or an OEM responsibility level to prepare the WhatsApp report.</p></div>
+            <div><h2>Daily OEM report dispatch</h2><p>Select Daily or an OEM responsibility level to send the report through Meta WhatsApp Cloud API.</p></div>
             {lastPrepared && <span>{lastPrepared}</span>}
           </div>
           <div className="site-report-matrix-table">

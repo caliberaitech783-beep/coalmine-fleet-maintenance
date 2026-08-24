@@ -17,6 +17,7 @@ import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUr
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
+import {metaWhatsAppStatus,sendMetaWhatsAppText} from './meta-whatsapp.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -459,6 +460,32 @@ app.get('/api/health',async(_req,res)=>{
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database connection failed.';
     res.status(503).json({status:'degraded',database:'disconnected',error:databaseError});
+  }
+});
+
+app.get('/api/whatsapp/status',requireSuper,async(_req,res)=>{
+  try{res.json(await metaWhatsAppStatus())}
+  catch(error){res.status(503).json({configured:true,connected:false,error:error instanceof Error?error.message:'Meta WhatsApp connection failed.'})}
+});
+
+app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
+  const {reportType,targetName,reportLevel='',recipientName='',recipientPhone='',message=''}=req.body||{};
+  if(!reportType||!targetName||!recipientPhone||!message)
+    return res.status(400).json({error:'Report type, target, recipient phone, and message are required.'});
+  try{
+    const result=await sendMetaWhatsAppText({to:recipientPhone,message});
+    const {rows}=await pool.query(`INSERT INTO whatsapp_alert_history
+      (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)
+      RETURNING id,report_type AS "reportType",target_name AS "targetName",report_level AS "reportLevel",
+        recipient_name AS "recipientName",recipient_phone AS "recipientPhone",status,created_at AS "createdAt"`,
+      [reportType,targetName,reportLevel,recipientName,result.recipient,'Sent']);
+    res.status(201).json({...rows[0],messageId:result.messageId});
+  }catch(error){
+    try{await pool.query(`INSERT INTO whatsapp_alert_history
+      (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [reportType,targetName,reportLevel,recipientName,recipientPhone,'Failed'])}catch(historyError){console.error('Could not record failed WhatsApp delivery.',historyError)}
+    const status=Number(error?.status)>=400&&Number(error?.status)<500?400:502;
+    res.status(status).json({error:error instanceof Error?error.message:'WhatsApp delivery failed.'});
   }
 });
 
