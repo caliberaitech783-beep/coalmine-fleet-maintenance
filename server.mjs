@@ -692,12 +692,18 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   const {rows}=await client.query(`SELECT record_data FROM master_records
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
   const contacts=new Map();
+  const usersByLogin=new Map();
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
     const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
+    if(login&&!usersByLogin.has(login))usersByLogin.set(login,user);
     if(login&&phone&&!contacts.has(login))contacts.set(login,{name:String(user.employee||user.name||user.login||login),phone});
   }
+  const missingPhone=logins.filter((login)=>!contacts.has(login));
+  await Promise.all(missingPhone.map((login)=>{const user=usersByLogin.get(login)||{};return pool.query(`INSERT INTO whatsapp_alert_history
+    (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+    ['System notification',String(reference||''),'',String(user.employee||user.name||user.login||login),'','Skipped - phone number missing']);}));
   await Promise.allSettled([...contacts.entries()].map(async([login,contact])=>{
     let status='Sent';
     try{
@@ -705,7 +711,7 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
       catch(templateError){console.warn(`WhatsApp template ${workflowTemplate.templateKey} unavailable; using text fallback:`,templateError.message);await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`})}
       else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`});
     }
-    catch(error){status='Failed';console.error(`WhatsApp notification failed for ${login}:`,error.message)}
+    catch(error){status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;console.error(`WhatsApp notification failed for ${login}:`,error.message)}
     await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
       ['System notification',String(reference||''),'',contact.name,contact.phone,status]);
@@ -743,17 +749,20 @@ function requestNotificationTime(value){
   return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(new Date(value));
 }
 
-async function requestStakeholderLogins(client,{requesterLogin}){
+async function requestStakeholderLogins(client,{site,requesterLogin}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
   const recipients=[String(requesterLogin||'').trim().toLowerCase()];
+  const requestSite=canonicalSiteName(site);
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
     if(!login)continue;
     const profile=resolveMobileAccess({user});
+    const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+    const siteMatches=Boolean(requestSite)&&userSite===requestSite;
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager')recipients.push(login);
-    if(profile.sessionRole==='normal'&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
+    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&siteMatches)recipients.push(login);
+    if(profile.sessionRole==='normal'&&siteMatches&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
   }
   return [...new Set(recipients.filter(Boolean))];
 }

@@ -13,6 +13,9 @@ test('workflow notifications are mirrored to Meta WhatsApp recipients',()=>{
   assert.match(server,/\['System notification',String\(reference\|\|''\)/);
   for(const key of ['ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestIdle','requestClosed','requestOnRoad','requestVerified'])assert.match(server,new RegExp(`templateKey:'${key}'`));
   assert.match(server,/catch\(templateError\)[\s\S]*sendMetaWhatsAppText/);
-  assert.match(server,/profile\.sessionRole==='super'&&profile\.permissions\.adminLevel==='Manager'\)recipients\.push\(login\)/);
-  assert.match(server,/profile\.sessionRole==='normal'&&\['Production User','Maintenance User','MIS User'\]\.includes\(profile\.assignedRole\)/);
+  assert.match(server,/const requestSite=canonicalSiteName\(site\)/);
+  assert.match(server,/profile\.sessionRole==='super'&&profile\.permissions\.adminLevel==='Manager'&&siteMatches/);
+  assert.match(server,/profile\.sessionRole==='normal'&&siteMatches&&\['Production User','Maintenance User','MIS User'\]\.includes\(profile\.assignedRole\)/);
+  assert.match(server,/Skipped - phone number missing/);
+  assert.match(server,/Failed - \$\{String\(error\?\.message/);
 });
