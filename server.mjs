@@ -685,10 +685,34 @@ function ticketProjection(){
 
 function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
 
+async function sendWhatsAppNotifications(client,recipients,reference,message){
+  const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
+  if(!logins.length)return;
+  const {rows}=await client.query(`SELECT record_data FROM master_records
+    WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
+  const contacts=new Map();
+  for(const row of rows){
+    const user=row.record_data||{};
+    const login=String(user.login||'').trim().toLowerCase();
+    const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
+    if(login&&phone&&!contacts.has(login))contacts.set(login,{name:String(user.employee||user.name||user.login||login),phone});
+  }
+  await Promise.allSettled([...contacts.entries()].map(async([login,contact])=>{
+    let status='Sent';
+    try{await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`})}
+    catch(error){status='Failed';console.error(`WhatsApp notification failed for ${login}:`,error.message)}
+    await pool.query(`INSERT INTO whatsapp_alert_history
+      (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+      ['System notification',String(reference||''),'',contact.name,contact.phone,status]);
+  }));
+}
+
 async function addTicketNotifications(client,recipients,reference,message){
-  for(const login of [...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))]){
+  const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
+  for(const login of logins){
     await client.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message) VALUES ($1,$2,$3)`,[login,reference,message]);
   }
+  await sendWhatsAppNotifications(client,logins,reference,message);
 }
 
 async function ticketSuperRecipients(client,{creatorRole,site}){
@@ -839,12 +863,15 @@ async function createMaintenanceReminderNotifications(){
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRole==='Maintenance Manager'&&siteMatches)recipients.push(login);
     }
+    const newRecipients=[];
+    const message=`${slot}:00 reminder: add today’s maintenance update and delay reason for ${request.reference}.`;
     for(const login of [...new Set(recipients)]){
       const key=`maintenance-reminder:${day}:${slot}:${request.reference}:${login}`;
-      await pool.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message,notification_key)
-        VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) DO NOTHING`,[login,request.reference,
-        `${slot}:00 reminder: add today’s maintenance update and delay reason for ${request.reference}.`,key]);
+      const inserted=await pool.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message,notification_key)
+        VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) DO NOTHING RETURNING id`,[login,request.reference,message,key]);
+      if(inserted.rowCount)newRecipients.push(login);
     }
+    await sendWhatsAppNotifications(pool,newRecipients,request.reference,message);
   }
 }
 
@@ -1095,6 +1122,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
       first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5 WHERE reference=$6 AND status='Closed' AND verified_at IS NULL
       AND lower(trim(site))=lower(trim($7)) RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference,misSite]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
+    const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`);
     res.json(rows[0]);
   }catch(error){next(error)}
 });
