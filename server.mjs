@@ -18,6 +18,7 @@ import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleE
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppTemplate,sendMetaWhatsAppText} from './meta-whatsapp.mjs';
+import {canonicalSiteName} from './site-location.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -745,13 +746,13 @@ function requestNotificationTime(value){
 async function requestStakeholderLogins(client,{site,requesterLogin}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
   const recipients=[String(requesterLogin||'').trim().toLowerCase()];
-  const requestSite=String(site||'').trim().toLowerCase();
+  const requestSite=canonicalSiteName(site);
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
     if(!login)continue;
     const profile=resolveMobileAccess({user});
-    const userSite=String(user.site||user.location||user.currentLocation||'').trim().toLowerCase();
+    const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
     const siteMatches=Boolean(requestSite)&&userSite===requestSite;
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&siteMatches&&profile.permissions.managerRoles.length)recipients.push(login);
@@ -863,8 +864,8 @@ async function createMaintenanceReminderNotifications(){
       const login=String(user.login||'').trim().toLowerCase();
       if(!login)continue;
       const profile=resolveMobileAccess({user});
-      const userSite=String(user.site||user.location||'').trim().toLowerCase();
-      const siteMatches=!userSite||userSite===String(request.site||'').trim().toLowerCase();
+      const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+      const siteMatches=!userSite||userSite===canonicalSiteName(request.site);
       if(profile.assignedRole==='Maintenance User'&&siteMatches)recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&siteMatches)recipients.push(login);
@@ -1001,7 +1002,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
     const recipients=[String(eligible.rows[0].requester_login||'').trim().toLowerCase()];
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
-      const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim().toLowerCase();const siteMatches=!userSite||userSite===String(eligible.rows[0].site||'').trim().toLowerCase();
+      const profile=resolveMobileAccess({user});const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);const siteMatches=!userSite||userSite===canonicalSiteName(eligible.rows[0].site);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&siteMatches)recipients.push(login);
     }
