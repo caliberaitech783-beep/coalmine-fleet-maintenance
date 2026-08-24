@@ -1,0 +1,42 @@
+.ideal-choice {
+  border: 1px solid #dfe4ec;
+  border-radius: 7px;
+  padding: 10px 12px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ideal-choice legend {
+  padding: 0 4px;
+  color: #546177;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.ideal-choice legend small {
+  color: #8995a8;
+  font-weight: 500;
+}
+
+.ideal-choice label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ideal-choice input {
+  width: auto !important;
+  margin: 0 !important;
+}
+
+.ideal-choice > small {
+  color: #b26618;
+  line-height: 1.35;
+}
+
+.status.ideal {
+  background: #fff2e5;
+  color: #c8782d;
+}

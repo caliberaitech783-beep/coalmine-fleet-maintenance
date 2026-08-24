@@ -28,7 +28,8 @@ export function requestDateTimeValue(date, time) {
 }
 
 export function requestMayBeChanged(request = {}) {
-  return !request.closedAt && !request.verifiedAt && String(request.status || "").toLowerCase() !== "closed";
+  const status = String(request.status || "").toLowerCase();
+  return !request.closedAt && !request.verifiedAt && status !== "closed" && status !== "ideal";
 }
 
 export function requestMayBeVerified(request = {}) {

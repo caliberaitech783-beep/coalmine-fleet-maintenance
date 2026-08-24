@@ -77,6 +77,7 @@ import "./privilege.css";
 import "./sortable-table.css";
 import "./theme.css";
 import "./mobile-workflow.css";
+import "./ideal-flow.css";
 import "./daily-updates.css";
 import "./dashboard-concept-a.css";
 import { APP_VERSION } from "./app-version.js";
@@ -513,7 +514,7 @@ function formatTwelveHourDateTime(value) {
   return `${match[1]} ${hour%12||12}:${match[3]} ${hour>=12?"PM":"AM"}`;
 }
 
-function ManagerDashboard({ managerRole, managerLocation = "", requests = [], gotoEquipment }) {
+function ManagerDashboard({ managerRole, managerLocation = "", requests = [], gotoEquipment, onApproveIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const siteEquipment = equipmentRecords.filter((record) => recordBelongsToSite(record, managerLocation));
@@ -546,9 +547,12 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
   const pendingVerification=closedRequests.filter((request)=>!request.verifiedAt);
+  const idealRows=managerRole==="Maintenance Manager"?requests.filter((request)=>String(request.status||"").toLowerCase()==="ideal"):[];
   const activeRows=managerRole==="MIS Manager"?pendingVerification:openRequests;
+  const visibleActiveRows=managerRole==="Maintenance Manager"?activeRows.filter((request)=>String(request.status||"").toLowerCase()!=="ideal"):activeRows;
   const historyRows=managerRole==="MIS Manager"?verifiedRequests:closedRequests;
   const detailRows=queueTab==="history"?historyRows:activeRows;
+  const visibleDetailRows=queueTab==="ideal"?idealRows:managerRole==="Maintenance Manager"&&queueTab==="active"?visibleActiveRows:detailRows;
   const title = managerRole || "Manager";
   const description = managerRole === "Production Manager"
     ? `Live fleet availability for ${managerLocation || "the assigned location"}.`
@@ -560,8 +564,8 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
       <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{managerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
-    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button><button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{detailRows.length} record{detailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={detailRows} showReason={managerRole === "Production Manager"} showBreakdownDays={managerRole !== "MIS Manager"} showTurnaroundTime={managerRole === "MIS Manager"} /></article>
+    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{managerRole==="Maintenance Manager"&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Ideal approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Ideal requests awaiting on-road approval":managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={managerRole === "Production Manager"} showBreakdownDays={managerRole !== "MIS Manager"} showTurnaroundTime={managerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} /></article>
   </section>;
 }
 function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
@@ -666,7 +670,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, onApproveIdeal }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
@@ -678,7 +682,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
       ["category", "Repair category"], ...(showReason ? [["complaint", "Reason"]] : []), ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
-      ["status", "Status"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"],
+      ["status", "Status"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal ? [["idealAction", "Action"]] : []),
     ],
     displayRows = showBreakdownDays
       ? rows.map((row) => ({
@@ -729,6 +733,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                   {!r.complaintAudio && !r.maintenanceAudio && "—"}
                 </div></td>}
                 <td>{r.owner}</td>
+                {onApproveIdeal&&<td><button type="button" className="primary compact" onClick={()=>onApproveIdeal(r)}><CheckCircle2 /> Make on road</button></td>}
               </tr>
             ))
           ) : (
@@ -3932,6 +3937,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
         <tbody>
           {rows.length ? rows.map((row) => {
             const days = calculateBreakdownDaysFromStart(row.start, now);
+            const lockedIdeal = String(row.status || "").toLowerCase() === "ideal";
             return <tr key={row.ref}>
               <td><b>{row.ref}</b></td>
               <td>{row.equipment || "—"}</td>
@@ -3946,10 +3952,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {row.complaintAudio ? <audio controls preload="none" src={row.complaintAudio}>Complaint audio</audio> : "—"}
               </td>}
               {showActions && <td className="row-actions">
-                {onEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
-                {onDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
-                {onClose && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
-                {onRemark && String(row.status).toLowerCase() !== "closed" && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
+                {onEdit && !lockedIdeal && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
+                {onDelete && !lockedIdeal && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
+                {onClose && !lockedIdeal && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
+                {onRemark && String(row.status).toLowerCase() !== "closed" && !lockedIdeal && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
@@ -4004,7 +4010,7 @@ function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repai
 function CloseRequestForm({ request, close, onSave }) {
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
-  const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date);
+  const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date), [ideal,setIdeal]=useState(false), [status,setStatus]=useState(request.status === "Closed" ? "Closed" : "In progress");
   const openedAt=new Date(`${opened.date}T${opened.time}+05:30`),closingAt=new Date(`${closingDate}T${time}+05:30`),tatMilliseconds=Math.max(0,closingAt-openedAt);
   const tatDays=Math.floor(tatMilliseconds/86400000),tatHours=Math.floor((tatMilliseconds%86400000)/3600000),tatMinutes=Math.floor((tatMilliseconds%3600000)/60000);
   const turnaroundTime=`${tatDays}d ${tatHours}h ${tatMinutes}m`;
@@ -4012,7 +4018,7 @@ function CloseRequestForm({ request, close, onSave }) {
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: form.get("status")});
+      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Ideal" : status, ideal});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
@@ -4028,7 +4034,8 @@ function CloseRequestForm({ request, close, onSave }) {
         <label>Closing date *<input name="closingDate" type="date" required value={closingDate} onChange={(event)=>setClosingDate(event.target.value)} /></label>
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
-        <label>Status *<select name="status" defaultValue={request.status === "Closed" ? "Closed" : "In progress"}><option>In progress</option><option>Closed</option></select></label>
+        <label>Status *<select name="status" disabled={ideal} value={ideal?"Ideal":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Ideal</option>}</select></label>
+        <fieldset className="ideal-choice"><legend>Ideal? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>setIdeal(false)} /> No</label>{ideal&&<small>The request will remain Ideal until the Maintenance Manager approves Make on road.</small>}</fieldset>
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
@@ -4209,7 +4216,7 @@ function TicketPage({ session }) {
 function NotificationBell({ session, onOpenTickets }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false);
   const reminderShown = useRef("");
-  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then((next) => {setItems(next);const reminder=next.find((item)=>!item.isRead&&String(item.message).includes("reminder: add today’s maintenance update"));if(reminder&&reminderShown.current!==String(reminder.id)){reminderShown.current=String(reminder.id);setOpen(true)}}).catch(() => {});
+  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then((next) => {setItems(next);const reminder=next.find((item)=>!item.isRead&&(String(item.message).includes("reminder: add today’s maintenance update")||String(item.message).includes("was marked Ideal")));if(reminder&&reminderShown.current!==String(reminder.id)){reminderShown.current=String(reminder.id);setOpen(true)}}).catch(() => {});
   useEffect(() => { load(); const timer = window.setInterval(load, 30000); return () => window.clearInterval(timer); }, [session?.token]);
   const unread = items.filter((item) => !item.isRead).length;
   const toggle = async () => {
@@ -4282,7 +4289,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {tab === "tickets" && <TicketPage session={session} />}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt)} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && String(row.status||"").toLowerCase()!=="ideal")} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
@@ -4501,7 +4508,7 @@ function App() {
       }
     },
     updateRequest = async (reference, payload, action = "edit") => {
-      const endpoint = action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : `/api/requests/${encodeURIComponent(reference)}`;
+      const endpoint = action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : `/api/requests/${encodeURIComponent(reference)}`;
       const response = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
@@ -4587,7 +4594,7 @@ function App() {
         <div className="body">
           {active === "Dashboard" ? (
             adminPermissions.adminLevel === "Manager"
-              ? <ManagerDashboard managerRole={adminPermissions.managerRole} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} />
+              ? <ManagerDashboard managerRole={adminPermissions.managerRole} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} />
               : <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
