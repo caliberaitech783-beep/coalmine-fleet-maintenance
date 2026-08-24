@@ -7,7 +7,7 @@ test("Ideal requests require same-site Maintenance Manager approval before MIS",
   const client=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   assert.match(server,/ideal_requested_at TIMESTAMPTZ/);
   assert.match(server,/status='Ideal'/);
-  assert.match(server,/managerRole!=='Maintenance Manager'/);
+  assert.match(server,/managerRoleSelection\([\s\S]*\.includes\('Maintenance Manager'\)/);
   assert.match(server,/lower\(trim\(site\)\)=lower\(trim\(\$3\)\)/);
   assert.match(server,/status='Closed',closed_at=NOW\(\)/);
   assert.match(server,/awaiting MIS verification/);

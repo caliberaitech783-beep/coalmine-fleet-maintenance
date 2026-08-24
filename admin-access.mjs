@@ -38,6 +38,13 @@ export function accessAllows(selection, name) {
   return selection == null || selection.includes(name);
 }
 
+export const MANAGER_ROLE_OPTIONS = ["Production Manager", "Maintenance Manager", "MIS Manager"];
+
+export function managerRoleSelection(value) {
+  const raw=Array.isArray(value)?value:String(value||"").split(/\s*[|,]\s*/);
+  return [...new Set(raw.map((role)=>String(role).trim()).filter((role)=>MANAGER_ROLE_OPTIONS.includes(role)))];
+}
+
 export function adminAccessPermissions(user = {}) {
   const adminLevel = String(user.adminLevel || "Admin").trim() === "Manager" ? "Manager" : "Admin";
   const selectedTabs = accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS);
@@ -46,9 +53,11 @@ export function adminAccessPermissions(user = {}) {
     ? [...new Set([...selectedTabs, "Tickets"])]
     : selectedTabs;
   const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
+  const managerRoles=managerRoleSelection(user.managerRole);
   return {
     adminLevel,
-    managerRole: ["Production Manager", "Maintenance Manager", "MIS Manager"].includes(String(user.managerRole || "").trim()) ? String(user.managerRole).trim() : "",
+    managerRole: managerRoles[0]||"",
+    managerRoles,
     masterAccess: accessSelection(user, "masterAccess", ADMIN_MASTER_OPTIONS),
     tabAccess,
     dashboardAccess: accessSelection(user, "dashboardAccess", ADMIN_SUBMENU_OPTIONS.Dashboard.options),

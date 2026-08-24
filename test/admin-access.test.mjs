@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions, navigationPermissionsForView} from "../admin-access.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
 
 test("legacy administrators retain full access when allowlists are absent", () => {
   const permissions = adminAccessPermissions({userType: "Super Admin"});
@@ -15,6 +15,14 @@ test("manager authority is retained in the admin session permissions", () => {
   assert.equal(permissions.adminLevel, "Manager");
   assert.equal(permissions.managerRole, "Maintenance Manager");
   assert.deepEqual(permissions.tabAccess, ["Dashboard", "Tickets"]);
+});
+
+test("a non-admin can manage multiple operational teams", () => {
+  const roles = "Production Manager | Maintenance Manager | MIS Manager";
+  const permissions = adminAccessPermissions({adminLevel: "Manager", managerRole: roles});
+  assert.deepEqual(managerRoleSelection(roles), ["Production Manager", "Maintenance Manager", "MIS Manager"]);
+  assert.deepEqual(permissions.managerRoles, ["Production Manager", "Maintenance Manager", "MIS Manager"]);
+  assert.equal(permissions.managerRole, "Production Manager");
 });
 
 test("desktop and mobile menu selections remain independent per user",()=>{

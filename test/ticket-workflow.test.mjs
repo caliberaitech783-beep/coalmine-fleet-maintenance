@@ -49,5 +49,5 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   assert.match(server, /\(@\$\{creatorLogin\}\) created ticket/);
   assert.match(source, /className="normal-header-nav"[\s\S]*<Ticket \/> Tickets/);
   assert.match(server, /Only an Admin can resolve tickets/);
-  assert.match(server, /managerUserRole\(req\.session\.permissions\?\.managerRole\)/);
+  assert.match(server, /managerRoleSelection\([\s\S]*\.map\(managerUserRole\)/);
 });

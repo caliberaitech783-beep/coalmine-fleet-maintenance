@@ -12,10 +12,10 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(manager,/"Total requests", verifiedRequests\.length/);
   assert.doesNotMatch(manager,/"Pending verification"/);
   assert.doesNotMatch(manager,/\["Verified", verifiedRequests\.length/);
-  assert.match(manager,/activeRows=managerRole==="MIS Manager"\?pendingVerification:openRequests/);
-  assert.match(manager,/historyRows=managerRole==="MIS Manager"\?verifiedRequests:closedRequests/);
+  assert.match(manager,/activeRows=activeManagerRole==="MIS Manager"\?pendingVerification:openRequests/);
+  assert.match(manager,/historyRows=activeManagerRole==="MIS Manager"\?verifiedRequests:closedRequests/);
   assert.match(manager,/detailRows=queueTab==="history"\?historyRows:activeRows/);
-  assert.match(manager,/showTurnaroundTime=\{managerRole === "MIS Manager"\}/);
+  assert.match(manager,/showTurnaroundTime=\{activeManagerRole === "MIS Manager"\}/);
   assert.match(source,/showTurnaroundTime \? "Turn around time \(TAT\)" : "Downtime"/);
   assert.match(source,/isMis[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} showTurnaroundTime/);
 });

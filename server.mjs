@@ -11,7 +11,7 @@ import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
-import {accessAllows} from './admin-access.mjs';
+import {accessAllows,managerRoleSelection} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
@@ -726,7 +726,7 @@ async function ticketSuperRecipients(client,{creatorRole,site}){
     const profile=resolveMobileAccess({user});
     if(profile.sessionRole!=='super')continue;
     if(profile.permissions.adminLevel==='Admin')adminLogins.push(login);
-    else if(managerUserRole(profile.permissions.managerRole)===creatorRole){
+    else if(profile.permissions.managerRoles.some((role)=>managerUserRole(role)===creatorRole)){
       const managerSite=String(user.site||user.location||'').trim().toLowerCase();
       if(!managerSite||managerSite===String(site||'').trim().toLowerCase())managerLogins.push(login);
     }
@@ -750,7 +750,7 @@ async function requestStakeholderLogins(client,{site,requesterLogin}){
     const userSite=String(user.site||user.location||user.currentLocation||'').trim().toLowerCase();
     const siteMatches=Boolean(requestSite)&&userSite===requestSite;
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&siteMatches&&['Production Manager','Maintenance Manager','MIS Manager'].includes(profile.permissions.managerRole))recipients.push(login);
+    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&siteMatches&&profile.permissions.managerRoles.length)recipients.push(login);
     if(profile.sessionRole==='normal'&&siteMatches&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
   }
   return [...new Set(recipients.filter(Boolean))];
@@ -766,8 +766,8 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
       conditions.push(`lower(creator_login)=$${values.length}`);
     }else if(req.session.permissions?.adminLevel==='Manager'){
       const user=await currentUserRecord(req.session);
-      values.push(managerUserRole(req.session.permissions?.managerRole));
-      conditions.push(`creator_role=$${values.length}`);
+      values.push(managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).map(managerUserRole));
+      conditions.push(`creator_role=ANY($${values.length}::text[])`);
       const managerSite=String(user.site||user.location||'').trim();
       if(managerSite){values.push(managerSite);conditions.push(`lower(site)=lower($${values.length})`)}
     }
@@ -861,7 +861,7 @@ async function createMaintenanceReminderNotifications(){
       const siteMatches=!userSite||userSite===String(request.site||'').trim().toLowerCase();
       if(profile.assignedRole==='Maintenance User'&&siteMatches)recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRole==='Maintenance Manager'&&siteMatches)recipients.push(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&siteMatches)recipients.push(login);
     }
     const newRecipients=[];
     const message=`${slot}:00 reminder: add today’s maintenance update and delay reason for ${request.reference}.`;
@@ -996,7 +996,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
       const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim().toLowerCase();const siteMatches=!userSite||userSite===String(eligible.rows[0].site||'').trim().toLowerCase();
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&['Maintenance Manager','Production Manager'].includes(profile.permissions.managerRole)&&siteMatches)recipients.push(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&siteMatches)recipients.push(login);
     }
     await addTicketNotifications(pool,recipients,reference,`${req.session.name||'Maintenance User'} added a daily maintenance update for ${reference}.`);
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
@@ -1070,7 +1070,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
       const recipients=[];
-      for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim();if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRole==='Maintenance Manager'&&userSite.toLowerCase()===String(rows[0].site||'').trim().toLowerCase())recipients.push(login)}
+      for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim();if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userSite.toLowerCase()===String(rows[0].site||'').trim().toLowerCase())recipients.push(login)}
       await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Ideal by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`);
     }else{
       const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
@@ -1082,7 +1082,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
 
 app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,next)=>{
   try{
-    if(req.session.role!=='super'||req.session.permissions?.adminLevel!=='Manager'||req.session.permissions?.managerRole!=='Maintenance Manager')
+    if(req.session.role!=='super'||req.session.permissions?.adminLevel!=='Manager'||!managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).includes('Maintenance Manager'))
       return res.status(403).json({error:'Only the assigned Maintenance Manager can approve an Ideal request.'});
     const manager=await currentUserRecord(req.session);
     const managerSite=String(manager.site||manager.location||'').trim();

@@ -11,10 +11,10 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/Closed history/);
   assert.match(source,/activeRequests=requests\.filter[\s\S]*!=="closed"/);
   assert.match(source,/historyRows=isMis\?closedRequests/);
-  assert.match(source,/showReason=\{managerRole === "Production Manager"\}/);
+  assert.match(source,/showReason=\{activeManagerRole === "Production Manager"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);
-  assert.match(server,/\['Production Manager','Maintenance Manager','MIS Manager'\]/);
+  assert.match(server,/profile\.permissions\.managerRoles\.length/);
   assert.match(server,/\['Production User','Maintenance User','MIS User'\]/);
   assert.match(server,/opened at \$\{requestNotificationTime\(startedAt\)\}/);
   assert.match(server,/closed at \$\{requestNotificationTime\(closedAt\)\}/);

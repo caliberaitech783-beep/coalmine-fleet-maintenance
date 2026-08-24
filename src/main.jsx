@@ -16,7 +16,7 @@ import {
   requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
-import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, navigationPermissionsForView} from "../admin-access.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -498,7 +498,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           <UserRound />
         </div>
         <span>
-          <b>{permissions.adminLevel === "Manager" ? permissions.managerRole || "Manager" : "Super User"}</b>
+          <b>{permissions.adminLevel === "Manager" ? permissions.managerRoles?.join(" · ") || permissions.managerRole || "Manager" : "Super User"}</b>
           <small>{[session?.name || (permissions.adminLevel === "Manager" ? "Manager" : "Administrator"), profileLocation].filter(Boolean).join(" · ")}</small>
         </span>
         <button onClick={logout}>
@@ -515,8 +515,10 @@ function formatTwelveHourDateTime(value) {
   return `${match[1]} ${hour%12||12}:${match[3]} ${hour>=12?"PM":"AM"}`;
 }
 
-function ManagerDashboard({ managerRole, managerLocation = "", requests = [], gotoEquipment, onApproveIdeal }) {
+function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", requests = [], gotoEquipment, onApproveIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
+  const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
+  const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const siteEquipment = equipmentRecords.filter((record) => recordBelongsToSite(record, managerLocation));
   const openRequests = requests.filter((request) => String(request.status || "").toLowerCase() !== "closed");
@@ -532,14 +534,14 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
   const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
   const closedRequests = requests.filter((request) => String(request.status || "").toLowerCase() === "closed");
   const verifiedRequests = requests.filter((request) => Boolean(request.verifiedAt));
-  const cards = managerRole === "Production Manager"
+  const cards = activeManagerRole === "Production Manager"
     ? [
         ["Total equipment", fleet.total, "Registered fleet", "all", totalTypes],
         ["On road", fleet.onRoad, "Available for production", "onroad", onRoadTypes],
         ["Off road", fleet.offRoad, "Equipment currently in maintenance", "offroad", offRoadTypes],
         ["Idle", fleet.idle, "Operational but currently idle", "idle", idleTypes],
       ]
-    : managerRole === "Maintenance Manager"
+    : activeManagerRole === "Maintenance Manager"
       ? [
           ["Total equipment", fleet.total, "Equipment at the assigned location", "all"],
           ["Received for maintenance", requests.length, "Total maintenance intake", ""],
@@ -552,25 +554,26 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
   const pendingVerification=closedRequests.filter((request)=>!request.verifiedAt);
-  const idealRows=managerRole==="Maintenance Manager"?requests.filter((request)=>String(request.status||"").toLowerCase()==="ideal"):[];
-  const activeRows=managerRole==="MIS Manager"?pendingVerification:openRequests;
-  const visibleActiveRows=managerRole==="Maintenance Manager"?activeRows.filter((request)=>String(request.status||"").toLowerCase()!=="ideal"):activeRows;
-  const historyRows=managerRole==="MIS Manager"?verifiedRequests:closedRequests;
+  const idealRows=activeManagerRole==="Maintenance Manager"?requests.filter((request)=>String(request.status||"").toLowerCase()==="ideal"):[];
+  const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
+  const visibleActiveRows=activeManagerRole==="Maintenance Manager"?activeRows.filter((request)=>String(request.status||"").toLowerCase()!=="ideal"):activeRows;
+  const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
   const detailRows=queueTab==="history"?historyRows:activeRows;
-  const visibleDetailRows=queueTab==="ideal"?idealRows:managerRole==="Maintenance Manager"&&queueTab==="active"?visibleActiveRows:detailRows;
-  const title = managerRole || "Manager";
-  const description = managerRole === "Production Manager"
+  const visibleDetailRows=queueTab==="ideal"?idealRows:activeManagerRole==="Maintenance Manager"&&queueTab==="active"?visibleActiveRows:detailRows;
+  const title = activeManagerRole || "Manager";
+  const description = activeManagerRole === "Production Manager"
     ? `Live fleet availability for ${managerLocation || "the assigned location"}.`
-    : managerRole === "Maintenance Manager"
+    : activeManagerRole === "Maintenance Manager"
       ? "Site equipment, maintenance intake, remaining workload, and completed equipment."
       : "Location-wise verified requests and first-trip status.";
   return <section className="manager-dashboard">
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
+    {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
-      <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{managerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
+      <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{activeManagerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
-    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{managerRole==="Maintenance Manager"&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Ideal approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Ideal requests awaiting on-road approval":managerRole === "Production Manager" ? "Active production interruptions" : managerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={managerRole === "Production Manager"} showBreakdownDays={managerRole !== "MIS Manager"} showTurnaroundTime={managerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} /></article>
+    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{activeManagerRole==="Maintenance Manager"&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Ideal approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Ideal requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={activeManagerRole === "Production Manager"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} /></article>
   </section>;
 }
 function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
@@ -866,7 +869,7 @@ const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
   ["adminLevel", "User authority"],
-  ["managerRole", "Manager role"],
+  ["managerRole", "Manager role", "multi-checkbox"],
   ["read", "Read", "checkbox"],
   ["edit", "Edit", "checkbox"],
   ["delete", "Delete", "checkbox"],
@@ -1149,7 +1152,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const [accountRole, setAccountRole] = useState(initialRole);
   const [roleSection, setRoleSection] = useState(initialRole && initialRole !== "User" ? "team" : "manager");
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
-  const [managerRole, setManagerRole] = useState(record.managerRole || "");
+  const [managerRoles, setManagerRoles] = useState(managerRoleSelection(record.managerRole));
   const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
   const [mobileVisibleTabs, setMobileVisibleTabs] = useState(selectedAccessValues(record,"mobileTabAccess","tabAccess"));
   const isDesktopUser = accountRole === "User";
@@ -1180,9 +1183,9 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
     </fieldset>}
     {isManager && <fieldset className="account-role-field manager-role-field full">
       <legend>Whose manager is this user? *</legend>
-      <p>Select the operational team this Manager supervises. Their dashboard will be tailored to this choice.</p>
-      <div>{managerRoleOptions.map((option) => <label key={option} className={managerRole === option ? "selected" : ""}>
-        <input type="radio" name="managerRole" value={option} required checked={managerRole === option} onChange={() => setManagerRole(option)} />
+      <p>Select one or more operational teams this Non Admin supervises. Their dashboard will include every selected role.</p>
+      <div>{managerRoleOptions.map((option) => <label key={option} className={managerRoles.includes(option) ? "selected" : ""}>
+        <input type="checkbox" name="managerRole" value={option} checked={managerRoles.includes(option)} onChange={(event) => setManagerRoles((current) => event.target.checked ? [...new Set([...current, option])] : current.filter((role) => role !== option))} />
       <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road, idle and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
       </label>)}</div>
     </fieldset>}
@@ -1224,8 +1227,10 @@ function applyUserRoleDefaults(record) {
         record.mobileTabAccess = ADMIN_TAB_OPTIONS.join(" | ");
         Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field, options}) => { record[mobileAccessKey(field)] = options.join(" | "); });
       }
-    } else if (!managerRoleOptions.includes(record.managerRole)) record.managerRole = "";
-    else {
+    } else {
+      const selectedManagerRoles=managerRoleSelection(record.managerRole);
+      record.managerRole=selectedManagerRoles.join(" | ");
+      if(!selectedManagerRoles.length)return record;
       const tabs = new Set(String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
       tabs.add("Dashboard");
       tabs.add("Tickets");
@@ -1236,7 +1241,7 @@ function applyUserRoleDefaults(record) {
       mobileTabs.add("Tickets");
       record.mobileTabAccess = [...mobileTabs].join(" | ");
       record.mobileDashboardAccess = "Dashboard";
-      if (record.managerRole !== "MIS Manager") {
+      if (selectedManagerRoles.some((role)=>role !== "MIS Manager")) {
         const masters = new Set(String(record.masterAccess || "").split(/\s*\|\s*/).filter(Boolean));
         masters.add("Equipment master");
         record.masterAccess = [...masters].join(" | ");
@@ -1299,6 +1304,10 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
         ]),
       );
     if (name === "Users & employees") applyUserRoleDefaults(record);
+    if (name === "Users & employees" && record.userType === "Super Admin" && record.adminLevel === "Manager" && !record.managerRole) {
+      alert("Select at least one manager role for this Non Admin user.");
+      return;
+    }
     if (name === "Equipment master" && !record.status)
       record.status = "Operational";
     if (name === "Users & employees" && record.userType === "Super Admin" && !record.masterAccess && !record.tabAccess) {
@@ -3177,6 +3186,10 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
             : String(form.get(key) || "").trim(),
     ]));
     if (name === "Users & employees") applyUserRoleDefaults(updated);
+    if (name === "Users & employees" && updated.userType === "Super Admin" && updated.adminLevel === "Manager" && !updated.managerRole) {
+      alert("Select at least one manager role for this Non Admin user.");
+      return;
+    }
     if (name === "Users & employees" && updated.userType === "Super Admin" && !updated.masterAccess && !updated.tabAccess) {
       alert("Select at least one visible master or tab for this Super Admin.");
       return;
@@ -4649,7 +4662,7 @@ function App() {
         <div className="body">
           {active === "Dashboard" ? (
             adminPermissions.adminLevel === "Manager"
-              ? <ManagerDashboard managerRole={adminPermissions.managerRole} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} />
+              ? <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} />
               : <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
