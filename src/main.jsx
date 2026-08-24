@@ -78,6 +78,7 @@ import "./sortable-table.css";
 import "./theme.css";
 import "./mobile-workflow.css";
 import "./ideal-flow.css";
+import "./idle-status.css";
 import "./daily-updates.css";
 import "./dashboard-concept-a.css";
 import { APP_VERSION } from "./app-version.js";
@@ -521,11 +522,14 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
   const openRequests = requests.filter((request) => String(request.status || "").toLowerCase() !== "closed");
   const offRoadKeys = new Set(openRequests.map((request) => String(request.chassis || request.door || request.equipment || "").trim().toLowerCase()).filter(Boolean));
   const offRoad = Math.min(siteEquipment.length, offRoadKeys.size);
-  const fleet = {total:siteEquipment.length,offRoad,onRoad:Math.max(0,siteEquipment.length-offRoad)};
+  const idleEquipment=siteEquipment.filter((record)=>equipmentRoadStatus(record)==="idle"&&!offRoadKeys.has(String(record.chassisNo||record.manufacturerSerialNo||record.door||record.equipmentName||"").trim().toLowerCase()));
+  const idle=Math.min(Math.max(0,siteEquipment.length-offRoad),idleEquipment.length);
+  const fleet = {total:siteEquipment.length,offRoad,idle,onRoad:Math.max(0,siteEquipment.length-offRoad-idle)};
   const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
   const totalTypes=typeSummary(siteEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
   const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
-  const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
+  const idleTypes=typeSummary(idleEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
+  const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
   const closedRequests = requests.filter((request) => String(request.status || "").toLowerCase() === "closed");
   const verifiedRequests = requests.filter((request) => Boolean(request.verifiedAt));
   const cards = managerRole === "Production Manager"
@@ -533,6 +537,7 @@ function ManagerDashboard({ managerRole, managerLocation = "", requests = [], go
         ["Total equipment", fleet.total, "Registered fleet", "all", totalTypes],
         ["On road", fleet.onRoad, "Available for production", "onroad", onRoadTypes],
         ["Off road", fleet.offRoad, "Equipment currently in maintenance", "offroad", offRoadTypes],
+        ["Idle", fleet.idle, "Operational but currently idle", "idle", idleTypes],
       ]
     : managerRole === "Maintenance Manager"
       ? [
@@ -584,7 +589,8 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const visibleBreakdowns = selectedRegion ? requests.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : requests;
   const kpis = equipmentMetrics(visibleEquipment);
   const statusCounts = [
-    ["Operational", visibleEquipment.filter((record) => record.status === "Operational").length, "operational"],
+    ["On road", kpis.onRoad, "operational"],
+    ["Idle", kpis.idle, "idle"],
     ["In maintenance", visibleEquipment.filter((record) => String(record.status || "").toLowerCase().includes("maintenance")).length, "maintenance"],
     ["Breakdown", visibleBreakdowns.filter((record) => record.status !== "Closed").length, "breakdown"],
   ];
@@ -623,6 +629,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const equipmentShare = assetCounts.total ? (assetCounts.equipment / assetCounts.total) * 100 : 0;
   const onRoadShare = kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0;
   const offRoadShare = kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0;
+  const idleShare = kpis.total ? (kpis.idle / kpis.total) * 100 : 0;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
@@ -641,12 +648,13 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
           </div>
         </article>
         <article className="mine-overview-chart">
-          <header><div><span className="mine-eyebrow">Road availability</span><h2>On-road and off-road</h2><p>Only explicit fleet statuses are counted</p></div></header>
+          <header><div><span className="mine-eyebrow">Road availability</span><h2>On-road, off-road and idle</h2><p>Every explicit fleet state is counted separately</p></div></header>
           <div className="mine-overview-chart-body">
-            <button type="button" className="mine-overview-donut" aria-label={`${kpis.availability}% on road`} onClick={() => gotoEquipment("onroad", "")} style={{ background: `conic-gradient(#72c99e 0 ${onRoadShare}%, #df776e ${onRoadShare}% ${onRoadShare + offRoadShare}%, #d9e3e7 ${onRoadShare + offRoadShare}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button>
+            <button type="button" className="mine-overview-donut" aria-label={`${kpis.availability}% on road`} onClick={() => gotoEquipment("onroad", "")} style={{ background: `conic-gradient(#72c99e 0 ${onRoadShare}%, #df776e ${onRoadShare}% ${onRoadShare + offRoadShare}%, #e5aa55 ${onRoadShare + offRoadShare}% ${onRoadShare + offRoadShare + idleShare}%, #d9e3e7 ${onRoadShare + offRoadShare + idleShare}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button>
             <div className="mine-overview-legend">
               <button type="button" onClick={() => gotoEquipment("onroad", "")}><i className="mine-chart-green" /><span>On road<small>Available for operation</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
               <button type="button" onClick={() => gotoEquipment("offroad", "")}><i className="mine-chart-red" /><span>Off road<small>Maintenance or breakdown</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoEquipment("idle", "")}><i className="mine-chart-idle" /><span>Idle<small>Operational, currently not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
               {kpis.unknown > 0 && <div><i className="mine-chart-grey" /><span>Status not set<small>Not counted as off road</small></span><strong>{kpis.unknown.toLocaleString()}</strong></div>}
             </div>
           </div>
@@ -656,10 +664,10 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
         {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => goto("Breakdown master")}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
       </section>
       <section className="mine-dashboard-grid">
-        <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Fleet status · all</span><h2>Vehicle status</h2><p>Availability across the selected operating region</p></div><button type="button" onClick={() => gotoEquipment("all", "")}>View fleet <ChevronRight /></button></header><div className="mine-status-body"><button type="button" className="mine-status-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#7ed6a3 0 ${kpis.availability}%, #26383c ${kpis.availability}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button><div className="mine-status-list">{statusCounts.map(([label, value, tone]) => <button type="button" key={label} onClick={() => gotoEquipment(tone === "operational" ? "onroad" : "all", "")}><i className={`mine-dot ${tone}`} /><span>{label}</span><b>{value.toLocaleString()}</b></button>)}</div></div></article>
+        <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Fleet status · all</span><h2>Vehicle status</h2><p>Availability across the selected operating region</p></div><button type="button" onClick={() => gotoEquipment("all", "")}>View fleet <ChevronRight /></button></header><div className="mine-status-body"><button type="button" className="mine-status-donut" onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#7ed6a3 0 ${kpis.availability}%, #26383c ${kpis.availability}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button><div className="mine-status-list">{statusCounts.map(([label, value, tone]) => <button type="button" key={label} onClick={() => gotoEquipment(tone === "operational" ? "onroad" : tone === "idle" ? "idle" : "all", "")}><i className={`mine-dot ${tone}`} /><span>{label}</span><b>{value.toLocaleString()}</b></button>)}</div></div></article>
         <article className="mine-panel mine-open-cases"><header><div><span className="mine-eyebrow">Maintenance workload</span><h2>Open cases</h2><p>Current action queue</p></div><button type="button" aria-label="Open site-wise case drilldown" onClick={() => setShowOpenCases(true)}><ChevronRight /></button></header><button type="button" className="mine-open-cases-trigger" onClick={() => setShowOpenCases(true)}><div className="mine-big-number"><strong>{activeBreakdowns.toLocaleString()}</strong><span>Active breakdowns</span><small>{visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length.toLocaleString()} awaiting action</small></div><div className="mine-mini-bars"><span><i style={{ width: `${activeBreakdowns ? 100 : 0}%` }} />Active</span><span><i className="mine-bar-orange" style={{ width: `${activeBreakdowns ? Math.min(100, visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length / activeBreakdowns * 100) : 0}%` }} />Awaiting</span></div></button></article>
         <article className="mine-panel"><header><div><span className="mine-eyebrow">Equipment by region</span><h2>Operating regions</h2><p>Registered assets across sites</p></div><button type="button" onClick={() => goto("Region master")}><ChevronRight /></button></header><div className="mine-region-bars">{regionBars.map((region) => <button type="button" key={region.code} onClick={() => gotoEquipment("all", region.sites[0] || "")}><span>{region.code}</span><div><i style={{ width: `${(region.total / maxRegionTotal) * 100}%` }} /></div><b>{region.total.toLocaleString()}</b></button>)}</div></article>
-        <article className="mine-panel"><header><div><span className="mine-eyebrow">Vehicle status</span><h2>Availability mix</h2><p>Live maintenance signals</p></div></header><div className="mine-vertical-metrics"><div><span>On road</span><strong>{kpis.onRoad.toLocaleString()}</strong><i className="mine-bar-green" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Off road</span><strong>{kpis.offRoad.toLocaleString()}</strong><i className="mine-bar-grey" style={{ width: `${kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Breakdowns</span><strong>{activeBreakdowns.toLocaleString()}</strong><i className="mine-bar-red" style={{ width: `${activeBreakdowns ? 100 : 0}%` }} /></div></div></article>
+        <article className="mine-panel"><header><div><span className="mine-eyebrow">Vehicle status</span><h2>Availability mix</h2><p>Live fleet-state signals</p></div></header><div className="mine-vertical-metrics"><div><span>On road</span><strong>{kpis.onRoad.toLocaleString()}</strong><i className="mine-bar-green" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Off road</span><strong>{kpis.offRoad.toLocaleString()}</strong><i className="mine-bar-grey" style={{ width: `${kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Idle</span><strong>{kpis.idle.toLocaleString()}</strong><i className="mine-bar-idle" style={{ width: `${kpis.total ? (kpis.idle / kpis.total) * 100 : 0}%` }} /></div><div><span>Breakdowns</span><strong>{activeBreakdowns.toLocaleString()}</strong><i className="mine-bar-red" style={{ width: `${activeBreakdowns ? 100 : 0}%` }} /></div></div></article>
         <article className="mine-panel"><header><div><span className="mine-eyebrow">Fleet composition</span><h2>Vehicle by group</h2><p>Most represented equipment categories</p></div></header><div className="mine-type-bars">{vehicleTypes.length ? vehicleTypes.map(([label, value]) => <button type="button" key={label} onClick={() => gotoEquipment("all", "")}><span>{label}</span><div><i style={{ width: `${(value / Math.max(1, vehicleTypes[0][1])) * 100}%` }} /></div><b>{value.toLocaleString()}</b></button>) : <p className="mine-empty">No equipment records yet</p>}</div></article>
         <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Requests</span><h2>Maintenance workload by status</h2><p>Open, in-progress and completed requests</p></div><button type="button" onClick={() => goto("Breakdown master")}>View requests <ChevronRight /></button></header><div className="mine-workload-grid">{["Open", "In progress", "Awaiting parts", "Awaiting approval", "Closed"].map((status) => { const count = visibleBreakdowns.filter((record) => record.status === status).length; const max = Math.max(1, visibleBreakdowns.length); return <button type="button" key={status} onClick={() => goto("Breakdown master")}><span>{status}</span><div><i style={{ width: `${(count / max) * 100}%` }} /></div><b>{count.toLocaleString()}</b></button>; })}</div></article>
         <article className="mine-panel"><header><div><span className="mine-eyebrow">People</span><h2>Operations users</h2><p>Registered access profiles</p></div><button type="button" onClick={() => setShowUserBreakdown(true)}><ChevronRight /></button></header><div className="mine-people"><strong>{usersAndEmployees.length.toLocaleString()}</strong><span>Users &amp; employees</span><div><b>Mobile {userCounts.mobile}</b><b>Super {userCounts.super}</b><b>Admin {userCounts.admin}</b></div></div></article>
@@ -1175,7 +1183,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
       <p>Select the operational team this Manager supervises. Their dashboard will be tailored to this choice.</p>
       <div>{managerRoleOptions.map((option) => <label key={option} className={managerRole === option ? "selected" : ""}>
         <input type="radio" name="managerRole" value={option} required checked={managerRole === option} onChange={() => setManagerRole(option)} />
-        <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
+      <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road, idle and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
       </label>)}</div>
     </fieldset>}
     {accountRole && (!isDesktopUser || isManager) && <label>Location *
@@ -1487,6 +1495,9 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                         </option>
                       ))}
                     </select></>
+                  ) : name === "Equipment master" && key === "status" ? (
+                    <>{label} *
+                    <select name={key} required defaultValue="Operational"><option value="Operational">On road</option><option value="Off road">Off road</option><option value="Idle">Idle</option></select></>
                   ) : key === "level" ? (
                     <>{label} *
                     <select name={key} required defaultValue="">
@@ -1643,7 +1654,7 @@ function Equipment({
       ["itemName", "Item name"], ["itemSpecification", "Item specification name"],
       ["acquisitionDate", "Acquisition date"], ["make", "Make"], ["model", "Model"],
       ["manufacturerSerialNo", "Manufacturer serial no."], ["engineNo", "Engine no."],
-      ["chassisNo", "Chassis no."], ["documentStatus", "Document status"],
+      ["chassisNo", "Chassis no."], ["documentStatus", "Document status"], ["status", "Fleet status"],
     ],
     equipmentValue = (record, key) => {
       if (key === "currentLocation") return record.currentLocation || record.location;
@@ -1691,7 +1702,7 @@ function Equipment({
       equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
   );
   const [sortedRows, sort, changeSort] = useSortableRows(rows, "", equipmentValue);
-  const equipmentEditFields = masterFields["Equipment master"].filter(([key]) => key !== "status");
+  const equipmentEditFields = masterFields["Equipment master"];
   const saveEquipmentEdit = async (event) => {
     event.preventDefault();
     if (!editing?.id || savingEdit) return;
@@ -1732,7 +1743,9 @@ function Equipment({
               ? "All equipment"
               : road === "onroad"
                 ? "On Road equipment"
-                : "Off Road equipment"}{" "}
+                : road === "offroad"
+                  ? "Off Road equipment"
+                  : "Idle equipment"}{" "}
             · {rows.length} records shown
           </p>
         </div>
@@ -1751,6 +1764,7 @@ function Equipment({
           <option value="all">All road statuses</option>
           <option value="onroad">On Road</option>
           <option value="offroad">Off Road</option>
+          <option value="idle">Idle</option>
         </select>
         <select value={location} onChange={(e) => setLocation(e.target.value)}>
           <option value="">All locations</option>
@@ -1811,6 +1825,7 @@ function Equipment({
                   <td>{v.engineNo}</td>
                   <td>{v.chassisNo}</td>
                   <td>{v.documentStatus}</td>
+                  <td><Status>{equipmentRoadStatus(v)==="onroad"?"On road":equipmentRoadStatus(v)==="offroad"?"Off road":equipmentRoadStatus(v)==="idle"?"Idle":"Status not set"}</Status></td>
                   <td className="row-actions" onClick={(event) => event.stopPropagation()}>
                     {v.id ? (
                       <>
@@ -1827,7 +1842,7 @@ function Equipment({
               ))
             ) : (
               <tr>
-                <td colSpan="14" className="empty-state">
+                <td colSpan="15" className="empty-state">
                   No equipment or vehicle records for this selection
                 </td>
               </tr>
@@ -1847,7 +1862,7 @@ function Equipment({
                 {detail.make} {detail.model} · {detail.reg}
               </p>
             </div>
-            <Status>{roadStatus(detail)}</Status>
+            <Status>{equipmentRoadStatus(detail)==="onroad"?"On road":equipmentRoadStatus(detail)==="offroad"?"Off road":equipmentRoadStatus(detail)==="idle"?"Idle":"Status not set"}</Status>
           </div>
           <div className="details">
             {Object.entries(detail)
@@ -1867,7 +1882,7 @@ function Equipment({
             <div className="formgrid">
               {equipmentEditFields.map(([key, label]) => (
                 <label key={key}>{label}
-                  <input name={key} defaultValue={editing[key] || ""} />
+                  {key==="status"?<select name={key} defaultValue={editing[key]||"Operational"}><option value="Operational">On road</option><option value="Off road">Off road</option><option value="Idle">Idle</option></select>:<input name={key} defaultValue={editing[key] || ""} />}
                 </label>
               ))}
             </div>
@@ -2590,7 +2605,7 @@ function Subsidiaries({ gotoEquipment }) {
         <div>
           <h1>Region master</h1>
           <p>
-            Click a region, then select Total, On Road or Off Road for any
+            Click a region, then select Total, On Road, Off Road or Idle for any
             site
           </p>
         </div>
@@ -2655,12 +2670,12 @@ function Subsidiaries({ gotoEquipment }) {
                         <div className="site-linked-list">
                           {s.sites.map((site) => {
                             const list = vehicles.filter(
-                                (v) => v.location === site,
+                                (v) => (v.currentLocation || v.location) === site,
                               ),
-                              on = list.filter(
-                                (v) => v.status === "Operational",
-                              ).length,
-                              off = list.length - on;
+                              metrics=equipmentMetrics(list),
+                              on=metrics.onRoad,
+                              off=metrics.offRoad,
+                              idle=metrics.idle;
                             return (
                               <div className="site-linked" key={site}>
                                 <button
@@ -2689,6 +2704,13 @@ function Subsidiaries({ gotoEquipment }) {
                                 >
                                   <strong>{off}</strong>
                                   <span>Off Road</span>
+                                </button>
+                                <button
+                                  className="idle"
+                                  onClick={() => gotoEquipment("idle", site)}
+                                >
+                                  <strong>{idle}</strong>
+                                  <span>Idle</span>
                                 </button>
                               </div>
                             );
@@ -2769,7 +2791,7 @@ function Generic({ name, requests = [] }) {
   }[name];
   const reportNames = [
     ["Executive dashboard summary", "Dashboard"],
-    ["Fleet availability: On Road / Off Road", "Dashboard"],
+    ["Fleet availability: On Road / Off Road / Idle", "Dashboard"],
     ["Equipment master register", "Equipment master"],
     ["Equipment category, group & make report", "Equipment master"],
     ["Vehicle transfer history", "Vehicle transfers"],
@@ -3554,15 +3576,13 @@ function WhatsAppReport({type, requests = []}) {
   const rows = isSite
     ? subsidiaryData.flatMap((region) => region.sites).map((site) => {
         const siteRecords = records.filter((record) => String(record.location || "").trim().toLowerCase() === site.toLowerCase());
-        const offRoad = siteRecords.filter((record) => {
-          const status = String(record.status || "").toLowerCase();
-          return status.includes("off") || status.includes("break");
-        }).length;
+        const metrics=equipmentMetrics(siteRecords);
         return {
           name: site,
           total: siteRecords.length,
-          onRoad: siteRecords.length - offRoad,
-          offRoad,
+          onRoad: metrics.onRoad,
+          offRoad: metrics.offRoad,
+          idle: metrics.idle,
           breakdowns: requests.filter((request) => request.site === site && request.status !== "Closed").length,
         };
       })
@@ -3585,7 +3605,7 @@ function WhatsAppReport({type, requests = []}) {
     ? rows.filter((row) => locationMatchesRegion(row.locations, oemRegion))
     : rows;
   const reportText = isSite
-    ? [`Nerve Center - Daily Site-wise Report`, today, ...visibleRows.map((r) => `${r.name}: Total ${r.total}, On Road ${r.onRoad}, Off Road ${r.offRoad}, Open Breakdowns ${r.breakdowns}`)].join("\n")
+    ? [`Nerve Center - Daily Site-wise Report`, today, ...visibleRows.map((r) => `${r.name}: Total ${r.total}, On Road ${r.onRoad}, Off Road ${r.offRoad}, Idle ${r.idle}, Open Breakdowns ${r.breakdowns}`)].join("\n")
     : [`Nerve Center - Daily OEM Report${oemRegion === "all" ? "" : ` - ${oemRegion}`}`, today, ...visibleRows.map((r) => `${r.name}: ${r.contacts} contacts, Levels ${r.levels || "N/A"}, Locations ${r.locations || "N/A"}`)].join("\n");
   const share = () => window.open(`https://wa.me/?text=${encodeURIComponent(reportText)}`, "_blank", "noopener,noreferrer");
   const dummyReportTypes = ["A/B", "B/C", "C/D"];
@@ -3615,6 +3635,7 @@ function WhatsAppReport({type, requests = []}) {
       `Total equipment: ${site.total}`,
       `On road: ${site.onRoad}`,
       `Off road: ${site.offRoad}`,
+      `Idle: ${site.idle}`,
       `Open breakdowns: ${site.breakdowns}`,
     ].join("\n");
     setLastPrepared(`${reportType} report prepared for ${site.name}${recipient ? ` (${recipient.employee || recipient.login})` : ""}`);
@@ -3709,12 +3730,12 @@ function WhatsAppReport({type, requests = []}) {
         </div>
       )}
       <div className="emptytable"><table>
-        <thead><tr>{(isSite ? ["Site","Total equipment","On road","Off road","Open breakdowns"] : ["OEM","Contacts","Levels","Locations"]).map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
+        <thead><tr>{(isSite ? ["Site","Total equipment","On road","Off road","Idle","Open breakdowns"] : ["OEM","Contacts","Levels","Locations"]).map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
         <tbody>{visibleRows.length ? visibleRows.map((row) => isSite ? (
-          <tr key={row.name}><td><b>{row.name}</b></td><td>{row.total}</td><td>{row.onRoad}</td><td>{row.offRoad}</td><td>{row.breakdowns}</td></tr>
+          <tr key={row.name}><td><b>{row.name}</b></td><td>{row.total}</td><td>{row.onRoad}</td><td>{row.offRoad}</td><td>{row.idle}</td><td>{row.breakdowns}</td></tr>
         ) : (
           <tr key={row.name}><td><b>{row.name}</b></td><td>{row.contacts}</td><td>{row.levels || "—"}</td><td>{row.locations || "—"}</td></tr>
-        )) : <tr><td colSpan={isSite ? 5 : 4} className="empty-state">No data available for this report</td></tr>}</tbody>
+        )) : <tr><td colSpan={isSite ? 6 : 4} className="empty-state">No data available for this report</td></tr>}</tbody>
       </table></div>
     </section>
   );

@@ -10,7 +10,8 @@ test("manager requests, equipment, and dashboard metrics are scoped to the assig
   assert.match(source,/function ManagerDashboard\(\{ managerRole, managerLocation/);
   assert.match(source,/siteEquipment = equipmentRecords\.filter/);
   assert.match(source,/offRoadKeys = new Set\(openRequests/);
-  assert.match(source,/onRoad:Math\.max\(0,siteEquipment\.length-offRoad\)/);
+  assert.match(source,/onRoad:Math\.max\(0,siteEquipment\.length-offRoad-idle\)/);
+  assert.match(source,/\["Idle", fleet\.idle/);
   assert.doesNotMatch(source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard")),/Active breakdowns/);
   assert.match(source,/formatTwelveHourDateTime\(r\.start\)/);
 });

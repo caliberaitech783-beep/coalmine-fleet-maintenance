@@ -1,0 +1,27 @@
+.status.idle {
+  background: #fff4df;
+  color: #ad6b08;
+}
+
+.mine-overview-legend .mine-chart-idle,
+.mine-dot.idle {
+  background: #e5aa55;
+}
+
+.mine-vertical-metrics .mine-bar-idle {
+  background: #e5aa55;
+}
+
+.site-linked button.idle strong {
+  color: #ad6b08;
+}
+
+.site-linked {
+  grid-template-columns: minmax(150px, 1fr) repeat(4, 70px);
+}
+
+@media (max-width: 600px) {
+  .site-linked {
+    grid-template-columns: minmax(105px, 1fr) repeat(4, 52px);
+  }
+}

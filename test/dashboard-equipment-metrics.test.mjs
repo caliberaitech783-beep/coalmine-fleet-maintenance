@@ -13,7 +13,7 @@ test("dashboard equipment totals use all persisted master records", () => {
       { status: "Breakdown" },
       { status: "Operational" },
     ]),
-    { total: 3, onRoad: 2, offRoad: 1, unknown: 0, availability: 67 },
+    { total: 3, onRoad: 2, offRoad: 1, idle: 0, unknown: 0, availability: 67 },
   );
 });
 
@@ -22,6 +22,7 @@ test("dashboard equipment totals handle an empty master", () => {
     total: 0,
     onRoad: 0,
     offRoad: 0,
+    idle: 0,
     unknown: 0,
     availability: 0,
   });
@@ -36,9 +37,16 @@ test("off-road totals exclude blank and neutral statuses", () => {
       { status: "Off-road" },
       { status: "Breakdown" },
     ]),
-    { total: 5, onRoad: 0, offRoad: 3, unknown: 2, availability: 0 },
+    { total: 5, onRoad: 0, offRoad: 3, idle: 0, unknown: 2, availability: 0 },
   );
   assert.equal(equipmentRoadStatus({ status: "" }), "unknown");
+});
+
+test("idle is a distinct fleet state and is not counted on-road or off-road", () => {
+  assert.deepEqual(equipmentMetrics([
+    {status:"Operational"}, {status:"Idle"}, {status:"Off road"}, {status:"Idling"},
+  ]), {total:4,onRoad:1,offRoad:1,idle:2,unknown:0,availability:25});
+  assert.equal(equipmentRoadStatus({status:"Idle"}), "idle");
 });
 
 test("fleet totals count vehicles separately from other equipment", () => {
