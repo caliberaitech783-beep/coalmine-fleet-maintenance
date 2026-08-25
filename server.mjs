@@ -1157,7 +1157,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     if(!canViewEquipment&&!canViewRepairTypes)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'?await currentUserRecord(req.session):null;
-    const managerSite=String(managerRecord?.site||managerRecord?.location||'').trim().toLowerCase();
+    const managerSite=canonicalSiteName(managerRecord?.site||managerRecord?.location||'');
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
@@ -1170,7 +1170,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
       if(managerRecord&&row.master_name==='Equipment master'){
-        const equipmentSite=String(record.currentLocation||record.site||record.location||'').trim().toLowerCase();
+        const equipmentSite=canonicalSiteName(record.currentLocation||record.site||record.location||'');
         if(!managerSite||equipmentSite!==managerSite)continue;
       }
       if(row.master_name==='Privilege'){

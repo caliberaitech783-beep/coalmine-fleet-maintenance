@@ -7,6 +7,8 @@ test("manager requests, equipment, and dashboard metrics are scoped to the assig
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   assert.match(server,/adminLevel==='Manager'[\s\S]*maintenance_requests WHERE lower\(trim\(site\)\)=lower\(trim\(\$1\)\)/);
   assert.match(server,/managerRecord&&row\.master_name==='Equipment master'/);
+  assert.match(server,/managerSite=canonicalSiteName\(managerRecord\?\.site\|\|managerRecord\?\.location\|\|''\)/);
+  assert.match(server,/equipmentSite=canonicalSiteName\(record\.currentLocation\|\|record\.site\|\|record\.location\|\|''\)/);
   assert.match(source,/function ManagerDashboard\(\{ managerRole, managerRoles = \[\], managerLocation/);
   assert.match(source,/siteEquipment = equipmentRecords\.filter/);
   assert.match(source,/offRoadKeys = new Set\(openRequests/);
