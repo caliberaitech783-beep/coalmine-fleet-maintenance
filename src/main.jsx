@@ -3990,7 +3990,7 @@ function DailyRemarkForm({ request, close, onSave }) {
   </div></Modal>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -4001,7 +4001,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
       <table className="workflow-table">
         <thead><tr>
           <th>Job reference</th><th>Equipment group</th><th>Door no.</th><th>Site location</th>
-          <th>Status</th><th>Started</th>{showTurnaroundTime && <th>Turn around time (TAT)</th>}<th>Days of breakdown</th><th>Daily remarks</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
+          <th>Status</th>{showReason && <th>Reason</th>}<th>Started</th>{showTurnaroundTime && <th>Turn around time (TAT)</th>}<th>Days of breakdown</th><th>Daily remarks</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {rows.length ? rows.map((row) => {
@@ -4013,6 +4013,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
               <td>{row.door || "—"}</td>
               <td><MapPin /> {row.site || "Not assigned"}</td>
               <td><Status>{row.status || "Open"}</Status></td>
+              {showReason && <td>{row.complaint || "—"}</td>}
               <td>{formatTwelveHourDateTime(row.start)}</td>
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
@@ -4028,7 +4029,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={8 + (showTurnaroundTime ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div>
@@ -4361,7 +4362,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && String(row.status||"").toLowerCase()!=="ideal")} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
