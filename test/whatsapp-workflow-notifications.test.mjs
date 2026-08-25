@@ -12,6 +12,8 @@ test('workflow notifications are mirrored to Meta WhatsApp recipients',()=>{
   assert.match(server,/await addTicketNotifications\(pool,recipients,rows\[0\]\.ref,`Request \$\{rows\[0\]\.ref\} was verified by/);
   assert.match(server,/\['System notification',String\(reference\|\|''\)/);
   for(const key of ['ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestIdle','requestClosed','requestOnRoad','requestVerified'])assert.match(server,new RegExp(`templateKey:'${key}'`));
+  assert.match(server,/templateKey:'requestOpened',parameters:\[rows\[0\]\.ref,equipmentDetails,rows\[0\]\.category,openedAt,rows\[0\]\.site,openedBy\]/);
+  assert.match(server,/templateKey:'requestClosed',parameters:\[rows\[0\]\.ref,equipmentDetails,rows\[0\]\.category,closedAtLabel,rows\[0\]\.maintenanceWork,closedBy\]/);
   assert.match(server,/catch\(templateError\)[\s\S]*sendMetaWhatsAppText/);
   assert.match(server,/const requestSite=canonicalSiteName\(site\)/);
   assert.match(server,/profile\.sessionRole==='super'&&profile\.permissions\.adminLevel==='Manager'&&siteMatches/);

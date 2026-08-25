@@ -12,6 +12,15 @@ test('every workflow event has a Meta utility template',()=>{
   assert.ok(Object.values(META_WORKFLOW_TEMPLATES).every(({name,body,example})=>name.startsWith('nerve_')&&body&&example.length));
 });
 
+test('request lifecycle templates include complete operational details',()=>{
+  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.name,'nerve_request_opened_details');
+  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.example.length,6);
+  assert.match(META_WORKFLOW_TEMPLATES.requestOpened.body,/Equipment \/ Vehicle Details:[\s\S]*Type of Breakdown:[\s\S]*Date & Time:[\s\S]*Location:[\s\S]*User:/);
+  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.name,'nerve_request_closed_details');
+  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.example.length,6);
+  assert.match(META_WORKFLOW_TEMPLATES.requestClosed.body,/Equipment \/ Vehicle Details:[\s\S]*Type of Breakdown:[\s\S]*Closing Date & Time:[\s\S]*Maintenance Work Details:[\s\S]*Closed By:/);
+});
+
 test('Cloud API template delivery uses approved template parameters',async()=>{
   let request;
   const result=await sendMetaWhatsAppTemplate({to:'9420476281',templateKey:'ticketResolved',parameters:['TIC/1','Admin']},{

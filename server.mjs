@@ -922,6 +922,14 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, door_num
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded"`;
 
+function requestEquipmentNotificationDetails(request={}){
+  return [
+    String(request.equipment||'').trim(),
+    String(request.door||'').trim()?`Door: ${String(request.door).trim()}`:'',
+    String(request.chassis||'').trim()?`Chassis: ${String(request.chassis).trim()}`:'',
+  ].filter(Boolean).join(' | ')||'Not available';
+}
+
 let requestDriverSyncRunning=false;
 async function syncTemporaryRequestDrivers(){
   if(!oracleConfigured||!databaseReady||requestDriverSyncRunning)return {skipped:true};
@@ -1040,8 +1048,11 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       RETURNING ${requestProjection}`,
       [ref,equipment,door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened at ${requestNotificationTime(startedAt)} for ${rows[0].site} by ${req.session.name||'Production User'}.`,
-      {templateKey:'requestOpened',parameters:[rows[0].ref,requestNotificationTime(startedAt),rows[0].site,req.session.name||'Production User']});
+    const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+    const openedAt=requestNotificationTime(startedAt);
+    const openedBy=req.session.name||'Production User';
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened for ${equipmentDetails}. Breakdown: ${rows[0].category}. Date & time: ${openedAt}. Location: ${rows[0].site}. User: ${openedBy}.`,
+      {templateKey:'requestOpened',parameters:[rows[0].ref,equipmentDetails,rows[0].category,openedAt,rows[0].site,openedBy]});
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });
@@ -1091,8 +1102,11 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
         {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User']});
     }else{
       const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed at ${requestNotificationTime(closedAt)} by ${req.session.name||'Maintenance User'}. It is now available in Closed History.`,
-        {templateKey:'requestClosed',parameters:[rows[0].ref,requestNotificationTime(closedAt),req.session.name||'Maintenance User']});
+      const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+      const closedAtLabel=requestNotificationTime(closedAt);
+      const closedBy=req.session.name||'Maintenance User';
+      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed for ${equipmentDetails}. Breakdown: ${rows[0].category}. Closing date & time: ${closedAtLabel}. Maintenance work: ${rows[0].maintenanceWork}. Closed by: ${closedBy}.`,
+        {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].category,closedAtLabel,rows[0].maintenanceWork,closedBy]});
     }
     res.json(rows[0]);
   }catch(error){next(error)}
