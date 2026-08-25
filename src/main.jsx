@@ -810,7 +810,7 @@ const masterFields = {
   "Users & employees": [
     ["login", "Login name"],
     ["employee", "Employee name"],
-    ["superior", "Superior"],
+    ["superior", "Superior", "multi-text"],
     ["site", "Location"],
     ["email", "Mail ID"],
     ["phone", "Phone no."],
@@ -1280,6 +1280,34 @@ function missingViewSubmenu(record){
   return null;
 }
 
+const splitMultiTextValues = (value = "") => String(value)
+  .split(/\s*\|\s*/)
+  .map((item) => item.trim())
+  .filter(Boolean);
+
+function MultiTextField({ name, label, value = "" }) {
+  const [values, setValues] = useState(() => {
+    const existing = splitMultiTextValues(value);
+    return existing.length ? existing : [""];
+  });
+  const updateValue = (index, nextValue) => setValues((current) => current.map((item, itemIndex) => itemIndex === index ? nextValue : item));
+  const removeValue = (index) => setValues((current) => current.length === 1 ? [""] : current.filter((_, itemIndex) => itemIndex !== index));
+  return (
+    <fieldset className="multi-text-field full">
+      <legend>{label} *</legend>
+      <div className="multi-text-values">
+        {values.map((item, index) => (
+          <div className="multi-text-row" key={`${name}-${index}`}>
+            <input name={name} value={item} onChange={(event) => updateValue(index, event.target.value)} placeholder={`Enter ${label.toLowerCase()} name`} />
+            {values.length > 1 && <button type="button" onClick={() => removeValue(index)} aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}>Remove</button>}
+          </div>
+        ))}
+      </div>
+      <button className="multi-text-add" type="button" onClick={() => setValues((current) => [...current, ""])}><Plus /> Add another superior</button>
+    </fieldset>
+  );
+}
+
 function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
@@ -1298,8 +1326,8 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
           key,
           type === "checkbox"
             ? fd.has(key)
-            : type === "multi-checkbox"
-              ? fd.getAll(key).map(String).join(" | ")
+            : type === "multi-checkbox" || type === "multi-text"
+              ? fd.getAll(key).map((value) => String(value).trim()).filter(Boolean).join(" | ")
               : String(fd.get(key) || "").trim(),
         ]),
       );
@@ -1429,7 +1457,9 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
           <form className="form master-form" onSubmit={saveManual}>
             <div className="formgrid">
               {fields.map(([key, label, type]) =>
-                name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
+                name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-text" ? (
+                  <MultiTextField key={key} name={key} label={label} />
+                ) : type === "multi-checkbox" ? (
                   <fieldset key={key} className="user-access-field full">
                     <legend>{label}</legend>
                     <p>Select exactly which {key === "masterAccess" ? "masters" : "navigation tabs"} this user can open.</p>
@@ -3182,8 +3212,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           ? privilegeSelectionValue(form.get(key))
         : type === "checkbox"
           ? form.has(key)
-          : type === "multi-checkbox"
-            ? form.getAll(key).map(String).join(" | ")
+          : type === "multi-checkbox" || type === "multi-text"
+            ? form.getAll(key).map((value) => String(value).trim()).filter(Boolean).join(" | ")
             : String(form.get(key) || "").trim(),
     ]));
     if (name === "Users & employees") applyUserRoleDefaults(updated);
@@ -3388,7 +3418,9 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <form className="form master-form" onSubmit={saveEdit}>
           <div className="formgrid">
             {fields.filter(([key]) => name !== "Privilege" || key !== "username").map(([key, label, type]) =>
-              name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-checkbox" ? (
+              name === "Users & employees" && ["site", "userType", "masterAccess", "tabAccess"].includes(key) ? null : type === "multi-text" ? (
+                <MultiTextField key={key} name={key} label={label} value={editing[key]} />
+              ) : type === "multi-checkbox" ? (
                   <fieldset key={key} className="user-access-field full">
                     <legend>{label}</legend>
                     <div>
