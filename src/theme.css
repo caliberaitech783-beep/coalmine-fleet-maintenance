@@ -309,6 +309,8 @@ textarea {
 :root[data-theme="dark"] .column-filter-close:hover,:root[data-theme="dark"] .column-filter-close:focus-visible{background:#223e64;color:#fff}
 :root[data-theme="dark"] .column-filter-search input{color:#dce7f7}
 :root[data-theme="dark"] .column-filter-values button,:root[data-theme="dark"] .column-filter-all{color:#dce7f7}
+:root[data-theme="dark"] .notification-popover,:root[data-theme="dark"] .notification-popover header,:root[data-theme="dark"] .notification-list,:root[data-theme="dark"] .notification-list>button{background:#111d30!important}
+:root[data-theme="dark"] .notification-list>button:hover,:root[data-theme="dark"] .notification-popover header button:hover,:root[data-theme="dark"] .notification-popover header>div>span{background:#1d2d47!important}
 :root[data-theme="dark"] .column-filter-all:hover,:root[data-theme="dark"] .column-filter-values button:hover,:root[data-theme="dark"] .column-filter-values button.selected{background:#223e64;color:#fff}
 :root[data-theme="dark"] .crumb .page-back{background:#17253a;border-color:#34435a;color:#c4d0e2}
 :root[data-theme="dark"] .crumb .page-back:hover:not(:disabled){background:#223e64;border-color:#55709b;color:#fff}

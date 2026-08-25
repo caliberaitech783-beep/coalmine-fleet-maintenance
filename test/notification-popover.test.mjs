@@ -10,5 +10,9 @@ test("notification menu contains a close control and isolated scrolling list",()
   assert.match(source,/className="notification-list"/);
   assert.match(styles,/\.notification-popover\{[^}]*display:flex;[^}]*overflow:hidden/);
   assert.match(styles,/\.notification-list\{[^}]*overflow-y:auto/);
+  assert.match(styles,/\.notification-popover\{[^}]*background:#fff/);
+  assert.match(styles,/\.notification-list>button\{[^}]*background:#fff!important/);
   assert.match(styles,/\.notification-list>button span\{[^}]*position:static!important;[^}]*line-height:1\.45!important/);
+  const theme=fs.readFileSync(new URL("../src/theme.css",import.meta.url),"utf8");
+  assert.match(theme,/data-theme="dark"[^\n]*\.notification-popover[^\n]*background:#111d30!important/);
 });
