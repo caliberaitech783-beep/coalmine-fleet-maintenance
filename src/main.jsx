@@ -4262,7 +4262,8 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
 function TicketPage({ session }) {
   const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null);
   const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
-  const canCreate = session?.role === "normal";
+  const isProductionManager = session?.role === "super" && session?.permissions?.adminLevel === "Manager" && managerRoleSelection(session?.permissions?.managerRoles?.length ? session.permissions.managerRoles : session?.permissions?.managerRole).includes("Production Manager");
+  const canCreate = session?.role === "normal" || isProductionManager;
   const load = async () => {
     setLoading(true);
     try {
