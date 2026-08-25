@@ -2536,7 +2536,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             )}
           </label>
           <label>
-            Date *<input name="date" type="date" value={requestDate} onChange={(event) => setRequestDate(event.target.value)} />
+            Date *<input name="date" type="date" value={requestDate} readOnly aria-readonly="true" />
           </label>
           {!normal && (
             <label>
@@ -2551,7 +2551,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               type="text"
               inputMode="numeric"
               value={requestTime}
-              onChange={(event) => setRequestTime(event.target.value)}
+              readOnly
+              aria-readonly="true"
               placeholder="HH:MM:SS"
               pattern={TIME_24H_PATTERN}
               title="Enter time in 24-hour HH:MM:SS format"
@@ -4066,8 +4067,8 @@ function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repai
         <label>Door number *<input name="door" required defaultValue={request.door || ""} /></label>
         <label>Chassis number *<input name="chassis" required defaultValue={request.chassis || ""} /></label>
         <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
-        <label>Date *<input name="date" type="date" required defaultValue={parts.date} /></label>
-        <label>Timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
+        <label>Timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save changes <ChevronRight /></button></footer>
@@ -4099,8 +4100,8 @@ function CloseRequestForm({ request, close, onSave }) {
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudio ? <audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
-        <label>Closing date *<input name="closingDate" type="date" required value={closingDate} onChange={(event)=>setClosingDate(event.target.value)} /></label>
-        <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        <label>Closing date *<input name="closingDate" type="date" required value={closingDate} readOnly aria-readonly="true" /></label>
+        <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
         <label>Status *<select name="status" disabled={ideal} value={ideal?"Ideal":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Ideal</option>}</select></label>
         <fieldset className="ideal-choice"><legend>Ideal? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>setIdeal(false)} /> No</label>{ideal&&<small>The request will remain Ideal until the Maintenance Manager approves Make on road.</small>}</fieldset>
@@ -4151,8 +4152,8 @@ function VerifyRequestForm({ request, close, onSave }) {
       </div>
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       {firstTripDone && <div className="formgrid">
-        <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
-        <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} value={time} onChange={(event) => setTime(event.target.value)} /></label>
+        <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} readOnly aria-readonly="true" /></label>
+        <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label className="full">First trip card image *
           <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
             const file = event.target.files?.[0] || null;
