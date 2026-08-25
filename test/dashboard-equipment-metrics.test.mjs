@@ -49,12 +49,12 @@ test("idle is a distinct fleet state and is not counted on-road or off-road", ()
   assert.equal(equipmentRoadStatus({status:"Idle"}), "idle");
 });
 
-test("fleet totals count vehicles separately from other equipment", () => {
+test("fleet totals use only the Equipment Master category column", () => {
   assert.deepEqual(fleetAssetCounts([
-    { group: "Excavator" },
-    { category: "Water truck" },
-    { itemName: "Office equipment" },
-    { equipmentName: "Pickup" },
-    { chassisNo: "CH-100", category: "Utility asset" },
-  ]), { equipment: 2, vehicles: 3, total: 5 });
+    { category: " EQUIPMENT ", group: "Truck" },
+    { category: "equipment", chassisNo: "CH-100" },
+    { category: "VEHICLE", itemName: "Excavator" },
+    { category: "vehicles" },
+    { category: "Utility asset", equipmentName: "Pickup" },
+  ]), { equipment: 2, vehicles: 2, total: 5 });
 });

@@ -1,24 +1,13 @@
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
 
-const vehicleWords = [
-  "vehicle", "truck", "dumper", "tipper", "tanker", "bus", "ambulance",
-  "jeep", "car", "pickup", "tractor", "trailer",
-];
-
 export function isVehicleRecord(record = {}) {
-  const classification = [
-    record.group,
-    record.category,
-    record.itemName,
-    record.equipmentName,
-  ].map(normalize).join(" ");
-  return Boolean(normalize(record.reg) || normalize(record.chassisNo))
-    || vehicleWords.some((word) => new RegExp(`\\b${word}s?\\b`, "i").test(classification));
+  return ["vehicle", "vehicles"].includes(normalize(record.category));
 }
 
 export function fleetAssetCounts(records = []) {
+  const equipment = records.filter((record) => ["equipment", "equipments"].includes(normalize(record.category))).length;
   const vehicles = records.filter(isVehicleRecord).length;
-  return { equipment: records.length - vehicles, vehicles, total: records.length };
+  return { equipment, vehicles, total: records.length };
 }
 
 export function equipmentRoadStatus(record = {}) {
