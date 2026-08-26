@@ -4172,7 +4172,7 @@ function VerifyRequestForm({ request, close, onSave }) {
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      if (firstTripDone && !tripCardFile) return alert("Upload the first-trip card image.");
+      if (!tripCardFile) return alert("Upload the first-trip card image.");
       if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
         return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
@@ -4188,9 +4188,11 @@ function VerifyRequestForm({ request, close, onSave }) {
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
       </div>
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
-      {firstTripDone && <div className="formgrid">
-        <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} readOnly aria-readonly="true" /></label>
-        <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+      <div className="formgrid">
+        {firstTripDone && <>
+          <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} readOnly aria-readonly="true" /></label>
+          <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        </>}
         <label className="full">First trip card image *
           <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
             const file = event.target.files?.[0] || null;
@@ -4201,7 +4203,7 @@ function VerifyRequestForm({ request, close, onSave }) {
           <small>JPEG, PNG or WebP · maximum 5 MB</small>
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
-      </div>}
+      </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Verify request <ChevronRight /></button></footer>
     </form>
   </Modal>;

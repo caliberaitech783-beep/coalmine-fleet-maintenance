@@ -11,6 +11,10 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(server,/A location must be assigned before this MIS user can verify requests/);
   assert.match(server,/canonicalSiteName\(eligible\.rows\[0\]\.site\)!==canonicalSiteName\(misSite\)/);
   assert.match(server,/This request belongs to a different location/);
+  assert.match(server,/const firstTripCardImage=String\(req\.body\?\.firstTripCardImage\|\|''\)/);
+  assert.match(server,/if\(!validTripCardImageDataUrl\(firstTripCardImage\)\)return res\.status\(400\)/);
+  assert.match(source,/if \(!tripCardFile\) return alert\("Upload the first-trip card image\."\)/);
+  assert.match(source,/First trip card image \*[\s\S]*name="firstTripCardImage"[\s\S]*required/);
   assert.match(manager,/"Total requests", verifiedRequests\.length/);
   assert.doesNotMatch(manager,/"Pending verification"/);
   assert.doesNotMatch(manager,/\["Verified", verifiedRequests\.length/);

@@ -1151,9 +1151,9 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const reference=String(req.params.reference||'').trim();
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
     const firstTripAt=firstTripDone?requestDateTimeValue(req.body?.firstTripDate,req.body?.firstTripTime):null;
-    const firstTripCardImage=firstTripDone?String(req.body?.firstTripCardImage||''):'';
+    const firstTripCardImage=String(req.body?.firstTripCardImage||'');
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
-    if(firstTripDone&&!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
+    if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     const misUser=await currentUserRecord(req.session);
     const misSite=String(misUser.site||misUser.location||'').trim();
     if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
