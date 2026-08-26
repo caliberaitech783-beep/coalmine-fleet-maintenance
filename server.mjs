@@ -50,6 +50,7 @@ async function migrate(){
       id BIGSERIAL PRIMARY KEY,
       reference TEXT NOT NULL UNIQUE,
       equipment_name TEXT NOT NULL DEFAULT '',
+      equipment_group TEXT NOT NULL DEFAULT '',
       requester_login TEXT NOT NULL DEFAULT '',
       door_number TEXT NOT NULL,
       registration_number TEXT NOT NULL DEFAULT '',
@@ -86,6 +87,8 @@ async function migrate(){
       ON maintenance_requests (created_at DESC);
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS equipment_name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS equipment_group TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS requester_login TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
@@ -152,6 +155,20 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS master_records_master_name_idx
       ON master_records (master_name, created_at DESC);
+    UPDATE maintenance_requests AS request
+      SET equipment_group=COALESCE(NULLIF(equipment.record_data->>'group',''),NULLIF(equipment.record_data->>'equipmentGroup',''),'')
+      FROM master_records AS equipment
+      WHERE equipment.master_name='Equipment master'
+        AND request.equipment_group=''
+        AND COALESCE(NULLIF(equipment.record_data->>'group',''),NULLIF(equipment.record_data->>'equipmentGroup',''),'')<>''
+        AND lower(trim(request.door_number))=ANY(ARRAY[
+          lower(trim(COALESCE(equipment.record_data->>'door',''))),
+          lower(trim(COALESCE(equipment.record_data->>'registration',''))),
+          lower(trim(COALESCE(equipment.record_data->>'reg',''))),
+          lower(trim(COALESCE(equipment.record_data->>'equipmentName',''))),
+          lower(trim(COALESCE(equipment.record_data->>'itemName',''))),
+          lower(trim(COALESCE(equipment.record_data->>'manufacturerSerialNo','')))
+        ]);
     CREATE TABLE IF NOT EXISTS auth_sessions (
       token UUID PRIMARY KEY,
       role TEXT NOT NULL,
@@ -913,7 +930,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-const requestProjection=`reference AS ref, equipment_name AS equipment, door_number AS door,
+const requestProjection=`reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
@@ -1034,7 +1051,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
+    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
@@ -1048,10 +1065,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedDriverName=String(driverName).trim().slice(0,200)||'Demo Driver';
     const storedDriverSource=String(driverNameSource).trim().slice(0,200)||(storedDriverName==='Demo Driver'?'Demo':'Manual');
     const {rows}=await pool.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'Open',$14,$15)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Open',$15,$16)
       RETURNING ${requestProjection}`,
-      [ref,equipment,door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
     const openedAt=requestNotificationTime(startedAt);

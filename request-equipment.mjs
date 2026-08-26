@@ -27,6 +27,7 @@ export function requestEquipmentDetails(record = {}) {
     equipment;
   return {
     equipment,
+    group: text(record.group) || text(record.equipmentGroup),
     door,
     reg,
     chassis: text(record.chassisNo) || text(record.chassis),

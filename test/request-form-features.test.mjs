@@ -14,5 +14,11 @@ test("mobile request forms enforce chassis, search, duplicate confirmation, and 
   assert.match(server, /chassis_number TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /complaint_audio TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /maintenance_audio TEXT NOT NULL DEFAULT ''/);
+  assert.match(server, /equipment_group TEXT NOT NULL DEFAULT ''/);
+  assert.match(server, /equipment_group AS "equipmentGroup"/);
+  assert.match(server, /SET equipment_group=COALESCE/);
+  assert.match(source, /equipmentGroup: equipmentDetails\.group \|\| equipmentGroup/);
+  assert.match(source, /row\.equipmentGroup \|\| row\.equipment/);
+  assert.match(source, /r\.equipmentGroup \|\| r\.equipment/);
   assert.match(server, /duplicate:true/);
 });

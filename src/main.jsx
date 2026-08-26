@@ -720,7 +720,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <b>{r.ref}</b>
                 </td>
-                <td>{r.equipment || "—"}</td>
+                <td>{r.equipmentGroup || r.equipment || "—"}</td>
                 <td>{r.door}</td>
                 <td>
                   <MapPin /> {r.site}
@@ -2416,6 +2416,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       request = {
         ref: "REQ-" + Date.now(),
         equipment: equipmentDetails.equipment,
+        equipmentGroup: equipmentDetails.group || equipmentGroup,
         door: fd.get("door"),
         site: currentLocation || "Not assigned",
         category: String(fd.get("category") || "").trim(),
@@ -4043,7 +4044,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
             const lockedIdeal = String(row.status || "").toLowerCase() === "ideal";
             return <tr key={row.ref}>
               <td><b>{row.ref}</b></td>
-              <td>{row.equipment || "—"}</td>
+              <td>{row.equipmentGroup || row.equipment || "—"}</td>
               <td>{row.door || "—"}</td>
               <td><MapPin /> {row.site || "Not assigned"}</td>
               <td><Status>{row.status || "Open"}</Status></td>
@@ -4127,7 +4128,7 @@ function CloseRequestForm({ request, close, onSave }) {
       onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Ideal" : status, ideal});
     }}>
       <div className="details request-linked-details">
-        <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
+        <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
@@ -4180,7 +4181,7 @@ function VerifyRequestForm({ request, close, onSave }) {
       onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage});
     }}>
       <div className="details request-linked-details">
-        <div><span>Equipment group</span><b>{request.equipment || "—"}</b></div>
+        <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
