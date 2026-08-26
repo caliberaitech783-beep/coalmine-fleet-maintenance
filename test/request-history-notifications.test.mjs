@@ -22,7 +22,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/rows=\{historyRows\} showReason showCreatedBy showBreakdownDays/);
   assert.match(mobileStyles,/\.normal \.table \.mobile-breakdown-table th,[\s\S]*display: table-cell/);
   assert.match(source,/rows=\{activeRequests\} showReason showCreatedBy showComplaintAudio/);
-  assert.match(source,/rows=\{visibleRows\} showReason showVerifiedBy showTurnaroundTime/);
+  assert.match(source,/rows=\{visibleRows\} showReason showClosedBy showTurnaroundTime/);
+  assert.match(source,/showVerifiedBy=\{isMis\} showTripCard=\{isMis\}/);
   assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\}/);
   assert.match(source,/showReason=\{activeManagerRole === "Production Manager"\}/);
   assert.match(access,/"Closed history"/);

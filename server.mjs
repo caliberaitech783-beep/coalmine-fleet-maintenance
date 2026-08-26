@@ -1188,6 +1188,21 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
   }catch(error){next(error)}
 });
 
+app.get('/api/requests/:reference/trip-card',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const misUser=await currentUserRecord(req.session);
+    const misSite=String(misUser.site||misUser.location||'').trim();
+    if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can view trip cards.'});
+    const {rows}=await pool.query(`SELECT site,first_trip_card_image AS image FROM maintenance_requests
+      WHERE reference=$1 AND status='Closed' AND verified_at IS NOT NULL`,[reference]);
+    if(!rows.length)return res.status(404).json({error:'Verified closed request not found.'});
+    if(canonicalSiteName(rows[0].site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
+    if(!validTripCardImageDataUrl(rows[0].image))return res.status(404).json({error:'Trip-card image is not available.'});
+    res.json({image:rows[0].image});
+  }catch(error){next(error)}
+});
+
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
     const superCanView=(master)=>req.session.role==='super'&&(accessAllows(req.session.permissions?.masterAccess,master)||accessAllows(req.session.permissions?.mobileMasterAccess,master));

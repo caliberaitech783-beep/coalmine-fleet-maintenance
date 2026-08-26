@@ -15,6 +15,14 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(server,/if\(!validTripCardImageDataUrl\(firstTripCardImage\)\)return res\.status\(400\)/);
   assert.match(source,/if \(!tripCardFile\) return alert\("Upload the first-trip card image\."\)/);
   assert.match(source,/First trip card image \*[\s\S]*name="firstTripCardImage"[\s\S]*required/);
+  assert.match(source,/showClosedBy && <th>Closed by<\/th>/);
+  assert.match(source,/showClosedBy && <td>\{row\.closedBy \|\| "—"\}<\/td>/);
+  assert.match(source,/showTripCard && <th>Trip card image<\/th>/);
+  assert.match(source,/<TripCardCell request=\{row\} \/>/);
+  assert.match(source,/tab === "requests"[\s\S]*showReason showClosedBy showTurnaroundTime/);
+  assert.match(source,/showVerifiedBy=\{isMis\} showTripCard=\{isMis\}/);
+  assert.match(server,/app\.get\('\/api\/requests\/:reference\/trip-card'/);
+  assert.match(server,/first_trip_card_image AS image/);
   assert.match(manager,/"Total requests", verifiedRequests\.length/);
   assert.doesNotMatch(manager,/"Pending verification"/);
   assert.doesNotMatch(manager,/\["Verified", verifiedRequests\.length/);
