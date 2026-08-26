@@ -4184,7 +4184,6 @@ function CloseRequestForm({ request, close, onSave }) {
 function VerifyRequestForm({ request, close, onSave }) {
   const today = requestStartParts("");
   const [firstTripDone, setFirstTripDone] = useState(false);
-  const [time, setTime] = useState(today.time);
   const [tripCardFile, setTripCardFile] = useState(null);
   const [tripCardPreview, setTripCardPreview] = useState("");
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
@@ -4216,8 +4215,8 @@ function VerifyRequestForm({ request, close, onSave }) {
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       <div className="formgrid">
         {firstTripDone && <>
-          <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} readOnly aria-readonly="true" /></label>
-          <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+          <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
+          <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
         </>}
         <label className="full">First trip card image *
           <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
