@@ -8,5 +8,5 @@ test("maintenance users can play production complaint audio", () => {
   assert.match(source, /showComplaintAudio && <th>Complaint audio<\/th>/);
   assert.match(source, /row\.complaintAudio \? <audio controls preload="none" src=\{row\.complaintAudio\}/);
   assert.match(source, /Production complaint audio/);
-  assert.match(source, /isMaintenance[\s\S]*MobileWorkflowTable rows=\{activeRequests\} showComplaintAudio/);
+  assert.match(source, /isMaintenance[\s\S]*MobileWorkflowTable rows=\{activeRequests\}[\s\S]*showComplaintAudio/);
 });

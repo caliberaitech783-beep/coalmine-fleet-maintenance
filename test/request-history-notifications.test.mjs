@@ -11,9 +11,16 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/Closed history/);
   assert.match(source,/activeRequests=requests\.filter[\s\S]*!=="closed"/);
   assert.match(source,/historyRows=isMis\?closedRequests/);
-  assert.match(source,/showReason=\{isMaintenance\} showComplaintAudio=\{isMaintenance\}/);
   assert.match(source,/showReason && <th>Reason<\/th>/);
   assert.match(source,/showReason && <td>\{row\.complaint \|\| "—"\}<\/td>/);
+  assert.match(source,/showCreatedBy && <th>Created by<\/th>/);
+  assert.match(source,/showCreatedBy && <td>\{row\.owner \|\| row\.requesterLogin \|\| "—"\}<\/td>/);
+  assert.match(source,/showVerifiedBy && <th>Verified by<\/th>/);
+  assert.match(source,/showVerifiedBy && <td>\{row\.verifiedBy \|\| "—"\}<\/td>/);
+  assert.match(source,/rows=\{activeRequests\} showReason showCreatedBy showBreakdownDays/);
+  assert.match(source,/rows=\{activeRequests\} showReason showCreatedBy showComplaintAudio/);
+  assert.match(source,/rows=\{visibleRows\} showReason showVerifiedBy showTurnaroundTime/);
+  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\}/);
   assert.match(source,/showReason=\{activeManagerRole === "Production Manager"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);

@@ -681,7 +681,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, onApproveIdeal }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, onApproveIdeal }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
@@ -692,7 +692,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ["site", "Site location"],
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
-      ["category", "Repair category"], ...(showReason ? [["complaint", "Reason"]] : []), ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
+      ["category", "Repair category"], ...(showReason ? [["complaint", "Reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal ? [["idealAction", "Action"]] : []),
     ],
     displayRows = showBreakdownDays
@@ -732,6 +732,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 )}
                 <td>{r.category}</td>
                 {showReason && <td>{r.complaint || "—"}</td>}
+                {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 <td>{formatTwelveHourDateTime(r.start)}</td>
                 <td>{r.hours}</td>
                 <td>
@@ -4022,7 +4023,7 @@ function DailyRemarkForm({ request, close, onSave }) {
   </div></Modal>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -4033,7 +4034,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
       <table className="workflow-table">
         <thead><tr>
           <th>Job reference</th><th>Equipment group</th><th>Door no.</th><th>Site location</th>
-          <th>Status</th>{showReason && <th>Reason</th>}<th>Started</th>{showTurnaroundTime && <th>Turn around time (TAT)</th>}<th>Days of breakdown</th><th>Daily remarks</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
+          <th>Status</th>{showReason && <th>Reason</th>}{showCreatedBy && <th>Created by</th>}{showVerifiedBy && <th>Verified by</th>}<th>Started</th>{showTurnaroundTime && <th>Turn around time (TAT)</th>}<th>Days of breakdown</th><th>Daily remarks</th>{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {rows.length ? rows.map((row) => {
@@ -4046,6 +4047,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
               <td><MapPin /> {row.site || "Not assigned"}</td>
               <td><Status>{row.status || "Open"}</Status></td>
               {showReason && <td>{row.complaint || "—"}</td>}
+              {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}
+              {showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}
               <td>{formatTwelveHourDateTime(row.start)}</td>
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
@@ -4061,7 +4064,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div>
@@ -4390,12 +4393,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
       </div>
       {tab === "tickets" && <TicketPage session={session} />}
-      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showCreatedBy showBreakdownDays /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showReason showCreatedBy showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && String(row.status||"").toLowerCase()!=="ideal")} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
-      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
+      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showReason showVerifiedBy showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showVerifiedBy={isMis} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
