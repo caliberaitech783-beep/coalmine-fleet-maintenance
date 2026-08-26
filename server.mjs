@@ -986,22 +986,22 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
+    let scopedSite=null;
     if(req.session.role==='normal'&&req.session.assignedRole==='MIS User'){
       const misUser=await currentUserRecord(req.session);
-      const misSite=String(misUser.site||misUser.location||'').trim();
-      query=misSite
-        ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE lower(trim(site))=lower(trim($1)) ORDER BY created_at DESC`,values:[misSite]}
-        : {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE FALSE`,values:[]};
+      scopedSite=String(misUser.site||misUser.location||'').trim();
     }
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
       const manager=await currentUserRecord(req.session);
-      const managerSite=String(manager.site||manager.location||'').trim();
-      query=managerSite
-        ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE lower(trim(site))=lower(trim($1)) ORDER BY created_at DESC`,values:[managerSite]}
-        : {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE FALSE`,values:[]};
+      scopedSite=String(manager.site||manager.location||'').trim();
     }
     const {rows}=await pool.query(query);
-    res.json(await attachDailyRemarks(rows));
+    const visibleRows=scopedSite===null
+      ? rows
+      : scopedSite
+        ? rows.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(scopedSite))
+        : [];
+    res.json(await attachDailyRemarks(visibleRows));
   }catch(error){next(error)}
 });
 
@@ -1157,9 +1157,12 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const misUser=await currentUserRecord(req.session);
     const misSite=String(misUser.site||misUser.location||'').trim();
     if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
+    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status='Closed' AND verified_at IS NULL`,[reference]);
+    if(!eligible.rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
+    if(canonicalSiteName(eligible.rows[0].site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
       first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5 WHERE reference=$6 AND status='Closed' AND verified_at IS NULL
-      AND lower(trim(site))=lower(trim($7)) RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference,misSite]);
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`,

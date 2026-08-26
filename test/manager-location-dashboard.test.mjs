@@ -5,7 +5,8 @@ import test from "node:test";
 test("manager requests, equipment, and dashboard metrics are scoped to the assigned location", () => {
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
-  assert.match(server,/adminLevel==='Manager'[\s\S]*maintenance_requests WHERE lower\(trim\(site\)\)=lower\(trim\(\$1\)\)/);
+  assert.match(server,/adminLevel==='Manager'[\s\S]*scopedSite=String\(manager\.site\|\|manager\.location/);
+  assert.match(server,/rows\.filter\(\(row\)=>canonicalSiteName\(row\.site\)===canonicalSiteName\(scopedSite\)\)/);
   assert.match(server,/managerRecord&&row\.master_name==='Equipment master'/);
   assert.match(server,/managerSite=canonicalSiteName\(managerRecord\?\.site\|\|managerRecord\?\.location\|\|''\)/);
   assert.match(server,/equipmentSite=canonicalSiteName\(record\.currentLocation\|\|record\.site\|\|record\.location\|\|''\)/);
