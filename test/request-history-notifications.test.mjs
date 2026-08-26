@@ -4,6 +4,7 @@ import test from "node:test";
 
 test("request lifecycle has reason/status columns, closed history, and stakeholder notifications",()=>{
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
+  const mobileStyles=fs.readFileSync(new URL("../src/mobile-workflow.css",import.meta.url),"utf8");
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const access=fs.readFileSync(new URL("../mobile-access.mjs",import.meta.url),"utf8");
   assert.match(source,/showReason \? \[\["complaint", "Reason"\]\]/);
@@ -18,6 +19,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/showVerifiedBy && <th>Verified by<\/th>/);
   assert.match(source,/showVerifiedBy && <td>\{row\.verifiedBy \|\| "—"\}<\/td>/);
   assert.match(source,/rows=\{activeRequests\} showReason showCreatedBy showBreakdownDays/);
+  assert.match(source,/rows=\{historyRows\} showReason showCreatedBy showBreakdownDays/);
+  assert.match(mobileStyles,/\.normal \.table \.mobile-breakdown-table th,[\s\S]*display: table-cell/);
   assert.match(source,/rows=\{activeRequests\} showReason showCreatedBy showComplaintAudio/);
   assert.match(source,/rows=\{visibleRows\} showReason showVerifiedBy showTurnaroundTime/);
   assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\}/);
