@@ -26,8 +26,7 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const server = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
   assert.match(source, /function TicketPage/);
-  assert.match(source, /const isProductionManager = session\?\.role === "super"[\s\S]*includes\("Production Manager"\)/);
-  assert.match(source, /const canCreate = session\?\.role === "normal" \|\| isProductionManager/);
+  assert.match(source, /const canCreate = Boolean\(session\?\.token\)/);
   assert.match(source, /function TicketCreateForm/);
   const createForm = source.slice(source.indexOf("function TicketCreateForm"), source.indexOf("function TicketAttachment"));
   assert.doesNotMatch(createForm, /User name|name="category"/);
@@ -52,5 +51,7 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   assert.match(source, /className="normal-header-nav"[\s\S]*<Ticket \/> Tickets/);
   assert.match(server, /Only an Admin can resolve tickets/);
   assert.match(server, /managerRoleSelection\([\s\S]*\.map\(managerUserRole\)/);
-  assert.match(server, /managerRoles\.includes\('Production Manager'\)[\s\S]*managerUserRole\('Production Manager'\)/);
+  assert.doesNotMatch(server, /Managers and Admins have view-only ticket intake access/);
+  assert.match(server, /adminLevel==='Manager'&&managerRoles\.length[\s\S]*managerUserRole\(managerRoles\[0\]\)/);
+  assert.match(server, /const roleCategory=String\(creatorRole\)\.replace/);
 });

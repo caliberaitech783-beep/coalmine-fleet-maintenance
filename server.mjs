@@ -792,8 +792,14 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
 app.post('/api/tickets',requireSession,async(req,res,next)=>{
   const client=await pool.connect();
   try{
-    if(req.session.role==='super')return res.status(403).json({error:'Managers and Admins have view-only ticket intake access.'});
-    const category=TICKET_CATEGORIES.includes(String(req.session.assignedRole||'').replace(/ User$/,''))?String(req.session.assignedRole).replace(/ User$/,''):'General';
+    const managerRoles=managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole);
+    const creatorRole=req.session.role==='super'
+      ? req.session.permissions?.adminLevel==='Manager'&&managerRoles.length
+        ? managerUserRole(managerRoles[0])
+        : 'Admin'
+      : String(req.session.assignedRole||'User');
+    const roleCategory=String(creatorRole).replace(/ User$/,'');
+    const category=TICKET_CATEGORIES.includes(roleCategory)?roleCategory:'General';
     const priority=['Low','Medium','High'].includes(String(req.body?.priority||''))?String(req.body.priority):'';
     const message=String(req.body?.message||'').trim();
     const messageAudio=String(req.body?.messageAudio||'');
@@ -806,12 +812,6 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
     const user=await currentUserRecord(req.session,client);
     const site=String(user.site||user.location||user.currentLocation||'Not assigned').trim()||'Not assigned';
-    const managerRoles=managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole);
-    const creatorRole=req.session.role==='super'
-      ? req.session.permissions?.adminLevel==='Manager'&&managerRoles.includes('Production Manager')
-        ? managerUserRole('Production Manager')
-        : 'Admin'
-      : String(req.session.assignedRole||'User');
     await client.query('BEGIN');
     const inserted=await client.query(`INSERT INTO crm_tickets
       (creator_login,creator_name,creator_role,site,category,priority,message,message_audio,attachment_data,attachment_name,attachment_type)
