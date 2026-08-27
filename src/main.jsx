@@ -1170,9 +1170,9 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
       <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road, idle and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
       </label>)}</div>
     </fieldset>}
-    {isManager && <fieldset className="account-role-field manager-region-field full">
+    {isDesktopUser && <fieldset className="account-role-field manager-region-field full">
       <legend>Consolidated WhatsApp report regions</legend>
-      <p>Select one or more regions, or select All. Leave every option clear for a site-only manager.</p>
+      <p>Select one or more regions, or select All. Non Admin users may leave every option clear to receive only their assigned site's report.</p>
       <div>{MANAGER_REGION_OPTIONS.map((option) => <label key={option} className={managerRegions.includes(option) ? "selected" : ""}>
         <input type="checkbox" name="managerRegion" value={option} checked={managerRegions.includes(option)} onChange={(event) => setManagerRegions((current) => {
           if(option==="All")return event.target.checked?["All"]:[];
@@ -1213,7 +1213,7 @@ function applyUserRoleDefaults(record) {
     if (record.adminLevel === "Admin") {
       record.site = "";
       record.managerRole = "";
-      record.managerRegion = "";
+      record.managerRegion = managerRegionSelection(record.managerRegion).join(" | ");
       if(!Object.prototype.hasOwnProperty.call(record,"mobileTabAccess")&&!Object.prototype.hasOwnProperty.call(record,"dashboardAccess")){
         record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
         record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");

@@ -17,6 +17,7 @@ import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUr
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
+import {buildTicketWhatsAppReport,prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
@@ -817,6 +818,71 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
   }finally{consolidatedReportRunning=false}
 }
 
+let consolidatedTicketReportRunning=false;
+async function sendScheduledConsolidatedTicketReports(now=new Date()){
+  if(!databaseReady||consolidatedTicketReportRunning)return {skipped:true};
+  if(!ticketReportDue(now))return {skipped:true,reason:'outside scheduled CRM report window'};
+  consolidatedTicketReportRunning=true;
+  try{
+    const window=ticketReportWindow(now);
+    const [{rows:ticketRows},{rows:userRows}]=await Promise.all([
+      pool.query(`SELECT reference,site,creator_name AS "user",message AS remarks,status,
+        created_at AS "openedAt",resolved_at AS "resolvedAt"
+        FROM crm_tickets
+        WHERE (created_at >= $1 AND created_at < $2 AND status <> 'Resolved')
+           OR (resolved_at >= $1 AND resolved_at < $2)`,[window.start,window.end]),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+    ]);
+    const tickets=prepareTicketReportRows(ticketRows,window.end);
+    const openTickets=tickets.filter((ticket)=>ticket.status!=='Resolved'&&!ticket.resolvedAt);
+    const closedTickets=tickets.filter((ticket)=>Boolean(ticket.resolvedAt));
+    let sent=0,failed=0,skipped=0;
+    for(const row of userRows){
+      const user=row.record_data||{};
+      const profile=resolveMobileAccess({user});
+      if(profile.sessionRole!=='super')continue;
+      const isAdmin=profile.permissions.adminLevel==='Admin';
+      const isManager=profile.permissions.adminLevel==='Manager';
+      if(!isAdmin&&!isManager)continue;
+      const login=String(user.login||'').trim().toLowerCase();
+      const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
+      if(!login)continue;
+      let scope=managerReportScope(user);
+      if(isAdmin&&scope.sites!==null&&!scope.sites.length)scope={key:'ALL',label:'All regions',sites:null};
+      if(scope.sites!==null&&!scope.sites.length){skipped++;continue}
+      const scopedOpen=openTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
+      const scopedClosed=closedTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
+      const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+        (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
+        ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
+          SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
+          WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
+        RETURNING id`,[window.slotKey,login,`CRM-${scope.key}`]);
+      if(!claim.rowCount){skipped++;continue}
+      const recipientName=String(user.employee||user.name||user.login||login);
+      let status='Sent';
+      try{
+        if(!phone)throw new Error('Phone number missing');
+        const message=buildTicketWhatsAppReport({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[message]})}
+        catch(templateError){console.warn('Consolidated CRM WhatsApp template unavailable; using text fallback:',templateError.message);await sendMetaWhatsAppText({to:phone,message})}
+        sent++;
+      }catch(error){
+        status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
+        failed++;
+        console.error(`Consolidated CRM WhatsApp report failed for ${login}:`,error.message);
+      }
+      await Promise.all([
+        pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
+        pool.query(`INSERT INTO whatsapp_alert_history
+          (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+          ['Consolidated CRM ticket report',scope.label,window.slotKey,recipientName,phone,status]),
+      ]);
+    }
+    return {slotKey:window.slotKey,sent,failed,skipped,open:openTickets.length,closed:closedTickets.length};
+  }finally{consolidatedTicketReportRunning=false}
+}
+
 async function ticketSuperRecipients(client,{creatorRole,site}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
   const adminLogins=[];
@@ -914,7 +980,7 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const recipients=await ticketSuperRecipients(client,{creatorRole,site});
     const creatorLogin=String(req.session.login||'').trim().toLowerCase();
     await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} (@${creatorLogin}) created ticket ${reference}.`,
-      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]});
+      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:false});
     await client.query('COMMIT');
     res.status(201).json(rows[0]);
     sendTicketRaisedEmail(rows[0]).catch((error)=>console.error(`Ticket email failed for ${reference}:`,error.message));
@@ -944,7 +1010,7 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
     const ticket=result.rows[0];
     const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
     await addTicketNotifications(client,[ticket.creatorLogin,...recipients.managerLogins],ticket.reference,`Ticket ${ticket.reference} was resolved by ${req.session.name||'Admin'}.`,
-      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']});
+      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},{whatsapp:false});
     await client.query('COMMIT');
     res.json(ticket);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
@@ -1569,6 +1635,9 @@ async function initializeDatabase(){
     void sendScheduledConsolidatedWhatsAppReports()
       .then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result))
       .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
+    void sendScheduledConsolidatedTicketReports()
+      .then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result))
+      .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
     if(process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID)void submitMetaWhatsAppTemplates()
       .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
       .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
@@ -1593,3 +1662,9 @@ const consolidatedWhatsAppTimer=setInterval(()=>{
     .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
 },60*1000);
 consolidatedWhatsAppTimer.unref?.();
+const consolidatedTicketWhatsAppTimer=setInterval(()=>{
+  void sendScheduledConsolidatedTicketReports()
+    .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)})
+    .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
+},60*1000);
+consolidatedTicketWhatsAppTimer.unref?.();

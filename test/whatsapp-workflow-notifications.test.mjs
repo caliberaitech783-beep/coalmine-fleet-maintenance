@@ -10,6 +10,9 @@ test('request WhatsApp alerts are consolidated while in-app notifications remain
   assert.match(server,/templateKey:'requestOpened'[\s\S]*\{whatsapp:false\}/);
   assert.match(server,/templateKey:'requestClosed'[\s\S]*\{whatsapp:false\}/);
   assert.match(server,/templateKey:'requestVerified'[\s\S]*\{whatsapp:false\}/);
+  assert.match(server,/templateKey:'ticketCreated'[\s\S]*\{whatsapp:false\}/);
+  assert.match(server,/templateKey:'ticketResolved'[\s\S]*\{whatsapp:false\}/);
+  assert.match(server,/sendScheduledConsolidatedTicketReports/);
   assert.match(server,/WhatsApp request traffic is[\s\S]*scheduled consolidated report/);
   assert.match(server,/async function sendScheduledConsolidatedWhatsAppReports/);
   assert.match(server,/whatsapp_consolidated_report_runs/);
