@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {attachRequestOems,buildConsolidatedWhatsAppReport,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from '../consolidated-whatsapp-report.mjs';
-import {managerRegionSelection,managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
+import {managerRegionSelection,managerReportScope,managerSiteSelection,reportScopeIncludesSite,sitesForManagerRegions} from '../region-scope.mjs';
 
 test('scheduled report windows follow 6, 10, 14, 18 and 22 India time',()=>{
   const six=consolidatedReportWindow(new Date('2026-08-27T00:31:00Z'));
@@ -21,6 +21,11 @@ test('manager report scope supports site, multiple regions and all regions',()=>
   assert.equal(reportScopeIncludesSite(managerReportScope({managerRegion:'WCL'}),'Majri OB'),true);
   assert.equal(reportScopeIncludesSite(managerReportScope({managerRegion:'WCL'}),'Jayant OB'),false);
   assert.equal(managerReportScope({managerRegion:'All'}).sites,null);
+  assert.deepEqual(managerSiteSelection('Sasti OB | Majri OB'),['sasti ob','majri ob']);
+  assert.ok(sitesForManagerRegions('WCL').includes('sasti ob'));
+  const selected=managerReportScope({managerRegion:'WCL',managerSites:'Sasti OB | Majri OB'});
+  assert.equal(reportScopeIncludesSite(selected,'Sasti OB'),true);
+  assert.equal(reportScopeIncludesSite(selected,'Lalpeth OB'),false);
 });
 
 test('consolidated report uses Equipment Master OEM and sorts elapsed time high to low',()=>{

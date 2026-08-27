@@ -715,6 +715,7 @@ function ticketProjection(){
 }
 
 function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
+const userManagesSite=(user,site)=>reportScopeIncludesSite(managerReportScope(user),site);
 
 async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
@@ -895,8 +896,7 @@ async function ticketSuperRecipients(client,{creatorRole,site}){
     if(profile.sessionRole!=='super')continue;
     if(profile.permissions.adminLevel==='Admin')adminLogins.push(login);
     else if(profile.permissions.managerRoles.some((role)=>managerUserRole(role)===creatorRole)){
-      const managerSite=String(user.site||user.location||'').trim().toLowerCase();
-      if(!managerSite||managerSite===String(site||'').trim().toLowerCase())managerLogins.push(login);
+      if(userManagesSite(user,site))managerLogins.push(login);
     }
   }
   return {adminLogins,managerLogins};
@@ -918,7 +918,7 @@ async function requestStakeholderLogins(client,{site,requesterLogin}){
     const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
     const siteMatches=Boolean(requestSite)&&userSite===requestSite;
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&siteMatches)recipients.push(login);
+    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&userManagesSite(user,site))recipients.push(login);
     if(profile.sessionRole==='normal'&&siteMatches&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
   }
   return [...new Set(recipients.filter(Boolean))];
@@ -929,6 +929,7 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
     const category=TICKET_CATEGORIES.includes(String(req.query.category||''))?String(req.query.category):'';
     const values=[];
     const conditions=[];
+    let managerScope=null;
     if(req.session.role!=='super'){
       values.push(String(req.session.login||'').trim().toLowerCase());
       conditions.push(`lower(creator_login)=$${values.length}`);
@@ -936,13 +937,12 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
       const user=await currentUserRecord(req.session);
       values.push(managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).map(managerUserRole));
       conditions.push(`creator_role=ANY($${values.length}::text[])`);
-      const managerSite=String(user.site||user.location||'').trim();
-      if(managerSite){values.push(managerSite);conditions.push(`lower(site)=lower($${values.length})`)}
+      managerScope=managerReportScope(user);
     }
     if(category){values.push(category);conditions.push(`category=$${values.length}`)}
     const where=conditions.length?`WHERE ${conditions.join(' AND ')}`:'';
     const {rows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets ${where} ORDER BY created_at DESC`,values);
-    res.json(rows);
+    res.json(managerScope?rows.filter((ticket)=>reportScopeIncludesSite(managerScope,ticket.site)):rows);
   }catch(error){next(error)}
 });
 
@@ -1036,7 +1036,7 @@ async function createMaintenanceReminderNotifications(){
       const siteMatches=!userSite||userSite===canonicalSiteName(request.site);
       if(profile.assignedRole==='Maintenance User'&&siteMatches)recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&siteMatches)recipients.push(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,request.site))recipients.push(login);
     }
     const newRecipients=[];
     const message=`${slot}:00 reminder: add today’s maintenance update and delay reason for ${request.reference}.`;
@@ -1143,17 +1143,19 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
-    let scopedSite=null;
+    let scopedSite=null,scopedManagerSites=null;
     if(req.session.role==='normal'&&req.session.assignedRole==='MIS User'){
       const misUser=await currentUserRecord(req.session);
       scopedSite=String(misUser.site||misUser.location||'').trim();
     }
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
       const manager=await currentUserRecord(req.session);
-      scopedSite=String(manager.site||manager.location||'').trim();
+      scopedManagerSites=managerReportScope(manager).sites;
     }
     const {rows}=await pool.query(query);
-    const visibleRows=scopedSite===null
+    const visibleRows=scopedManagerSites!==null
+      ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
+      : scopedSite===null
       ? rows
       : scopedSite
         ? rows.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(scopedSite))
@@ -1180,7 +1182,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
       const profile=resolveMobileAccess({user});const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);const siteMatches=!userSite||userSite===canonicalSiteName(eligible.rows[0].site);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
-      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&siteMatches)recipients.push(login);
+      if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&userManagesSite(user,eligible.rows[0].site))recipients.push(login);
     }
     await addTicketNotifications(pool,recipients,reference,`${req.session.name||'Maintenance User'} added a daily maintenance update for ${reference}.`,
       {templateKey:'dailyUpdate',parameters:[req.session.name||'Maintenance User',reference]},{whatsapp:false});
@@ -1259,7 +1261,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
       const recipients=[];
-      for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim();if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userSite.toLowerCase()===String(rows[0].site||'').trim().toLowerCase())recipients.push(login)}
+      for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,rows[0].site))recipients.push(login)}
       await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Ideal by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
         {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User']},{whatsapp:false});
     }else{
@@ -1279,13 +1281,13 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
     if(req.session.role!=='super'||req.session.permissions?.adminLevel!=='Manager'||!managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).includes('Maintenance Manager'))
       return res.status(403).json({error:'Only the assigned Maintenance Manager can approve an Ideal request.'});
     const manager=await currentUserRecord(req.session);
-    const managerSite=String(manager.site||manager.location||'').trim();
-    if(!managerSite)return res.status(403).json({error:'A location must be assigned to this Maintenance Manager.'});
     const reference=String(req.params.reference||'').trim();
+    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status='Ideal' AND verified_at IS NULL`,[reference]);
+    if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Ideal request is no longer awaiting your approval or is outside your assigned sites.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
       ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status='Ideal' AND verified_at IS NULL
-      AND lower(trim(site))=lower(trim($3)) RETURNING ${requestProjection}`,[req.session.name||'Maintenance Manager',reference,managerSite]);
-    if(!rows.length)return res.status(409).json({error:'This Ideal request is no longer awaiting your approval or is outside your assigned location.'});
+      RETURNING ${requestProjection}`,[req.session.name||'Maintenance Manager',reference]);
+    if(!rows.length)return res.status(409).json({error:'This Ideal request is no longer awaiting your approval.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const approvedAt=requestNotificationTime(new Date());
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Maintenance Manager'}. It is now awaiting MIS verification.`,
@@ -1351,7 +1353,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     if(!canViewEquipment&&!canViewRepairTypes)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'?await currentUserRecord(req.session):null;
-    const managerSite=canonicalSiteName(managerRecord?.site||managerRecord?.location||'');
+    const managerScope=managerRecord?managerReportScope(managerRecord):null;
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
@@ -1365,7 +1367,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
       if(managerRecord&&row.master_name==='Equipment master'){
         const equipmentSite=canonicalSiteName(record.currentLocation||record.site||record.location||'');
-        if(!managerSite||equipmentSite!==managerSite)continue;
+        if(!reportScopeIncludesSite(managerScope,equipmentSite))continue;
       }
       if(row.master_name==='Privilege'){
         const username=String(record.username||'').trim().toLowerCase();

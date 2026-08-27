@@ -12,8 +12,21 @@ export function managerRegionSelection(value){
   return [...new Set(raw.map((item)=>String(item).trim()).filter((item)=>MANAGER_REGION_OPTIONS.includes(item)))];
 }
 
+export function managerSiteSelection(value){
+  const raw=Array.isArray(value)?value:String(value||'').split(/\s*\|\s*/);
+  return [...new Set(raw.map(canonicalSiteName).filter(Boolean))];
+}
+
+export function sitesForManagerRegions(value){
+  const regions=managerRegionSelection(value);
+  const selected=regions.includes('All')?REGION_DATA:REGION_DATA.filter(({code})=>regions.includes(code));
+  return [...new Set(selected.flatMap(({sites})=>sites).map(canonicalSiteName).filter(Boolean))];
+}
+
 export function managerReportScope(user={}){
   const regions=managerRegionSelection(user.managerRegion||user.region);
+  const selectedSites=managerSiteSelection(user.managerSites);
+  if(selectedSites.length)return {key:`SITES-${selectedSites.join('+')}`,label:selectedSites.join(' + '),sites:selectedSites};
   if(regions.includes('All'))return {key:'ALL',label:'All regions',sites:null};
   if(regions.length){
     const sites=[...new Set(REGION_DATA.filter(({code})=>regions.includes(code)).flatMap(({sites})=>sites).map(canonicalSiteName).filter(Boolean))];

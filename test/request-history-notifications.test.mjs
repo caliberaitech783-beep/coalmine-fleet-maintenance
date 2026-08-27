@@ -28,7 +28,7 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/showReason=\{activeManagerRole === "Production Manager"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);
-  assert.match(server,/profile\.permissions\.adminLevel==='Manager'&&siteMatches/);
+  assert.match(server,/profile\.permissions\.adminLevel==='Manager'&&userManagesSite\(user,site\)/);
   assert.match(server,/\['Production User','Maintenance User','MIS User'\]/);
   assert.match(server,/const openedAt=requestNotificationTime\(startedAt\)/);
   assert.match(server,/Date & time: \$\{openedAt\}/);
