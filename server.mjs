@@ -17,8 +17,10 @@ import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUr
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
-import {metaWhatsAppStatus,sendMetaWhatsAppTemplate,sendMetaWhatsAppText} from './meta-whatsapp.mjs';
+import {metaWhatsAppStatus,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
+import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
+import {attachRequestOems,buildConsolidatedWhatsAppReport,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -220,6 +222,16 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS whatsapp_alert_history_created_at_idx
       ON whatsapp_alert_history (created_at DESC);
+    CREATE TABLE IF NOT EXISTS whatsapp_consolidated_report_runs (
+      id BIGSERIAL PRIMARY KEY,
+      slot_key TEXT NOT NULL,
+      recipient_login TEXT NOT NULL,
+      scope_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Sending',
+      attempts INTEGER NOT NULL DEFAULT 1,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(slot_key,recipient_login,scope_key)
+    );
     CREATE TABLE IF NOT EXISTS crm_tickets (
       id BIGSERIAL PRIMARY KEY,
       reference TEXT UNIQUE,
@@ -735,12 +747,74 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   }));
 }
 
-async function addTicketNotifications(client,recipients,reference,message,workflowTemplate){
+async function addTicketNotifications(client,recipients,reference,message,workflowTemplate,{whatsapp=true}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   for(const login of logins){
     await client.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message) VALUES ($1,$2,$3)`,[login,reference,message]);
   }
-  await sendWhatsAppNotifications(client,logins,reference,message,workflowTemplate);
+  if(whatsapp)await sendWhatsAppNotifications(client,logins,reference,message,workflowTemplate);
+}
+
+let consolidatedReportRunning=false;
+async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
+  if(!databaseReady||consolidatedReportRunning)return {skipped:true};
+  if(!consolidatedReportDue(now))return {skipped:true,reason:'outside scheduled report window'};
+  consolidatedReportRunning=true;
+  try{
+    const window=consolidatedReportWindow(now);
+    const [{rows:requestRows},{rows:equipmentRows},{rows:userRows}]=await Promise.all([
+      pool.query(`SELECT reference,equipment_name AS equipment,door_number AS door,chassis_number AS chassis,site,status,
+        owner_name AS "user",closed_by AS "closedBy",started_at AS "startedAt",closed_at AS "closedAt"
+        FROM maintenance_requests
+        WHERE (started_at >= $1 AND started_at < $2 AND status <> 'Closed')
+           OR (closed_at >= $1 AND closed_at < $2)`,[window.start,window.end]),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+    ]);
+    const enriched=prepareConsolidatedRows(attachRequestOems(requestRows,equipmentRows.map(({record_data})=>record_data||{})),window.end);
+    const openRequests=enriched.filter((request)=>request.status!=='Closed'&&!request.closedAt);
+    const closedRequests=enriched.filter((request)=>Boolean(request.closedAt));
+    let sent=0,failed=0,skipped=0;
+    for(const row of userRows){
+      const user=row.record_data||{};
+      const profile=resolveMobileAccess({user});
+      if(profile.sessionRole!=='super'||profile.permissions.adminLevel!=='Manager')continue;
+      const login=String(user.login||'').trim().toLowerCase();
+      const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
+      if(!login)continue;
+      const scope=managerReportScope(user);
+      if(scope.sites!==null&&!scope.sites.length){skipped++;continue}
+      const scopedOpen=openRequests.filter((request)=>reportScopeIncludesSite(scope,request.site));
+      const scopedClosed=closedRequests.filter((request)=>reportScopeIncludesSite(scope,request.site));
+      const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+        (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
+        ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
+          SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
+          WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
+        RETURNING id`,[window.slotKey,login,scope.key]);
+      if(!claim.rowCount){skipped++;continue}
+      const recipientName=String(user.employee||user.name||user.login||login);
+      let status='Sent';
+      try{
+        if(!phone)throw new Error('Phone number missing');
+        const message=buildConsolidatedWhatsAppReport({scopeLabel:scope.label,start:window.start,end:window.end,openRequests:scopedOpen,closedRequests:scopedClosed});
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[message]})}
+        catch(templateError){console.warn('Consolidated WhatsApp template unavailable; using text fallback:',templateError.message);await sendMetaWhatsAppText({to:phone,message})}
+        sent++;
+      }catch(error){
+        status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
+        failed++;
+        console.error(`Consolidated WhatsApp report failed for ${login}:`,error.message);
+      }
+      await Promise.all([
+        pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
+        pool.query(`INSERT INTO whatsapp_alert_history
+          (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+          ['Consolidated request report',scope.label,window.slotKey,recipientName,phone,status]),
+      ]);
+    }
+    return {slotKey:window.slotKey,sent,failed,skipped,open:openRequests.length,closed:closedRequests.length};
+  }finally{consolidatedReportRunning=false}
 }
 
 async function ticketSuperRecipients(client,{creatorRole,site}){
@@ -906,8 +980,8 @@ async function createMaintenanceReminderNotifications(){
         VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) DO NOTHING RETURNING id`,[login,request.reference,message,key]);
       if(inserted.rowCount)newRecipients.push(login);
     }
-    await sendWhatsAppNotifications(pool,newRecipients,request.reference,message,
-      {templateKey:'maintenanceReminder',parameters:[slot==='09'?'9:00 AM':'6:00 PM',request.reference]});
+    // Maintenance reminders remain available in-app. WhatsApp request traffic is
+    // delivered only through the scheduled consolidated report.
   }
 }
 
@@ -1043,7 +1117,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&siteMatches)recipients.push(login);
     }
     await addTicketNotifications(pool,recipients,reference,`${req.session.name||'Maintenance User'} added a daily maintenance update for ${reference}.`,
-      {templateKey:'dailyUpdate',parameters:[req.session.name||'Maintenance User',reference]});
+      {templateKey:'dailyUpdate',parameters:[req.session.name||'Maintenance User',reference]},{whatsapp:false});
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     res.status(201).json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
@@ -1074,7 +1148,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const openedAt=requestNotificationTime(startedAt);
     const openedBy=req.session.name||'Production User';
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened for ${equipmentDetails}. Breakdown: ${rows[0].category}. Date & time: ${openedAt}. Location: ${rows[0].site}. User: ${openedBy}.`,
-      {templateKey:'requestOpened',parameters:[rows[0].ref,equipmentDetails,rows[0].category,openedAt,rows[0].site,openedBy]});
+      {templateKey:'requestOpened',parameters:[rows[0].ref,equipmentDetails,rows[0].category,openedAt,rows[0].site,openedBy]},{whatsapp:false});
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });
@@ -1121,14 +1195,14 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       const recipients=[];
       for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});const userSite=String(user.site||user.location||'').trim();if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userSite.toLowerCase()===String(rows[0].site||'').trim().toLowerCase())recipients.push(login)}
       await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Ideal by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
-        {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User']});
+        {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User']},{whatsapp:false});
     }else{
       const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
       const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
       const closedAtLabel=requestNotificationTime(closedAt);
       const closedBy=req.session.name||'Maintenance User';
       await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed for ${equipmentDetails}. Breakdown: ${rows[0].category}. Closing date & time: ${closedAtLabel}. Maintenance work: ${rows[0].maintenanceWork}. Closed by: ${closedBy}.`,
-        {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].category,closedAtLabel,rows[0].maintenanceWork,closedBy]});
+        {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].category,closedAtLabel,rows[0].maintenanceWork,closedBy]},{whatsapp:false});
     }
     res.json(rows[0]);
   }catch(error){next(error)}
@@ -1149,7 +1223,7 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const approvedAt=requestNotificationTime(new Date());
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Maintenance Manager'}. It is now awaiting MIS verification.`,
-      {templateKey:'requestOnRoad',parameters:[rows[0].ref,approvedAt,req.session.name||'Maintenance Manager']});
+      {templateKey:'requestOnRoad',parameters:[rows[0].ref,approvedAt,req.session.name||'Maintenance Manager']},{whatsapp:false});
     res.json(rows[0]);
   }catch(error){next(error)}
 });
@@ -1183,7 +1257,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`,
-      {templateKey:'requestVerified',parameters:[rows[0].ref,req.session.name||'MIS User',firstTripDone?'Completed':'Pending']});
+      {templateKey:'requestVerified',parameters:[rows[0].ref,req.session.name||'MIS User',firstTripDone?'Completed':'Pending']},{whatsapp:false});
     res.json(rows[0]);
   }catch(error){next(error)}
 });
@@ -1492,6 +1566,12 @@ async function initializeDatabase(){
     if(oracleConfigured)void syncTemporaryRequestDrivers()
       .then(result=>console.log('Oracle request-driver sync completed.',result))
       .catch(error=>console.error('Oracle request-driver startup sync failed.',error));
+    void sendScheduledConsolidatedWhatsAppReports()
+      .then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result))
+      .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
+    if(process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID)void submitMetaWhatsAppTemplates()
+      .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
+      .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database initialization failed.';
@@ -1507,3 +1587,9 @@ const requestDriverSyncTimer=setInterval(()=>{
     .catch(error=>console.error('Scheduled Oracle request-driver sync failed.',error));
 },driverSyncIntervalMs);
 requestDriverSyncTimer.unref?.();
+const consolidatedWhatsAppTimer=setInterval(()=>{
+  void sendScheduledConsolidatedWhatsAppReports()
+    .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})
+    .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
+},60*1000);
+consolidatedWhatsAppTimer.unref?.();

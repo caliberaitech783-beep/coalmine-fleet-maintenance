@@ -8,7 +8,7 @@ test('Meta WhatsApp configuration remains disabled until token and phone id are 
 });
 
 test('every workflow event has a Meta utility template',()=>{
-  assert.deepEqual(Object.keys(META_WORKFLOW_TEMPLATES),['ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestIdle','requestClosed','requestOnRoad','requestVerified']);
+  assert.deepEqual(Object.keys(META_WORKFLOW_TEMPLATES),['consolidatedRequestReport','ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestIdle','requestClosed','requestOnRoad','requestVerified']);
   assert.ok(Object.values(META_WORKFLOW_TEMPLATES).every(({name,body,example})=>name.startsWith('nerve_')&&body&&example.length));
 });
 
@@ -38,9 +38,9 @@ test('template submission creates missing utility templates and preserves existi
     env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_BUSINESS_ACCOUNT_ID:'456'},
     fetchImpl:async(url,options={})=>{requests.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>({data:[{id:'old',name:'nerve_ticket_created',status:'APPROVED',category:'UTILITY',language:'en_US'}]})};return {ok:true,json:async()=>({id:`new-${requests.length}`,status:'PENDING'})}},
   });
-  assert.equal(results.length,9);
+  assert.equal(results.length,10);
   assert.equal(results.find((result)=>result.name==='nerve_ticket_created').existing,true);
-  assert.equal(requests.filter((request)=>request.options.method==='POST').length,8);
+  assert.equal(requests.filter((request)=>request.options.method==='POST').length,9);
   assert.ok(requests.filter((request)=>request.options.method==='POST').every((request)=>JSON.parse(request.options.body).category==='UTILITY'));
 });
 

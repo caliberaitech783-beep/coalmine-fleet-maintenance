@@ -4,20 +4,15 @@ import fs from 'node:fs';
 
 const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 
-test('workflow notifications are mirrored to Meta WhatsApp recipients',()=>{
-  assert.match(server,/async function sendWhatsAppNotifications/);
-  assert.match(server,/Nerve Center notification/);
-  assert.match(server,/await sendWhatsAppNotifications\(client,logins,reference,message,workflowTemplate\)/);
-  assert.match(server,/await sendWhatsAppNotifications\(pool,newRecipients,request\.reference,message,/);
-  assert.match(server,/await addTicketNotifications\(pool,recipients,rows\[0\]\.ref,`Request \$\{rows\[0\]\.ref\} was verified by/);
-  assert.match(server,/\['System notification',String\(reference\|\|''\)/);
-  for(const key of ['ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestIdle','requestClosed','requestOnRoad','requestVerified'])assert.match(server,new RegExp(`templateKey:'${key}'`));
-  assert.match(server,/templateKey:'requestOpened',parameters:\[rows\[0\]\.ref,equipmentDetails,rows\[0\]\.category,openedAt,rows\[0\]\.site,openedBy\]/);
-  assert.match(server,/templateKey:'requestClosed',parameters:\[rows\[0\]\.ref,equipmentDetails,rows\[0\]\.category,closedAtLabel,rows\[0\]\.maintenanceWork,closedBy\]/);
-  assert.match(server,/catch\(templateError\)[\s\S]*sendMetaWhatsAppText/);
-  assert.match(server,/const requestSite=canonicalSiteName\(site\)/);
-  assert.match(server,/profile\.sessionRole==='super'&&profile\.permissions\.adminLevel==='Manager'&&siteMatches/);
-  assert.match(server,/profile\.sessionRole==='normal'&&siteMatches&&\['Production User','Maintenance User','MIS User'\]\.includes\(profile\.assignedRole\)/);
-  assert.match(server,/Skipped - phone number missing/);
-  assert.match(server,/Failed - \$\{String\(error\?\.message/);
+test('request WhatsApp alerts are consolidated while in-app notifications remain immediate',()=>{
+  assert.match(server,/async function addTicketNotifications\(client,recipients,reference,message,workflowTemplate,\{whatsapp=true\}=\{\}\)/);
+  assert.match(server,/if\(whatsapp\)await sendWhatsAppNotifications/);
+  assert.match(server,/templateKey:'requestOpened'[\s\S]*\{whatsapp:false\}/);
+  assert.match(server,/templateKey:'requestClosed'[\s\S]*\{whatsapp:false\}/);
+  assert.match(server,/templateKey:'requestVerified'[\s\S]*\{whatsapp:false\}/);
+  assert.match(server,/WhatsApp request traffic is[\s\S]*scheduled consolidated report/);
+  assert.match(server,/async function sendScheduledConsolidatedWhatsAppReports/);
+  assert.match(server,/whatsapp_consolidated_report_runs/);
+  assert.match(server,/templateKey:'consolidatedRequestReport'/);
+  assert.match(server,/setInterval\(\(\)=>\{[\s\S]*sendScheduledConsolidatedWhatsAppReports/);
 });

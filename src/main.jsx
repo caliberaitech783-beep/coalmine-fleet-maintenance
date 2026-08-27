@@ -17,6 +17,7 @@ import {
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
+import {MANAGER_REGION_OPTIONS, REGION_DATA, managerRegionSelection} from "../region-scope.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -98,31 +99,7 @@ const storedSession = (() => {
 })();
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
-const subsidiaryData = [
-  {
-    name: "Western Coalfields Limited",
-    code: "WCL",
-    state: "MH / MP",
-    sites: [
-      "Sasti OB",
-      "Majri OB",
-      "Dhoptala OB (2nd)",
-      "Gauri Pauni OB (2nd)",
-      "Lalpeth OB",
-    ],
-  },
-  {
-    name: "Northern Coalfields Limited",
-    code: "NCL",
-    state: "MP / UP",
-    sites: [
-      "Jayant OB",
-      "Jayant OB 2nd",
-      "Dudhichua OB",
-      "Dudhichua East OB",
-    ],
-  },
-];
+const subsidiaryData = REGION_DATA;
 const nav = [
   ["Dashboard", LayoutDashboard],
   ["Tickets", Ticket],
@@ -872,6 +849,7 @@ const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
   ["adminLevel", "User authority"],
   ["managerRole", "Manager role", "multi-checkbox"],
+  ["managerRegion", "Report regions", "multi-checkbox"],
   ["read", "Read", "checkbox"],
   ["edit", "Edit", "checkbox"],
   ["delete", "Delete", "checkbox"],
@@ -1155,6 +1133,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const [roleSection, setRoleSection] = useState(initialRole && initialRole !== "User" ? "team" : "manager");
   const [userAuthority, setUserAuthority] = useState(record.adminLevel || (initialRole === "User" ? "Admin" : ""));
   const [managerRoles, setManagerRoles] = useState(managerRoleSelection(record.managerRole));
+  const [managerRegions, setManagerRegions] = useState(managerRegionSelection(record.managerRegion));
   const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
   const [mobileVisibleTabs, setMobileVisibleTabs] = useState(selectedAccessValues(record,"mobileTabAccess","tabAccess"));
   const isDesktopUser = accountRole === "User";
@@ -1191,6 +1170,18 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
       <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road, idle and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
       </label>)}</div>
     </fieldset>}
+    {isManager && <fieldset className="account-role-field manager-region-field full">
+      <legend>Consolidated WhatsApp report regions</legend>
+      <p>Select one or more regions, or select All. Leave every option clear for a site-only manager.</p>
+      <div>{MANAGER_REGION_OPTIONS.map((option) => <label key={option} className={managerRegions.includes(option) ? "selected" : ""}>
+        <input type="checkbox" name="managerRegion" value={option} checked={managerRegions.includes(option)} onChange={(event) => setManagerRegions((current) => {
+          if(option==="All")return event.target.checked?["All"]:[];
+          const withoutAll=current.filter((region)=>region!=="All");
+          return event.target.checked?[...new Set([...withoutAll,option])]:withoutAll.filter((region)=>region!==option);
+        })} />
+        <span><b>{option}</b><small>{option==="All"?"Receive reports for every configured region":`${option} sites only`}</small></span>
+      </label>)}</div>
+    </fieldset>}
     {accountRole && (!isDesktopUser || isManager) && <label>Location *
       <select name="site" required defaultValue={record.site || record.location || ""}>
         <option value="" disabled>Select location</option>
@@ -1222,6 +1213,7 @@ function applyUserRoleDefaults(record) {
     if (record.adminLevel === "Admin") {
       record.site = "";
       record.managerRole = "";
+      record.managerRegion = "";
       if(!Object.prototype.hasOwnProperty.call(record,"mobileTabAccess")&&!Object.prototype.hasOwnProperty.call(record,"dashboardAccess")){
         record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
         record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
@@ -1232,6 +1224,7 @@ function applyUserRoleDefaults(record) {
     } else {
       const selectedManagerRoles=managerRoleSelection(record.managerRole);
       record.managerRole=selectedManagerRoles.join(" | ");
+      record.managerRegion=managerRegionSelection(record.managerRegion).join(" | ");
       if(!selectedManagerRoles.length)return record;
       const tabs = new Set(String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
       tabs.add("Dashboard");
@@ -1256,6 +1249,7 @@ function applyUserRoleDefaults(record) {
     record.userType = "Mobile User";
     record.adminLevel = "";
     record.managerRole = "";
+    record.managerRegion = "";
     record.masterAccess = "";
     record.tabAccess = "";
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[field] = ""; });
