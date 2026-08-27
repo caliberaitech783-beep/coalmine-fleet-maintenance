@@ -17,5 +17,7 @@ test('request WhatsApp alerts are consolidated while in-app notifications remain
   assert.match(server,/async function sendScheduledConsolidatedWhatsAppReports/);
   assert.match(server,/whatsapp_consolidated_report_runs/);
   assert.match(server,/templateKey:'consolidatedRequestReport'/);
+  assert.match(server,/sendScheduledConsolidatedWhatsAppReports[\s\S]*const isAdmin=profile\.permissions\.adminLevel==='Admin';[\s\S]*if\(!isAdmin&&!isManager\)continue;/);
+  assert.match(server,/sendScheduledConsolidatedWhatsAppReports[\s\S]*if\(isAdmin&&scope\.sites!==null&&!scope\.sites\.length\)scope=\{key:'ALL',label:'All regions',sites:null\};/);
   assert.match(server,/setInterval\(\(\)=>\{[\s\S]*sendScheduledConsolidatedWhatsAppReports/);
 });

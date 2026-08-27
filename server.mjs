@@ -780,11 +780,15 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
     for(const row of userRows){
       const user=row.record_data||{};
       const profile=resolveMobileAccess({user});
-      if(profile.sessionRole!=='super'||profile.permissions.adminLevel!=='Manager')continue;
+      if(profile.sessionRole!=='super')continue;
+      const isAdmin=profile.permissions.adminLevel==='Admin';
+      const isManager=profile.permissions.adminLevel==='Manager';
+      if(!isAdmin&&!isManager)continue;
       const login=String(user.login||'').trim().toLowerCase();
       const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       if(!login)continue;
-      const scope=managerReportScope(user);
+      let scope=managerReportScope(user);
+      if(isAdmin&&scope.sites!==null&&!scope.sites.length)scope={key:'ALL',label:'All regions',sites:null};
       if(scope.sites!==null&&!scope.sites.length){skipped++;continue}
       const scopedOpen=openRequests.filter((request)=>reportScopeIncludesSite(scope,request.site));
       const scopedClosed=closedRequests.filter((request)=>reportScopeIncludesSite(scope,request.site));
