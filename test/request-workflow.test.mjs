@@ -10,6 +10,7 @@ test("accepts a complete India date and time for request workflow actions", () =
 test("locks verified and closed requests from normal edits", () => {
   assert.equal(requestMayBeChanged({status: "Open"}), true);
   assert.equal(requestMayBeChanged({status: "Closed"}), false);
+  assert.equal(requestMayBeChanged({status: "Idle"}), false);
   assert.equal(requestMayBeChanged({status: "Ideal"}), false);
   assert.equal(requestMayBeChanged({verifiedAt: "2026-08-14 14:00"}), false);
 });

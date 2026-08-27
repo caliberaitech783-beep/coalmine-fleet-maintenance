@@ -47,3 +47,15 @@ test('consolidated report uses Equipment Master OEM and sorts elapsed time high 
   assert.ok(message.indexOf('REQ-OLD')<message.indexOf('REQ-NEW'));
   assert.match(message,/OEM: Komatsu/);
 });
+
+test('Idle requests include their reason in consolidated reports',()=>{
+  const end=new Date('2026-08-27T00:30:00Z');
+  const message=buildConsolidatedWhatsAppReport({
+    scopeLabel:'SASTI',
+    start:new Date('2026-08-26T20:30:00Z'),
+    end,
+    openRequests:prepareConsolidatedRows([{reference:'REQ-IDLE',site:'SASTI',door:'HP2',startedAt:'2026-08-26T22:30:00Z',status:'Idle',idleReason:'No driver'}],end),
+    closedRequests:[],
+  });
+  assert.match(message,/Status: Idle \| Idle reason: No driver/);
+});

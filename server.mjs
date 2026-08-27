@@ -65,6 +65,7 @@ async function migrate(){
       ideal_requested_by TEXT NOT NULL DEFAULT '',
       ideal_approved_at TIMESTAMPTZ,
       ideal_approved_by TEXT NOT NULL DEFAULT '',
+      idle_reason TEXT NOT NULL DEFAULT '',
       complaint_audio TEXT NOT NULL DEFAULT '',
       superior_name TEXT NOT NULL DEFAULT '',
       site TEXT NOT NULL DEFAULT 'Not assigned',
@@ -110,6 +111,9 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS ideal_approved_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS ideal_approved_by TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS idle_reason TEXT NOT NULL DEFAULT '';
+    UPDATE maintenance_requests SET status='Idle' WHERE status='Ideal';
     UPDATE maintenance_requests SET driver_name_source='Legacy'
       WHERE driver_name_source='' AND driver_name<>'';
     ALTER TABLE maintenance_requests
@@ -765,7 +769,7 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
   try{
     const window=consolidatedReportWindow(now);
     const [{rows:requestRows},{rows:equipmentRows},{rows:userRows}]=await Promise.all([
-      pool.query(`SELECT reference,equipment_name AS equipment,door_number AS door,chassis_number AS chassis,site,status,
+      pool.query(`SELECT reference,equipment_name AS equipment,door_number AS door,chassis_number AS chassis,site,status,idle_reason AS "idleReason",
         owner_name AS "user",closed_by AS "closedBy",started_at AS "startedAt",closed_at AS "closedAt"
         FROM maintenance_requests
         WHERE (started_at >= $1 AND started_at < $2 AND status <> 'Closed')
@@ -1078,7 +1082,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
-  status, owner_name AS owner, requester_login AS "requesterLogin",
+  status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "closedAt",
@@ -1174,7 +1178,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     const remark=String(req.body?.remark||'').trim();
     const delayReason=String(req.body?.delayReason||'').trim();
     if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and the reason for delay.'});
-    const eligible=await pool.query(`SELECT reference,site,requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Ideal')`,[reference]);
+    const eligible=await pool.query(`SELECT reference,site,requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal')`,[reference]);
     if(!eligible.rows.length)return res.status(409).json({error:'Daily remarks are available only while the request is open.'});
     const existingToday=await pool.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
@@ -1232,7 +1236,7 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     if(!reference||!door||!complaint||!String(chassis).trim())return res.status(400).json({error:'Door number, chassis number and complaint are required.'});
     const startedAt=parseIndiaRequestDateTime(start);
     const {rows}=await pool.query(`UPDATE maintenance_requests SET equipment_name=$1,door_number=$2,registration_number=$3,chassis_number=$4,
-      site=$5,category=$6,complaint=$7,started_at=$8 WHERE reference=$9 AND status NOT IN ('Closed','Ideal') AND verified_at IS NULL
+      site=$5,category=$6,complaint=$7,started_at=$8 WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
       RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,reference]);
     if(!rows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
     res.json(rows[0]);
@@ -1248,26 +1252,28 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const maintenanceAudio=String(req.body?.maintenanceAudio||'');
     const status=String(req.body?.status||'Closed').trim();
     const ideal=req.body?.ideal===true||String(req.body?.ideal||'').toLowerCase()==='true';
+    const idleReason=String(req.body?.idleReason||'').trim();
     const closedAt=requestDateTimeValue(closingDate,closingTime);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
+    if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
     if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
     const {rows}=ideal
-      ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status='Ideal',
-          ideal_requested_at=NOW(),ideal_requested_by=$3,ideal_approved_at=NULL,ideal_approved_by=''
-          WHERE reference=$4 AND status NOT IN ('Closed','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
-          [maintenanceWork,maintenanceAudio,req.session.name||'Maintenance User',reference])
+      ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status='Idle',idle_reason=$3,
+          ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
+          WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+          [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference])
       : await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,status=$5
-          WHERE reference=$6 AND status NOT IN ('Closed','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+          WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
           [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,reference]);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
       const recipients=[];
       for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,rows[0].site))recipients.push(login)}
-      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Ideal by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
-        {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User']},{whatsapp:false});
+      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
+        {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User',rows[0].idleReason]},{whatsapp:false});
     }else{
       const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
       const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
@@ -1283,15 +1289,15 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
 app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,next)=>{
   try{
     if(req.session.role!=='super'||req.session.permissions?.adminLevel!=='Manager'||!managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).includes('Maintenance Manager'))
-      return res.status(403).json({error:'Only the assigned Maintenance Manager can approve an Ideal request.'});
+      return res.status(403).json({error:'Only the assigned Maintenance Manager can approve an Idle request.'});
     const manager=await currentUserRecord(req.session);
     const reference=String(req.params.reference||'').trim();
-    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status='Ideal' AND verified_at IS NULL`,[reference]);
-    if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Ideal request is no longer awaiting your approval or is outside your assigned sites.'});
+    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
+    if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
-      ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status='Ideal' AND verified_at IS NULL
+      ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL
       RETURNING ${requestProjection}`,[req.session.name||'Maintenance Manager',reference]);
-    if(!rows.length)return res.status(409).json({error:'This Ideal request is no longer awaiting your approval.'});
+    if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your approval.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const approvedAt=requestNotificationTime(new Date());
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Maintenance Manager'}. It is now awaiting MIS verification.`,
@@ -1303,8 +1309,8 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
 app.delete('/api/requests/:reference',requireSession,requirePermission('deleteRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
-    const result=await pool.query(`DELETE FROM maintenance_requests WHERE reference=$1 AND verified_at IS NULL AND status<>'Ideal'`,[reference]);
-    if(!result.rowCount)return res.status(409).json({error:'Verified or Ideal requests cannot be deleted, or the request no longer exists.'});
+    const result=await pool.query(`DELETE FROM maintenance_requests WHERE reference=$1 AND verified_at IS NULL AND status NOT IN ('Idle','Ideal')`,[reference]);
+    if(!result.rowCount)return res.status(409).json({error:'Verified or Idle requests cannot be deleted, or the request no longer exists.'});
     res.status(204).end();
   }catch(error){next(error)}
 });

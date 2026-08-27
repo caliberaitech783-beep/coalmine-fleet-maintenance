@@ -70,7 +70,7 @@ test("live dashboard availability overlays requests on imported equipment withou
   const requests = [
     { equipment: "D23 - 07339", chassis: "7339", status: "Open" },
     { equipment: "HP12 - 10016", chassis: "JJ202405310016", status: "Closed" },
-    { equipment: "D16 - 24964", chassis: "24964", status: "Ideal" },
+    { equipment: "D16 - 24964", chassis: "24964", status: "Idle" },
   ];
   assert.deepEqual(liveEquipmentMetrics(equipment, requests), {
     total: 4,

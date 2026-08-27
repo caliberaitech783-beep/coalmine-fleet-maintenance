@@ -2,19 +2,24 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-test("Ideal requests require an assigned-site Maintenance Manager approval before MIS",()=>{
+test("Idle requests require a reason and assigned-site Maintenance Manager approval before MIS",()=>{
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const client=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   assert.match(server,/ideal_requested_at TIMESTAMPTZ/);
-  assert.match(server,/status='Ideal'/);
+  assert.match(server,/idle_reason TEXT NOT NULL DEFAULT ''/);
+  assert.match(server,/status='Idle',idle_reason=\$3/);
+  assert.match(server,/\['No driver','No work'\]\.includes\(idleReason\)/);
   assert.match(server,/managerRoleSelection\([\s\S]*\.includes\('Maintenance Manager'\)/);
   assert.match(server,/userManagesSite\(manager,eligible\.rows\[0\]\.site\)/);
   assert.match(server,/status='Closed',closed_at=NOW\(\)/);
   assert.match(server,/awaiting MIS verification/);
-  assert.match(server,/status NOT IN \('Closed','Ideal'\)/);
-  assert.match(client,/Ideal approvals \(\{idealRows\.length\}\)/);
+  assert.match(server,/status NOT IN \('Closed','Idle','Ideal'\)/);
+  assert.match(client,/Idle approvals \(\{idealRows\.length\}\)/);
   assert.match(client,/Make on road/);
   assert.match(client,/name="idealChoice"/);
-  assert.match(client,/status: ideal \? "Ideal"/);
-  assert.match(client,/includes\("was marked Ideal"\)/);
+  assert.match(client,/status: ideal \? "Idle"/);
+  assert.match(client,/Idle reason \*/);
+  assert.match(client,/<option>No driver<\/option><option>No work<\/option>/);
+  assert.match(client,/includes\("was marked Idle"\)/);
+  assert.match(client,/row\.idleReason \|\| "—"/);
 });

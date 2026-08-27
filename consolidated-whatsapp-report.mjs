@@ -72,7 +72,9 @@ const recordLines=(request,index,closed=false)=>[
   `   Request: ${request.reference||request.ref||'—'}`,
   `   User: ${request.user||request.owner||'Not assigned'}`,
   `   OEM: ${request.oem||'Not assigned'}`,
-  closed?`   Closed by: ${request.closedBy||'Not assigned'}`:`   Status: ${request.status||'Open'}`,
+  closed
+    ? `   Closed by: ${request.closedBy||'Not assigned'}`
+    : `   Status: ${request.status||'Open'}${String(request.status||'').toLowerCase()==='idle'?` | Idle reason: ${request.idleReason||'Not assigned'}`:''}`,
 ].join('\n');
 
 export function buildConsolidatedWhatsAppReport({scopeLabel='Site',start,end,openRequests=[],closedRequests=[],maxLength=3900}){

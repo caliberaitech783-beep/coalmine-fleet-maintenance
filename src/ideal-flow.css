@@ -36,6 +36,7 @@
   line-height: 1.35;
 }
 
+.status.idle,
 .status.ideal {
   background: #fff2e5;
   color: #c8782d;
