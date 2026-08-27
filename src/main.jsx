@@ -5,7 +5,7 @@ import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases, openCasesBySite } from "../dashboard-open-cases.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
@@ -567,7 +567,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const selectedSites = selectedRegion?.sites || [];
   const visibleEquipment = selectedRegion ? equipmentRecords.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : equipmentRecords;
   const visibleBreakdowns = selectedRegion ? requests.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : requests;
-  const kpis = equipmentMetrics(visibleEquipment);
+  const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
   const statusCounts = [
     ["On road", kpis.onRoad, "operational"],
     ["Idle", kpis.idle, "idle"],

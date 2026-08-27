@@ -36,3 +36,43 @@ export function equipmentMetrics(records = []) {
       : 0,
   };
 }
+
+const identityValues = (record = {}) => [
+  record.manufacturerSerialNo,
+  record.chassisNo,
+  record.chassis,
+  record.door,
+  record.equipmentName,
+  record.equipment,
+  record.reg,
+  record.registration,
+].map(normalize).filter(Boolean);
+
+function requestMatchesEquipment(request = {}, equipment = {}) {
+  const equipmentValues = new Set(identityValues(equipment));
+  return identityValues(request).some((value) => equipmentValues.has(value));
+}
+
+export function liveEquipmentRoadStatus(record = {}, requests = []) {
+  const matchingRequests = requests.filter((request) =>
+    normalize(request.status) !== "closed" && requestMatchesEquipment(request, record));
+  if (matchingRequests.some((request) => !["ideal", "idle"].includes(normalize(request.status)))) return "offroad";
+  if (matchingRequests.some((request) => ["ideal", "idle"].includes(normalize(request.status)))) return "idle";
+  const storedStatus = equipmentRoadStatus(record);
+  return storedStatus === "unknown" ? "onroad" : storedStatus;
+}
+
+export function liveEquipmentMetrics(records = [], requests = []) {
+  const statuses = records.map((record) => liveEquipmentRoadStatus(record, requests));
+  const onRoad = statuses.filter((status) => status === "onroad").length;
+  const offRoad = statuses.filter((status) => status === "offroad").length;
+  const idle = statuses.filter((status) => status === "idle").length;
+  return {
+    total: records.length,
+    onRoad,
+    offRoad,
+    idle,
+    unknown: records.length - onRoad - offRoad - idle,
+    availability: records.length ? Math.round((onRoad / records.length) * 100) : 0,
+  };
+}

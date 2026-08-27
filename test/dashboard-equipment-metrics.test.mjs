@@ -4,6 +4,7 @@ import {
   equipmentMetrics,
   equipmentRoadStatus,
   fleetAssetCounts,
+  liveEquipmentMetrics,
 } from "../dashboard-equipment-metrics.mjs";
 
 test("dashboard equipment totals use all persisted master records", () => {
@@ -57,4 +58,26 @@ test("fleet totals use only the Equipment Master category column", () => {
     { category: "vehicles" },
     { category: "Utility asset", equipmentName: "Pickup" },
   ]), { equipment: 2, vehicles: 2, total: 5 });
+});
+
+test("live dashboard availability overlays requests on imported equipment without fleet statuses", () => {
+  const equipment = [
+    { equipmentName: "D23 - 07339", chassisNo: "7339", status: "" },
+    { equipmentName: "HP12 - 10016", chassisNo: "JJ202405310016", status: "" },
+    { equipmentName: "VPC60 - 80081", chassisNo: "80081", status: "Idle" },
+    { equipmentName: "D16 - 24964", chassisNo: "24964", status: "" },
+  ];
+  const requests = [
+    { equipment: "D23 - 07339", chassis: "7339", status: "Open" },
+    { equipment: "HP12 - 10016", chassis: "JJ202405310016", status: "Closed" },
+    { equipment: "D16 - 24964", chassis: "24964", status: "Ideal" },
+  ];
+  assert.deepEqual(liveEquipmentMetrics(equipment, requests), {
+    total: 4,
+    onRoad: 1,
+    offRoad: 1,
+    idle: 2,
+    unknown: 0,
+    availability: 25,
+  });
 });
