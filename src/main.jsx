@@ -469,13 +469,14 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {n}
           </button></div>
         ))}
+        {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button className={active === "Admin locks" ? "active" : ""} onClick={() => selectPage("Admin locks")}><ShieldCheck />Admin locks</button></div>}
       </nav>
       <div className="user">
         <div>
           <UserRound />
         </div>
         <span>
-          <b>{permissions.adminLevel === "Manager" ? permissions.managerRoles?.join(" · ") || permissions.managerRole || "Manager" : "Super User"}</b>
+          <b>{permissions.adminLevel === "Manager" ? permissions.managerRoles?.join(" · ") || permissions.managerRole || "Manager" : permissions.adminLevel === "Super Admin" ? "Super Admin" : "Admin"}</b>
           <small>{[session?.name || (permissions.adminLevel === "Manager" ? "Manager" : "Administrator"), profileLocation].filter(Boolean).join(" · ")}</small>
         </span>
         <button onClick={logout}>
@@ -1127,7 +1128,7 @@ function OperationalViewMenuFields({record={},view="desktop",role=""}){
   </section>;
 }
 
-function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
+function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdmin = false }) {
   const initialRole = String(record.userType || "").toLowerCase().includes("super")
     ? "User"
     : privilegeSelectionValue(record.userGroup);
@@ -1143,7 +1144,8 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
   const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
   const [mobileVisibleTabs, setMobileVisibleTabs] = useState(selectedAccessValues(record,"mobileTabAccess","tabAccess"));
   const isDesktopUser = accountRole === "User";
-  const isAdmin = isDesktopUser && userAuthority === "Admin";
+  const isAdmin = isDesktopUser && (userAuthority === "Admin" || userAuthority === "Super Admin");
+  const isSuperAdmin = isDesktopUser && userAuthority === "Super Admin";
   const isManager = isDesktopUser && userAuthority === "Manager";
   return <>
     <input type="hidden" name="userType" value={isDesktopUser ? "Super Admin" : accountRole ? "Mobile User" : ""} />
@@ -1163,9 +1165,9 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
     {isDesktopUser && <fieldset className="account-role-field user-authority-field full">
       <legend>User authority *</legend>
       <p>Choose whether this desktop user is a full Admin or a configurable Manager.</p>
-      <div>{userAuthorityOptions.map((option) => <label key={option} className={userAuthority === option ? "selected" : ""}>
+      <div>{[...userAuthorityOptions,...(canCreateSuperAdmin?["Super Admin"]:[])].map((option) => <label key={option} className={userAuthority === option ? "selected" : ""}>
         <input type="radio" name="adminLevel" value={option} required checked={userAuthority === option} onChange={() => setUserAuthority(option)} />
-        <span><b>{option === "Manager" ? "Non Admin" : option}</b><small>{option === "Admin" ? "All screens, menus and administrative functions" : "Only the selected menus and screens"}</small></span>
+        <span><b>{option === "Manager" ? "Non Admin" : option}</b><small>{option === "Super Admin" ? "All Admin features plus Admin lock and Super Admin management" : option === "Admin" ? "All screens, menus and administrative functions" : "Only the selected menus and screens"}</small></span>
       </label>)}</div>
     </fieldset>}
     {isManager && <fieldset className="account-role-field manager-role-field full">
@@ -1205,7 +1207,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [] }) {
         {(record.site || record.location) && !siteOptions.includes(record.site || record.location) && <option value={record.site || record.location}>{record.site || record.location}</option>}
       </select>
     </label>}
-    {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>Admin menu access</b><small>All menus are selected by default. You can tailor this Admin’s desktop and mobile menus below.</small></span></div>}
+    {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
     {isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Configure this user’s header menus and submenus separately for desktop and responsive mobile screens.</p></div>
       <UserViewMenuFields record={record} view="desktop" visibleTabs={visibleTabs} setVisibleTabs={setVisibleTabs} isManager />
@@ -1226,7 +1228,7 @@ function applyUserRoleDefaults(record) {
     record.userType = "Super Admin";
     record.userGroup = "";
     record.location = "";
-    if (record.adminLevel === "Admin") {
+    if (record.adminLevel === "Admin" || record.adminLevel === "Super Admin") {
       record.site = "";
       record.managerRole = "";
       record.managerRegion = managerRegionSelection(record.managerRegion).join(" | ");
@@ -1323,7 +1325,7 @@ function MultiTextField({ name, label, value = "" }) {
   );
 }
 
-function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [] }) {
+function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, saveAllDisabled = false, userOptions = [], siteOptions = [], canCreateSuperAdmin = false }) {
   const [mode, setMode] = useState(null),
     [selectedFile, setSelectedFile] = useState(null),
     [importing, setImporting] = useState(false),
@@ -1581,7 +1583,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                 </label>
                 ),
               )}
-              {name === "Users & employees" && <UserTypeAccessFields siteOptions={siteOptions} />}
+              {name === "Users & employees" && <UserTypeAccessFields siteOptions={siteOptions} canCreateSuperAdmin={canCreateSuperAdmin} />}
             </div>
             <footer>
               <button type="button" onClick={() => setMode(null)}>
@@ -3168,7 +3170,7 @@ function ReportsPage({ requests = [], goto }) {
   );
 }
 
-function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [] }) {
+function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [], canCreateSuperAdmin = false }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
     [pendingPrivilegeRows, setPendingPrivilegeRows] = useState({}),
@@ -3307,6 +3309,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
           onDeleteAll={onDeleteAll}
           userOptions={userOptions}
           siteOptions={siteOptions}
+          canCreateSuperAdmin={canCreateSuperAdmin}
         />
       </header>
       <div className="toolbar">
@@ -3504,7 +3507,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
               </label>)
             )}
-            {name === "Users & employees" && <UserTypeAccessFields record={editing} siteOptions={siteOptions} />}
+            {name === "Users & employees" && <UserTypeAccessFields record={editing} siteOptions={siteOptions} canCreateSuperAdmin={canCreateSuperAdmin} />}
           </div>
           <footer>
             <button type="button" onClick={() => setEditing(null)}>Cancel</button>
@@ -3987,7 +3990,7 @@ Generic = function GenericWithMasters(props) {
     name === "Privilege" ? (
       <PrivilegeMasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
     ) : (
-      <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} siteOptions={masterSiteOptions} />
+      <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} siteOptions={masterSiteOptions} canCreateSuperAdmin={props.session?.permissions?.adminLevel==="Super Admin"} />
     )
   ) : (
     <OriginalGeneric {...props} />
@@ -4344,6 +4347,18 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
   </Modal>;
 }
 
+function AdminLockManagement({session}){
+  const [data,setData]=useState({locked:false,incidents:[],accounts:[]});
+  const [loading,setLoading]=useState(true);
+  const load=async()=>{setLoading(true);try{const response=await fetch('/api/admin-locks',{headers:{Authorization:`Bearer ${session.token}`}});const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load admin locks');setData(body)}catch(error){alert(error.message)}finally{setLoading(false)}};
+  useEffect(()=>{load()},[session.token]);
+  const unlock=async()=>{if(!window.confirm('Unlock all Admin and Non Admin Manager accounts for the current CRM lock incidents?'))return;const response=await fetch('/api/admin-locks/unlock',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}});const body=await response.json();if(!response.ok)return alert(body.error||'Could not unlock accounts');await load()};
+  return <section className="admin-lock-page"><header><div><small>SUPER ADMIN CONTROL</small><h1>Admin account locks</h1><p>CRM tickets created from 28 August 2026 that remain open for 72 hours lock every Admin and Non Admin Manager login.</p></div><ShieldCheck /></header>
+    {loading?<p>Loading lock status…</p>:<><div className={`admin-lock-status ${data.locked?'locked':'clear'}`}><div><b>{data.locked?'Admin logins are locked':'Admin logins are available'}</b><span>{data.locked?`${data.incidents.length} overdue CRM ticket incident${data.incidents.length===1?'':'s'} active`:'No active 72-hour CRM lock incident'}</span></div>{data.locked&&<button className="primary" onClick={unlock}>Unlock all accounts</button>}</div>
+    {data.locked&&<><h2>Triggering CRM tickets</h2><div className="emptytable"><table><thead><tr><th>Ticket reference</th><th>Ticket created</th><th>Locked at</th></tr></thead><tbody>{data.incidents.map(row=><tr key={row.ticketReference}><td><b>{row.ticketReference}</b></td><td>{formatTwelveHourDateTime(row.ticketCreatedAt)}</td><td>{formatTwelveHourDateTime(row.lockedAt)}</td></tr>)}</tbody></table></div><h2>Locked accounts</h2><div className="emptytable"><table><thead><tr><th>Login</th><th>Employee</th><th>Authority</th></tr></thead><tbody>{data.accounts.map(row=><tr key={row.id}><td><b>{row.login}</b></td><td>{row.employee||'—'}</td><td>{row.adminLevel==='Manager'?'Non Admin Manager':row.adminLevel}</td></tr>)}</tbody></table></div></>}</>}
+  </section>;
+}
+
 function TicketPage({ session }) {
   const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null);
   const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
@@ -4493,6 +4508,7 @@ function App() {
     return () => { activeRequest = false; };
   }, [session?.token]);
   const canOpenAdminPage = (name) => {
+    if(name==="Admin locks")return adminPermissions.adminLevel==="Super Admin";
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && accessAllows(activeNavigationPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
@@ -4753,6 +4769,8 @@ function App() {
               : <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
+          ) : active === "Admin locks" ? (
+            <AdminLockManagement session={session} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}
@@ -4781,7 +4799,7 @@ function App() {
           ) : whatsappNav.some(([name]) => name === active) ? (
             <WhatsAppReport type={active} requests={requests} />
           ) : (
-            <Generic name={active} requests={requests} />
+            <Generic name={active} requests={requests} session={session} />
           )}
         </div>
       </main>

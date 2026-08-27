@@ -22,6 +22,7 @@ import {metaWhatsAppStatus,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitM
 import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,buildConsolidatedWhatsAppReport,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
+import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -268,6 +269,13 @@ async function migrate(){
     ALTER TABLE crm_tickets ADD COLUMN IF NOT EXISTS resolution_attachment_type TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS crm_tickets_creator_idx ON crm_tickets (creator_login, created_at DESC);
     CREATE INDEX IF NOT EXISTS crm_tickets_scope_idx ON crm_tickets (creator_role, site, created_at DESC);
+    CREATE TABLE IF NOT EXISTS admin_lock_incidents (
+      ticket_reference TEXT PRIMARY KEY REFERENCES crm_tickets(reference) ON DELETE CASCADE,
+      ticket_created_at TIMESTAMPTZ NOT NULL,
+      locked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      unlocked_at TIMESTAMPTZ,
+      unlocked_by TEXT NOT NULL DEFAULT ''
+    );
     CREATE TABLE IF NOT EXISTS crm_notifications (
       id BIGSERIAL PRIMARY KEY,
       recipient_login TEXT NOT NULL,
@@ -304,6 +312,10 @@ async function migrate(){
         VALUES ('repair_type_defaults_seeded','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
+    const seededSuperAdmin={login:'superadamin',employee:'System Super Admin',mail:'',phone:'',userType:'Super Admin',userGroup:'',adminLevel:'Super Admin',passwordHash:hashPassword('admin'),mustChangePassword:false};
+    await client.query(`INSERT INTO master_records (master_name,record_data)
+      SELECT 'Users & employees',$1::jsonb
+      WHERE NOT EXISTS (SELECT 1 FROM master_records WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))='superadamin')`,[JSON.stringify(seededSuperAdmin)]);
     await client.query('COMMIT');
   }catch(error){
     await client.query('ROLLBACK');
@@ -340,6 +352,26 @@ function loginPayload({token,profile,employee,login}){
   };
 }
 
+async function auditAdminLockIncidents(client=pool){
+  await client.query(`INSERT INTO admin_lock_incidents (ticket_reference,ticket_created_at)
+    SELECT reference,created_at FROM crm_tickets
+    WHERE created_at >= $1::timestamptz AND created_at <= NOW()-INTERVAL '72 hours'
+      AND lower(status) NOT IN ('resolved','closed')
+    ON CONFLICT (ticket_reference) DO NOTHING`,[ADMIN_LOCK_TICKET_CUTOFF]);
+}
+
+async function activeAdminLockIncidents(client=pool){
+  await auditAdminLockIncidents(client);
+  const {rows}=await client.query(`SELECT ticket_reference AS "ticketReference",ticket_created_at AS "ticketCreatedAt",locked_at AS "lockedAt"
+    FROM admin_lock_incidents WHERE unlocked_at IS NULL ORDER BY locked_at DESC`);
+  return rows;
+}
+
+function requireTrueSuperAdmin(req,res,next){
+  if(req.session?.role==='super'&&isTrueSuperAdmin(req.session.permissions))return next();
+  return res.status(403).json({error:'Only a Super Admin can perform this action.'});
+}
+
 app.post('/api/login',async(req,res,next)=>{
   try{
     const username=String(req.body?.username||'').trim().toLowerCase();
@@ -370,6 +402,10 @@ app.post('/api/login',async(req,res,next)=>{
     const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers)});
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
     if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, or MIS User in Users & employees.'});
+    if(profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
+      const incidents=await activeAdminLockIncidents();
+      if(incidents.length)return res.status(423).json({error:`This admin account is locked because CRM ticket ${incidents[0].ticketReference} has remained open for 72 hours. Contact a Super Admin.`});
+    }
     if(employee.mustChangePassword===true){
       const changeToken=randomUUID();
       await pool.query(`INSERT INTO password_change_sessions
@@ -451,6 +487,23 @@ app.get('/api/navigation-settings',requireSuper,async(_req,res,next)=>{
   try{
     const {rows}=await pool.query("SELECT setting_value FROM app_settings WHERE setting_key='mobile_navigation'");
     res.json(normalizeMobileNavigationVisibility(rows[0]?.setting_value||{}));
+  }catch(error){next(error)}
+});
+
+app.get('/api/admin-locks',requireSuper,requireTrueSuperAdmin,async(_req,res,next)=>{
+  try{
+    const incidents=await activeAdminLockIncidents();
+    const {rows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`);
+    const accounts=rows.map(row=>({id:row.id,...publicUserRecord(row.record_data)})).filter(row=>isLockableAdmin(row));
+    res.json({locked:incidents.length>0,incidents,accounts:incidents.length?accounts:[]});
+  }catch(error){next(error)}
+});
+
+app.post('/api/admin-locks/unlock',requireSuper,requireTrueSuperAdmin,async(req,res,next)=>{
+  try{
+    await auditAdminLockIncidents();
+    const result=await pool.query(`UPDATE admin_lock_incidents SET unlocked_at=NOW(),unlocked_by=$1 WHERE unlocked_at IS NULL`,[req.session.name||req.session.login||'Super Admin']);
+    res.json({unlocked:result.rowCount});
   }catch(error){next(error)}
 });
 
@@ -1403,6 +1456,8 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     const records=Array.isArray(req.body)?req.body:[req.body];
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
+    if(master==='Users & employees'&&records.some(record=>isTrueSuperAdmin(record))&&!isTrueSuperAdmin(req.session.permissions))
+      return res.status(403).json({error:'Only a Super Admin can create another Super Admin account.'});
     let prepared;
     try{
       prepared=records.map((record,index)=>{
@@ -1512,6 +1567,8 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     if(master==='Users & employees'){
       const existing=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
       if(!existing.rows.length)return res.status(404).json({error:'Master record not found.'});
+      if((isTrueSuperAdmin(record)||isTrueSuperAdmin(existing.rows[0].record_data))&&!isTrueSuperAdmin(req.session.permissions))
+        return res.status(403).json({error:'Only a Super Admin can manage Super Admin accounts.'});
       storedRecord={...record,passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
     }
     if(master==='Privilege'){
@@ -1565,6 +1622,7 @@ app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
     if(!master)return res.status(400).json({error:'A master name is required.'});
+    if(master==='Users & employees')return res.status(403).json({error:'User accounts cannot be deleted in bulk.'});
     if(master==='Breakdown master'){
       const client=await pool.connect();
       try{
@@ -1586,6 +1644,10 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const master=decodeURIComponent(req.params.master);
     const id=Number(req.params.id);
     if(!master||!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid master record is required.'});
+    if(master==='Users & employees'){
+      const existing=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
+      if(isTrueSuperAdmin(existing.rows[0]?.record_data)&&!isTrueSuperAdmin(req.session.permissions))return res.status(403).json({error:'Only a Super Admin can delete Super Admin accounts.'});
+    }
     if(master==='Privilege'){
       const client=await pool.connect();
       try{
@@ -1650,6 +1712,7 @@ async function initializeDatabase(){
     void sendScheduledConsolidatedTicketReports()
       .then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result))
       .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
+    void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
     if(process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID)void submitMetaWhatsAppTemplates()
       .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
       .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
@@ -1680,3 +1743,5 @@ const consolidatedTicketWhatsAppTimer=setInterval(()=>{
     .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
 },60*1000);
 consolidatedTicketWhatsAppTimer.unref?.();
+const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
+adminLockAuditTimer.unref?.();

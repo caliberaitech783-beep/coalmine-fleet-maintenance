@@ -46,7 +46,8 @@ export function managerRoleSelection(value) {
 }
 
 export function adminAccessPermissions(user = {}) {
-  const adminLevel = String(user.adminLevel || "Admin").trim() === "Manager" ? "Manager" : "Admin";
+  const rawAdminLevel = String(user.adminLevel || "Admin").trim();
+  const adminLevel = rawAdminLevel === "Super Admin" ? "Super Admin" : rawAdminLevel === "Manager" ? "Manager" : "Admin";
   const selectedTabs = accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS);
   const ticketAccount = adminLevel === "Manager" || ["Admin", "Manager"].includes(String(user.adminLevel || "").trim()) || String(user.userType || "").toLowerCase().includes("super");
   const tabAccess = ticketAccount && selectedTabs != null
