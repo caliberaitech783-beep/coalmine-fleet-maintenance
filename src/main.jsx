@@ -1691,6 +1691,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
 function Equipment({
   initialFilter = "all",
   initialLocation = "",
+  requests = [],
   records = [],
   onAdd,
   onEdit,
@@ -1717,6 +1718,7 @@ function Equipment({
       if (key === "currentLocation") return record.currentLocation || record.location;
       if (key === "equipmentName") return record.equipmentName || record.door;
       if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
+      if (key === "status") return liveEquipmentRoadStatus(record, requests) === "onroad" ? "On road" : liveEquipmentRoadStatus(record, requests) === "offroad" ? "Off road" : liveEquipmentRoadStatus(record, requests) === "idle" ? "Idle" : "Status not set";
       return record[key];
     },
     filterText = (value) => String(value ?? "").trim(),
@@ -1753,7 +1755,7 @@ function Equipment({
   let rows = records.filter(
     (v) =>
       (road === "all" ||
-        equipmentRoadStatus(v) === road) &&
+        liveEquipmentRoadStatus(v, requests) === road) &&
       (!location || (v.currentLocation || v.location) === location) &&
       Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()) &&
       equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
@@ -1882,7 +1884,7 @@ function Equipment({
                   <td>{v.engineNo}</td>
                   <td>{v.chassisNo}</td>
                   <td>{v.documentStatus}</td>
-                  <td><Status>{equipmentRoadStatus(v)==="onroad"?"On road":equipmentRoadStatus(v)==="offroad"?"Off road":equipmentRoadStatus(v)==="idle"?"Idle":"Status not set"}</Status></td>
+                  <td><Status>{equipmentValue(v,"status")}</Status></td>
                   <td className="row-actions" onClick={(event) => event.stopPropagation()}>
                     {v.id ? (
                       <>
@@ -1919,7 +1921,7 @@ function Equipment({
                 {detail.make} {detail.model} · {detail.reg}
               </p>
             </div>
-            <Status>{equipmentRoadStatus(detail)==="onroad"?"On road":equipmentRoadStatus(detail)==="offroad"?"Off road":equipmentRoadStatus(detail)==="idle"?"Idle":"Status not set"}</Status>
+            <Status>{equipmentValue(detail,"status")}</Status>
           </div>
           <div className="details">
             {Object.entries(detail)
@@ -4755,6 +4757,7 @@ function App() {
             <Equipment
               initialFilter={equipmentFilter}
               initialLocation={equipmentLocation}
+              requests={requests}
             />
           ) : active === "Breakdown master" ? (
             <Breakdown requests={requests} />
