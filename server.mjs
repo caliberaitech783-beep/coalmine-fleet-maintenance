@@ -35,7 +35,7 @@ const currentAppVersion=existsSync(versionFile)
   ? readFileSync(versionFile,'utf8').trim()
   : createHash('sha256').update(readFileSync(path.join(staticRoot,'index.html'))).digest('hex').slice(0,16);
 const connectionString=process.env.DATABASE_URL;
-const driverSyncIntervalMs=2*60*60*1000;
+const driverSyncIntervalMs=2*60*1000;
 
 const pool=new Pool({
   connectionString:connectionString||undefined,

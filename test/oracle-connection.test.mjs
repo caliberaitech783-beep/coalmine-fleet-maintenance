@@ -32,7 +32,7 @@ test("request forms fetch and persist Oracle logbook driver names", () => {
   assert.match(server, /driver_name_source TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /driver_name AS "driverName"/);
   assert.match(server, /syncTemporaryRequestDrivers/);
-  assert.match(server, /2\*60\*60\*1000/);
+  assert.match(server, /driverSyncIntervalMs=2\*60\*1000/);
   assert.match(client, /Driver \/ operator name/);
   assert.match(client, /\/api\/oracle\/driver\?/);
   assert.match(client, /driverName: driverLookup\.name/);

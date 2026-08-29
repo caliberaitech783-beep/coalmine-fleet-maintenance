@@ -2628,7 +2628,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : "Select equipment to fetch driver"}
             />
             {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
-            {driverLookup.status === "temporary" && <small>Temporary name — enter the driver manually if known. It will be replaced automatically when Oracle supplies the actual driver during the two-hour sync.</small>}
+            {driverLookup.status === "temporary" && <small>Temporary name — enter the driver manually if known. Oracle is checked every two minutes; when the actual driver is available it automatically replaces and removes this temporary name.</small>}
           </label>
           <SpeechComplaint />
         </div>
