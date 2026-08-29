@@ -17,11 +17,12 @@ import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUr
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
-import {buildTicketWhatsAppReport,prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
-import {metaWhatsAppStatus,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
+import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
+import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
-import {attachRequestOems,buildConsolidatedWhatsAppReport,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
+import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
+import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 
 const {Pool}=pg;
@@ -36,6 +37,8 @@ const currentAppVersion=existsSync(versionFile)
   : createHash('sha256').update(readFileSync(path.join(staticRoot,'index.html'))).digest('hex').slice(0,16);
 const connectionString=process.env.DATABASE_URL;
 const driverSyncIntervalMs=2*60*1000;
+const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
+const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
@@ -860,9 +863,11 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
       let status='Sent';
       try{
         if(!phone)throw new Error('Phone number missing');
-        const message=buildConsolidatedWhatsAppReport({scopeLabel:scope.label,start:window.start,end:window.end,openRequests:scopedOpen,closedRequests:scopedClosed});
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[message]})}
-        catch(templateError){console.warn('Consolidated WhatsApp template unavailable; using text fallback:',templateError.message);await sendMetaWhatsAppText({to:phone,message})}
+        const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOFF ROAD / OPEN: ${scopedOpen.length}\nON ROAD / CLOSED: ${scopedClosed.length}\nThe complete report is attached as a PDF.`;
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[summary]})}
+        catch(templateError){console.warn('Consolidated WhatsApp notification template unavailable; attempting PDF delivery:',templateError.message)}
+        const pdf=await buildFleetConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openRequests:scopedOpen,closedRequests:scopedClosed});
+        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('Fleet',scope.key,window.slotKey),caption:`Nerve Center fleet report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`});
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
@@ -925,9 +930,11 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       let status='Sent';
       try{
         if(!phone)throw new Error('Phone number missing');
-        const message=buildTicketWhatsAppReport({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[message]})}
-        catch(templateError){console.warn('Consolidated CRM WhatsApp template unavailable; using text fallback:',templateError.message);await sendMetaWhatsAppText({to:phone,message})}
+        const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOPEN TICKETS: ${scopedOpen.length}\nCLOSED TICKETS: ${scopedClosed.length}\nThe complete report is attached as a PDF.`;
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]})}
+        catch(templateError){console.warn('Consolidated CRM WhatsApp notification template unavailable; attempting PDF delivery:',templateError.message)}
+        const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
+        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`});
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;

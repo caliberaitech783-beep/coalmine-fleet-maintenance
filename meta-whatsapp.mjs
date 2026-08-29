@@ -71,6 +71,34 @@ export async function sendMetaWhatsAppText({to,message},{env=process.env,fetchIm
   return {sent:true,recipient,messageId:details?.messages?.[0]?.id||''};
 }
 
+export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center-report.pdf',caption=''},{env=process.env,fetchImpl=fetch}={}){
+  const config=metaWhatsAppConfiguration(env);
+  const recipient=normalizeWhatsAppRecipient(to);
+  const documentBuffer=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer||[]);
+  const safeFilename=clean(filename).replace(/[\\/:*?"<>|]+/g,'-').slice(0,120)||'nerve-center-report.pdf';
+  const safeCaption=clean(caption);
+  if(!recipient||recipient.length<10||recipient.length>15)throw new Error('A valid WhatsApp recipient phone number is required.');
+  if(!documentBuffer.length)throw new Error('A PDF document is required.');
+  if(documentBuffer.length>100*1024*1024)throw new Error('WhatsApp documents cannot exceed 100 MB.');
+  if(safeCaption.length>1024)throw new Error('WhatsApp document captions cannot exceed 1024 characters.');
+  const form=new FormData();
+  form.append('messaging_product','whatsapp');
+  form.append('type','application/pdf');
+  form.append('file',new Blob([documentBuffer],{type:'application/pdf'}),safeFilename);
+  const uploadResponse=await fetchImpl(`https://graph.facebook.com/${config.graphVersion}/${config.phoneNumberId}/media`,{
+    method:'POST',headers:{Authorization:`Bearer ${config.accessToken}`},body:form,
+  });
+  const upload=await uploadResponse.json().catch(()=>({}));
+  if(!uploadResponse.ok||!clean(upload.id)){
+    const message=clean(upload?.error?.message)||`Meta WhatsApp media upload failed (${uploadResponse.status}).`;
+    throw new Error(message);
+  }
+  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,body:{
+    messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'document',document:{id:upload.id,filename:safeFilename,...(safeCaption?{caption:safeCaption}:{})},
+  }});
+  return {sent:true,recipient,mediaId:upload.id,messageId:details?.messages?.[0]?.id||''};
+}
+
 export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[]},{env=process.env,fetchImpl=fetch}={}){
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);

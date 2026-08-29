@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,normalizeWhatsAppRecipient,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from '../meta-whatsapp.mjs';
+import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,normalizeWhatsAppRecipient,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from '../meta-whatsapp.mjs';
 
 test('Meta WhatsApp configuration remains disabled until token and phone id are present',()=>{
   assert.equal(metaWhatsAppConfiguration({}).configured,false);
@@ -58,4 +58,20 @@ test('Cloud API text delivery uses the configured phone number without exposing 
   assert.equal(request.url,'https://graph.facebook.com/v25.0/1183/messages');
   assert.equal(request.options.headers.Authorization,'Bearer top-secret');
   assert.deepEqual(JSON.parse(request.options.body),{messaging_product:'whatsapp',recipient_type:'individual',to:'919420476281',type:'text',text:{preview_url:false,body:'Daily report'}});
+});
+
+test('Cloud API document delivery uploads a PDF and sends it by media id',async()=>{
+  const requests=[];
+  const result=await sendMetaWhatsAppDocument({to:'9420476281',buffer:Buffer.from('%PDF-1.7 demo'),filename:'Fleet Report.pdf',caption:'Open the PDF'},
+    {env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'1183',META_GRAPH_VERSION:'v25.0'},fetchImpl:async(url,options)=>{
+      requests.push({url,options});
+      return url.endsWith('/media')
+        ? {ok:true,json:async()=>({id:'media-1'})}
+        : {ok:true,json:async()=>({messages:[{id:'wamid.document'}]})};
+    }});
+  assert.equal(result.mediaId,'media-1');
+  assert.equal(requests[0].url,'https://graph.facebook.com/v25.0/1183/media');
+  assert.ok(requests[0].options.body instanceof FormData);
+  assert.equal(requests[0].options.headers['Content-Type'],undefined);
+  assert.deepEqual(JSON.parse(requests[1].options.body),{messaging_product:'whatsapp',recipient_type:'individual',to:'919420476281',type:'document',document:{id:'media-1',filename:'Fleet Report.pdf',caption:'Open the PDF'}});
 });
