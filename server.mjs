@@ -752,7 +752,7 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
       LIMIT 1`,[login,name]);
     const record=rows[0]?.record_data||{};
     const location=String(record.site||record.location||record.currentLocation||'').trim();
-    res.json({location});
+    res.json({location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||''});
   }catch(error){next(error)}
 });
 

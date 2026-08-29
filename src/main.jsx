@@ -373,10 +373,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
   const visibleMasterNav = masterNav.filter(([name]) => accessAllows(viewPermissions.masterAccess, name));
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
-  const visibleNav = nav.filter(([name]) => accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name));
+  const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
+  const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   return (
     <aside className={open ? "open" : ""}>
       <div className="logo">
@@ -395,6 +396,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             {n}
           </button></div>
         ))}
+        {permissions.adminLevel === "Manager" && <div className="nav-config-row"><button className={active === "Manager Profile" ? "active" : ""} onClick={() => selectPage("Manager Profile")}><UserRound />{managerProfileLabel}</button></div>}
         {canViewMasters && <div
           className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setMastersSelectionClosed(false)}
@@ -555,7 +557,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={activeManagerRole === "Production Manager"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} /></article>
   </section>;
 }
-function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
+function Dashboard({ goto = () => {}, gotoEquipment = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
@@ -565,10 +567,19 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
-  const selectedRegion = subsidiaryData.find((region) => region.code === dashboardRegion);
+  const normalizedAllowedSites=Array.isArray(allowedSites)?allowedSites.filter(Boolean):null;
+  const normalizedAllowedRegions=Array.isArray(allowedRegions)?allowedRegions.filter((region)=>region&&region!=="All"):null;
+  const scopedEquipment=normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords;
+  const scopedBreakdowns=normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests;
+  const scopedUsers=normalizedAllowedSites?.length?usersAndEmployees.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:usersAndEmployees;
+  const availableRegions=subsidiaryData.filter((region)=>{
+    if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
+    return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
+  });
+  const selectedRegion = availableRegions.find((region) => region.code === dashboardRegion);
   const selectedSites = selectedRegion?.sites || [];
-  const visibleEquipment = selectedRegion ? equipmentRecords.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : equipmentRecords;
-  const visibleBreakdowns = selectedRegion ? requests.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : requests;
+  const visibleEquipment = selectedRegion ? scopedEquipment.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment;
+  const visibleBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
   const statusCounts = [
     ["On road", kpis.onRoad, "operational"],
@@ -576,7 +587,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     ["In maintenance", visibleEquipment.filter((record) => String(record.status || "").toLowerCase().includes("maintenance")).length, "maintenance"],
     ["Breakdown", visibleBreakdowns.filter((record) => record.status !== "Closed").length, "breakdown"],
   ];
-  const userCounts = usersAndEmployees.reduce((counts, record) => {
+  const userCounts = scopedUsers.reduce((counts, record) => {
     const type = String(record.userType || record.role || "").toLowerCase();
     if (type.includes("mobile") || type.includes("normal")) counts.mobile += 1;
     else if (type.includes("super")) counts.super += 1;
@@ -599,7 +610,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === label.toLowerCase()).length,
     "Breakdown requests",
   ]);
-  const regionBars = subsidiaryData.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: equipmentRecords.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
+  const regionBars = availableRegions.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: scopedEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
   const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const openCaseRequests = activeOpenCases(visibleBreakdowns);
   const openCaseSites = openCasesBySite(visibleBreakdowns);
@@ -616,7 +627,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
         <div><span className="mine-brandmark">CM</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
-        <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">All regions</option>{subsidiaryData.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
+        <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
       </header>
       <section className="mine-overview-charts" aria-label="Fleet overview charts">
         <article className="mine-overview-chart">
@@ -652,9 +663,9 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
         <article className="mine-panel"><header><div><span className="mine-eyebrow">Vehicle status</span><h2>Availability mix</h2><p>Live fleet-state signals</p></div></header><div className="mine-vertical-metrics"><div><span>On road</span><strong>{kpis.onRoad.toLocaleString()}</strong><i className="mine-bar-green" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Off road</span><strong>{kpis.offRoad.toLocaleString()}</strong><i className="mine-bar-grey" style={{ width: `${kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0}%` }} /></div><div><span>Idle</span><strong>{kpis.idle.toLocaleString()}</strong><i className="mine-bar-idle" style={{ width: `${kpis.total ? (kpis.idle / kpis.total) * 100 : 0}%` }} /></div><div><span>Breakdowns</span><strong>{activeBreakdowns.toLocaleString()}</strong><i className="mine-bar-red" style={{ width: `${activeBreakdowns ? 100 : 0}%` }} /></div></div></article>
         <article className="mine-panel"><header><div><span className="mine-eyebrow">Fleet composition</span><h2>Vehicle by group</h2><p>Most represented equipment categories</p></div></header><div className="mine-type-bars">{vehicleTypes.length ? vehicleTypes.map(([label, value]) => <button type="button" key={label} onClick={() => gotoEquipment("all", "")}><span>{label}</span><div><i style={{ width: `${(value / Math.max(1, vehicleTypes[0][1])) * 100}%` }} /></div><b>{value.toLocaleString()}</b></button>) : <p className="mine-empty">No equipment records yet</p>}</div></article>
         <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Requests</span><h2>Maintenance workload by status</h2><p>Open, in-progress, idle and completed requests</p></div><button type="button" onClick={() => goto("Breakdown master")}>View requests <ChevronRight /></button></header><div className="mine-workload-grid">{["Open", "In progress", "Awaiting parts", "Awaiting approval", "Idle", "Closed"].map((status) => { const count = visibleBreakdowns.filter((record) => record.status === status).length; const max = Math.max(1, visibleBreakdowns.length); return <button type="button" key={status} onClick={() => goto("Breakdown master")}><span>{status}</span><div><i style={{ width: `${(count / max) * 100}%` }} /></div><b>{count.toLocaleString()}</b></button>; })}</div></article>
-        <article className="mine-panel"><header><div><span className="mine-eyebrow">People</span><h2>Operations users</h2><p>Registered access profiles</p></div><button type="button" onClick={() => setShowUserBreakdown(true)}><ChevronRight /></button></header><div className="mine-people"><strong>{usersAndEmployees.length.toLocaleString()}</strong><span>Users &amp; employees</span><div><b>Mobile {userCounts.mobile}</b><b>Super {userCounts.super}</b><b>Admin {userCounts.admin}</b></div></div></article>
+        <article className="mine-panel"><header><div><span className="mine-eyebrow">People</span><h2>Operations users</h2><p>Registered access profiles</p></div><button type="button" onClick={() => setShowUserBreakdown(true)}><ChevronRight /></button></header><div className="mine-people"><strong>{scopedUsers.length.toLocaleString()}</strong><span>Users &amp; employees</span><div><b>Mobile {userCounts.mobile}</b><b>Super {userCounts.super}</b><b>Admin {userCounts.admin}</b></div></div></article>
       </section>
-      {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{usersAndEmployees.length}</strong></div></Modal>}
+      {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{scopedUsers.length}</strong></div></Modal>}
       {showOpenCases && <Modal title="Open cases by site" close={() => { setShowOpenCases(false); setOpenCaseSite("all"); }}><div className="open-case-drilldown"><div className="open-case-site-filter"><button type="button" className={openCaseSite === "all" ? "active" : ""} onClick={() => setOpenCaseSite("all")}><span>All sites</span><strong>{openCaseRequests.length}</strong></button>{openCaseSites.map((site) => <button type="button" key={site.key} className={openCaseSite === site.key ? "active" : ""} onClick={() => setOpenCaseSite(site.key)}><span>{site.label}</span><strong>{site.requests.length}</strong></button>)}</div><div className="open-case-results"><div><h3>{openCaseSite === "all" ? "All open cases" : openCaseSites.find((site) => site.key === openCaseSite)?.label}</h3><span>{selectedOpenCases.length} active breakdown{selectedOpenCases.length === 1 ? "" : "s"}</span></div><BreakdownTable rows={selectedOpenCases} /></div></div></Modal>}
       <section className="mine-panel mine-recent"><header><div><span className="mine-eyebrow">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest maintenance activity" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns.slice(0, 5)} /></section>
     </div>
@@ -4423,6 +4434,7 @@ function NotificationBell({ session, onOpenTickets }) {
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
   const mobileRole = session?.assignedRole || "Mobile User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
+  const [section,setSection]=useState(embedded?"profile":"dashboard");
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
@@ -4468,8 +4480,11 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
   const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav">{showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}><Wrench /> Requests</button>}{showTicketsMenu&&<button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => setTab(String(item?.ticketReference || "").startsWith("TIC/")&&showTicketsMenu ? "tickets" : "requests")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
+      {!embedded&&section==="dashboard"&&<Dashboard requests={requests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
+      {!embedded&&section==="tickets"&&<TicketPage session={session} />}
+      {(embedded||section==="profile")&&<>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
@@ -4479,7 +4494,6 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
       </div>
-      {tab === "tickets" && <TicketPage session={session} />}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showReason showCreatedBy showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
@@ -4487,6 +4501,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showVerifiedBy={isMis} showTripCard={isMis} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
       {isMis && tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
+      </>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
@@ -4522,17 +4537,21 @@ function App() {
   const adminPermissions = session?.permissions || {};
   const activeNavigationPermissions=navigationPermissionsForView(adminPermissions,responsiveMobile);
   const [profileLocation, setProfileLocation] = useState("");
+  const [profileManagerRegions,setProfileManagerRegions]=useState([]);
+  const [profileManagerSites,setProfileManagerSites]=useState([]);
   useEffect(() => {
     if (!session?.token) return undefined;
     let activeRequest = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session.token}`}})
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((profile) => { if (activeRequest) setProfileLocation(String(profile.location || "").trim()); })
+      .then((profile) => { if (activeRequest) {setProfileLocation(String(profile.location || "").trim());setProfileManagerRegions(managerRegionSelection(profile.managerRegion));setProfileManagerSites(managerSiteSelection(profile.managerSites));} })
       .catch(() => {});
     return () => { activeRequest = false; };
   }, [session?.token]);
   const canOpenAdminPage = (name) => {
     if(name==="Admin locks")return adminPermissions.adminLevel==="Super Admin";
+    if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
+    if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && accessAllows(activeNavigationPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
@@ -4788,9 +4807,9 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            adminPermissions.adminLevel === "Manager"
-              ? <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} />
-              : <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} />
+            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} allowedSites={adminPermissions.adminLevel==="Manager"?(profileManagerSites.length?profileManagerSites:profileLocation?[profileLocation]:[]):null} allowedRegions={adminPermissions.adminLevel==="Manager"?profileManagerRegions:null} restrictToScope={adminPermissions.adminLevel==="Manager"} />
+          ) : active === "Manager Profile" ? (
+            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (
