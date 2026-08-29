@@ -82,6 +82,7 @@ async function migrate(){
       closed_by TEXT NOT NULL DEFAULT '',
       maintenance_work TEXT NOT NULL DEFAULT '',
       maintenance_audio TEXT NOT NULL DEFAULT '',
+      expected_completion_at TIMESTAMPTZ,
       verification_status TEXT NOT NULL DEFAULT 'Pending',
       verified_at TIMESTAMPTZ,
       verified_by TEXT NOT NULL DEFAULT '',
@@ -132,6 +133,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS maintenance_work TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS maintenance_audio TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS expected_completion_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'Pending';
     ALTER TABLE maintenance_requests
@@ -1146,7 +1149,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "closedAt",
-  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", verification_status AS "verificationStatus",
+  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
@@ -1313,20 +1316,22 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const status=String(req.body?.status||'Closed').trim();
     const ideal=req.body?.ideal===true||String(req.body?.ideal||'').toLowerCase()==='true';
     const idleReason=String(req.body?.idleReason||'').trim();
+    const expectedCompletionAt=String(req.body?.expectedCompletionAt||'').trim();
     const closedAt=requestDateTimeValue(closingDate,closingTime);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
     if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
+    if(!ideal&&status==='In progress'&&!expectedCompletionAt)return res.status(400).json({error:'Enter the expected time for completion.'});
     const {rows}=ideal
       ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status='Idle',idle_reason=$3,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
           WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
           [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference])
-      : await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,status=$5
-          WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
-          [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,reference]);
+      : await pool.query(`UPDATE maintenance_requests SET closed_at=CASE WHEN $5='Closed' THEN $1 ELSE NULL END,closed_by=CASE WHEN $5='Closed' THEN $2 ELSE '' END,maintenance_work=$3,maintenance_audio=$4,status=$5,expected_completion_at=CASE WHEN $5='In progress' AND $6<>'' THEN ($6::timestamp AT TIME ZONE 'Asia/Kolkata') ELSE NULL END
+          WHERE reference=$7 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+          [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,expectedCompletionAt,reference]);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
@@ -1334,7 +1339,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,rows[0].site))recipients.push(login)}
       await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
         {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User',rows[0].idleReason]},{whatsapp:false});
-    }else{
+    }else if(status==='Closed'){
       const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
       const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
       const closedAtLabel=requestNotificationTime(closedAt);

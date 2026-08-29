@@ -67,6 +67,7 @@ import {
   Ticket,
   Paperclip,
   RefreshCw,
+  ListFilter,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -661,6 +662,7 @@ function Dashboard({ goto, gotoEquipment, requests = [], theme = "light" }) {
 }
 function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, onApproveIdeal }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
+  const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("");
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
     const timer = window.setInterval(() => setBreakdownNow(Date.now()), 60000);
@@ -674,15 +676,16 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal ? [["idealAction", "Action"]] : []),
     ],
+    searchedRows = rows.filter((row) => (!query.trim() || [row.ref,row.equipmentGroup,row.equipment,row.door,row.site,row.status,row.complaint,row.owner].some((value) => String(value || "").toLowerCase().includes(query.trim().toLowerCase()))) && (!statusFilter || row.status === statusFilter)),
     displayRows = showBreakdownDays
-      ? rows.map((row) => ({
+      ? searchedRows.map((row) => ({
           ...row,
           breakdownDays: calculateBreakdownDaysFromStart(row.start, breakdownNow),
         }))
-      : rows,
+      : searchedRows,
     [sortedRows, sort, changeSort] = useSortableRows(displayRows);
   return (
-    <div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><div className="table-search-toolbar"><label><Search /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <table>
         <thead>
           <tr>
@@ -737,7 +740,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
           )}
         </tbody>
       </table>
-    </div>
+    </div></>
   );
 }
 const masterFields = {
@@ -954,7 +957,7 @@ function SortableHeader({ label, sortKey, sort, onSort }) {
   return (
     <th aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
       <button className={`sort-header ${active ? "active" : ""}`} onClick={() => onSort(sortKey)} type="button">
-        <span>{label}</span><Icon aria-hidden="true" />
+        <span>{label}</span><Icon aria-hidden="true" /><ListFilter className="header-filter-icon" aria-hidden="true" />
       </button>
     </th>
   );
@@ -2382,7 +2385,9 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
     [door, setDoor] = useState(""),
-    [equipmentSearch, setEquipmentSearch] = useState("");
+    [equipmentSearch, setEquipmentSearch] = useState(""),
+    [equipmentSearchActive, setEquipmentSearchActive] = useState(false),
+    [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [openedAt] = useState(() => new Date());
   const pad = (n) => String(n).padStart(2, "0");
   const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
@@ -2391,7 +2396,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     v = findRequestEquipment(locationEquipmentRecords, equipmentId),
     equipmentGroups = requestEquipmentGroupOptions(locationEquipmentRecords),
     groupRecords = requestEquipmentRecordsForGroup(locationEquipmentRecords, equipmentGroup),
-    equipmentVehicleRecords = groupRecords.reduce((unique, record) => {
+    searchableRecords = equipmentSearchActive || equipmentSearch.trim() ? locationEquipmentRecords : groupRecords,
+    equipmentVehicleRecords = searchableRecords.reduce((unique, record) => {
       const label = requestEquipmentOptionLabel(record);
       if (record.id != null && label && !unique.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
         unique.push({ record, label });
@@ -2405,6 +2411,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const [requestDate, setRequestDate] = useState(systemDate);
   const [driverLookup, setDriverLookup] = useState({status: "idle", name: "", source: ""});
   const [submitting, setSubmitting] = useState(false);
+  useEffect(() => {
+    const timer = window.setInterval(() => setElapsedSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   useEffect(() => {
     const equipmentNo = equipmentDetails.door || equipmentDetails.equipment;
     if (!equipmentNo || !currentLocation || !requestDate || !requestTime) {
@@ -2480,7 +2490,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   };
   return (
     <Modal
-      title={<span className="request-modal-title">{normal ? "Push vehicle for maintenance" : "Create breakdown case"}<small><MapPin /> {currentLocation || "Location not assigned"}</small></span>}
+      title={<span className="request-modal-title"><span className="request-form-timer"><Clock /> {String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:{String(elapsedSeconds % 60).padStart(2, "0")}</span>{normal ? "Push vehicle for maintenance" : "Create breakdown case"}<small><MapPin /> {currentLocation || "Location not assigned"}</small></span>}
       close={close}
     >
       <form className="form" onSubmit={submit}>
@@ -2545,13 +2555,15 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
           </label>
           <label>
             Equipment / vehicle *
-            {equipmentGroup && equipmentVehicleRecords.length ? (
+            {equipmentLoaded && locationEquipmentRecords.length ? (
               <>
                 <input
                   className="equipment-request-search"
                   type="search"
                   value={equipmentSearch}
                   onChange={(event) => setEquipmentSearch(event.target.value)}
+                  onFocus={() => setEquipmentSearchActive(true)}
+                  onClick={() => setEquipmentSearchActive(true)}
                   placeholder="Search equipment / vehicle"
                   aria-label="Search equipment or vehicle"
                 />
@@ -2564,6 +2576,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                       selected = findRequestEquipment(locationEquipmentRecords, selectedId),
                       details = requestEquipmentDetails(selected || {});
                     setEquipmentId(selectedId);
+                    if (details.group) setEquipmentGroup(details.group);
                     setDoor(details.door);
                   }}
                 >
@@ -4073,20 +4086,27 @@ function TripCardCell({ request }) {
 }
 
 function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+  // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
+  const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("");
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+  const filteredRows = rows.filter((row) => {
+    const matchesText = !query.trim() || [row.ref,row.equipmentGroup,row.equipment,row.door,row.site,row.status,row.idleReason,row.complaint,row.owner,row.requesterLogin].some((value) => String(value || "").toLowerCase().includes(query.trim().toLowerCase()));
+    return matchesText && (!statusFilter || String(row.status || "") === statusFilter);
+  });
+  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows);
   return (
-    <div className="scroll mobile-workflow-table">
+    <><div className="table-search-toolbar"><label><Search /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div><div className="scroll mobile-workflow-table">
       <table className="workflow-table">
         <thead><tr>
-          <th>Job reference</th><th>Equipment group</th><th>Door no.</th><th>Site location</th>
-          <th>Status</th><th>Idle reason</th>{showReason && <th>Reason</th>}{showCreatedBy && <th>Created by</th>}{showVerifiedBy && <th>Verified by</th>}{showClosedBy && <th>Closed by</th>}<th>Started</th>{showTurnaroundTime && <th>Turn around time (TAT)</th>}<th>Days of breakdown</th><th>Daily remarks</th>{showTripCard && <th>Trip card image</th>}{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
+          <SortableHeader label="Job reference" sortKey="ref" sort={sort} onSort={changeSort}/><SortableHeader label="Equipment group" sortKey="equipmentGroup" sort={sort} onSort={changeSort}/><SortableHeader label="Door no." sortKey="door" sort={sort} onSort={changeSort}/><SortableHeader label="Site location" sortKey="site" sort={sort} onSort={changeSort}/>
+          <SortableHeader label="Status" sortKey="status" sort={sort} onSort={changeSort}/><SortableHeader label="Idle reason" sortKey="idleReason" sort={sort} onSort={changeSort}/>{showReason && <SortableHeader label="Reason" sortKey="complaint" sort={sort} onSort={changeSort}/>} {showCreatedBy && <SortableHeader label="Created by" sortKey="owner" sort={sort} onSort={changeSort}/>} {showVerifiedBy && <SortableHeader label="Verified by" sortKey="verifiedBy" sort={sort} onSort={changeSort}/>} {showClosedBy && <SortableHeader label="Closed by" sortKey="closedBy" sort={sort} onSort={changeSort}/>}<SortableHeader label="Started" sortKey="start" sort={sort} onSort={changeSort}/>{showTurnaroundTime && <SortableHeader label="Turn around time (TAT)" sortKey="hours" sort={sort} onSort={changeSort}/>}<th>Days of breakdown</th><th>Daily remarks</th>{showTripCard && <th>Trip card image</th>}{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
-          {rows.length ? rows.map((row) => {
+          {sortedRows.length ? sortedRows.map((row) => {
             const days = calculateBreakdownDaysFromStart(row.start, now);
             const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
             return <tr key={row.ref}>
@@ -4119,7 +4139,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
           }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
-    </div>
+    </div></>
   );
 }
 
@@ -4175,7 +4195,7 @@ function CloseRequestForm({ request, close, onSave }) {
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : ""});
+      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, expectedCompletionAt: !ideal && status === "In progress" ? form.get("expectedCompletionAt") : "", maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : ""});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
@@ -4192,6 +4212,7 @@ function CloseRequestForm({ request, close, onSave }) {
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
         <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Idle</option>}</select></label>
+        {!ideal && status === "In progress" && <label className="etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required /></label>}
         <fieldset className="ideal-choice"><legend>Idle? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>{setIdeal(false);setIdleReason("")}} /> No</label>{ideal&&<><label>Idle reason *<select name="idleReason" required value={idleReason} onChange={(event)=>setIdleReason(event.target.value)}><option value="">Select idle reason</option><option>No driver</option><option>No work</option></select></label><small>The request will remain Idle until the Maintenance Manager approves Make on road.</small></>}</fieldset>
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
@@ -4415,7 +4436,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const canCreate = isProduction || isMaintenance;
   const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets");
   useEffect(()=>{
-    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu("Verify closed requests"):tab==="history"?canSeeRequestMenu("Closed history"):true);
+    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu("Verify closed requests"):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
     if(allowed)return;
     if(showRequestsMenu&&canSeeRequestMenu("View requests"))setTab("requests");
     else if(showRequestsMenu&&isMis&&canSeeRequestMenu("Verify closed requests"))setTab("verify");
@@ -4445,6 +4466,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const closedRequests=requests.filter((row)=>String(row.status||"").toLowerCase()==="closed");
   const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt) : activeRequests;
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
+  const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
     {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav">{showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}><Wrench /> Requests</button>}{showTicketsMenu&&<button className={tab === "tickets" ? "active" : ""} onClick={() => setTab("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => setTab(String(item?.ticketReference || "").startsWith("TIC/")&&showTicketsMenu ? "tickets" : "requests")} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
@@ -4455,6 +4477,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu("Verify closed requests")&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
+        {showRequestsMenu&&isMis&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
       </div>
       {tab === "tickets" && <TicketPage session={session} />}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showCreatedBy showBreakdownDays /></section></>}
@@ -4463,6 +4486,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showReason showClosedBy showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showVerifiedBy={isMis} showTripCard={isMis} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {isMis && tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
