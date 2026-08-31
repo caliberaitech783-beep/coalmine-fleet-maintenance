@@ -3599,6 +3599,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [transferRecords, , transfersLoaded] = useMasterRecords("Vehicle transfers");
   const [query, setQuery] = useState("");
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
+  const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
+  const [directorSending, setDirectorSending] = useState(false);
+  const [directorResult, setDirectorResult] = useState(null);
 
   const equipmentByReference = useMemo(() => {
     const records = new Map();
@@ -3745,6 +3748,23 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const selectReportTab = (report) => {
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
   };
+  const sendDirectorTestReport = async () => {
+    const recipientPhone = window.prompt("Send Director daily report WhatsApp to:", "9925565281");
+    if (!recipientPhone) return;
+    setDirectorSending(true);
+    setDirectorResult(null);
+    try {
+      const response = await fetch("/api/reports/director/send-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ recipientPhone, recipientName: "Director test recipient" }),
+      });
+      const details = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(details.error || details.status || "Could not send the Director report WhatsApp.");
+      setDirectorResult(details);
+    } catch (error) { alert(error.message); }
+    finally { setDirectorSending(false); }
+  };
   return (
     <section className="reports-page panel pagepanel">
       <header>
@@ -3752,7 +3772,37 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <h1>Reports</h1>
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
+        <button type="button" className="secondary director-timing-trigger" onClick={() => setDirectorTimingOpen(true)}><Clock /> Director 7 PM</button>
       </header>
+      {directorTimingOpen && createPortal(
+        <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
+          <div className="modal director-timing-modal">
+            <header>
+              <h3>Director WhatsApp report timing</h3>
+              <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close Director timing"><X /></button>
+            </header>
+            <div className="director-timing-card">
+              <span><Clock /> Daily schedule</span>
+              <strong>7:00 PM IST</strong>
+              <p>All defined reports are generated as PDF and Excel, grouped department-wise, and sent in one WhatsApp message with clickable report links.</p>
+            </div>
+            <div className="director-timing-grid">
+              <article><b>General</b><span>8 linked reports</span></article>
+              <article><b>Production</b><span>1 linked report</span></article>
+              <article><b>Maintenance</b><span>4 linked reports</span></article>
+            </div>
+            {directorResult && <div className="director-send-result" role="status">
+              <b>{directorResult.status || "Generated"}</b>
+              <span>{directorResult.reportCount || 0} reports prepared for slot {directorResult.slotKey}.</span>
+            </div>}
+            <footer>
+              <button type="button" onClick={() => setDirectorTimingOpen(false)}>Close</button>
+              <button type="button" className="primary" onClick={sendDirectorTestReport} disabled={directorSending}><Send /> {directorSending ? "Sending..." : "Generate & send test now"}</button>
+            </footer>
+          </div>
+        </div>,
+        document.body,
+      )}
       <div className="toolbar reports-toolbar">
         <div><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
         {loading && <span className="reports-loading" role="status">Updating live totals…</span>}

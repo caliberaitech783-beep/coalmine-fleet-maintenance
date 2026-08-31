@@ -25,6 +25,7 @@ import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
+import {buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportDue,directorReportFilename,directorReportWindow} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 
 const {Pool}=pg;
@@ -41,6 +42,7 @@ const connectionString=process.env.DATABASE_URL;
 const driverSyncIntervalMs=2*60*1000;
 const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
+const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
@@ -274,6 +276,16 @@ async function migrate(){
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(slot_key,recipient_login,scope_key)
     );
+    CREATE TABLE IF NOT EXISTS published_reports (
+      id UUID PRIMARY KEY,
+      filename TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+      file_data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '14 days'
+    );
+    CREATE INDEX IF NOT EXISTS published_reports_expires_at_idx
+      ON published_reports (expires_at);
     CREATE TABLE IF NOT EXISTS crm_tickets (
       id BIGSERIAL PRIMARY KEY,
       reference TEXT UNIQUE,
@@ -383,6 +395,24 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
     res.type('application/pdf');
     res.attachment(reportFilename('Report',title,new Date().toISOString().slice(0,10)));
     res.send(pdf);
+  }catch(error){next(error)}
+});
+
+app.get('/api/reports/director/timing',requireSuper,(_req,res)=>{
+  const window=directorReportWindow(new Date());
+  res.json({level:'Director',schedule:'Daily 7:00 PM IST',nextSlotKey:window.slotKey,nextWindowEnd:window.end.toISOString(),reportCount:13});
+});
+
+app.get('/reports/published/:id',async(req,res,next)=>{
+  try{
+    const id=String(req.params.id||'').trim();
+    if(!/^[0-9a-f-]{36}$/i.test(id))return res.status(404).send('Report not found');
+    const {rows}=await pool.query(`SELECT filename,content_type,file_data FROM published_reports WHERE id=$1 AND expires_at>NOW()`,[id]);
+    if(!rows.length)return res.status(404).send('Report expired or not found');
+    res.set('Cache-Control','private, max-age=3600');
+    res.set('Content-Type',rows[0].content_type);
+    res.set('Content-Disposition',`inline; filename="${String(rows[0].filename).replace(/"/g,'')}"`);
+    res.send(rows[0].file_data);
   }catch(error){next(error)}
 });
 
@@ -1094,6 +1124,110 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
     return {slotKey:window.slotKey,sent,failed,skipped,open:openTickets.length,closed:closedTickets.length};
   }finally{consolidatedTicketReportRunning=false}
 }
+
+function isDirectorRecipient(user={}){
+  return [user.level,user.hierarchyLevel,user.userGroup,user.adminLevel,user.designation,user.role,user.employee,user.name]
+    .some((value)=>String(value||'').trim().toLowerCase().includes('director'));
+}
+
+async function directorReportSourceData(){
+  const [{rows:requestRows},{rows:equipmentRows},{rows:transferRows}]=await Promise.all([
+    pool.query(`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`),
+    pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY created_at ASC`),
+    pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Vehicle transfers' ORDER BY created_at ASC`),
+  ]);
+  return {
+    requests:requestRows,
+    equipmentRecords:equipmentRows.map(({id,record_data})=>({id,...record_data})),
+    transferRecords:transferRows.map(({id,record_data})=>({id,...record_data})),
+  };
+}
+
+async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
+  const tables=buildDirectorReportTables(await directorReportSourceData());
+  await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+  const links=[];
+  for(const table of tables){
+    const pdf=await buildTableExportPdf({title:table.title,columns:table.columns.map((column)=>({label:column.label})),rows:table.rows});
+    const xlsx=buildXlsxWorkbookBuffer(table.title,table.columns,table.rows);
+    const pdfId=randomUUID(),xlsxId=randomUUID();
+    const pdfFilename=directorReportFilename(table.title,'pdf',slotKey);
+    const xlsxFilename=directorReportFilename(table.title,'xlsx',slotKey);
+    await pool.query(`INSERT INTO published_reports (id,filename,content_type,file_data,expires_at) VALUES
+      ($1,$2,'application/pdf',$3,NOW()+INTERVAL '14 days'),
+      ($4,$5,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$6,NOW()+INTERVAL '14 days')`,
+      [pdfId,pdfFilename,pdf,xlsxId,xlsxFilename,xlsx]);
+    links.push({
+      title:table.title,department:table.department,rowCount:table.rows.length,
+      pdfUrl:`${baseUrl}/reports/published/${pdfId}`,
+      xlsxUrl:`${baseUrl}/reports/published/${xlsxId}`,
+    });
+  }
+  return {slotKey,generatedAt:now,links,message:buildDirectorWhatsAppMessage({generatedAt:now,links})};
+}
+
+async function sendDirectorReportBundle({recipientPhone,recipientName='Director',baseUrl=publicBaseUrl(),now=new Date(),manual=false}={}){
+  if(!databaseReady)return {skipped:true,reason:'database is not ready'};
+  const window=directorReportWindow(now);
+  const phone=String(recipientPhone||'').trim();
+  if(!phone)return {skipped:true,reason:'phone number missing'};
+  const recipientKey=manual?`manual:${phone}`:`director:${phone}`;
+  const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+    (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,'DIRECTOR','Sending',1,NOW())
+    ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
+      SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
+      WHERE $3::boolean OR (whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3)
+    RETURNING id`,[window.slotKey,recipientKey,manual]);
+  if(!claim.rowCount)return {skipped:true,reason:'already sent for this Director slot',slotKey:window.slotKey};
+  let status='Sent',bundle=null;
+  try{
+    bundle=await publishDirectorReportFiles({baseUrl,slotKey:window.slotKey,now});
+    await sendMetaWhatsAppText({to:phone,message:bundle.message});
+  }catch(error){
+    status=`Failed - ${String(error?.message||'Director WhatsApp delivery error').slice(0,160)}`;
+    console.error(`Director WhatsApp report failed for ${phone}:`,error.message);
+  }
+  await Promise.all([
+    pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
+    pool.query(`INSERT INTO whatsapp_alert_history
+      (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+      ['Director linked report bundle','All departments',window.slotKey,recipientName,phone,status]),
+  ]);
+  return {slotKey:window.slotKey,status,reportCount:bundle?.links?.length||0,links:bundle?.links||[],message:bundle?.message||''};
+}
+
+let directorReportRunning=false;
+async function sendScheduledDirectorReportBundles(now=new Date()){
+  if(!databaseReady||directorReportRunning)return {skipped:true};
+  if(!directorReportDue(now))return {skipped:true,reason:'outside Director 7 PM report window'};
+  directorReportRunning=true;
+  try{
+    const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`);
+    let sent=0,failed=0,skipped=0;
+    for(const row of userRows){
+      const user=row.record_data||{};
+      if(!isDirectorRecipient(user))continue;
+      const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
+      const result=await sendDirectorReportBundle({recipientPhone:phone,recipientName:String(user.employee||user.name||user.login||'Director'),baseUrl:publicBaseUrl(),now});
+      if(result.skipped)skipped++;
+      else if(String(result.status||'').startsWith('Sent'))sent++;
+      else failed++;
+    }
+    return {slotKey:directorReportWindow(now).slotKey,sent,failed,skipped};
+  }finally{directorReportRunning=false}
+}
+
+app.post('/api/reports/director/send-test',requireSuper,async(req,res,next)=>{
+  try{
+    const recipientPhone=String(req.body?.recipientPhone||'').trim();
+    const recipientName=String(req.body?.recipientName||'Director test recipient').trim()||'Director test recipient';
+    const now=req.body?.now?new Date(req.body.now):new Date();
+    const result=await sendDirectorReportBundle({recipientPhone,recipientName,baseUrl:publicBaseUrl(req),now,manual:true});
+    const status=String(result.status||'');
+    if(status.startsWith('Failed'))return res.status(502).json(result);
+    res.json(result);
+  }catch(error){next(error)}
+});
 
 async function ticketSuperRecipients(client,{creatorRole,site}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
@@ -1897,6 +2031,9 @@ async function initializeDatabase(){
     void sendScheduledConsolidatedTicketReports()
       .then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result))
       .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
+    void sendScheduledDirectorReportBundles()
+      .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
+      .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
     void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
     if(process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID)void submitMetaWhatsAppTemplates()
       .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
@@ -1928,5 +2065,11 @@ const consolidatedTicketWhatsAppTimer=setInterval(()=>{
     .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
 },60*1000);
 consolidatedTicketWhatsAppTimer.unref?.();
+const directorWhatsAppTimer=setInterval(()=>{
+  void sendScheduledDirectorReportBundles()
+    .then(result=>{if(!result?.skipped)console.log('Scheduled Director WhatsApp report check completed.',result)})
+    .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
+},60*1000);
+directorWhatsAppTimer.unref?.();
 const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
 adminLockAuditTimer.unref?.();
