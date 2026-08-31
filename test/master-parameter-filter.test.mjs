@@ -14,5 +14,5 @@ test("every master table exposes the shared all-parameter filter panel", () => {
   assert.match(masters, /filterColumns = displayFields\.map/);
   assert.match(masters, /tableRowMatchesFilters\(record, filterColumns, columnFilters\)/);
   assert.match(masters, /<TableParameterFilter columns=\{filterColumns\} rows=\{records\}/);
-  assert.match(styles, /\.toolbar>\.table-parameter-filter\{min-width:0;padding:0;border:0;border-radius:0\}/);
+  assert.match(styles, /\.toolbar>\.table-parameter-filter\{min-width:0;padding:0;border:0;border-radius:0;margin-left:auto\}/);
 });

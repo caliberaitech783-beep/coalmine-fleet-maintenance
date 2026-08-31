@@ -5,6 +5,7 @@ import test from 'node:test';
 test('all master and user report exports offer PDF, CSV, and print',()=>{
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/sortable-table.css',import.meta.url),'utf8');
 
   assert.match(source,/function ExportMenu\(/);
   assert.match(source,/Download as PDF/);
@@ -18,4 +19,6 @@ test('all master and user report exports offer PDF, CSV, and print',()=>{
   assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);
   assert.match(server,/app\.post\('\/api\/exports\/pdf',requireSession/);
   assert.match(server,/buildTableExportPdf\(\{title,columns,rows\}\)/);
+  assert.match(styles,/\.table-search-toolbar>\.table-parameter-filter,\.report-table-filter-toolbar>\.table-parameter-filter\{margin-left:auto\}/);
+  assert.match(styles,/\.toolbar>\.table-parameter-filter\{min-width:0;padding:0;border:0;border-radius:0;margin-left:auto\}/);
 });
