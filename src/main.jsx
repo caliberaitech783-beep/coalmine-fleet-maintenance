@@ -69,6 +69,7 @@ import {
   Paperclip,
   RefreshCw,
   ListFilter,
+  Printer,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -711,7 +712,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.make, row.model) && (!statusFilter || row.status === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
     [sortedRows, sort, changeSort] = useSortableRows(searchedRows);
   return (
-    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <table className="breakdown-table-auto-fit">
         <thead>
           <tr>
@@ -1149,6 +1150,90 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
     </div>
   );
 }
+function exportCellText(value) {
+  return tableFilterText(value).replace(/\s+/g, " ").trim() || "—";
+}
+function exportFileName(title, extension) {
+  const safeTitle = String(title || "nerve-center-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "nerve-center-report";
+  return `${safeTitle}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+}
+function downloadExportFile(blob, filename) {
+  const url = URL.createObjectURL(blob), link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+function escapeExportHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]));
+}
+function ExportMenu({ title, columns = [], rows = [], className = "secondary", label = "Export" }) {
+  const [open, setOpen] = useState(false), [downloading, setDownloading] = useState(false);
+  const triggerRef = useRef(null);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
+  const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeMenu = (event) => {
+      if (!event.target.closest?.(".export-menu, .export-menu-popover")) setOpen(false);
+    };
+    document.addEventListener("mousedown", closeMenu);
+    return () => document.removeEventListener("mousedown", closeMenu);
+  }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const positionMenu = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setPopoverPosition({ top: Math.min(window.innerHeight - 176, rect.bottom + 6), left: Math.max(12, Math.min(rect.right - 214, window.innerWidth - 226)) });
+    };
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [open]);
+  const downloadCsv = () => {
+    const csvValue = (value) => {
+      const text = String(value || "");
+      return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replaceAll('"', '""')}"`;
+    };
+    const csv = [columns.map((column) => csvValue(column.label)).join(","), ...exportRows.map((row) => row.map(csvValue).join(","))].join("\n") + "\n";
+    downloadExportFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), exportFileName(title, "csv"));
+    setOpen(false);
+  };
+  const downloadPdf = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const response = await fetch("/api/exports/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ title, columns: columns.map((column) => ({ label: column.label })), rows: exportRows }),
+      });
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}));
+        throw new Error(details.error || "Could not create the PDF report.");
+      }
+      downloadExportFile(await response.blob(), exportFileName(title, "pdf"));
+      setOpen(false);
+    } catch (error) { alert(error.message); }
+    finally { setDownloading(false); }
+  };
+  const printReport = () => {
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    if (!popup) { alert("Allow pop-ups to print this report."); return; }
+    const headings = columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
+    const body = exportRows.length ? exportRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No records available</td></tr>`;
+    popup.document.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}@media print{body{margin:15mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()))}</p><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`);
+    popup.document.close();
+    window.setTimeout(() => { popup.focus(); popup.print(); }, 120);
+    setOpen(false);
+  };
+  return <div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={downloading}><Download /> {downloading ? "Preparing PDF..." : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadCsv}><Download /> Download as CSV</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div>;
+}
 function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
   const [columnFilters, setColumnFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
@@ -1510,7 +1595,8 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     [syncingOracle, setSyncingOracle] = useState(false),
     fileInput = useRef(null),
     fields = masterFields[name],
-    formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields;
+    formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
+    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
   if (!fields) return null;
   const saveManual = (e) => {
     e.preventDefault();
@@ -1588,18 +1674,6 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     link.click();
     URL.revokeObjectURL(link.href);
   };
-  const exportRecords = () => {
-    const quote = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
-    const csv = [
-      fields.map(([, label]) => quote(label)).join(","),
-      ...records.map((record) => fields.map(([key, , type]) => quote(type === "checkbox" ? isCheckedValue(record[key]) : record[key])).join(",")),
-    ].join("\n") + "\n";
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    link.download = name.toLowerCase().replaceAll(" ", "-") + "-export.csv";
-    link.click();
-    URL.revokeObjectURL(link.href);
-  };
   const syncOracle = async () => {
     if (syncingOracle) return;
     setSyncingOracle(true);
@@ -1641,10 +1715,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
           <Upload />
           Import
         </button>
-        <button className="secondary" type="button" onClick={exportRecords}>
-          <Download />
-          Export
-        </button>
+        <ExportMenu title={name} columns={exportColumns} rows={records} />
         <button className="primary" onClick={() => setMode("manual")}>
           <Plus />
           Add record
@@ -3304,32 +3375,9 @@ function ReportsPage({ requests = [], goto }) {
     {report: "Audit trail", value: "View", source: "Audit Trail"},
   ];
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
-  const exportReports = () => {
-    const lines = [
-      ["Report", "Reference", "Equipment", "Make", "Model", "Site", "Production offroad", "Maintenance onroad", "MIS verified", "Offroad to onroad", "Onroad to verified", "Total elapsed"],
-      ...elapsedRows.map((row) => [
-        "Workflow timing",
-        row.ref || "",
-        row.reportEquipment,
-        row.reportMake,
-        row.reportModel,
-        row.reportSite,
-        row.start || "",
-        row.closedAt || "",
-        row.verifiedAt || "",
-        elapsedLabel(row.start, row.closedAt),
-        elapsedLabel(row.closedAt, row.verifiedAt),
-        elapsedLabel(row.start, row.verifiedAt),
-      ]),
-    ];
-    const csv = lines.map((line) => line.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `nerve-center-reports-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
+  const reportExportColumns = [
+    { label: "Report", value: () => "Workflow timing" }, { label: "Reference", value: (row) => row.ref }, { label: "Equipment", value: (row) => row.reportEquipment }, { label: "Make", value: (row) => row.reportMake }, { label: "Model", value: (row) => row.reportModel }, { label: "Site", value: (row) => row.reportSite }, { label: "Production offroad", value: (row) => row.start }, { label: "Maintenance onroad", value: (row) => row.closedAt }, { label: "MIS verified", value: (row) => row.verifiedAt }, { label: "Offroad to onroad", value: (row) => elapsedLabel(row.start, row.closedAt) }, { label: "Onroad to verified", value: (row) => elapsedLabel(row.closedAt, row.verifiedAt) }, { label: "Total elapsed", value: (row) => elapsedLabel(row.start, row.verifiedAt) },
+  ];
   return (
     <section className="reports-page panel pagepanel">
       <header>
@@ -3337,9 +3385,7 @@ function ReportsPage({ requests = [], goto }) {
           <h1>Reports</h1>
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
-        <button className="primary" type="button" onClick={exportReports}>
-          <Download /> Export reports
-        </button>
+        <ExportMenu title="Nerve Center reports" columns={reportExportColumns} rows={elapsedRows} className="primary" label="Export reports" />
       </header>
       <div className="toolbar reports-toolbar">
         <div><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
@@ -4387,7 +4433,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows);
   return (
-    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /></div><div className="scroll mobile-workflow-table">
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="scroll mobile-workflow-table">
       <table className="workflow-table">
         <thead><tr>
           <SortableHeader label="Job reference" sortKey="ref" sort={sort} onSort={changeSort}/><SortableHeader label="Equipment group" sortKey="equipmentGroup" sort={sort} onSort={changeSort}/><SortableHeader label="Door no." sortKey="door" sort={sort} onSort={changeSort}/><SortableHeader label="Site location" sortKey="site" sort={sort} onSort={changeSort}/>
@@ -4672,6 +4718,9 @@ function TicketPage({ session }) {
   const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null);
   const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const canCreate = Boolean(session?.token);
+  const ticketExportColumns = [
+    { label: "Ticket ID", value: (ticket) => ticket.reference }, { label: "User", value: (ticket) => ticket.creatorName }, { label: "Site", value: (ticket) => ticket.site }, { label: "Category", value: (ticket) => ticket.category }, { label: "Priority", value: (ticket) => ticket.priority || "Medium" }, { label: "Description", value: (ticket) => ticket.message || "Audio description" }, { label: "Status", value: (ticket) => ticket.status }, { label: "Resolution", value: (ticket) => ticket.resolutionMessage || "—" },
+  ];
   const load = async () => {
     setLoading(true);
     try {
@@ -4684,7 +4733,7 @@ function TicketPage({ session }) {
   };
   useEffect(() => { load(); }, [category, session?.token]);
   return <section className="ticket-page">
-    <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div>{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</header>
+    <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
     <div className="ticket-table-wrap"><table><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && (String(ticket.resolutionAttachmentType).startsWith("video/") ? <video className="ticket-media" controls preload="metadata" src={ticket.resolutionAttachmentData}>Resolution video</video> : <a href={ticket.resolutionAttachmentData} target="_blank" rel="noreferrer"><img className="ticket-media" src={ticket.resolutionAttachmentData} alt={ticket.resolutionAttachmentName || "Resolution attachment"} /></a>)}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></table></div>
     {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}

@@ -23,6 +23,7 @@ import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
+import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 
 const {Pool}=pg;
@@ -334,6 +335,26 @@ app.use(express.json({limit:'20mb'}));
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
   res.json({version:currentAppVersion});
+});
+
+app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
+  try{
+    const title=String(req.body?.title||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,120)||'Nerve Center report';
+    const requestedColumns=Array.isArray(req.body?.columns)?req.body.columns:[];
+    const requestedRows=Array.isArray(req.body?.rows)?req.body.rows:[];
+    if(!requestedColumns.length||requestedColumns.length>24)return res.status(400).json({error:'Select between 1 and 24 report columns.'});
+    if(requestedRows.length>5000)return res.status(413).json({error:'This report has too many rows to export at once. Apply a filter and try again.'});
+    const columns=requestedColumns.map((column,index)=>({label:String(column?.label||`Column ${index+1}`).replace(/\s+/g,' ').trim().slice(0,100)||`Column ${index+1}`}));
+    const rows=requestedRows.map((row)=>{
+      if(!Array.isArray(row))return columns.map(()=> '—');
+      return columns.map((_,index)=>String(row[index]??'').replace(/\s+/g,' ').trim().slice(0,600));
+    });
+    const pdf=await buildTableExportPdf({title,columns,rows});
+    res.set('Cache-Control','no-store');
+    res.type('application/pdf');
+    res.attachment(reportFilename('Report',title,new Date().toISOString().slice(0,10)));
+    res.send(pdf);
+  }catch(error){next(error)}
 });
 
 function privilegeForUser(rows, identifiers){

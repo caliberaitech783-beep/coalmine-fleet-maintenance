@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import test from 'node:test';
+
+test('all master and user report exports offer PDF, CSV, and print',()=>{
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+
+  assert.match(source,/function ExportMenu\(/);
+  assert.match(source,/Download as PDF/);
+  assert.match(source,/Download as CSV/);
+  assert.match(source,/<Printer \/> Print<\/button>/);
+  assert.match(source,/fetch\("\/api\/exports\/pdf"/);
+  assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
+  assert.match(source,/<ExportMenu title="Nerve Center reports" columns=\{reportExportColumns\} rows=\{elapsedRows\}/);
+  assert.match(source,/<ExportMenu title="Breakdown report" columns=\{filterColumns\} rows=\{sortedRows\}/);
+  assert.match(source,/<ExportMenu title="Workflow report" columns=\{filterColumns\} rows=\{sortedRows\}/);
+  assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);
+  assert.match(server,/app\.post\('\/api\/exports\/pdf',requireSession/);
+  assert.match(server,/buildTableExportPdf\(\{title,columns,rows\}\)/);
+});
