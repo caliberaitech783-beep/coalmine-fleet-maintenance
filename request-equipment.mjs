@@ -35,6 +35,10 @@ export function requestEquipmentDetails(record = {}) {
   };
 }
 
+export function requestEquipmentMeterType(record = {}) {
+  return ["vehicle", "vehicles"].includes(text(record.category).toLowerCase()) ? "KMR" : "HMR";
+}
+
 export function requestEquipmentOptionLabel(record = {}) {
   const details = requestEquipmentDetails(record);
   const context = [
