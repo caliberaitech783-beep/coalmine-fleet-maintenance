@@ -1904,7 +1904,8 @@ function Equipment({
       if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
       return record[key];
     },
-    filterText = (value) => String(value ?? "").trim(),
+    filterText = (value) => tableFilterText(value),
+    filterColumns = equipmentColumns.map(([key, label]) => ({ key, label, value: (record) => equipmentValue(record, key) })),
     equipmentColumnValues = Object.fromEntries(
       equipmentColumns.map(([key]) => [
         key,
@@ -1943,7 +1944,7 @@ function Equipment({
       (!allowedLocations.length || allowedLocations.some((site) => recordBelongsToSite(v, site))) &&
       (!location || (v.currentLocation || v.location) === location) &&
       matchesSmartSearch(q, v) &&
-      equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
+      tableRowMatchesFilters(v, filterColumns, columnFilters),
   );
   const [sortedRows, sort, changeSort] = useSortableRows(rows, "", equipmentValue);
   const equipmentEditFields = masterFields["Equipment master"];
@@ -2023,6 +2024,7 @@ function Equipment({
           <option value="equipment">Equipment</option>
           <option value="vehicle">Vehicles</option>
         </select>
+        <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="scroll master-table-scroll" onClick={() => setOpenFilter(null)}>
         <table>
@@ -3464,6 +3466,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         return String(record.userGroup || (String(record.userType || "").toLowerCase().includes("super") ? `User — ${record.adminLevel || "Admin"}` : record.userType) || "").trim();
       return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
     },
+    filterColumns = displayFields.map(([key, label]) => ({ key, label, value: (record) => masterValue(record, key) })),
     columnValues = Object.fromEntries(
       displayFields.map(([key]) => [
         key,
@@ -3472,7 +3475,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     ),
     filteredRows = records.filter((record) =>
       matchesSmartSearch(q, record) &&
-      displayFields.every(([key]) => !columnFilters[key] || masterValue(record, key) === columnFilters[key]),
+      tableRowMatchesFilters(record, filterColumns, columnFilters),
     ),
     [rows, sort, changeSort] = useSortableRows(filteredRows, "", (record, key) => {
       const type = fields.find(([field]) => field === key)?.[2];
@@ -3600,6 +3603,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+        <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="emptytable master-table-scroll" onClick={() => setOpenFilter(null)}>
         <table>
