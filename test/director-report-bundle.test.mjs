@@ -29,11 +29,11 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.equal(workbook.subarray(0,2).toString(),'PK');
   assert.match(workbook.toString('utf8'),/application\/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main\+xml/);
   const message=buildDirectorWhatsAppMessage({generatedAt:new Date('2026-09-01T13:30:00Z'),links:[
-    {department:'General',title:'Location wise Open BD report with Category (Prod)',pdfUrl:'https://bdms.cmll.in/reports/published/a',xlsxUrl:'https://bdms.cmll.in/reports/published/b'},
+    {department:'General',title:'Location wise Open BD report with Category (Prod)',pdfUrl:'https://bdms.cmll.in/r/a',xlsxUrl:'https://bdms.cmll.in/r/b'},
   ]});
   assert.match(message,/Director Daily Report/);
-  assert.match(message,/PDF https:\/\/bdms\.cmll\.in\/reports\/published\/a/);
-  assert.match(message,/Excel https:\/\/bdms\.cmll\.in\/reports\/published\/b/);
+  assert.match(message,/P: https:\/\/bdms\.cmll\.in\/r\/a/);
+  assert.match(message,/X: https:\/\/bdms\.cmll\.in\/r\/b/);
 });
 
 test('Director report API and timing popup are wired into server and reports UI',()=>{
@@ -45,7 +45,7 @@ test('Director report API and timing popup are wired into server and reports UI'
   assert.match(server,/app\.get\('\/api\/whatsapp\/settings'/);
   assert.match(server,/app\.put\('\/api\/whatsapp\/settings'/);
   assert.match(server,/metaWhatsAppRuntimeEnv/);
-  assert.match(server,/app\.get\('\/reports\/published\/:id'/);
+  assert.match(server,/app\.get\(\['\/reports\/published\/:id','\/r\/:id'\]/);
   assert.match(server,/app\.post\('\/api\/reports\/director\/send-test'/);
   assert.match(server,/sendScheduledDirectorReportBundles/);
   assert.match(source,/Director WhatsApp report timing/);

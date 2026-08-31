@@ -449,7 +449,7 @@ app.get('/api/reports/director/timing',requireSuper,(_req,res)=>{
   res.json({level:'Director',schedule:'Daily 7:00 PM IST',nextSlotKey:window.slotKey,nextWindowEnd:window.end.toISOString(),reportCount:13});
 });
 
-app.get('/reports/published/:id',async(req,res,next)=>{
+app.get(['/reports/published/:id','/r/:id'],async(req,res,next)=>{
   try{
     const id=String(req.params.id||'').trim();
     if(!/^[0-9a-f-]{36}$/i.test(id))return res.status(404).send('Report not found');
@@ -1232,8 +1232,8 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
       [pdfId,pdfFilename,pdf,xlsxId,xlsxFilename,xlsx]);
     links.push({
       title:table.title,department:table.department,rowCount:table.rows.length,
-      pdfUrl:`${baseUrl}/reports/published/${pdfId}`,
-      xlsxUrl:`${baseUrl}/reports/published/${xlsxId}`,
+      pdfUrl:`${baseUrl}/r/${pdfId}`,
+      xlsxUrl:`${baseUrl}/r/${xlsxId}`,
     });
   }
   return {slotKey,generatedAt:now,links,message:buildDirectorWhatsAppMessage({generatedAt:now,links})};
