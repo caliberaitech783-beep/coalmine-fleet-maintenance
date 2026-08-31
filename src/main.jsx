@@ -697,7 +697,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     [sortedRows, sort, changeSort] = useSortableRows(displayRows);
   return (
     <><div className="table-search-toolbar"><label><Search /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
-      <table>
+      <table className="breakdown-table-auto-fit">
         <thead>
           <tr>
             {columns.map(([key, label]) => (
