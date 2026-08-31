@@ -263,7 +263,7 @@ export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[]}={
     lines.push('',`${department} --`);
     items.forEach((item,index)=>{
       const title=WHATSAPP_REPORT_LABELS.get(item.title)||item.title;
-      lines.push('',`${index+1}. ${title}`,'   PDF 📄','   '+item.pdfUrl,'   Excel 📊','   '+item.xlsxUrl);
+      lines.push('',`${index+1}. ${title}`,'   PDF 📄 '+item.pdfUrl,'   Excel 📊 '+item.xlsxUrl);
     });
   }
   return lines.join('\n').slice(0,4096);

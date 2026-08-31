@@ -37,8 +37,8 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.match(message,/Department Wise Report Links:/);
   assert.match(message,/General --/);
   assert.match(message,/1\. Loc\. wise Open BD/);
-  assert.match(message,/PDF 📄\n\s+https:\/\/bdms\.cmll\.in\/r\/a/);
-  assert.match(message,/Excel 📊\n\s+https:\/\/bdms\.cmll\.in\/r\/b/);
+  assert.match(message,/PDF 📄 https:\/\/bdms\.cmll\.in\/r\/a/);
+  assert.match(message,/Excel 📊 https:\/\/bdms\.cmll\.in\/r\/b/);
 });
 
 test('Director report API and timing popup are wired into server and reports UI',()=>{
