@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
+import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases, openCasesBySite } from "../dashboard-open-cases.mjs";
@@ -698,7 +699,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal ? [["idealAction", "Action"]] : []),
     ],
-    searchedRows = rows.filter((row) => (!query.trim() || [row.ref,row.equipmentGroup,row.equipment,row.door,row.site,row.status,row.complaint,row.owner].some((value) => String(value || "").toLowerCase().includes(query.trim().toLowerCase()))) && (!statusFilter || row.status === statusFilter)),
+    searchedRows = rows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.make, row.model) && (!statusFilter || row.status === statusFilter)),
     displayRows = showBreakdownDays
       ? searchedRows.map((row) => ({
           ...row,
@@ -707,7 +708,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       : searchedRows,
     [sortedRows, sort, changeSort] = useSortableRows(displayRows);
   return (
-    <><div className="table-search-toolbar"><label><Search /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <table className="breakdown-table-auto-fit">
         <thead>
           <tr>
@@ -1001,8 +1002,7 @@ function FilterableHeader({
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const active = sort.key === sortKey,
     Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown,
-    normalizedSearch = valueSearch.trim().toLowerCase(),
-    visibleValues = values.filter((value) => !normalizedSearch || String(value || "").toLowerCase().includes(normalizedSearch));
+    visibleValues = values.filter((value) => matchesSmartSearch(valueSearch, value));
   useEffect(() => {
     if (!open) setValueSearch("");
   }, [open]);
@@ -1053,7 +1053,7 @@ function FilterableHeader({
           </div>
           <label className="column-filter-search">
             <Search aria-hidden="true" />
-            <input autoFocus value={valueSearch} onChange={(event) => setValueSearch(event.target.value)} placeholder="Filter..." />
+            <input data-smart-search autoFocus value={valueSearch} onChange={(event) => setValueSearch(event.target.value)} placeholder="Filter..." />
           </label>
           <button type="button" className={`column-filter-all ${!filterValue ? "selected" : ""}`} onClick={() => onFilterChange("")}>All values</button>
           <div className="column-filter-values">
@@ -1791,7 +1791,7 @@ function Equipment({
       (assetCategory === "all" || String(v.category || "").trim().toLowerCase() === assetCategory) &&
       (!allowedLocations.length || allowedLocations.some((site) => recordBelongsToSite(v, site))) &&
       (!location || (v.currentLocation || v.location) === location) &&
-      Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()) &&
+      matchesSmartSearch(q, v) &&
       equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
   );
   const [sortedRows, sort, changeSort] = useSortableRows(rows, "", equipmentValue);
@@ -1848,6 +1848,8 @@ function Equipment({
         <div>
           <Search />
           <input
+            data-smart-search
+            type="search"
             placeholder="Search equipment, category, serial no...."
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -2436,7 +2438,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       }
       return unique;
     }, []),
-    visibleEquipmentVehicleRecords = equipmentVehicleRecords.filter(({ record, label }) => String(record.id) === equipmentId || label.toLowerCase().includes(equipmentSearch.trim().toLowerCase())),
+    visibleEquipmentVehicleRecords = equipmentVehicleRecords.filter(({ record, label }) => String(record.id) === equipmentId || matchesSmartSearch(equipmentSearch, label, record)),
     equipmentDetails = requestEquipmentDetails(v || {}),
     currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
   const [requestTime, setRequestTime] = useState(systemTime);
@@ -2591,6 +2593,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               <>
                 <input
                   className="equipment-request-search"
+                  data-smart-search
                   type="search"
                   value={equipmentSearch}
                   onChange={(event) => setEquipmentSearch(event.target.value)}
@@ -2701,11 +2704,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
 function Subsidiaries({ gotoEquipment }) {
   const [open, setOpen] = useState(null),
     [q, setQ] = useState("");
-  const data = subsidiaryData.filter((x) =>
-    (x.name + " " + x.code + " " + x.sites.join(" "))
-      .toLowerCase()
-      .includes(q.toLowerCase()),
-  );
+  const data = subsidiaryData.filter((x) => matchesSmartSearch(q, x.name, x.code, x.sites));
   return (
     <section className="panel pagepanel generic">
       <header>
@@ -2725,6 +2724,8 @@ function Subsidiaries({ gotoEquipment }) {
         <div>
           <Search />
           <input
+            data-smart-search
+            type="search"
             placeholder="Search regions or sites"
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -2836,6 +2837,7 @@ function Subsidiaries({ gotoEquipment }) {
   );
 }
 function Generic({ name, requests = [] }) {
+  const [q, setQ] = useState("");
   const isReport = name === "Reports",
     isAudit = name === "Audit Trail";
   const columns = {
@@ -2935,6 +2937,8 @@ function Generic({ name, requests = [] }) {
         "PDF / Excel",
       ])
     : [];
+  const visibleRows = rows.filter((row) => matchesSmartSearch(q, row));
+  const visibleRequests = requests.filter((request) => matchesSmartSearch(q, request));
   const requestAgeInDays = (request) => {
     const startedAt = new Date(String(request.start || "").replace(" ", "T"));
     if (Number.isNaN(startedAt.getTime())) return 0;
@@ -2972,7 +2976,7 @@ function Generic({ name, requests = [] }) {
       <div className="toolbar">
         <div>
           <Search />
-          <input placeholder={"Search " + name.toLowerCase()} />
+          <input data-smart-search type="search" value={q} onChange={(event) => setQ(event.target.value)} placeholder={"Search " + name.toLowerCase()} />
         </div>
         {isReport && (
           <select>
@@ -2999,7 +3003,7 @@ function Generic({ name, requests = [] }) {
             <table>
               <thead><tr><th>Job reference</th><th>Door no.</th><th>Site</th><th>Complaint</th><th>Created</th><th>Age</th><th>Status</th></tr></thead>
               <tbody>
-                {requests.length ? requests.map((request) => {
+                {visibleRequests.length ? visibleRequests.map((request) => {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
@@ -3023,8 +3027,8 @@ function Generic({ name, requests = [] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.length ? (
-              rows.map((row, ri) => (
+            {visibleRows.length ? (
+              visibleRows.map((row, ri) => (
                 <tr key={ri}>
                   {row.map((cell, ci) => (
                     <td key={ci}>{ci === 0 ? <b>{cell}</b> : cell}</td>
@@ -3086,9 +3090,8 @@ function ReportsPage({ requests = [], goto }) {
     },
   ], [requests]);
   const selectedEvent = eventReports.find((report) => report.id === selectedReport) || eventReports[0];
-  const normalizedQuery = query.trim().toLowerCase();
   const visibleEventRows = (selectedEvent?.rows || []).filter((request) =>
-    !normalizedQuery || Object.values(request).join(" ").toLowerCase().includes(normalizedQuery),
+    matchesSmartSearch(query, selectedEvent.title, selectedEvent.description, request),
   );
   const elapsedRows = requests.filter((request) => request.start || request.closedAt || request.verifiedAt);
   const loading = !(equipmentLoaded && usersLoaded && transfersLoaded && privilegesLoaded);
@@ -3152,7 +3155,7 @@ function ReportsPage({ requests = [], goto }) {
         </button>
       </header>
       <div className="toolbar reports-toolbar">
-        <div><Search /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
+        <div><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
         {loading && <span className="reports-loading" role="status">Updating live totals…</span>}
       </div>
       <div className="reports-section reports-kpis">
@@ -3239,7 +3242,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       ]),
     ),
     filteredRows = records.filter((record) =>
-      Object.values(record).join(" ").toLowerCase().includes(q.toLowerCase()) &&
+      matchesSmartSearch(q, record) &&
       displayFields.every(([key]) => !columnFilters[key] || masterValue(record, key) === columnFilters[key]),
     ),
     [rows, sort, changeSort] = useSortableRows(filteredRows, "", (record, key) => {
@@ -3361,6 +3364,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <div>
           <Search />
           <input
+            data-smart-search
+            type="search"
             placeholder={"Search " + name.toLowerCase()}
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -4126,12 +4131,12 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     return () => window.clearInterval(timer);
   }, []);
   const filteredRows = rows.filter((row) => {
-    const matchesText = !query.trim() || [row.ref,row.equipmentGroup,row.equipment,row.door,row.site,row.status,row.idleReason,row.complaint,row.owner,row.requesterLogin].some((value) => String(value || "").toLowerCase().includes(query.trim().toLowerCase()));
+    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.idleReason, row.complaint, row.owner, row.requesterLogin);
     return matchesText && (!statusFilter || String(row.status || "") === statusFilter);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows);
   return (
-    <><div className="table-search-toolbar"><label><Search /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div><div className="scroll mobile-workflow-table">
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div><div className="scroll mobile-workflow-table">
       <table className="workflow-table">
         <thead><tr>
           <SortableHeader label="Job reference" sortKey="ref" sort={sort} onSort={changeSort}/><SortableHeader label="Equipment group" sortKey="equipmentGroup" sort={sort} onSort={changeSort}/><SortableHeader label="Door no." sortKey="door" sort={sort} onSort={changeSort}/><SortableHeader label="Site location" sortKey="site" sort={sort} onSort={changeSort}/>
@@ -4838,7 +4843,7 @@ function App() {
           </div>
           <div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            <button>
+            <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <Search />
             </button>
             <NotificationBell session={session} onOpenTickets={(item) => selectMenu(String(item?.ticketReference || "").startsWith("TIC/") ? "Tickets" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
