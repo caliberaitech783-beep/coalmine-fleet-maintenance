@@ -1311,6 +1311,84 @@ function downloadExportFile(blob, filename) {
 function escapeExportHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]));
 }
+function crc32(bytes) {
+  let crc = -1;
+  for (const byte of bytes) {
+    crc = (crc >>> 8) ^ crc32.table[(crc ^ byte) & 0xff];
+  }
+  return (crc ^ -1) >>> 0;
+}
+crc32.table = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  return value >>> 0;
+});
+function uint16(value) {
+  return [value & 0xff, (value >>> 8) & 0xff];
+}
+function uint32(value) {
+  return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
+}
+function zipStoredFiles(files) {
+  const encoder = new TextEncoder();
+  const chunks = [], centralDirectory = [];
+  let offset = 0;
+  files.forEach(({ name, content }) => {
+    const filename = encoder.encode(name);
+    const data = encoder.encode(content);
+    const checksum = crc32(data);
+    const localHeader = new Uint8Array([
+      0x50, 0x4b, 0x03, 0x04, ...uint16(20), ...uint16(0), ...uint16(0), ...uint16(0), ...uint16(0),
+      ...uint32(checksum), ...uint32(data.length), ...uint32(data.length), ...uint16(filename.length), ...uint16(0),
+    ]);
+    chunks.push(localHeader, filename, data);
+    centralDirectory.push({ filename, checksum, size: data.length, offset });
+    offset += localHeader.length + filename.length + data.length;
+  });
+  const centralStart = offset;
+  centralDirectory.forEach((entry) => {
+    const header = new Uint8Array([
+      0x50, 0x4b, 0x01, 0x02, ...uint16(20), ...uint16(20), ...uint16(0), ...uint16(0), ...uint16(0), ...uint16(0),
+      ...uint32(entry.checksum), ...uint32(entry.size), ...uint32(entry.size), ...uint16(entry.filename.length),
+      ...uint16(0), ...uint16(0), ...uint16(0), ...uint16(0), ...uint32(0), ...uint32(entry.offset),
+    ]);
+    chunks.push(header, entry.filename);
+    offset += header.length + entry.filename.length;
+  });
+  const centralSize = offset - centralStart;
+  chunks.push(new Uint8Array([
+    0x50, 0x4b, 0x05, 0x06, ...uint16(0), ...uint16(0), ...uint16(files.length), ...uint16(files.length),
+    ...uint32(centralSize), ...uint32(centralStart), ...uint16(0),
+  ]));
+  return new Blob(chunks, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+function excelCellReference(columnIndex, rowIndex) {
+  let column = "", value = columnIndex + 1;
+  while (value) {
+    value -= 1;
+    column = String.fromCharCode(65 + (value % 26)) + column;
+    value = Math.floor(value / 26);
+  }
+  return `${column}${rowIndex + 1}`;
+}
+function buildXlsxWorkbook(title, columns, exportRows) {
+  const worksheetRows = [columns.map((column) => column.label), ...exportRows];
+  const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}" t="inlineStr"><is><t>${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
+  const widths = columns.map((column, index) => {
+    const maxLength = Math.max(String(column.label || "").length, ...exportRows.map((row) => String(row[index] || "").length));
+    return `<col min="${index + 1}" max="${index + 1}" width="${Math.min(48, Math.max(12, maxLength + 2))}" customWidth="1"/>`;
+  }).join("");
+  const workbookTitle = escapeExportHtml(title || "Nerve Center report");
+  return zipStoredFiles([
+    { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
+    { name: "_rels/.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
+    { name: "docProps/core.xml", content: `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${workbookTitle}</dc:title><dc:creator>Nerve Center</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>` },
+    { name: "docProps/app.xml", content: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Nerve Center</Application></Properties>` },
+    { name: "xl/_rels/workbook.xml.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>` },
+    { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Report" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+    { name: "xl/worksheets/sheet1.xml", content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>` },
+  ]);
+}
 function ExportMenu({ title, columns = [], rows = [], className = "secondary", label = "Export" }) {
   const [open, setOpen] = useState(false), [downloading, setDownloading] = useState(false);
   const triggerRef = useRef(null);
@@ -1340,10 +1418,7 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
     };
   }, [open]);
   const downloadExcel = () => {
-    const headings = columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
-    const body = exportRows.length ? exportRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No records available</td></tr>`;
-    const workbook = `<!doctype html><html><head><meta charset="utf-8" /></head><body><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`;
-    downloadExportFile(new Blob([`\ufeff${workbook}`], { type: "application/vnd.ms-excel;charset=utf-8" }), exportFileName(title, "xls"));
+    downloadExportFile(buildXlsxWorkbook(title, columns, exportRows), exportFileName(title, "xlsx"));
     setOpen(false);
   };
   const downloadPdf = async () => {
@@ -1366,12 +1441,12 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
   };
   const printReport = () => {
     const popup = window.open("", "_blank", "noopener,noreferrer");
-    if (!popup) { alert("Allow pop-ups to print this report."); return; }
+    if (!popup) { alert("Allow pop-ups to open the system print dialog for this report."); return; }
     const headings = columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
     const body = exportRows.length ? exportRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No records available</td></tr>`;
-    popup.document.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}@media print{body{margin:15mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()))}</p><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`);
+    popup.document.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}@media print{@page{size:A4 landscape;margin:12mm}body{margin:0}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()))}</p><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`);
     popup.document.close();
-    window.setTimeout(() => { popup.focus(); popup.print(); }, 120);
+    window.setTimeout(() => { popup.focus(); popup.print(); }, 250);
     setOpen(false);
   };
   return <div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={downloading}><Download /> {downloading ? "Preparing PDF..." : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadExcel}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div>;

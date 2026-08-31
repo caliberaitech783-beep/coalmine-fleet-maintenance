@@ -10,8 +10,13 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/function ExportMenu\(/);
   assert.match(source,/Download as PDF/);
   assert.match(source,/Download as Excel/);
-  assert.match(source,/application\/vnd\.ms-excel/);
+  assert.match(source,/buildXlsxWorkbook/);
+  assert.match(source,/application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet/);
+  assert.match(source,/exportFileName\(title, "xlsx"\)/);
+  assert.match(source,/\[Content_Types\]\.xml/);
+  assert.match(source,/xl\/worksheets\/sheet1\.xml/);
   assert.match(source,/<Printer \/> Print<\/button>/);
+  assert.match(source,/popup\.print\(\)/);
   assert.match(source,/fetch\("\/api\/exports\/pdf"/);
   assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
   assert.match(source,/<ExportMenu title=\{title\} columns=\{columns\} rows=\{rows\}/);
