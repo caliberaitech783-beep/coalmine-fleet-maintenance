@@ -1714,9 +1714,6 @@ async function initializeDatabase(){
     databaseReady=true;
     databaseError='';
     console.log('Database initialization completed.');
-    if(oracleConfigured)void syncOracleEquipmentTransfers()
-      .then(result=>console.log('Oracle equipment-transfer sync completed.',result))
-      .catch(error=>console.error('Oracle equipment-transfer startup sync failed.',error));
     if(oracleConfigured)void syncTemporaryRequestDrivers()
       .then(result=>console.log('Oracle request-driver sync completed.',result))
       .catch(error=>console.error('Oracle request-driver startup sync failed.',error));

@@ -16,6 +16,14 @@ test("Oracle integration is read-only, lazy, protected, and environment configur
   assert.doesNotMatch(example, /CMPLAI@123|13\.206\.103\.124/);
 });
 
+test("Equipment Master Oracle synchronization is manual only", () => {
+  const server = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
+  const startup = server.slice(server.indexOf("async function initializeDatabase"));
+  assert.doesNotMatch(startup, /syncOracleEquipmentTransfers\(\)/);
+  assert.match(server, /app\.post\('\/api\/oracle\/equipment\/sync',requireSuper/);
+  assert.match(server, /app\.post\('\/api\/oracle\/equipment-transfers\/sync',requireSuper/);
+});
+
 test("request forms fetch and persist Oracle logbook driver names", () => {
   const oracle = fs.readFileSync(new URL("../oracle-db.mjs", import.meta.url), "utf8");
   const server = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
