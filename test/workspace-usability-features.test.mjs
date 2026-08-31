@@ -12,6 +12,8 @@ test("operational tables expose search, filters, sorting, and the MIS idle queue
   assert.match(ui, /SortableHeader label="Job reference"/);
   assert.match(ui, />Idle Vehicles</);
   assert.match(ui, /tab === "idle"/);
+  assert.match(ui, /showRequestsMenu&&canSeeRequestMenu\("Closed history"\)&&<button className=\{tab === "idle"/);
+  assert.doesNotMatch(ui, /isMis && tab === "idle"/);
 });
 
 test("request forms expose elapsed time, site-scoped all-equipment search, and ETC", () => {

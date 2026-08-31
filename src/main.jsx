@@ -4522,7 +4522,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu("Verify closed requests")&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>Verify closed requests</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
-        {showRequestsMenu&&isMis&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
+        {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
       </div>
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showReason showCreatedBy showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
@@ -4530,7 +4530,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showReason showClosedBy showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showVerifiedBy={isMis} showTripCard={isMis} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
-      {isMis && tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
+      {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
       </>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
