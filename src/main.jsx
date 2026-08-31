@@ -14,6 +14,7 @@ import {
   requestEquipmentDetails,
   requestEquipmentOptionLabel,
   requestEquipmentGroupOptions,
+  requestEquipmentMeterType,
   requestEquipmentRecordsForGroup,
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
@@ -2639,6 +2640,18 @@ function EnhancedSpeechComplaint({
   );
 }
 SpeechComplaint = EnhancedSpeechComplaint;
+function readMeterEvidence(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) return reject(new Error("Select a KMR/HMR evidence file."));
+    if (!["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      return reject(new Error("Upload a JPEG, PNG, WebP, or PDF KMR/HMR file up to 5 MB."));
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read the selected KMR/HMR file."));
+    reader.readAsDataURL(file);
+  });
+}
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "" }) {
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
@@ -2668,6 +2681,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const [requestTime, setRequestTime] = useState(systemTime);
   const [requestDate, setRequestDate] = useState(systemDate);
   const [driverLookup, setDriverLookup] = useState({status: "idle", name: "", source: ""});
+  const [openingMeterFile, setOpeningMeterFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   useEffect(() => {
     const timer = window.setInterval(() => setElapsedSeconds((value) => value + 1), 1000);
@@ -2700,7 +2714,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     e.preventDefault();
     if (submitting) return;
     const fd = new FormData(e.currentTarget),
-      request = {
+      meterType = requestEquipmentMeterType(v || {}),
+      openingMeterEvidence = await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; });
+    if (!openingMeterEvidence) return;
+    const request = {
         ref: "REQ-" + Date.now(),
         equipment: equipmentDetails.equipment,
         equipmentGroup: equipmentDetails.group || equipmentGroup,
@@ -2717,6 +2734,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         chassis: equipmentDetails.chassis,
         driverName: driverLookup.name,
         driverNameSource: driverLookup.status === "found" ? `Oracle - ${driverLookup.source}` : driverLookup.source || "Demo",
+        meterType,
+        openingMeterReading: String(fd.get("openingMeterReading") || "").trim(),
+        openingMeterFile: openingMeterEvidence,
+        openingMeterFileName: openingMeterFile?.name || "",
       };
     if (!request.chassis) {
       alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
@@ -2901,6 +2922,16 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             />
             {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
             {driverLookup.status === "temporary" && <small>Temporary name — enter the driver manually if known. Oracle is checked every two minutes; when the actual driver is available it automatically replaces and removes this temporary name.</small>}
+          </label>
+          <label>
+            {requestEquipmentMeterType(v || {})} opening reading *
+            <input name="openingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required placeholder={`Enter opening ${requestEquipmentMeterType(v || {})}`} />
+            <small>{requestEquipmentMeterType(v || {}) === "KMR" ? "KMR is used for Vehicle-category assets." : "HMR is used for Equipment-category assets."}</small>
+          </label>
+          <label>
+            Opening {requestEquipmentMeterType(v || {})} file *
+            <input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} />
+            <small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>
           </label>
           <SpeechComplaint />
         </div>
@@ -4401,7 +4432,29 @@ function TripCardCell({ request }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View trip card"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+function MeterFileCell({ request, stage = "opening" }) {
+  const uploaded = stage === "closing" ? request.closingMeterFileUploaded : request.openingMeterFileUploaded;
+  const [file, setFile] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  if (!uploaded) return "—";
+  const load = async () => {
+    if (file) return;
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/requests/${encodeURIComponent(request.ref)}/meter-file?stage=${stage}`, {headers: {Authorization: `Bearer ${authToken}`}});
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "KMR/HMR file could not be loaded.");
+      setFile(result.file || "");
+      setName(result.name || `${stage}-meter-evidence`);
+    } catch (error) { alert(error.message); } finally { setLoading(false); }
+  };
+  return file
+    ? <a className="compact" href={file} target="_blank" rel="noreferrer" download={name}>Open file</a>
+    : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
+}
+
+function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, showMeterData = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
@@ -4424,6 +4477,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     ...(showTurnaroundTime ? [{key: "hours", label: "Turn around time (TAT)", value: (row) => row.hours}] : []),
     {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysFromStart(row.start, now)},
     {key: "dailyRemarks", label: "Daily remarks", value: (row) => row.dailyRemarks},
+    ...(showMeterData ? [
+      {key: "openingMeter", label: "Opening KMR/HMR", value: (row) => `${row.meterType || "HMR"} ${row.openingMeterReading || ""}`.trim()},
+      {key: "closingMeter", label: "Closing KMR/HMR", value: (row) => row.closingMeterReading ? `${row.meterType || "HMR"} ${row.closingMeterReading}` : "Pending"},
+    ] : []),
     ...(showTripCard ? [{key: "tripCard", label: "Trip card image", value: (row) => row.firstTripCardUploaded ? "Uploaded" : "Not uploaded"}] : []),
     ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudio ? "Available" : "Not available"}] : []),
   ];
@@ -4437,7 +4494,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
       <table className="workflow-table">
         <thead><tr>
           <SortableHeader label="Job reference" sortKey="ref" sort={sort} onSort={changeSort}/><SortableHeader label="Equipment group" sortKey="equipmentGroup" sort={sort} onSort={changeSort}/><SortableHeader label="Door no." sortKey="door" sort={sort} onSort={changeSort}/><SortableHeader label="Site location" sortKey="site" sort={sort} onSort={changeSort}/>
-          <SortableHeader label="Status" sortKey="status" sort={sort} onSort={changeSort}/><SortableHeader label="Idle reason" sortKey="idleReason" sort={sort} onSort={changeSort}/>{showReason && <SortableHeader label="Reason" sortKey="complaint" sort={sort} onSort={changeSort}/>} {showCreatedBy && <SortableHeader label="Created by" sortKey="owner" sort={sort} onSort={changeSort}/>} {showVerifiedBy && <SortableHeader label="Verified by" sortKey="verifiedBy" sort={sort} onSort={changeSort}/>} {showClosedBy && <SortableHeader label="Closed by" sortKey="closedBy" sort={sort} onSort={changeSort}/>}<SortableHeader label="Started" sortKey="start" sort={sort} onSort={changeSort}/>{showTurnaroundTime && <SortableHeader label="Turn around time (TAT)" sortKey="hours" sort={sort} onSort={changeSort}/>}<th>Days of breakdown</th><th>Daily remarks</th>{showTripCard && <th>Trip card image</th>}{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
+          <SortableHeader label="Status" sortKey="status" sort={sort} onSort={changeSort}/><SortableHeader label="Idle reason" sortKey="idleReason" sort={sort} onSort={changeSort}/>{showReason && <SortableHeader label="Reason" sortKey="complaint" sort={sort} onSort={changeSort}/>} {showCreatedBy && <SortableHeader label="Created by" sortKey="owner" sort={sort} onSort={changeSort}/>} {showVerifiedBy && <SortableHeader label="Verified by" sortKey="verifiedBy" sort={sort} onSort={changeSort}/>} {showClosedBy && <SortableHeader label="Closed by" sortKey="closedBy" sort={sort} onSort={changeSort}/>}<SortableHeader label="Started" sortKey="start" sort={sort} onSort={changeSort}/>{showTurnaroundTime && <SortableHeader label="Turn around time (TAT)" sortKey="hours" sort={sort} onSort={changeSort}/>}<th>Days of breakdown</th><th>Daily remarks</th>{showMeterData && <><th>Opening KMR/HMR</th><th>Closing KMR/HMR</th></>}{showTripCard && <th>Trip card image</th>}{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
@@ -4458,6 +4515,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
               <td><MaintenanceRemarks remarks={row.dailyRemarks} /></td>
+              {showMeterData && <><td><b>{row.meterType || "HMR"} {row.openingMeterReading || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{row.closingMeterReading ? `${row.meterType || "HMR"} ${row.closingMeterReading}` : "Pending"}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
               {showTripCard && <td><TripCardCell request={row} /></td>}
               {showComplaintAudio && <td className="maintenance-complaint-audio">
                 {row.complaintAudio ? <audio controls preload="none" src={row.complaintAudio}>Complaint audio</audio> : "—"}
@@ -4470,7 +4528,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div></>
@@ -4539,6 +4597,7 @@ function CloseRequestForm({ request, close, onSave }) {
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Category</span><b>{request.category || "Maintenance request"}</b></div>
         <div><span>Started</span><b>{request.start || "—"}</b></div>
+        <div><span>Opening {request.meterType || "KMR/HMR"}</span><b>{request.openingMeterReading || "—"}</b><MeterFileCell request={request} stage="opening" /></div>
         <div><span>Reason / complaint</span><b>{request.complaint || "—"}</b></div>
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudio ? <audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio> : <b>—</b>}</div>
       </div>
@@ -4565,6 +4624,7 @@ function VerifyRequestForm({ request, close, onSave }) {
   const today = requestStartParts("");
   const [firstTripDone, setFirstTripDone] = useState(false);
   const [tripCardFile, setTripCardFile] = useState(null);
+  const [closingMeterFile, setClosingMeterFile] = useState(null);
   const [tripCardPreview, setTripCardPreview] = useState("");
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
   const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
@@ -4582,7 +4642,9 @@ function VerifyRequestForm({ request, close, onSave }) {
         return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
       const firstTripCardImage = tripCardFile ? await fileAsDataUrl(tripCardFile) : "";
-      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage});
+      const closingMeterEvidence = await readMeterEvidence(closingMeterFile).catch((error) => { alert(error.message); return ""; });
+      if (!closingMeterEvidence) return;
+      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim(), closingMeterFile: closingMeterEvidence, closingMeterFileName: closingMeterFile?.name || ""});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
@@ -4591,6 +4653,7 @@ function VerifyRequestForm({ request, close, onSave }) {
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
+        <div><span>Opening {request.meterType || "KMR/HMR"}</span><b>{request.openingMeterReading || "—"}</b><MeterFileCell request={request} stage="opening" /></div>
       </div>
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       <div className="formgrid">
@@ -4598,6 +4661,11 @@ function VerifyRequestForm({ request, close, onSave }) {
           <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
           <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
         </>}
+        <label>Closing {request.meterType || "KMR/HMR"} reading *<input name="closingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required placeholder={`Enter closing ${request.meterType || "KMR/HMR"}`} /></label>
+        <label>Closing {request.meterType || "KMR/HMR"} file *
+          <input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required onChange={(event) => setClosingMeterFile(event.target.files?.[0] || null)} />
+          <small>{closingMeterFile ? `${closingMeterFile.name} · ${(closingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>
+        </label>
         <label className="full">First trip card image *
           <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
             const file = event.target.files?.[0] || null;
@@ -4820,7 +4888,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<>
-      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
+      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
@@ -4830,11 +4898,11 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
       </div>
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showCreatedBy showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showReason showCreatedBy showComplaintAudio showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showComplaintAudio showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
-      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showReason showClosedBy showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
-      {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showActions onVerify={setVerifying} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showVerifiedBy={isMis} showTripCard={isMis} showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showReason showCreatedBy showComplaintAudio showMeterData showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showComplaintAudio showMeterData showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
+      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showReason showClosedBy showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
+      {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
       {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
       </>}
     </main>
