@@ -57,6 +57,8 @@ test('Director report API and timing popup are wired into server and reports UI'
   assert.match(server,/app\.post\('\/api\/reports\/director\/send-email-test'/);
   assert.match(server,/sendDirectorReportEmail/);
   assert.match(server,/files\.push\(/);
+  assert.match(server,/publishDirectorReportArchive/);
+  assert.match(server,/archiveUrl/);
   assert.match(server,/sendScheduledDirectorReportBundles/);
   assert.match(source,/Director WhatsApp report timing/);
   assert.match(source,/Generate & send test now/);

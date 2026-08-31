@@ -26,7 +26,7 @@ import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
-import {buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportDue,directorReportFilename,directorReportWindow} from './director-report-bundle.mjs';
+import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportDue,directorReportFilename,directorReportWindow} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 
 const {Pool}=pg;
@@ -1252,6 +1252,17 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
   return {slotKey,generatedAt:now,links,files,message:buildDirectorWhatsAppMessage({generatedAt:now,links})};
 }
 
+async function publishDirectorReportArchive({baseUrl,slotKey,files=[]}){
+  if(!files.length)return null;
+  const archive=buildDirectorReportArchiveBuffer(files);
+  const archiveId=randomUUID(),archiveCode=randomUUID().replace(/-/g,'').slice(0,10);
+  const filename=`nerve-center-director-reports-${slotKey}.zip`;
+  await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at)
+    VALUES ($1,$2,$3,'application/zip',$4,NOW()+INTERVAL '14 days')`,
+    [archiveId,archiveCode,filename,archive]);
+  return {filename,url:`${baseUrl}/r/${archiveCode}`,size:archive.length};
+}
+
 async function sendDirectorReportBundle({recipientPhone,recipientName='Director',baseUrl=publicBaseUrl(),now=new Date(),manual=false}={}){
   if(!databaseReady)return {skipped:true,reason:'database is not ready'};
   const window=directorReportWindow(now);
@@ -1321,9 +1332,10 @@ app.post('/api/reports/director/send-email-test',requireSuper,async(req,res,next
     const now=req.body?.now?new Date(req.body.now):new Date();
     const window=directorReportWindow(now);
     const bundle=await publishDirectorReportFiles({baseUrl:publicBaseUrl(req),slotKey:window.slotKey,now});
-    const result=await sendDirectorReportEmail({to:recipientEmail,bundle});
+    const archive=await publishDirectorReportArchive({baseUrl:publicBaseUrl(req),slotKey:window.slotKey,files:bundle.files});
+    const result=await sendDirectorReportEmail({to:recipientEmail,bundle:{...bundle,archiveUrl:archive?.url},attachZip:req.body?.attachZip===true});
     if(!result.sent)return res.status(502).json({slotKey:window.slotKey,status:'Failed',reason:result.reason});
-    res.json({slotKey:window.slotKey,status:'Sent',reportCount:bundle.links.length,accepted:result.accepted,attachmentCount:result.attachmentCount});
+    res.json({slotKey:window.slotKey,status:'Sent',reportCount:bundle.links.length,accepted:result.accepted,attachmentCount:result.attachmentCount,archiveUrl:archive?.url,archiveSize:archive?.size});
   }catch(error){next(error)}
 });
 

@@ -14,7 +14,7 @@ function emailDate(value){
   return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
 }
 
-export function buildDirectorReportEmail({generatedAt=new Date(),links=[]}={}){
+export function buildDirectorReportEmail({generatedAt=new Date(),links=[],archiveUrl=''}={}){
   const sections=[];
   for(const [department,items] of groupLinks(links)){
     const rows=items.map((item,index)=>`
@@ -41,11 +41,13 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[]}={}){
       </table>`);
   }
   const generated=emailDate(generatedAt);
+  const archiveLine=cleanEmailText(archiveUrl);
   const text=[
     'Nerve Center',
     "Director's Daily Report",
     'Schedule: Daily 7:00 PM IST',
     `Generated: ${generated}`,
+    ...(archiveLine?['',`Download ZIP: ${archiveLine}`]:[]),
     '',
     ...[...groupLinks(links)].flatMap(([department,items])=>[
       `${department} --`,
@@ -58,6 +60,7 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[]}={}){
       <h2 style="margin:0;color:#10213d">Director's Daily Report</h2>
       <p style="margin:6px 0 0;color:#61708a">Schedule: Daily 7:00 PM IST</p>
       <p style="margin:0 0 20px;color:#61708a">Generated: ${escapeEmailHtml(generated)}</p>
+      ${archiveLine?`<p style="margin:0 0 18px"><a href="${escapeEmailHtml(archiveLine)}" style="display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;font-weight:800;padding:11px 16px;border-radius:7px">Download complete ZIP report</a></p>`:''}
       <h3 style="margin:0 0 12px;color:#10213d">Department Wise Report Links</h3>
       ${sections.join('')}
     </div>
@@ -76,13 +79,13 @@ export function buildDirectorReportZipAttachment(bundle={}){
   };
 }
 
-export async function sendDirectorReportEmail({to,bundle},env=process.env){
+export async function sendDirectorReportEmail({to,bundle,attachZip=false},env=process.env){
   const recipients=String(to||'').split(',').map((value)=>value.trim()).filter(Boolean);
   if(!recipients.length)return {sent:false,reason:'recipient email missing'};
   const {config,transporter}=createTicketMailer(env);
   if(!transporter)return {sent:false,reason:'Email is not configured'};
   const email=buildDirectorReportEmail(bundle);
-  const zipAttachment=buildDirectorReportZipAttachment(bundle);
+  const zipAttachment=attachZip?buildDirectorReportZipAttachment(bundle):null;
   const result=await transporter.sendMail({
     from:`Nerve Center Reports <${config.user}>`,
     to:recipients,
