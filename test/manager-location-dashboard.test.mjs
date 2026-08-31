@@ -5,6 +5,7 @@ import test from "node:test";
 test("manager requests, equipment, and dashboard metrics are scoped to selected sites", () => {
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
+  const styles=fs.readFileSync(new URL("../src/style.css",import.meta.url),"utf8");
   assert.match(server,/adminLevel==='Manager'[\s\S]*scopedManagerSites=managerReportScope\(manager\)\.sites/);
   assert.match(server,/rows\.filter\(\(row\)=>reportScopeIncludesSite\(\{sites:scopedManagerSites\},row\.site\)\)/);
   assert.match(server,/managerRecord&&row\.master_name==='Equipment master'/);
@@ -16,5 +17,8 @@ test("manager requests, equipment, and dashboard metrics are scoped to selected 
   assert.match(source,/onRoad:Math\.max\(0,siteEquipment\.length-offRoad-idle\)/);
   assert.match(source,/\["Idle", fleet\.idle/);
   assert.doesNotMatch(source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard")),/Active breakdowns/);
+  assert.match(source,/<BreakdownTable rows=\{visibleDetailRows\}[\s\S]*stableToolbar/);
+  assert.match(styles,/\.manager-table-search-toolbar\{min-height:66px;flex-wrap:nowrap\}/);
+  assert.match(styles,/\.manager-table-search-toolbar \.table-parameter-filter-trigger\{min-width:108px;justify-content:center\}/);
   assert.match(source,/formatTwelveHourDateTime\(r\.start\)/);
 });
