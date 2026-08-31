@@ -1427,7 +1427,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
     if(!canViewEquipment&&!canViewRepairTypes)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
-    const managerRecord=req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'?await currentUserRecord(req.session):null;
+    const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
     const managerScope=managerRecord?managerReportScope(managerRecord):null;
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();

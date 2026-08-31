@@ -99,8 +99,10 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
       deleteRequests: maintenance && permissionEnabled(Object.hasOwn(user, "delete") ? user.delete : privilege.delete),
       closeRequests: maintenance,
       verifyRequests: assignedRole === "MIS User",
-      viewEquipment: assignedRole === "Production User" || maintenance,
-      viewRepairTypes: assignedRole === "Production User" || assignedRole === "Maintenance User",
+      // Every operational role receives the shared fleet dashboard. Equipment
+      // is site-scoped by the masters endpoint; repair types are reference data.
+      viewEquipment: true,
+      viewRepairTypes: true,
       desktopUserMenuAccess:accessList("desktopUserMenuAccess",["Requests","Tickets"]),
       desktopUserRequestAccess:[...new Set([...accessList("desktopUserRequestAccess",roleRequestMenus),"Closed history"])],
       mobileUserMenuAccess:accessList("mobileUserMenuAccess",accessList("desktopUserMenuAccess",["Requests","Tickets"])),

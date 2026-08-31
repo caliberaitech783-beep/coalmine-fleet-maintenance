@@ -56,6 +56,8 @@ test("MIS can verify but cannot create or maintain requests", () => {
   assert.equal(profile.permissions.verifyRequests, true);
   assert.equal(profile.permissions.createRequests, false);
   assert.equal(profile.permissions.closeRequests, false);
+  assert.equal(profile.permissions.viewEquipment, true);
+  assert.equal(profile.permissions.viewRepairTypes, true);
 });
 
 test("operational users keep independent desktop and mobile menu access",()=>{
