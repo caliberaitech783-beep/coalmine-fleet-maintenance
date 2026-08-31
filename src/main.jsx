@@ -4753,7 +4753,7 @@ Generic = function GenericWithMasters(props) {
   );
 };
 const OriginalSubsidiaries = Subsidiaries;
-Subsidiaries = function SubsidiariesWithImport() {
+Subsidiaries = function SubsidiariesWithImport(props = {}) {
   const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
