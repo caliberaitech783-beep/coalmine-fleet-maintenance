@@ -23,6 +23,21 @@ const clean=(value)=>String(value??'').trim();
 const cell=(value)=>clean(value)||'-';
 const safeFilePart=(value)=>clean(value).toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'report';
 const escapeXml=(value)=>String(value??'').replace(/[&<>"']/g,(character)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[character]));
+const WHATSAPP_REPORT_LABELS=new Map([
+  ['Location wise Open BD report with Category (Prod)','Loc. wise Open BD'],
+  ['Location wise Closing BD report with Category (Maint.)','Loc. wise Closing BD'],
+  ['MIS Verification Report (MIS)','MIS Verification'],
+  ['Report for On Road / Off Road & Idle','Road Status: On / Off / Idle'],
+  ['Vehicle Transfer Report','Vehicle Transfer'],
+  ['Total Equipment / Vehicle Location Wise','Equipment / Vehicle Location'],
+  ['Idle Vehicle Report','Idle Vehicle'],
+  ['Recent Breakdown Cases','Recent Breakdown'],
+  ['Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.','Off Road to MIS Verification'],
+  ['Event Open Report - Prod. Open with Maint. Close Time -- TAT','Event Open TAT'],
+  ['Event close Report - Maint. Closing to MIS Verif.','Event Close to MIS'],
+  ['Idle Time with PM Verification Time','Idle Time with PM Verification'],
+  ['Idle Verification v/s MIS First Trip verification','Idle vs MIS First Trip'],
+]);
 
 function indiaParts(date){
   const shifted=new Date(date.getTime()+INDIA_OFFSET_MS);
@@ -243,10 +258,13 @@ export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[]}={
     return groups;
   },new Map());
   const generated=new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(generatedAt);
-  const lines=['Nerve Center Director Daily Report',`Generated: ${generated}`,'Schedule: Daily 7:00 PM IST','','Department wise report links:'];
+  const lines=['▣ Nerve Center',"Director's Daily Report",'Schedule: Daily 7:00 PM IST',`Generated: ${generated}`,'','Department Wise Report Links:'];
   for(const [department,items] of byDepartment){
-    lines.push('',`${department}:`);
-    for(const item of items)lines.push(`- ${item.title}\n${item.pdfUrl} ${item.xlsxUrl}`);
+    lines.push('',`${department} --`);
+    items.forEach((item,index)=>{
+      const title=WHATSAPP_REPORT_LABELS.get(item.title)||item.title;
+      lines.push('',`${index+1}. ${title}`,'   PDF 📄','   '+item.pdfUrl,'   Excel 📊','   '+item.xlsxUrl);
+    });
   }
   return lines.join('\n').slice(0,4096);
 }
