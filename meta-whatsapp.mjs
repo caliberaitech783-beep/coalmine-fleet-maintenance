@@ -1,6 +1,11 @@
 const clean=(value)=>String(value??'').trim();
 
 export const META_WORKFLOW_TEMPLATES={
+  passwordResetOtp:{name:'nerve_password_reset_otp',category:'AUTHENTICATION',example:['123456'],otpButton:true,components:[
+    {type:'BODY',add_security_recommendation:true},
+    {type:'FOOTER',code_expiration_minutes:10},
+    {type:'BUTTONS',buttons:[{type:'OTP',otp_type:'COPY_CODE',text:'Copy Code'}]},
+  ]},
   consolidatedRequestReport:{name:'nerve_consolidated_request_report',body:'Nerve Center scheduled fleet report:\n\n{{1}}\n\nGenerated automatically. Open Nerve Center for the complete live view.',example:['SCOPE: WCL\nWINDOW: 26 Aug 2026, 10:00 PM - 27 Aug 2026, 6:00 AM\nOFF ROAD / OPEN: 2\nON ROAD / CLOSED: 1']},
   consolidatedTicketReport:{name:'nerve_consolidated_crm_ticket_report',body:'Nerve Center scheduled CRM ticket report:\n\n{{1}}\n\nGenerated automatically. Open Nerve Center for the complete live view.',example:['SCOPE: WCL\nWINDOW: 27 Aug 2026, 8:00 AM - 27 Aug 2026, 3:00 PM\nOPEN TICKETS: 3\nCLOSED TICKETS: 2']},
   ticketCreated:{name:'nerve_ticket_created',body:'Nerve Center: Ticket {{1}} was created by {{2}} at {{3}}. Please open Nerve Center to review it.',example:['TIC/MAJRI-OB/240826/000001','Anoop Paul','Majri OB']},
@@ -106,9 +111,12 @@ export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[]},{e
   if(!template)throw new Error(`Unknown Meta WhatsApp template: ${templateKey}`);
   if(!recipient||recipient.length<10||recipient.length>15)throw new Error('A valid WhatsApp recipient phone number is required.');
   if(parameters.length!==template.example.length)throw new Error(`Template ${template.name} requires ${template.example.length} parameters.`);
+  const bodyParameters=parameters.map((value)=>({type:'text',text:clean(value)}));
+  const components=[{type:'body',parameters:bodyParameters}];
+  if(template.otpButton)components.push({type:'button',sub_type:'url',index:'0',parameters:bodyParameters});
   const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,body:{
     messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'template',template:{
-      name:template.name,language:{code:'en_US'},components:[{type:'body',parameters:parameters.map((value)=>({type:'text',text:clean(value)}))}],
+      name:template.name,language:{code:'en_US'},components,
     },
   }});
   return {sent:true,recipient,template:template.name,messageId:details?.messages?.[0]?.id||''};
@@ -130,10 +138,12 @@ export async function submitMetaWhatsAppTemplates({env=process.env,fetchImpl=fet
   for(const [key,template] of Object.entries(META_WORKFLOW_TEMPLATES)){
     if(byName.has(template.name)){results.push({key,name:template.name,status:byName.get(template.name).status,existing:true});continue}
     let created;
+    const category=template.category||'UTILITY';
     try{
       created=await metaRequest(`${config.businessAccountId}/message_templates`,{method:'POST',env,fetchImpl,body:{
-        name:template.name,language:'en_US',category:'UTILITY',allow_category_change:true,
-        components:[{type:'BODY',text:template.body,example:{body_text:[template.example]}}],
+        name:template.name,language:'en_US',category,
+        ...(category==='UTILITY'?{allow_category_change:true}:{}),
+        components:template.components||[{type:'BODY',text:template.body,example:{body_text:[template.example]}}],
       }});
     }catch(error){
       throw new Error(`${template.name}: ${error instanceof Error?error.message:'Meta template submission failed.'}`);

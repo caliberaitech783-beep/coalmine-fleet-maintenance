@@ -7,6 +7,6 @@ test("all visible application logo marks use NC branding", () => {
   const manifest = fs.readFileSync(new URL("../public/site.webmanifest", import.meta.url), "utf8");
 
   assert.equal(source.includes(">CM<"), false);
-  assert.equal((source.match(/>NC</g) ?? []).length, 6);
+  assert.equal((source.match(/>NC</g) ?? []).length, 7);
   assert.match(manifest, /"short_name": "NC"/);
 });

@@ -7,6 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
+import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
@@ -227,6 +228,20 @@ async function migrate(){
     ALTER TABLE password_change_sessions ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE password_change_sessions ADD COLUMN IF NOT EXISTS assigned_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE password_change_sessions ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
+    CREATE TABLE IF NOT EXISTS password_reset_sessions (
+      token UUID PRIMARY KEY,
+      master_record_id BIGINT NOT NULL REFERENCES master_records(id) ON DELETE CASCADE,
+      otp_hash TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      requested_ip TEXT NOT NULL DEFAULT '',
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS password_reset_sessions_user_idx
+      ON password_reset_sessions (master_record_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS password_reset_sessions_ip_idx
+      ON password_reset_sessions (requested_ip, created_at DESC);
     CREATE TABLE IF NOT EXISTS app_metadata (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -460,6 +475,96 @@ app.post('/api/login',async(req,res,next)=>{
     await sessionStore.create({token,role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
     res.json(loginPayload({token,profile,employee,login}));
   }catch(error){next(error)}
+});
+
+const passwordResetRequestMessage='If the user name has a registered mobile number, a 6-digit OTP has been sent by WhatsApp.';
+const passwordResetPhone=(record={})=>String(record.phone||record.phoneNo||record.phoneNumber||'').trim();
+
+app.post('/api/password-reset/request',async(req,res,next)=>{
+  try{
+    res.set('Cache-Control','no-store');
+    const username=String(req.body?.username||'').trim().toLowerCase();
+    if(!username)return res.status(400).json({error:'Enter your user name.'});
+    const fallbackToken=randomUUID();
+    const {rows:userRows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
+    const loginRows=loginRecordCandidates(userRows,username);
+    const exactRows=loginRows.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);
+    const candidates=exactRows.length?exactRows:loginRows;
+    if(candidates.length!==1||!passwordResetPhone(candidates[0].record_data))
+      return res.status(202).json({message:passwordResetRequestMessage,resetToken:fallbackToken});
+
+    const user=candidates[0],requestedIp=String(req.ip||req.socket?.remoteAddress||'').slice(0,100);
+    const {rows:limits}=await pool.query(`SELECT
+      COUNT(*) FILTER (WHERE master_record_id=$1 AND created_at>NOW()-INTERVAL '1 hour')::int AS account_requests,
+      COUNT(*) FILTER (WHERE requested_ip=$2 AND requested_ip<>'' AND created_at>NOW()-INTERVAL '1 hour')::int AS ip_requests
+      FROM password_reset_sessions`,[user.id,requestedIp]);
+    if(Number(limits[0]?.account_requests||0)>=PASSWORD_RESET_MAX_REQUESTS_PER_HOUR||Number(limits[0]?.ip_requests||0)>=20)
+      return res.status(202).json({message:passwordResetRequestMessage,resetToken:fallbackToken});
+
+    const resetToken=randomUUID(),otp=generatePasswordResetOtp();
+    await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE master_record_id=$1 AND used_at IS NULL',[user.id]);
+    await pool.query(`INSERT INTO password_reset_sessions
+      (token,master_record_id,otp_hash,requested_ip,expires_at)
+      VALUES ($1,$2,$3,$4,NOW()+($5::text||' minutes')::interval)`,[
+        resetToken,user.id,hashPassword(otp),requestedIp,PASSWORD_RESET_OTP_TTL_MINUTES
+      ]);
+    const phone=passwordResetPhone(user.record_data);
+    try{
+      await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',parameters:[otp]});
+    }catch(templateError){
+      console.warn('Password reset OTP template unavailable; using WhatsApp text fallback:',templateError.message);
+      try{await sendMetaWhatsAppText({to:phone,message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`})}
+      catch(deliveryError){
+        await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
+        console.error('Password reset OTP delivery failed:',deliveryError.message);
+      }
+    }
+    res.status(202).json({message:passwordResetRequestMessage,resetToken});
+  }catch(error){next(error)}
+});
+
+app.post('/api/password-reset/confirm',async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    res.set('Cache-Control','no-store');
+    const resetToken=String(req.body?.resetToken||'').trim();
+    const otp=String(req.body?.otp||'').trim();
+    const password=String(req.body?.password||'');
+    const confirmation=String(req.body?.confirmation||'');
+    if(!resetToken||!validPasswordResetOtp(otp))return res.status(400).json({error:'Enter the valid 6-digit OTP sent to your mobile.'});
+    if(password.length<8)return res.status(400).json({error:'The new password must contain at least 8 characters.'});
+    if(password!==confirmation)return res.status(400).json({error:'The password confirmation does not match.'});
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT token,master_record_id,otp_hash,attempts FROM password_reset_sessions
+      WHERE token=$1 AND used_at IS NULL AND expires_at>NOW() FOR UPDATE`,[resetToken]);
+    const reset=rows[0];
+    if(!reset){await client.query('ROLLBACK');return res.status(400).json({error:'This OTP is invalid or has expired. Request a new OTP.'})}
+    if(Number(reset.attempts)>=PASSWORD_RESET_MAX_ATTEMPTS){
+      await client.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
+      await client.query('COMMIT');
+      return res.status(429).json({error:'Too many incorrect OTP attempts. Request a new OTP.'});
+    }
+    const attempts=Number(reset.attempts)+1;
+    if(!verifyPassword(otp,reset.otp_hash)){
+      await client.query(`UPDATE password_reset_sessions SET attempts=$2,used_at=CASE WHEN $2>=$3 THEN NOW() ELSE used_at END WHERE token=$1`,[resetToken,attempts,PASSWORD_RESET_MAX_ATTEMPTS]);
+      await client.query('COMMIT');
+      return res.status(400).json({error:attempts>=PASSWORD_RESET_MAX_ATTEMPTS?'Too many incorrect OTP attempts. Request a new OTP.':'The OTP is incorrect.'});
+    }
+    const userResult=await client.query(`SELECT record_data FROM master_records
+      WHERE id=$1 AND master_name='Users & employees' FOR UPDATE`,[reset.master_record_id]);
+    const user=userResult.rows[0]?.record_data;
+    if(!user){await client.query('ROLLBACK');return res.status(400).json({error:'This OTP is invalid or has expired. Request a new OTP.'})}
+    const validationError=passwordResetValidationError({password,confirmation,phone:passwordResetPhone(user)});
+    if(validationError){await client.query('ROLLBACK');return res.status(400).json({error:validationError})}
+    const updated={...user,passwordHash:hashPassword(password),mustChangePassword:false};
+    await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(updated),reset.master_record_id]);
+    await client.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE master_record_id=$1 AND used_at IS NULL',[reset.master_record_id]);
+    await client.query('DELETE FROM password_change_sessions WHERE master_record_id=$1',[reset.master_record_id]);
+    const login=String(user.login||userLoginCandidates(user)[0]||'').trim().toLowerCase();
+    if(login)await client.query('DELETE FROM auth_sessions WHERE lower(login_name)=$1',[login]);
+    await client.query('COMMIT');
+    res.json({message:'Password reset successfully. Sign in with your new password.'});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
 
 app.post('/api/change-initial-password',async(req,res,next)=>{

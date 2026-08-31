@@ -167,6 +167,10 @@ function Login({ onLogin, theme, toggleTheme }) {
   const [passwordChange, setPasswordChange] = useState(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [loginMode, setLoginMode] = useState("signin");
+  const [resetRequest, setResetRequest] = useState(null);
+  const [resetOtp, setResetOtp] = useState("");
+  const [notice, setNotice] = useState("");
   const saveSession = (data) => {
     authToken = data.token;
     currentEmployeeName = data.name;
@@ -228,6 +232,49 @@ function Login({ onLogin, theme, toggleTheme }) {
       setWorking(false);
     }
   };
+  const requestPasswordReset = async () => {
+    setWorking(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/password-reset/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not request an OTP.");
+      setResetRequest({ resetToken: data.resetToken, message: data.message });
+    } catch (resetError) {
+      setError(resetError.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+  const confirmPasswordReset = async () => {
+    setWorking(true);
+    setError("");
+    try {
+      const response = await fetch("/api/password-reset/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetToken: resetRequest.resetToken, otp: resetOtp, password: newPassword, confirmation }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not reset the password.");
+      setNotice(data.message);
+      setLoginMode("signin");
+      setResetRequest(null);
+      setResetOtp("");
+      setNewPassword("");
+      setConfirmation("");
+      setPassword("");
+    } catch (resetError) {
+      setError(resetError.message);
+    } finally {
+      setWorking(false);
+    }
+  };
   return (
     <div className="login">
       <section className="login-visual" aria-label="Nerve Center fleet operations">
@@ -276,6 +323,35 @@ function Login({ onLogin, theme, toggleTheme }) {
           <div className="login-feedback" aria-live="polite">{error && <p className="login-error" role="alert">{error}</p>}</div>
           <button type="submit" className="primary" disabled={working || newPassword.length < 8 || confirmation.length < 8}>{working ? "Updating password…" : "Change password and continue"}<ChevronRight /></button>
           <p className="login-help">This required step cannot be skipped.</p>
+        </form> : loginMode === "reset" ? <form
+          className="loginbox password-reset-box"
+          onSubmit={(event) => { event.preventDefault(); resetRequest ? confirmPasswordReset() : requestPasswordReset(); }}
+        >
+          <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
+          <div className="login-auth-tabs" role="tablist" aria-label="Login options">
+            <button type="button" role="tab" aria-selected="false" onClick={() => { setLoginMode("signin"); setError(""); }}>Sign in</button>
+            <button type="button" role="tab" aria-selected="true" className="active">Reset password</button>
+          </div>
+          <small className="login-kicker"><LockKeyhole /> ACCOUNT RECOVERY</small>
+          <h2>{resetRequest ? "Enter OTP" : "Reset password"}</h2>
+          <p>{resetRequest ? "Enter the 6-digit OTP sent to your registered WhatsApp mobile number, then create a new password." : "Enter your user name. We will send a password-reset OTP to your registered mobile number."}</p>
+          {!resetRequest ? <>
+            <label className="login-label" htmlFor="reset-username">User name</label>
+            <div className="login-input"><User aria-hidden="true" /><input id="reset-username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Enter your user name" autoComplete="username" spellCheck="false" required autoFocus /></div>
+          </> : <>
+            <div className="reset-otp-note"><MessageCircle /><span>{resetRequest.message}</span></div>
+            <label className="login-label" htmlFor="reset-otp">6-digit OTP</label>
+            <div className="login-input otp-input"><LockKeyhole aria-hidden="true" /><input id="reset-otp" value={resetOtp} onChange={(event) => setResetOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" required autoFocus /></div>
+            <label className="login-label" htmlFor="reset-new-password">New password</label>
+            <div className="login-input"><LockKeyhole aria-hidden="true" /><input id="reset-new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Minimum 8 characters" /></div>
+            <label className="login-label" htmlFor="reset-confirm-password">Confirm new password</label>
+            <div className="login-input"><LockKeyhole aria-hidden="true" /><input id="reset-confirm-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Re-enter new password" /></div>
+          </>}
+          <div className="login-feedback" aria-live="polite">{error && <p className="login-error" role="alert">{error}</p>}</div>
+          <button type="submit" className="primary" disabled={working || (!resetRequest && !username.trim()) || (resetRequest && (resetOtp.length !== 6 || newPassword.length < 8 || confirmation.length < 8))}>
+            {working ? "Please wait…" : resetRequest ? "Reset password" : "Send OTP"}<ChevronRight />
+          </button>
+          {resetRequest && <button type="button" className="reset-start-over" onClick={() => { setResetRequest(null); setResetOtp(""); setNewPassword(""); setConfirmation(""); setError(""); }}>Request another OTP</button>}
         </form> : <form
           className="loginbox"
           onSubmit={(event) => {
@@ -284,6 +360,10 @@ function Login({ onLogin, theme, toggleTheme }) {
           }}
         >
           <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
+          <div className="login-auth-tabs" role="tablist" aria-label="Login options">
+            <button type="button" role="tab" aria-selected="true" className="active">Sign in</button>
+            <button type="button" role="tab" aria-selected="false" onClick={() => { setLoginMode("reset"); setError(""); setNotice(""); }}>Reset password</button>
+          </div>
           <small className="login-kicker"><LockKeyhole /> SECURE OPERATIONS PORTAL</small>
           <h2>Welcome back</h2>
           <p>Sign in to access your fleet operations workspace.</p>
@@ -328,6 +408,7 @@ function Login({ onLogin, theme, toggleTheme }) {
             Remember me
           </label>
           <div className="login-feedback" aria-live="polite">
+            {notice && <p className="login-success" role="status">{notice}</p>}
             {error && <p className="login-error" role="alert">{error}</p>}
           </div>
           <button
@@ -4888,7 +4969,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<>
-      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
+      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
