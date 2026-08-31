@@ -1226,6 +1226,7 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
   const tables=buildDirectorReportTables(await directorReportSourceData());
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
   const links=[];
+  const files=[];
   const shortReportCode=()=>randomUUID().replace(/-/g,'').slice(0,10);
   for(const table of tables){
     const pdf=await buildTableExportPdf({title:table.title,columns:table.columns.map((column)=>({label:column.label})),rows:table.rows});
@@ -1243,8 +1244,12 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
       pdfUrl:`${baseUrl}/r/${pdfCode}`,
       xlsxUrl:`${baseUrl}/r/${xlsxCode}`,
     });
+    files.push(
+      {filename:pdfFilename,contentType:'application/pdf',content:pdf},
+      {filename:xlsxFilename,contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',content:xlsx},
+    );
   }
-  return {slotKey,generatedAt:now,links,message:buildDirectorWhatsAppMessage({generatedAt:now,links})};
+  return {slotKey,generatedAt:now,links,files,message:buildDirectorWhatsAppMessage({generatedAt:now,links})};
 }
 
 async function sendDirectorReportBundle({recipientPhone,recipientName='Director',baseUrl=publicBaseUrl(),now=new Date(),manual=false}={}){
@@ -1318,7 +1323,7 @@ app.post('/api/reports/director/send-email-test',requireSuper,async(req,res,next
     const bundle=await publishDirectorReportFiles({baseUrl:publicBaseUrl(req),slotKey:window.slotKey,now});
     const result=await sendDirectorReportEmail({to:recipientEmail,bundle});
     if(!result.sent)return res.status(502).json({slotKey:window.slotKey,status:'Failed',reason:result.reason});
-    res.json({slotKey:window.slotKey,status:'Sent',reportCount:bundle.links.length,accepted:result.accepted});
+    res.json({slotKey:window.slotKey,status:'Sent',reportCount:bundle.links.length,accepted:result.accepted,attachmentCount:result.attachmentCount});
   }catch(error){next(error)}
 });
 

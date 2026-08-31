@@ -1,4 +1,5 @@
 import {createTicketMailer,cleanEmailText,escapeEmailHtml} from './ticket-email.mjs';
+import {buildDirectorReportArchiveBuffer} from './director-report-bundle.mjs';
 
 function groupLinks(links=[]){
   return links.reduce((groups,link)=>{
@@ -64,18 +65,31 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[]}={}){
   return {subject:`Nerve Center - Director's Daily Report - ${generated}`,text,html};
 }
 
+export function buildDirectorReportZipAttachment(bundle={}){
+  const files=Array.isArray(bundle.files)?bundle.files:[];
+  if(!files.length)return null;
+  const slotKey=cleanEmailText(bundle.slotKey||'director-daily-report');
+  return {
+    filename:`nerve-center-director-reports-${slotKey}.zip`,
+    content:buildDirectorReportArchiveBuffer(files),
+    contentType:'application/zip',
+  };
+}
+
 export async function sendDirectorReportEmail({to,bundle},env=process.env){
   const recipients=String(to||'').split(',').map((value)=>value.trim()).filter(Boolean);
   if(!recipients.length)return {sent:false,reason:'recipient email missing'};
   const {config,transporter}=createTicketMailer(env);
   if(!transporter)return {sent:false,reason:'Email is not configured'};
   const email=buildDirectorReportEmail(bundle);
+  const zipAttachment=buildDirectorReportZipAttachment(bundle);
   const result=await transporter.sendMail({
     from:`Nerve Center Reports <${config.user}>`,
     to:recipients,
     subject:email.subject,
     text:email.text,
     html:email.html,
+    attachments:zipAttachment?[zipAttachment]:[],
   });
-  return {sent:true,messageId:result.messageId,accepted:result.accepted};
+  return {sent:true,messageId:result.messageId,accepted:result.accepted,attachmentCount:zipAttachment?1:0};
 }

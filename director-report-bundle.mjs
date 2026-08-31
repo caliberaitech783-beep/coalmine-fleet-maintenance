@@ -220,6 +220,10 @@ function zipStoredFiles(files){
   return Buffer.concat(chunks);
 }
 
+export function buildDirectorReportArchiveBuffer(files=[]){
+  return zipStoredFiles(files.map((file)=>({name:file.filename||file.name,content:file.content||file.buffer||Buffer.alloc(0)})));
+}
+
 function excelCellReference(columnIndex,rowIndex){
   let column='',value=columnIndex+1;
   while(value){value-=1;column=String.fromCharCode(65+(value%26))+column;value=Math.floor(value/26)}
