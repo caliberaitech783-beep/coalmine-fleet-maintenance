@@ -17,12 +17,19 @@ export const ADMIN_TAB_OPTIONS = [
   "Audit Trail",
   "Tickets",
 ];
+export const ADMIN_REPORT_OPTIONS = [
+  "Reports",
+  "General Report",
+  "Production report",
+  "Maintenance report",
+  "MIS Report",
+];
 
 export const ADMIN_SUBMENU_OPTIONS = {
   Dashboard: {field: "dashboardAccess", label: "Visible dashboard menus", options: ["Dashboard"]},
   Masters: {field: "masterAccess", label: "Visible masters", options: ADMIN_MASTER_OPTIONS},
   "WhatsApp Integration": {field: "whatsappAccess", label: "Visible WhatsApp menus", options: ["Daily site-wise report", "Daily OEM report", "WhatsApp alert history"]},
-  Reports: {field: "reportAccess", label: "Visible report menus", options: ["Reports"]},
+  Reports: {field: "reportAccess", label: "Visible report menus", options: ADMIN_REPORT_OPTIONS},
   "Audit Trail": {field: "auditAccess", label: "Visible audit menus", options: ["Audit Trail"]},
   Tickets: {field: "ticketAccess", label: "Visible ticket menus", options: ["Tickets"]},
 };

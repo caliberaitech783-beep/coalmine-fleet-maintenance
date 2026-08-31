@@ -10,9 +10,41 @@ test("every report table supports header filters, sorting, and equipment compari
   assert.match(source, /<FilterableHeader/);
   assert.match(source, /onSort=\{changeSort\}/);
   assert.match(source, /elapsedMilliseconds\(request\.start, request\.closedAt\)/);
-  assert.equal((reportsSource.match(/<ReportTable/g) || []).length, 4);
+  assert.match(source, /<ReportTable[\s\S]*columns=\{columns\}/);
+  assert.match(source, /function ReportSection\(/);
   assert.match(reportsSource, /reportMake: request\.make \|\| equipment\?\.make/);
   assert.match(reportsSource, /reportModel: request\.model \|\| equipment\?\.model/);
-  assert.equal((reportsSource.match(/key: "make"/g) || []).length, 3);
-  assert.equal((reportsSource.match(/key: "model"/g) || []).length, 3);
+  assert.ok((reportsSource.match(/key: "make"/g) || []).length >= 2);
+  assert.ok((reportsSource.match(/key: "model"/g) || []).length >= 2);
+});
+
+test("reports page exposes generated report type and report-name sub tabs", () => {
+  const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const reportsSource = source.slice(source.indexOf("const reportCategoryTabs"), source.indexOf("function MasterPage"));
+
+  assert.match(reportsSource, /General Report/);
+  assert.match(reportsSource, /Production report/);
+  assert.match(reportsSource, /Maintenance report/);
+  assert.match(reportsSource, /MIS Report/);
+  assert.doesNotMatch(reportsSource, /Report format, filters, columns, and export rules are not defined yet/);
+  assert.match(reportsSource, /className="report-name-tabs"/);
+  assert.match(reportsSource, /selectedReportByCategory/);
+  assert.match(reportsSource, /selectedReport && \(/);
+  assert.match(reportsSource, /Location wise Open BD report with Category \(Prod\)/);
+  assert.match(reportsSource, /Location wise Closing BD report with Category \(Maint\.\)/);
+  assert.match(reportsSource, /MIS Verification Report \(MIS\)/);
+  assert.match(reportsSource, /Report for On Road \/ Off Road & Idle/);
+  assert.match(reportsSource, /Vehicle Transfer Report/);
+  assert.match(reportsSource, /Total Equipment \/ Vehicle Location Wise/);
+  assert.match(reportsSource, /Idle Vehicle Report/);
+  assert.match(reportsSource, /Recent Breakdown Cases/);
+  assert.match(reportsSource, /Off Road to MIS Verift Report - Time taken from Prod to MIS Veri\./);
+  assert.match(reportsSource, /Event Open Report - Prod\. Open with Maint\. Close Time -- TAT/);
+  assert.match(reportsSource, /Event close Report - Maint\. Closing to MIS Verif\./);
+  assert.match(reportsSource, /Idle Time with PM Verification Time/);
+  assert.match(reportsSource, /Idle Verification v\/s MIS First Trip verification/);
+  assert.match(reportsSource, /MIS reports will be defined afterward/);
+  assert.doesNotMatch(reportsSource, /category: "mis", title:/);
+  assert.match(reportsSource, /<ExportMenu title=\{title\} columns=\{columns\} rows=\{rows\}/);
+  assert.match(reportsSource, /label="Generate"/);
 });

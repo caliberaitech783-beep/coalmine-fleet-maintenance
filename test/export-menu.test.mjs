@@ -2,18 +2,19 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 
-test('all master and user report exports offer PDF, CSV, and print',()=>{
+test('all master and user report exports offer PDF, Excel, and print',()=>{
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/sortable-table.css',import.meta.url),'utf8');
 
   assert.match(source,/function ExportMenu\(/);
   assert.match(source,/Download as PDF/);
-  assert.match(source,/Download as CSV/);
+  assert.match(source,/Download as Excel/);
+  assert.match(source,/application\/vnd\.ms-excel/);
   assert.match(source,/<Printer \/> Print<\/button>/);
   assert.match(source,/fetch\("\/api\/exports\/pdf"/);
   assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
-  assert.match(source,/<ExportMenu title="Nerve Center reports" columns=\{reportExportColumns\} rows=\{elapsedRows\}/);
+  assert.match(source,/<ExportMenu title=\{title\} columns=\{columns\} rows=\{rows\}/);
   assert.match(source,/<ExportMenu title="Breakdown report" columns=\{filterColumns\} rows=\{sortedRows\}/);
   assert.match(source,/<ExportMenu title="Workflow report" columns=\{filterColumns\} rows=\{sortedRows\}/);
   assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);

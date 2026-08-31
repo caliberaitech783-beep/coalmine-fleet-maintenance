@@ -36,6 +36,7 @@ test("desktop and mobile menu selections remain independent per user",()=>{
 test("every main header has a conditional submenu allowlist", () => {
   assert.deepEqual(Object.keys(ADMIN_SUBMENU_OPTIONS), ["Dashboard", "Masters", "WhatsApp Integration", "Reports", "Audit Trail", "Tickets"]);
   assert.ok(Object.values(ADMIN_SUBMENU_OPTIONS).every(({field, options}) => field && options.length));
+  assert.deepEqual(ADMIN_SUBMENU_OPTIONS.Reports.options, ["Reports", "General Report", "Production report", "Maintenance report", "MIS Report"]);
 });
 
 test("new administrators receive only explicitly selected masters and tabs", () => {

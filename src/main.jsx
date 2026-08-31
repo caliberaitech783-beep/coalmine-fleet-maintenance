@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
-import { elapsedLabel, elapsedMilliseconds, latestTimestamp } from "../report-metrics.mjs";
+import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
@@ -49,6 +49,7 @@ import {
   FileBarChart,
   History,
   Download,
+  FileSpreadsheet,
   Upload,
   ChevronDown,
   ArrowUpDown,
@@ -444,11 +445,13 @@ function Login({ onLogin, theme, toggleTheme }) {
     </div>
   );
 }
-function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "" }) {
+function Side({ active, setActive, logout, open, permissions = {}, session, profileLocation = "", activeReportCategory = "general" }) {
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 900px)");
@@ -460,6 +463,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setMastersOpen(false);
     setWhatsappOpen(false);
     setWorkspacesOpen(false);
+    setReportsOpen(false);
   };
   const selectPage = (page) => {
     closeMenus();
@@ -471,6 +475,12 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     event.currentTarget.blur();
     setActive(page);
   };
+  const selectReport = (category, event) => {
+    setReportsOpen(false);
+    setReportsSelectionClosed(true);
+    event.currentTarget.blur();
+    setActive({ page: "Reports", reportCategory: category.id });
+  };
   useEffect(() => {
     closeMenus();
   }, [active]);
@@ -481,6 +491,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
+  const visibleReportNav = reportCategoryTabs.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
+  const canViewReports = accessAllows(viewPermissions.tabAccess, "Reports") && visibleReportNav.length > 0;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   return (
     <aside className={open ? "open" : ""}>
@@ -567,7 +579,37 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             </button></div>)}
           </div>
         </div>}
-        {visibleNav.filter(([name]) => name !== "Dashboard").map(([n, I]) => (
+        {canViewReports && <div
+          className={`masters-menu reports-menu${reportsOpen ? " open" : ""}${reportsSelectionClosed ? " selection-closed" : ""}`}
+          onPointerLeave={() => setReportsSelectionClosed(false)}
+        >
+          <div className="nav-config-row"><button
+            className={active === "Reports" ? "active" : ""}
+            aria-haspopup="menu"
+            aria-expanded={reportsOpen}
+            onClick={() => {
+              setReportsSelectionClosed(false);
+              setReportsOpen((value) => !value);
+            }}
+          >
+            <FileBarChart />
+            Reports
+            <ChevronDown className="masters-chevron" />
+          </button></div>
+          <div className="masters-dropdown reports-dropdown" role="menu">
+            {visibleReportNav.map((category) => (
+              <div className="nav-config-row" key={category.id}><button
+                role="menuitem"
+                className={active === "Reports" && activeReportCategory === category.id ? "active" : ""}
+                onClick={(event) => selectReport(category, event)}
+              >
+                <FileBarChart />
+                {category.label}
+              </button></div>
+            ))}
+          </div>
+        </div>}
+        {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={active === n ? "active" : ""}
             onClick={() => selectPage(n)}
@@ -1297,13 +1339,11 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
       window.removeEventListener("scroll", positionMenu, true);
     };
   }, [open]);
-  const downloadCsv = () => {
-    const csvValue = (value) => {
-      const text = String(value || "");
-      return `"${(/^[=+\-@]/.test(text) ? `'${text}` : text).replaceAll('"', '""')}"`;
-    };
-    const csv = [columns.map((column) => csvValue(column.label)).join(","), ...exportRows.map((row) => row.map(csvValue).join(","))].join("\n") + "\n";
-    downloadExportFile(new Blob([csv], { type: "text/csv;charset=utf-8" }), exportFileName(title, "csv"));
+  const downloadExcel = () => {
+    const headings = columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
+    const body = exportRows.length ? exportRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No records available</td></tr>`;
+    const workbook = `<!doctype html><html><head><meta charset="utf-8" /></head><body><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+    downloadExportFile(new Blob([`\ufeff${workbook}`], { type: "application/vnd.ms-excel;charset=utf-8" }), exportFileName(title, "xls"));
     setOpen(false);
   };
   const downloadPdf = async () => {
@@ -1334,7 +1374,7 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
     window.setTimeout(() => { popup.focus(); popup.print(); }, 120);
     setOpen(false);
   };
-  return <div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={downloading}><Download /> {downloading ? "Preparing PDF..." : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadCsv}><Download /> Download as CSV</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div>;
+  return <div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={downloading}><Download /> {downloading ? "Preparing PDF..." : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadExcel}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div>;
 }
 function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
   const [columnFilters, setColumnFilters] = useState({});
@@ -3405,19 +3445,66 @@ function Generic({ name, requests = [] }) {
   );
 }
 
-function ReportsPage({ requests = [], goto }) {
+const reportCategoryTabs = [
+  {id: "general", label: "General Report", description: "Common breakdown, location, transfer, idle, and fleet reports."},
+  {id: "production", label: "Production report", description: "Production to MIS verification elapsed-time reports."},
+  {id: "maintenance", label: "Maintenance report", description: "Maintenance closure, TAT, idle, and verification reports."},
+  {id: "mis", label: "MIS Report", description: "MIS verification and first-trip audit reports."},
+];
+function reportAccessAllows(selection, label) {
+  return accessAllows(selection, "Reports") || accessAllows(selection, label);
+}
+function firstTripTimestamp(request) {
+  const date = String(request.firstTripDate || "").trim();
+  const time = String(request.firstTripTime || "").trim();
+  return date ? [date, time].filter(Boolean).join(" ") : "";
+}
+function roadStatusLabel(record) {
+  const status = equipmentRoadStatus(record);
+  return status === "onroad" ? "On road" : status === "offroad" ? "Off road" : status === "idle" ? "Idle" : "Status not set";
+}
+function locationCountRows(records = []) {
+  const groups = new Map();
+  records.forEach((record) => {
+    const location = String(record.currentLocation || record.location || "Not assigned").trim() || "Not assigned";
+    const type = ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase()) ? "vehicles" : "equipment";
+    const current = groups.get(location) || { location, equipment: 0, vehicles: 0, total: 0 };
+    current[type] += 1;
+    current.total += 1;
+    groups.set(location, current);
+  });
+  return [...groups.values()].sort((a, b) => sortCollator.compare(a.location, b.location));
+}
+function ReportSection({ title, description, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, children }) {
+  return (
+    <div className="reports-section generated-report-section">
+      <div className="reports-section-heading">
+        <div>
+          <h2>{title}</h2>
+          <p>{description}</p>
+        </div>
+        <ExportMenu title={title} columns={columns} rows={rows} className="secondary" label="Generate" />
+      </div>
+      {children || (
+        <div className="reports-detail-table emptytable">
+          <ReportTable
+            query={query}
+            rows={rows}
+            rowKey={rowKey}
+            rowClassName={rowClassName}
+            emptyMessage={emptyMessage}
+            columns={columns}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {} }) {
   const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master");
-  const [userRecords, , usersLoaded] = useMasterRecords("Users & employees");
   const [transferRecords, , transfersLoaded] = useMasterRecords("Vehicle transfers");
-  const [privilegeRecords, , privilegesLoaded] = useMasterRecords("Privilege");
-  const [selectedReport, setSelectedReport] = useState("offroad");
   const [query, setQuery] = useState("");
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
 
   const equipmentByReference = useMemo(() => {
     const records = new Map();
@@ -3446,70 +3533,123 @@ function ReportsPage({ requests = [], goto }) {
       reportSite: request.site || equipment?.currentLocation || equipment?.location || "",
     };
   }), [requests, equipmentByReference]);
-  const eventReports = useMemo(() => [
-    {
-      id: "offroad",
-      title: "Production User · Offroad",
-      description: "Vehicle requests created when production marks equipment offroad.",
-      timestampKey: "start",
-      actorKey: "owner",
-      rows: reportRequests.filter((request) => String(request.start || "").trim()),
-    },
-    {
-      id: "onroad",
-      title: "Maintenance User · Onroad",
-      description: "Maintenance closure events that return a vehicle to service.",
-      timestampKey: "closedAt",
-      actorKey: "closedBy",
-      rows: reportRequests.filter((request) => String(request.closedAt || "").trim()),
-    },
-    {
-      id: "verified",
-      title: "MIS User · Verified",
-      description: "Verification events recorded after the maintenance request is closed.",
-      timestampKey: "verifiedAt",
-      actorKey: "verifiedBy",
-      rows: reportRequests.filter((request) => String(request.verifiedAt || "").trim()),
-    },
-  ], [reportRequests]);
-  const selectedEvent = eventReports.find((report) => report.id === selectedReport) || eventReports[0];
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
-  const ageRows = useMemo(() => reportRequests.map((request) => {
-    const age = Math.max(0, Math.floor((now - (new Date(String(request.start || "").replace(" ", "T")).getTime() || now)) / 86400000));
-    return {
-      ...request,
-      reportAge: age,
-      reportAgeClass: age > 5 ? "request-age-red" : age >= 2 && age <= 4 ? "request-age-orange" : age === 1 ? "request-age-yellow" : "",
-    };
-  }), [reportRequests, now]);
-  const loading = !(equipmentLoaded && usersLoaded && transfersLoaded && privilegesLoaded);
-  const count = (records, loaded) => loaded ? records.length.toLocaleString("en-IN") : "—";
-  const masterTotals = [
-    {label: "Total equipment", value: count(equipmentRecords, equipmentLoaded), source: "Equipment master", target: "Equipment master"},
-    {label: "Total users", value: count(userRecords, usersLoaded), source: "Users & employees master", target: "Users & employees"},
-    {label: "Total breakdown", value: requests.length.toLocaleString("en-IN"), source: "All maintenance requests", target: "Breakdown master"},
-    {label: "Vehicle transfer", value: count(transferRecords, transfersLoaded), source: "Vehicle transfers master", target: "Vehicle transfers"},
-    {label: "User privilege assignments", value: count(privilegeRecords, privilegesLoaded), source: "Users & employees", target: "Users & employees"},
-    {label: "Audit trail", value: "View", source: "Recorded user activity", target: "Audit Trail", unavailable: true},
-  ];
-  const reportCatalog = [
-    {report: "Production User marks vehicle Offroad", value: eventReports[0]?.rows.length || 0, source: "Workflow event"},
-    {report: "Maintenance User marks vehicle Onroad", value: eventReports[1]?.rows.length || 0, source: "Workflow event"},
-    {report: "MIS User verifies request / vehicle", value: eventReports[2]?.rows.length || 0, source: "Workflow event"},
-    {report: "Offroad → Onroad time difference", value: elapsedRows.filter((row) => row.start && row.closedAt).length, source: "Elapsed time"},
-    {report: "Onroad → MIS verification time difference", value: elapsedRows.filter((row) => row.closedAt && row.verifiedAt).length, source: "Elapsed time"},
-    {report: "Offroad → MIS verification total time", value: elapsedRows.filter((row) => row.start && row.verifiedAt).length, source: "Elapsed time"},
-    {report: "Total equipment", value: equipmentLoaded ? equipmentRecords.length : "—", source: "Equipment master"},
-    {report: "Total users", value: usersLoaded ? userRecords.length : "—", source: "Users & employees master"},
-    {report: "Total breakdown", value: requests.length, source: "Requests"},
-    {report: "Vehicle transfer", value: transfersLoaded ? transferRecords.length : "—", source: "Vehicle transfers master"},
-    {report: "User privilege assignments", value: privilegesLoaded ? privilegeRecords.length : "—", source: "Users & employees"},
-    {report: "Audit trail", value: "View", source: "Audit Trail"},
-  ];
+  const loading = !(equipmentLoaded && transfersLoaded);
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
-  const reportExportColumns = [
-    { label: "Report", value: () => "Workflow timing" }, { label: "Reference", value: (row) => row.ref }, { label: "Equipment", value: (row) => row.reportEquipment }, { label: "Make", value: (row) => row.reportMake }, { label: "Model", value: (row) => row.reportModel }, { label: "Site", value: (row) => row.reportSite }, { label: "Production offroad", value: (row) => row.start }, { label: "Maintenance onroad", value: (row) => row.closedAt }, { label: "MIS verified", value: (row) => row.verifiedAt }, { label: "Offroad to onroad", value: (row) => elapsedLabel(row.start, row.closedAt) }, { label: "Onroad to verified", value: (row) => elapsedLabel(row.closedAt, row.verifiedAt) }, { label: "Total elapsed", value: (row) => elapsedLabel(row.start, row.verifiedAt) },
+  const activeCategory = reportCategoryTabs.find((category) => category.id === activeReportCategory) || reportCategoryTabs[0];
+  const openBreakdownRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
+  const closedBreakdownRows = reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed");
+  const misVerificationRows = reportRequests.filter((request) => String(request.verifiedAt || "").trim() || String(request.verifiedBy || "").trim());
+  const idleRequestRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() === "idle" || String(request.idleReason || "").trim());
+  const fleetStatusRows = equipmentRecords.map((record, index) => ({
+    ...record,
+    reportId: record.id || `${record.equipmentName || record.door || "equipment"}-${index}`,
+    reportEquipment: record.equipmentName || record.equipment || record.door || "",
+    reportDoor: record.door || "",
+    reportMake: record.make || "",
+    reportModel: record.model || record.modelNo || "",
+    reportSite: record.currentLocation || record.location || "",
+    reportRoadStatus: roadStatusLabel(record),
+  }));
+  const transferRows = transferRecords.map((record, index) => ({
+    ...record,
+    reportId: record.id || `${record.transferNo || "transfer"}-${index}`,
+    reportEquipment: record.equipment || record.equipmentName || record.door || "",
+    reportSite: record.destination || record.currentLocation || record.location || "",
+  }));
+  const locationWiseRows = locationCountRows(equipmentRecords);
+  const recentBreakdownRows = [...reportRequests]
+    .sort((a, b) => (new Date(String(b.start || b.closedAt || b.verifiedAt || 0).replace(" ", "T")).getTime() || 0) - (new Date(String(a.start || a.closedAt || a.verifiedAt || 0).replace(" ", "T")).getTime() || 0))
+    .slice(0, 250);
+  const requestColumns = [
+    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
+    {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
+    {key: "door", label: "Door no.", value: (request) => request.reportDoor},
+    {key: "make", label: "Make", value: (request) => request.reportMake},
+    {key: "model", label: "Model", value: (request) => request.reportModel},
+    {key: "site", label: "Location", value: (request) => request.reportSite},
+    {key: "category", label: "Category", value: (request) => request.equipmentGroup || request.category || request.type},
+    {key: "status", label: "Status", value: (request) => request.status, render: (request) => <Status>{request.status}</Status>},
+    {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
+    {key: "started", label: "Opened at", value: (request) => request.start, render: (request) => formatTimestamp(request.start)},
   ];
+  const closureColumns = [
+    ...requestColumns,
+    {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
+    {key: "closedAt", label: "Closed at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+  ];
+  const misColumns = [
+    ...closureColumns,
+    {key: "verifiedBy", label: "MIS user", value: (request) => request.verifiedBy},
+    {key: "verifiedAt", label: "MIS verified at", value: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt)},
+  ];
+  const fleetColumns = [
+    {key: "equipment", label: "Equipment / vehicle", value: (record) => record.reportEquipment, render: (record) => <b>{record.reportEquipment || "—"}</b>},
+    {key: "door", label: "Door no.", value: (record) => record.reportDoor},
+    {key: "category", label: "Category", value: (record) => record.category || record.group || record.itemName},
+    {key: "make", label: "Make", value: (record) => record.reportMake},
+    {key: "model", label: "Model", value: (record) => record.reportModel},
+    {key: "location", label: "Location", value: (record) => record.reportSite},
+    {key: "roadStatus", label: "Road status", value: (record) => record.reportRoadStatus, render: (record) => <Status>{record.reportRoadStatus}</Status>},
+    {key: "serial", label: "Serial / chassis no.", value: (record) => record.manufacturerSerialNo || record.chassisNo},
+  ];
+  const transferColumns = [
+    {key: "transferNo", label: "Transfer no.", value: (record) => record.transferNo, render: (record) => <b>{record.transferNo || "—"}</b>},
+    {key: "transferDate", label: "Transfer date", value: (record) => record.transferDate},
+    {key: "equipment", label: "Equipment / vehicle", value: (record) => record.reportEquipment},
+    {key: "from", label: "From location", value: (record) => record.source},
+    {key: "to", label: "To location", value: (record) => record.destination},
+    {key: "model", label: "Model", value: (record) => record.modelNo || record.model},
+    {key: "driver", label: "Driver", value: (record) => record.driver},
+    {key: "chassis", label: "Chassis no.", value: (record) => record.chassisNo || record.manufacturerSerialNo},
+  ];
+  const reportGroups = [
+    {category: "general", title: "Location wise Open BD report with Category (Prod)", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, emptyMessage: "No open breakdown cases available"},
+    {category: "general", title: "Location wise Closing BD report with Category (Maint.)", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, emptyMessage: "No closed maintenance cases available"},
+    {category: "general", title: "MIS Verification Report (MIS)", description: "Requests verified by MIS, including maintenance close and MIS verification timestamps.", rows: misVerificationRows, columns: misColumns, emptyMessage: "No MIS verification records available"},
+    {category: "general", title: "Report for On Road / Off Road & Idle", description: "Current road status of equipment and vehicles from the Equipment Master.", rows: fleetStatusRows, columns: fleetColumns, emptyMessage: "No equipment road-status records available", rowKey: (record) => `road-${record.reportId}`},
+    {category: "general", title: "Vehicle Transfer Report", description: "Vehicle transfer history with source, destination, equipment, model, driver, and chassis details.", rows: transferRows, columns: transferColumns, emptyMessage: "No vehicle transfer records available", rowKey: (record) => `transfer-${record.reportId}`},
+    {category: "general", title: "Total Equipment / Vehicle Location Wise", description: "Location-wise count of equipment, vehicles, and total fleet records.", rows: locationWiseRows, columns: [
+      {key: "location", label: "Location", value: (row) => row.location, render: (row) => <b>{row.location}</b>},
+      {key: "equipment", label: "Equipment", value: (row) => row.equipment},
+      {key: "vehicles", label: "Vehicles", value: (row) => row.vehicles},
+      {key: "total", label: "Total equipment / vehicle", value: (row) => row.total},
+    ], emptyMessage: "No location-wise equipment records available", rowKey: (row) => `location-${row.location}`},
+    {category: "general", title: "Idle Vehicle Report", description: "Idle breakdown requests and idle fleet records that need follow-up.", rows: idleRequestRows, columns: [
+      ...requestColumns,
+      {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
+      {key: "closedAt", label: "Maintenance close / idle at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+    ], emptyMessage: "No idle vehicle records available"},
+    {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp.", rows: recentBreakdownRows, columns: closureColumns, emptyMessage: "No recent breakdown cases available"},
+    {category: "production", title: "Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.", description: "Elapsed time from Production off-road marking to MIS verification.", rows: elapsedRows.filter((row) => row.start && row.verifiedAt), columns: [
+      ...misColumns,
+      {key: "prodToMis", label: "Prod to MIS verification", value: (request) => elapsedLabel(request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.start, request.verifiedAt)}</strong>},
+    ], emptyMessage: "No Production to MIS verification timings available"},
+    {category: "maintenance", title: "Event Open Report - Prod. Open with Maint. Close Time -- TAT", description: "Turnaround time from Production opening to Maintenance close.", rows: elapsedRows.filter((row) => row.start && row.closedAt), columns: [
+      ...closureColumns,
+      {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
+    ], emptyMessage: "No Production-open to Maintenance-close timings available"},
+    {category: "maintenance", title: "Event close Report - Maint. Closing to MIS Verif.", description: "Elapsed time from Maintenance close to MIS verification.", rows: elapsedRows.filter((row) => row.closedAt && row.verifiedAt), columns: [
+      ...misColumns,
+      {key: "maintToMis", label: "Maintenance close to MIS verification", value: (request) => elapsedLabel(request.closedAt, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt, request.verifiedAt)}</strong>},
+    ], emptyMessage: "No Maintenance to MIS verification timings available"},
+    {category: "maintenance", title: "Idle Time with PM Verification Time", description: "Idle cases with maintenance idle time and verification timestamp.", rows: idleRequestRows, columns: [
+      ...misColumns,
+      {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
+      {key: "idleTime", label: "Idle to PM verification time", value: (request) => elapsedLabel(request.closedAt || request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt || request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt || request.start, request.verifiedAt)}</strong>},
+    ], emptyMessage: "No idle verification timings available"},
+    {category: "maintenance", title: "Idle Verification v/s MIS First Trip verification", description: "Comparison of MIS verification against first-trip confirmation for idle cases.", rows: idleRequestRows.filter((row) => row.verifiedAt || firstTripTimestamp(row)), columns: [
+      ...misColumns,
+      {key: "firstTripDone", label: "First trip done", value: (request) => request.firstTripDone ? "Yes" : "No"},
+      {key: "firstTrip", label: "First trip verification", value: (request) => firstTripTimestamp(request), render: (request) => formatTimestamp(firstTripTimestamp(request))},
+      {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
+    ], emptyMessage: "No idle first-trip verification records available"},
+  ];
+  const activeReports = reportGroups.filter((report) => report.category === activeCategory.id);
+  const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
+  const selectReportTab = (report) => {
+    setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
+  };
   return (
     <section className="reports-page panel pagepanel">
       <header>
@@ -3517,112 +3657,60 @@ function ReportsPage({ requests = [], goto }) {
           <h1>Reports</h1>
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
-        <ExportMenu title="Nerve Center reports" columns={reportExportColumns} rows={elapsedRows} className="primary" label="Export reports" />
       </header>
       <div className="toolbar reports-toolbar">
         <div><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
         {loading && <span className="reports-loading" role="status">Updating live totals…</span>}
       </div>
-      <div className="reports-section reports-kpis">
-        <div className="reports-section-heading"><div><h2>Control totals</h2><p>Live values are read from the current masters and request register.</p></div></div>
-        <div className="reports-kpi-grid">
-          {masterTotals.map((card) => (
-            <button key={card.label} type="button" className={`reports-kpi ${card.unavailable ? "unavailable" : ""}`} onClick={() => card.target && goto?.(card.target)}>
-              <span>{card.label}</span><strong>{card.value}</strong><small>{card.source}</small>
-            </button>
-          ))}
-        </div>
+      <div className="reports-category-tabs" role="tablist" aria-label="Report type tabs">
+        {reportCategoryTabs.map((category) => (
+          <button
+            key={category.id}
+            type="button"
+            role="tab"
+            aria-selected={activeReportCategory === category.id}
+            className={activeReportCategory === category.id ? "active" : ""}
+            onClick={() => setActiveReportCategory(category.id)}
+          >
+            <FileBarChart aria-hidden="true" />
+            <span><b>{category.label}</b><small>{category.description}</small></span>
+          </button>
+        ))}
       </div>
-      <div className="reports-section">
-        <div className="reports-section-heading"><div><h2>Workflow event reports</h2><p>Each report is driven by the timestamp recorded by the responsible role.</p></div></div>
-        <div className="reports-event-grid">
-          {eventReports.map((report) => (
-            <button key={report.id} type="button" className={`reports-event-card ${selectedReport === report.id ? "selected" : ""}`} onClick={() => setSelectedReport(report.id)}>
-              <span>{report.title}</span><strong>{report.rows.length.toLocaleString("en-IN")}</strong><small>{report.description}</small><em>Latest: {latestTimestamp(report.rows.map((row) => row[report.timestampKey]))}</em>
-            </button>
-          ))}
-        </div>
-        <div className="reports-detail-table emptytable">
-          <div className="reports-detail-heading"><h3>{selectedEvent?.title || "Workflow events"}</h3><span>{selectedEvent?.rows.length || 0} events</span></div>
-          <ReportTable
-            query={query}
-            rows={selectedEvent?.rows || []}
-            rowKey={(request) => `${selectedEvent?.id}-${request.ref}`}
-            emptyMessage="No events recorded for this report"
-            columns={[
-              {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
-              {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
-              {key: "make", label: "Make", value: (request) => request.reportMake},
-              {key: "model", label: "Model", value: (request) => request.reportModel},
-              {key: "site", label: "Site", value: (request) => request.reportSite},
-              {key: "user", label: "User", value: (request) => request[selectedEvent?.actorKey]},
-              {key: "recordedAt", label: "Recorded at", value: (request) => request[selectedEvent?.timestampKey], render: (request) => formatTimestamp(request[selectedEvent?.timestampKey])},
-              {key: "status", label: "Status", value: (request) => request.status, render: (request) => <Status>{request.status}</Status>},
-            ]}
-          />
-        </div>
+      <div className="reports-subtype-summary">
+        <div><b>{activeCategory.label}</b><span>{activeCategory.description}</span></div>
+        <small>{activeReports.length} generated report{activeReports.length === 1 ? "" : "s"}</small>
       </div>
-      <div className="reports-section">
-        <div className="reports-section-heading"><div><h2>Workflow timing</h2><p>Durations are calculated from Production offroad, Maintenance onroad, and MIS verification timestamps.</p></div></div>
-        <div className="reports-detail-table emptytable">
-          <ReportTable
-            query={query}
-            rows={elapsedRows}
-            rowKey={(request) => `elapsed-${request.ref}`}
-            emptyMessage="No workflow timings available"
-            columns={[
-              {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
-              {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
-              {key: "make", label: "Make", value: (request) => request.reportMake},
-              {key: "model", label: "Model", value: (request) => request.reportModel},
-              {key: "site", label: "Site", value: (request) => request.reportSite},
-              {key: "offroad", label: "Production offroad", value: (request) => request.start, render: (request) => formatTimestamp(request.start)},
-              {key: "onroad", label: "Maintenance onroad", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
-              {key: "verified", label: "MIS verified", value: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt)},
-              {key: "offroadToOnroad", label: "Offroad → Onroad", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
-              {key: "onroadToVerified", label: "Onroad → Verified", value: (request) => elapsedLabel(request.closedAt, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt, request.verifiedAt)}</strong>},
-              {key: "totalElapsed", label: "Total elapsed", value: (request) => elapsedLabel(request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.start, request.verifiedAt)}</strong>},
-            ]}
-          />
-        </div>
-      </div>
-      <div className="reports-section">
-        <div className="reports-section-heading"><div><h2>Report catalogue</h2><p>All requested report outputs are available from this section.</p></div></div>
-        <div className="reports-catalogue emptytable">
-          <ReportTable
-            query={query}
-            rows={reportCatalog}
-            rowKey={(report) => report.report}
-            emptyMessage="No reports match this search"
-            columns={[
-              {key: "report", label: "Report", value: (report) => report.report, render: (report) => <b>{report.report}</b>},
-              {key: "value", label: "Records / value", value: (report) => report.value},
-              {key: "source", label: "Source", value: (report) => report.source},
-            ]}
-          />
-        </div>
-      </div>
-      <div className="reports-section request-age-report">
-        <div className="request-age-heading"><div><h2>Service and maintenance request ageing</h2><p>Requests are highlighted automatically according to their age.</p></div><div className="request-age-legend"><span className="yellow">1 day</span><span className="orange">2–4 days</span><span className="red">More than 5 days</span></div></div>
-        <div className="emptytable"><ReportTable
+      {activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
+        {activeReports.map((report) => (
+          <button
+            key={report.title}
+            type="button"
+            role="tab"
+            aria-selected={selectedReport?.title === report.title}
+            className={selectedReport?.title === report.title ? "active" : ""}
+            onClick={() => selectReportTab(report)}
+          >
+            <FileBarChart aria-hidden="true" />
+            <span>{report.title}</span>
+          </button>
+        ))}
+      </div> : <div className="reports-section reports-empty-definition">
+        <div className="reports-section-heading"><div><h2>{activeCategory.label}</h2><p>MIS reports will be defined afterward.</p></div></div>
+      </div>}
+      {selectedReport && (
+        <ReportSection
+          key={`${selectedReport.category}-${selectedReport.title}`}
+          title={selectedReport.title}
+          description={selectedReport.description}
           query={query}
-          rows={ageRows}
-          rowKey={(request) => `age-${request.ref}`}
-          rowClassName={(request) => request.reportAgeClass}
-          emptyMessage="No service or maintenance requests available"
-          columns={[
-            {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
-            {key: "door", label: "Door no.", value: (request) => request.reportDoor},
-            {key: "make", label: "Make", value: (request) => request.reportMake},
-            {key: "model", label: "Model", value: (request) => request.reportModel},
-            {key: "site", label: "Site", value: (request) => request.reportSite},
-            {key: "complaint", label: "Complaint", value: (request) => request.complaint},
-            {key: "created", label: "Created", value: (request) => request.start, render: (request) => formatTimestamp(request.start)},
-            {key: "age", label: "Age", value: (request) => request.reportAge, render: (request) => <b>{request.reportAge} {request.reportAge === 1 ? "day" : "days"}</b>},
-            {key: "status", label: "Status", value: (request) => request.status, render: (request) => <Status>{request.status}</Status>},
-          ]}
-        /></div>
-      </div>
+          rows={selectedReport.rows}
+          columns={selectedReport.columns}
+          emptyMessage={selectedReport.emptyMessage}
+          rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
+          rowClassName={selectedReport.rowClassName}
+        />
+      )}
     </section>
   );
 }
@@ -5022,6 +5110,7 @@ function App() {
     [equipmentCategory, setEquipmentCategory] = useState("all"),
     [breakdownFleetFilter, setBreakdownFleetFilter] = useState(""),
     [breakdownFleetSites, setBreakdownFleetSites] = useState([]),
+    [activeReportCategory, setActiveReportCategory] = useState("general"),
     [requests, setRequests] = useState([]),
     [menu, setMenu] = useState(false),
     [loadTime, setLoadTime] = useState(null),
@@ -5062,6 +5151,7 @@ function App() {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && accessAllows(activeNavigationPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
+    if (name === "Reports") return accessAllows(activeNavigationPermissions.tabAccess, "Reports") && reportCategoryTabs.some((category) => reportAccessAllows(activeNavigationPermissions.reportAccess, category.label));
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
@@ -5279,8 +5369,10 @@ function App() {
       <Side
         active={active}
         setActive={(x) => {
-          selectMenu(x);
-          if (x === "Equipment master") {
+          const page = typeof x === "string" ? x : x?.page;
+          if (x?.reportCategory) setActiveReportCategory(x.reportCategory);
+          selectMenu(page);
+          if (page === "Equipment master") {
             setEquipmentFilter("all");
             setEquipmentLocation("");
           }
@@ -5291,6 +5383,7 @@ function App() {
         permissions={adminPermissions}
         session={session}
         profileLocation={profileLocation}
+        activeReportCategory={activeReportCategory}
       />
       <main className="content">
         <div className="top">
@@ -5340,7 +5433,7 @@ function App() {
           ) : active === "WhatsApp alert history" ? (
             <WhatsAppAlertHistory />
           ) : active === "Reports" ? (
-            <ReportsPage requests={requests} goto={selectMenu} />
+            <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} />
           ) : operationalSession ? (
             <Normal
               embedded
