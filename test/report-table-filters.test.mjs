@@ -14,6 +14,8 @@ test("every report table supports header filters, sorting, and equipment compari
   assert.match(source, /function ReportSection\(/);
   assert.match(reportsSource, /reportMake: request\.make \|\| equipment\?\.make/);
   assert.match(reportsSource, /reportModel: request\.model \|\| equipment\?\.model/);
+  assert.match(reportsSource, /const reportRequestStatus = \(request\) => String\(request\.status \|\| ""\)\.trim\(\) \|\| "Open"/);
+  assert.match(reportsSource, /key: "status", label: "Status", value: reportRequestStatus/);
   assert.ok((reportsSource.match(/key: "make"/g) || []).length >= 2);
   assert.ok((reportsSource.match(/key: "model"/g) || []).length >= 2);
 });

@@ -3630,6 +3630,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
   const loading = !(equipmentLoaded && transfersLoaded);
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
+  const reportRequestStatus = (request) => String(request.status || "").trim() || "Open";
   const activeCategory = reportCategoryTabs.find((category) => category.id === activeReportCategory) || reportCategoryTabs[0];
   const openBreakdownRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
   const closedBreakdownRows = reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed");
@@ -3663,7 +3664,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "model", label: "Model", value: (request) => request.reportModel},
     {key: "site", label: "Location", value: (request) => request.reportSite},
     {key: "category", label: "Category", value: (request) => request.equipmentGroup || request.category || request.type},
-    {key: "status", label: "Status", value: (request) => request.status, render: (request) => <Status>{request.status}</Status>},
+    {key: "status", label: "Status", value: reportRequestStatus, render: (request) => <Status>{reportRequestStatus(request)}</Status>},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "started", label: "Opened at", value: (request) => request.start, render: (request) => formatTimestamp(request.start)},
   ];
