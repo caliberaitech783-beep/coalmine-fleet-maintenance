@@ -4616,6 +4616,118 @@ function PrivilegeMasterPage(props) {
   if (missingUsers.length && failedSync !== syncKey) return <MasterLoader name="Privilege" />;
   return <MasterPage {...props} userOptions={userOptions} siteOptions={privilegeSiteOptions} />;
 }
+const regionSites = (record = {}) => String(record.sites || "")
+  .split(/\s*\|\s*/)
+  .map((site) => site.trim())
+  .filter(Boolean);
+
+function RegionMasterPage({ records = [], onAdd, onDeleteAll, gotoEquipment }) {
+  const normalizedRegions = records.map((record, index) => ({
+    ...record,
+    code: String(record.code || record.shortName || "").trim() || `REG-${index + 1}`,
+    sitesList: regionSites(record),
+  }));
+  const [activeRegionCode, setActiveRegionCode] = useState(() => normalizedRegions[0]?.code || "WCL");
+  const activeRegion = normalizedRegions.find((region) => region.code === activeRegionCode) || normalizedRegions[0];
+  const [activeSite, setActiveSite] = useState("");
+  const [query, setQuery] = useState("");
+  const [equipmentRecords] = useMasterRecords("Equipment master", vehicles);
+  useEffect(() => {
+    const firstSite = activeRegion?.sitesList?.[0] || "";
+    if (!activeRegion?.sitesList?.includes(activeSite)) setActiveSite(firstSite);
+  }, [activeRegionCode, activeRegion?.sites, activeSite]);
+  const visibleSites = (activeRegion?.sitesList || []).filter((site) => matchesSmartSearch(query, activeRegion?.name, activeRegion?.code, site));
+  const siteMetrics = (site) => {
+    const siteRecords = equipmentRecords.filter((record) => recordBelongsToSite(record, site));
+    const metrics = equipmentMetrics(siteRecords);
+    return { total: siteRecords.length, onRoad: metrics.onRoad, offRoad: metrics.offRoad, idle: metrics.idle };
+  };
+  const regionTotals = (activeRegion?.sitesList || []).reduce((totals, site) => {
+    const metrics = siteMetrics(site);
+    return {
+      total: totals.total + metrics.total,
+      onRoad: totals.onRoad + metrics.onRoad,
+      offRoad: totals.offRoad + metrics.offRoad,
+      idle: totals.idle + metrics.idle,
+    };
+  }, { total: 0, onRoad: 0, offRoad: 0, idle: 0 });
+  const selectedSiteMetrics = activeSite ? siteMetrics(activeSite) : { total: 0, onRoad: 0, offRoad: 0, idle: 0 };
+  const openEquipment = (road = "all", site = activeSite) => {
+    if (site && gotoEquipment) gotoEquipment(road, site);
+  };
+  return (
+    <section className="region-master-page panel pagepanel">
+      <header>
+        <div>
+          <h1>Region master</h1>
+          <p>{normalizedRegions.length} regions configured · WCL and NCL site control center</p>
+        </div>
+        <MasterActions name="Region master" records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} />
+      </header>
+      <div className="region-master-toolbar">
+        <div className="region-main-tabs" role="tablist" aria-label="Region tabs">
+          {normalizedRegions.map((region) => (
+            <button key={region.code} type="button" role="tab" aria-selected={activeRegion?.code === region.code} className={activeRegion?.code === region.code ? "active" : ""} onClick={() => setActiveRegionCode(region.code)}>
+              <Building2 />
+              <span><b>{region.code}</b><small>{region.name}</small></span>
+            </button>
+          ))}
+        </div>
+        <label className="region-search"><Search /><input data-smart-search type="search" placeholder="Search sites" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      </div>
+      {activeRegion ? (
+        <>
+          <div className="region-hero">
+            <div>
+              <span>{activeRegion.code}</span>
+              <h2>{activeRegion.name}</h2>
+              <p>{activeRegion.state || "State not assigned"} · {activeRegion.sitesList.length} sites</p>
+            </div>
+            <div className="region-summary-strip">
+              <button type="button" onClick={() => openEquipment("all")}><strong>{regionTotals.total}</strong><span>Total</span></button>
+              <button type="button" onClick={() => openEquipment("onroad")}><strong>{regionTotals.onRoad}</strong><span>On Road</span></button>
+              <button type="button" onClick={() => openEquipment("offroad")}><strong>{regionTotals.offRoad}</strong><span>Off Road</span></button>
+              <button type="button" onClick={() => openEquipment("idle")}><strong>{regionTotals.idle}</strong><span>Idle</span></button>
+            </div>
+          </div>
+          <div className="region-site-tabs" role="tablist" aria-label={`${activeRegion.code} site tabs`}>
+            {visibleSites.map((site) => (
+              <button key={site} type="button" role="tab" aria-selected={activeSite === site} className={activeSite === site ? "active" : ""} onClick={() => setActiveSite(site)}>
+                <MapPin />
+                <span>{site}</span>
+              </button>
+            ))}
+          </div>
+          {activeSite ? (
+            <div className="region-site-panel">
+              <header>
+                <div>
+                  <span>Selected site</span>
+                  <h3>{activeSite}</h3>
+                </div>
+                <button className="secondary" type="button" onClick={() => openEquipment("all", activeSite)}>Open equipment <ChevronRight /></button>
+              </header>
+              <div className="region-site-metrics">
+                {[
+                  ["all", "Total equipment / vehicle", selectedSiteMetrics.total, Gauge],
+                  ["onroad", "On Road", selectedSiteMetrics.onRoad, CheckCircle2],
+                  ["offroad", "Off Road", selectedSiteMetrics.offRoad, AlertTriangle],
+                  ["idle", "Idle", selectedSiteMetrics.idle, Clock],
+                ].map(([road, label, value, Icon]) => (
+                  <button key={road} type="button" className={`region-metric ${road}`} onClick={() => openEquipment(road, activeSite)}>
+                    <Icon />
+                    <span>{label}</span>
+                    <strong>{Number(value).toLocaleString("en-IN")}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : <p className="empty-state">No sites match this search.</p>}
+        </>
+      ) : <p className="empty-state">No regions configured.</p>}
+    </section>
+  );
+}
 Generic = function GenericWithMasters(props) {
   const name = props.name,
     seed =
@@ -4647,7 +4759,7 @@ Subsidiaries = function SubsidiariesWithImport() {
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
   if (!loaded) return <MasterLoader name="Region master" />;
-  return <MasterPage name="Region master" records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />;
+  return <RegionMasterPage records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={props.gotoEquipment} />;
 };
 function Modal({ title, close, children, className = "" }) {
   return (

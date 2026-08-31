@@ -177,3 +177,35 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
   .login-auth-tab-copy small{display:none}
   .login-auth-tabs button.active:after{right:8px;top:8px;width:6px;height:6px}
 }
+
+/* Region master graphical workspace */
+.region-master-page{overflow:hidden}
+.region-master-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line);background:#f8fafc}
+.region-main-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.region-main-tabs button{display:grid;grid-template-columns:42px minmax(0,1fr);align-items:center;gap:12px;min-height:74px;border:1px solid #dfe6f1;border-radius:8px;background:#fff;color:#5f6d86;text-align:left;padding:12px;box-shadow:0 6px 18px #17233c08}
+.region-main-tabs button svg{width:22px;height:22px;color:#2d5ccf}
+.region-main-tabs button>svg{display:grid;place-items:center;width:42px;height:42px;padding:10px;border-radius:8px;background:#eef4ff}
+.region-main-tabs b,.region-main-tabs small{display:block;min-width:0}
+.region-main-tabs b{color:#14213d;font:800 18px Manrope}
+.region-main-tabs small{margin-top:3px;color:#78869c;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.region-main-tabs button.active{border-color:#9eb7f3;background:#edf3ff;box-shadow:0 10px 24px #2454d11a}
+.region-main-tabs button.active>svg{background:#2454d1;color:#fff}
+.region-search{display:flex;align-items:center;gap:9px;height:48px;border:1px solid #dfe6f1;border-radius:8px;background:#fff;padding:0 13px;color:#8794aa}
+.region-search svg{width:17px}.region-search input{width:100%;border:0;outline:0;background:transparent;color:var(--ink);font-size:13px}
+.region-hero{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;align-items:center;padding:24px 28px;background:linear-gradient(135deg,#10213f,#173f7a);color:#fff}
+.region-hero span{display:block;color:#9fc3ff;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.region-hero h2{margin:6px 0 6px;font:850 30px Manrope}.region-hero p{margin:0;color:#c8d7ef;font-size:13px}
+.region-summary-strip{display:grid;grid-template-columns:repeat(4,112px);gap:9px}
+.region-summary-strip button{border:1px solid #ffffff24;border-radius:8px;background:#ffffff12;color:#fff;padding:12px;text-align:left}
+.region-summary-strip strong,.region-summary-strip span{display:block}.region-summary-strip strong{font:850 24px Manrope}.region-summary-strip span{margin-top:2px;color:#c4d4ef;font-size:10px}
+.region-site-tabs{display:flex;gap:9px;overflow:auto;padding:16px 22px;border-bottom:1px solid var(--line);background:#fff}
+.region-site-tabs button{display:flex;align-items:center;gap:8px;flex:0 0 auto;min-height:42px;border:1px solid #dfe6f1;border-radius:8px;background:#fff;color:#63718b;padding:9px 12px;font-size:12px;font-weight:800}
+.region-site-tabs svg{width:16px}.region-site-tabs button.active{border-color:#2454d1;background:#eef4ff;color:#2454d1}
+.region-site-panel{padding:22px;background:#f8fafc}
+.region-site-panel>header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+.region-site-panel>header span{display:block;color:#2b6f9c;font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.region-site-panel h3{margin:3px 0 0;font:850 22px Manrope;color:#14213d}.region-site-panel .secondary{display:inline-flex;align-items:center;gap:7px}.region-site-panel .secondary svg{width:15px}
+.region-site-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
+.region-metric{display:grid;grid-template-columns:42px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;gap:4px 12px;min-height:104px;border:1px solid #dfe6f1;border-radius:8px;background:#fff;color:#52627b;padding:16px;text-align:left;box-shadow:0 8px 20px #17233c08}
+.region-metric svg{grid-row:1/3;width:42px;height:42px;padding:10px;border-radius:8px;background:#eef4ff;color:#2454d1}.region-metric span{font-size:12px;font-weight:800}.region-metric strong{font:850 30px Manrope;color:#14213d}
+.region-metric.onroad svg{background:#eaf7f1;color:#288967}.region-metric.offroad svg{background:#fdeceb;color:#d45551}.region-metric.idle svg{background:#fff4df;color:#b77412}
+@media(max-width:900px){.region-master-toolbar,.region-hero{grid-template-columns:1fr}.region-summary-strip,.region-site-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.region-search{width:100%}}
+@media(max-width:560px){.region-main-tabs{grid-template-columns:1fr}.region-summary-strip,.region-site-metrics{grid-template-columns:1fr}.region-hero{padding:20px}.region-hero h2{font-size:24px}.region-master-toolbar,.region-site-panel{padding:16px}}
