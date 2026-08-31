@@ -312,6 +312,11 @@ textarea {
 :root[data-theme="dark"] .notification-popover,:root[data-theme="dark"] .notification-popover header,:root[data-theme="dark"] .notification-list,:root[data-theme="dark"] .notification-list>button{background:#111d30!important}
 :root[data-theme="dark"] .notification-list>button:hover,:root[data-theme="dark"] .notification-popover header button:hover,:root[data-theme="dark"] .notification-popover header>div>span{background:#1d2d47!important}
 :root[data-theme="dark"] .column-filter-all:hover,:root[data-theme="dark"] .column-filter-values button:hover,:root[data-theme="dark"] .column-filter-values button.selected{background:#223e64;color:#fff}
+:root[data-theme="dark"] .table-parameter-filter-trigger,:root[data-theme="dark"] .report-table-filter-toolbar>label{background:#17253a;border-color:#36516f;color:#dce7f7}
+:root[data-theme="dark"] .table-parameter-filter-trigger svg,:root[data-theme="dark"] .report-table-filter-toolbar>label svg{color:#9bb7ff}
+:root[data-theme="dark"] .table-parameter-filter-popover{background:#17253a;border-color:#2c415e;color:#dce7f7;box-shadow:0 14px 30px #0008}
+:root[data-theme="dark"] .table-parameter-filter-head,:root[data-theme="dark"] .table-parameter-filter-foot{border-color:#2c415e}:root[data-theme="dark"] .table-parameter-filter-head strong{color:#eef3fb}:root[data-theme="dark"] .table-parameter-filter-head span,:root[data-theme="dark"] .table-parameter-filter-fields label>span{color:#a9b8ce}
+:root[data-theme="dark"] .table-parameter-filter-fields select{background:#1d2d45;border-color:#36516f;color:#dce7f7}:root[data-theme="dark"] .report-table-filter-toolbar{background:#142136;border-color:#2c415e}:root[data-theme="dark"] .report-table-filter-toolbar select{color:#dce7f7}
 :root[data-theme="dark"] .crumb .page-back{background:#17253a;border-color:#34435a;color:#c4d0e2}
 :root[data-theme="dark"] .crumb .page-back:hover:not(:disabled){background:#223e64;border-color:#55709b;color:#fff}
 :root[data-theme="dark"] .user-access-field{border-color:#34435a}:root[data-theme="dark"] .user-access-field legend{color:#dce7f7}:root[data-theme="dark"] .user-access-field label{background:#17253a;border-color:#34435a;color:#dce7f7}

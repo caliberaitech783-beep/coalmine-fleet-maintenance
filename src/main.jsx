@@ -677,7 +677,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
 }
 function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showMakeModel = false, onApproveIdeal }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
-  const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("");
+  const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
     const timer = window.setInterval(() => setBreakdownNow(Date.now()), 60000);
@@ -691,16 +691,27 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal ? [["idealAction", "Action"]] : []),
     ],
-    searchedRows = rows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.make, row.model) && (!statusFilter || row.status === statusFilter)),
     displayRows = showBreakdownDays
-      ? searchedRows.map((row) => ({
+      ? rows.map((row) => ({
           ...row,
           breakdownDays: calculateBreakdownDaysFromStart(row.start, breakdownNow),
         }))
-      : searchedRows,
-    [sortedRows, sort, changeSort] = useSortableRows(displayRows);
+      : rows,
+    filterColumns = columns.filter(([key]) => key !== "idealAction").map(([key, label]) => ({
+      key,
+      label,
+      value: (row) => {
+        if (key === "equipment") return row.equipmentGroup || row.equipment;
+        if (key === "createdBy") return row.owner || row.requesterLogin;
+        if (key === "start") return formatTwelveHourDateTime(row.start);
+        if (key === "audio") return row.complaintAudio || row.maintenanceAudio ? "Available" : "Not available";
+        return row[key];
+      },
+    })),
+    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.make, row.model) && (!statusFilter || row.status === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
+    [sortedRows, sort, changeSort] = useSortableRows(searchedRows);
   return (
-    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <table className="breakdown-table-auto-fit">
         <thead>
           <tr>
@@ -1061,10 +1072,87 @@ function FilterableHeader({
     </th>
   );
 }
+const EMPTY_TABLE_FILTER_VALUE = "__empty_table_filter_value__";
+function tableFilterText(value) {
+  if (Array.isArray(value)) return value.map(tableFilterText).filter(Boolean).join(" · ");
+  if (value && typeof value === "object") return Object.values(value).map(tableFilterText).filter(Boolean).join(" · ");
+  return String(value ?? "").trim();
+}
+function tableRowMatchesFilters(row, columns, filters) {
+  return columns.every((column) => {
+    const selected = filters[column.key];
+    if (!selected) return true;
+    const value = tableFilterText(column.value?.(row));
+    return selected === EMPTY_TABLE_FILTER_VALUE ? !value : value === selected;
+  });
+}
+function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterChange, onClearFilters, label = "Filter" }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
+  const activeFilterCount = columns.filter((column) => filters[column.key]).length;
+  const columnValues = Object.fromEntries(
+    columns.map((column) => [
+      column.key,
+      [...new Set(rows.map((row) => tableFilterText(column.value?.(row))))].sort((a, b) => sortCollator.compare(a, b)),
+    ]),
+  );
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeFilter = (event) => {
+      if (!event.target.closest?.(".table-parameter-filter, .table-parameter-filter-popover")) setOpen(false);
+    };
+    document.addEventListener("mousedown", closeFilter);
+    return () => document.removeEventListener("mousedown", closeFilter);
+  }, [open]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const positionPopover = () => {
+      const bounds = triggerRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      const width = Math.min(560, window.innerWidth - 24);
+      const height = Math.min(620, window.innerHeight * 0.7);
+      const top = bounds.bottom + 6;
+      setPopoverPosition({
+        top: top + height > window.innerHeight - 12 ? Math.max(12, bounds.top - height - 6) : top,
+        left: Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12)),
+      });
+    };
+    positionPopover();
+    window.addEventListener("resize", positionPopover);
+    window.addEventListener("scroll", positionPopover, true);
+    return () => {
+      window.removeEventListener("resize", positionPopover);
+      window.removeEventListener("scroll", positionPopover, true);
+    };
+  }, [open]);
+  return (
+    <div className="table-parameter-filter">
+      <button ref={triggerRef} type="button" className={`table-parameter-filter-trigger ${activeFilterCount ? "active" : ""}`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="dialog">
+        <ListFilter aria-hidden="true" /><span>{label}{activeFilterCount ? ` (${activeFilterCount})` : ""}</span>
+      </button>
+      {open && createPortal(
+        <div className="table-parameter-filter-popover" style={popoverPosition} role="dialog" aria-label="Filter report parameters" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+          <div className="table-parameter-filter-head"><div><strong>Filter report</strong><span>Choose values to compare report records.</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Close report filters" title="Close"><X /></button></div>
+          <div className="table-parameter-filter-fields">
+            {columns.map((column) => (
+              <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
+                <option value="">All {column.label}</option>
+                {columnValues[column.key].map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
+              </select></label>
+            ))}
+          </div>
+          <div className="table-parameter-filter-foot"><button type="button" onClick={onClearFilters} disabled={!activeFilterCount}><X /> Clear filters</button></div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
 function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
   const [columnFilters, setColumnFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
-  const columnValue = (row, column) => String(column.value?.(row) ?? "").trim();
+  const columnValue = (row, column) => tableFilterText(column.value?.(row));
   const columnValues = Object.fromEntries(
     columns.map((column) => [
       column.key,
@@ -1073,7 +1161,7 @@ function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey
   );
   const filteredRows = rows.filter((row) =>
     matchesSmartSearch(query, row) &&
-    columns.every((column) => !columnFilters[column.key] || columnValue(row, column) === columnFilters[column.key]),
+    tableRowMatchesFilters(row, columns, columnFilters),
   );
   const [sortedRows, sort, changeSort] = useSortableRows(
     filteredRows,
@@ -1091,6 +1179,7 @@ function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey
       return next;
     });
   };
+  const statusColumn = columns.find((column) => column.key === "status");
   useEffect(() => {
     if (!openFilter) return undefined;
     const closeFilter = (event) => {
@@ -1100,29 +1189,35 @@ function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
   return (
-    <table className="report-filter-table">
-      <thead><tr>{columns.map((column) => (
-        <FilterableHeader
-          key={column.key}
-          label={column.label}
-          sortKey={column.key}
-          sort={sort}
-          onSort={changeSort}
-          open={openFilter === column.key}
-          onToggle={(key) => setOpenFilter((current) => current === key ? null : key)}
-          values={columnValues[column.key]}
-          filterValue={columnFilters[column.key] || ""}
-          onFilterChange={(value) => updateColumnFilter(column.key, value)}
-        />
-      ))}</tr></thead>
-      <tbody>
-        {sortedRows.length ? sortedRows.map((row, index) => (
-          <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-            {columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
-          </tr>
-        )) : <tr><td colSpan={columns.length} className="empty-state">{emptyMessage}</td></tr>}
-      </tbody>
-    </table>
+    <>
+      <div className="report-table-filter-toolbar">
+        {statusColumn && <label><ListFilter /><select value={columnFilters.status || ""} onChange={(event) => updateColumnFilter("status", event.target.value)}><option value="">All statuses</option>{columnValues.status.map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}</select></label>}
+        <TableParameterFilter columns={columns} rows={rows} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
+      </div>
+      <table className="report-filter-table">
+        <thead><tr>{columns.map((column) => (
+          <FilterableHeader
+            key={column.key}
+            label={column.label}
+            sortKey={column.key}
+            sort={sort}
+            onSort={changeSort}
+            open={openFilter === column.key}
+            onToggle={(key) => setOpenFilter((current) => current === key ? null : key)}
+            values={columnValues[column.key]}
+            filterValue={columnFilters[column.key] || ""}
+            onFilterChange={(value) => updateColumnFilter(column.key, value)}
+          />
+        ))}</tr></thead>
+        <tbody>
+          {sortedRows.length ? sortedRows.map((row, index) => (
+            <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
+              {columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+            </tr>
+          )) : <tr><td colSpan={columns.length} className="empty-state">{emptyMessage}</td></tr>}
+        </tbody>
+      </table>
+    </>
   );
 }
 function parseCsv(text, fields) {
@@ -4259,18 +4354,36 @@ function TripCardCell({ request }) {
 function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
-  const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("");
+  const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+  const filterColumns = [
+    {key: "ref", label: "Job reference", value: (row) => row.ref},
+    {key: "equipmentGroup", label: "Equipment group", value: (row) => row.equipmentGroup || row.equipment},
+    {key: "door", label: "Door no.", value: (row) => row.door},
+    {key: "site", label: "Site location", value: (row) => row.site},
+    {key: "status", label: "Status", value: (row) => row.status},
+    {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
+    ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
+    ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
+    ...(showVerifiedBy ? [{key: "verifiedBy", label: "Verified by", value: (row) => row.verifiedBy}] : []),
+    ...(showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : []),
+    {key: "start", label: "Started", value: (row) => formatTwelveHourDateTime(row.start)},
+    ...(showTurnaroundTime ? [{key: "hours", label: "Turn around time (TAT)", value: (row) => row.hours}] : []),
+    {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysFromStart(row.start, now)},
+    {key: "dailyRemarks", label: "Daily remarks", value: (row) => row.dailyRemarks},
+    ...(showTripCard ? [{key: "tripCard", label: "Trip card image", value: (row) => row.firstTripCardUploaded ? "Uploaded" : "Not uploaded"}] : []),
+    ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudio ? "Available" : "Not available"}] : []),
+  ];
   const filteredRows = rows.filter((row) => {
     const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.idleReason, row.complaint, row.owner, row.requesterLogin);
-    return matchesText && (!statusFilter || String(row.status || "") === statusFilter);
+    return matchesText && (!statusFilter || String(row.status || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows);
   return (
-    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div><div className="scroll mobile-workflow-table">
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /></div><div className="scroll mobile-workflow-table">
       <table className="workflow-table">
         <thead><tr>
           <SortableHeader label="Job reference" sortKey="ref" sort={sort} onSort={changeSort}/><SortableHeader label="Equipment group" sortKey="equipmentGroup" sort={sort} onSort={changeSort}/><SortableHeader label="Door no." sortKey="door" sort={sort} onSort={changeSort}/><SortableHeader label="Site location" sortKey="site" sort={sort} onSort={changeSort}/>
