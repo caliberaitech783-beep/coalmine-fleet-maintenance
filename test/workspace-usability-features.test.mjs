@@ -25,6 +25,15 @@ test("request forms expose elapsed time, site-scoped all-equipment search, and E
   assert.match(server, /expectedCompletionAt/);
 });
 
+test("Maintenance User edits ETC instead of entering it in the close form", () => {
+  const editForm = ui.slice(ui.indexOf("function RequestEditForm"), ui.indexOf("function CloseRequestForm"));
+  const closeForm = ui.slice(ui.indexOf("function CloseRequestForm"), ui.indexOf("function VerifyRequestForm"));
+  assert.match(editForm, /name="expectedCompletionAt" type="datetime-local" required/);
+  assert.match(editForm, /expectedCompletionAt: form\.get\("expectedCompletionAt"\)/);
+  assert.doesNotMatch(closeForm, /name="expectedCompletionAt"/);
+  assert.match(server, /expected_completion_at=\(\$9::timestamp AT TIME ZONE 'Asia\/Kolkata'\)/);
+});
+
 test("workspaces, masters, tables, and forms use the expanded readable layout", () => {
   assert.match(css, /\.normal>main\{width:100%;max-width:none/);
   assert.match(css, /\.body\{max-width:none;width:100%/);

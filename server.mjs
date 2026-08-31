@@ -1297,12 +1297,13 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
-    const {equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,start}=req.body||{};
+    const {equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,start,expectedCompletionAt}=req.body||{};
     if(!reference||!door||!complaint||!String(chassis).trim())return res.status(400).json({error:'Door number, chassis number and complaint are required.'});
+    if(!String(expectedCompletionAt||'').trim())return res.status(400).json({error:'Enter the expected time for completion.'});
     const startedAt=parseIndiaRequestDateTime(start);
     const {rows}=await pool.query(`UPDATE maintenance_requests SET equipment_name=$1,door_number=$2,registration_number=$3,chassis_number=$4,
-      site=$5,category=$6,complaint=$7,started_at=$8 WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,reference]);
+      site=$5,category=$6,complaint=$7,started_at=$8,expected_completion_at=($9::timestamp AT TIME ZONE 'Asia/Kolkata') WHERE reference=$10 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,String(expectedCompletionAt).trim(),reference]);
     if(!rows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
     res.json(rows[0]);
   }catch(error){next(error)}
@@ -1318,22 +1319,20 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const status=String(req.body?.status||'Closed').trim();
     const ideal=req.body?.ideal===true||String(req.body?.ideal||'').toLowerCase()==='true';
     const idleReason=String(req.body?.idleReason||'').trim();
-    const expectedCompletionAt=String(req.body?.expectedCompletionAt||'').trim();
     const closedAt=requestDateTimeValue(closingDate,closingTime);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
     if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
-    if(!ideal&&status==='In progress'&&!expectedCompletionAt)return res.status(400).json({error:'Enter the expected time for completion.'});
     const {rows}=ideal
       ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status='Idle',idle_reason=$3,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
           WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
           [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference])
-      : await pool.query(`UPDATE maintenance_requests SET closed_at=CASE WHEN $5='Closed' THEN $1 ELSE NULL END,closed_by=CASE WHEN $5='Closed' THEN $2 ELSE '' END,maintenance_work=$3,maintenance_audio=$4,status=$5,expected_completion_at=CASE WHEN $5='In progress' AND $6<>'' THEN ($6::timestamp AT TIME ZONE 'Asia/Kolkata') ELSE NULL END
-          WHERE reference=$7 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
-          [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,expectedCompletionAt,reference]);
+      : await pool.query(`UPDATE maintenance_requests SET closed_at=CASE WHEN $5='Closed' THEN $1 ELSE NULL END,closed_by=CASE WHEN $5='Closed' THEN $2 ELSE '' END,maintenance_work=$3,maintenance_audio=$4,status=$5
+          WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+          [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,reference]);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);

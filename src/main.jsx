@@ -4321,7 +4321,7 @@ function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repai
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), start: `${form.get("date")} · ${form.get("time")}`});
+      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), start: `${form.get("date")} · ${form.get("time")}`});
     }}>
       <div className="formgrid">
         <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>
@@ -4348,6 +4348,7 @@ function RequestEditForm({ request, close, onSave, repairTypeRecords = [], repai
         <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>Timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required defaultValue={String(request.expectedCompletionAt || "").replace(" ", "T")} /></label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save changes <ChevronRight /></button></footer>
@@ -4366,7 +4367,7 @@ function CloseRequestForm({ request, close, onSave }) {
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, expectedCompletionAt: !ideal && status === "In progress" ? form.get("expectedCompletionAt") : "", maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : ""});
+      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : ""});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
@@ -4383,7 +4384,6 @@ function CloseRequestForm({ request, close, onSave }) {
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
         <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Idle</option>}</select></label>
-        {!ideal && status === "In progress" && <label className="etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required /></label>}
         <fieldset className="ideal-choice"><legend>Idle? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>{setIdeal(false);setIdleReason("")}} /> No</label>{ideal&&<><label>Idle reason *<select name="idleReason" required value={idleReason} onChange={(event)=>setIdleReason(event.target.value)}><option value="">Select idle reason</option><option>No driver</option><option>No work</option></select></label><small>The request will remain Idle until the Maintenance Manager approves Make on road.</small></>}</fieldset>
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
