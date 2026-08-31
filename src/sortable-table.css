@@ -68,6 +68,7 @@
 .column-filter-values button{display:block;width:100%;min-height:32px;border:0;background:transparent;text-align:left;padding:8px 10px;border-radius:4px;color:#45546d;font-size:11px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 0 auto}
 .column-filter-empty{padding:7px 6px;color:#8a96aa;font-size:10px}
 .table-parameter-filter{position:relative;flex:0 0 auto}
+.toolbar>.table-parameter-filter{min-width:0;padding:0;border:0;border-radius:0}
 .table-parameter-filter-trigger{min-height:40px;border:1px solid #dbe3ef;border-radius:8px;background:#fff;color:#294363;padding:0 13px;display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700}
 .table-parameter-filter-trigger svg{width:16px;height:16px;color:#41689b}.table-parameter-filter-trigger:hover,.table-parameter-filter-trigger.active{border-color:#aabfe3;background:#edf4ff;color:#2458d3}.table-parameter-filter-trigger.active svg{color:#2458d3}
 .table-parameter-filter-popover{position:fixed;width:min(560px,calc(100vw - 24px));max-height:min(70vh,620px);overflow:auto;padding:14px;background:#fff;border:1px solid #d7e1ef;border-radius:10px;box-shadow:0 18px 42px #17233c33;z-index:1000;color:#34425a}
