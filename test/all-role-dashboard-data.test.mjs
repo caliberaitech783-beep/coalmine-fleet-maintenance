@@ -16,4 +16,7 @@ test("equipment and vehicle totals open a name list on every dashboard", () => {
   assert.match(client, /onClick=\{\(\) => setAssetDrilldown\("equipment"\)\}/);
   assert.match(client, /onClick=\{\(\) => setAssetDrilldown\("vehicle"\)\}/);
   assert.match(client, /className="dashboard-asset-list"[\s\S]*Equipment name[\s\S]*equipmentName/);
+  assert.match(client, /Equipment group<\/th><th>Make<\/th><th>Model<\/th>/);
+  assert.match(client, /Recent breakdown cases[\s\S]*showMakeModel/);
+  assert.match(client, /showMakeModel && <><td>\{r\.make \|\| "—"\}<\/td><td>\{r\.model \|\| "—"\}<\/td><\/>/);
 });

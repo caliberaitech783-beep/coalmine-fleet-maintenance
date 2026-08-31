@@ -580,7 +580,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const selectedRegion = availableRegions.find((region) => region.code === dashboardRegion);
   const selectedSites = selectedRegion?.sites || [];
   const visibleEquipment = selectedRegion ? scopedEquipment.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment;
-  const visibleBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
+  const equipmentByReference=new Map();
+  visibleEquipment.forEach((record)=>[record.manufacturerSerialNo,record.chassisNo,record.door,record.reg,record.equipmentName]
+    .map((value)=>String(value||"").trim().toLowerCase()).filter(Boolean).forEach((key)=>equipmentByReference.set(key,record)));
+  const visibleBreakdowns = (selectedRegion ? scopedBreakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns)
+    .map((record)=>{const equipment=[record.chassis,record.door,record.equipment].map((value)=>String(value||"").trim().toLowerCase()).filter(Boolean).map((key)=>equipmentByReference.get(key)).find(Boolean);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
   const statusCounts = [
     ["On road", kpis.onRoad, "operational"],
@@ -673,12 +677,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </section>
       {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{scopedUsers.length}</strong></div></Modal>}
       {showOpenCases && <Modal title="Open cases by site" close={() => { setShowOpenCases(false); setOpenCaseSite("all"); }}><div className="open-case-drilldown"><div className="open-case-site-filter"><button type="button" className={openCaseSite === "all" ? "active" : ""} onClick={() => setOpenCaseSite("all")}><span>All sites</span><strong>{openCaseRequests.length}</strong></button>{openCaseSites.map((site) => <button type="button" key={site.key} className={openCaseSite === site.key ? "active" : ""} onClick={() => setOpenCaseSite(site.key)}><span>{site.label}</span><strong>{site.requests.length}</strong></button>)}</div><div className="open-case-results"><div><h3>{openCaseSite === "all" ? "All open cases" : openCaseSites.find((site) => site.key === openCaseSite)?.label}</h3><span>{selectedOpenCases.length} active breakdown{selectedOpenCases.length === 1 ? "" : "s"}</span></div><BreakdownTable rows={selectedOpenCases} /></div></div></Modal>}
-      {assetDrilldown && <Modal title={`${assetDrilldown === "vehicle" ? "Total vehicles" : "Total equipment"} · ${assetDrilldownRows.length}`} close={() => setAssetDrilldown("")}><div className="dashboard-asset-list"><table><thead><tr><th>Equipment name</th><th>Equipment group</th><th>Current location</th><th>Serial / chassis no.</th></tr></thead><tbody>{assetDrilldownRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{record.group||record.itemName||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td></tr>)}</tbody></table></div></Modal>}
-      <section className="mine-panel mine-recent"><header><div><span className="mine-eyebrow">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest maintenance activity" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns.slice(0, 5)} /></section>
+      {assetDrilldown && <Modal title={`${assetDrilldown === "vehicle" ? "Total vehicles" : "Total equipment"} · ${assetDrilldownRows.length}`} close={() => setAssetDrilldown("")}><div className="dashboard-asset-list"><table><thead><tr><th>Equipment name</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th></tr></thead><tbody>{assetDrilldownRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{record.group||record.itemName||"—"}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td></tr>)}</tbody></table></div></Modal>}
+      <section className="mine-panel mine-recent"><header><div><span className="mine-eyebrow">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest maintenance activity" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns.slice(0, 5)} showMakeModel /></section>
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, onApproveIdeal }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showMakeModel = false, onApproveIdeal }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState("");
   useEffect(() => {
@@ -687,7 +691,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => window.clearInterval(timer);
   }, [showBreakdownDays]);
   const columns = [
-      ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ["site", "Site location"],
+      ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
       ...(showReason ? [["complaint", "Reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
@@ -721,6 +725,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 </td>
                 <td>{r.equipmentGroup || r.equipment || "—"}</td>
                 <td>{r.door}</td>
+                {showMakeModel && <><td>{r.make || "—"}</td><td>{r.model || "—"}</td></>}
                 <td>
                   <MapPin /> {r.site}
                 </td>
