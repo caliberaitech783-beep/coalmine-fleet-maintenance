@@ -635,8 +635,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, requests = [], t
           <div className="mine-overview-chart-body">
             <button type="button" className="mine-overview-donut" aria-label={`${assetCounts.total} total assets`} onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#4f86c6 0 ${equipmentShare}%, #72c99e ${equipmentShare}% 100%)` }}><span><strong>{assetCounts.total.toLocaleString()}</strong><small>All total</small></span></button>
             <div className="mine-overview-legend">
-              <button type="button" onClick={() => gotoEquipment("all", "")}><i className="mine-chart-blue" /><span>Total equipment<small>Non-vehicle equipment</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => gotoEquipment("all", "")}><i className="mine-chart-green" /><span>Total vehicles<small>Vehicles only</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoEquipment("all", "", "equipment")}><i className="mine-chart-blue" /><span>Total equipment<small>Non-vehicle equipment</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoEquipment("all", "", "vehicle")}><i className="mine-chart-green" /><span>Total vehicles<small>Vehicles only</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong></button>
             </div>
           </div>
         </article>
@@ -1708,6 +1708,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
 function Equipment({
   initialFilter = "all",
   initialLocation = "",
+  initialCategory = "all",
   records = [],
   onAdd,
   onEdit,
@@ -1717,6 +1718,7 @@ function Equipment({
   const [q, setQ] = useState(""),
     [road, setRoad] = useState(initialFilter),
     [location, setLocation] = useState(initialLocation),
+    [assetCategory, setAssetCategory] = useState(initialCategory),
     [columnFilters, setColumnFilters] = useState({}),
     [openFilter, setOpenFilter] = useState(null),
     [detail, setDetail] = useState(null),
@@ -1771,6 +1773,7 @@ function Equipment({
     (v) =>
       (road === "all" ||
         equipmentRoadStatus(v) === road) &&
+      (assetCategory === "all" || String(v.category || "").trim().toLowerCase() === assetCategory) &&
       (!location || (v.currentLocation || v.location) === location) &&
       Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()) &&
       equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
@@ -1846,8 +1849,10 @@ function Equipment({
             <option key={site}>{site}</option>
           ))}
         </select>
-        <select>
-          <option>All categories</option>
+        <select value={assetCategory} onChange={(e) => setAssetCategory(e.target.value)}>
+          <option value="all">All categories</option>
+          <option value="equipment">Equipment</option>
+          <option value="vehicle">Vehicles</option>
         </select>
       </div>
       <div className="scroll master-table-scroll" onClick={() => setOpenFilter(null)}>
@@ -4515,6 +4520,7 @@ function App() {
     [active, setActive] = useState("Dashboard"),
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
+    [equipmentCategory, setEquipmentCategory] = useState("all"),
     [requests, setRequests] = useState([]),
     [menu, setMenu] = useState(false),
     [loadTime, setLoadTime] = useState(null),
@@ -4686,9 +4692,10 @@ function App() {
       window.clearInterval(timer);
     };
   }, [session?.token]);
-  const gotoEquipment = (filter = "all", location = "") => {
+  const gotoEquipment = (filter = "all", location = "", category = "all") => {
       setEquipmentFilter(filter);
       setEquipmentLocation(location);
+      setEquipmentCategory(category);
       selectMenu("Equipment master");
     },
     logout = () => {
@@ -4818,6 +4825,7 @@ function App() {
             <Equipment
               initialFilter={equipmentFilter}
               initialLocation={equipmentLocation}
+              initialCategory={equipmentCategory}
             />
           ) : active === "Breakdown master" ? (
             <Breakdown requests={requests} />
