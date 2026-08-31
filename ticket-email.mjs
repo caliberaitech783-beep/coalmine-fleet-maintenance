@@ -1,12 +1,14 @@
 import nodemailer from "nodemailer";
 
-const clean = (value) => String(value ?? "").trim();
-const escapeHtml = (value) => clean(value)
+export const cleanEmailText = (value) => String(value ?? "").trim();
+export const escapeEmailHtml = (value) => cleanEmailText(value)
   .replaceAll("&", "&amp;")
   .replaceAll("<", "&lt;")
   .replaceAll(">", "&gt;")
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#39;");
+const clean = cleanEmailText;
+const escapeHtml = escapeEmailHtml;
 
 export function ticketEmailConfiguration(env = process.env) {
   const user = clean(env.GMAIL_USER || "breakdown.cmll@gmail.com");

@@ -37,8 +37,9 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.match(message,/Department Wise Report Links:/);
   assert.match(message,/General --/);
   assert.match(message,/1\. Loc\. wise Open BD/);
-  assert.match(message,/PDF 📄 https:\/\/bdms\.cmll\.in\/r\/a/);
-  assert.match(message,/Excel 📊 https:\/\/bdms\.cmll\.in\/r\/b/);
+  assert.match(message,/PDF 📄\nhttps:\/\/bdms\.cmll\.in\/r\/a/);
+  assert.match(message,/Excel 📊\nhttps:\/\/bdms\.cmll\.in\/r\/b/);
+  assert.doesNotMatch(message,/\n\s+https:\/\/bdms\.cmll\.in\/r\//);
 });
 
 test('Director report API and timing popup are wired into server and reports UI',()=>{
@@ -53,6 +54,8 @@ test('Director report API and timing popup are wired into server and reports UI'
   assert.match(server,/metaWhatsAppRuntimeEnv/);
   assert.match(server,/app\.get\(\['\/reports\/published\/:id','\/r\/:id'\]/);
   assert.match(server,/app\.post\('\/api\/reports\/director\/send-test'/);
+  assert.match(server,/app\.post\('\/api\/reports\/director\/send-email-test'/);
+  assert.match(server,/sendDirectorReportEmail/);
   assert.match(server,/sendScheduledDirectorReportBundles/);
   assert.match(source,/Director WhatsApp report timing/);
   assert.match(source,/Generate & send test now/);

@@ -18,6 +18,7 @@ import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUr
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
+import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
@@ -1306,6 +1307,18 @@ app.post('/api/reports/director/send-test',requireSuper,async(req,res,next)=>{
     const status=String(result.status||'');
     if(status.startsWith('Failed'))return res.status(502).json(result);
     res.json(result);
+  }catch(error){next(error)}
+});
+
+app.post('/api/reports/director/send-email-test',requireSuper,async(req,res,next)=>{
+  try{
+    const recipientEmail=String(req.body?.recipientEmail||'').trim();
+    const now=req.body?.now?new Date(req.body.now):new Date();
+    const window=directorReportWindow(now);
+    const bundle=await publishDirectorReportFiles({baseUrl:publicBaseUrl(req),slotKey:window.slotKey,now});
+    const result=await sendDirectorReportEmail({to:recipientEmail,bundle});
+    if(!result.sent)return res.status(502).json({slotKey:window.slotKey,status:'Failed',reason:result.reason});
+    res.json({slotKey:window.slotKey,status:'Sent',reportCount:bundle.links.length,accepted:result.accepted});
   }catch(error){next(error)}
 });
 
