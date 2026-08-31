@@ -599,7 +599,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     counts[label] = (counts[label] || 0) + 1;
     return counts;
   }, {});
-  const vehicleTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+  const vehicleTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
   const repairTypeCards = [...new Map(
     repairTypeRecords
       .map((record) => String(record.repairType || "").trim())
