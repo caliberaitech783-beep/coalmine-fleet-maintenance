@@ -32,8 +32,8 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
     {department:'General',title:'Location wise Open BD report with Category (Prod)',pdfUrl:'https://bdms.cmll.in/r/a',xlsxUrl:'https://bdms.cmll.in/r/b'},
   ]});
   assert.match(message,/Director Daily Report/);
-  assert.match(message,/P: https:\/\/bdms\.cmll\.in\/r\/a/);
-  assert.match(message,/X: https:\/\/bdms\.cmll\.in\/r\/b/);
+  assert.match(message,/https:\/\/bdms\.cmll\.in\/r\/a https:\/\/bdms\.cmll\.in\/r\/b/);
+  assert.doesNotMatch(message,/P:|X:/);
 });
 
 test('Director report API and timing popup are wired into server and reports UI',()=>{
@@ -41,6 +41,7 @@ test('Director report API and timing popup are wired into server and reports UI'
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
   assert.match(server,/published_reports/);
+  assert.match(server,/published_reports_short_code_idx/);
   assert.match(server,/WHATSAPP_SETTING_KEY='meta_whatsapp'/);
   assert.match(server,/app\.get\('\/api\/whatsapp\/settings'/);
   assert.match(server,/app\.put\('\/api\/whatsapp\/settings'/);

@@ -246,7 +246,7 @@ export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[]}={
   const lines=['Nerve Center Director Daily Report',`Generated: ${generated}`,'Schedule: Daily 7:00 PM IST','','Department wise report links:'];
   for(const [department,items] of byDepartment){
     lines.push('',`${department}:`);
-    for(const item of items)lines.push(`- ${item.title}\n  P: ${item.pdfUrl}\n  X: ${item.xlsxUrl}`);
+    for(const item of items)lines.push(`- ${item.title}\n${item.pdfUrl} ${item.xlsxUrl}`);
   }
   return lines.join('\n').slice(0,4096);
 }

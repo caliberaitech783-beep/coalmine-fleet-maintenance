@@ -324,12 +324,16 @@ async function migrate(){
     );
     CREATE TABLE IF NOT EXISTS published_reports (
       id UUID PRIMARY KEY,
+      short_code TEXT,
       filename TEXT NOT NULL,
       content_type TEXT NOT NULL,
       file_data BYTEA NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '14 days'
     );
+    ALTER TABLE published_reports ADD COLUMN IF NOT EXISTS short_code TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS published_reports_short_code_idx
+      ON published_reports (short_code) WHERE short_code IS NOT NULL;
     CREATE INDEX IF NOT EXISTS published_reports_expires_at_idx
       ON published_reports (expires_at);
     CREATE TABLE IF NOT EXISTS crm_tickets (
@@ -452,8 +456,9 @@ app.get('/api/reports/director/timing',requireSuper,(_req,res)=>{
 app.get(['/reports/published/:id','/r/:id'],async(req,res,next)=>{
   try{
     const id=String(req.params.id||'').trim();
-    if(!/^[0-9a-f-]{36}$/i.test(id))return res.status(404).send('Report not found');
-    const {rows}=await pool.query(`SELECT filename,content_type,file_data FROM published_reports WHERE id=$1 AND expires_at>NOW()`,[id]);
+    if(!/^[a-z0-9-]{6,36}$/i.test(id))return res.status(404).send('Report not found');
+    const {rows}=await pool.query(`SELECT filename,content_type,file_data FROM published_reports
+      WHERE (id::text=$1 OR short_code=$1) AND expires_at>NOW()`,[id]);
     if(!rows.length)return res.status(404).send('Report expired or not found');
     res.set('Cache-Control','private, max-age=3600');
     res.set('Content-Type',rows[0].content_type);
@@ -1220,20 +1225,22 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
   const tables=buildDirectorReportTables(await directorReportSourceData());
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
   const links=[];
+  const shortReportCode=()=>randomUUID().replace(/-/g,'').slice(0,10);
   for(const table of tables){
     const pdf=await buildTableExportPdf({title:table.title,columns:table.columns.map((column)=>({label:column.label})),rows:table.rows});
     const xlsx=buildXlsxWorkbookBuffer(table.title,table.columns,table.rows);
     const pdfId=randomUUID(),xlsxId=randomUUID();
+    const pdfCode=shortReportCode(),xlsxCode=shortReportCode();
     const pdfFilename=directorReportFilename(table.title,'pdf',slotKey);
     const xlsxFilename=directorReportFilename(table.title,'xlsx',slotKey);
-    await pool.query(`INSERT INTO published_reports (id,filename,content_type,file_data,expires_at) VALUES
-      ($1,$2,'application/pdf',$3,NOW()+INTERVAL '14 days'),
-      ($4,$5,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$6,NOW()+INTERVAL '14 days')`,
-      [pdfId,pdfFilename,pdf,xlsxId,xlsxFilename,xlsx]);
+    await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at) VALUES
+      ($1,$2,$3,'application/pdf',$4,NOW()+INTERVAL '14 days'),
+      ($5,$6,$7,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$8,NOW()+INTERVAL '14 days')`,
+      [pdfId,pdfCode,pdfFilename,pdf,xlsxId,xlsxCode,xlsxFilename,xlsx]);
     links.push({
       title:table.title,department:table.department,rowCount:table.rows.length,
-      pdfUrl:`${baseUrl}/r/${pdfId}`,
-      xlsxUrl:`${baseUrl}/r/${xlsxId}`,
+      pdfUrl:`${baseUrl}/r/${pdfCode}`,
+      xlsxUrl:`${baseUrl}/r/${xlsxCode}`,
     });
   }
   return {slotKey,generatedAt:now,links,message:buildDirectorWhatsAppMessage({generatedAt:now,links})};
