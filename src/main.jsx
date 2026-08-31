@@ -233,7 +233,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <i /><i /><i /><i />
         </div>
         <div className="login-brand">
-          <div className="brandmark">CM</div>
+          <div className="brandmark">NC</div>
           <div><strong>Nerve Center</strong><span>Fleet operations platform</span></div>
         </div>
         <div className="login-message">
@@ -262,7 +262,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           className="loginbox password-change-box"
           onSubmit={(event) => { event.preventDefault(); changeInitialPassword(); }}
         >
-          <div className="login-mobile-brand"><div className="brandmark">CM</div><strong>Nerve Center</strong></div>
+          <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
           <small className="login-kicker"><LockKeyhole /> FIRST LOGIN SECURITY</small>
           <h2>Create your password</h2>
           <p>Welcome, {passwordChange.name}. You must replace your temporary phone-number password before continuing.</p>
@@ -280,7 +280,7 @@ function Login({ onLogin, theme, toggleTheme }) {
             signIn();
           }}
         >
-          <div className="login-mobile-brand"><div className="brandmark">CM</div><strong>Nerve Center</strong></div>
+          <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
           <small className="login-kicker"><LockKeyhole /> SECURE OPERATIONS PORTAL</small>
           <h2>Welcome back</h2>
           <p>Sign in to access your fleet operations workspace.</p>
@@ -381,7 +381,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   return (
     <aside className={open ? "open" : ""}>
       <div className="logo">
-        <b>CM</b>
+        <b>NC</b>
         <span>
           Nerve Center<small>BREAKDOWN MANAGEMENT SYSTEM</small>
         </span>
@@ -636,7 +636,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
-        <div><span className="mine-brandmark">CM</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
+        <div><span className="mine-brandmark">NC</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
       </header>
       <section className="mine-overview-charts" aria-label="Fleet overview charts">
@@ -4510,7 +4510,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
   const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><div className="logo"><b>NC</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}

@@ -1,6 +1,6 @@
 {
   "name": "Nerve Center — Breakdown Management System",
-  "short_name": "BDMS",
+  "short_name": "NC",
   "description": "Fleet maintenance and breakdown management system.",
   "start_url": "/",
   "display": "standalone",
