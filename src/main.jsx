@@ -563,6 +563,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [repairTypeRecords] = useMasterRecords("Repair type master");
   const [showUserBreakdown, setShowUserBreakdown] = useState(false);
   const [showOpenCases, setShowOpenCases] = useState(false);
+  const [assetDrilldown, setAssetDrilldown] = useState("");
   const [openCaseSite, setOpenCaseSite] = useState("all");
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const now = new Date();
@@ -619,6 +620,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ? openCaseRequests
     : openCaseSites.find((site) => site.key === openCaseSite)?.requests || [];
   const assetCounts = fleetAssetCounts(visibleEquipment);
+  const assetDrilldownRows=visibleEquipment.filter((record)=>assetDrilldown==="equipment"
+    ? ["equipment","equipments"].includes(String(record.category||"").trim().toLowerCase())
+    : assetDrilldown==="vehicle"
+      ? ["vehicle","vehicles"].includes(String(record.category||"").trim().toLowerCase())
+      : false);
   const equipmentShare = assetCounts.total ? (assetCounts.equipment / assetCounts.total) * 100 : 0;
   const onRoadShare = kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0;
   const offRoadShare = kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0;
@@ -635,8 +641,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <div className="mine-overview-chart-body">
             <button type="button" className="mine-overview-donut" aria-label={`${assetCounts.total} total assets`} onClick={() => gotoEquipment("all", "")} style={{ background: `conic-gradient(#4f86c6 0 ${equipmentShare}%, #72c99e ${equipmentShare}% 100%)` }}><span><strong>{assetCounts.total.toLocaleString()}</strong><small>All total</small></span></button>
             <div className="mine-overview-legend">
-              <button type="button" onClick={() => gotoEquipment("all", "", "equipment")}><i className="mine-chart-blue" /><span>Total equipment<small>Non-vehicle equipment</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => gotoEquipment("all", "", "vehicle")}><i className="mine-chart-green" /><span>Total vehicles<small>Vehicles only</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => setAssetDrilldown("equipment")}><i className="mine-chart-blue" /><span>Total equipment<small>Non-vehicle equipment</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => setAssetDrilldown("vehicle")}><i className="mine-chart-green" /><span>Total vehicles<small>Vehicles only</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong></button>
             </div>
           </div>
         </article>
@@ -667,6 +673,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </section>
       {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{scopedUsers.length}</strong></div></Modal>}
       {showOpenCases && <Modal title="Open cases by site" close={() => { setShowOpenCases(false); setOpenCaseSite("all"); }}><div className="open-case-drilldown"><div className="open-case-site-filter"><button type="button" className={openCaseSite === "all" ? "active" : ""} onClick={() => setOpenCaseSite("all")}><span>All sites</span><strong>{openCaseRequests.length}</strong></button>{openCaseSites.map((site) => <button type="button" key={site.key} className={openCaseSite === site.key ? "active" : ""} onClick={() => setOpenCaseSite(site.key)}><span>{site.label}</span><strong>{site.requests.length}</strong></button>)}</div><div className="open-case-results"><div><h3>{openCaseSite === "all" ? "All open cases" : openCaseSites.find((site) => site.key === openCaseSite)?.label}</h3><span>{selectedOpenCases.length} active breakdown{selectedOpenCases.length === 1 ? "" : "s"}</span></div><BreakdownTable rows={selectedOpenCases} /></div></div></Modal>}
+      {assetDrilldown && <Modal title={`${assetDrilldown === "vehicle" ? "Total vehicles" : "Total equipment"} · ${assetDrilldownRows.length}`} close={() => setAssetDrilldown("")}><div className="dashboard-asset-list"><table><thead><tr><th>Equipment name</th><th>Equipment group</th><th>Current location</th><th>Serial / chassis no.</th></tr></thead><tbody>{assetDrilldownRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{record.group||record.itemName||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td></tr>)}</tbody></table></div></Modal>}
       <section className="mine-panel mine-recent"><header><div><span className="mine-eyebrow">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest maintenance activity" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns.slice(0, 5)} /></section>
     </div>
   );
@@ -4444,6 +4451,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const mobileRole = session?.assignedRole || "Mobile User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
+  const [dashboardRequests,setDashboardRequests]=useState(requests);
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
@@ -4468,6 +4476,14 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
   const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
+  useEffect(()=>{
+    let active=true;
+    fetch(`/api/requests?scope=dashboard&t=${Date.now()}`,{cache:"no-store",headers:{Authorization:`Bearer ${session?.token||authToken}`}})
+      .then(async(response)=>{const body=await response.json().catch(()=>([]));if(!response.ok)throw new Error(body.error||"Could not load dashboard requests");return body})
+      .then((rows)=>{if(active)setDashboardRequests(rows)})
+      .catch((error)=>console.error(error));
+    return()=>{active=false};
+  },[session?.token,requests.length]);
   useEffect(() => {
     let active = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session?.token || authToken}`}})
@@ -4491,7 +4507,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
     {!embedded && <header><div className="logo"><b>CM</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&<Dashboard requests={requests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
+      {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>

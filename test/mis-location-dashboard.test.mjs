@@ -6,7 +6,7 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const manager=source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard"));
-  assert.match(server,/assignedRole==='MIS User'[\s\S]*scopedSite=String\(misUser\.site\|\|misUser\.location/);
+  assert.match(server,/dashboardScope\|\|req\.session\.assignedRole==='MIS User'[\s\S]*scopedSite=String\(operationalUser\.site\|\|operationalUser\.location/);
   assert.match(server,/rows\.filter\(\(row\)=>canonicalSiteName\(row\.site\)===canonicalSiteName\(scopedSite\)\)/);
   assert.match(server,/A location must be assigned before this MIS user can verify requests/);
   assert.match(server,/canonicalSiteName\(eligible\.rows\[0\]\.site\)!==canonicalSiteName\(misSite\)/);

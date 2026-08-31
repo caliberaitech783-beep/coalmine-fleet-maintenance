@@ -1208,16 +1208,18 @@ async function attachDailyRemarks(rows,client=pool){
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{
-    if(req.session.role!=='super'&&req.session.permissions?.readRequests!==true)
+    const operationalRole=req.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(req.session.assignedRole);
+    if(req.session.role!=='super'&&!operationalRole&&req.session.permissions?.readRequests!==true)
       return res.status(403).json({error:'Your assigned role is not authorized to view maintenance requests.'});
     const requesterLogin=String(req.session.login||'').trim().toLowerCase();
-    let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'
+    const dashboardScope=req.query.scope==='dashboard';
+    let query=req.session.role==='normal'&&req.session.assignedRole==='Production User'&&!dashboardScope
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
-    if(req.session.role==='normal'&&req.session.assignedRole==='MIS User'){
-      const misUser=await currentUserRecord(req.session);
-      scopedSite=String(misUser.site||misUser.location||'').trim();
+    if(req.session.role==='normal'&&(dashboardScope||req.session.assignedRole==='MIS User')){
+      const operationalUser=await currentUserRecord(req.session);
+      scopedSite=String(operationalUser.site||operationalUser.location||'').trim();
     }
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
       const manager=await currentUserRecord(req.session);
