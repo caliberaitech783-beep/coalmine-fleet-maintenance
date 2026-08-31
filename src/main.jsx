@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
-import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
+import { elapsedLabel, elapsedMilliseconds, latestTimestamp } from "../report-metrics.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
@@ -1059,6 +1059,70 @@ function FilterableHeader({
         document.body,
       )}
     </th>
+  );
+}
+function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
+  const [columnFilters, setColumnFilters] = useState({});
+  const [openFilter, setOpenFilter] = useState(null);
+  const columnValue = (row, column) => String(column.value?.(row) ?? "").trim();
+  const columnValues = Object.fromEntries(
+    columns.map((column) => [
+      column.key,
+      [...new Set(rows.map((row) => columnValue(row, column)))].sort((a, b) => sortCollator.compare(a, b)),
+    ]),
+  );
+  const filteredRows = rows.filter((row) =>
+    matchesSmartSearch(query, row) &&
+    columns.every((column) => !columnFilters[column.key] || columnValue(row, column) === columnFilters[column.key]),
+  );
+  const [sortedRows, sort, changeSort] = useSortableRows(
+    filteredRows,
+    "",
+    (row, key) => {
+      const column = columns.find((item) => item.key === key);
+      return column?.sortValue?.(row) ?? column?.value?.(row);
+    },
+  );
+  const updateColumnFilter = (key, value) => {
+    setColumnFilters((current) => {
+      const next = { ...current };
+      if (value) next[key] = value;
+      else delete next[key];
+      return next;
+    });
+  };
+  useEffect(() => {
+    if (!openFilter) return undefined;
+    const closeFilter = (event) => {
+      if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
+    };
+    document.addEventListener("mousedown", closeFilter);
+    return () => document.removeEventListener("mousedown", closeFilter);
+  }, [openFilter]);
+  return (
+    <table className="report-filter-table">
+      <thead><tr>{columns.map((column) => (
+        <FilterableHeader
+          key={column.key}
+          label={column.label}
+          sortKey={column.key}
+          sort={sort}
+          onSort={changeSort}
+          open={openFilter === column.key}
+          onToggle={(key) => setOpenFilter((current) => current === key ? null : key)}
+          values={columnValues[column.key]}
+          filterValue={columnFilters[column.key] || ""}
+          onFilterChange={(value) => updateColumnFilter(column.key, value)}
+        />
+      ))}</tr></thead>
+      <tbody>
+        {sortedRows.length ? sortedRows.map((row, index) => (
+          <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
+            {columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+          </tr>
+        )) : <tr><td colSpan={columns.length} className="empty-state">{emptyMessage}</td></tr>}
+      </tbody>
+    </table>
   );
 }
 function parseCsv(text, fields) {
@@ -3055,6 +3119,33 @@ function ReportsPage({ requests = [], goto }) {
     return () => window.clearInterval(timer);
   }, []);
 
+  const equipmentByReference = useMemo(() => {
+    const records = new Map();
+    const addReference = (value, record) => {
+      const reference = String(value || "").trim().toLowerCase();
+      if (!reference) return;
+      if (!records.has(reference)) records.set(reference, record);
+      else if (records.get(reference) !== record) records.set(reference, null);
+    };
+    equipmentRecords.forEach((record) => {
+      [record.manufacturerSerialNo, record.chassisNo, record.door, record.reg, record.equipmentName]
+        .forEach((value) => addReference(value, record));
+    });
+    return records;
+  }, [equipmentRecords]);
+  const reportRequests = useMemo(() => requests.map((request) => {
+    const equipment = [request.chassis, request.door, request.reg, request.equipment]
+      .map((value) => equipmentByReference.get(String(value || "").trim().toLowerCase()))
+      .find(Boolean);
+    return {
+      ...request,
+      reportEquipment: request.equipment || request.door || equipment?.equipmentName || "",
+      reportDoor: request.door || equipment?.door || "",
+      reportMake: request.make || equipment?.make || "",
+      reportModel: request.model || equipment?.model || "",
+      reportSite: request.site || equipment?.currentLocation || equipment?.location || "",
+    };
+  }), [requests, equipmentByReference]);
   const eventReports = useMemo(() => [
     {
       id: "offroad",
@@ -3062,7 +3153,7 @@ function ReportsPage({ requests = [], goto }) {
       description: "Vehicle requests created when production marks equipment offroad.",
       timestampKey: "start",
       actorKey: "owner",
-      rows: requests.filter((request) => String(request.start || "").trim()),
+      rows: reportRequests.filter((request) => String(request.start || "").trim()),
     },
     {
       id: "onroad",
@@ -3070,7 +3161,7 @@ function ReportsPage({ requests = [], goto }) {
       description: "Maintenance closure events that return a vehicle to service.",
       timestampKey: "closedAt",
       actorKey: "closedBy",
-      rows: requests.filter((request) => String(request.closedAt || "").trim()),
+      rows: reportRequests.filter((request) => String(request.closedAt || "").trim()),
     },
     {
       id: "verified",
@@ -3078,14 +3169,19 @@ function ReportsPage({ requests = [], goto }) {
       description: "Verification events recorded after the maintenance request is closed.",
       timestampKey: "verifiedAt",
       actorKey: "verifiedBy",
-      rows: requests.filter((request) => String(request.verifiedAt || "").trim()),
+      rows: reportRequests.filter((request) => String(request.verifiedAt || "").trim()),
     },
-  ], [requests]);
+  ], [reportRequests]);
   const selectedEvent = eventReports.find((report) => report.id === selectedReport) || eventReports[0];
-  const visibleEventRows = (selectedEvent?.rows || []).filter((request) =>
-    matchesSmartSearch(query, selectedEvent.title, selectedEvent.description, request),
-  );
-  const elapsedRows = requests.filter((request) => request.start || request.closedAt || request.verifiedAt);
+  const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
+  const ageRows = useMemo(() => reportRequests.map((request) => {
+    const age = Math.max(0, Math.floor((now - (new Date(String(request.start || "").replace(" ", "T")).getTime() || now)) / 86400000));
+    return {
+      ...request,
+      reportAge: age,
+      reportAgeClass: age > 5 ? "request-age-red" : age >= 2 && age <= 4 ? "request-age-orange" : age === 1 ? "request-age-yellow" : "",
+    };
+  }), [reportRequests, now]);
   const loading = !(equipmentLoaded && usersLoaded && transfersLoaded && privilegesLoaded);
   const count = (records, loaded) => loaded ? records.length.toLocaleString("en-IN") : "—";
   const masterTotals = [
@@ -3097,28 +3193,30 @@ function ReportsPage({ requests = [], goto }) {
     {label: "Audit trail", value: "View", source: "Recorded user activity", target: "Audit Trail", unavailable: true},
   ];
   const reportCatalog = [
-    ["Production User marks vehicle Offroad", eventReports[0]?.rows.length || 0, "Workflow event"],
-    ["Maintenance User marks vehicle Onroad", eventReports[1]?.rows.length || 0, "Workflow event"],
-    ["MIS User verifies request / vehicle", eventReports[2]?.rows.length || 0, "Workflow event"],
-    ["Offroad → Onroad time difference", elapsedRows.filter((row) => row.start && row.closedAt).length, "Elapsed time"],
-    ["Onroad → MIS verification time difference", elapsedRows.filter((row) => row.closedAt && row.verifiedAt).length, "Elapsed time"],
-    ["Offroad → MIS verification total time", elapsedRows.filter((row) => row.start && row.verifiedAt).length, "Elapsed time"],
-    ["Total equipment", equipmentLoaded ? equipmentRecords.length : "—", "Equipment master"],
-    ["Total users", usersLoaded ? userRecords.length : "—", "Users & employees master"],
-    ["Total breakdown", requests.length, "Requests"],
-    ["Vehicle transfer", transfersLoaded ? transferRecords.length : "—", "Vehicle transfers master"],
-    ["User privilege assignments", privilegesLoaded ? privilegeRecords.length : "—", "Users & employees"],
-    ["Audit trail", "View", "Audit Trail"],
+    {report: "Production User marks vehicle Offroad", value: eventReports[0]?.rows.length || 0, source: "Workflow event"},
+    {report: "Maintenance User marks vehicle Onroad", value: eventReports[1]?.rows.length || 0, source: "Workflow event"},
+    {report: "MIS User verifies request / vehicle", value: eventReports[2]?.rows.length || 0, source: "Workflow event"},
+    {report: "Offroad → Onroad time difference", value: elapsedRows.filter((row) => row.start && row.closedAt).length, source: "Elapsed time"},
+    {report: "Onroad → MIS verification time difference", value: elapsedRows.filter((row) => row.closedAt && row.verifiedAt).length, source: "Elapsed time"},
+    {report: "Offroad → MIS verification total time", value: elapsedRows.filter((row) => row.start && row.verifiedAt).length, source: "Elapsed time"},
+    {report: "Total equipment", value: equipmentLoaded ? equipmentRecords.length : "—", source: "Equipment master"},
+    {report: "Total users", value: usersLoaded ? userRecords.length : "—", source: "Users & employees master"},
+    {report: "Total breakdown", value: requests.length, source: "Requests"},
+    {report: "Vehicle transfer", value: transfersLoaded ? transferRecords.length : "—", source: "Vehicle transfers master"},
+    {report: "User privilege assignments", value: privilegesLoaded ? privilegeRecords.length : "—", source: "Users & employees"},
+    {report: "Audit trail", value: "View", source: "Audit Trail"},
   ];
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
   const exportReports = () => {
     const lines = [
-      ["Report", "Reference", "Equipment", "Site", "Production offroad", "Maintenance onroad", "MIS verified", "Offroad to onroad", "Onroad to verified", "Total elapsed"],
+      ["Report", "Reference", "Equipment", "Make", "Model", "Site", "Production offroad", "Maintenance onroad", "MIS verified", "Offroad to onroad", "Onroad to verified", "Total elapsed"],
       ...elapsedRows.map((row) => [
         "Workflow timing",
         row.ref || "",
-        row.equipment || row.door || "",
-        row.site || "",
+        row.reportEquipment,
+        row.reportMake,
+        row.reportModel,
+        row.reportSite,
         row.start || "",
         row.closedAt || "",
         row.verifiedAt || "",
@@ -3171,40 +3269,84 @@ function ReportsPage({ requests = [], goto }) {
         </div>
         <div className="reports-detail-table emptytable">
           <div className="reports-detail-heading"><h3>{selectedEvent?.title || "Workflow events"}</h3><span>{selectedEvent?.rows.length || 0} events</span></div>
-          <table>
-            <thead><tr><th>Job reference</th><th>Equipment / vehicle</th><th>Site</th><th>User</th><th>Recorded at</th><th>Status</th></tr></thead>
-            <tbody>
-              {visibleEventRows.length ? visibleEventRows.map((request) => (
-                <tr key={`${selectedEvent.id}-${request.ref}`}><td><b>{request.ref}</b></td><td>{request.equipment || request.door || "—"}</td><td>{request.site || "—"}</td><td>{request[selectedEvent.actorKey] || "—"}</td><td>{formatTimestamp(request[selectedEvent.timestampKey])}</td><td><Status>{request.status}</Status></td></tr>
-              )) : <tr><td colSpan="6" className="empty-state">No events recorded for this report</td></tr>}
-            </tbody>
-          </table>
+          <ReportTable
+            query={query}
+            rows={selectedEvent?.rows || []}
+            rowKey={(request) => `${selectedEvent?.id}-${request.ref}`}
+            emptyMessage="No events recorded for this report"
+            columns={[
+              {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
+              {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
+              {key: "make", label: "Make", value: (request) => request.reportMake},
+              {key: "model", label: "Model", value: (request) => request.reportModel},
+              {key: "site", label: "Site", value: (request) => request.reportSite},
+              {key: "user", label: "User", value: (request) => request[selectedEvent?.actorKey]},
+              {key: "recordedAt", label: "Recorded at", value: (request) => request[selectedEvent?.timestampKey], render: (request) => formatTimestamp(request[selectedEvent?.timestampKey])},
+              {key: "status", label: "Status", value: (request) => request.status, render: (request) => <Status>{request.status}</Status>},
+            ]}
+          />
         </div>
       </div>
       <div className="reports-section">
         <div className="reports-section-heading"><div><h2>Workflow timing</h2><p>Durations are calculated from Production offroad, Maintenance onroad, and MIS verification timestamps.</p></div></div>
         <div className="reports-detail-table emptytable">
-          <table>
-            <thead><tr><th>Job reference</th><th>Production offroad</th><th>Maintenance onroad</th><th>MIS verified</th><th>Offroad → Onroad</th><th>Onroad → Verified</th><th>Total elapsed</th></tr></thead>
-            <tbody>
-              {elapsedRows.length ? elapsedRows.map((request) => (
-                <tr key={`elapsed-${request.ref}`}><td><b>{request.ref}</b></td><td>{formatTimestamp(request.start)}</td><td>{formatTimestamp(request.closedAt)}</td><td>{formatTimestamp(request.verifiedAt)}</td><td><strong>{elapsedLabel(request.start, request.closedAt)}</strong></td><td><strong>{elapsedLabel(request.closedAt, request.verifiedAt)}</strong></td><td><strong>{elapsedLabel(request.start, request.verifiedAt)}</strong></td></tr>
-              )) : <tr><td colSpan="7" className="empty-state">No workflow timings available</td></tr>}
-            </tbody>
-          </table>
+          <ReportTable
+            query={query}
+            rows={elapsedRows}
+            rowKey={(request) => `elapsed-${request.ref}`}
+            emptyMessage="No workflow timings available"
+            columns={[
+              {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
+              {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
+              {key: "make", label: "Make", value: (request) => request.reportMake},
+              {key: "model", label: "Model", value: (request) => request.reportModel},
+              {key: "site", label: "Site", value: (request) => request.reportSite},
+              {key: "offroad", label: "Production offroad", value: (request) => request.start, render: (request) => formatTimestamp(request.start)},
+              {key: "onroad", label: "Maintenance onroad", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+              {key: "verified", label: "MIS verified", value: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt)},
+              {key: "offroadToOnroad", label: "Offroad → Onroad", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
+              {key: "onroadToVerified", label: "Onroad → Verified", value: (request) => elapsedLabel(request.closedAt, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt, request.verifiedAt)}</strong>},
+              {key: "totalElapsed", label: "Total elapsed", value: (request) => elapsedLabel(request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.start, request.verifiedAt)}</strong>},
+            ]}
+          />
         </div>
       </div>
       <div className="reports-section">
         <div className="reports-section-heading"><div><h2>Report catalogue</h2><p>All requested report outputs are available from this section.</p></div></div>
         <div className="reports-catalogue emptytable">
-          <table><thead><tr><th>Report</th><th>Records / value</th><th>Source</th></tr></thead><tbody>{reportCatalog.map(([label, value, source]) => <tr key={label}><td><b>{label}</b></td><td>{value}</td><td>{source}</td></tr>)}</tbody></table>
+          <ReportTable
+            query={query}
+            rows={reportCatalog}
+            rowKey={(report) => report.report}
+            emptyMessage="No reports match this search"
+            columns={[
+              {key: "report", label: "Report", value: (report) => report.report, render: (report) => <b>{report.report}</b>},
+              {key: "value", label: "Records / value", value: (report) => report.value},
+              {key: "source", label: "Source", value: (report) => report.source},
+            ]}
+          />
         </div>
       </div>
       <div className="reports-section request-age-report">
         <div className="request-age-heading"><div><h2>Service and maintenance request ageing</h2><p>Requests are highlighted automatically according to their age.</p></div><div className="request-age-legend"><span className="yellow">1 day</span><span className="orange">2–4 days</span><span className="red">More than 5 days</span></div></div>
-        <div className="emptytable"><table><thead><tr><th>Job reference</th><th>Door no.</th><th>Site</th><th>Complaint</th><th>Created</th><th>Age</th><th>Status</th></tr></thead><tbody>
-          {requests.length ? requests.map((request) => { const age = Math.max(0, Math.floor((now - (new Date(String(request.start || "").replace(" ", "T")).getTime() || now)) / 86400000)); const ageClass = age > 5 ? "request-age-red" : age >= 2 && age <= 4 ? "request-age-orange" : age === 1 ? "request-age-yellow" : ""; return <tr key={`age-${request.ref}`} className={ageClass}><td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td><td>{request.start}</td><td><b>{age} {age === 1 ? "day" : "days"}</b></td><td><Status>{request.status}</Status></td></tr>; }) : <tr><td colSpan="7" className="empty-state">No service or maintenance requests available</td></tr>}
-        </tbody></table></div>
+        <div className="emptytable"><ReportTable
+          query={query}
+          rows={ageRows}
+          rowKey={(request) => `age-${request.ref}`}
+          rowClassName={(request) => request.reportAgeClass}
+          emptyMessage="No service or maintenance requests available"
+          columns={[
+            {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
+            {key: "door", label: "Door no.", value: (request) => request.reportDoor},
+            {key: "make", label: "Make", value: (request) => request.reportMake},
+            {key: "model", label: "Model", value: (request) => request.reportModel},
+            {key: "site", label: "Site", value: (request) => request.reportSite},
+            {key: "complaint", label: "Complaint", value: (request) => request.complaint},
+            {key: "created", label: "Created", value: (request) => request.start, render: (request) => formatTimestamp(request.start)},
+            {key: "age", label: "Age", value: (request) => request.reportAge, render: (request) => <b>{request.reportAge} {request.reportAge === 1 ? "day" : "days"}</b>},
+            {key: "status", label: "Status", value: (request) => request.status, render: (request) => <Status>{request.status}</Status>},
+          ]}
+        /></div>
       </div>
     </section>
   );
