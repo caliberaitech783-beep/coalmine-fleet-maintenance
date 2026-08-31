@@ -53,8 +53,8 @@ test("password reset is exposed only inside the login component", () => {
   const login = source.slice(source.indexOf("function Login"), source.indexOf("function Side"));
   const afterLogin = source.slice(source.indexOf("function Side"));
 
-  assert.match(login, /className="login-auth-tabs"/);
-  assert.match(login, />Reset password<\/button>/);
+  assert.match(source, /className="login-auth-tabs"/);
+  assert.match(source, /label: "Reset password"/);
   assert.match(login, /\/api\/password-reset\/request/);
   assert.match(login, /\/api\/password-reset\/confirm/);
   assert.match(login, /autoComplete="one-time-code"/);

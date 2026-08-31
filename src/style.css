@@ -79,3 +79,100 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
 .close-request-title{color:#d92d20}.manager-kpi-grid button{position:relative}.manager-kpi-tooltip{position:absolute;left:14px;top:calc(100% + 7px);z-index:20;display:none;min-width:190px;max-height:230px;overflow:auto;padding:11px;border:1px solid #c9d5eb;border-radius:9px;background:#fff;box-shadow:0 14px 32px #172b5030;color:#263b60}.manager-kpi-grid button:hover .manager-kpi-tooltip,.manager-kpi-grid button:focus-visible .manager-kpi-tooltip{display:block}.manager-kpi-tooltip b,.manager-kpi-tooltip i{display:block}.manager-kpi-tooltip b{margin-bottom:6px;font-size:11px}.manager-kpi-tooltip i{padding:3px 0;font-size:10px;font-style:normal}
 .account-role-field>.manager-site-options{display:block;margin-top:12px;padding:13px;border:1px solid #dfe5ef;border-radius:10px;background:#f7f9fd}.manager-site-options>b,.manager-site-options>small{display:block}.manager-site-options>small{margin:4px 0 10px;color:#71809d;font-size:9px}.manager-site-options>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.manager-site-options label{min-height:51px;background:#fff}@media(max-width:700px){.manager-site-options>div{grid-template-columns:1fr}}
 .admin-lock-page{display:grid;gap:18px}.admin-lock-page>header{display:flex;justify-content:space-between;align-items:center;padding:28px;border-radius:16px;background:linear-gradient(120deg,#173f7a,#2b60be);color:#fff}.admin-lock-page>header h1{margin:5px 0;font-size:30px}.admin-lock-page>header p{margin:0;max-width:760px}.admin-lock-page>header svg{width:52px;height:52px;opacity:.45}.admin-lock-status{display:flex;align-items:center;justify-content:space-between;padding:22px;border:1px solid #dbe3ef;border-radius:14px;background:#fff}.admin-lock-status div{display:grid;gap:5px}.admin-lock-status b{font-size:20px}.admin-lock-status.locked{border-color:#fecaca;background:#fff7f7}.admin-lock-status.locked b{color:#b42318}.admin-lock-status.clear{border-color:#b7ebd3;background:#f4fcf8}.admin-lock-status.clear b{color:#087a55}
+
+/* Graphical login mode selector */
+.login-auth-tabs{
+  gap:10px;
+  margin:0 0 26px;
+  padding:6px;
+  border-color:#cfdaeb;
+  border-radius:12px;
+  background:linear-gradient(135deg,#f8fbff,#eef3fb);
+  box-shadow:inset 0 1px 0 #ffffffcc,0 8px 24px #10213f0a;
+}
+.login-auth-tabs button{
+  position:relative;
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  align-items:center;
+  gap:10px;
+  min-height:58px;
+  padding:9px 12px;
+  border:1px solid transparent;
+  border-radius:8px;
+  text-align:left;
+  transition:background .18s,border-color .18s,box-shadow .18s,transform .18s,color .18s;
+}
+.login-auth-tabs button:hover{
+  background:#ffffffa8;
+  border-color:#d8e2f2;
+  color:#315fd3;
+}
+.login-auth-tabs button:focus-visible{
+  outline:3px solid #315fd32e;
+  outline-offset:2px;
+}
+.login-auth-tabs button.active{
+  border-color:#b7c8ed;
+  background:#fff;
+  color:#204ebc;
+  box-shadow:0 8px 20px #10213f14;
+}
+.login-auth-tabs button.active:after{
+  content:"";
+  position:absolute;
+  right:12px;
+  top:12px;
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:var(--login-orange);
+  box-shadow:0 0 0 4px #f49a4224;
+}
+.login-auth-tab-icon{
+  display:grid;
+  place-items:center;
+  width:38px;
+  height:38px;
+  border-radius:8px;
+  background:#e7eefc;
+  color:#315fd3;
+}
+.login-auth-tab-icon svg{
+  width:18px;
+  height:18px;
+}
+.login-auth-tabs button.active .login-auth-tab-icon{
+  background:#315fd3;
+  color:#fff;
+}
+.login-auth-tab-copy,
+.login-auth-tab-copy span,
+.login-auth-tab-copy small{
+  display:block;
+  min-width:0;
+}
+.login-auth-tab-copy span{
+  color:inherit;
+  font-size:12px;
+  font-weight:800;
+  line-height:1.2;
+}
+.login-auth-tab-copy small{
+  margin-top:4px;
+  color:#8190a7;
+  font-size:9px;
+  font-weight:700;
+  line-height:1.2;
+}
+.login-auth-tabs button.active .login-auth-tab-copy small{
+  color:#5f75a5;
+}
+@media(max-width:560px){
+  .login-auth-tabs{gap:7px;padding:5px}
+  .login-auth-tabs button{grid-template-columns:32px minmax(0,1fr);gap:8px;min-height:54px;padding:8px}
+  .login-auth-tab-icon{width:32px;height:32px}
+  .login-auth-tab-copy span{font-size:11px;overflow-wrap:anywhere}
+  .login-auth-tab-copy small{display:none}
+  .login-auth-tabs button.active:after{right:8px;top:8px;width:6px;height:6px}
+}

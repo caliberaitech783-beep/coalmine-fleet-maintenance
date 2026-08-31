@@ -157,6 +157,32 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
     </button>
   );
 }
+function AuthModeTabs({ mode, onModeChange }) {
+  const options = [
+    { id: "signin", label: "Sign in", detail: "Portal access", Icon: UserRound },
+    { id: "reset", label: "Reset password", detail: "OTP recovery", Icon: LockKeyhole },
+  ];
+  return (
+    <div className="login-auth-tabs" role="tablist" aria-label="Login options">
+      {options.map(({ id, label, detail, Icon }) => (
+        <button
+          key={id}
+          type="button"
+          role="tab"
+          aria-selected={mode === id}
+          className={mode === id ? "active" : ""}
+          onClick={() => onModeChange(id)}
+        >
+          <span className="login-auth-tab-icon" aria-hidden="true"><Icon /></span>
+          <span className="login-auth-tab-copy">
+            <span>{label}</span>
+            <small>{detail}</small>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
 function Login({ onLogin, theme, toggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -328,10 +354,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           onSubmit={(event) => { event.preventDefault(); resetRequest ? confirmPasswordReset() : requestPasswordReset(); }}
         >
           <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
-          <div className="login-auth-tabs" role="tablist" aria-label="Login options">
-            <button type="button" role="tab" aria-selected="false" onClick={() => { setLoginMode("signin"); setError(""); }}>Sign in</button>
-            <button type="button" role="tab" aria-selected="true" className="active">Reset password</button>
-          </div>
+          <AuthModeTabs mode="reset" onModeChange={(mode) => { setLoginMode(mode); setError(""); }} />
           <small className="login-kicker"><LockKeyhole /> ACCOUNT RECOVERY</small>
           <h2>{resetRequest ? "Enter OTP" : "Reset password"}</h2>
           <p>{resetRequest ? "Enter the 6-digit OTP sent to your registered WhatsApp mobile number, then create a new password." : "Enter your user name. We will send a password-reset OTP to your registered mobile number."}</p>
@@ -360,10 +383,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           }}
         >
           <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
-          <div className="login-auth-tabs" role="tablist" aria-label="Login options">
-            <button type="button" role="tab" aria-selected="true" className="active">Sign in</button>
-            <button type="button" role="tab" aria-selected="false" onClick={() => { setLoginMode("reset"); setError(""); setNotice(""); }}>Reset password</button>
-          </div>
+          <AuthModeTabs mode="signin" onModeChange={(mode) => { setLoginMode(mode); setError(""); setNotice(""); }} />
           <small className="login-kicker"><LockKeyhole /> SECURE OPERATIONS PORTAL</small>
           <h2>Welcome back</h2>
           <p>Sign in to access your fleet operations workspace.</p>

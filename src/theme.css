@@ -344,3 +344,35 @@ textarea {
     transition: none;
   }
 }
+
+:root[data-theme="dark"] .login-auth-tabs{
+  background:linear-gradient(135deg,#0d1829,#142238);
+  border-color:#34435a;
+  box-shadow:inset 0 1px 0 #ffffff0a,0 10px 24px #0003;
+}
+:root[data-theme="dark"] .login-auth-tabs button{
+  color:#a9b7cc;
+}
+:root[data-theme="dark"] .login-auth-tabs button:hover{
+  background:#17243a;
+  border-color:#3e5576;
+  color:#b7ccff;
+}
+:root[data-theme="dark"] .login-auth-tabs button.active{
+  background:#1b2a41;
+  border-color:#4b6590;
+  color:#b7ccff;
+  box-shadow:0 8px 20px #0004;
+}
+:root[data-theme="dark"] .login-auth-tab-icon{
+  background:#223553;
+  color:#9bb7ff;
+}
+:root[data-theme="dark"] .login-auth-tabs button.active .login-auth-tab-icon{
+  background:#4d7cf0;
+  color:#fff;
+}
+:root[data-theme="dark"] .login-auth-tab-copy small,
+:root[data-theme="dark"] .login-auth-tabs button.active .login-auth-tab-copy small{
+  color:#91a2bd;
+}
