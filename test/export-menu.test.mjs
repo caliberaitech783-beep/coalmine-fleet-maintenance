@@ -16,7 +16,9 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/\[Content_Types\]\.xml/);
   assert.match(source,/xl\/worksheets\/sheet1\.xml/);
   assert.match(source,/<Printer \/> Print<\/button>/);
-  assert.match(source,/popup\.print\(\)/);
+  assert.doesNotMatch(source,/window\.open\("", "_blank"/);
+  assert.match(source,/document\.createElement\("iframe"\)/);
+  assert.match(source,/frame\.contentWindow\?\.print\(\)/);
   assert.match(source,/fetch\("\/api\/exports\/pdf"/);
   assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
   assert.match(source,/<ExportMenu title=\{title\} columns=\{columns\} rows=\{rows\}/);
