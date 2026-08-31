@@ -53,3 +53,11 @@ jobs:
           app-name: coalmine-fleet-azure-783
           slot-name: Production
           package: .
+      - name: Restart Azure Web App
+        run: |
+          APP_ID=$(az webapp list --query "[?name=='coalmine-fleet-azure-783'].id | [0]" -o tsv)
+          if [ -z "$APP_ID" ]; then
+            echo "Azure Web App coalmine-fleet-azure-783 was not found."
+            exit 1
+          fi
+          az webapp restart --ids "$APP_ID"
