@@ -4820,7 +4820,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<>
-      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Maintenance requests" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
+      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
