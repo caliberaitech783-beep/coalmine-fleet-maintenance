@@ -43,6 +43,7 @@ const driverSyncIntervalMs=2*60*1000;
 const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
+const WHATSAPP_SETTING_KEY='meta_whatsapp';
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
@@ -54,6 +55,51 @@ const pool=new Pool({
 const sessionStore=createSessionStore(pool);
 let databaseReady=false;
 let databaseError='Database initialization is pending.';
+
+function maskedSecret(value){
+  const text=String(value||'').trim();
+  if(!text)return '';
+  if(text.length<=10)return 'configured';
+  return `${text.slice(0,6)}...${text.slice(-4)}`;
+}
+
+async function storedWhatsAppSettings(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[WHATSAPP_SETTING_KEY]);
+  return rows[0]?.setting_value||{};
+}
+
+async function metaWhatsAppRuntimeEnv(){
+  try{
+    const settings=await storedWhatsAppSettings();
+    return {
+      ...process.env,
+      META_WHATSAPP_PHONE_NUMBER_ID:String(settings.phoneNumberId||process.env.META_WHATSAPP_PHONE_NUMBER_ID||'').trim(),
+      META_WHATSAPP_ACCESS_TOKEN:String(settings.accessToken||process.env.META_WHATSAPP_ACCESS_TOKEN||'').trim(),
+      META_WHATSAPP_BUSINESS_ACCOUNT_ID:String(settings.businessAccountId||process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||'').trim(),
+      META_GRAPH_VERSION:String(settings.graphVersion||process.env.META_GRAPH_VERSION||'v25.0').trim(),
+    };
+  }catch(error){
+    console.warn('Could not load stored WhatsApp settings; falling back to environment variables:',error.message);
+    return process.env;
+  }
+}
+
+async function publicWhatsAppSettings(){
+  const settings=await storedWhatsAppSettings();
+  const env=await metaWhatsAppRuntimeEnv();
+  return {
+    phoneNumberId:String(env.META_WHATSAPP_PHONE_NUMBER_ID||''),
+    businessAccountId:String(env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||''),
+    graphVersion:String(env.META_GRAPH_VERSION||'v25.0'),
+    accessTokenConfigured:Boolean(env.META_WHATSAPP_ACCESS_TOKEN),
+    accessTokenPreview:maskedSecret(env.META_WHATSAPP_ACCESS_TOKEN),
+    source:{
+      phoneNumberId:settings.phoneNumberId?'database':(process.env.META_WHATSAPP_PHONE_NUMBER_ID?'environment':'missing'),
+      accessToken:settings.accessToken?'database':(process.env.META_WHATSAPP_ACCESS_TOKEN?'environment':'missing'),
+      businessAccountId:settings.businessAccountId?'database':(process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID?'environment':'missing'),
+    },
+  };
+}
 
 async function migrate(){
   await pool.query(`
@@ -539,11 +585,12 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
         resetToken,user.id,hashPassword(otp),requestedIp,PASSWORD_RESET_OTP_TTL_MINUTES
       ]);
     const phone=passwordResetPhone(user.record_data);
+    const whatsappEnv=await metaWhatsAppRuntimeEnv();
     try{
-      await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',parameters:[otp]});
+      await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',parameters:[otp]},{env:whatsappEnv});
     }catch(templateError){
       console.warn('Password reset OTP template unavailable; using WhatsApp text fallback:',templateError.message);
-      try{await sendMetaWhatsAppText({to:phone,message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`})}
+      try{await sendMetaWhatsAppText({to:phone,message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv})}
       catch(deliveryError){
         await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
         console.error('Password reset OTP delivery failed:',deliveryError.message);
@@ -728,8 +775,31 @@ app.get('/api/health',async(_req,res)=>{
 });
 
 app.get('/api/whatsapp/status',requireSuper,async(_req,res)=>{
-  try{res.json(await metaWhatsAppStatus())}
+  try{res.json({...await metaWhatsAppStatus({env:await metaWhatsAppRuntimeEnv()}),settings:await publicWhatsAppSettings()})}
   catch(error){res.status(503).json({configured:true,connected:false,error:error instanceof Error?error.message:'Meta WhatsApp connection failed.'})}
+});
+
+app.get('/api/whatsapp/settings',requireSuper,async(_req,res,next)=>{
+  try{res.json(await publicWhatsAppSettings())}
+  catch(error){next(error)}
+});
+
+app.put('/api/whatsapp/settings',requireSuper,async(req,res,next)=>{
+  try{
+    const current=await storedWhatsAppSettings();
+    const nextSettings={...current};
+    if(Object.prototype.hasOwnProperty.call(req.body||{},'phoneNumberId'))nextSettings.phoneNumberId=String(req.body.phoneNumberId||'').replace(/\D/g,'').trim();
+    if(Object.prototype.hasOwnProperty.call(req.body||{},'accessToken'))nextSettings.accessToken=String(req.body.accessToken||'').trim();
+    if(Object.prototype.hasOwnProperty.call(req.body||{},'businessAccountId'))nextSettings.businessAccountId=String(req.body.businessAccountId||'').replace(/\D/g,'').trim();
+    if(Object.prototype.hasOwnProperty.call(req.body||{},'graphVersion'))nextSettings.graphVersion=String(req.body.graphVersion||'v25.0').trim()||'v25.0';
+    if(!nextSettings.phoneNumberId)return res.status(400).json({error:'Meta WhatsApp phone number ID is required.'});
+    if(!nextSettings.accessToken)return res.status(400).json({error:'Meta WhatsApp access token is required.'});
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
+      WHATSAPP_SETTING_KEY,JSON.stringify(nextSettings),
+    ]);
+    res.json(await publicWhatsAppSettings());
+  }catch(error){next(error)}
 });
 
 app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
@@ -737,7 +807,7 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
   if(!reportType||!targetName||!recipientPhone||!message)
     return res.status(400).json({error:'Report type, target, recipient phone, and message are required.'});
   try{
-    const result=await sendMetaWhatsAppText({to:recipientPhone,message});
+    const result=await sendMetaWhatsAppText({to:recipientPhone,message},{env:await metaWhatsAppRuntimeEnv()});
     const {rows}=await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING id,report_type AS "reportType",target_name AS "targetName",report_level AS "reportLevel",
@@ -970,10 +1040,11 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
     ['System notification',String(reference||''),'',String(user.employee||user.name||user.login||login),'','Skipped - phone number missing']);}));
   await Promise.allSettled([...contacts.entries()].map(async([login,contact])=>{
     let status='Sent';
+    const whatsappEnv=await metaWhatsAppRuntimeEnv();
     try{
-      if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate})}
-      catch(templateError){console.warn(`WhatsApp template ${workflowTemplate.templateKey} unavailable; using text fallback:`,templateError.message);await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`})}
-      else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`});
+      if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate},{env:whatsappEnv})}
+      catch(templateError){console.warn(`WhatsApp template ${workflowTemplate.templateKey} unavailable; using text fallback:`,templateError.message);await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv})}
+      else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv});
     }
     catch(error){status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;console.error(`WhatsApp notification failed for ${login}:`,error.message)}
     await pool.query(`INSERT INTO whatsapp_alert_history
@@ -1037,10 +1108,11 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
       try{
         if(!phone)throw new Error('Phone number missing');
         const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOFF ROAD / OPEN: ${scopedOpen.length}\nON ROAD / CLOSED: ${scopedClosed.length}\nThe complete report is attached as a PDF.`;
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[summary]})}
+        const whatsappEnv=await metaWhatsAppRuntimeEnv();
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[summary]},{env:whatsappEnv})}
         catch(templateError){console.warn('Consolidated WhatsApp notification template unavailable; attempting PDF delivery:',templateError.message)}
         const pdf=await buildFleetConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openRequests:scopedOpen,closedRequests:scopedClosed});
-        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('Fleet',scope.key,window.slotKey),caption:`Nerve Center fleet report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`});
+        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('Fleet',scope.key,window.slotKey),caption:`Nerve Center fleet report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`},{env:whatsappEnv});
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
@@ -1104,10 +1176,11 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       try{
         if(!phone)throw new Error('Phone number missing');
         const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOPEN TICKETS: ${scopedOpen.length}\nCLOSED TICKETS: ${scopedClosed.length}\nThe complete report is attached as a PDF.`;
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]})}
+        const whatsappEnv=await metaWhatsAppRuntimeEnv();
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]},{env:whatsappEnv})}
         catch(templateError){console.warn('Consolidated CRM WhatsApp notification template unavailable; attempting PDF delivery:',templateError.message)}
         const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
-        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`});
+        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`},{env:whatsappEnv});
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
@@ -1182,7 +1255,7 @@ async function sendDirectorReportBundle({recipientPhone,recipientName='Director'
   let status='Sent',bundle=null;
   try{
     bundle=await publishDirectorReportFiles({baseUrl,slotKey:window.slotKey,now});
-    await sendMetaWhatsAppText({to:phone,message:bundle.message});
+    await sendMetaWhatsAppText({to:phone,message:bundle.message},{env:await metaWhatsAppRuntimeEnv()});
   }catch(error){
     status=`Failed - ${String(error?.message||'Director WhatsApp delivery error').slice(0,160)}`;
     console.error(`Director WhatsApp report failed for ${phone}:`,error.message);
@@ -2035,9 +2108,12 @@ async function initializeDatabase(){
       .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
       .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
     void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
-    if(process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID)void submitMetaWhatsAppTemplates()
-      .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
-      .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
+    void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
+      if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
+        .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
+        .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
+      return null;
+    }).catch(error=>console.error('Meta WhatsApp template configuration check failed.',error));
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database initialization failed.';

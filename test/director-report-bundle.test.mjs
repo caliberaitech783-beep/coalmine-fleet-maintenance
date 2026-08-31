@@ -41,6 +41,10 @@ test('Director report API and timing popup are wired into server and reports UI'
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
   assert.match(server,/published_reports/);
+  assert.match(server,/WHATSAPP_SETTING_KEY='meta_whatsapp'/);
+  assert.match(server,/app\.get\('\/api\/whatsapp\/settings'/);
+  assert.match(server,/app\.put\('\/api\/whatsapp\/settings'/);
+  assert.match(server,/metaWhatsAppRuntimeEnv/);
   assert.match(server,/app\.get\('\/reports\/published\/:id'/);
   assert.match(server,/app\.post\('\/api\/reports\/director\/send-test'/);
   assert.match(server,/sendScheduledDirectorReportBundles/);
