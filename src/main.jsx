@@ -4753,13 +4753,13 @@ Generic = function GenericWithMasters(props) {
   );
 };
 const OriginalSubsidiaries = Subsidiaries;
-Subsidiaries = function SubsidiariesWithImport(props = {}) {
+Subsidiaries = function SubsidiariesWithImport({ gotoEquipment } = {}) {
   const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
   if (!loaded) return <MasterLoader name="Region master" />;
-  return <RegionMasterPage records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={props.gotoEquipment} />;
+  return <RegionMasterPage records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
 function Modal({ title, close, children, className = "" }) {
   return (

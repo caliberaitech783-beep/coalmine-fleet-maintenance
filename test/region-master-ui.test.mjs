@@ -8,9 +8,9 @@ test("region master renders WCL and NCL graphical tabs with site subtabs", () =>
   const regionSource = source.slice(source.indexOf("function RegionMasterPage"), source.indexOf("Generic = function GenericWithMasters"));
 
   assert.match(source, /function RegionMasterPage\(/);
-  assert.match(source, /Subsidiaries = function SubsidiariesWithImport\(props = \{\}\)/);
+  assert.match(source, /Subsidiaries = function SubsidiariesWithImport\(\{ gotoEquipment \} = \{\}\)/);
   assert.match(source, /<RegionMasterPage records=\{records\}/);
-  assert.match(source, /gotoEquipment=\{props\.gotoEquipment\}/);
+  assert.match(source, /gotoEquipment=\{gotoEquipment\}/);
   assert.match(regionSource, /className="region-main-tabs"/);
   assert.match(regionSource, /role="tablist" aria-label="Region tabs"/);
   assert.match(regionSource, /className="region-site-tabs"/);
