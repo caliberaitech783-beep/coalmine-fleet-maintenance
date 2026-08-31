@@ -5,7 +5,7 @@ import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, latestTimestamp } from "../report-metrics.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases, openCasesBySite } from "../dashboard-open-cases.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
@@ -557,7 +557,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={activeManagerRole === "Production Manager"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} /></article>
   </section>;
 }
-function Dashboard({ goto = () => {}, gotoEquipment = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
+function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
@@ -643,11 +643,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, requests = [], t
         <article className="mine-overview-chart">
           <header><div><span className="mine-eyebrow">Road availability</span><h2>On-road, off-road and idle</h2><p>Every explicit fleet state is counted separately</p></div></header>
           <div className="mine-overview-chart-body">
-            <button type="button" className="mine-overview-donut" aria-label={`${kpis.availability}% on road`} onClick={() => gotoEquipment("onroad", "")} style={{ background: `conic-gradient(#72c99e 0 ${onRoadShare}%, #df776e ${onRoadShare}% ${onRoadShare + offRoadShare}%, #e5aa55 ${onRoadShare + offRoadShare}% ${onRoadShare + offRoadShare + idleShare}%, #d9e3e7 ${onRoadShare + offRoadShare + idleShare}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button>
+            <button type="button" className="mine-overview-donut" aria-label={`${kpis.availability}% on road`} onClick={() => gotoBreakdownFleet("onroad", selectedSites)} style={{ background: `conic-gradient(#72c99e 0 ${onRoadShare}%, #df776e ${onRoadShare}% ${onRoadShare + offRoadShare}%, #e5aa55 ${onRoadShare + offRoadShare}% ${onRoadShare + offRoadShare + idleShare}%, #d9e3e7 ${onRoadShare + offRoadShare + idleShare}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button>
             <div className="mine-overview-legend">
-              <button type="button" onClick={() => gotoEquipment("onroad", "")}><i className="mine-chart-green" /><span>On road<small>Available for operation</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => gotoEquipment("offroad", "")}><i className="mine-chart-red" /><span>Off road<small>Maintenance or breakdown</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => gotoEquipment("idle", "")}><i className="mine-chart-idle" /><span>Idle<small>Operational, currently not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoBreakdownFleet("onroad", selectedSites)}><i className="mine-chart-green" /><span>On road<small>Available for operation</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoBreakdownFleet("offroad", selectedSites)}><i className="mine-chart-red" /><span>Off road<small>Maintenance or breakdown</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
+              <button type="button" onClick={() => gotoBreakdownFleet("idle", selectedSites)}><i className="mine-chart-idle" /><span>Idle<small>Operational, currently not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
               {kpis.unknown > 0 && <div><i className="mine-chart-grey" /><span>Status not set<small>Not counted as off road</small></span><strong>{kpis.unknown.toLocaleString()}</strong></div>}
             </div>
           </div>
@@ -1709,6 +1709,9 @@ function Equipment({
   initialFilter = "all",
   initialLocation = "",
   initialCategory = "all",
+  pageTitle = "Equipment master",
+  statusRequests = null,
+  allowedLocations = [],
   records = [],
   onAdd,
   onEdit,
@@ -1772,8 +1775,9 @@ function Equipment({
   let rows = records.filter(
     (v) =>
       (road === "all" ||
-        equipmentRoadStatus(v) === road) &&
+        (Array.isArray(statusRequests) ? liveEquipmentRoadStatus(v, statusRequests) : equipmentRoadStatus(v)) === road) &&
       (assetCategory === "all" || String(v.category || "").trim().toLowerCase() === assetCategory) &&
+      (!allowedLocations.length || allowedLocations.some((site) => recordBelongsToSite(v, site))) &&
       (!location || (v.currentLocation || v.location) === location) &&
       Object.values(v).join(" ").toLowerCase().includes(q.toLowerCase()) &&
       equipmentColumns.every(([key]) => !columnFilters[key] || filterText(equipmentValue(v, key)) === columnFilters[key]),
@@ -1813,7 +1817,7 @@ function Equipment({
     <section className="panel table pagepanel">
       <header>
         <div>
-          <h1>Equipment master</h1>
+          <h1>{pageTitle}</h1>
           <p>
             {location ? location + " · " : ""}
             {road === "all"
@@ -4521,6 +4525,8 @@ function App() {
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
     [equipmentCategory, setEquipmentCategory] = useState("all"),
+    [breakdownFleetFilter, setBreakdownFleetFilter] = useState(""),
+    [breakdownFleetSites, setBreakdownFleetSites] = useState([]),
     [requests, setRequests] = useState([]),
     [menu, setMenu] = useState(false),
     [loadTime, setLoadTime] = useState(null),
@@ -4698,6 +4704,11 @@ function App() {
       setEquipmentCategory(category);
       selectMenu("Equipment master");
     },
+    gotoBreakdownFleet = (filter, sites = []) => {
+      setBreakdownFleetFilter(filter);
+      setBreakdownFleetSites(sites);
+      selectMenu("Breakdown master");
+    },
     logout = () => {
       authToken = "";
       currentEmployeeName = "";
@@ -4814,7 +4825,7 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} requests={requests} theme={theme} allowedSites={adminPermissions.adminLevel==="Manager"?(profileManagerSites.length?profileManagerSites:profileLocation?[profileLocation]:[]):null} allowedRegions={adminPermissions.adminLevel==="Manager"?profileManagerRegions:null} restrictToScope={adminPermissions.adminLevel==="Manager"} />
+            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} allowedSites={adminPermissions.adminLevel==="Manager"?(profileManagerSites.length?profileManagerSites:profileLocation?[profileLocation]:[]):null} allowedRegions={adminPermissions.adminLevel==="Manager"?profileManagerRegions:null} restrictToScope={adminPermissions.adminLevel==="Manager"} />
           ) : active === "Manager Profile" ? (
             <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} />
           ) : active === "Tickets" ? (
@@ -4828,7 +4839,7 @@ function App() {
               initialCategory={equipmentCategory}
             />
           ) : active === "Breakdown master" ? (
-            <Breakdown requests={requests} />
+            breakdownFleetFilter ? <Equipment initialFilter={breakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={breakdownFleetSites} /> : <Breakdown requests={requests} />
           ) : active === "Region master" ? (
             <Subsidiaries gotoEquipment={gotoEquipment} />
           ) : active === "WhatsApp alert history" ? (
