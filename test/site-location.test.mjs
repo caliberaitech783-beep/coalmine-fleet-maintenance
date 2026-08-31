@@ -38,9 +38,10 @@ test("legacy NCL locations match once and do not duplicate Jayant", () => {
   );
 });
 
-test("site matching accepts current and legacy equipment location fields", () => {
+test("site matching accepts equipment and maintenance-request location fields", () => {
   assert.equal(recordBelongsToSite({ currentLocation: "Sasti II" }, "Sasti OB"), true);
   assert.equal(recordBelongsToSite({ location: "Majri II" }, "Majri OB"), true);
+  assert.equal(recordBelongsToSite({ site: "Sasti" }, "Sasti OB"), true);
   assert.equal(recordBelongsToSite({ currentLocation: "Jayant" }, "Jayant OB 2nd"), false);
 });
 

@@ -27,7 +27,7 @@ export function canonicalSiteName(value = "") {
 
 export function recordBelongsToSite(record, site) {
   return (
-    canonicalSiteName(record?.currentLocation || record?.location) ===
+    canonicalSiteName(record?.currentLocation || record?.location || record?.site) ===
     canonicalSiteName(site)
   );
 }
