@@ -10,7 +10,7 @@ import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} 
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
-import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {accessAllows,managerRoleSelection} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
@@ -91,6 +91,13 @@ async function migrate(){
       first_trip_at TIMESTAMPTZ,
       first_trip_by TEXT NOT NULL DEFAULT '',
       first_trip_card_image TEXT NOT NULL DEFAULT '',
+      meter_type TEXT NOT NULL DEFAULT '',
+      opening_meter_reading TEXT NOT NULL DEFAULT '',
+      opening_meter_file TEXT NOT NULL DEFAULT '',
+      opening_meter_file_name TEXT NOT NULL DEFAULT '',
+      closing_meter_reading TEXT NOT NULL DEFAULT '',
+      closing_meter_file TEXT NOT NULL DEFAULT '',
+      closing_meter_file_name TEXT NOT NULL DEFAULT '',
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS maintenance_requests_created_at_idx
@@ -150,6 +157,13 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS first_trip_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS meter_type TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_reading TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_file TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_file_name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_reading TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_file TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_file_name TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS maintenance_requests_requester_login_idx
       ON maintenance_requests (requester_login, created_at DESC);
     CREATE TABLE IF NOT EXISTS maintenance_daily_remarks (
@@ -1174,7 +1188,11 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
-  first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded"`;
+  first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
+  meter_type AS "meterType", opening_meter_reading AS "openingMeterReading",
+  (opening_meter_file <> '') AS "openingMeterFileUploaded", opening_meter_file_name AS "openingMeterFileName",
+  closing_meter_reading AS "closingMeterReading", (closing_meter_file <> '') AS "closingMeterFileUploaded",
+  closing_meter_file_name AS "closingMeterFileName"`;
 
 function requestEquipmentNotificationDetails(request={}){
   return [
@@ -1287,10 +1305,13 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,forceDuplicate=false}=req.body||{};
+    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName='',forceDuplicate=false}=req.body||{};
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
+    if(!['KMR','HMR'].includes(String(meterType)))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
+    if(!validMeterReading(openingMeterReading))return res.status(400).json({error:`Enter a valid opening ${meterType} reading.`});
+    if(!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${meterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
     if(forceDuplicate!==true){
       const duplicate=await pool.query(`SELECT reference FROM maintenance_requests WHERE lower(trim(chassis_number))=lower(trim($1)) AND status<>'Closed' ORDER BY created_at DESC LIMIT 1`,[chassis]);
       if(duplicate.rows.length)return res.status(409).json({duplicate:true,existingReference:duplicate.rows[0].reference,error:`Request ${duplicate.rows[0].reference} already exists for this equipment. Do you still want to add another request?`});
@@ -1301,10 +1322,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedDriverName=String(driverName).trim().slice(0,200)||'Demo Driver';
     const storedDriverSource=String(driverNameSource).trim().slice(0,200)||(storedDriverName==='Demo Driver'?'Demo':'Manual');
     const {rows}=await pool.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Open',$15,$16)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Open',$15,$16,$17,$18,$19,$20)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase()]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),meterType,String(openingMeterReading).trim(),openingMeterFile,String(openingMeterFileName).trim().slice(0,255)]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
     const openedAt=requestNotificationTime(startedAt);
@@ -1408,8 +1429,13 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
     const firstTripAt=firstTripDone?requestDateTimeValue(req.body?.firstTripDate,req.body?.firstTripTime):null;
     const firstTripCardImage=String(req.body?.firstTripCardImage||'');
+    const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
+    const closingMeterFile=String(req.body?.closingMeterFile||'');
+    const closingMeterFileName=String(req.body?.closingMeterFileName||'').trim().slice(0,255);
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
     if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
+    if(!validMeterReading(closingMeterReading))return res.status(400).json({error:'Enter a valid closing KMR/HMR reading.'});
+    if(!validMeterEvidenceDataUrl(closingMeterFile))return res.status(400).json({error:'Upload a closing KMR/HMR JPEG, PNG, WebP, or PDF up to 5 MB.'});
     const misUser=await currentUserRecord(req.session);
     const misSite=String(misUser.site||misUser.location||'').trim();
     if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
@@ -1417,8 +1443,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(!eligible.rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     if(canonicalSiteName(eligible.rows[0].site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5 WHERE reference=$6 AND status='Closed' AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,reference]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6,closing_meter_file=$7,closing_meter_file_name=$8 WHERE reference=$9 AND status='Closed' AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,closingMeterFile,closingMeterFileName,reference]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`,
@@ -1439,6 +1465,29 @@ app.get('/api/requests/:reference/trip-card',requireSession,requirePermission('v
     if(canonicalSiteName(rows[0].site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
     if(!validTripCardImageDataUrl(rows[0].image))return res.status(404).json({error:'Trip-card image is not available.'});
     res.json({image:rows[0].image});
+  }catch(error){next(error)}
+});
+
+app.get('/api/requests/:reference/meter-file',requireSession,async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const stage=req.query.stage==='closing'?'closing':'opening';
+    const {rows}=await pool.query(`SELECT requester_login,site,
+      CASE WHEN $2='closing' THEN closing_meter_file ELSE opening_meter_file END AS file,
+      CASE WHEN $2='closing' THEN closing_meter_file_name ELSE opening_meter_file_name END AS name
+      FROM maintenance_requests WHERE reference=$1`,[reference,stage]);
+    if(!rows.length)return res.status(404).json({error:'Maintenance request not found.'});
+    const row=rows[0];
+    let allowed=req.session.role==='super'||req.session.permissions?.readRequests===true;
+    if(req.session.role==='normal'&&req.session.assignedRole==='Maintenance User')allowed=true;
+    if(req.session.role==='normal'&&req.session.assignedRole==='Production User')allowed=String(row.requester_login||'').trim().toLowerCase()===String(req.session.login||'').trim().toLowerCase();
+    if(req.session.role==='normal'&&req.session.assignedRole==='MIS User'){
+      const user=await currentUserRecord(req.session);
+      allowed=Boolean(user.site||user.location)&&canonicalSiteName(row.site)===canonicalSiteName(user.site||user.location);
+    }
+    if(!allowed)return res.status(403).json({error:'You are not authorized to view this meter file.'});
+    if(!validMeterEvidenceDataUrl(row.file))return res.status(404).json({error:`${stage==='closing'?'Closing':'Opening'} meter file is not available.`});
+    res.json({file:row.file,name:row.name||`${stage}-meter-evidence`});
   }catch(error){next(error)}
 });
 
