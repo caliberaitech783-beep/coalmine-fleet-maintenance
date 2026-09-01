@@ -99,6 +99,7 @@ import "./daily-updates.css";
 import "./dashboard-concept-a.css";
 import "./brand-theme.css";
 import "./report-schedule-polish.css";
+import "./reports-workspace.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -3924,10 +3925,10 @@ function Generic({ name, requests = [] }) {
 }
 
 const reportCategoryTabs = [
-  {id: "general", label: "General Report", description: "Common road status, fleet location, transfer, and recent breakdown reports."},
-  {id: "production", label: "Production report", description: "Production opening and Production-to-MIS verification reports."},
-  {id: "maintenance", label: "Maintenance report", description: "Maintenance closing, idle, TAT, and verification reports."},
-  {id: "mis", label: "MIS Report", description: "MIS verification and first-trip audit reports."},
+  {id: "general", label: "General Report", description: "Common road status, fleet location, transfer, and recent breakdown reports.", icon: FileBarChart},
+  {id: "production", label: "Production report", description: "Production opening and Production-to-MIS verification reports.", icon: Gauge},
+  {id: "maintenance", label: "Maintenance report", description: "Maintenance closing, idle, TAT, and verification reports.", icon: Wrench},
+  {id: "mis", label: "MIS Report", description: "MIS verification and first-trip audit reports.", icon: ShieldCheck},
 ];
 const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const reportDesignationOptions = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
@@ -3961,15 +3962,18 @@ function locationCountRows(records = []) {
   });
   return [...groups.values()].sort((a, b) => sortCollator.compare(a.location, b.location));
 }
-function ReportSection({ title, description, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, children }) {
+function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, children }) {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const visibleColumns = visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
   return (
-    <div className="reports-section generated-report-section">
+    <div className="reports-section generated-report-section" data-category={category}>
       <div className="reports-section-heading">
-        <div>
-          <h2>{title}</h2>
-          <p>{description}</p>
+        <div className="generated-report-title">
+          <span className="generated-report-icon"><ReportIcon aria-hidden="true" /></span>
+          <div>
+            <h2>{title}</h2>
+            <p>{description}</p>
+          </div>
         </div>
         <ExportMenu title={title} columns={visibleColumns} rows={rows} className="secondary" label="Generate" />
       </div>
@@ -4237,7 +4241,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const selectedScheduleMeta = reportDesignationOptions.find((designation) => designation.key === selectedScheduleDesignation) || reportDesignationOptions[0];
   const selectedScheduleRecipients = reportScheduleRecipients[selectedScheduleDesignation] || [];
   return (
-    <section className="reports-page panel pagepanel">
+    <section className="reports-page panel pagepanel" data-report-category={activeCategory.id}>
       <header>
         <div>
           <h1>Reports</h1>
@@ -4334,19 +4338,23 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       )}
       <CaliberActivityOverlay message={reportZipDownloading ? "Preparing reports ZIP..." : ""} />
       <div className="reports-category-tabs" role="tablist" aria-label="Report type tabs">
-        {reportCategoryTabs.map((category) => (
-          <button
+        {reportCategoryTabs.map((category) => {
+          const CategoryIcon = category.icon;
+          const reportCount = reportGroups.filter((report) => report.category === category.id).length;
+          return <button
             key={category.id}
             type="button"
             role="tab"
             aria-selected={activeReportCategory === category.id}
+            data-category={category.id}
             className={activeReportCategory === category.id ? "active" : ""}
             onClick={() => setActiveReportCategory(category.id)}
           >
-            <FileBarChart aria-hidden="true" />
-            <span><b>{category.label}</b><small>{category.description}</small></span>
-          </button>
-        ))}
+            <span className="report-category-icon"><CategoryIcon aria-hidden="true" /></span>
+            <span className="report-category-copy"><b>{category.label}</b><small>{category.description}</small></span>
+            <em>{reportCount}</em>
+          </button>;
+        })}
       </div>
       {activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
         {activeReports.map((report) => (
@@ -4370,6 +4378,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           key={`${selectedReport.category}-${selectedReport.title}`}
           title={selectedReport.title}
           description={selectedReport.description}
+          category={selectedReport.category}
+          icon={activeCategory.icon}
           rows={selectedReport.rows}
           columns={selectedReport.columns}
           emptyMessage={selectedReport.emptyMessage}

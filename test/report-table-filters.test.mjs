@@ -28,6 +28,7 @@ test("every report table supports header filters, sorting, and equipment compari
 
 test("reports page exposes generated report type and report-name sub tabs", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const reportStyles = readFileSync(new URL("../src/reports-workspace.css", import.meta.url), "utf8");
   const reportsSource = source.slice(source.indexOf("const reportCategoryTabs"), source.indexOf("function MasterPage"));
 
   assert.match(reportsSource, /General Report/);
@@ -36,6 +37,11 @@ test("reports page exposes generated report type and report-name sub tabs", () =
   assert.match(reportsSource, /MIS Report/);
   assert.doesNotMatch(reportsSource, /Report format, filters, columns, and export rules are not defined yet/);
   assert.match(reportsSource, /className="report-name-tabs"/);
+  assert.match(reportsSource, /data-report-category=\{activeCategory\.id\}/);
+  assert.match(reportsSource, /className="report-category-icon"/);
+  assert.match(reportsSource, /className="generated-report-icon"/);
+  assert.match(reportStyles, /\.reports-category-tabs button\[data-category="maintenance"\]/);
+  assert.match(reportStyles, /\.generated-report-section \.reports-detail-table/);
   assert.match(reportsSource, /selectedReportByCategory/);
   assert.match(reportsSource, /selectedReport && \(/);
   assert.doesNotMatch(reportsSource, /Search reports, references, sites/);
