@@ -42,7 +42,7 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.doesNotMatch(message,/\n\s+https:\/\/bdms\.cmll\.in\/r\//);
 });
 
-test('Director report API and timing popup are wired into server and reports UI',()=>{
+test('Director report API and all-user schedule popup are wired into server and reports UI',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
@@ -60,8 +60,12 @@ test('Director report API and timing popup are wired into server and reports UI'
   assert.match(server,/publishDirectorReportArchive/);
   assert.match(server,/archiveUrl/);
   assert.match(server,/sendScheduledDirectorReportBundles/);
-  assert.match(source,/Director WhatsApp report timing/);
+  assert.match(source,/Report delivery schedules/);
+  assert.match(source,/HIERARCHY_REPORT_DESIGNATIONS/);
+  assert.match(source,/7-day schedule/);
+  assert.match(source,/Every \$\{schedule\.intervalDays\} days/);
   assert.match(source,/Generate & send test now/);
   assert.match(source,/9925565281/);
   assert.match(css,/\.director-timing-modal/);
+  assert.match(css,/\.report-week-grid/);
 });

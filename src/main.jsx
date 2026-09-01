@@ -6,6 +6,7 @@ import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
+import { HIERARCHY_REPORT_DESIGNATIONS } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
@@ -1482,13 +1483,17 @@ function uint16(value) {
 function uint32(value) {
   return [value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff];
 }
-function zipStoredFiles(files) {
+function zipStoredFiles(files, mimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
   const encoder = new TextEncoder();
   const chunks = [], centralDirectory = [];
   let offset = 0;
   files.forEach(({ name, content }) => {
     const filename = encoder.encode(name);
-    const data = encoder.encode(content);
+    const data = content instanceof Uint8Array
+      ? content
+      : content instanceof ArrayBuffer
+        ? new Uint8Array(content)
+        : encoder.encode(String(content));
     const checksum = crc32(data);
     const localHeader = new Uint8Array([
       0x50, 0x4b, 0x03, 0x04, ...uint16(20), ...uint16(0), ...uint16(0), ...uint16(0), ...uint16(0),
@@ -1513,7 +1518,7 @@ function zipStoredFiles(files) {
     0x50, 0x4b, 0x05, 0x06, ...uint16(0), ...uint16(0), ...uint16(files.length), ...uint16(files.length),
     ...uint32(centralSize), ...uint32(centralStart), ...uint16(0),
   ]));
-  return new Blob(chunks, { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  return new Blob(chunks, { type: mimeType });
 }
 function excelCellReference(columnIndex, rowIndex) {
   let column = "", value = columnIndex + 1;
@@ -3708,6 +3713,14 @@ const reportCategoryTabs = [
   {id: "maintenance", label: "Maintenance report", description: "Maintenance closure, TAT, idle, and verification reports."},
   {id: "mis", label: "MIS Report", description: "MIS verification and first-trip audit reports."},
 ];
+const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const reportScheduleGroups = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
+function reportScheduleKind(schedule) {
+  if (schedule.eventBased) return "Every event";
+  if (schedule.intervalDays) return `Every ${schedule.intervalDays} days`;
+  if (schedule.weekday != null) return "Weekly";
+  return "Daily";
+}
 function reportAccessAllows(selection, label) {
   return accessAllows(selection, "Reports") || accessAllows(selection, label);
 }
@@ -3765,6 +3778,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
   const [directorSending, setDirectorSending] = useState(false);
   const [directorResult, setDirectorResult] = useState(null);
+  const [reportZipOpen, setReportZipOpen] = useState(false);
+  const [selectedZipReports, setSelectedZipReports] = useState([]);
+  const [reportZipDownloading, setReportZipDownloading] = useState(false);
 
   const equipmentByReference = useMemo(() => {
     const records = new Map();
@@ -3911,6 +3927,42 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const selectReportTab = (report) => {
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
   };
+  const openReportZip = () => {
+    setSelectedZipReports(reportGroups.map((report) => report.title));
+    setReportZipOpen(true);
+  };
+  const toggleZipReport = (title) => {
+    setSelectedZipReports((current) => current.includes(title) ? current.filter((item) => item !== title) : [...current, title]);
+  };
+  const downloadSelectedReportZip = async () => {
+    if (reportZipDownloading || !selectedZipReports.length) return;
+    setReportZipDownloading(true);
+    try {
+      const selectedReports = reportGroups.filter((report) => selectedZipReports.includes(report.title));
+      const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
+        const exportRows = report.rows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
+        const pdfResponse = await fetch("/api/exports/pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          body: JSON.stringify({ title: report.title, columns: report.columns.map((column) => ({ label: column.label })), rows: exportRows }),
+        });
+        if (!pdfResponse.ok) {
+          const details = await pdfResponse.json().catch(() => ({}));
+          throw new Error(details.error || `Could not create ${report.title}.`);
+        }
+        const folder = reportCategoryTabs.find((category) => category.id === report.category)?.label || "Reports";
+        const baseName = exportFileName(report.title, "").replace(/\.$/, "");
+        const xlsx = buildXlsxWorkbook(report.title, report.columns, exportRows);
+        return [
+          { name: `${folder}/${baseName}.pdf`, content: new Uint8Array(await (await pdfResponse.blob()).arrayBuffer()) },
+          { name: `${folder}/${baseName}.xlsx`, content: new Uint8Array(await xlsx.arrayBuffer()) },
+        ];
+      }));
+      downloadExportFile(zipStoredFiles(generatedFiles.flat(), "application/zip"), exportFileName("selected-reports", "zip"));
+      setReportZipOpen(false);
+    } catch (error) { alert(error.message); }
+    finally { setReportZipDownloading(false); }
+  };
   const sendDirectorTestReport = async () => {
     const recipientPhone = window.prompt("Send Director daily report WhatsApp to:", "9925565281");
     if (!recipientPhone) return;
@@ -3935,24 +3987,40 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <h1>Reports</h1>
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
-        <button type="button" className="secondary director-timing-trigger" onClick={() => setDirectorTimingOpen(true)}><Clock /> Director 7 PM</button>
+        <div className="reports-header-actions">
+          <button type="button" className="secondary director-timing-trigger" onClick={() => setDirectorTimingOpen(true)}><Clock /> All report schedules</button>
+          <button type="button" className="primary" onClick={openReportZip}><Download /> Download reports ZIP</button>
+        </div>
       </header>
       {directorTimingOpen && createPortal(
         <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
           <div className="modal director-timing-modal">
             <header>
-              <h3>Director WhatsApp report timing</h3>
-              <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close Director timing"><X /></button>
+              <div><h3>Report delivery schedules</h3><p>All configured WhatsApp schedules by user designation</p></div>
+              <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X /></button>
             </header>
             <div className="director-timing-card">
-              <span><Clock /> Daily schedule</span>
-              <strong>7:00 PM IST</strong>
-              <p>All defined reports are generated as PDF and Excel, grouped department-wise, and sent in one WhatsApp message with clickable report links.</p>
+              <span><CalendarDays /> 7-day schedule</span>
+              <strong>IST timings</strong>
+              <p>Daily schedules run every day. Saturday also includes the weekly fleet report at 7:00 PM. Event and 3/5/7-day cycles are listed below.</p>
             </div>
-            <div className="director-timing-grid">
-              <article><b>General</b><span>8 linked reports</span></article>
-              <article><b>Production</b><span>1 linked report</span></article>
-              <article><b>Maintenance</b><span>4 linked reports</span></article>
+            <div className="report-week-grid" aria-label="Seven day report schedule">
+              {reportWeekDays.map((day) => <article key={day} className={day === "Saturday" ? "weekly" : ""}>
+                <b>{day.slice(0, 3)}</b>
+                <span>Daily · 8 AM, 6 PM, 7 PM</span>
+                {day === "Saturday" && <small>Weekly fleet · 7 PM</small>}
+              </article>)}
+            </div>
+            <div className="report-schedule-list">
+              {reportScheduleGroups.map((designation) => <article key={designation.key}>
+                <div className="report-schedule-person"><span>Level {designation.level}</span><b>{designation.label}</b></div>
+                <div className="report-schedule-rules">
+                  {designation.schedules.map((schedule) => <div key={schedule.key}>
+                    <span className="report-schedule-kind">{reportScheduleKind(schedule)}</span>
+                    <p><b>{schedule.label}</b><small>{schedule.reports.length} linked report{schedule.reports.length === 1 ? "" : "s"}</small></p>
+                  </div>)}
+                </div>
+              </article>)}
             </div>
             {directorResult && <div className="director-send-result" role="status">
               <b>{directorResult.status || "Generated"}</b>
@@ -3961,6 +4029,41 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             <footer>
               <button type="button" onClick={() => setDirectorTimingOpen(false)}>Close</button>
               <button type="button" className="primary" onClick={sendDirectorTestReport} disabled={directorSending}><Send /> {directorSending ? "Sending..." : "Generate & send test now"}</button>
+            </footer>
+          </div>
+        </div>,
+        document.body,
+      )}
+      {reportZipOpen && createPortal(
+        <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && !reportZipDownloading && setReportZipOpen(false)}>
+          <div className="modal report-zip-modal">
+            <header>
+              <div><h3>Download reports as ZIP</h3><p>Select the reports you need. Each selected report includes PDF and Excel files.</p></div>
+              <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Close ZIP report selection"><X /></button>
+            </header>
+            <div className="report-zip-toolbar">
+              <b>{selectedZipReports.length} of {reportGroups.length} selected</b>
+              <div>
+                <button type="button" onClick={() => setSelectedZipReports(reportGroups.map((report) => report.title))}>Select all</button>
+                <button type="button" onClick={() => setSelectedZipReports([])}>Clear</button>
+              </div>
+            </div>
+            <div className="report-zip-groups">
+              {reportCategoryTabs.map((category) => {
+                const categoryReports = reportGroups.filter((report) => report.category === category.id);
+                if (!categoryReports.length) return null;
+                return <section key={category.id}>
+                  <h4>{category.label}<span>{categoryReports.length}</span></h4>
+                  <div>{categoryReports.map((report) => <label key={report.title}>
+                    <input type="checkbox" checked={selectedZipReports.includes(report.title)} onChange={() => toggleZipReport(report.title)} />
+                    <span><b>{report.title}</b><small>{report.rows.length.toLocaleString("en-IN")} records · PDF + Excel</small></span>
+                  </label>)}</div>
+                </section>;
+              })}
+            </div>
+            <footer>
+              <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading}>Cancel</button>
+              <button type="button" className="primary" onClick={downloadSelectedReportZip} disabled={!selectedZipReports.length || reportZipDownloading}><Download /> {reportZipDownloading ? "Preparing ZIP..." : `Download ${selectedZipReports.length} selected`}</button>
             </footer>
           </div>
         </div>,
