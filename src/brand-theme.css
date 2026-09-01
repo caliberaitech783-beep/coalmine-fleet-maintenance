@@ -6,8 +6,8 @@
   --brand-green-soft: #e4f2e9;
   --brand-red: #f04e53;
   --brand-red-soft: #fdebec;
-  --brand-gradient: linear-gradient(125deg, #f04e53 0%, #b72d6e 48%, #522e90 100%);
-  --brand-gradient-hover: linear-gradient(125deg, #e53f4a 0%, #a92566 48%, #452579 100%);
+  --brand-gradient: linear-gradient(125deg, #522e90 0%, #b72d6e 52%, #f04e53 100%);
+  --brand-gradient-hover: linear-gradient(125deg, #452579 0%, #a92566 52%, #e53f4a 100%);
   --ink: #2b2233;
   --muted: #766a7c;
   --line: #eadde7;

@@ -15,7 +15,7 @@ test("application chrome uses the approved Caliber transformation branding", () 
   assert.match(theme, /--brand-purple:\s*#522e90/i);
   assert.match(theme, /--brand-green:\s*#007d3f/i);
   assert.match(theme, /--brand-red:\s*#f04e53/i);
-  assert.match(theme, /linear-gradient\(125deg,\s*#f04e53[^;]+#522e90/i);
+  assert.match(theme, /linear-gradient\(125deg,\s*#522e90[^;]+#f04e53/i);
   assert.match(manifest, /"short_name": "Nerve Center"/);
   assert.match(manifest, /"theme_color": "#522e90"/i);
 });
