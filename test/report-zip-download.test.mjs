@@ -5,6 +5,7 @@ import test from 'node:test';
 test('reports UI supports selectable PDF and Excel downloads in one ZIP archive',()=>{
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+  const polish=readFileSync(new URL('../src/report-schedule-polish.css',import.meta.url),'utf8');
   assert.match(source,/Download reports ZIP/);
   assert.match(source,/Download reports as ZIP/);
   assert.match(source,/type="checkbox" checked=\{selectedZipReports\.includes\(report\.title\)\}/);
@@ -14,4 +15,9 @@ test('reports UI supports selectable PDF and Excel downloads in one ZIP archive'
   assert.match(source,/PDF \+ Excel/);
   assert.match(css,/\.report-zip-modal/);
   assert.match(css,/\.report-zip-groups input/);
+  assert.match(source,/report-zip-title/);
+  assert.match(source,/report-zip-selection/);
+  assert.match(source,/className=\{selectedZipReports\.includes\(report\.title\) \? "selected" : ""\}/);
+  assert.match(polish,/\.report-zip-modal > header/);
+  assert.match(polish,/\.report-zip-groups label\.selected/);
 });

@@ -4075,11 +4075,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && !reportZipDownloading && setReportZipOpen(false)}>
           <div className="modal report-zip-modal">
             <header>
-              <div><h3>Download reports as ZIP</h3><p>Select the reports you need. Each selected report includes PDF and Excel files.</p></div>
+              <div className="report-zip-title"><span><Download /></span><div><h3>Download reports as ZIP</h3><p>Choose reports and receive organised PDF and Excel files in one archive</p></div></div>
               <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Close ZIP report selection"><X /></button>
             </header>
             <div className="report-zip-toolbar">
-              <b>{selectedZipReports.length} of {reportGroups.length} selected</b>
+              <div className="report-zip-selection"><span><b>{selectedZipReports.length}</b> of {reportGroups.length} selected</span><small>PDF + Excel included</small><i aria-hidden="true"><span style={{ width: `${reportGroups.length ? (selectedZipReports.length / reportGroups.length) * 100 : 0}%` }} /></i></div>
               <div>
                 <button type="button" onClick={() => setSelectedZipReports(reportGroups.map((report) => report.title))}>Select all</button>
                 <button type="button" onClick={() => setSelectedZipReports([])}>Clear</button>
@@ -4090,8 +4090,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                 const categoryReports = reportGroups.filter((report) => report.category === category.id);
                 if (!categoryReports.length) return null;
                 return <section key={category.id}>
-                  <h4>{category.label}<span>{categoryReports.length}</span></h4>
-                  <div>{categoryReports.map((report) => <label key={report.title}>
+                  <h4><FileBarChart />{category.label}<span>{categoryReports.length}</span></h4>
+                  <div>{categoryReports.map((report) => <label key={report.title} className={selectedZipReports.includes(report.title) ? "selected" : ""}>
                     <input type="checkbox" checked={selectedZipReports.includes(report.title)} onChange={() => toggleZipReport(report.title)} />
                     <span><b>{report.title}</b><small>{report.rows.length.toLocaleString("en-IN")} records · PDF + Excel</small></span>
                   </label>)}</div>
