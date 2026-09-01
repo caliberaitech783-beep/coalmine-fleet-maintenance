@@ -545,10 +545,10 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             onClick={() => selectPage(n)}
           >
             <I />
-            {n}
+            <span className="nav-label">{n}</span>
           </button></div>
         ))}
-        {permissions.adminLevel === "Manager" && <div className="nav-config-row"><button className={active === "Manager Profile" ? "active" : ""} onClick={() => selectPage("Manager Profile")}><UserRound />{managerProfileLabel}</button></div>}
+        {permissions.adminLevel === "Manager" && <div className="nav-config-row"><button className={active === "Manager Profile" ? "active" : ""} onClick={() => selectPage("Manager Profile")}><UserRound /><span className="nav-label">{managerProfileLabel}</span></button></div>}
         {canViewMasters && <div
           className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setMastersSelectionClosed(false)}
@@ -563,7 +563,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             }}
           >
             <Menu />
-            Masters
+            <span className="nav-label">Masters</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown" role="menu">
@@ -574,7 +574,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
                 onClick={(event) => selectMaster(name, event)}
               >
                 <Icon />
-                {name}
+                <span className="nav-label">{name}</span>
               </button></div>
             ))}
           </div>
@@ -587,13 +587,13 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             onClick={() => setWhatsappOpen((value) => !value)}
           >
             <MessageCircle />
-            WhatsApp Integration
+            <span className="nav-label">WhatsApp Integration</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
             {visibleWhatsAppNav.map(([name, Icon]) => (
               <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onPointerDown={closeMenus} onClick={() => selectPage(name)}>
-                <Icon />{name}
+                <Icon /><span className="nav-label">{name}</span>
               </button></div>
             ))}
           </div>
@@ -606,12 +606,12 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             onClick={() => setWorkspacesOpen((value) => !value)}
           >
             <Users />
-            Operational Workspaces
+            <span className="nav-label">Operational Workspaces</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown operational-workspaces-dropdown" role="menu">
             {operationalWorkspaceNav.map(([name, Icon]) => <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={() => selectPage(name)}>
-              <Icon />{name}
+              <Icon /><span className="nav-label">{name}</span>
             </button></div>)}
           </div>
         </div>}
@@ -629,7 +629,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             }}
           >
             <FileBarChart />
-            Reports
+            <span className="nav-label">Reports</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown reports-dropdown" role="menu">
@@ -640,7 +640,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
                 onClick={(event) => selectReport(category, event)}
               >
                 <FileBarChart />
-                {category.label}
+                <span className="nav-label">{category.label}</span>
               </button></div>
             ))}
           </div>
@@ -651,10 +651,10 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             onClick={() => selectPage(n)}
           >
             <I />
-            {n}
+            <span className="nav-label">{n}</span>
           </button></div>
         ))}
-        {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button className={active === "Admin locks" ? "active" : ""} onClick={() => selectPage("Admin locks")}><ShieldCheck />Admin locks</button></div>}
+        {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button className={active === "Admin locks" ? "active" : ""} onClick={() => selectPage("Admin locks")}><ShieldCheck /><span className="nav-label">Admin locks</span></button></div>}
       </nav>
       <div className="user">
         <div>
