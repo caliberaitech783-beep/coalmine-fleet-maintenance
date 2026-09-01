@@ -1702,9 +1702,16 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     if(!eligible.rows.length)return res.status(409).json({error:'Daily remarks are available only while the request is open.'});
     const existingToday=await pool.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
       AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
-    if(existingToday.rows.length)return res.status(409).json({error:'Today’s update is already saved. Previous daily updates are read-only.'});
-    await pool.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name) VALUES ($1,$2,$3,$4,$5)`,
-      [reference,remark,delayReason,String(req.session.login||'').trim().toLowerCase(),req.session.name||'Maintenance User']);
+    const authorLogin=String(req.session.login||'').trim().toLowerCase();
+    const authorName=req.session.name||'Maintenance User';
+    const updatedToday=existingToday.rows.length>0;
+    if(updatedToday){
+      await pool.query(`UPDATE maintenance_daily_remarks SET remark=$1,delay_reason=$2,author_login=$3,author_name=$4 WHERE id=$5`,
+        [remark,delayReason,authorLogin,authorName,existingToday.rows[0].id]);
+    }else{
+      await pool.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name) VALUES ($1,$2,$3,$4,$5)`,
+        [reference,remark,delayReason,authorLogin,authorName]);
+    }
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
     const recipients=[String(eligible.rows[0].requester_login||'').trim().toLowerCase()];
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
@@ -1712,22 +1719,25 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&userManagesSite(user,eligible.rows[0].site))recipients.push(login);
     }
-    await addTicketNotifications(pool,recipients,reference,`${req.session.name||'Maintenance User'} added a daily maintenance update for ${reference}.`,
-      {templateKey:'dailyUpdate',parameters:[req.session.name||'Maintenance User',reference]},{whatsapp:false});
+    await addTicketNotifications(pool,recipients,reference,`${authorName} ${updatedToday?'updated today’s':'added a'} daily maintenance update for ${reference}.`,
+      {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:false});
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
-    res.status(201).json((await attachDailyRemarks(rows))[0]);
+    res.status(updatedToday?200:201).json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
 });
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
     const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName='',forceDuplicate=false}=req.body||{};
+    const normalizedMeterType=String(meterType).trim().toUpperCase();
+    const normalizedOpeningMeterReading=String(openingMeterReading).trim();
+    const openingMeterOptional=req.session.role==='normal'&&req.session.assignedRole==='Production User';
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
-    if(!['KMR','HMR'].includes(String(meterType)))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-    if(!validMeterReading(openingMeterReading))return res.status(400).json({error:`Enter a valid opening ${meterType} reading.`});
-    if(!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${meterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
+    if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
+    if((!openingMeterOptional||normalizedOpeningMeterReading)&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
+    if((!openingMeterOptional||openingMeterFile)&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
     if(forceDuplicate!==true){
       const duplicate=await pool.query(`SELECT reference FROM maintenance_requests WHERE lower(trim(chassis_number))=lower(trim($1)) AND status<>'Closed' ORDER BY created_at DESC LIMIT 1`,[chassis]);
       if(duplicate.rows.length)return res.status(409).json({duplicate:true,existingReference:duplicate.rows[0].reference,error:`Request ${duplicate.rows[0].reference} already exists for this equipment. Do you still want to add another request?`});
@@ -1741,7 +1751,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Open',$15,$16,$17,$18,$19,$20)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),meterType,String(openingMeterReading).trim(),openingMeterFile,String(openingMeterFileName).trim().slice(0,255)]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255)]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
     const openedAt=requestNotificationTime(startedAt);
@@ -1789,12 +1799,16 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
     const {rows:meterRows}=await pool.query(`SELECT meter_type,opening_meter_reading,opening_meter_file FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!meterRows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
-    const openingMeterMissing=!String(meterRows[0].opening_meter_reading||'').trim()||!String(meterRows[0].opening_meter_file||'').trim();
-    if(openingMeterMissing){
-      if(!['KMR','HMR'].includes(meterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-      if(!validMeterReading(openingMeterReading))return res.status(400).json({error:`Enter a valid opening ${meterType} reading.`});
-      if(!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${meterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
-      await pool.query(`UPDATE maintenance_requests SET meter_type=$1,opening_meter_reading=$2,opening_meter_file=$3,opening_meter_file_name=$4 WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[meterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference]);
+    if(openingMeterReading&&!validMeterReading(openingMeterReading))return res.status(400).json({error:`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`});
+    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`});
+    if(openingMeterReading||openingMeterFile){
+      const effectiveMeterType=['KMR','HMR'].includes(meterType)?meterType:String(meterRows[0].meter_type||'').trim().toUpperCase();
+      if(!['KMR','HMR'].includes(effectiveMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
+      await pool.query(`UPDATE maintenance_requests SET meter_type=CASE WHEN meter_type='' THEN $1 ELSE meter_type END,
+        opening_meter_reading=CASE WHEN $2<>'' THEN $2 ELSE opening_meter_reading END,
+        opening_meter_file=CASE WHEN $3<>'' THEN $3 ELSE opening_meter_file END,
+        opening_meter_file_name=CASE WHEN $3<>'' THEN $4 ELSE opening_meter_file_name END
+        WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference]);
     }
     const {rows}=ideal
       ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status='Idle',idle_reason=$3,
