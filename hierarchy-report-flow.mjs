@@ -204,5 +204,8 @@ export function flowDesignationForUser(user={},profile={}){
   if(fields.includes('maintenance')&&includesAny(fields,['incharge','supervisor']))return {key:'maintenanceSupervisor',...HIERARCHY_REPORT_DESIGNATIONS.maintenanceSupervisor};
   if(includesAny(fields,['mis manager'])||managerRoles.includes('MIS Manager'))return {key:'misManager',...HIERARCHY_REPORT_DESIGNATIONS.misManager};
   if(fields.includes('mis')&&includesAny(fields,['incharge','supervisor']))return {key:'misSupervisor',...HIERARCHY_REPORT_DESIGNATIONS.misSupervisor};
+  if(profile.assignedRole==='Production User')return {key:'productionSupervisor',...HIERARCHY_REPORT_DESIGNATIONS.productionSupervisor};
+  if(profile.assignedRole==='Maintenance User')return {key:'maintenanceSupervisor',...HIERARCHY_REPORT_DESIGNATIONS.maintenanceSupervisor};
+  if(profile.assignedRole==='MIS User')return {key:'misSupervisor',...HIERARCHY_REPORT_DESIGNATIONS.misSupervisor};
   return null;
 }

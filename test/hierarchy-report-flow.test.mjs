@@ -39,6 +39,12 @@ test('department managers use every-event rules separately from scheduled consol
   assert.equal(reportsDueForDesignation(supervisor.key,new Date('2026-09-01T13:35:00Z')).length,0);
 });
 
+test('mobile operational profiles inherit their department report designation',()=>{
+  assert.equal(flowDesignationForUser({}, {assignedRole:'Production User'}).key,'productionSupervisor');
+  assert.equal(flowDesignationForUser({}, {assignedRole:'Maintenance User'}).key,'maintenanceSupervisor');
+  assert.equal(flowDesignationForUser({}, {assignedRole:'MIS User'}).key,'misSupervisor');
+});
+
 test('OEM designations follow their day-cycle consolidate schedules',()=>{
   const area=flowDesignationForUser({designation:'Area Service engineer'});
   assert.equal(area.key,'oemAreaServiceEngineer');

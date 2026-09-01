@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
+import { indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
@@ -532,8 +533,9 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
-  const visibleReportNav = reportCategoryTabs.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
-  const canViewReports = accessAllows(viewPermissions.tabAccess, "Reports") && visibleReportNav.length > 0;
+  const configuredReportNav = reportCategoryTabs.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
+  const visibleReportNav = configuredReportNav.length ? configuredReportNav : reportCategoryTabs;
+  const canViewReports = true;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   return (
     <aside className={open ? "open" : ""}>
@@ -3994,7 +3996,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
     </div>
   );
 }
-function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {} }) {
+function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, session = null }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [transferRecords] = useMasterRecords("Vehicle transfers");
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
@@ -4004,9 +4006,15 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [selectedScheduleDesignation, setSelectedScheduleDesignation] = useState("director");
   const [reportScheduleLoading, setReportScheduleLoading] = useState(false);
   const [reportScheduleSaving, setReportScheduleSaving] = useState(false);
+  const reportAdministrator = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
+  const [reportAccess, setReportAccess] = useState({ canManageAll: reportAdministrator, allowedDesignationKeys: [], allowedReports: [] });
+  const [reportAccessLoaded, setReportAccessLoaded] = useState(reportAdministrator);
   const [reportZipOpen, setReportZipOpen] = useState(false);
   const [selectedZipReports, setSelectedZipReports] = useState([]);
   const [reportZipDownloading, setReportZipDownloading] = useState(false);
+  const [reportZipFrom, setReportZipFrom] = useState(() => indiaDateTimeInputValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
+  const [reportZipTo, setReportZipTo] = useState(() => indiaDateTimeInputValue(new Date(Date.now() + 60 * 1000)));
+  const reportGeneratedAt = useMemo(() => indiaDateTimeInputValue(new Date()), []);
 
   const equipmentByReference = useMemo(() => {
     const records = new Map();
@@ -4106,61 +4114,94 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "chassis", label: "Chassis no.", value: (record) => record.chassisNo || record.manufacturerSerialNo},
   ];
   const reportGroups = [
-    {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, emptyMessage: "No open breakdown cases available"},
-    {category: "maintenance", title: "Location wise closing BD", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, emptyMessage: "No closed maintenance cases available"},
-    {category: "mis", title: "MIS Verification Report", description: "Requests verified by MIS, including maintenance close and MIS verification timestamps.", rows: misVerificationRows, columns: misColumns, emptyMessage: "No MIS verification records available"},
-    {category: "general", title: "Report for On Road / Off Road & Idle", description: "Current road status of equipment and vehicles from the Equipment Master.", rows: fleetStatusRows, columns: fleetColumns, emptyMessage: "No equipment road-status records available", rowKey: (record) => `road-${record.reportId}`},
-    {category: "general", title: "Vehicle Transfer Report", description: "Vehicle transfer history with source, destination, equipment, model, driver, and chassis details.", rows: transferRows, columns: transferColumns, emptyMessage: "No vehicle transfer records available", rowKey: (record) => `transfer-${record.reportId}`},
+    {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, dateValue: (row) => row.start, emptyMessage: "No open breakdown cases available"},
+    {category: "maintenance", title: "Location wise closing BD", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, dateValue: (row) => row.closedAt, emptyMessage: "No closed maintenance cases available"},
+    {category: "mis", title: "MIS Verification Report", description: "Requests verified by MIS, including maintenance close and MIS verification timestamps.", rows: misVerificationRows, columns: misColumns, dateValue: (row) => row.verifiedAt, emptyMessage: "No MIS verification records available"},
+    {category: "general", title: "Report for On Road / Off Road & Idle", description: "Current road status of equipment and vehicles from the Equipment Master.", rows: fleetStatusRows, columns: fleetColumns, dateValue: () => reportGeneratedAt, emptyMessage: "No equipment road-status records available", rowKey: (record) => `road-${record.reportId}`},
+    {category: "general", title: "Vehicle Transfer Report", description: "Vehicle transfer history with source, destination, equipment, model, driver, and chassis details.", rows: transferRows, columns: transferColumns, dateValue: (row) => row.transferDate, emptyMessage: "No vehicle transfer records available", rowKey: (record) => `transfer-${record.reportId}`},
     {category: "general", title: "Total Equipment / Vehicle Location Wise", description: "Location-wise count of equipment, vehicles, and total fleet records.", rows: locationWiseRows, columns: [
       {key: "location", label: "Location", value: (row) => row.location, render: (row) => <b>{row.location}</b>},
       {key: "equipment", label: "Equipment", value: (row) => row.equipment},
       {key: "vehicles", label: "Vehicles", value: (row) => row.vehicles},
       {key: "total", label: "Total equipment / vehicle", value: (row) => row.total},
-    ], emptyMessage: "No location-wise equipment records available", rowKey: (row) => `location-${row.location}`},
+    ], dateValue: () => reportGeneratedAt, emptyMessage: "No location-wise equipment records available", rowKey: (row) => `location-${row.location}`},
     {category: "maintenance", title: "Idle Vehicle Report", description: "Idle breakdown requests and idle fleet records that need follow-up.", rows: idleRequestRows, columns: [
       ...requestColumns,
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
       {key: "closedAt", label: "Maintenance close / idle at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
-    ], emptyMessage: "No idle vehicle records available"},
-    {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp.", rows: recentBreakdownRows, columns: closureColumns, emptyMessage: "No recent breakdown cases available"},
+    ], dateValue: (row) => row.closedAt || row.start, emptyMessage: "No idle vehicle records available"},
+    {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp.", rows: recentBreakdownRows, columns: closureColumns, dateValue: (row) => row.start || row.closedAt || row.verifiedAt, emptyMessage: "No recent breakdown cases available"},
     {category: "production", title: "Off Road to MIS Veri.", description: "Elapsed time from Production off-road marking to MIS verification.", rows: elapsedRows.filter((row) => row.start && row.verifiedAt), columns: [
       ...misColumns,
       {key: "prodToMis", label: "Prod to MIS verification", value: (request) => elapsedLabel(request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.start, request.verifiedAt)}</strong>},
-    ], emptyMessage: "No Production to MIS verification timings available"},
+    ], dateValue: (row) => row.verifiedAt, emptyMessage: "No Production to MIS verification timings available"},
     {category: "maintenance", title: "Off Road to Maint. Close", description: "Turnaround time from Production opening to Maintenance close.", rows: elapsedRows.filter((row) => row.start && row.closedAt), columns: [
       ...closureColumns,
       {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
-    ], emptyMessage: "No Production-open to Maintenance-close timings available"},
+    ], dateValue: (row) => row.closedAt, emptyMessage: "No Production-open to Maintenance-close timings available"},
     {category: "maintenance", title: "Event close Report - Maint. Closing to MIS Verif.", description: "Elapsed time from Maintenance close to MIS verification.", rows: elapsedRows.filter((row) => row.closedAt && row.verifiedAt), columns: [
       ...misColumns,
       {key: "maintToMis", label: "Maintenance close to MIS verification", value: (request) => elapsedLabel(request.closedAt, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt, request.verifiedAt)}</strong>},
-    ], emptyMessage: "No Maintenance to MIS verification timings available"},
+    ], dateValue: (row) => row.verifiedAt, emptyMessage: "No Maintenance to MIS verification timings available"},
     {category: "maintenance", title: "Idle with PM verif.", description: "Idle cases with maintenance idle time and verification timestamp.", rows: idleRequestRows, columns: [
       ...misColumns,
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
       {key: "idleTime", label: "Idle to PM verification time", value: (request) => elapsedLabel(request.closedAt || request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt || request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt || request.start, request.verifiedAt)}</strong>},
-    ], emptyMessage: "No idle verification timings available"},
+    ], dateValue: (row) => row.verifiedAt || row.closedAt || row.start, emptyMessage: "No idle verification timings available"},
     {category: "mis", title: "On Road with first trip veri.", description: "Comparison of MIS verification against first-trip confirmation for idle cases.", rows: idleRequestRows.filter((row) => row.verifiedAt || firstTripTimestamp(row)), columns: [
       ...misColumns,
       {key: "firstTripDone", label: "First trip done", value: (request) => request.firstTripDone ? "Yes" : "No"},
       {key: "firstTrip", label: "First trip verification", value: (request) => firstTripTimestamp(request), render: (request) => formatTimestamp(firstTripTimestamp(request))},
       {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
-    ], emptyMessage: "No idle first-trip verification records available"},
+    ], dateValue: (row) => firstTripTimestamp(row) || row.verifiedAt, emptyMessage: "No idle first-trip verification records available"},
   ];
-  const activeReports = reportGroups.filter((report) => report.category === activeCategory.id);
+  const accessibleReportGroups = reportAccess.canManageAll ? reportGroups : reportGroups.filter((report) => reportAccess.allowedReports.includes(report.title));
+  const availableReportCategories = reportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
+  const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
   const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
   const selectReportTab = (report) => {
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
   };
+  const applyReportScheduleDetails = (details = {}) => {
+    setReportScheduleSettings(details.settings || defaultHierarchyReportScheduleSettings());
+    setReportScheduleRecipients(details.recipients || {});
+    const access = {
+      canManageAll: details.canManageAll === true,
+      allowedDesignationKeys: Array.isArray(details.allowedDesignationKeys) ? details.allowedDesignationKeys : [],
+      allowedReports: Array.isArray(details.allowedReports) ? details.allowedReports : [],
+    };
+    setReportAccess(access);
+    if (access.allowedDesignationKeys.length === 1) setSelectedScheduleDesignation(access.allowedDesignationKeys[0]);
+    setReportAccessLoaded(true);
+  };
+  const loadReportScheduleDetails = async () => {
+    const response = await fetch("/api/report-schedule-settings", { headers: { Authorization: `Bearer ${session?.token || authToken}` } });
+    const details = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(details.error || "Could not load report schedules.");
+    applyReportScheduleDetails(details);
+    return details;
+  };
+  useEffect(() => {
+    let active = true;
+    fetch("/api/report-schedule-settings", { headers: { Authorization: `Bearer ${session?.token || authToken}` } })
+      .then(async (response) => {
+        const details = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(details.error || "Could not load report access.");
+        if (active) applyReportScheduleDetails(details);
+      })
+      .catch((error) => { if (active) console.error(error); })
+      .finally(() => { if (active) setReportAccessLoaded(true); });
+    return () => { active = false; };
+  }, [session?.token]);
+  useEffect(() => {
+    if (!reportAccessLoaded || availableReportCategories.some((category) => category.id === activeReportCategory)) return;
+    if (availableReportCategories[0]) setActiveReportCategory(availableReportCategories[0].id);
+  }, [reportAccessLoaded, activeReportCategory, availableReportCategories.map((category) => category.id).join("|")]);
   const openReportSchedules = async () => {
     setDirectorTimingOpen(true);
     setReportScheduleLoading(true);
     try {
-      const response = await fetch("/api/report-schedule-settings", { headers: { Authorization: `Bearer ${authToken}` } });
-      const details = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(details.error || "Could not load report schedules.");
-      setReportScheduleSettings(details.settings || defaultHierarchyReportScheduleSettings());
-      setReportScheduleRecipients(details.recipients || {});
+      await loadReportScheduleDetails();
     } catch (error) { alert(error.message); }
     finally { setReportScheduleLoading(false); }
   };
@@ -4179,7 +4220,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   }));
   const addReportSchedule = () => updateScheduleDesignation((designation) => ({
     ...designation,
-    schedules: [...designation.schedules, { key: `custom-${Date.now()}`, enabled: true, cadence: "daily", weekday: 1, intervalDays: 7, times: ["19:00"], reports: [] }],
+    schedules: [...designation.schedules, { key: `custom-${Date.now()}`, enabled: true, cadence: "daily", weekday: 1, intervalDays: 7, times: ["19:00"], reports: reportAccess.canManageAll ? [] : [...reportAccess.allowedReports] }],
   }));
   const removeReportSchedule = (scheduleKey) => updateScheduleDesignation((designation) => ({
     ...designation,
@@ -4191,18 +4232,18 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     try {
       const response = await fetch("/api/report-schedule-settings", {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
         body: JSON.stringify(reportScheduleSettings),
       });
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not save report schedules.");
-      setReportScheduleSettings(details);
+      applyReportScheduleDetails(details);
       setDirectorTimingOpen(false);
     } catch (error) { alert(error.message); }
     finally { setReportScheduleSaving(false); }
   };
   const openReportZip = () => {
-    setSelectedZipReports(reportGroups.map((report) => report.title));
+    setSelectedZipReports(accessibleReportGroups.map((report) => report.title));
     setReportZipOpen(true);
   };
   const toggleZipReport = (title) => {
@@ -4212,12 +4253,14 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     if (reportZipDownloading || !selectedZipReports.length) return;
     setReportZipDownloading(true);
     try {
-      const selectedReports = reportGroups.filter((report) => selectedZipReports.includes(report.title));
+      if (!validReportDateRange(reportZipFrom, reportZipTo)) throw new Error("Select a valid From and To date/time range.");
+      const selectedReports = accessibleReportGroups.filter((report) => selectedZipReports.includes(report.title));
       const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
-        const exportRows = report.rows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
+        const filteredRows = reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo);
+        const exportRows = filteredRows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
         const pdfResponse = await fetch("/api/exports/pdf", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
           body: JSON.stringify({ title: report.title, columns: report.columns.map((column) => ({ label: column.label })), rows: exportRows }),
         });
         if (!pdfResponse.ok) {
@@ -4237,8 +4280,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     } catch (error) { alert(error.message); }
     finally { setReportZipDownloading(false); }
   };
+  const scheduleDesignationOptions = reportAccess.canManageAll ? reportDesignationOptions : reportDesignationOptions.filter((designation) => reportAccess.allowedDesignationKeys.includes(designation.key));
   const selectedScheduleConfig = reportScheduleSettings.designations[selectedScheduleDesignation] || { enabled: true, allRecipients: true, recipientLogins: [], schedules: [] };
-  const selectedScheduleMeta = reportDesignationOptions.find((designation) => designation.key === selectedScheduleDesignation) || reportDesignationOptions[0];
+  const selectedScheduleMeta = reportDesignationOptions.find((designation) => designation.key === selectedScheduleDesignation) || scheduleDesignationOptions[0] || reportDesignationOptions[0];
   const selectedScheduleRecipients = reportScheduleRecipients[selectedScheduleDesignation] || [];
   return (
     <section className="reports-page panel pagepanel" data-report-category={activeCategory.id}>
@@ -4248,8 +4292,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
-          <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules}><Clock /> Report schedules</button>
-          <button type="button" className="primary" onClick={openReportZip}><Download /> Download reports ZIP</button>
+          <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules} disabled={!reportAccessLoaded}><Clock /> Report schedules</button>
+          <button type="button" className="primary" onClick={openReportZip} disabled={!reportAccessLoaded || !accessibleReportGroups.length}><Download /> Download reports ZIP</button>
         </div>
       </header>
       {directorTimingOpen && createPortal(
@@ -4261,7 +4305,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             </header>
             {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : <>
               <div className="report-schedule-toolbar">
-                <label><span>Assign schedule to</span><select value={selectedScheduleDesignation} onChange={(event) => setSelectedScheduleDesignation(event.target.value)}>{reportDesignationOptions.map((designation) => <option key={designation.key} value={designation.key}>{designation.label}</option>)}</select></label>
+                <label><span>{reportAccess.canManageAll ? "Assign schedule to" : "Your assigned schedule"}</span><select value={selectedScheduleDesignation} onChange={(event) => setSelectedScheduleDesignation(event.target.value)} disabled={!reportAccess.canManageAll}>{scheduleDesignationOptions.map((designation) => <option key={designation.key} value={designation.key}>{designation.label}</option>)}</select></label>
                 <label className="report-schedule-switch"><input type="checkbox" checked={selectedScheduleConfig.enabled} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, enabled: event.target.checked }))} /><span>Active</span></label>
               </div>
               <div className="report-week-grid compact" aria-label="Seven day report schedule summary">
@@ -4271,11 +4315,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                   return <article key={day} className={count ? "active" : ""}><b>{day.slice(0, 3)}</b><span>{count ? `${count} slot${count === 1 ? "" : "s"}` : "—"}</span></article>;
                 })}
               </div>
-              <details className="report-recipient-picker">
+              {reportAccess.canManageAll && <details className="report-recipient-picker">
                 <summary><span>Recipients</span><b>{selectedScheduleConfig.allRecipients ? `All ${selectedScheduleMeta.label}` : `${selectedScheduleConfig.recipientLogins.length} selected`}</b></summary>
                 <label className="report-recipient-all"><input type="checkbox" checked={selectedScheduleConfig.allRecipients} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, allRecipients: event.target.checked }))} /> Send to every matching user</label>
                 {!selectedScheduleConfig.allRecipients && <div>{selectedScheduleRecipients.length ? selectedScheduleRecipients.map((recipient) => <label key={recipient.login}><input type="checkbox" checked={selectedScheduleConfig.recipientLogins.includes(recipient.login)} onChange={() => updateScheduleDesignation((designation) => ({ ...designation, recipientLogins: designation.recipientLogins.includes(recipient.login) ? designation.recipientLogins.filter((login) => login !== recipient.login) : [...designation.recipientLogins, recipient.login] }))} /><span><b>{recipient.name}</b><small>{recipient.hasPhone ? recipient.login : `${recipient.login} · phone missing`}</small></span></label>) : <p>No matching users are configured.</p>}</div>}
-              </details>
+              </details>}
               <div className="report-schedule-editor-list">
                 {selectedScheduleConfig.schedules.map((schedule) => <article key={schedule.key}>
                   <header>
@@ -4288,7 +4332,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                     {schedule.cadence === "interval" && <label><span>Repeat every</span><div className="report-interval-input"><input type="number" min="2" max="31" value={schedule.intervalDays} onChange={(event) => updateReportSchedule(schedule.key, { intervalDays: Number(event.target.value) })} /><small>days</small></div></label>}
                     {schedule.cadence !== "event" && <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>}
                   </div>
-                  <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details>
+                  {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <div className="report-assigned-summary"><span>Assigned reports</span><b>{schedule.reports.length} available for this slot</b></div>}
                 </article>)}
                 <button type="button" className="report-add-schedule" onClick={addReportSchedule}><Plus /> Add schedule</button>
               </div>
@@ -4308,29 +4352,34 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
               <div className="report-zip-title"><span><Download /></span><div><h3>Download reports as ZIP</h3><p>Choose reports and receive organised PDF and Excel files in one archive</p></div></div>
               <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Close ZIP report selection"><X /></button>
             </header>
+            <div className="report-zip-range">
+              <div><CalendarDays /><span><b>Report period</b><small>Only records within this IST date and time range are included.</small></span></div>
+              <label><span>From</span><input type="datetime-local" value={reportZipFrom} max={reportZipTo} onChange={(event) => setReportZipFrom(event.target.value)} /></label>
+              <label><span>To</span><input type="datetime-local" value={reportZipTo} min={reportZipFrom} onChange={(event) => setReportZipTo(event.target.value)} /></label>
+            </div>
             <div className="report-zip-toolbar">
-              <div className="report-zip-selection"><span><b>{selectedZipReports.length}</b> of {reportGroups.length} selected</span><small>PDF + Excel included</small><i aria-hidden="true"><span style={{ width: `${reportGroups.length ? (selectedZipReports.length / reportGroups.length) * 100 : 0}%` }} /></i></div>
+              <div className="report-zip-selection"><span><b>{selectedZipReports.length}</b> of {accessibleReportGroups.length} selected</span><small>PDF + Excel included</small><i aria-hidden="true"><span style={{ width: `${accessibleReportGroups.length ? (selectedZipReports.length / accessibleReportGroups.length) * 100 : 0}%` }} /></i></div>
               <div>
-                <button type="button" onClick={() => setSelectedZipReports(reportGroups.map((report) => report.title))}>Select all</button>
+                <button type="button" onClick={() => setSelectedZipReports(accessibleReportGroups.map((report) => report.title))}>Select all</button>
                 <button type="button" onClick={() => setSelectedZipReports([])}>Clear</button>
               </div>
             </div>
             <div className="report-zip-groups">
               {reportCategoryTabs.map((category) => {
-                const categoryReports = reportGroups.filter((report) => report.category === category.id);
+                const categoryReports = accessibleReportGroups.filter((report) => report.category === category.id);
                 if (!categoryReports.length) return null;
                 return <section key={category.id}>
                   <h4><FileBarChart />{category.label}<span>{categoryReports.length}</span></h4>
                   <div>{categoryReports.map((report) => <label key={report.title} className={selectedZipReports.includes(report.title) ? "selected" : ""}>
                     <input type="checkbox" checked={selectedZipReports.includes(report.title)} onChange={() => toggleZipReport(report.title)} />
-                    <span><b>{report.title}</b><small>{report.rows.length.toLocaleString("en-IN")} records · PDF + Excel</small></span>
+                    <span><b>{report.title}</b><small>{reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo).length.toLocaleString("en-IN")} records in range · PDF + Excel</small></span>
                   </label>)}</div>
                 </section>;
               })}
             </div>
             <footer>
               <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading}>Cancel</button>
-              <button type="button" className="primary" onClick={downloadSelectedReportZip} disabled={!selectedZipReports.length || reportZipDownloading}><Download /> {reportZipDownloading ? "Preparing ZIP..." : `Download ${selectedZipReports.length} selected`}</button>
+              <button type="button" className="primary" onClick={downloadSelectedReportZip} disabled={!selectedZipReports.length || reportZipDownloading || !validReportDateRange(reportZipFrom, reportZipTo)}><Download /> {reportZipDownloading ? "Preparing ZIP..." : `Download ${selectedZipReports.length} selected`}</button>
             </footer>
           </div>
         </div>,
@@ -4338,9 +4387,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       )}
       <CaliberActivityOverlay message={reportZipDownloading ? "Preparing reports ZIP..." : ""} />
       <div className="reports-category-tabs" role="tablist" aria-label="Report type tabs">
-        {reportCategoryTabs.map((category) => {
+        {availableReportCategories.map((category) => {
           const CategoryIcon = category.icon;
-          const reportCount = reportGroups.filter((report) => report.category === category.id).length;
+          const reportCount = accessibleReportGroups.filter((report) => report.category === category.id).length;
           return <button
             key={category.id}
             type="button"
@@ -4356,7 +4405,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           </button>;
         })}
       </div>
-      {activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
+      {!reportAccessLoaded ? <div className="reports-section reports-empty-definition"><div className="reports-section-heading"><div><h2>Loading assigned reports…</h2><p>Your report access is being prepared.</p></div></div></div> : activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
         {activeReports.map((report) => (
           <button
             key={report.title}
@@ -4371,7 +4420,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           </button>
         ))}
       </div> : <div className="reports-section reports-empty-definition">
-        <div className="reports-section-heading"><div><h2>{activeCategory.label}</h2><p>MIS reports will be defined afterward.</p></div></div>
+        <div className="reports-section-heading"><div><h2>{activeCategory.label}</h2><p>No reports are assigned to this profile in this category.</p></div></div>
       </div>}
       {selectedReport && (
         <ReportSection
@@ -6015,6 +6064,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const mobileRole = session?.assignedRole || "Mobile User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
+  const [mobileReportCategory,setMobileReportCategory]=useState("general");
   const [dashboardRequests,setDashboardRequests]=useState(requests);
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
@@ -6069,9 +6119,10 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
   const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
+      {!embedded&&section==="reports"&&<ReportsPage requests={requests} activeReportCategory={mobileReportCategory} setActiveReportCategory={setMobileReportCategory} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
@@ -6148,7 +6199,7 @@ function App() {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && accessAllows(activeNavigationPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
-    if (name === "Reports") return accessAllows(activeNavigationPermissions.tabAccess, "Reports") && reportCategoryTabs.some((category) => reportAccessAllows(activeNavigationPermissions.reportAccess, category.label));
+    if (name === "Reports") return true;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
@@ -6432,7 +6483,7 @@ function App() {
           ) : active === "WhatsApp alert history" ? (
             <WhatsAppAlertHistory />
           ) : active === "Reports" ? (
-            <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} />
+            <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} session={session} />
           ) : operationalSession ? (
             <Normal
               embedded

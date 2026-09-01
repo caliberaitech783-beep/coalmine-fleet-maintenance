@@ -313,6 +313,44 @@
 .report-zip-modal > header > button:hover { background: #f3e4ee; color: #932d6a; }
 .report-zip-modal > header > button svg { width: 17px; }
 
+.report-zip-range {
+  display: grid;
+  grid-template-columns: minmax(230px, 1fr) repeat(2, minmax(180px, .62fr));
+  align-items: end;
+  gap: 12px;
+  margin: 14px 18px 0;
+  padding: 13px;
+  border: 1px solid #e6d8e2;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff8fc, #f8f4ff);
+}
+
+.report-zip-range > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.report-zip-range > div > svg { width: 20px; color: #992d6c; }
+.report-zip-range > div span,
+.report-zip-range > div b,
+.report-zip-range > div small { display: block; }
+.report-zip-range > div b { color: #3d2d41; font: 850 11px Manrope; }
+.report-zip-range > div small { margin-top: 3px; color: #88778b; font-size: 9px; line-height: 1.35; }
+.report-zip-range > label > span { display: block; margin-bottom: 5px; color: #775b72; font-size: 9px; font-weight: 850; text-transform: uppercase; letter-spacing: .05em; }
+.report-zip-range input { width: 100%; min-height: 38px; border: 1px solid #dccccf; border-radius: 8px; background: #fff; color: #3a2a3e; padding: 7px 9px; font: 750 10px Manrope; }
+.report-zip-range input:focus { border-color: #ad4a83; outline: 2px solid #ad4a8318; }
+
+.report-assigned-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 11px 11px;
+  padding: 9px 11px;
+  border: 1px solid #eadde6;
+  border-radius: 8px;
+  background: #fcf8fb;
+  color: #76536d;
+  font-size: 9px;
+}
+.report-assigned-summary b { color: #3b2e3e; }
+
 .report-zip-toolbar {
   margin: 14px 18px 0;
   padding: 11px 12px;
@@ -433,6 +471,7 @@
   .report-zip-toolbar { align-items: stretch; flex-direction: column; margin: 11px 12px 0; }
   .report-zip-toolbar > div:last-child { display: grid; grid-template-columns: 1fr 1fr; }
   .report-zip-selection > i { width: 100%; }
+  .report-zip-range { grid-template-columns: 1fr; margin: 11px 12px 0; }
   .report-zip-groups { margin: 10px 12px 0; }
   .report-zip-modal > footer { padding: 11px 12px !important; }
 }

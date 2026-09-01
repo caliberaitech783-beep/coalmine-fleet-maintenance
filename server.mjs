@@ -27,7 +27,7 @@ import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
-import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow} from './director-report-bundle.mjs';
+import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 
 const {Pool}=pg;
@@ -752,32 +752,81 @@ app.put('/api/navigation-settings',requireSuper,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
-app.get('/api/report-schedule-settings',requireSuper,async(_req,res,next)=>{
+function canManageAllReportSchedules(session){
+  return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager';
+}
+
+function reportsAssignedToDesignation(settings,designationKey){
+  return [...new Set((settings.designations?.[designationKey]?.schedules||[]).flatMap((schedule)=>schedule.reports||[]))];
+}
+
+async function reportScheduleScope(session,settings){
+  if(canManageAllReportSchedules(session))return {canManageAll:true,allowedDesignationKeys:Object.keys(settings.designations||{}),allowedReports:DIRECTOR_REPORT_TITLES};
+  const user=await currentUserRecord(session);
+  const resolved=resolveMobileAccess({user});
+  const profile={...resolved,assignedRole:session?.assignedRole||resolved.assignedRole,permissions:{...resolved.permissions,...(session?.permissions||{})}};
+  const designation=flowDesignationForUser(user,profile);
+  if(!designation)return null;
+  return {canManageAll:false,allowedDesignationKeys:[designation.key],allowedReports:reportsAssignedToDesignation(settings,designation.key),user};
+}
+
+function scopedReportScheduleSettings(settings,scope){
+  if(scope.canManageAll)return settings;
+  const key=scope.allowedDesignationKeys[0];
+  return {designations:{[key]:settings.designations[key]}};
+}
+
+app.get('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
   try{
     const [{rows},settings]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
       storedHierarchyReportScheduleSettings(),
     ]);
+    const scope=await reportScheduleScope(req.session,settings);
+    if(!scope)return res.status(403).json({error:'No report designation is assigned to this profile.'});
     const recipients={};
     for(const row of rows){
       const user=row.record_data||{};
       const designation=flowDesignationForUser(user,resolveMobileAccess({user}));
       const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
-      if(!designation||!login)continue;
+      if(!designation||!login||!scope.allowedDesignationKeys.includes(designation.key))continue;
       (recipients[designation.key]??=[]).push({login,name:String(user.employee||user.name||user.login||login).trim(),hasPhone:Boolean(String(user.phone||user.phoneNo||user.phoneNumber||'').trim())});
     }
-    res.json({settings,recipients});
+    res.json({settings:scopedReportScheduleSettings(settings,scope),recipients,canManageAll:scope.canManageAll,allowedDesignationKeys:scope.allowedDesignationKeys,allowedReports:scope.allowedReports});
   }catch(error){next(error)}
 });
 
-app.put('/api/report-schedule-settings',requireSuper,async(req,res,next)=>{
+app.put('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
   try{
-    const settings=normalizeHierarchyReportScheduleSettings(req.body||{});
+    const current=await storedHierarchyReportScheduleSettings();
+    const scope=await reportScheduleScope(req.session,current);
+    if(!scope)return res.status(403).json({error:'No report designation is assigned to this profile.'});
+    let settings;
+    if(scope.canManageAll){
+      settings=normalizeHierarchyReportScheduleSettings(req.body||{});
+    }else{
+      const designationKey=scope.allowedDesignationKeys[0];
+      const existing=current.designations[designationKey];
+      const submitted=req.body?.designations?.[designationKey];
+      if(!submitted||typeof submitted!=='object')return res.status(400).json({error:'Your assigned report schedule was not provided.'});
+      const allowedReports=new Set(scope.allowedReports);
+      const schedules=(Array.isArray(submitted.schedules)?submitted.schedules:[]).map((schedule)=>({
+        ...schedule,
+        reports:(Array.isArray(schedule.reports)?schedule.reports:scope.allowedReports).filter((title)=>allowedReports.has(title)),
+      }));
+      settings=normalizeHierarchyReportScheduleSettings({designations:{...current.designations,[designationKey]:{
+        ...submitted,
+        allRecipients:existing.allRecipients,
+        recipientLogins:existing.recipientLogins,
+        schedules,
+      }}});
+    }
     await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
       ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
       HIERARCHY_REPORT_SCHEDULE_SETTING_KEY,JSON.stringify(settings),
     ]);
-    res.json(settings);
+    const savedScope=await reportScheduleScope(req.session,settings);
+    res.json({settings:scopedReportScheduleSettings(settings,savedScope),canManageAll:savedScope.canManageAll,allowedDesignationKeys:savedScope.allowedDesignationKeys,allowedReports:savedScope.allowedReports});
   }catch(error){next(error)}
 });
 
