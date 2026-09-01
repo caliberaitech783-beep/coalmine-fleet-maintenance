@@ -39,6 +39,22 @@ export function requestEquipmentMeterType(record = {}) {
   return ["vehicle", "vehicles"].includes(text(record.category).toLowerCase()) ? "KMR" : "HMR";
 }
 
+export function requestMeterTypeForRequest(request = {}, records = []) {
+  if (["KMR", "HMR"].includes(text(request.meterType).toUpperCase())) {
+    return text(request.meterType).toUpperCase();
+  }
+  const requestKeys = [request.chassis, request.door, request.reg, request.equipment]
+    .map((value) => text(value).toLowerCase())
+    .filter(Boolean);
+  const equipment = records.find((record) => {
+    const details = requestEquipmentDetails(record);
+    return [details.chassis, details.door, details.reg, details.equipment]
+      .map((value) => text(value).toLowerCase())
+      .some((value) => value && requestKeys.includes(value));
+  });
+  return requestEquipmentMeterType(equipment || {});
+}
+
 export function requestEquipmentOptionLabel(record = {}) {
   const details = requestEquipmentDetails(record);
   const context = [

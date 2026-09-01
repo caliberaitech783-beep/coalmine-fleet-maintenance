@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import {requestEquipmentMeterType} from "../request-equipment.mjs";
+import {requestEquipmentMeterType, requestMeterTypeForRequest} from "../request-equipment.mjs";
 import {validMeterEvidenceDataUrl, validMeterReading} from "../request-workflow.mjs";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -12,6 +12,16 @@ test("vehicles use KMR and equipment uses HMR", () => {
   assert.equal(requestEquipmentMeterType({category: "Vehicles"}), "KMR");
   assert.equal(requestEquipmentMeterType({category: "Equipment"}), "HMR");
   assert.equal(requestEquipmentMeterType({}), "HMR");
+});
+
+test("legacy requests derive their meter type from the matching equipment", () => {
+  const records = [
+    {category: "Vehicle", door: "S116", chassisNo: "MYKG8X4MON5663995"},
+    {category: "Equipment", door: "PL79", chassisNo: "MH40CX9284"},
+  ];
+  assert.equal(requestMeterTypeForRequest({door: "S116", chassis: "MYKG8X4MON5663995"}, records), "KMR");
+  assert.equal(requestMeterTypeForRequest({door: "PL79"}, records), "HMR");
+  assert.equal(requestMeterTypeForRequest({meterType: "KMR", door: "PL79"}, records), "KMR");
 });
 
 test("meter readings and evidence files are validated", () => {
@@ -28,9 +38,11 @@ test("opening and closing KMR/HMR values and files flow through every operationa
   assert.match(source, /name="openingMeterReading"[\s\S]*name="openingMeterFile"/);
   assert.match(source, /showMeterData[\s\S]*Opening KMR\/HMR[\s\S]*Closing KMR\/HMR/);
   assert.match(source, /Opening \{request\.meterType \|\| "KMR\/HMR"\}[\s\S]*MeterFileCell/);
+  assert.match(source, /openingMeterMissing[\s\S]*This older request was created before KMR\/HMR capture was enabled/);
   assert.match(source, /name="closingMeterReading"[\s\S]*name="closingMeterFile"/);
   assert.match(server, /opening_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /closing_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.get\('\/api\/requests\/:reference\/meter-file'/);
   assert.match(server, /closing_meter_reading=\$6,closing_meter_file=\$7/);
+  assert.match(server, /openingMeterMissing[\s\S]*UPDATE maintenance_requests SET meter_type=\$1,opening_meter_reading=\$2/);
 });
