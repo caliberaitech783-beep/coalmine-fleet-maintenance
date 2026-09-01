@@ -1068,6 +1068,14 @@ async function addTicketNotifications(client,recipients,reference,message,workfl
   if(whatsapp)await sendWhatsAppNotifications(client,logins,reference,message,workflowTemplate);
 }
 
+async function addTicketNotificationsBestEffort(client,recipients,reference,message,workflowTemplate,options){
+  try{
+    await addTicketNotifications(client,recipients,reference,message,workflowTemplate,options);
+  }catch(error){
+    console.error(`Request ${reference} was updated, but its follow-up notifications could not be saved.`,error);
+  }
+}
+
 let consolidatedReportRunning=false;
 async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
   if(!databaseReady||consolidatedReportRunning)return {skipped:true};
@@ -1565,7 +1573,7 @@ async function createMaintenanceReminderNotifications(){
     for(const login of [...new Set(recipients)]){
       const key=`maintenance-reminder:${day}:${slot}:${request.reference}:${login}`;
       const inserted=await pool.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message,notification_key)
-        VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) DO NOTHING RETURNING id`,[login,request.reference,message,key]);
+        VALUES ($1,$2,$3,$4) ON CONFLICT (notification_key) WHERE notification_key IS NOT NULL DO NOTHING RETURNING id`,[login,request.reference,message,key]);
       if(inserted.rowCount)newRecipients.push(login);
     }
     // Maintenance reminders remain available in-app. WhatsApp request traffic is
@@ -1575,7 +1583,9 @@ async function createMaintenanceReminderNotifications(){
 
 app.get('/api/notifications',requireSession,async(req,res,next)=>{
   try{
-    await createMaintenanceReminderNotifications();
+    await createMaintenanceReminderNotifications().catch((error)=>{
+      console.error('Maintenance reminder notification generation failed.',error);
+    });
     const login=String(req.session.login||'').trim().toLowerCase();
     const {rows}=await pool.query(`SELECT id,ticket_reference AS "ticketReference",message,is_read AS "isRead",
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
@@ -1797,6 +1807,9 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
     if(!validRequestAudioDataUrl(maintenanceAudio))return res.status(400).json({error:'Maintenance audio must be a supported recording up to 3 MB.'});
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
+    const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
+    if(!ideal&&status==='Closed'&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt)return res.json(existingRows[0]);
     const {rows:meterRows}=await pool.query(`SELECT meter_type,opening_meter_reading,opening_meter_file FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!meterRows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
     if(openingMeterReading&&!validMeterReading(openingMeterReading))return res.status(400).json({error:`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`});
@@ -1815,23 +1828,31 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
           WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
           [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference])
-      : await pool.query(`UPDATE maintenance_requests SET closed_at=CASE WHEN $5='Closed' THEN $1 ELSE NULL END,closed_by=CASE WHEN $5='Closed' THEN $2 ELSE '' END,maintenance_work=$3,maintenance_audio=$4,status=$5
-          WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
-          [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,status,reference]);
+      : status==='Closed'
+        ? await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,status='Closed'
+            WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+            [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,reference])
+        : await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status=$3
+            WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+            [maintenanceWork,maintenanceAudio,status,reference]);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
       const recipients=[];
       for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,rows[0].site))recipients.push(login)}
-      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
+      await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
         {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User',rows[0].idleReason]},{whatsapp:false});
     }else if(status==='Closed'){
-      const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-      const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
-      const closedAtLabel=requestNotificationTime(closedAt);
-      const closedBy=req.session.name||'Maintenance User';
-      await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed for ${equipmentDetails}. Breakdown: ${rows[0].category}. Closing date & time: ${closedAtLabel}. Maintenance work: ${rows[0].maintenanceWork}. Closed by: ${closedBy}.`,
-        {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].category,closedAtLabel,rows[0].maintenanceWork,closedBy]},{whatsapp:false});
+      try{
+        const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+        const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+        const closedAtLabel=requestNotificationTime(closedAt);
+        const closedBy=req.session.name||'Maintenance User';
+        await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed for ${equipmentDetails}. Breakdown: ${rows[0].category}. Closing date & time: ${closedAtLabel}. Maintenance work: ${rows[0].maintenanceWork}. Closed by: ${closedBy}.`,
+          {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].category,closedAtLabel,rows[0].maintenanceWork,closedBy]},{whatsapp:false});
+      }catch(error){
+        console.error(`Request ${rows[0].ref} was closed, but its notification recipients could not be resolved.`,error);
+      }
     }
     res.json(rows[0]);
   }catch(error){next(error)}
