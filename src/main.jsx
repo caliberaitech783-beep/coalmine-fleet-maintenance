@@ -5641,10 +5641,26 @@ function TicketCreateForm({ session, close, onCreated }) {
   </Modal>;
 }
 
+function TicketMedia({ data, name, type, label }) {
+  const objectUrl = useMemo(() => {
+    const match = String(data || "").match(/^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/);
+    if (!match) return "";
+    try {
+      const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
+      return URL.createObjectURL(new Blob([bytes], { type: match[1] }));
+    } catch {
+      return "";
+    }
+  }, [data]);
+  useEffect(() => () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }, [objectUrl]);
+  if (!data) return "—";
+  if (!objectUrl) return <span className="ticket-media-error">Attachment unavailable</span>;
+  if (String(type).startsWith("video/")) return <video className="ticket-media" controls preload="metadata" src={objectUrl}>{label} video</video>;
+  return <a href={objectUrl} target="_blank" rel="noreferrer" title={name || `Open ${label.toLowerCase()}`}><img className="ticket-media" src={objectUrl} alt={name || `${label} attachment`} /></a>;
+}
+
 function TicketAttachment({ ticket }) {
-  if (!ticket.attachmentData) return "—";
-  if (String(ticket.attachmentType).startsWith("video/")) return <video className="ticket-media" controls preload="metadata" src={ticket.attachmentData}>Ticket video</video>;
-  return <a href={ticket.attachmentData} target="_blank" rel="noreferrer" title={ticket.attachmentName || "Open attachment"}><img className="ticket-media" src={ticket.attachmentData} alt={ticket.attachmentName || "Ticket attachment"} /></a>;
+  return <TicketMedia data={ticket.attachmentData} name={ticket.attachmentName} type={ticket.attachmentType} label="Ticket" />;
 }
 
 function TicketResolutionForm({ ticket, session, close, onResolved }) {
@@ -5713,7 +5729,7 @@ function TicketPage({ session }) {
   return <section className="ticket-page">
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
-    <div className="ticket-table-wrap"><table><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && (String(ticket.resolutionAttachmentType).startsWith("video/") ? <video className="ticket-media" controls preload="metadata" src={ticket.resolutionAttachmentData}>Resolution video</video> : <a href={ticket.resolutionAttachmentData} target="_blank" rel="noreferrer"><img className="ticket-media" src={ticket.resolutionAttachmentData} alt={ticket.resolutionAttachmentName || "Resolution attachment"} /></a>)}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></table></div>
+    <div className="ticket-table-wrap"><table><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></table></div>
     {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}
     {resolving && <TicketResolutionForm ticket={resolving} session={session} close={() => setResolving(null)} onResolved={(result) => setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket))} />}
   </section>;
