@@ -19,6 +19,7 @@ import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleE
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
+import {flowDesignationForUser,reportsDueForDesignation} from './hierarchy-report-flow.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
@@ -26,7 +27,7 @@ import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
-import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportDue,directorReportFilename,directorReportWindow} from './director-report-bundle.mjs';
+import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 
 const {Pool}=pg;
@@ -1204,11 +1205,6 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
   }finally{consolidatedTicketReportRunning=false}
 }
 
-function isDirectorRecipient(user={}){
-  return [user.level,user.hierarchyLevel,user.userGroup,user.adminLevel,user.designation,user.role,user.employee,user.name]
-    .some((value)=>String(value||'').trim().toLowerCase().includes('director'));
-}
-
 async function directorReportSourceData(){
   const [{rows:requestRows},{rows:equipmentRows},{rows:transferRows}]=await Promise.all([
     pool.query(`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`),
@@ -1222,8 +1218,9 @@ async function directorReportSourceData(){
   };
 }
 
-async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
-  const tables=buildDirectorReportTables(await directorReportSourceData());
+async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST'}){
+  const selectedTitles=reportTitles?new Set(reportTitles):null;
+  const tables=buildDirectorReportTables(await directorReportSourceData()).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
   const links=[];
   const files=[];
@@ -1249,7 +1246,7 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date()}){
       {filename:xlsxFilename,contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',content:xlsx},
     );
   }
-  return {slotKey,generatedAt:now,links,files,message:buildDirectorWhatsAppMessage({generatedAt:now,links})};
+  return {slotKey,generatedAt:now,links,files,message:buildDirectorWhatsAppMessage({generatedAt:now,links,heading,scheduleLabel})};
 }
 
 async function publishDirectorReportArchive({baseUrl,slotKey,files=[]}){
@@ -1293,25 +1290,65 @@ async function sendDirectorReportBundle({recipientPhone,recipientName='Director'
   return {slotKey:window.slotKey,status,reportCount:bundle?.links?.length||0,links:bundle?.links||[],message:bundle?.message||''};
 }
 
-let directorReportRunning=false;
 async function sendScheduledDirectorReportBundles(now=new Date()){
-  if(!databaseReady||directorReportRunning)return {skipped:true};
-  if(!directorReportDue(now))return {skipped:true,reason:'outside Director 7 PM report window'};
-  directorReportRunning=true;
+  return {skipped:true,reason:'Director schedule is handled by the hierarchy report flow'};
+}
+
+let hierarchyReportRunning=false;
+async function sendScheduledHierarchyReportBundles(now=new Date()){
+  if(!databaseReady||hierarchyReportRunning)return {skipped:true};
+  hierarchyReportRunning=true;
   try{
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`);
     let sent=0,failed=0,skipped=0;
     for(const row of userRows){
       const user=row.record_data||{};
-      if(!isDirectorRecipient(user))continue;
+      const profile=resolveMobileAccess({user});
+      const designation=flowDesignationForUser(user,profile);
+      if(!designation)continue;
+      const dueGroups=reportsDueForDesignation(designation.key,now);
+      if(!dueGroups.length)continue;
+      const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))];
+      const scheduleLabel=[...new Set(dueGroups.map((group)=>group.scheduleLabel))].join(' + ');
+      const slotKey=dueGroups.map((group)=>group.slotKey).sort().join('+');
+      const scheduleKey=dueGroups.map((group)=>group.scheduleKey).sort().join('+');
+      const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
       const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
-      const result=await sendDirectorReportBundle({recipientPhone:phone,recipientName:String(user.employee||user.name||user.login||'Director'),baseUrl:publicBaseUrl(),now});
-      if(result.skipped)skipped++;
-      else if(String(result.status||'').startsWith('Sent'))sent++;
-      else failed++;
+      const recipientName=String(user.employee||user.name||user.login||designation.label);
+      if(!phone){skipped++;continue}
+      const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+        (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
+        ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
+          SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
+          WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
+        RETURNING id`,[slotKey,login||`hierarchy:${phone}`,`HIERARCHY-${designation.key}-${scheduleKey}`]);
+      if(!claim.rowCount){skipped++;continue}
+      let status='Sent',bundle=null;
+      try{
+        bundle=await publishDirectorReportFiles({
+          baseUrl:publicBaseUrl(),
+          slotKey,
+          now,
+          reportTitles,
+          heading:`${designation.label} Consolidated Report`,
+          scheduleLabel,
+        });
+        await sendMetaWhatsAppText({to:phone,message:bundle.message},{env:await metaWhatsAppRuntimeEnv()});
+        sent++;
+      }catch(error){
+        status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;
+        failed++;
+        console.error(`Hierarchy WhatsApp report failed for ${recipientName}:`,error.message);
+      }
+      await Promise.all([
+        pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
+        pool.query(`INSERT INTO whatsapp_alert_history
+          (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+          ['Hierarchy linked report bundle',designation.label,slotKey,recipientName,phone,status]),
+      ]);
     }
-    return {slotKey:directorReportWindow(now).slotKey,sent,failed,skipped};
-  }finally{directorReportRunning=false}
+    return {sent,failed,skipped};
+  }finally{hierarchyReportRunning=false}
 }
 
 app.post('/api/reports/director/send-test',requireSuper,async(req,res,next)=>{
@@ -2144,6 +2181,9 @@ async function initializeDatabase(){
     void sendScheduledDirectorReportBundles()
       .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
       .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
+    void sendScheduledHierarchyReportBundles()
+      .then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result))
+      .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
     void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
     void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
       if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
@@ -2184,5 +2224,11 @@ const directorWhatsAppTimer=setInterval(()=>{
     .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
 },60*1000);
 directorWhatsAppTimer.unref?.();
+const hierarchyWhatsAppTimer=setInterval(()=>{
+  void sendScheduledHierarchyReportBundles()
+    .then(result=>{if(!result?.skipped)console.log('Scheduled hierarchy WhatsApp report check completed.',result)})
+    .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
+},60*1000);
+hierarchyWhatsAppTimer.unref?.();
 const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
 adminLockAuditTimer.unref?.();
