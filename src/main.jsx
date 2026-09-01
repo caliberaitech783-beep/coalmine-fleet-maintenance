@@ -416,7 +416,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <CaliberBrand className="login-mobile-brand" subtitle="Fleet operations platform" />
           <AuthModeTabs mode="signin" onModeChange={(mode) => { setLoginMode(mode); setError(""); setNotice(""); }} />
           <small className="login-kicker"><LockKeyhole /> SECURE OPERATIONS PORTAL</small>
-          <h2>WELCOME BACK</h2>
+          <h2>Welcome Back</h2>
           <p>Sign in to access your fleet operations workspace.</p>
           <div className="single-login-note"><ShieldCheck /><span><b>One secure login</b><small>Your workspace and permissions are assigned by your administrator.</small></span></div>
           <label className="login-label" htmlFor="login-username">User name</label>
