@@ -90,6 +90,7 @@ import "./idle-status.css";
 import "./daily-updates.css";
 import "./dashboard-concept-a.css";
 import "./brand-theme.css";
+import "./report-schedule-polish.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -4048,7 +4049,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
           <div className="modal director-timing-modal">
             <header>
-              <div><h3>Report delivery schedules</h3><p>All configured WhatsApp schedules by user designation</p></div>
+              <div className="report-schedule-title"><span><CalendarDays /></span><div><h3>Report delivery schedules</h3><p>Choose recipients, timing and reports for each delivery slot</p></div></div>
               <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X /></button>
             </header>
             {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : <>

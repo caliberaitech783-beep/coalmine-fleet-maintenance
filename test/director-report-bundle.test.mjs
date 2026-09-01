@@ -46,6 +46,7 @@ test('Director report API and all-user schedule popup are wired into server and 
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const css=readFileSync(new URL('../src/style.css',import.meta.url),'utf8');
+  const schedulePolish=readFileSync(new URL('../src/report-schedule-polish.css',import.meta.url),'utf8');
   assert.match(server,/published_reports/);
   assert.match(server,/published_reports_short_code_idx/);
   assert.match(server,/WHATSAPP_SETTING_KEY='meta_whatsapp'/);
@@ -70,4 +71,8 @@ test('Director report API and all-user schedule popup are wired into server and 
   assert.match(server,/app\.put\('\/api\/report-schedule-settings'/);
   assert.match(css,/\.director-timing-modal/);
   assert.match(css,/\.report-week-grid/);
+  assert.match(source,/report-schedule-polish\.css/);
+  assert.match(schedulePolish,/\.report-schedule-title/);
+  assert.match(schedulePolish,/grid-template-columns: repeat\(12/);
+  assert.match(schedulePolish,/position: sticky/);
 });
