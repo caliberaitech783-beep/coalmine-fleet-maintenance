@@ -1776,16 +1776,12 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName='',forceDuplicate=false}=req.body||{};
+    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,meterType='',forceDuplicate=false}=req.body||{};
     const normalizedMeterType=String(meterType).trim().toUpperCase();
-    const normalizedOpeningMeterReading=String(openingMeterReading).trim();
-    const openingMeterOptional=req.session.role==='normal'&&req.session.assignedRole==='Production User';
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-    if((!openingMeterOptional||normalizedOpeningMeterReading)&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
-    if((!openingMeterOptional||openingMeterFile)&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
     if(forceDuplicate!==true){
       const duplicate=await pool.query(`SELECT reference FROM maintenance_requests WHERE lower(trim(chassis_number))=lower(trim($1)) AND status<>'Closed' ORDER BY created_at DESC LIMIT 1`,[chassis]);
       if(duplicate.rows.length)return res.status(409).json({duplicate:true,existingReference:duplicate.rows[0].reference,error:`Request ${duplicate.rows[0].reference} already exists for this equipment. Do you still want to add another request?`});
@@ -1799,7 +1795,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,status,owner_name,requester_login,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Open',$15,$16,$17,$18,$19,$20)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255)]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
     const openedAt=requestNotificationTime(startedAt);
@@ -1813,13 +1809,28 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
-    const {equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,start,expectedCompletionAt}=req.body||{};
+    const {equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,start,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName='',closingMeterReading='',closingMeterFile='',closingMeterFileName=''}=req.body||{};
+    const normalizedMeterType=String(meterType).trim().toUpperCase();
+    const normalizedOpeningMeterReading=String(openingMeterReading).trim();
+    const normalizedClosingMeterReading=String(closingMeterReading).trim();
     if(!reference||!door||!complaint||!String(chassis).trim())return res.status(400).json({error:'Door number, chassis number and complaint are required.'});
     if(!String(expectedCompletionAt||'').trim())return res.status(400).json({error:'Enter the expected time for completion.'});
+    if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
+    if(!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
+    if(!validMeterReading(normalizedClosingMeterReading))return res.status(400).json({error:`Enter a valid closing ${normalizedMeterType} reading.`});
+    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
+    if(closingMeterFile&&!validMeterEvidenceDataUrl(closingMeterFile))return res.status(400).json({error:`Upload a closing ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
+    const {rows:meterRows}=await pool.query(`SELECT opening_meter_file,closing_meter_file FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
+    if(!meterRows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
+    if(!openingMeterFile&&!meterRows[0].opening_meter_file)return res.status(400).json({error:`Upload an opening ${normalizedMeterType} evidence file.`});
+    if(!closingMeterFile&&!meterRows[0].closing_meter_file)return res.status(400).json({error:`Upload a closing ${normalizedMeterType} evidence file.`});
     const startedAt=parseIndiaRequestDateTime(start);
     const {rows}=await pool.query(`UPDATE maintenance_requests SET equipment_name=$1,door_number=$2,registration_number=$3,chassis_number=$4,
-      site=$5,category=$6,complaint=$7,started_at=$8,expected_completion_at=($9::timestamp AT TIME ZONE 'Asia/Kolkata') WHERE reference=$10 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,String(expectedCompletionAt).trim(),reference]);
+      site=$5,category=$6,complaint=$7,started_at=$8,expected_completion_at=($9::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$10,
+      opening_meter_reading=$11,opening_meter_file=CASE WHEN $12<>'' THEN $12 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $12<>'' THEN $13 ELSE opening_meter_file_name END,
+      closing_meter_reading=$14,closing_meter_file=CASE WHEN $15<>'' THEN $15 ELSE closing_meter_file END,closing_meter_file_name=CASE WHEN $15<>'' THEN $16 ELSE closing_meter_file_name END
+      WHERE reference=$17 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),normalizedClosingMeterReading,closingMeterFile,String(closingMeterFileName).trim().slice(0,255),reference]);
     if(!rows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
     res.json(rows[0]);
   }catch(error){next(error)}
