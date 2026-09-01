@@ -1139,7 +1139,7 @@ const selectedAccessValues = (record, key, fallbackKey = "") => {
 };
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
 const hierarchyReportGroups = [
-  {group:"Common Report", className:"common", reports:[
+  {group:"Common Report", viewKey:"C", className:"common", reports:[
     "Location wise Open BD report with Category (Prod)",
     "Location wise Closing BD report with Category (Maint.)",
     "MIS Verification Report (MIS)",
@@ -1149,10 +1149,10 @@ const hierarchyReportGroups = [
     "Idle Vehicle Report",
     "Recent Breakdown Cases",
   ]},
-  {group:"Production Report", className:"production", reports:[
+  {group:"Production Report", viewKey:"P", className:"production", reports:[
     "Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.",
   ]},
-  {group:"Maintenance Report", className:"maintenance", reports:[
+  {group:"Maintenance Report", viewKey:"M", className:"maintenance", reports:[
     "Event Open Report - Prod. Open with Maint. Close Time -- TAT",
     "Event close Report - Maint. Closing to MIS Verif.",
     "Idle Time with PM Verification Time",
@@ -1176,6 +1176,26 @@ const hierarchyDefaults = [
 ];
 const hierarchySiteGroups = subsidiaryData.map((region) => ({code:region.code, name:region.name, sites:region.sites}));
 const hierarchySiteTitles = hierarchySiteGroups.flatMap((region) => region.sites);
+const hierarchyColumnViewOptions = [
+  {key:"A", label:"Designation / level / schedule", shortLabel:"Identity"},
+  {key:"C", label:"Common reports", shortLabel:"Common"},
+  {key:"P", label:"Production report", shortLabel:"Production"},
+  {key:"M", label:"Maintenance reports", shortLabel:"Maintenance"},
+  {key:"S", label:"WCL and NCL site-wise controls", shortLabel:"Site wise"},
+];
+const hierarchyRowViewOptions = [
+  {key:"D", label:"Director", shortLabel:"Director"},
+  {key:"P", label:"Project Manager", shortLabel:"PM"},
+  {key:"M", label:"Production, Maintenance and MIS managers", shortLabel:"Managers"},
+  {key:"U", label:"Users, supervisors and OEM roles", shortLabel:"Users"},
+];
+function hierarchyRowViewKey(row = {}) {
+  const designation = String(row.designation || "").toLowerCase();
+  if (designation.includes("director")) return "D";
+  if (designation.includes("project manager")) return "P";
+  if (designation.includes("manager")) return "M";
+  return "U";
+}
 const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
 function privilegeSelectionValue(value) {
   if (typeof value !== "string") return "";
@@ -4794,8 +4814,10 @@ const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).ma
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const [savingKey, setSavingKey] = useState("");
   const [query, setQuery] = useState("");
+  const [visibleColumnGroups, setVisibleColumnGroups] = useState(() => hierarchyColumnViewOptions.map((option) => option.key));
+  const [visibleRowGroups, setVisibleRowGroups] = useState(() => hierarchyRowViewOptions.map((option) => option.key));
   const byDesignation = new Map(records.map((record) => [String(record.designation || "").trim().toLowerCase(), record]));
-  const rows = hierarchyDefaults.map((row, index) => {
+  const allRows = hierarchyDefaults.map((row, index) => {
     const stored = byDesignation.get(row.designation.toLowerCase()) || {};
     return {
       ...row,
@@ -4804,7 +4826,22 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       reportAccess: stored.reportAccess || row.reportAccess || "",
       siteAccess: Object.prototype.hasOwnProperty.call(stored, "siteAccess") ? stored.siteAccess : hierarchySiteTitles.join(" | "),
     };
-  }).filter((row) => matchesSmartSearch(query, row.section, row.designation, row.level, row.schedule));
+  });
+  const visibleColumnKeys = new Set(visibleColumnGroups);
+  const visibleRowKeys = new Set(visibleRowGroups);
+  const showIdentityColumns = visibleColumnKeys.has("A");
+  const showSiteColumns = visibleColumnKeys.has("S");
+  const visibleReportGroups = hierarchyReportGroups.filter((group) => visibleColumnKeys.has(group.viewKey));
+  const visibleReportTitles = visibleReportGroups.flatMap((group) => group.reports);
+  const visibleSiteTitles = showSiteColumns ? hierarchySiteTitles : [];
+  const matrixColumnCount = (showIdentityColumns ? 4 : 0) + visibleReportTitles.length + visibleSiteTitles.length;
+  const rows = allRows.filter((row) => (
+    visibleRowKeys.has(hierarchyRowViewKey(row))
+    && matchesSmartSearch(query, row.section, row.designation, row.level, row.schedule)
+  ));
+  const toggleViewOption = (setter, key) => setter((selected) => (
+    selected.includes(key) ? selected.filter((item) => item !== key) : [...selected, key]
+  ));
   const saveRow = async (row, updates) => {
     const payload = {
       section: row.section,
@@ -4844,7 +4881,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
           <h1>Hierarchy master</h1>
           <p>Designation-wise WhatsApp report matrix with report and site tick controls</p>
         </div>
-        <MasterActions name="Hierarchy master" records={rows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
+        <MasterActions name="Hierarchy master" records={allRows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
       <div className="hierarchy-toolbar">
         <div className="region-main-tabs hierarchy-region-tabs" aria-label="Hierarchy site regions">
@@ -4861,21 +4898,49 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         <MapPin />
         <div><b>WCL and NCL site wise ticks</b><span>Select sites row-wise for report delivery and data scoping.</span></div>
       </div>
+      <div className="hierarchy-view-controls" aria-label="Hierarchy matrix view controls">
+        <div className="hierarchy-view-group">
+          <b>Columns</b>
+          <div role="group" aria-label="Visible hierarchy column groups">
+            {hierarchyColumnViewOptions.map((option) => (
+              <label key={option.key} className={`hierarchy-view-tab ${visibleColumnKeys.has(option.key) ? "active" : ""}`} title={option.label}>
+                <input type="checkbox" checked={visibleColumnKeys.has(option.key)} onChange={() => toggleViewOption(setVisibleColumnGroups, option.key)} />
+                <span className="hierarchy-view-code">{option.key}</span>
+                <span>{option.shortLabel}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="hierarchy-view-group">
+          <b>Rows</b>
+          <div role="group" aria-label="Visible hierarchy designation groups">
+            {hierarchyRowViewOptions.map((option) => (
+              <label key={option.key} className={`hierarchy-view-tab ${visibleRowKeys.has(option.key) ? "active" : ""}`} title={option.label}>
+                <input type="checkbox" checked={visibleRowKeys.has(option.key)} onChange={() => toggleViewOption(setVisibleRowGroups, option.key)} />
+                <span className="hierarchy-view-code">{option.key}</span>
+                <span>{option.shortLabel}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
       <div className="hierarchy-matrix-scroll">
-        <table className="hierarchy-matrix">
+        {matrixColumnCount ? <table className="hierarchy-matrix">
           <thead>
             <tr className="hierarchy-group-row">
-              <th colSpan="4">Hierarchy Key Whatsapp Flow</th>
-              {hierarchyReportGroups.map((group) => <th key={group.group} className={group.className} colSpan={group.reports.length}>{group.group}</th>)}
-              {hierarchySiteGroups.map((region) => <th key={region.code} className="site-wise-region" colSpan={region.sites.length}>{region.code} Site Wise</th>)}
+              {showIdentityColumns && <th className="hierarchy-admin-group" colSpan="4">Hierarchy Key Whatsapp Flow</th>}
+              {visibleReportGroups.map((group) => <th key={group.group} className={group.className} colSpan={group.reports.length}>{group.group}</th>)}
+              {showSiteColumns && hierarchySiteGroups.map((region) => <th key={region.code} className="site-wise-region" colSpan={region.sites.length}>{region.code} Site Wise</th>)}
             </tr>
             <tr>
-              <th>Section</th>
-              <th>Designation</th>
-              <th>Level</th>
-              <th>Schedule</th>
-              {hierarchyReportTitles.map((report, index) => <th key={report} title={report}>R{index + 1}<small>{report}</small></th>)}
-              {hierarchySiteGroups.flatMap((region) => region.sites.map((site) => <th key={`${region.code}-${site}`} title={`${region.code} · ${site}`}>{region.code}<small>{site}</small></th>))}
+              {showIdentityColumns && <>
+                <th className="hierarchy-col-section">Section</th>
+                <th className="hierarchy-col-designation">Designation</th>
+                <th className="hierarchy-col-level">Level</th>
+                <th className="hierarchy-col-schedule">Schedule</th>
+              </>}
+              {visibleReportTitles.map((report) => <th key={report} title={report}>R{hierarchyReportTitles.indexOf(report) + 1}<small>{report}</small></th>)}
+              {showSiteColumns && hierarchySiteGroups.flatMap((region) => region.sites.map((site) => <th className="hierarchy-site-column" key={`${region.code}-${site}`} title={`${region.code} · ${site}`}>{region.code}<small>{site}</small></th>))}
             </tr>
           </thead>
           <tbody>
@@ -4884,16 +4949,18 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
               const sites = new Set(splitPipeValues(row.siteAccess));
               return (
                 <tr key={row.rowKey} className={row.section === "Management" ? "management" : ""}>
-                  <td><span className="hierarchy-section-pill">{row.section}</span></td>
-                  <td><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</td>
-                  <td><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
-                  <td className="hierarchy-schedule">{row.schedule}</td>
-                  {hierarchyReportTitles.map((report) => (
+                  {showIdentityColumns && <>
+                    <td className="hierarchy-col-section"><span className="hierarchy-section-pill">{row.section}</span></td>
+                    <td className="hierarchy-col-designation"><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</td>
+                    <td className="hierarchy-col-level"><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
+                    <td className="hierarchy-col-schedule hierarchy-schedule">{row.schedule}</td>
+                  </>}
+                  {visibleReportTitles.map((report) => (
                     <td key={report}>
                       <input type="checkbox" aria-label={`${row.designation} ${report}`} checked={reports.has(report)} onChange={(event) => toggleReport(row, report, event.target.checked)} disabled={savingKey === row.rowKey} />
                     </td>
                   ))}
-                  {hierarchySiteGroups.flatMap((region) => region.sites.map((site) => (
+                  {showSiteColumns && hierarchySiteGroups.flatMap((region) => region.sites.map((site) => (
                     <td key={`${region.code}-${site}`}>
                       <input type="checkbox" aria-label={`${row.designation} ${region.code} ${site}`} checked={sites.has(site)} onChange={(event) => toggleSite(row, site, event.target.checked)} disabled={savingKey === row.rowKey} />
                     </td>
@@ -4901,13 +4968,13 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                 </tr>
               );
             })}
-            {!rows.length && <tr><td colSpan={4 + hierarchyReportTitles.length + hierarchySiteTitles.length} className="empty-state">No hierarchy rows match this search.</td></tr>}
+            {!rows.length && <tr><td colSpan={matrixColumnCount} className="empty-state">No hierarchy rows match this view.</td></tr>}
           </tbody>
-        </table>
+        </table> : <div className="hierarchy-view-empty">Select at least one column group to view the matrix.</div>}
       </div>
-      <div className="hierarchy-report-legend">
-        {hierarchyReportTitles.map((report, index) => <span key={report}><b>R{index + 1}</b>{report}</span>)}
-      </div>
+      {!!visibleReportTitles.length && <div className="hierarchy-report-legend">
+        {visibleReportTitles.map((report) => <span key={report}><b>R{hierarchyReportTitles.indexOf(report) + 1}</b>{report}</span>)}
+      </div>}
     </section>
   );
 }
