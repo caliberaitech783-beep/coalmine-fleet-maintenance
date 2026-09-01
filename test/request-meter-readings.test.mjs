@@ -34,31 +34,33 @@ test("meter readings and evidence files are validated", () => {
   assert.equal(validMeterEvidenceDataUrl("data:text/plain;base64,SGVsbG8="), false);
 });
 
-test("opening and closing KMR/HMR values and files flow through every operational workspace", () => {
-  assert.match(source, /name="openingMeterReading"[\s\S]*name="openingMeterFile"/);
+test("opening and closing KMR/HMR values and files are captured in request edit", () => {
+  const createForm = source.slice(source.indexOf("function MaintenanceForm"), source.indexOf("function Subsidiaries"));
+  const editForm = source.slice(source.indexOf("function RequestEditForm"), source.indexOf("function CloseRequestForm"));
+  const closeForm = source.slice(source.indexOf("function CloseRequestForm"), source.indexOf("function VerifyRequestForm"));
+
+  assert.doesNotMatch(createForm, /name="openingMeterReading"|name="openingMeterFile"|name="closingMeterReading"|name="closingMeterFile"/);
+  assert.match(editForm, /name="openingMeterReading"[\s\S]*name="openingMeterFile"/);
+  assert.match(editForm, /name="closingMeterReading"[\s\S]*name="closingMeterFile"/);
+  assert.match(editForm, /required=\{!request\.openingMeterFileUploaded\}/);
+  assert.match(editForm, /required=\{!request\.closingMeterFileUploaded\}/);
+  assert.match(closeForm, /Opening \{meterType\}[\s\S]*stage="opening"[\s\S]*Closing \{meterType\}[\s\S]*stage="closing"/);
   assert.match(source, /showMeterData[\s\S]*Opening KMR\/HMR[\s\S]*Closing KMR\/HMR/);
   assert.match(source, /Opening \{request\.meterType \|\| "KMR\/HMR"\}[\s\S]*MeterFileCell/);
-  assert.match(source, /openingMeterReadingMissing[\s\S]*this request can be closed without it/);
-  assert.match(source, /name="closingMeterReading"[\s\S]*name="closingMeterFile"/);
   assert.match(server, /opening_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /closing_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.get\('\/api\/requests\/:reference\/meter-file'/);
+  assert.match(server, /opening_meter_reading=\$11[\s\S]*closing_meter_reading=\$14/);
   assert.match(server, /closing_meter_reading=\$6,closing_meter_file=\$7/);
-  assert.match(server, /if\(openingMeterReading\|\|openingMeterFile\)[\s\S]*opening_meter_reading=CASE WHEN \$2<>'' THEN \$2 ELSE opening_meter_reading END/);
 });
 
-test("Production User opening KMR/HMR capture is optional and does not block later closure", () => {
-  const productionForm = source.slice(source.indexOf("function MaintenanceForm"), source.indexOf("function Subsidiaries"));
-  const closeForm = source.slice(source.indexOf("function CloseRequestForm"), source.indexOf("function VerifyRequestForm"));
+test("request edit validates both readings and preserves existing evidence unless replaced", () => {
+  const editRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference'"), server.indexOf("app.patch('/api/requests/:reference/close'"));
 
-  assert.match(productionForm, /openingMeterFile\s*\?\s*await readMeterEvidence/);
-  assert.match(productionForm, /required=\{!openingMeterOptional\}/);
-  assert.match(productionForm, /opening reading \{openingMeterOptional \? <small>Optional<\/small>/);
-  assert.match(source, /<MaintenanceForm normal openingMeterOptional=\{isProduction\}/);
-  assert.match(closeForm, /this request can be closed without it/);
-  assert.doesNotMatch(closeForm, /name="openingMeterReading"[^>]*required/);
-  assert.doesNotMatch(closeForm, /name="openingMeterFile"[^>]*required/);
-  assert.match(server, /openingMeterOptional=req\.session\.role==='normal'&&req\.session\.assignedRole==='Production User'/);
-  assert.match(server, /if\(\(!openingMeterOptional\|\|normalizedOpeningMeterReading\)&&!validMeterReading\(normalizedOpeningMeterReading\)\)/);
-  assert.match(server, /if\(\(!openingMeterOptional\|\|openingMeterFile\)&&!validMeterEvidenceDataUrl\(openingMeterFile\)\)/);
+  assert.match(editRoute, /validMeterReading\(normalizedOpeningMeterReading\)/);
+  assert.match(editRoute, /validMeterReading\(normalizedClosingMeterReading\)/);
+  assert.match(editRoute, /if\(!openingMeterFile&&!meterRows\[0\]\.opening_meter_file\)/);
+  assert.match(editRoute, /if\(!closingMeterFile&&!meterRows\[0\]\.closing_meter_file\)/);
+  assert.match(editRoute, /opening_meter_file=CASE WHEN \$12<>'' THEN \$12 ELSE opening_meter_file END/);
+  assert.match(editRoute, /closing_meter_file=CASE WHEN \$15<>'' THEN \$15 ELSE closing_meter_file END/);
 });
