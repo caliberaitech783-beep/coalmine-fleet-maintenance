@@ -13,7 +13,10 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(hierarchySource, /Designation-wise WhatsApp report matrix/);
   assert.match(hierarchySource, /hierarchyReportGroups\.map/);
   assert.match(hierarchySource, /hierarchyReportTitles\.map/);
-  assert.match(hierarchySource, /activeRegion\?\.sites/);
+  assert.match(hierarchySource, /WCL and NCL site wise ticks/);
+  assert.match(hierarchySource, /hierarchySiteGroups\.flatMap/);
+  assert.match(hierarchySource, /hierarchySiteTitles/);
+  assert.doesNotMatch(hierarchySource, /activeRegion\?\.sites/);
   assert.match(hierarchySource, /toggleReport/);
   assert.match(hierarchySource, /toggleSite/);
   assert.match(source, /reportAccess/);

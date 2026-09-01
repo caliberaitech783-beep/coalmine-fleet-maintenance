@@ -1104,6 +1104,8 @@ const hierarchyDefaults = [
   {section:"OEM", designation:"Area Service engineer", level:"3", schedule:"Every 3rd day consolidate", reportAccess:hierarchyReportTitles[1]},
   {section:"OEM", designation:"Service Engineer / Site Service Engineer", level:"4", schedule:"Every day consolidate", reportAccess:hierarchyReportTitles[1]},
 ];
+const hierarchySiteGroups = subsidiaryData.map((region) => ({code:region.code, name:region.name, sites:region.sites}));
+const hierarchySiteTitles = hierarchySiteGroups.flatMap((region) => region.sites);
 const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
 function privilegeSelectionValue(value) {
   if (typeof value !== "string") return "";
@@ -4710,10 +4712,8 @@ const regionSites = (record = {}) => String(record.sites || "")
 const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).map((item) => item.trim()).filter(Boolean);
 
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
-  const [activeRegionCode, setActiveRegionCode] = useState("WCL");
   const [savingKey, setSavingKey] = useState("");
   const [query, setQuery] = useState("");
-  const activeRegion = subsidiaryData.find((region) => region.code === activeRegionCode) || subsidiaryData[0];
   const byDesignation = new Map(records.map((record) => [String(record.designation || "").trim().toLowerCase(), record]));
   const rows = hierarchyDefaults.map((row, index) => {
     const stored = byDesignation.get(row.designation.toLowerCase()) || {};
@@ -4722,7 +4722,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       ...stored,
       rowKey: stored.id || `default-${index}`,
       reportAccess: stored.reportAccess || row.reportAccess || "",
-      siteAccess: Object.prototype.hasOwnProperty.call(stored, "siteAccess") ? stored.siteAccess : (activeRegion?.sites || []).join(" | "),
+      siteAccess: Object.prototype.hasOwnProperty.call(stored, "siteAccess") ? stored.siteAccess : hierarchySiteTitles.join(" | "),
     };
   }).filter((row) => matchesSmartSearch(query, row.section, row.designation, row.level, row.schedule));
   const saveRow = async (row, updates) => {
@@ -4767,11 +4767,11 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         <MasterActions name="Hierarchy master" records={rows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
       <div className="hierarchy-toolbar">
-        <div className="region-main-tabs hierarchy-region-tabs" role="tablist" aria-label="Hierarchy site region tabs">
-          {subsidiaryData.map((region) => (
-            <button key={region.code} type="button" role="tab" aria-selected={activeRegionCode === region.code} className={activeRegionCode === region.code ? "active" : ""} onClick={() => setActiveRegionCode(region.code)}>
+        <div className="region-main-tabs hierarchy-region-tabs" aria-label="Hierarchy site regions">
+          {hierarchySiteGroups.map((region) => (
+            <button key={region.code} type="button">
               <Building2 />
-              <span><b>{region.code}</b><small>{region.name}</small></span>
+              <span><b>{region.code}</b><small>{region.sites.length} sites · {region.name}</small></span>
             </button>
           ))}
         </div>
@@ -4779,7 +4779,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       </div>
       <div className="hierarchy-site-strip">
         <MapPin />
-        <div><b>{activeRegion?.code} site wise ticks</b><span>Select sites row-wise for report delivery and data scoping.</span></div>
+        <div><b>WCL and NCL site wise ticks</b><span>Select sites row-wise for report delivery and data scoping.</span></div>
       </div>
       <div className="hierarchy-matrix-scroll">
         <table className="hierarchy-matrix">
@@ -4787,7 +4787,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
             <tr className="hierarchy-group-row">
               <th colSpan="4">Hierarchy Key Whatsapp Flow</th>
               {hierarchyReportGroups.map((group) => <th key={group.group} className={group.className} colSpan={group.reports.length}>{group.group}</th>)}
-              <th colSpan={activeRegion?.sites?.length || 1}>Site Wise</th>
+              {hierarchySiteGroups.map((region) => <th key={region.code} className="site-wise-region" colSpan={region.sites.length}>{region.code} Site Wise</th>)}
             </tr>
             <tr>
               <th>Section</th>
@@ -4795,7 +4795,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
               <th>Level</th>
               <th>Schedule</th>
               {hierarchyReportTitles.map((report, index) => <th key={report} title={report}>R{index + 1}<small>{report}</small></th>)}
-              {(activeRegion?.sites || []).map((site) => <th key={site} title={site}>Site<small>{site}</small></th>)}
+              {hierarchySiteGroups.flatMap((region) => region.sites.map((site) => <th key={`${region.code}-${site}`} title={`${region.code} · ${site}`}>{region.code}<small>{site}</small></th>))}
             </tr>
           </thead>
           <tbody>
@@ -4813,15 +4813,15 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                       <input type="checkbox" aria-label={`${row.designation} ${report}`} checked={reports.has(report)} onChange={(event) => toggleReport(row, report, event.target.checked)} disabled={savingKey === row.rowKey} />
                     </td>
                   ))}
-                  {(activeRegion?.sites || []).map((site) => (
-                    <td key={site}>
-                      <input type="checkbox" aria-label={`${row.designation} ${site}`} checked={sites.has(site)} onChange={(event) => toggleSite(row, site, event.target.checked)} disabled={savingKey === row.rowKey} />
+                  {hierarchySiteGroups.flatMap((region) => region.sites.map((site) => (
+                    <td key={`${region.code}-${site}`}>
+                      <input type="checkbox" aria-label={`${row.designation} ${region.code} ${site}`} checked={sites.has(site)} onChange={(event) => toggleSite(row, site, event.target.checked)} disabled={savingKey === row.rowKey} />
                     </td>
-                  ))}
+                  )))}
                 </tr>
               );
             })}
-            {!rows.length && <tr><td colSpan={4 + hierarchyReportTitles.length + (activeRegion?.sites?.length || 1)} className="empty-state">No hierarchy rows match this search.</td></tr>}
+            {!rows.length && <tr><td colSpan={4 + hierarchyReportTitles.length + hierarchySiteTitles.length} className="empty-state">No hierarchy rows match this search.</td></tr>}
           </tbody>
         </table>
       </div>
