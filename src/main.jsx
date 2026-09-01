@@ -1470,6 +1470,27 @@ function exportFileName(title, extension) {
   const safeTitle = String(title || "nerve-center-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "nerve-center-report";
   return `${safeTitle}-${new Date().toISOString().slice(0, 10)}.${extension}`;
 }
+function CaliberActivityMark({ size = "medium" }) {
+  return (
+    <span className={`caliber-activity-mark ${size}`} aria-hidden="true">
+      <span className="caliber-activity-ring" />
+      <img src="/app-icon.png" alt="" />
+    </span>
+  );
+}
+function CaliberActivityOverlay({ message = "" }) {
+  if (!message) return null;
+  return createPortal(
+    <div className="caliber-activity-overlay" role="status" aria-live="polite" aria-label={message}>
+      <div className="caliber-activity-panel">
+        <CaliberActivityMark size="large" />
+        <strong>{message}</strong>
+        <span>Please wait while Nerve Center prepares your file.</span>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 function downloadExportFile(blob, filename) {
   const url = URL.createObjectURL(blob), link = document.createElement("a");
   link.href = url;
@@ -1563,7 +1584,7 @@ function buildXlsxWorkbook(title, columns, exportRows) {
   ]);
 }
 function ExportMenu({ title, columns = [], rows = [], className = "secondary", label = "Export" }) {
-  const [open, setOpen] = useState(false), [downloading, setDownloading] = useState(false);
+  const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
@@ -1590,14 +1611,23 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
       window.removeEventListener("scroll", positionMenu, true);
     };
   }, [open]);
-  const downloadExcel = () => {
-    downloadExportFile(buildXlsxWorkbook(title, columns, exportRows), exportFileName(title, "xlsx"));
+  const runDownload = (message, task) => {
+    if (downloadActivity) return;
     setOpen(false);
+    setDownloadActivity(message);
+    window.setTimeout(async () => {
+      const startedAt = Date.now();
+      try { await task(); }
+      catch (error) { alert(error.message); }
+      finally {
+        window.setTimeout(() => setDownloadActivity(""), Math.max(0, 450 - (Date.now() - startedAt)));
+      }
+    }, 50);
   };
-  const downloadPdf = async () => {
-    if (downloading) return;
-    setDownloading(true);
-    try {
+  const downloadExcel = () => runDownload("Preparing Excel report...", () => {
+    downloadExportFile(buildXlsxWorkbook(title, columns, exportRows), exportFileName(title, "xlsx"));
+  });
+  const downloadPdf = () => runDownload("Preparing PDF report...", async () => {
       const response = await fetch("/api/exports/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
@@ -1608,10 +1638,7 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
         throw new Error(details.error || "Could not create the PDF report.");
       }
       downloadExportFile(await response.blob(), exportFileName(title, "pdf"));
-      setOpen(false);
-    } catch (error) { alert(error.message); }
-    finally { setDownloading(false); }
-  };
+  });
   const printReport = () => {
     const headings = columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
     const body = exportRows.length ? exportRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No records available</td></tr>`;
@@ -1641,7 +1668,7 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
     }, 150);
     setOpen(false);
   };
-  return <div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={downloading}><Download /> {downloading ? "Preparing PDF..." : "Download as PDF"}</button><button type="button" role="menuitem" onClick={downloadExcel}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div>;
+  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
 }
 function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
   const [columnFilters, setColumnFilters] = useState({});
@@ -2320,7 +2347,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
 
             {importing && (
               <div className="import-loading" role="status" aria-live="polite">
-                <div className="import-loading-spinner" aria-hidden="true" />
+                <CaliberActivityMark size="small" />
                 <div>
                   <strong>Importing records...</strong>
                   <span>Please keep this window open while data is saved.</span>
@@ -4106,9 +4133,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         </div>,
         document.body,
       )}
+      <CaliberActivityOverlay message={reportZipDownloading ? "Preparing reports ZIP..." : ""} />
       <div className="toolbar reports-toolbar">
         <div><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
-        {loading && <span className="reports-loading" role="status">Updating live totals…</span>}
+        {loading && <span className="reports-loading" role="status"><CaliberActivityMark size="tiny" /> Updating live totals…</span>}
       </div>
       <div className="reports-category-tabs" role="tablist" aria-label="Report type tabs">
         {reportCategoryTabs.map((category) => (
@@ -4527,11 +4555,7 @@ function MasterLoader({ name }) {
         </div>
       </header>
       <div className="master-loader-content" role="status">
-        <div className="master-loader-spinner" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
+        <CaliberActivityMark size="large" />
         <strong>Loading {name.toLowerCase()}</strong>
         <p>Please wait while the live data is retrieved.</p>
         <div className="master-loader-lines" aria-hidden="true">

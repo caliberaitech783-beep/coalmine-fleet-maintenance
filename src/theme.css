@@ -262,6 +262,12 @@ textarea {
 :root[data-theme="dark"] .privilege-group-authority small { background: #203766; color: #b7ccff; }
 
 :root[data-theme="dark"] .master-loader-content strong { color: var(--ink); }
+:root[data-theme="dark"] .caliber-activity-panel {
+  background: #111d30;
+  border-color: #34435a;
+}
+:root[data-theme="dark"] .caliber-activity-panel strong { color: var(--ink); }
+:root[data-theme="dark"] .caliber-activity-panel > span:last-child { color: var(--muted); }
 :root[data-theme="dark"] .master-loader-lines i {
   background: linear-gradient(90deg, #1b293d 25%, #26364c 50%, #1b293d 75%);
   background-size: 200% 100%;

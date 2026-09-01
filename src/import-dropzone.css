@@ -64,7 +64,6 @@
 .import-progress span { width: 45%; height: 100%; margin: 0; border-radius: inherit; background: linear-gradient(90deg, #7549cf, #9a71e6); animation: import-progress 1s ease-in-out infinite alternate; }
 
 .import-loading { margin-top: 14px; padding: 13px 15px; border-radius: 11px; background: #eef4ff; display: flex; align-items: center; gap: 12px; color: #3159b9; }
-.import-loading-spinner { width: 28px; height: 28px; flex: 0 0 auto; border: 3px solid #d6e1fa; border-top-color: #315fd3; border-radius: 50%; animation: import-spin .8s linear infinite; }
 .import-loading strong, .import-loading span { display: block; }
 .import-loading strong { font-size: 11px; }
 .import-loading span { margin-top: 3px; color: #71809d; font-size: 9px; }
@@ -72,7 +71,6 @@
 .import-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 18px; }
 .import-actions button:disabled { opacity: .52; cursor: not-allowed; }
 
-@keyframes import-spin { to { transform: rotate(360deg); } }
 @keyframes import-progress { from { transform: translateX(-35%); } to { transform: translateX(155%); } }
 
 @media (max-width: 600px) {
@@ -85,6 +83,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .import-dropzone { transition: none; }
-  .import-loading-spinner { animation-duration: 2s; }
   .import-progress span { animation-duration: 2.5s; }
 }

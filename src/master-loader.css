@@ -12,36 +12,98 @@
   text-align: center;
 }
 
-.master-loader-spinner {
-  width: 56px;
-  height: 56px;
-  margin-bottom: 18px;
+.caliber-activity-mark {
+  --caliber-loader-size: 46px;
+  --caliber-logo-size: 28px;
+  width: var(--caliber-loader-size);
+  height: var(--caliber-loader-size);
   position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
 }
 
-.master-loader-spinner span {
+.caliber-activity-mark.large {
+  --caliber-loader-size: 64px;
+  --caliber-logo-size: 39px;
+}
+
+.caliber-activity-mark.small {
+  --caliber-loader-size: 34px;
+  --caliber-logo-size: 20px;
+}
+
+.caliber-activity-mark.tiny {
+  --caliber-loader-size: 22px;
+  --caliber-logo-size: 13px;
+}
+
+.caliber-activity-ring {
   position: absolute;
   inset: 0;
-  border: 3px solid transparent;
   border-radius: 50%;
+  background: conic-gradient(from 0deg, #315fd3 0 31%, #f49a42 31% 61%, #37a47b 61% 83%, #dce5f4 83% 100%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 0);
   animation: master-loader-spin 1.15s linear infinite;
 }
 
-.master-loader-spinner span:nth-child(1) {
-  border-top-color: #315fd3;
+.caliber-activity-mark.small .caliber-activity-ring,
+.caliber-activity-mark.tiny .caliber-activity-ring {
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 0);
 }
 
-.master-loader-spinner span:nth-child(2) {
-  inset: 8px;
-  border-right-color: #f49a42;
-  animation-direction: reverse;
-  animation-duration: .9s;
+.caliber-activity-mark img {
+  width: var(--caliber-logo-size);
+  height: var(--caliber-logo-size);
+  position: relative;
+  z-index: 1;
+  display: block;
+  border-radius: 7px;
+  object-fit: contain;
+  box-shadow: 0 3px 10px #17233c24;
 }
 
-.master-loader-spinner span:nth-child(3) {
-  inset: 18px;
-  border-bottom-color: #37a47b;
-  animation-duration: .7s;
+.master-loader-content > .caliber-activity-mark {
+  margin-bottom: 18px;
+}
+
+.caliber-activity-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #0b1730a3;
+  backdrop-filter: blur(2px);
+}
+
+.caliber-activity-panel {
+  width: min(320px, calc(100vw - 32px));
+  min-height: 190px;
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border: 1px solid #dfe6f2;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 70px #07112652;
+  text-align: center;
+}
+
+.caliber-activity-panel strong {
+  color: #17233c;
+  font: 800 15px Manrope;
+}
+
+.caliber-activity-panel > span:last-child {
+  color: #71809d;
+  font-size: 10px;
 }
 
 .master-loader-content strong {
@@ -89,6 +151,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .master-loader-spinner span,
+  .caliber-activity-ring,
   .master-loader-lines i { animation-duration: 3s; }
 }
