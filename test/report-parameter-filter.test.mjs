@@ -10,6 +10,9 @@ test("report views expose a visible all-parameter filter beside status controls"
 
   assert.match(source, /function TableParameterFilter\(/);
   assert.match(source, /aria-label="Filter report parameters"/);
+  assert.match(source, /const \[valueSearches, setValueSearches\] = useState\(\{\}\);/);
+  assert.match(source, /placeholder=\{`Search \$\{column\.label\}`\}/);
+  assert.match(source, /matchesSmartSearch\(valueSearches\[column\.key\] \|\| "", value\)/);
   assert.match(source, /function tableRowMatchesFilters\(/);
   assert.match(breakdown, /<TableParameterFilter columns=\{filterColumns\}/);
   assert.match(breakdown, /tableRowMatchesFilters\(row, filterColumns, parameterFilters\)/);
