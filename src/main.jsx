@@ -2351,10 +2351,13 @@ function Equipment({
           .filter(Boolean),
       ]),
     ];
+  const roadStatusFor = (record) => Array.isArray(statusRequests)
+    ? liveEquipmentRoadStatus(record, statusRequests)
+    : equipmentRoadStatus(record);
   let rows = records.filter(
     (v) =>
       (road === "all" ||
-        (Array.isArray(statusRequests) ? liveEquipmentRoadStatus(v, statusRequests) : equipmentRoadStatus(v)) === road) &&
+        roadStatusFor(v) === road) &&
       (assetCategory === "all" || String(v.category || "").trim().toLowerCase() === assetCategory) &&
       (!allowedLocations.length || allowedLocations.some((site) => recordBelongsToSite(v, site))) &&
       (!location || (v.currentLocation || v.location) === location) &&
@@ -2490,7 +2493,7 @@ function Equipment({
                   <td>{v.engineNo}</td>
                   <td>{v.chassisNo}</td>
                   <td>{v.documentStatus}</td>
-                  <td><Status>{equipmentRoadStatus(v)==="onroad"?"On road":equipmentRoadStatus(v)==="offroad"?"Off road":equipmentRoadStatus(v)==="idle"?"Idle":"Status not set"}</Status></td>
+                  <td><Status>{roadStatusFor(v)==="onroad"?"On road":roadStatusFor(v)==="offroad"?"Off road":roadStatusFor(v)==="idle"?"Idle":"Status not set"}</Status></td>
                   <td className="row-actions" onClick={(event) => event.stopPropagation()}>
                     {v.id ? (
                       <>
@@ -2527,7 +2530,7 @@ function Equipment({
                 {detail.make} {detail.model} · {detail.reg}
               </p>
             </div>
-            <Status>{equipmentRoadStatus(detail)==="onroad"?"On road":equipmentRoadStatus(detail)==="offroad"?"Off road":equipmentRoadStatus(detail)==="idle"?"Idle":"Status not set"}</Status>
+            <Status>{roadStatusFor(detail)==="onroad"?"On road":roadStatusFor(detail)==="offroad"?"Off road":roadStatusFor(detail)==="idle"?"Idle":"Status not set"}</Status>
           </div>
           <div className="details">
             {Object.entries(detail)
@@ -4901,7 +4904,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   );
 }
 
-function RegionMasterPage({ records = [], onAdd, onDeleteAll, gotoEquipment }) {
+function RegionMasterPage({ records = [], requests = [], onAdd, onDeleteAll, gotoEquipment }) {
   const normalizedRegions = records.map((record, index) => ({
     ...record,
     code: String(record.code || record.shortName || "").trim() || `REG-${index + 1}`,
@@ -4919,7 +4922,8 @@ function RegionMasterPage({ records = [], onAdd, onDeleteAll, gotoEquipment }) {
   const visibleSites = (activeRegion?.sitesList || []).filter((site) => matchesSmartSearch(query, activeRegion?.name, activeRegion?.code, site));
   const siteMetrics = (site) => {
     const siteRecords = equipmentRecords.filter((record) => recordBelongsToSite(record, site));
-    const metrics = equipmentMetrics(siteRecords);
+    const siteRequests = requests.filter((record) => recordBelongsToSite(record, site));
+    const metrics = liveEquipmentMetrics(siteRecords, siteRequests);
     return { total: siteRecords.length, onRoad: metrics.onRoad, offRoad: metrics.offRoad, idle: metrics.idle };
   };
   const regionTotals = (activeRegion?.sitesList || []).reduce((totals, site) => {
@@ -5035,13 +5039,13 @@ Generic = function GenericWithMasters(props) {
   );
 };
 const OriginalSubsidiaries = Subsidiaries;
-Subsidiaries = function SubsidiariesWithImport({ gotoEquipment } = {}) {
+Subsidiaries = function SubsidiariesWithImport({ gotoEquipment, requests = [] } = {}) {
   const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
   if (!loaded) return <MasterLoader name="Region master" />;
-  return <RegionMasterPage records={records} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
+  return <RegionMasterPage records={records} requests={requests} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
 function Modal({ title, close, children, className = "" }) {
   return (
@@ -5926,11 +5930,12 @@ function App() {
               initialFilter={equipmentFilter}
               initialLocation={equipmentLocation}
               initialCategory={equipmentCategory}
+              statusRequests={requests}
             />
           ) : active === "Breakdown master" ? (
             breakdownFleetFilter ? <Equipment initialFilter={breakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={breakdownFleetSites} /> : <Breakdown requests={requests} />
           ) : active === "Region master" ? (
-            <Subsidiaries gotoEquipment={gotoEquipment} />
+            <Subsidiaries gotoEquipment={gotoEquipment} requests={requests} />
           ) : active === "WhatsApp alert history" ? (
             <WhatsAppAlertHistory />
           ) : active === "Reports" ? (

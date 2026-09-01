@@ -12,5 +12,6 @@ test("road availability KPIs open live-state equipment drilldowns", () => {
   assert.match(source, /rowsForAssetDrilldown = \(key = ""\)/);
   assert.match(source, /liveEquipmentRoadStatus\(record, visibleBreakdowns\) === key/);
   assert.match(source, /active === "Breakdown master"[\s\S]*<Equipment initialFilter=\{breakdownFleetFilter\} pageTitle="Breakdown master" statusRequests=\{requests\} allowedLocations=\{breakdownFleetSites\}/);
-  assert.match(source, /liveEquipmentRoadStatus\(v, statusRequests\)/);
+  assert.match(source, /const roadStatusFor = \(record\) => Array\.isArray\(statusRequests\)[\s\S]*liveEquipmentRoadStatus\(record, statusRequests\)/);
+  assert.match(source, /roadStatusFor\(v\) === road/);
 });
