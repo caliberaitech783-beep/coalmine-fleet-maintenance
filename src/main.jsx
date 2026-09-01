@@ -1362,7 +1362,6 @@ function tableRowMatchesFilters(row, columns, filters) {
 }
 function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterChange, onClearFilters, label = "Filter" }) {
   const [open, setOpen] = useState(false);
-  const [valueSearches, setValueSearches] = useState({});
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const activeFilterCount = columns.filter((column) => filters[column.key]).length;
@@ -1379,9 +1378,6 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
     };
     document.addEventListener("mousedown", closeFilter);
     return () => document.removeEventListener("mousedown", closeFilter);
-  }, [open]);
-  useEffect(() => {
-    if (!open) setValueSearches({});
   }, [open]);
   useEffect(() => {
     if (!open) return undefined;
@@ -1414,13 +1410,13 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
           <div className="table-parameter-filter-head"><div><strong>Filter report</strong><span>Choose values to compare report records.</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Close report filters" title="Close"><X /></button></div>
           <div className="table-parameter-filter-fields">
             {columns.map((column) => (
-              <label key={column.key}><span>{column.label}</span><input data-smart-search type="search" value={valueSearches[column.key] || ""} onChange={(event) => setValueSearches((current) => ({ ...current, [column.key]: event.target.value }))} placeholder={`Search ${column.label}`} aria-label={`Search ${column.label} values`} /><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
+              <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
                 <option value="">All {column.label}</option>
-                {columnValues[column.key].filter((value) => matchesSmartSearch(valueSearches[column.key] || "", value)).map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
+                {columnValues[column.key].map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
               </select></label>
             ))}
           </div>
-          <div className="table-parameter-filter-foot"><button type="button" onClick={() => { setValueSearches({}); onClearFilters(); }} disabled={!activeFilterCount && !Object.values(valueSearches).some(Boolean)}><X /> Clear filters</button></div>
+          <div className="table-parameter-filter-foot"><button type="button" onClick={onClearFilters} disabled={!activeFilterCount}><X /> Clear filters</button></div>
         </div>,
         document.body,
       )}
