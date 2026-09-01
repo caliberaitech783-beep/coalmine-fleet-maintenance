@@ -5,8 +5,14 @@ import test from "node:test";
 const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/style.css", import.meta.url), "utf8");
 
-test("recent breakdown cases enables its local started-date filter", () => {
-  assert.match(source, /<BreakdownTable rows=\{visibleBreakdowns\} showMakeModel showDateFilter rowLimit=\{5\} \/>/);
+test("dashboard replaces recent cases with a site-wise selectable breakdown trend", () => {
+  assert.doesNotMatch(source, /<BreakdownTable rows=\{visibleBreakdowns\} showMakeModel showDateFilter rowLimit=\{5\} \/>/);
+  assert.match(source, /className="mine-panel mine-breakdown-trend"/);
+  assert.match(source, /\[breakdownTrendDays, setBreakdownTrendDays\] = useState\(7\)/);
+  assert.match(source, /\[breakdownTrendSite, setBreakdownTrendSite\] = useState\("all"\)/);
+  assert.match(source, /\[7, 14, 30\]\.map/);
+  assert.match(source, /aria-label="Breakdown trend site"/);
+  assert.match(source, /breakdownTrendSites\.map/);
   assert.match(source, /showDateFilter = false, rowLimit = 0/);
   assert.match(source, /\[dateFilter, setDateFilter\] = useState\(""\)/);
   assert.match(source, /dashboardRecordDate\(row\) === dateFilter/);

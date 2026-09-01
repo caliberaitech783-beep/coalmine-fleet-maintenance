@@ -7,9 +7,9 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 test("all operational KPI cards open category, group, and full-detail drilldowns", () => {
   assert.match(source, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
   assert.match(source, /openAssetDrilldown\("open-cases"\)/);
-  assert.match(source, /openAssetDrilldown\(selectedRegion \? `region:\$\{selectedRegion\.code\}` : "all"\)/);
   assert.match(source, /openAssetDrilldown\(`region:\$\{region\.code\}`\)/);
-  assert.match(source, /openAssetDrilldown\(`group:\$\{label\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`group:\$\{group\.label\}`\)/);
   assert.match(source, /openAssetDrilldown\(`status:\$\{status\}`\)/);
   assert.match(source, /Step 1 · Select equipment category/);
   assert.match(source, /Step 2 · Select equipment group/);

@@ -533,9 +533,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
-  const configuredReportNav = reportCategoryTabs.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
-  const visibleReportNav = configuredReportNav.length ? configuredReportNav : reportCategoryTabs;
-  const canViewReports = true;
+  const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
+  const departmentReportNav = reportCategoryTabs.filter((category) => visibleReportCategoryIds.includes(category.id));
+  const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
+  const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
+  const canViewReports = visibleReportNav.length > 0;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   return (
     <aside className={open ? "open" : ""}>
@@ -761,6 +763,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
   const [dashboardDate, setDashboardDate] = useState("");
+  const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
+  const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
@@ -786,6 +790,27 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const locationBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
   const visibleBreakdowns = (dashboardDate ? locationBreakdowns.filter((record) => dashboardRecordDate(record) === dashboardDate) : locationBreakdowns)
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
+  const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
+    .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
+  const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
+  const trendEndDate = dashboardDate ? new Date(`${dashboardDate}T12:00:00`) : new Date();
+  const trendDateKeys = Array.from({ length: breakdownTrendDays }, (_, index) => {
+    const date = new Date(trendEndDate);
+    date.setDate(date.getDate() - (breakdownTrendDays - index - 1));
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  });
+  const trendRangeRequests = locationBreakdowns.filter((record) => {
+    const date = dashboardRecordDate(record);
+    return date >= trendDateKeys[0] && date <= trendDateKeys[trendDateKeys.length - 1];
+  });
+  const trendRequests = activeTrendSite === "all" ? trendRangeRequests : trendRangeRequests.filter((record) => recordBelongsToSite(record, activeTrendSite));
+  const breakdownTrend = trendDateKeys.map((date) => ({ date, count: trendRequests.filter((record) => dashboardRecordDate(record) === date).length }));
+  const maxBreakdownTrend = Math.max(1, ...breakdownTrend.map((day) => day.count));
+  const breakdownTrendTotal = trendRequests.length;
+  const breakdownTrendAverage = breakdownTrendDays ? (breakdownTrendTotal / breakdownTrendDays).toFixed(1) : "0.0";
+  const breakdownTrendPeak = breakdownTrend.reduce((peak, day) => day.count > peak.count ? day : peak, { date: trendDateKeys[0], count: 0 });
+  const breakdownTrendSites = trendAvailableSites.map((site) => ({ site, count: trendRangeRequests.filter((record) => recordBelongsToSite(record, site)).length })).sort((a, b) => b.count - a.count);
+  const maxBreakdownTrendSite = Math.max(1, ...breakdownTrendSites.map((site) => site.count));
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
   const userCounts = visibleUsers.reduce((counts, record) => {
     const type = String(record.userType || record.role || "").toLowerCase();
@@ -794,12 +819,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     else if (type.includes("admin")) counts.admin += 1;
     return counts;
   }, { mobile: 0, super: 0, admin: 0 });
-  const typeCounts = visibleEquipment.reduce((counts, record) => {
-    const label = String(record.group || record.category || record.itemName || "Unclassified").trim() || "Unclassified";
-    counts[label] = (counts[label] || 0) + 1;
-    return counts;
-  }, {});
-  const vehicleTypes = Object.entries(typeCounts).sort((a, b) => b[1] - a[1]);
   const repairTypeCards = [...new Map(
     repairTypeRecords
       .map((record) => String(record.repairType || "").trim())
@@ -810,8 +829,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === label.toLowerCase()).length,
     "Breakdown requests",
   ]);
-  const regionBars = availableRegions.filter((region) => !selectedRegion || region.code === selectedRegion.code).map((region) => ({ ...region, total: scopedEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))).length }));
-  const maxRegionTotal = Math.max(1, ...regionBars.map((region) => region.total));
   const openCaseRequests = activeOpenCases(visibleBreakdowns);
   const activeBreakdowns = openCaseRequests.length;
   const assetCounts = fleetAssetCounts(visibleEquipment);
@@ -824,6 +841,26 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     counts[label] = (counts[label] || 0) + 1;
     return counts;
   }, {})).sort((a, b) => b[1] - a[1]);
+  const fleetGroupInsights = summarizeEquipment(visibleEquipment).map(([label, total]) => {
+    const records = visibleEquipment.filter((record) => equipmentGroupLabel(record) === label);
+    return { label, total, ...fleetAssetCounts(records) };
+  });
+  const maxFleetGroupTotal = Math.max(1, ...fleetGroupInsights.map((group) => group.total));
+  const fleetRegionInsights = availableRegions
+    .filter((region) => !selectedRegion || region.code === selectedRegion.code)
+    .map((region) => {
+      const sites = region.sites
+        .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)))
+        .filter((site) => dashboardSite === "all" || site === dashboardSite)
+        .map((site) => {
+          const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
+          return { name: site, ...fleetAssetCounts(records) };
+        });
+      const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
+      return { ...region, sites, ...fleetAssetCounts(records) };
+    });
+  const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
+  const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
     return {
@@ -851,6 +888,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const region = availableRegions.find((item) => item.code === key.slice(7));
       return region ? visibleEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))) : [];
     }
+    if (key.startsWith("site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(5)));
     if (key.startsWith("group:")) return visibleEquipment.filter((record) => equipmentGroupLabel(record) === key.slice(6));
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
@@ -863,7 +901,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const assetCategoryBreakdown = summarizeEquipment(assetDrilldownRows, equipmentCategoryLabel);
   const assetGroupBreakdown = summarizeEquipment(assetCategoryRows);
   const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:");
-  const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
+  const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
     setAssetDrilldownCategory("");
@@ -927,15 +965,54 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       <section className="mine-counter-grid" aria-label="Mining fleet summary">
         {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
       </section>
-      <section className="mine-dashboard-grid">
+      <section className="mine-dashboard-grid mine-dashboard-core">
+        <article className="mine-panel mine-fleet-command mine-span-2">
+          <header className="mine-fleet-command-head">
+            <div><span className="mine-eyebrow">Fleet registry</span><h2>Total equipment intelligence</h2><p>Category, equipment group, region and site-wise fleet distribution</p></div>
+            <button type="button" onClick={() => openAssetDrilldown("all")}>View full fleet <ChevronRight /></button>
+          </header>
+          <div className="mine-fleet-command-body">
+            <section className="mine-fleet-category" aria-label="Equipment and vehicle bifurcation">
+              <div className="mine-fleet-section-title"><span>Asset category</span><b>{assetCounts.total.toLocaleString()} total</b></div>
+              <button type="button" className="mine-fleet-category-card equipment" onClick={() => openAssetDrilldown("equipment")}>
+                <span className="mine-fleet-category-icon"><Wrench /></span><span><b>Equipment</b><small>Non-vehicle mining assets</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong><em>{equipmentShare}%</em>
+              </button>
+              <button type="button" className="mine-fleet-category-card vehicle" onClick={() => openAssetDrilldown("vehicle")}>
+                <span className="mine-fleet-category-icon"><Truck /></span><span><b>Vehicles</b><small>Registered mobile fleet</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong><em>{vehicleShare}%</em>
+              </button>
+              <div className="mine-fleet-share" aria-label={`${equipmentShare}% equipment and ${vehicleShare}% vehicles`}><i style={{ width: `${equipmentShare}%` }} /><i style={{ width: `${vehicleShare}%` }} /></div>
+              <div className="mine-fleet-share-legend"><span><i />Equipment</span><span><i />Vehicles</span></div>
+            </section>
+            <section className="mine-fleet-groups" aria-label="Equipment groups">
+              <div className="mine-fleet-section-title"><span>Equipment groups</span><b>{fleetGroupInsights.length} groups</b></div>
+              <div className="mine-fleet-group-list">{fleetGroupInsights.length ? fleetGroupInsights.map((group) => <button type="button" key={group.label} onClick={() => openAssetDrilldown(`group:${group.label}`)}>
+                <span className="mine-fleet-group-rank">{String(fleetGroupInsights.indexOf(group) + 1).padStart(2, "0")}</span>
+                <span className="mine-fleet-group-name"><b>{group.label}</b><small>{group.equipment} equipment · {group.vehicles} vehicles</small><i><em style={{ width: `${(group.total / maxFleetGroupTotal) * 100}%` }} /></i></span>
+                <strong>{group.total.toLocaleString()}</strong><ChevronRight />
+              </button>) : <p className="mine-empty">No equipment groups available</p>}</div>
+            </section>
+            <section className="mine-fleet-geography" aria-label="Region and site-wise fleet">
+              <div className="mine-fleet-section-title"><span>Region &amp; site wise</span><b>{fleetRegionInsights.reduce((sum, region) => sum + region.sites.length, 0)} sites</b></div>
+              <div className="mine-fleet-region-list">{fleetRegionInsights.map((region) => <div className="mine-fleet-region" key={region.code}>
+                <button type="button" className="mine-fleet-region-head" onClick={() => openAssetDrilldown(`region:${region.code}`)}><span><Building2 /><b>{region.code}</b><small>{region.name}</small></span><span><strong>{region.total.toLocaleString()}</strong><small>{region.equipment} Eq. · {region.vehicles} Veh.</small></span><ChevronRight /></button>
+                <div className="mine-fleet-site-grid">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)}><MapPin /><span><b>{site.name}</b><small>{site.equipment} Eq. · {site.vehicles} Veh.</small></span><strong>{site.total.toLocaleString()}</strong></button>)}</div>
+              </div>)}</div>
+            </section>
+          </div>
+        </article>
         <article className="mine-panel mine-open-cases"><header><div><span className="mine-eyebrow">Maintenance workload</span><h2>Open cases</h2><p>Current action queue</p></div><button type="button" aria-label="Open case category drilldown" onClick={() => openAssetDrilldown("open-cases")}><ChevronRight /></button></header><button type="button" className="mine-open-cases-trigger" onClick={() => openAssetDrilldown("open-cases")}><div className="mine-big-number"><strong>{activeBreakdowns.toLocaleString()}</strong><span>Active breakdowns</span><small>{visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length.toLocaleString()} awaiting action</small></div><div className="mine-mini-bars"><span><i style={{ width: `${activeBreakdowns ? 100 : 0}%` }} />Active</span><span><i className="mine-bar-orange" style={{ width: `${activeBreakdowns ? Math.min(100, visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length / activeBreakdowns * 100) : 0}%` }} />Awaiting</span></div></button></article>
-        <article className="mine-panel"><header><div><span className="mine-eyebrow">Equipment by region</span><h2>Operating regions</h2><p>Registered assets across sites</p></div><button type="button" aria-label="Open operating region drilldown" onClick={() => openAssetDrilldown(selectedRegion ? `region:${selectedRegion.code}` : "all")}><ChevronRight /></button></header><div className="mine-region-bars">{regionBars.map((region) => <button type="button" key={region.code} onClick={() => openAssetDrilldown(`region:${region.code}`)}><span>{region.code}</span><div><i style={{ width: `${(region.total / maxRegionTotal) * 100}%` }} /></div><b>{region.total.toLocaleString()}</b></button>)}</div></article>
-        <article className="mine-panel"><header><div><span className="mine-eyebrow">Fleet composition</span><h2>Vehicle by group</h2><p>Most represented equipment categories</p></div></header><div className="mine-type-bars">{vehicleTypes.length ? vehicleTypes.map(([label, value]) => <button type="button" key={label} onClick={() => openAssetDrilldown(`group:${label}`)}><span>{label}</span><div><i style={{ width: `${(value / Math.max(1, vehicleTypes[0][1])) * 100}%` }} /></div><b>{value.toLocaleString()}</b></button>) : <p className="mine-empty">No equipment records yet</p>}</div></article>
       </section>
       {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{visibleUsers.length}</strong></div></Modal>}
       {showWorkloadBreakdown && <Modal title="Maintenance workload by status" close={() => setShowWorkloadBreakdown(false)}><div className="user-count-drilldown workload-status-drilldown">{Object.entries(workloadCounts).map(([status, count]) => <button type="button" key={status} onClick={() => { setShowWorkloadBreakdown(false); openAssetDrilldown(`status:${status}`); }}><Wrench /><span>{status}</span><strong>{count.toLocaleString()}</strong></button>)}</div><div className="user-count-total"><span>Active maintenance workload</span><strong>{activeBreakdowns.toLocaleString()}</strong></div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={`${assetDrilldownTitle} · ${assetDrilldownRows.length}`} close={() => { setAssetDrilldown(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><div className="dashboard-asset-drilldown"><section><h4>Step 1 · Select equipment category</h4><div className="dashboard-asset-summary">{assetCategoryBreakdown.length ? assetCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment records found</p>}</div></section>{assetDrilldownCategory && <section><h4>Step 2 · Select equipment group</h4><div className="dashboard-asset-groups">{assetGroupBreakdown.length ? assetGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No equipment group found</p>}</div></section>}{assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><table><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}</tr>)}</tbody></table></div></section>}</div></Modal>}
-      <section className="mine-panel mine-recent"><header><div><span className="mine-eyebrow">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest maintenance activity" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns} showMakeModel showDateFilter rowLimit={5} /></section>
+      <section className="mine-panel mine-breakdown-trend">
+        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Site-wise breakdown volume across the selected period</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
+        <div className="mine-breakdown-trend-body">
+          <div className="mine-trend-summary"><article><span>Total breakdowns</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendDays}-day period</small></article><article><span>Daily average</span><strong>{breakdownTrendAverage}</strong><small>Breakdowns per day</small></article><article><span>Peak day</span><strong>{breakdownTrendPeak.count.toLocaleString()}</strong><small>{new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${breakdownTrendPeak.date}T12:00:00`))}</small></article></div>
+          <div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day breakdown chart`}>{breakdownTrend.map((day, index) => <div className="mine-trend-day" key={day.date} title={`${day.date}: ${day.count} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div>
+          <aside className="mine-trend-sites"><div className="mine-fleet-section-title"><span>Site ranking</span><b>{breakdownTrendSites.length} sites</b></div><div>{breakdownTrendSites.length ? breakdownTrendSites.map((site) => <button type="button" key={site.site} className={activeTrendSite === site.site ? "active" : ""} onClick={() => setBreakdownTrendSite((current) => current === site.site ? "all" : site.site)}><MapPin /><span><b>{site.site}</b><i><em style={{ width: `${(site.count / maxBreakdownTrendSite) * 100}%` }} /></i></span><strong>{site.count.toLocaleString()}</strong></button>) : <p className="mine-empty">No site breakdowns in this period</p>}</div></aside>
+        </div>
+      </section>
     </div>
   );
 }
@@ -2143,17 +2220,25 @@ function applyUserRoleDefaults(record) {
       record.managerRole=selectedManagerRoles.join(" | ");
       record.managerRegion=managerRegionSelection(record.managerRegion).join(" | ");
       record.managerSites=managerSiteSelection(record.managerSites).join(" | ");
-      if(!selectedManagerRoles.length)return record;
       const tabs = new Set(String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
       tabs.add("Dashboard");
+      tabs.add("Reports");
       tabs.add("Tickets");
       record.tabAccess = [...tabs].join(" | ");
       record.dashboardAccess = "Dashboard";
+      const departmentReportLabels = new Set(["Reports", "General Report"]);
+      if (!selectedManagerRoles.length || selectedManagerRoles.includes("Production Manager")) departmentReportLabels.add("Production report");
+      if (!selectedManagerRoles.length || selectedManagerRoles.includes("Maintenance Manager")) departmentReportLabels.add("Maintenance report");
+      if (!selectedManagerRoles.length || selectedManagerRoles.includes("MIS Manager")) departmentReportLabels.add("MIS Report");
+      record.reportAccess = [...departmentReportLabels].join(" | ");
       const mobileTabs = new Set(String(record.mobileTabAccess || record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
       mobileTabs.add("Dashboard");
+      mobileTabs.add("Reports");
       mobileTabs.add("Tickets");
       record.mobileTabAccess = [...mobileTabs].join(" | ");
       record.mobileDashboardAccess = "Dashboard";
+      record.mobileReportAccess = record.reportAccess;
+      if(!selectedManagerRoles.length)return record;
       if (selectedManagerRoles.some((role)=>role !== "MIS Manager")) {
         const masters = new Set(String(record.masterAccess || "").split(/\s*\|\s*/).filter(Boolean));
         masters.add("Equipment master");
@@ -3943,6 +4028,30 @@ function reportScheduleKind(schedule) {
 function reportAccessAllows(selection, label) {
   return accessAllows(selection, "Reports") || accessAllows(selection, label);
 }
+function reportCategoryIdsForUser(permissions = {}, session = {}) {
+  const adminLevel = String(permissions.adminLevel || "").trim();
+  if (["Admin", "Super Admin"].includes(adminLevel) || (session.role === "super" && adminLevel !== "Manager")) return reportCategoryTabs.map((category) => category.id);
+  const roleText = [
+    ...(Array.isArray(permissions.managerRoles) ? permissions.managerRoles : []),
+    permissions.managerRole,
+    permissions.department,
+    session.assignedRole,
+    session.department,
+    session.designation,
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (adminLevel === "Manager" && (!roleText || roleText.includes("project manager") || roleText.includes("director"))) {
+    return reportCategoryTabs.map((category) => category.id);
+  }
+  const categoryIds = new Set(["general"]);
+  if (roleText.includes("production")) categoryIds.add("production");
+  if (roleText.includes("maintenance")) categoryIds.add("maintenance");
+  if (roleText.includes("mis")) categoryIds.add("mis");
+  const departmentScoped = categoryIds.size > 1 || adminLevel === "Manager";
+  return reportCategoryTabs
+    .filter((category) => categoryIds.has(category.id))
+    .filter((category) => departmentScoped || reportAccessAllows(permissions.reportAccess, category.label))
+    .map((category) => category.id);
+}
 function firstTripTimestamp(request) {
   const date = String(request.firstTripDate || "").trim();
   const time = String(request.firstTripTime || "").trim();
@@ -3996,7 +4105,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
     </div>
   );
 }
-function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, session = null }) {
+function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [transferRecords] = useMasterRecords("Vehicle transfers");
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
@@ -4015,6 +4124,12 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [reportZipFrom, setReportZipFrom] = useState(() => indiaDateTimeInputValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [reportZipTo, setReportZipTo] = useState(() => indiaDateTimeInputValue(new Date(Date.now() + 60 * 1000)));
   const reportGeneratedAt = useMemo(() => indiaDateTimeInputValue(new Date()), []);
+  const allowedReportCategoryIds = reportCategoryIdsForUser(permissions, session);
+  const departmentReportCategoryTabs = reportCategoryTabs.filter((category) => allowedReportCategoryIds.includes(category.id));
+  const reportToolRole = [permissions.adminLevel, permissions.managerRole, ...(permissions.managerRoles || []), session.designation]
+    .filter(Boolean).join(" ").toLowerCase();
+  const canUseReportWorkspaceTools = ["Admin", "Super Admin", "Manager"].includes(String(permissions.adminLevel || ""))
+    || reportToolRole.includes("project manager") || reportToolRole.includes("director");
 
   const equipmentByReference = useMemo(() => {
     const records = new Map();
@@ -4046,7 +4161,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
   const reportRequestStatus = (request) => String(request.status || "").trim() || "Open";
-  const activeCategory = reportCategoryTabs.find((category) => category.id === activeReportCategory) || reportCategoryTabs[0];
+  const activeCategory = departmentReportCategoryTabs.find((category) => category.id === activeReportCategory) || departmentReportCategoryTabs[0] || reportCategoryTabs[0];
   const openBreakdownRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
   const closedBreakdownRows = reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed");
   const misVerificationRows = reportRequests.filter((request) => String(request.verifiedAt || "").trim() || String(request.verifiedBy || "").trim());
@@ -4155,8 +4270,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
     ], dateValue: (row) => firstTripTimestamp(row) || row.verifiedAt, emptyMessage: "No idle first-trip verification records available"},
   ];
-  const accessibleReportGroups = reportAccess.canManageAll ? reportGroups : reportGroups.filter((report) => reportAccess.allowedReports.includes(report.title));
-  const availableReportCategories = reportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
+  const hierarchyAccessibleReportGroups = reportAccess.canManageAll || !reportAccess.allowedReports.length
+    ? reportGroups
+    : reportGroups.filter((report) => reportAccess.allowedReports.includes(report.title));
+  const accessibleReportGroups = hierarchyAccessibleReportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
+  const availableReportCategories = departmentReportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
   const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
   const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
   const selectReportTab = (report) => {
@@ -4291,10 +4409,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <h1>Reports</h1>
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
-        <div className="reports-header-actions">
+        {canUseReportWorkspaceTools && <div className="reports-header-actions">
           <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules} disabled={!reportAccessLoaded}><Clock /> Report schedules</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!reportAccessLoaded || !accessibleReportGroups.length}><Download /> Download reports ZIP</button>
-        </div>
+        </div>}
       </header>
       {directorTimingOpen && createPortal(
         <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
@@ -4332,7 +4450,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                     {schedule.cadence === "interval" && <label><span>Repeat every</span><div className="report-interval-input"><input type="number" min="2" max="31" value={schedule.intervalDays} onChange={(event) => updateReportSchedule(schedule.key, { intervalDays: Number(event.target.value) })} /><small>days</small></div></label>}
                     {schedule.cadence !== "event" && <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>}
                   </div>
-                  {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <div className="report-assigned-summary"><span>Assigned reports</span><b>{schedule.reports.length} available for this slot</b></div>}
+                  {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <div className="report-assigned-summary"><span>Assigned reports</span><b>{schedule.reports.filter((title) => accessibleReportGroups.some((report) => report.title === title)).length} available for this slot</b></div>}
                 </article>)}
                 <button type="button" className="report-add-schedule" onClick={addReportSchedule}><Plus /> Add schedule</button>
               </div>
@@ -4365,7 +4483,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
               </div>
             </div>
             <div className="report-zip-groups">
-              {reportCategoryTabs.map((category) => {
+              {availableReportCategories.map((category) => {
                 const categoryReports = accessibleReportGroups.filter((report) => report.category === category.id);
                 if (!categoryReports.length) return null;
                 return <section key={category.id}>
@@ -4394,9 +4512,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             key={category.id}
             type="button"
             role="tab"
-            aria-selected={activeReportCategory === category.id}
+            aria-selected={activeCategory.id === category.id}
             data-category={category.id}
-            className={activeReportCategory === category.id ? "active" : ""}
+            className={activeCategory.id === category.id ? "active" : ""}
             onClick={() => setActiveReportCategory(category.id)}
           >
             <span className="report-category-icon"><CategoryIcon aria-hidden="true" /></span>
@@ -6064,7 +6182,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const mobileRole = session?.assignedRole || "Mobile User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
-  const [mobileReportCategory,setMobileReportCategory]=useState("general");
+  const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardRequests,setDashboardRequests]=useState(requests);
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
@@ -6122,7 +6240,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
-      {!embedded&&section==="reports"&&<ReportsPage requests={requests} activeReportCategory={mobileReportCategory} setActiveReportCategory={setMobileReportCategory} session={session} />}
+      {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<>
       <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
@@ -6199,7 +6317,7 @@ function App() {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && accessAllows(activeNavigationPermissions.masterAccess, name);
     if (whatsappNav.some(([page]) => page === name)) return accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
-    if (name === "Reports") return true;
+    if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
@@ -6483,7 +6601,7 @@ function App() {
           ) : active === "WhatsApp alert history" ? (
             <WhatsAppAlertHistory />
           ) : active === "Reports" ? (
-            <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} session={session} />
+            <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
           ) : operationalSession ? (
             <Normal
               embedded

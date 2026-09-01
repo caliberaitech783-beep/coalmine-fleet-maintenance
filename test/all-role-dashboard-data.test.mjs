@@ -24,6 +24,9 @@ test("equipment and vehicle totals open a name list on every dashboard", () => {
   assert.match(client, /className="dashboard-asset-list"[\s\S]*Equipment name[\s\S]*equipmentName/);
   assert.match(client, /<Modal className="dashboard-asset-modal"/);
   assert.match(client, /Equipment category<\/th><th>Equipment group<\/th><th>Make<\/th><th>Model<\/th>/);
-  assert.match(client, /Recent breakdown cases[\s\S]*showMakeModel/);
+  assert.match(client, /<h2>Breakdown trend<\/h2>/);
+  assert.match(client, /aria-label="Breakdown trend site"/);
+  assert.match(client, /\[7, 14, 30\]\.map/);
+  assert.doesNotMatch(client, /<BreakdownTable rows=\{visibleBreakdowns\} showMakeModel showDateFilter rowLimit=\{5\}/);
   assert.match(client, /showMakeModel && <><td>\{r\.make \|\| "—"\}<\/td><td>\{r\.model \|\| "—"\}<\/td><\/>/);
 });
