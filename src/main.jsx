@@ -643,6 +643,14 @@ function formatTwelveHourDateTime(value) {
   return `${match[1]} ${hour%12||12}:${match[3]} ${hour>=12?"PM":"AM"}`;
 }
 
+function dashboardRecordDate(record = {}) {
+  for (const value of [record.start, record.startedAt, record.createdAt, record.closedAt, record.verifiedAt]) {
+    const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+  }
+  return "";
+}
+
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", requests = [], gotoEquipment, onApproveIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
@@ -715,8 +723,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [assetDrilldownGroup, setAssetDrilldownGroup] = useState("");
   const [openCaseSite, setOpenCaseSite] = useState("all");
   const [dashboardRegion, setDashboardRegion] = useState("all");
+  const [dashboardSite, setDashboardSite] = useState("all");
+  const [dashboardDate, setDashboardDate] = useState("");
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
+  const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
   const normalizedAllowedSites=Array.isArray(allowedSites)?allowedSites.filter(Boolean):null;
   const normalizedAllowedRegions=Array.isArray(allowedRegions)?allowedRegions.filter((region)=>region&&region!=="All"):null;
   const scopedEquipment=normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords;
@@ -727,15 +738,18 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
   });
   const selectedRegion = availableRegions.find((region) => region.code === dashboardRegion);
-  const selectedSites = selectedRegion?.sites || [];
-  const visibleEquipment = selectedRegion ? scopedEquipment.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment;
+  const selectedSites = (selectedRegion?.sites || []).filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)));
+  const activeSites = dashboardSite !== "all" ? [dashboardSite] : selectedSites;
+  const visibleEquipment = selectedRegion ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment;
+  const visibleUsers = selectedRegion ? scopedUsers.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedUsers;
   const equipmentByReference=new Map();
   visibleEquipment.forEach((record)=>[record.manufacturerSerialNo,record.chassisNo,record.door,record.reg,record.equipmentName]
     .map((value)=>String(value||"").trim().toLowerCase()).filter(Boolean).forEach((key)=>equipmentByReference.set(key,record)));
-  const visibleBreakdowns = (selectedRegion ? scopedBreakdowns.filter((record) => selectedSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns)
+  const locationBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
+  const visibleBreakdowns = (dashboardDate ? locationBreakdowns.filter((record) => dashboardRecordDate(record) === dashboardDate) : locationBreakdowns)
     .map((record)=>{const equipment=[record.chassis,record.door,record.equipment].map((value)=>String(value||"").trim().toLowerCase()).filter(Boolean).map((key)=>equipmentByReference.get(key)).find(Boolean);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
-  const userCounts = scopedUsers.reduce((counts, record) => {
+  const userCounts = visibleUsers.reduce((counts, record) => {
     const type = String(record.userType || record.role || "").toLowerCase();
     if (type.includes("mobile") || type.includes("normal")) counts.mobile += 1;
     else if (type.includes("super")) counts.super += 1;
@@ -814,7 +828,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
         <div><span className="mine-brandmark">NC</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
-        <div className="mine-head-actions"><label><span>Region</span><select value={dashboardRegion} onChange={(event) => setDashboardRegion(event.target.value)}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label><span className="mine-updated"><Activity /> Live · {dateLabel}</span></div>
+        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); setOpenCaseSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => { setDashboardSite(event.target.value); setOpenCaseSite("all"); }}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => { setDashboardDate(event.target.value); setOpenCaseSite("all"); }} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <section className="mine-overview-charts" aria-label="Fleet overview charts">
         <article className="mine-overview-chart">
