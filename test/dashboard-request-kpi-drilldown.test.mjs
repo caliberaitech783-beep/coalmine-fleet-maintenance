@@ -1,0 +1,26 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import test from "node:test";
+
+const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+
+test("all operational KPI cards open category, group, and full-detail drilldowns", () => {
+  assert.match(source, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
+  assert.match(source, /openAssetDrilldown\("open-cases"\)/);
+  assert.match(source, /openAssetDrilldown\(selectedRegion \? `region:\$\{selectedRegion\.code\}` : "all"\)/);
+  assert.match(source, /openAssetDrilldown\(`region:\$\{region\.code\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`group:\$\{label\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`status:\$\{status\}`\)/);
+  assert.match(source, /Step 1 · Select equipment category/);
+  assert.match(source, /Step 2 · Select equipment group/);
+  assert.match(source, /Step 3 · Full details for/);
+});
+
+test("request KPI drilldowns merge job fields with Equipment Master details", () => {
+  assert.match(source, /const requestAssetRows = \(requestRows = \[\]\)/);
+  assert.match(source, /const equipment = equipmentForRequest\(request\)/);
+  assert.match(source, /requestReference: request\.ref \|\| request\.reference/);
+  assert.match(source, /requestAssetDrilldown && <th>Job reference<\/th>/);
+  assert.match(source, /<th>Repair category<\/th><th>Status<\/th><th>Started<\/th>/);
+  assert.match(source, /<Status>\{record\.requestStatus\}<\/Status>/);
+});
