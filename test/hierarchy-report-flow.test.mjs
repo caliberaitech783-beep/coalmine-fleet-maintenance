@@ -72,6 +72,19 @@ test('saved schedule settings sanitize recipients, times and unsupported report 
   assert.deepEqual(settings.designations.director.schedules[0].reports,[DIRECTOR_REPORT_TITLES[0]]);
 });
 
+test('saved schedules migrate legacy report names to the renamed catalogue',()=>{
+  const settings=normalizeHierarchyReportScheduleSettings({designations:{director:{schedules:[{
+    key:'legacy',cadence:'daily',times:['19:00'],reports:[
+      'Location wise Open BD report with Category (Prod)',
+      'Idle Verification v/s MIS First Trip verification',
+    ],
+  }]}}});
+  assert.deepEqual(settings.designations.director.schedules[0].reports,[
+    'Location wise opened BD',
+    'On Road with first trip veri.',
+  ]);
+});
+
 test('hierarchy report scheduler is wired into the server',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(server,/flowDesignationForUser/);

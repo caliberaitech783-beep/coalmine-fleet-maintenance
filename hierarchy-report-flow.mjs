@@ -1,4 +1,4 @@
-import {DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
+import {canonicalReportTitle,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 
 const INDIA_OFFSET_MS=330*60*1000;
 const REPORT={
@@ -89,7 +89,7 @@ function scheduleTimes(schedule={}){
 function configuredSchedule(schedule={},index=0){
   const cadence=scheduleCadence(schedule);
   const times=cadence==='event'?[]:scheduleTimes(schedule);
-  const reports=[...new Set((Array.isArray(schedule.reports)?schedule.reports:[]).map(clean).filter((title)=>ALLOWED_REPORTS.has(title)))];
+  const reports=[...new Set((Array.isArray(schedule.reports)?schedule.reports:[]).map(canonicalReportTitle).filter((title)=>ALLOWED_REPORTS.has(title)))];
   return {
     key:clean(schedule.key)||`schedule-${index+1}`,
     enabled:schedule.enabled!==false,

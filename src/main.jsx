@@ -1178,41 +1178,86 @@ const selectedAccessValues = (record, key, fallbackKey = "") => {
   return String(record[key] || "").split(/\s*[|,]\s*/).filter(Boolean);
 };
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
+const hierarchyReports = {
+  openedBd: "Location wise opened BD",
+  closingBd: "Location wise closing BD",
+  misVerification: "MIS Verification Report",
+  roadStatus: "Report for On Road / Off Road & Idle",
+  vehicleTransfer: "Vehicle Transfer Report",
+  locationWise: "Total Equipment / Vehicle Location Wise",
+  idleVehicle: "Idle Vehicle Report",
+  recentBreakdown: "Recent Breakdown Cases",
+  offRoadToMis: "Off Road to MIS Veri.",
+  offRoadToMaintenance: "Off Road to Maint. Close",
+  maintenanceToMis: "Event close Report - Maint. Closing to MIS Verif.",
+  idlePm: "Idle with PM verif.",
+  firstTrip: "On Road with first trip veri.",
+};
+const hierarchyLegacyReportTitles = new Map([
+  ["Location wise Open BD report with Category (Prod)", hierarchyReports.openedBd],
+  ["Location wise Closing BD report with Category (Maint.)", hierarchyReports.closingBd],
+  ["MIS Verification Report (MIS)", hierarchyReports.misVerification],
+  ["Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.", hierarchyReports.offRoadToMis],
+  ["Event Open Report - Prod. Open with Maint. Close Time -- TAT", hierarchyReports.offRoadToMaintenance],
+  ["Idle Time with PM Verification Time", hierarchyReports.idlePm],
+  ["Idle Verification v/s MIS First Trip verification", hierarchyReports.firstTrip],
+]);
+const normalizeHierarchyReportAccess = (value = "") => [...new Set(String(value || "")
+  .split(/\s*\|\s*/)
+  .map((report) => hierarchyLegacyReportTitles.get(report.trim()) || report.trim())
+  .filter(Boolean))].join(" | ");
 const hierarchyReportGroups = [
   {group:"Common Report", viewKey:"C", className:"common", reports:[
-    "Location wise Open BD report with Category (Prod)",
-    "Location wise Closing BD report with Category (Maint.)",
-    "MIS Verification Report (MIS)",
-    "Report for On Road / Off Road & Idle",
-    "Vehicle Transfer Report",
-    "Total Equipment / Vehicle Location Wise",
-    "Idle Vehicle Report",
-    "Recent Breakdown Cases",
+    hierarchyReports.roadStatus,
+    hierarchyReports.vehicleTransfer,
+    hierarchyReports.locationWise,
+    hierarchyReports.recentBreakdown,
   ]},
   {group:"Production Report", viewKey:"P", className:"production", reports:[
-    "Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.",
+    hierarchyReports.openedBd,
+    hierarchyReports.offRoadToMis,
   ]},
   {group:"Maintenance Report", viewKey:"M", className:"maintenance", reports:[
-    "Event Open Report - Prod. Open with Maint. Close Time -- TAT",
-    "Event close Report - Maint. Closing to MIS Verif.",
-    "Idle Time with PM Verification Time",
-    "Idle Verification v/s MIS First Trip verification",
+    hierarchyReports.closingBd,
+    hierarchyReports.idleVehicle,
+    hierarchyReports.offRoadToMaintenance,
+    hierarchyReports.maintenanceToMis,
+    hierarchyReports.idlePm,
+  ]},
+  {group:"MIS Report", viewKey:"S", className:"mis", reports:[
+    hierarchyReports.misVerification,
+    hierarchyReports.firstTrip,
   ]},
 ];
 const hierarchyReportTitles = hierarchyReportGroups.flatMap((group) => group.reports);
+const hierarchyReportCodes = new Map([
+  hierarchyReports.openedBd,
+  hierarchyReports.closingBd,
+  hierarchyReports.misVerification,
+  hierarchyReports.roadStatus,
+  hierarchyReports.vehicleTransfer,
+  hierarchyReports.locationWise,
+  hierarchyReports.idleVehicle,
+  hierarchyReports.recentBreakdown,
+  hierarchyReports.offRoadToMis,
+  hierarchyReports.offRoadToMaintenance,
+  hierarchyReports.maintenanceToMis,
+  hierarchyReports.idlePm,
+  hierarchyReports.firstTrip,
+].map((report, index) => [report, `R${index + 1}`]));
 const hierarchyDefaults = [
   {section:"Management", designation:"Director's", level:"1", schedule:"Daily 7 PM; weekly fleet Sat 7 PM", reportAccess:hierarchyReportTitles.join(" | ")},
   {section:"Management", designation:"Project Manager (P.M)", level:"2", schedule:"8 AM & 6 PM common; 7 PM operational; weekly fleet Sat 7 PM", reportAccess:hierarchyReportTitles.join(" | ")},
-  {section:"Production Dept.", designation:"Production Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[...hierarchyReportTitles.slice(0,4), ...hierarchyReportTitles.slice(6)].join(" | ")},
-  {section:"Production Dept.", designation:"Production Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:hierarchyReportTitles.slice(0,3).join(" | ")},
-  {section:"Maintenance Dept.", designation:"Maintenance Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[...hierarchyReportTitles.slice(0,4), ...hierarchyReportTitles.slice(6)].join(" | ")},
-  {section:"Maintenance Dept.", designation:"Maintenance Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:hierarchyReportTitles.slice(0,3).join(" | ")},
-  {section:"MIS Dept.", designation:"MIS Manager", level:"3", schedule:"Every event for closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReportTitles[1], hierarchyReportTitles[2], hierarchyReportTitles[3], ...hierarchyReportTitles.slice(6)].join(" | ")},
-  {section:"MIS Dept.", designation:"MIS Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReportTitles[1], hierarchyReportTitles[2]].join(" | ")},
-  {section:"OEM", designation:"National Head", level:"1", schedule:"Every 7th day consolidate", reportAccess:hierarchyReportTitles[1]},
-  {section:"OEM", designation:"Regional Head / Zonal Head", level:"2", schedule:"Every 5th day consolidate", reportAccess:hierarchyReportTitles[1]},
-  {section:"OEM", designation:"Area Service engineer", level:"3", schedule:"Every 3rd day consolidate", reportAccess:hierarchyReportTitles[1]},
-  {section:"OEM", designation:"Service Engineer / Site Service Engineer", level:"4", schedule:"Every day consolidate", reportAccess:hierarchyReportTitles[1]},
+  {section:"Production Dept.", designation:"Production Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
+  {section:"Production Dept.", designation:"Production Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
+  {section:"Maintenance Dept.", designation:"Maintenance Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
+  {section:"Maintenance Dept.", designation:"Maintenance Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
+  {section:"MIS Dept.", designation:"MIS Manager", level:"3", schedule:"Every event for closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
+  {section:"MIS Dept.", designation:"MIS Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
+  {section:"OEM", designation:"National Head", level:"1", schedule:"Every 7th day consolidate", reportAccess:hierarchyReports.closingBd},
+  {section:"OEM", designation:"Regional Head / Zonal Head", level:"2", schedule:"Every 5th day consolidate", reportAccess:hierarchyReports.closingBd},
+  {section:"OEM", designation:"Area Service engineer", level:"3", schedule:"Every 3rd day consolidate", reportAccess:hierarchyReports.closingBd},
+  {section:"OEM", designation:"Service Engineer / Site Service Engineer", level:"4", schedule:"Every day consolidate", reportAccess:hierarchyReports.closingBd},
 ];
 const hierarchySiteGroups = subsidiaryData.map((region) => ({code:region.code, name:region.name, sites:region.sites}));
 const hierarchySiteTitles = hierarchySiteGroups.flatMap((region) => region.sites);
@@ -1221,7 +1266,8 @@ const hierarchyColumnViewOptions = [
   {key:"C", label:"Common reports", shortLabel:"Common"},
   {key:"P", label:"Production report", shortLabel:"Production"},
   {key:"M", label:"Maintenance reports", shortLabel:"Maintenance"},
-  {key:"S", label:"WCL and NCL site-wise controls", shortLabel:"Site wise"},
+  {key:"S", label:"MIS reports", shortLabel:"MIS"},
+  {key:"W", label:"WCL and NCL site-wise controls", shortLabel:"Site wise"},
 ];
 const hierarchyRowViewOptions = [
   {key:"D", label:"Director", shortLabel:"Director"},
@@ -3727,9 +3773,9 @@ function Generic({ name, requests = [] }) {
 }
 
 const reportCategoryTabs = [
-  {id: "general", label: "General Report", description: "Common breakdown, location, transfer, idle, and fleet reports."},
-  {id: "production", label: "Production report", description: "Production to MIS verification elapsed-time reports."},
-  {id: "maintenance", label: "Maintenance report", description: "Maintenance closure, TAT, idle, and verification reports."},
+  {id: "general", label: "General Report", description: "Common road status, fleet location, transfer, and recent breakdown reports."},
+  {id: "production", label: "Production report", description: "Production opening and Production-to-MIS verification reports."},
+  {id: "maintenance", label: "Maintenance report", description: "Maintenance closing, idle, TAT, and verification reports."},
   {id: "mis", label: "MIS Report", description: "MIS verification and first-trip audit reports."},
 ];
 const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -3748,8 +3794,8 @@ function firstTripTimestamp(request) {
   const time = String(request.firstTripTime || "").trim();
   return date ? [date, time].filter(Boolean).join(" ") : "";
 }
-function roadStatusLabel(record) {
-  const status = equipmentRoadStatus(record);
+function roadStatusLabel(record, requests = []) {
+  const status = liveEquipmentRoadStatus(record, requests);
   return status === "onroad" ? "On road" : status === "offroad" ? "Off road" : status === "idle" ? "Idle" : "Status not set";
 }
 function locationCountRows(records = []) {
@@ -3848,7 +3894,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     reportMake: record.make || "",
     reportModel: record.model || record.modelNo || "",
     reportSite: record.currentLocation || record.location || "",
-    reportRoadStatus: roadStatusLabel(record),
+    reportRoadStatus: roadStatusLabel(record, reportRequests),
   }));
   const transferRows = transferRecords.map((record, index) => ({
     ...record,
@@ -3903,9 +3949,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "chassis", label: "Chassis no.", value: (record) => record.chassisNo || record.manufacturerSerialNo},
   ];
   const reportGroups = [
-    {category: "general", title: "Location wise Open BD report with Category (Prod)", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, emptyMessage: "No open breakdown cases available"},
-    {category: "general", title: "Location wise Closing BD report with Category (Maint.)", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, emptyMessage: "No closed maintenance cases available"},
-    {category: "general", title: "MIS Verification Report (MIS)", description: "Requests verified by MIS, including maintenance close and MIS verification timestamps.", rows: misVerificationRows, columns: misColumns, emptyMessage: "No MIS verification records available"},
+    {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, emptyMessage: "No open breakdown cases available"},
+    {category: "maintenance", title: "Location wise closing BD", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, emptyMessage: "No closed maintenance cases available"},
+    {category: "mis", title: "MIS Verification Report", description: "Requests verified by MIS, including maintenance close and MIS verification timestamps.", rows: misVerificationRows, columns: misColumns, emptyMessage: "No MIS verification records available"},
     {category: "general", title: "Report for On Road / Off Road & Idle", description: "Current road status of equipment and vehicles from the Equipment Master.", rows: fleetStatusRows, columns: fleetColumns, emptyMessage: "No equipment road-status records available", rowKey: (record) => `road-${record.reportId}`},
     {category: "general", title: "Vehicle Transfer Report", description: "Vehicle transfer history with source, destination, equipment, model, driver, and chassis details.", rows: transferRows, columns: transferColumns, emptyMessage: "No vehicle transfer records available", rowKey: (record) => `transfer-${record.reportId}`},
     {category: "general", title: "Total Equipment / Vehicle Location Wise", description: "Location-wise count of equipment, vehicles, and total fleet records.", rows: locationWiseRows, columns: [
@@ -3914,17 +3960,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "vehicles", label: "Vehicles", value: (row) => row.vehicles},
       {key: "total", label: "Total equipment / vehicle", value: (row) => row.total},
     ], emptyMessage: "No location-wise equipment records available", rowKey: (row) => `location-${row.location}`},
-    {category: "general", title: "Idle Vehicle Report", description: "Idle breakdown requests and idle fleet records that need follow-up.", rows: idleRequestRows, columns: [
+    {category: "maintenance", title: "Idle Vehicle Report", description: "Idle breakdown requests and idle fleet records that need follow-up.", rows: idleRequestRows, columns: [
       ...requestColumns,
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
       {key: "closedAt", label: "Maintenance close / idle at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
     ], emptyMessage: "No idle vehicle records available"},
     {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp.", rows: recentBreakdownRows, columns: closureColumns, emptyMessage: "No recent breakdown cases available"},
-    {category: "production", title: "Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.", description: "Elapsed time from Production off-road marking to MIS verification.", rows: elapsedRows.filter((row) => row.start && row.verifiedAt), columns: [
+    {category: "production", title: "Off Road to MIS Veri.", description: "Elapsed time from Production off-road marking to MIS verification.", rows: elapsedRows.filter((row) => row.start && row.verifiedAt), columns: [
       ...misColumns,
       {key: "prodToMis", label: "Prod to MIS verification", value: (request) => elapsedLabel(request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.start, request.verifiedAt)}</strong>},
     ], emptyMessage: "No Production to MIS verification timings available"},
-    {category: "maintenance", title: "Event Open Report - Prod. Open with Maint. Close Time -- TAT", description: "Turnaround time from Production opening to Maintenance close.", rows: elapsedRows.filter((row) => row.start && row.closedAt), columns: [
+    {category: "maintenance", title: "Off Road to Maint. Close", description: "Turnaround time from Production opening to Maintenance close.", rows: elapsedRows.filter((row) => row.start && row.closedAt), columns: [
       ...closureColumns,
       {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
     ], emptyMessage: "No Production-open to Maintenance-close timings available"},
@@ -3932,12 +3978,12 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       ...misColumns,
       {key: "maintToMis", label: "Maintenance close to MIS verification", value: (request) => elapsedLabel(request.closedAt, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt, request.verifiedAt)}</strong>},
     ], emptyMessage: "No Maintenance to MIS verification timings available"},
-    {category: "maintenance", title: "Idle Time with PM Verification Time", description: "Idle cases with maintenance idle time and verification timestamp.", rows: idleRequestRows, columns: [
+    {category: "maintenance", title: "Idle with PM verif.", description: "Idle cases with maintenance idle time and verification timestamp.", rows: idleRequestRows, columns: [
       ...misColumns,
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
       {key: "idleTime", label: "Idle to PM verification time", value: (request) => elapsedLabel(request.closedAt || request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.closedAt || request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.closedAt || request.start, request.verifiedAt)}</strong>},
     ], emptyMessage: "No idle verification timings available"},
-    {category: "maintenance", title: "Idle Verification v/s MIS First Trip verification", description: "Comparison of MIS verification against first-trip confirmation for idle cases.", rows: idleRequestRows.filter((row) => row.verifiedAt || firstTripTimestamp(row)), columns: [
+    {category: "mis", title: "On Road with first trip veri.", description: "Comparison of MIS verification against first-trip confirmation for idle cases.", rows: idleRequestRows.filter((row) => row.verifiedAt || firstTripTimestamp(row)), columns: [
       ...misColumns,
       {key: "firstTripDone", label: "First trip done", value: (request) => request.firstTripDone ? "Yes" : "No"},
       {key: "firstTrip", label: "First trip verification", value: (request) => firstTripTimestamp(request), render: (request) => formatTimestamp(firstTripTimestamp(request))},
@@ -5011,14 +5057,14 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       ...row,
       ...stored,
       rowKey: stored.id || `default-${index}`,
-      reportAccess: stored.reportAccess || row.reportAccess || "",
+      reportAccess: normalizeHierarchyReportAccess(stored.reportAccess || row.reportAccess || ""),
       siteAccess: Object.prototype.hasOwnProperty.call(stored, "siteAccess") ? stored.siteAccess : hierarchySiteTitles.join(" | "),
     };
   });
   const visibleColumnKeys = new Set(visibleColumnGroups);
   const visibleRowKeys = new Set(visibleRowGroups);
   const showIdentityColumns = visibleColumnKeys.has("A");
-  const showSiteColumns = visibleColumnKeys.has("S");
+  const showSiteColumns = visibleColumnKeys.has("W");
   const visibleReportGroups = hierarchyReportGroups.filter((group) => visibleColumnKeys.has(group.viewKey));
   const visibleReportTitles = visibleReportGroups.flatMap((group) => group.reports);
   const visibleSiteTitles = showSiteColumns ? hierarchySiteTitles : [];
@@ -5127,7 +5173,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                 <th className="hierarchy-col-level">Level</th>
                 <th className="hierarchy-col-schedule">Schedule</th>
               </>}
-              {visibleReportTitles.map((report) => <th key={report} title={report}>R{hierarchyReportTitles.indexOf(report) + 1}<small>{report}</small></th>)}
+              {visibleReportTitles.map((report) => <th key={report} title={report}>{hierarchyReportCodes.get(report)}<small>{report}</small></th>)}
               {showSiteColumns && hierarchySiteGroups.flatMap((region) => region.sites.map((site) => <th className="hierarchy-site-column" key={`${region.code}-${site}`} title={`${region.code} · ${site}`}>{region.code}<small>{site}</small></th>))}
             </tr>
           </thead>
@@ -5161,7 +5207,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         </table> : <div className="hierarchy-view-empty">Select at least one column group to view the matrix.</div>}
       </div>
       {!!visibleReportTitles.length && <div className="hierarchy-report-legend">
-        {visibleReportTitles.map((report) => <span key={report}><b>R{hierarchyReportTitles.indexOf(report) + 1}</b>{report}</span>)}
+        {visibleReportTitles.map((report) => <span key={report}><b>{hierarchyReportCodes.get(report)}</b>{report}</span>)}
       </div>}
     </section>
   );

@@ -25,18 +25,26 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.ok(tables.some((table)=>table.department==='General'));
   assert.ok(tables.some((table)=>table.department==='Production'));
   assert.ok(tables.some((table)=>table.department==='Maintenance'));
+  assert.ok(tables.some((table)=>table.department==='MIS'));
+  assert.equal(tables.find((table)=>table.title==='Location wise opened BD').department,'Production');
+  assert.equal(tables.find((table)=>table.title==='Location wise closing BD').department,'Maintenance');
+  assert.equal(tables.find((table)=>table.title==='MIS Verification Report').department,'MIS');
+  assert.equal(tables.find((table)=>table.title==='Idle Vehicle Report').department,'Maintenance');
+  assert.equal(tables.find((table)=>table.title==='On Road with first trip veri.').department,'MIS');
+  const roadStatus=tables.find((table)=>table.title==='Report for On Road / Off Road & Idle');
+  assert.equal(roadStatus.rows[0][roadStatus.columns.findIndex((column)=>column.key==='roadStatus')],'Off road');
   const workbook=buildXlsxWorkbookBuffer(tables[0].title,tables[0].columns,tables[0].rows);
   assert.equal(workbook.subarray(0,2).toString(),'PK');
   assert.match(workbook.toString('utf8'),/application\/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main\+xml/);
   const message=buildDirectorWhatsAppMessage({generatedAt:new Date('2026-09-01T13:30:00Z'),links:[
-    {department:'General',title:'Location wise Open BD report with Category (Prod)',pdfUrl:'https://bdms.cmll.in/r/a',xlsxUrl:'https://bdms.cmll.in/r/b'},
+    {department:'Production',title:'Location wise opened BD',pdfUrl:'https://bdms.cmll.in/r/a',xlsxUrl:'https://bdms.cmll.in/r/b'},
   ]});
   assert.match(message,/▣ Nerve Center/);
   assert.match(message,/Director's Daily Report/);
   assert.match(message,/Schedule: Daily 7:00 PM IST/);
   assert.match(message,/Department Wise Report Links:/);
-  assert.match(message,/General --/);
-  assert.match(message,/1\. Loc\. wise Open BD/);
+  assert.match(message,/Production --/);
+  assert.match(message,/1\. Location wise opened BD/);
   assert.match(message,/PDF 📄\nhttps:\/\/bdms\.cmll\.in\/r\/a/);
   assert.match(message,/Excel 📊\nhttps:\/\/bdms\.cmll\.in\/r\/b/);
   assert.doesNotMatch(message,/\n\s+https:\/\/bdms\.cmll\.in\/r\//);

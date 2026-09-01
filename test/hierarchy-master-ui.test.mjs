@@ -20,6 +20,8 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(hierarchySource, /toggleReport/);
   assert.match(hierarchySource, /toggleSite/);
   assert.match(source, /hierarchyColumnViewOptions/);
+  assert.match(source, /group:"MIS Report", viewKey:"S"/);
+  assert.match(source, /key:"W", label:"WCL and NCL site-wise controls"/);
   assert.match(source, /hierarchyRowViewOptions/);
   assert.match(source, /hierarchyRowViewKey/);
   assert.match(hierarchySource, /visibleColumnGroups/);
@@ -27,13 +29,14 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(hierarchySource, /Visible hierarchy column groups/);
   assert.match(hierarchySource, /Visible hierarchy designation groups/);
   assert.match(hierarchySource, /showIdentityColumns/);
-  assert.match(hierarchySource, /showSiteColumns/);
+  assert.match(hierarchySource, /showSiteColumns = visibleColumnKeys\.has\("W"\)/);
   assert.match(source, /reportAccess/);
   assert.match(source, /siteAccess/);
   assert.match(styles, /\.hierarchy-master-page/);
   assert.match(styles, /\.hierarchy-matrix/);
   assert.match(styles, /\.hierarchy-view-controls/);
   assert.match(styles, /\.hierarchy-view-tab\.active/);
+  assert.match(styles, /\.hierarchy-group-row th\.mis/);
   assert.match(styles, /\.hierarchy-col-schedule\{position:sticky!important;left:458px!important/);
   assert.match(styles, /\.hierarchy-report-legend/);
 });

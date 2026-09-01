@@ -1,22 +1,37 @@
-import {equipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
+import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
 export const DIRECTOR_REPORT_TITLES=[
-  'Location wise Open BD report with Category (Prod)',
-  'Location wise Closing BD report with Category (Maint.)',
-  'MIS Verification Report (MIS)',
+  'Location wise opened BD',
+  'Location wise closing BD',
+  'MIS Verification Report',
   'Report for On Road / Off Road & Idle',
   'Vehicle Transfer Report',
   'Total Equipment / Vehicle Location Wise',
   'Idle Vehicle Report',
   'Recent Breakdown Cases',
-  'Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.',
-  'Event Open Report - Prod. Open with Maint. Close Time -- TAT',
+  'Off Road to MIS Veri.',
+  'Off Road to Maint. Close',
   'Event close Report - Maint. Closing to MIS Verif.',
-  'Idle Time with PM Verification Time',
-  'Idle Verification v/s MIS First Trip verification',
+  'Idle with PM verif.',
+  'On Road with first trip veri.',
 ];
+
+export const LEGACY_REPORT_TITLE_ALIASES=new Map([
+  ['Location wise Open BD report with Category (Prod)',DIRECTOR_REPORT_TITLES[0]],
+  ['Location wise Closing BD report with Category (Maint.)',DIRECTOR_REPORT_TITLES[1]],
+  ['MIS Verification Report (MIS)',DIRECTOR_REPORT_TITLES[2]],
+  ['Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.',DIRECTOR_REPORT_TITLES[8]],
+  ['Event Open Report - Prod. Open with Maint. Close Time -- TAT',DIRECTOR_REPORT_TITLES[9]],
+  ['Idle Time with PM Verification Time',DIRECTOR_REPORT_TITLES[11]],
+  ['Idle Verification v/s MIS First Trip verification',DIRECTOR_REPORT_TITLES[12]],
+]);
+
+export function canonicalReportTitle(title){
+  const normalized=String(title??'').trim();
+  return LEGACY_REPORT_TITLE_ALIASES.get(normalized)||normalized;
+}
 
 const INDIA_OFFSET_MS=330*60*1000;
 const clean=(value)=>String(value??'').trim();
@@ -24,19 +39,19 @@ const cell=(value)=>clean(value)||'-';
 const safeFilePart=(value)=>clean(value).toLowerCase().replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').slice(0,80)||'report';
 const escapeXml=(value)=>String(value??'').replace(/[&<>"']/g,(character)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[character]));
 const WHATSAPP_REPORT_LABELS=new Map([
-  ['Location wise Open BD report with Category (Prod)','Loc. wise Open BD'],
-  ['Location wise Closing BD report with Category (Maint.)','Loc. wise Closing BD'],
-  ['MIS Verification Report (MIS)','MIS Verification'],
+  ['Location wise opened BD','Location wise opened BD'],
+  ['Location wise closing BD','Location wise closing BD'],
+  ['MIS Verification Report','MIS Verification'],
   ['Report for On Road / Off Road & Idle','Road Status: On / Off / Idle'],
   ['Vehicle Transfer Report','Vehicle Transfer'],
   ['Total Equipment / Vehicle Location Wise','Equipment / Vehicle Location'],
   ['Idle Vehicle Report','Idle Vehicle'],
   ['Recent Breakdown Cases','Recent Breakdown'],
-  ['Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.','Off Road to MIS Verification'],
-  ['Event Open Report - Prod. Open with Maint. Close Time -- TAT','Event Open TAT'],
+  ['Off Road to MIS Veri.','Off Road to MIS Veri.'],
+  ['Off Road to Maint. Close','Off Road to Maint. Close'],
   ['Event close Report - Maint. Closing to MIS Verif.','Event Close to MIS'],
-  ['Idle Time with PM Verification Time','Idle Time with PM Verification'],
-  ['Idle Verification v/s MIS First Trip verification','Idle vs MIS First Trip'],
+  ['Idle with PM verif.','Idle with PM verif.'],
+  ['On Road with first trip veri.','On Road with first trip veri.'],
 ]);
 
 function indiaParts(date){
@@ -65,8 +80,8 @@ export function directorReportDue(now=new Date(),graceMinutes=20){
   return delay>=0&&delay<=graceMinutes*60*1000;
 }
 
-function roadStatusLabel(record){
-  const status=equipmentRoadStatus(record);
+function roadStatusLabel(record,requests=[]){
+  const status=liveEquipmentRoadStatus(record,requests);
   return status==='onroad'?'On road':status==='offroad'?'Off road':status==='idle'?'Idle':'Status not set';
 }
 
@@ -127,7 +142,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
   const fleetStatusRows=equipmentRecords.map((record,index)=>({
     ...record,reportId:record.id||`${record.equipmentName||record.door||'equipment'}-${index}`,
     reportEquipment:record.equipmentName||record.equipment||record.door||'',reportDoor:record.door||'',
-    reportMake:record.make||'',reportModel:record.model||record.modelNo||'',reportSite:record.currentLocation||record.location||'',reportRoadStatus:roadStatusLabel(record),
+    reportMake:record.make||'',reportModel:record.model||record.modelNo||'',reportSite:record.currentLocation||record.location||'',reportRoadStatus:roadStatusLabel(record,reportRequests),
   }));
   const transferRows=transferRecords.map((record,index)=>({...record,reportId:record.id||`${record.transferNo||'transfer'}-${index}`,reportEquipment:record.equipment||record.equipmentName||record.door||'',reportSite:record.destination||record.currentLocation||record.location||''}));
   const locationWiseRows=locationCountRows(equipmentRecords);
@@ -167,21 +182,21 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'chassis',label:'Chassis no.',value:(record)=>record.chassisNo||record.manufacturerSerialNo},
   ];
   return [
-    table(DIRECTOR_REPORT_TITLES[0],'General','Open production breakdown cases grouped with location and category details.',requestColumns,openBreakdownRows),
-    table(DIRECTOR_REPORT_TITLES[1],'General','Closed maintenance breakdown cases with location, category, closure user, and closure time.',closureColumns,closedBreakdownRows),
-    table(DIRECTOR_REPORT_TITLES[2],'General','Requests verified by MIS, including maintenance close and MIS verification timestamps.',misColumns,misVerificationRows),
+    table(DIRECTOR_REPORT_TITLES[0],'Production','Open production breakdown cases grouped with location and category details.',requestColumns,openBreakdownRows),
+    table(DIRECTOR_REPORT_TITLES[1],'Maintenance','Closed maintenance breakdown cases with location, category, closure user, and closure time.',closureColumns,closedBreakdownRows),
+    table(DIRECTOR_REPORT_TITLES[2],'MIS','Requests verified by MIS, including maintenance close and MIS verification timestamps.',misColumns,misVerificationRows),
     table(DIRECTOR_REPORT_TITLES[3],'General','Current road status of equipment and vehicles from the Equipment Master.',fleetColumns,fleetStatusRows),
     table(DIRECTOR_REPORT_TITLES[4],'General','Vehicle transfer history with source, destination, equipment, model, driver, and chassis details.',transferColumns,transferRows),
     table(DIRECTOR_REPORT_TITLES[5],'General','Location-wise count of equipment, vehicles, and total fleet records.',[
       {key:'location',label:'Location',value:(row)=>row.location},{key:'equipment',label:'Equipment',value:(row)=>row.equipment},{key:'vehicles',label:'Vehicles',value:(row)=>row.vehicles},{key:'total',label:'Total equipment / vehicle',value:(row)=>row.total},
     ],locationWiseRows),
-    table(DIRECTOR_REPORT_TITLES[6],'General','Idle breakdown requests and idle fleet records that need follow-up.',[...requestColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'closedAt',label:'Maintenance close / idle at',value:(request)=>request.closedAt}],idleRequestRows),
+    table(DIRECTOR_REPORT_TITLES[6],'Maintenance','Idle breakdown requests and idle fleet records that need follow-up.',[...requestColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'closedAt',label:'Maintenance close / idle at',value:(request)=>request.closedAt}],idleRequestRows),
     table(DIRECTOR_REPORT_TITLES[7],'General','Latest breakdown cases by recorded workflow timestamp.',closureColumns,recentBreakdownRows),
     table(DIRECTOR_REPORT_TITLES[8],'Production','Elapsed time from Production off-road marking to MIS verification.',[...misColumns,{key:'prodToMis',label:'Prod to MIS verification',value:(request)=>elapsedLabel(request.start,request.verifiedAt)}],elapsedRows.filter((row)=>row.start&&row.verifiedAt)),
     table(DIRECTOR_REPORT_TITLES[9],'Maintenance','Turnaround time from Production opening to Maintenance close.',[...closureColumns,{key:'tat',label:'TAT',value:(request)=>elapsedLabel(request.start,request.closedAt)}],elapsedRows.filter((row)=>row.start&&row.closedAt)),
     table(DIRECTOR_REPORT_TITLES[10],'Maintenance','Elapsed time from Maintenance close to MIS verification.',[...misColumns,{key:'maintToMis',label:'Maintenance close to MIS verification',value:(request)=>elapsedLabel(request.closedAt,request.verifiedAt)}],elapsedRows.filter((row)=>row.closedAt&&row.verifiedAt)),
     table(DIRECTOR_REPORT_TITLES[11],'Maintenance','Idle cases with maintenance idle time and verification timestamp.',[...misColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'idleTime',label:'Idle to PM verification time',value:(request)=>elapsedLabel(request.closedAt||request.start,request.verifiedAt)}],idleRequestRows),
-    table(DIRECTOR_REPORT_TITLES[12],'Maintenance','Comparison of MIS verification against first-trip confirmation for idle cases.',[...misColumns,{key:'firstTripDone',label:'First trip done',value:(request)=>request.firstTripDone?'Yes':'No'},{key:'firstTrip',label:'First trip verification',value:firstTripTimestamp},{key:'misToFirstTrip',label:'MIS to first trip',value:(request)=>elapsedLabel(request.verifiedAt,firstTripTimestamp(request))}],idleRequestRows.filter((row)=>row.verifiedAt||firstTripTimestamp(row))),
+    table(DIRECTOR_REPORT_TITLES[12],'MIS','Comparison of MIS verification against first-trip confirmation for idle cases.',[...misColumns,{key:'firstTripDone',label:'First trip done',value:(request)=>request.firstTripDone?'Yes':'No'},{key:'firstTrip',label:'First trip verification',value:firstTripTimestamp},{key:'misToFirstTrip',label:'MIS to first trip',value:(request)=>elapsedLabel(request.verifiedAt,firstTripTimestamp(request))}],idleRequestRows.filter((row)=>row.verifiedAt||firstTripTimestamp(row))),
   ];
 }
 
