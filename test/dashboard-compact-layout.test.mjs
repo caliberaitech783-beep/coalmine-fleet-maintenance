@@ -6,6 +6,7 @@ const css = fs.readFileSync(
   new URL("../src/dashboard-concept-a.css", import.meta.url),
   "utf8",
 );
+const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 test("dashboard KPI cards use a compact responsive grid", () => {
   assert.match(css, /Compact command-centre density/);
@@ -23,13 +24,20 @@ test("dashboard KPI cards use a compact responsive grid", () => {
   );
 });
 
-test("dashboard overview cards reserve a compact stable chart area", () => {
+test("six primary KPIs share one compact desktop row", () => {
   assert.match(
     css,
-    /\.mine-overview-chart-body\s*\{[\s\S]*?min-height:\s*96px;[\s\S]*?padding:\s*8px 12px;/,
+    /\.mine-primary-kpi-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\);/,
   );
   assert.match(
     css,
-    /\.mine-overview-donut\s*\{[\s\S]*?width:\s*82px;[\s\S]*?height:\s*82px;/,
+    /@media \(max-width:\s*1000px\)[\s\S]*?\.mine-primary-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/,
   );
+  assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-assets"/);
+  assert.match(client, /<b>Equipment &amp; vehicles<\/b>/);
+  assert.match(client, /<b>On road<\/b>/);
+  assert.match(client, /<b>Off road<\/b>/);
+  assert.match(client, /<b>Idle<\/b>/);
+  assert.match(client, /<b>Maintenance workload<\/b>/);
+  assert.match(client, /<b>Operations users<\/b>/);
 });

@@ -742,6 +742,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
   const [showUserBreakdown, setShowUserBreakdown] = useState(false);
+  const [showWorkloadBreakdown, setShowWorkloadBreakdown] = useState(false);
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [assetDrilldownCategory, setAssetDrilldownCategory] = useState("");
   const [assetDrilldownGroup, setAssetDrilldownGroup] = useState("");
@@ -863,39 +864,53 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const selectAssetGroup = (group) => {
     setAssetDrilldownGroup(group);
   };
-  const equipmentShare = assetCounts.total ? (assetCounts.equipment / assetCounts.total) * 100 : 0;
-  const onRoadShare = kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0;
-  const offRoadShare = kpis.total ? (kpis.offRoad / kpis.total) * 100 : 0;
-  const idleShare = kpis.total ? (kpis.idle / kpis.total) * 100 : 0;
+  const workloadCounts = ["Open", "In progress", "Awaiting parts", "Awaiting approval", "Idle", "Closed"].reduce((counts, status) => {
+    counts[status] = visibleBreakdowns.filter((record) => record.status === status).length;
+    return counts;
+  }, {});
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
-      <section className="mine-overview-charts" aria-label="Fleet overview charts">
-        <article className="mine-overview-chart">
-          <header><div><span className="mine-eyebrow">Fleet registry</span><h2>Equipment and vehicles</h2><p>Separate asset counts from Equipment Master</p></div></header>
-          <div className="mine-overview-chart-body">
-            <button type="button" className="mine-overview-donut" aria-label={`${assetCounts.total} total assets`} onClick={() => openAssetDrilldown("all")} style={{ background: `conic-gradient(#4f86c6 0 ${equipmentShare}%, #72c99e ${equipmentShare}% 100%)` }}><span><strong>{assetCounts.total.toLocaleString()}</strong><small>All total</small></span></button>
-            <div className="mine-overview-legend">
-              <button type="button" onClick={() => openAssetDrilldown("equipment")}><i className="mine-chart-blue" /><span>Total equipment<small>Non-vehicle equipment</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => openAssetDrilldown("vehicle")}><i className="mine-chart-green" /><span>Total vehicles<small>Vehicles only</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong></button>
-            </div>
+      <section className="mine-primary-kpi-grid" aria-label="Fleet status key performance indicators">
+        <article className="mine-primary-kpi-card mine-primary-kpi-assets">
+          <button type="button" className="mine-primary-kpi-main" onClick={() => openAssetDrilldown("all")}>
+            <span className="mine-primary-kpi-icon"><Truck /></span>
+            <span className="mine-primary-kpi-copy"><small>Fleet registry</small><b>Equipment &amp; vehicles</b><em>All registered assets</em></span>
+            <strong>{assetCounts.total.toLocaleString()}</strong>
+          </button>
+          <div className="mine-primary-kpi-split">
+            <button type="button" onClick={() => openAssetDrilldown("equipment")}><span>Total equipment</span><b>{assetCounts.equipment.toLocaleString()}</b></button>
+            <button type="button" onClick={() => openAssetDrilldown("vehicle")}><span>Total vehicles</span><b>{assetCounts.vehicles.toLocaleString()}</b></button>
           </div>
         </article>
-        <article className="mine-overview-chart">
-          <header><div><span className="mine-eyebrow">Road availability</span><h2>On-road, off-road and idle</h2><p>Every explicit fleet state is counted separately</p></div></header>
-          <div className="mine-overview-chart-body">
-            <button type="button" className="mine-overview-donut" aria-label={`${kpis.availability}% on road`} onClick={() => openAssetDrilldown("onroad")} style={{ background: `conic-gradient(#72c99e 0 ${onRoadShare}%, #df776e ${onRoadShare}% ${onRoadShare + offRoadShare}%, #e5aa55 ${onRoadShare + offRoadShare}% ${onRoadShare + offRoadShare + idleShare}%, #d9e3e7 ${onRoadShare + offRoadShare + idleShare}% 100%)` }}><span><strong>{kpis.availability}%</strong><small>On road</small></span></button>
-            <div className="mine-overview-legend">
-              <button type="button" onClick={() => openAssetDrilldown("onroad")}><i className="mine-chart-green" /><span>On road<small>Available for operation</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => openAssetDrilldown("offroad")}><i className="mine-chart-red" /><span>Off road<small>Maintenance or breakdown</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
-              <button type="button" onClick={() => openAssetDrilldown("idle")}><i className="mine-chart-idle" /><span>Idle<small>Operational, currently not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
-              {kpis.unknown > 0 && <button type="button" onClick={() => openAssetDrilldown("unknown")}><i className="mine-chart-grey" /><span>Status not set<small>Not counted as off road</small></span><strong>{kpis.unknown.toLocaleString()}</strong></button>}
-            </div>
-          </div>
-        </article>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-onroad" onClick={() => openAssetDrilldown("onroad")}>
+          <span className="mine-primary-kpi-icon"><CheckCircle2 /></span>
+          <span className="mine-primary-kpi-copy"><small>Road availability</small><b>On road</b><em>{kpis.availability}% available</em></span>
+          <strong>{kpis.onRoad.toLocaleString()}</strong>
+        </button>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-offroad" onClick={() => openAssetDrilldown("offroad")}>
+          <span className="mine-primary-kpi-icon"><AlertTriangle /></span>
+          <span className="mine-primary-kpi-copy"><small>Road availability</small><b>Off road</b><em>Maintenance or breakdown</em></span>
+          <strong>{kpis.offRoad.toLocaleString()}</strong>
+        </button>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-idle" onClick={() => openAssetDrilldown("idle")}>
+          <span className="mine-primary-kpi-icon"><Clock /></span>
+          <span className="mine-primary-kpi-copy"><small>Road availability</small><b>Idle</b><em>Available, not working</em></span>
+          <strong>{kpis.idle.toLocaleString()}</strong>
+        </button>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-workload" onClick={() => setShowWorkloadBreakdown(true)}>
+          <span className="mine-primary-kpi-icon"><Wrench /></span>
+          <span className="mine-primary-kpi-copy"><small>Requests</small><b>Maintenance workload</b><em>Open {workloadCounts.Open} · In progress {workloadCounts["In progress"]} · Idle {workloadCounts.Idle}</em></span>
+          <strong>{activeBreakdowns.toLocaleString()}</strong>
+        </button>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)}>
+          <span className="mine-primary-kpi-icon"><Users /></span>
+          <span className="mine-primary-kpi-copy"><small>People</small><b>Operations users</b><em>Mobile {userCounts.mobile} · Super {userCounts.super} · Admin {userCounts.admin}</em></span>
+          <strong>{visibleUsers.length.toLocaleString()}</strong>
+        </button>
       </section>
       <section className="mine-counter-grid" aria-label="Mining fleet summary">
         {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
@@ -904,10 +919,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <article className="mine-panel mine-open-cases"><header><div><span className="mine-eyebrow">Maintenance workload</span><h2>Open cases</h2><p>Current action queue</p></div><button type="button" aria-label="Open case category drilldown" onClick={() => openAssetDrilldown("open-cases")}><ChevronRight /></button></header><button type="button" className="mine-open-cases-trigger" onClick={() => openAssetDrilldown("open-cases")}><div className="mine-big-number"><strong>{activeBreakdowns.toLocaleString()}</strong><span>Active breakdowns</span><small>{visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length.toLocaleString()} awaiting action</small></div><div className="mine-mini-bars"><span><i style={{ width: `${activeBreakdowns ? 100 : 0}%` }} />Active</span><span><i className="mine-bar-orange" style={{ width: `${activeBreakdowns ? Math.min(100, visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length / activeBreakdowns * 100) : 0}%` }} />Awaiting</span></div></button></article>
         <article className="mine-panel"><header><div><span className="mine-eyebrow">Equipment by region</span><h2>Operating regions</h2><p>Registered assets across sites</p></div><button type="button" aria-label="Open operating region drilldown" onClick={() => openAssetDrilldown(selectedRegion ? `region:${selectedRegion.code}` : "all")}><ChevronRight /></button></header><div className="mine-region-bars">{regionBars.map((region) => <button type="button" key={region.code} onClick={() => openAssetDrilldown(`region:${region.code}`)}><span>{region.code}</span><div><i style={{ width: `${(region.total / maxRegionTotal) * 100}%` }} /></div><b>{region.total.toLocaleString()}</b></button>)}</div></article>
         <article className="mine-panel"><header><div><span className="mine-eyebrow">Fleet composition</span><h2>Vehicle by group</h2><p>Most represented equipment categories</p></div></header><div className="mine-type-bars">{vehicleTypes.length ? vehicleTypes.map(([label, value]) => <button type="button" key={label} onClick={() => openAssetDrilldown(`group:${label}`)}><span>{label}</span><div><i style={{ width: `${(value / Math.max(1, vehicleTypes[0][1])) * 100}%` }} /></div><b>{value.toLocaleString()}</b></button>) : <p className="mine-empty">No equipment records yet</p>}</div></article>
-        <article className="mine-panel mine-span-2"><header><div><span className="mine-eyebrow">Requests</span><h2>Maintenance workload by status</h2><p>Open, in-progress, idle and completed requests</p></div></header><div className="mine-workload-grid">{["Open", "In progress", "Awaiting parts", "Awaiting approval", "Idle", "Closed"].map((status) => { const count = visibleBreakdowns.filter((record) => record.status === status).length; const max = Math.max(1, visibleBreakdowns.length); return <button type="button" key={status} onClick={() => openAssetDrilldown(`status:${status}`)}><span>{status}</span><div><i style={{ width: `${(count / max) * 100}%` }} /></div><b>{count.toLocaleString()}</b></button>; })}</div></article>
-        <article className="mine-panel mine-people-panel"><header><div><span className="mine-eyebrow">People</span><h2>Operations users</h2><p>Registered access profiles</p></div><button type="button" onClick={() => setShowUserBreakdown(true)}><ChevronRight /></button></header><div className="mine-people"><strong>{scopedUsers.length.toLocaleString()}</strong><span>Users &amp; employees</span><div><b>Mobile {userCounts.mobile}</b><b>Super {userCounts.super}</b><b>Admin {userCounts.admin}</b></div></div></article>
       </section>
-      {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{scopedUsers.length}</strong></div></Modal>}
+      {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{visibleUsers.length}</strong></div></Modal>}
+      {showWorkloadBreakdown && <Modal title="Maintenance workload by status" close={() => setShowWorkloadBreakdown(false)}><div className="user-count-drilldown workload-status-drilldown">{Object.entries(workloadCounts).map(([status, count]) => <button type="button" key={status} onClick={() => { setShowWorkloadBreakdown(false); openAssetDrilldown(`status:${status}`); }}><Wrench /><span>{status}</span><strong>{count.toLocaleString()}</strong></button>)}</div><div className="user-count-total"><span>Active maintenance workload</span><strong>{activeBreakdowns.toLocaleString()}</strong></div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={`${assetDrilldownTitle} · ${assetDrilldownRows.length}`} close={() => { setAssetDrilldown(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><div className="dashboard-asset-drilldown"><section><h4>Step 1 · Select equipment category</h4><div className="dashboard-asset-summary">{assetCategoryBreakdown.length ? assetCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment records found</p>}</div></section>{assetDrilldownCategory && <section><h4>Step 2 · Select equipment group</h4><div className="dashboard-asset-groups">{assetGroupBreakdown.length ? assetGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No equipment group found</p>}</div></section>}{assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><table><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}</tr>)}</tbody></table></div></section>}</div></Modal>}
       <section className="mine-panel mine-recent"><header><div><span className="mine-eyebrow">Activity</span><h2>Recent breakdown cases</h2><p>{visibleBreakdowns.length ? "Latest maintenance activity" : "No breakdown records available"}</p></div><button type="button" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></header><BreakdownTable rows={visibleBreakdowns} showMakeModel showDateFilter rowLimit={5} /></section>
     </div>
