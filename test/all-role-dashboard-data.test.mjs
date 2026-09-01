@@ -13,11 +13,15 @@ test("every operational dashboard loads site-wide requests separately from perso
 });
 
 test("equipment and vehicle totals open a name list on every dashboard", () => {
-  assert.match(client, /onClick=\{\(\) => setAssetDrilldown\("equipment"\)\}/);
-  assert.match(client, /onClick=\{\(\) => setAssetDrilldown\("vehicle"\)\}/);
+  assert.match(client, /onClick=\{\(\) => openAssetDrilldown\("equipment"\)\}/);
+  assert.match(client, /onClick=\{\(\) => openAssetDrilldown\("vehicle"\)\}/);
+  assert.match(client, /Step 1 · KPI summary/);
+  assert.match(client, /Step 2 · Equipment category \/ group/);
+  assert.match(client, /Step 3 · Equipment list/);
+  assert.match(client, /assetGroupBreakdown\.map/);
   assert.match(client, /className="dashboard-asset-list"[\s\S]*Equipment name[\s\S]*equipmentName/);
   assert.match(client, /<Modal className="dashboard-asset-modal"/);
-  assert.match(client, /Equipment group<\/th><th>Make<\/th><th>Model<\/th>/);
+  assert.match(client, /Equipment category<\/th><th>Equipment group<\/th><th>Make<\/th><th>Model<\/th>/);
   assert.match(client, /Recent breakdown cases[\s\S]*showMakeModel/);
   assert.match(client, /showMakeModel && <><td>\{r\.make \|\| "—"\}<\/td><td>\{r\.model \|\| "—"\}<\/td><\/>/);
 });
