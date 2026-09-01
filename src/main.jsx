@@ -159,6 +159,24 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
     </button>
   );
 }
+function HeaderClock({ className = "" }) {
+  const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
+  useEffect(() => {
+    const updateClock = () => setCurrentDateTime(new Date());
+    const timer = window.setInterval(updateClock, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const padClockPart = (value) => String(value).padStart(2, "0");
+  const date = `${padClockPart(currentDateTime.getDate())}-${padClockPart(currentDateTime.getMonth() + 1)}-${currentDateTime.getFullYear()}`;
+  const time = `${padClockPart(currentDateTime.getHours())}:${padClockPart(currentDateTime.getMinutes())}:${padClockPart(currentDateTime.getSeconds())}`;
+  return (
+    <time className={`header-clock ${className}`.trim()} dateTime={currentDateTime.toISOString()} aria-label={`Current date and time ${date} ${time}`}>
+      <CalendarDays aria-hidden="true" />
+      <span className="header-clock-date">{date}</span>
+      <span className="header-clock-time">{time}</span>
+    </time>
+  );
+}
 function AuthModeTabs({ mode, onModeChange }) {
   const options = [
     { id: "signin", label: "Sign in", detail: "Portal access", Icon: UserRound },
@@ -5652,7 +5670,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
   const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>NC</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><div className="logo"><b>NC</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
@@ -5983,6 +6001,7 @@ function App() {
             </button>
             Operations <ChevronRight /> <b>{active}</b>
           </div>
+          <HeaderClock />
           <div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>

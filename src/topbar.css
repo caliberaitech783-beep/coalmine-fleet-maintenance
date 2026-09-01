@@ -95,6 +95,130 @@
   margin-top: 76px;
 }
 
+.header-clock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  min-width: 330px;
+  color: var(--ink);
+  font: 900 25px/1 Manrope, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.header-clock svg {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  color: #315ed0;
+  stroke-width: 2.4;
+}
+
+.header-clock-date,
+.header-clock-time {
+  display: inline-block;
+  font: inherit;
+}
+
+.header-clock-date {
+  color: #315ed0;
+}
+
+.top {
+  position: relative;
+}
+
+.top > .header-clock {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.normal-header-clock {
+  min-width: 282px;
+  padding: 9px 12px;
+  border: 1px solid #ffffff24;
+  border-radius: 8px;
+  background: #ffffff0a;
+  color: #fff;
+  font-size: 20px;
+}
+
+.normal-header-clock .header-clock-date,
+.normal-header-clock .header-clock-time {
+  color: #fff;
+}
+
+.normal-header-clock svg {
+  color: #f5a24f;
+}
+
+:root[data-theme="dark"] .top .header-clock-date,
+:root[data-theme="dark"] .top .header-clock svg {
+  color: #9ab7ff;
+}
+
+@media (max-width: 1300px) {
+  .top > .header-clock {
+    min-width: 285px;
+    font-size: 20px;
+  }
+
+  .normal > header {
+    height: auto;
+    min-height: 70px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .normal-header-clock {
+    order: 4;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1050px) {
+  .top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: 48px 34px;
+    height: auto;
+    min-height: 90px;
+    padding: 0 18px 8px;
+  }
+
+  .top > .menubtn {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .top > .crumb {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .top > div:last-child {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .top > .header-clock {
+    position: static;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    min-width: 0;
+    transform: none;
+    font-size: 20px;
+  }
+}
+
 @media (max-width: 900px) {
   .app > aside {
     transform: translateY(-110%);
@@ -153,5 +277,26 @@
 
   .app > .content {
     margin-top: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .top {
+    grid-template-rows: 48px 32px;
+    min-height: 88px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .header-clock,
+  .top > .header-clock,
+  .normal-header-clock {
+    gap: 7px;
+    font-size: 18px;
+  }
+
+  .header-clock svg {
+    width: 18px;
+    height: 18px;
   }
 }
