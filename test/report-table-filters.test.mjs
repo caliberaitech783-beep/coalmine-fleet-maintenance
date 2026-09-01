@@ -7,8 +7,14 @@ test("every report table supports header filters, sorting, and equipment compari
   const reportsSource = source.slice(source.indexOf("function ReportsPage"), source.indexOf("function MasterPage"));
 
   assert.match(source, /function ReportTable\(/);
+  assert.match(source, /function ReportActionsMenu\(/);
+  assert.match(source, /function ReportColumnSelector\(/);
+  assert.match(source, /Do Not Display/);
+  assert.match(source, /Display in Report/);
+  assert.match(source, /function ReportSortDialog\(/);
   assert.match(source, /<FilterableHeader/);
   assert.match(source, /onSort=\{changeSort\}/);
+  assert.match(source, /onVisibleColumnsChange/);
   assert.match(source, /elapsedMilliseconds\(request\.start, request\.closedAt\)/);
   assert.match(source, /<ReportTable[\s\S]*columns=\{columns\}/);
   assert.match(source, /function ReportSection\(/);
@@ -32,6 +38,8 @@ test("reports page exposes generated report type and report-name sub tabs", () =
   assert.match(reportsSource, /className="report-name-tabs"/);
   assert.match(reportsSource, /selectedReportByCategory/);
   assert.match(reportsSource, /selectedReport && \(/);
+  assert.doesNotMatch(reportsSource, /Search reports, references, sites/);
+  assert.doesNotMatch(reportsSource, /className="reports-subtype-summary"/);
   assert.match(reportsSource, /category: "production", title: "Location wise opened BD"/);
   assert.match(reportsSource, /category: "maintenance", title: "Location wise closing BD"/);
   assert.match(reportsSource, /category: "mis", title: "MIS Verification Report"/);
@@ -46,6 +54,6 @@ test("reports page exposes generated report type and report-name sub tabs", () =
   assert.match(reportsSource, /category: "maintenance", title: "Idle with PM verif\."/);
   assert.match(reportsSource, /category: "mis", title: "On Road with first trip veri\."/);
   assert.match(reportsSource, /roadStatusLabel\(record, reportRequests\)/);
-  assert.match(reportsSource, /<ExportMenu title=\{title\} columns=\{columns\} rows=\{rows\}/);
+  assert.match(reportsSource, /<ExportMenu title=\{title\} columns=\{visibleColumns\} rows=\{rows\}/);
   assert.match(reportsSource, /label="Generate"/);
 });

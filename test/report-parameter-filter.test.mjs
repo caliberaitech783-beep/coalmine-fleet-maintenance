@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-test("report views expose a visible all-parameter filter beside status controls", () => {
+test("report views expose parameter filters through the report actions control", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const breakdown = source.slice(source.indexOf("function BreakdownTable"), source.indexOf("const masterFields"));
   const reportTable = source.slice(source.indexOf("function ReportTable"), source.indexOf("function parseCsv"));
@@ -15,6 +15,9 @@ test("report views expose a visible all-parameter filter beside status controls"
   assert.match(breakdown, /tableRowMatchesFilters\(row, filterColumns, parameterFilters\)/);
   assert.match(mobileWorkflow, /<TableParameterFilter columns=\{filterColumns\}/);
   assert.match(mobileWorkflow, /tableRowMatchesFilters\(row, filterColumns, parameterFilters\)/);
-  assert.match(reportTable, /All statuses/);
+  assert.doesNotMatch(reportTable, /All statuses/);
+  assert.match(reportTable, /<ReportActionsMenu/);
+  assert.match(reportTable, /aria-label="Rows per page"/);
   assert.match(reportTable, /<TableParameterFilter columns=\{columns\}/);
+  assert.match(reportTable, /hideTrigger dialogMode/);
 });

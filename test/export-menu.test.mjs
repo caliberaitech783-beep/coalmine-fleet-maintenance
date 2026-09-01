@@ -21,7 +21,7 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/frame\.contentWindow\?\.print\(\)/);
   assert.match(source,/fetch\("\/api\/exports\/pdf"/);
   assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
-  assert.match(source,/<ExportMenu title=\{title\} columns=\{columns\} rows=\{rows\}/);
+  assert.match(source,/<ExportMenu title=\{title\} columns=\{visibleColumns\} rows=\{rows\}/);
   assert.match(source,/<ExportMenu title="Breakdown report" columns=\{filterColumns\} rows=\{sortedRows\}/);
   assert.match(source,/<ExportMenu title="Workflow report" columns=\{filterColumns\} rows=\{sortedRows\}/);
   assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);

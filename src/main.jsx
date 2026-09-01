@@ -54,6 +54,12 @@ import {
   FileSpreadsheet,
   Upload,
   ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  ChevronsLeft,
+  ChevronsRight,
+  ChevronsUp,
+  ChevronsDown,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
@@ -74,6 +80,8 @@ import {
   RefreshCw,
   ListFilter,
   Printer,
+  Columns3,
+  RotateCcw,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -1446,8 +1454,14 @@ function tableRowMatchesFilters(row, columns, filters) {
     return selected === EMPTY_TABLE_FILTER_VALUE ? !value : value === selected;
   });
 }
-function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterChange, onClearFilters, label = "Filter" }) {
-  const [open, setOpen] = useState(false);
+function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterChange, onClearFilters, label = "Filter", open: controlledOpen, onOpenChange, hideTrigger = false, dialogMode = false }) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value) => {
+    const next = typeof value === "function" ? value(open) : value;
+    if (onOpenChange) onOpenChange(next);
+    else setInternalOpen(next);
+  };
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const activeFilterCount = columns.filter((column) => filters[column.key]).length;
@@ -1458,7 +1472,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
     ]),
   );
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || dialogMode) return undefined;
     const closeFilter = (event) => {
       if (!event.target.closest?.(".table-parameter-filter, .table-parameter-filter-popover")) setOpen(false);
     };
@@ -1485,25 +1499,28 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
       window.removeEventListener("resize", positionPopover);
       window.removeEventListener("scroll", positionPopover, true);
     };
-  }, [open]);
+  }, [open, dialogMode]);
+  const filterDialog = (
+    <div className={`table-parameter-filter-popover ${dialogMode ? "dialog-mode" : ""}`} style={dialogMode ? undefined : popoverPosition} role="dialog" aria-modal={dialogMode || undefined} aria-label="Filter report parameters" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+      <div className="table-parameter-filter-head"><div><strong>Filter report</strong><span>Choose values to compare report records.</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Close report filters" title="Close"><X /></button></div>
+      <div className="table-parameter-filter-fields">
+        {columns.map((column) => (
+          <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
+            <option value="">All {column.label}</option>
+            {columnValues[column.key].map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
+          </select></label>
+        ))}
+      </div>
+      <div className="table-parameter-filter-foot"><button type="button" onClick={onClearFilters} disabled={!activeFilterCount}><X /> Clear filters</button>{dialogMode && <button type="button" className="primary" onClick={() => setOpen(false)}>Apply</button>}</div>
+    </div>
+  );
   return (
     <div className="table-parameter-filter">
-      <button ref={triggerRef} type="button" className={`table-parameter-filter-trigger ${activeFilterCount ? "active" : ""}`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="dialog">
+      {!hideTrigger && <button ref={triggerRef} type="button" className={`table-parameter-filter-trigger ${activeFilterCount ? "active" : ""}`} onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="dialog">
         <ListFilter aria-hidden="true" /><span>{label}{activeFilterCount ? ` (${activeFilterCount})` : ""}</span>
-      </button>
+      </button>}
       {open && createPortal(
-        <div className="table-parameter-filter-popover" style={popoverPosition} role="dialog" aria-label="Filter report parameters" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
-          <div className="table-parameter-filter-head"><div><strong>Filter report</strong><span>Choose values to compare report records.</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Close report filters" title="Close"><X /></button></div>
-          <div className="table-parameter-filter-fields">
-            {columns.map((column) => (
-              <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
-                <option value="">All {column.label}</option>
-                {columnValues[column.key].map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
-              </select></label>
-            ))}
-          </div>
-          <div className="table-parameter-filter-foot"><button type="button" onClick={onClearFilters} disabled={!activeFilterCount}><X /> Clear filters</button></div>
-        </div>,
+        dialogMode ? <div className="report-action-dialog-backdrop" onMouseDown={() => setOpen(false)}>{filterDialog}</div> : filterDialog,
         document.body,
       )}
     </div>
@@ -1716,10 +1733,133 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
   };
   return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
 }
-function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
+function ReportColumnSelector({ columns = [], visibleColumnKeys = [], onApply, onClose }) {
+  const [draftKeys, setDraftKeys] = useState(visibleColumnKeys);
+  const [selectedHidden, setSelectedHidden] = useState("");
+  const [selectedVisible, setSelectedVisible] = useState("");
+  const hiddenColumns = columns.filter((column) => !draftKeys.includes(column.key));
+  const displayedColumns = draftKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
+  const addColumn = (key) => {
+    if (!key || draftKeys.includes(key)) return;
+    setDraftKeys((current) => [...current, key]);
+    setSelectedHidden("");
+  };
+  const removeColumn = (key) => {
+    if (!key) return;
+    setDraftKeys((current) => current.filter((item) => item !== key));
+    setSelectedVisible("");
+  };
+  const moveColumn = (position) => {
+    const index = draftKeys.indexOf(selectedVisible);
+    if (index < 0) return;
+    let destination = position === "top" ? 0 : position === "bottom" ? draftKeys.length - 1 : index + (position === "up" ? -1 : 1);
+    destination = Math.max(0, Math.min(draftKeys.length - 1, destination));
+    if (destination === index) return;
+    setDraftKeys((current) => {
+      const next = [...current], [moved] = next.splice(index, 1);
+      next.splice(destination, 0, moved);
+      return next;
+    });
+  };
+  return createPortal(
+    <div className="report-action-dialog-backdrop" onMouseDown={onClose}>
+      <section className="report-columns-dialog" role="dialog" aria-modal="true" aria-labelledby="report-columns-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header><h2 id="report-columns-title">Select Columns</h2><button type="button" onClick={onClose} aria-label="Close column selector" title="Close"><X /></button></header>
+        <div className="report-columns-body">
+          <div className="report-column-list-panel">
+            <h3>Do Not Display</h3>
+            <div className="report-column-list" role="listbox" aria-label="Hidden report columns">
+              {hiddenColumns.length ? hiddenColumns.map((column) => <button key={column.key} type="button" role="option" aria-selected={selectedHidden === column.key} className={selectedHidden === column.key ? "selected" : ""} onClick={() => setSelectedHidden(column.key)} onDoubleClick={() => addColumn(column.key)}>{column.label}</button>) : <p>All columns are displayed.</p>}
+            </div>
+          </div>
+          <div className="report-column-transfer-controls" aria-label="Move report columns">
+            <button type="button" onClick={() => setDraftKeys(columns.map((column) => column.key))} disabled={!hiddenColumns.length} aria-label="Display all columns" title="Display all"><ChevronsRight /></button>
+            <button type="button" onClick={() => addColumn(selectedHidden)} disabled={!selectedHidden} aria-label="Display selected column" title="Display selected"><ChevronRight /></button>
+            <button type="button" onClick={() => removeColumn(selectedVisible)} disabled={!selectedVisible} aria-label="Hide selected column" title="Hide selected"><ChevronLeft /></button>
+            <button type="button" onClick={() => { setDraftKeys([]); setSelectedVisible(""); }} disabled={!draftKeys.length} aria-label="Hide all columns" title="Hide all"><ChevronsLeft /></button>
+          </div>
+          <div className="report-column-list-panel">
+            <h3>Display in Report</h3>
+            <div className="report-column-list" role="listbox" aria-label="Displayed report columns">
+              {displayedColumns.map((column) => <button key={column.key} type="button" role="option" aria-selected={selectedVisible === column.key} className={selectedVisible === column.key ? "selected" : ""} onClick={() => setSelectedVisible(column.key)} onDoubleClick={() => removeColumn(column.key)}>{column.label}</button>)}
+            </div>
+          </div>
+          <div className="report-column-order-controls" aria-label="Reorder displayed columns">
+            <button type="button" onClick={() => moveColumn("top")} disabled={!selectedVisible || draftKeys[0] === selectedVisible} aria-label="Move column to top" title="Move to top"><ChevronsUp /></button>
+            <button type="button" onClick={() => moveColumn("up")} disabled={!selectedVisible || draftKeys[0] === selectedVisible} aria-label="Move column up" title="Move up"><ChevronUp /></button>
+            <button type="button" onClick={() => moveColumn("down")} disabled={!selectedVisible || draftKeys.at(-1) === selectedVisible} aria-label="Move column down" title="Move down"><ChevronDown /></button>
+            <button type="button" onClick={() => moveColumn("bottom")} disabled={!selectedVisible || draftKeys.at(-1) === selectedVisible} aria-label="Move column to bottom" title="Move to bottom"><ChevronsDown /></button>
+          </div>
+        </div>
+        <footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="primary" disabled={!draftKeys.length} onClick={() => onApply(draftKeys)}>Apply</button></footer>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
+  const [columnKey, setColumnKey] = useState(sort.key || columns[0]?.key || "");
+  const [direction, setDirection] = useState(sort.direction || "asc");
+  return createPortal(
+    <div className="report-action-dialog-backdrop" onMouseDown={onClose}>
+      <section className="report-sort-dialog" role="dialog" aria-modal="true" aria-labelledby="report-sort-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header><h2 id="report-sort-title">Sort Report</h2><button type="button" onClick={onClose} aria-label="Close sort dialog" title="Close"><X /></button></header>
+        <div><label><span>Column</span><select value={columnKey} onChange={(event) => setColumnKey(event.target.value)}>{columns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select></label><label><span>Direction</span><select value={direction} onChange={(event) => setDirection(event.target.value)}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label></div>
+        <footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="primary" disabled={!columnKey} onClick={() => onApply(columnKey, direction)}>Apply</button></footer>
+      </section>
+    </div>,
+    document.body,
+  );
+}
+function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort, onClearSort, onReset }) {
+  const [open, setOpen] = useState(false);
+  const [dataOpen, setDataOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeMenu = (event) => {
+      if (!event.target.closest?.(".report-actions-menu, .report-actions-popover")) setOpen(false);
+    };
+    const placeMenu = () => {
+      const bounds = triggerRef.current?.getBoundingClientRect();
+      if (!bounds) return;
+      setPosition({ top: bounds.bottom + 6, left: Math.max(12, Math.min(bounds.left, window.innerWidth - 244)) });
+    };
+    placeMenu();
+    document.addEventListener("mousedown", closeMenu);
+    window.addEventListener("resize", placeMenu);
+    window.addEventListener("scroll", placeMenu, true);
+    return () => {
+      document.removeEventListener("mousedown", closeMenu);
+      window.removeEventListener("resize", placeMenu);
+      window.removeEventListener("scroll", placeMenu, true);
+    };
+  }, [open]);
+  const run = (callback) => { setOpen(false); setDataOpen(false); callback(); };
+  return <div className="report-actions-menu">
+    <button ref={triggerRef} type="button" className="report-actions-trigger" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="menu"><span>Actions</span><ChevronDown /></button>
+    {open && createPortal(<div className="report-actions-popover" style={position} role="menu" aria-label="Report actions">
+      <button type="button" role="menuitem" onClick={() => run(onColumns)}><Columns3 /><span>Columns</span></button>
+      <button type="button" role="menuitem" onClick={() => run(onFilter)}><ListFilter /><span>Filter</span>{activeFilterCount > 0 && <b>{activeFilterCount}</b>}</button>
+      <div className="report-actions-divider" />
+      <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={dataOpen} onClick={() => setDataOpen((current) => !current)}><ArrowUpDown /><span>Data</span><ChevronRight /></button>
+      {dataOpen && <div className="report-actions-submenu" role="menu" aria-label="Report data actions"><button type="button" role="menuitem" onClick={() => run(onSort)}><ArrowUpDown /><span>Sort</span></button><button type="button" role="menuitem" onClick={() => run(onClearSort)}><X /><span>Clear sort</span></button></div>}
+      <div className="report-actions-divider" />
+      <button type="button" role="menuitem" onClick={() => run(onReset)}><RotateCcw /><span>Reset report</span></button>
+    </div>, document.body)}
+  </div>;
+}
+function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
   const [columnFilters, setColumnFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [sortDialogOpen, setSortDialogOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(50);
+  const [page, setPage] = useState(0);
   const columnValue = (row, column) => tableFilterText(column.value?.(row));
+  const displayedColumns = visibleColumnKeys.length ? visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean) : columns;
   const columnValues = Object.fromEntries(
     columns.map((column) => [
       column.key,
@@ -1746,7 +1886,13 @@ function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey
       return next;
     });
   };
-  const statusColumn = columns.find((column) => column.key === "status");
+  const activeFilterCount = columns.filter((column) => columnFilters[column.key]).length;
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / pageSize));
+  const currentPage = Math.min(page, pageCount - 1);
+  const pagedRows = sortedRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+  const firstVisibleRow = sortedRows.length ? currentPage * pageSize + 1 : 0;
+  const lastVisibleRow = Math.min((currentPage + 1) * pageSize, sortedRows.length);
+  useEffect(() => { setPage(0); }, [query, columnFilters, sort.key, sort.direction, pageSize, rows.length]);
   useEffect(() => {
     if (!openFilter) return undefined;
     const closeFilter = (event) => {
@@ -1758,11 +1904,12 @@ function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey
   return (
     <>
       <div className="report-table-filter-toolbar">
-        {statusColumn && <label><ListFilter /><select value={columnFilters.status || ""} onChange={(event) => updateColumnFilter("status", event.target.value)}><option value="">All statuses</option>{columnValues.status.map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}</select></label>}
-        <TableParameterFilter columns={columns} rows={rows} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
+        <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); changeSort("", "asc"); setPageSize(50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} />
+        {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
       </div>
       <table className="report-filter-table">
-        <thead><tr>{columns.map((column) => (
+        <thead><tr>{displayedColumns.map((column) => (
           <FilterableHeader
             key={column.key}
             label={column.label}
@@ -1777,13 +1924,17 @@ function ReportTable({ columns = [], rows = [], query = "", emptyMessage, rowKey
           />
         ))}</tr></thead>
         <tbody>
-          {sortedRows.length ? sortedRows.map((row, index) => (
+          {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-              {columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+              {displayedColumns.map((column) => <td key={column.key}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
             </tr>
-          )) : <tr><td colSpan={columns.length} className="empty-state">{emptyMessage}</td></tr>}
+          )) : <tr><td colSpan={displayedColumns.length} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
       </table>
+      <div className="report-table-pagination"><span>{firstVisibleRow}-{lastVisibleRow} of {sortedRows.length.toLocaleString("en-IN")}</span><div><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={currentPage === 0} aria-label="Previous report page" title="Previous page"><ChevronLeft /></button><b>{currentPage + 1} / {pageCount}</b><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={currentPage >= pageCount - 1} aria-label="Next report page" title="Next page"><ChevronRight /></button></div></div>
+      <TableParameterFilter columns={columns} rows={rows} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} open={filterDialogOpen} onOpenChange={setFilterDialogOpen} hideTrigger dialogMode />
+      {columnDialogOpen && <ReportColumnSelector columns={columns} visibleColumnKeys={displayedColumns.map((column) => column.key)} onApply={(keys) => { onVisibleColumnsChange?.(keys); setColumnDialogOpen(false); }} onClose={() => setColumnDialogOpen(false)} />}
+      {sortDialogOpen && <ReportSortDialog columns={displayedColumns} sort={sort} onApply={(key, direction) => { changeSort(key, direction); setSortDialogOpen(false); }} onClose={() => setSortDialogOpen(false)} />}
     </>
   );
 }
@@ -3811,6 +3962,8 @@ function locationCountRows(records = []) {
   return [...groups.values()].sort((a, b) => sortCollator.compare(a.location, b.location));
 }
 function ReportSection({ title, description, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, children }) {
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
+  const visibleColumns = visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
   return (
     <div className="reports-section generated-report-section">
       <div className="reports-section-heading">
@@ -3818,7 +3971,7 @@ function ReportSection({ title, description, rows = [], columns = [], query = ""
           <h2>{title}</h2>
           <p>{description}</p>
         </div>
-        <ExportMenu title={title} columns={columns} rows={rows} className="secondary" label="Generate" />
+        <ExportMenu title={title} columns={visibleColumns} rows={rows} className="secondary" label="Generate" />
       </div>
       {children || (
         <div className="reports-detail-table emptytable">
@@ -3829,6 +3982,8 @@ function ReportSection({ title, description, rows = [], columns = [], query = ""
             rowClassName={rowClassName}
             emptyMessage={emptyMessage}
             columns={columns}
+            visibleColumnKeys={visibleColumnKeys}
+            onVisibleColumnsChange={setVisibleColumnKeys}
           />
         </div>
       )}
@@ -3836,9 +3991,8 @@ function ReportSection({ title, description, rows = [], columns = [], query = ""
   );
 }
 function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {} }) {
-  const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master");
-  const [transferRecords, , transfersLoaded] = useMasterRecords("Vehicle transfers");
-  const [query, setQuery] = useState("");
+  const [equipmentRecords] = useMasterRecords("Equipment master");
+  const [transferRecords] = useMasterRecords("Vehicle transfers");
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
   const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
   const [reportScheduleSettings, setReportScheduleSettings] = useState(defaultHierarchyReportScheduleSettings);
@@ -3878,7 +4032,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     };
   }), [requests, equipmentByReference]);
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
-  const loading = !(equipmentLoaded && transfersLoaded);
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
   const reportRequestStatus = (request) => String(request.status || "").trim() || "Open";
   const activeCategory = reportCategoryTabs.find((category) => category.id === activeReportCategory) || reportCategoryTabs[0];
@@ -4180,10 +4333,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         document.body,
       )}
       <CaliberActivityOverlay message={reportZipDownloading ? "Preparing reports ZIP..." : ""} />
-      <div className="toolbar reports-toolbar">
-        <div><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search reports, references, sites..." /></div>
-        {loading && <span className="reports-loading" role="status"><CaliberActivityMark size="tiny" /> Updating live totals…</span>}
-      </div>
       <div className="reports-category-tabs" role="tablist" aria-label="Report type tabs">
         {reportCategoryTabs.map((category) => (
           <button
@@ -4198,10 +4347,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             <span><b>{category.label}</b><small>{category.description}</small></span>
           </button>
         ))}
-      </div>
-      <div className="reports-subtype-summary">
-        <div><b>{activeCategory.label}</b><span>{activeCategory.description}</span></div>
-        <small>{activeReports.length} generated report{activeReports.length === 1 ? "" : "s"}</small>
       </div>
       {activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
         {activeReports.map((report) => (
@@ -4225,7 +4370,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           key={`${selectedReport.category}-${selectedReport.title}`}
           title={selectedReport.title}
           description={selectedReport.description}
-          query={query}
           rows={selectedReport.rows}
           columns={selectedReport.columns}
           emptyMessage={selectedReport.emptyMessage}

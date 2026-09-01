@@ -349,6 +349,25 @@ textarea {
 :root[data-theme="dark"] .report-name-tabs button:hover{background:#1d2d47;border-color:#55709b}
 :root[data-theme="dark"] .report-name-tabs button.active{background:#203766;border-color:#6690ff;color:#eef3fb;box-shadow:0 0 0 2px #6690ff28}
 :root[data-theme="dark"] .report-name-tabs svg{color:#9bb7ff}
+:root[data-theme="dark"] .report-actions-trigger,:root[data-theme="dark"] .report-table-pagination button{background:#17253a;border-color:#36516f;color:#dce7f7}
+:root[data-theme="dark"] .report-actions-trigger:hover,:root[data-theme="dark"] .report-actions-trigger[aria-expanded=true]{background:#223e64;border-color:#55709b}
+:root[data-theme="dark"] .report-actions-popover,:root[data-theme="dark"] .report-actions-submenu{background:#17253a;border-color:#2c415e;color:#dce7f7;box-shadow:0 14px 30px #0008}
+:root[data-theme="dark"] .report-actions-popover button:hover{background:#223e64;color:#fff}
+:root[data-theme="dark"] .report-actions-divider{background:#2c415e}
+:root[data-theme="dark"] .report-active-filter{background:#203766;border-color:#55709b;color:#b7ccff}
+:root[data-theme="dark"] .report-table-pagination{background:#142136;border-color:#2c415e;color:#a9b8ce}
+:root[data-theme="dark"] .report-table-pagination b{color:#eef3fb}
+:root[data-theme="dark"] .report-action-dialog-backdrop{background:#030b17a8}
+:root[data-theme="dark"] .report-columns-dialog,:root[data-theme="dark"] .report-sort-dialog{background:#17253a;border-color:#36516f;color:#dce7f7;box-shadow:0 28px 80px #0009}
+:root[data-theme="dark"] .report-columns-dialog>header,:root[data-theme="dark"] .report-sort-dialog>header,:root[data-theme="dark"] .report-columns-dialog>footer,:root[data-theme="dark"] .report-sort-dialog>footer{background:#142136;border-color:#2c415e}
+:root[data-theme="dark"] .report-columns-dialog>header button,:root[data-theme="dark"] .report-sort-dialog>header button,:root[data-theme="dark"] .report-columns-dialog>footer button,:root[data-theme="dark"] .report-sort-dialog>footer button{background:#1d2d45;border-color:#36516f;color:#dce7f7}
+:root[data-theme="dark"] .report-column-list-panel h3{background:#142136;border-color:#36516f;color:#a9b8ce}
+:root[data-theme="dark"] .report-column-list{background:#17253a;border-color:#36516f}
+:root[data-theme="dark"] .report-column-list button{background:#17253a;color:#dce7f7}
+:root[data-theme="dark"] .report-column-list button:hover{background:#223e64}
+:root[data-theme="dark"] .report-column-list button.selected{background:#294877;color:#fff}
+:root[data-theme="dark"] .report-column-transfer-controls button,:root[data-theme="dark"] .report-column-order-controls button{color:#b7ccff}
+:root[data-theme="dark"] .report-sort-dialog select{background:#1d2d45;border-color:#36516f;color:#dce7f7}
 
 @media (max-width: 600px) {
   .theme-toggle { min-width: 36px; width: 36px; padding: 4px !important; }
