@@ -36,6 +36,10 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   assert.match(source, /function TicketResolutionForm/);
   assert.match(source, /audioName="resolutionAudio"[\s\S]*Record resolution audio/);
   assert.match(source, /resolutionAttachmentData/);
+  assert.match(source, /function TicketMedia/);
+  assert.match(source, /URL\.createObjectURL\(new Blob/);
+  assert.match(source, /URL\.revokeObjectURL\(objectUrl\)/);
+  assert.doesNotMatch(source, /href=\{ticket\.(?:attachmentData|resolutionAttachmentData)\}/);
   assert.match(source, /image\/jpeg,image\/png,image\/webp,video\/mp4,video\/webm/);
   assert.match(source, /function NotificationBell/);
   assert.match(server, /CREATE TABLE IF NOT EXISTS crm_tickets/);
