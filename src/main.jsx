@@ -709,7 +709,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
       <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{activeManagerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{activeManagerRole==="Maintenance Manager"&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={activeManagerRole === "Production Manager"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} stableToolbar /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} stableToolbar /></article>
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
@@ -888,7 +888,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, stableToolbar = false }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, stableToolbar = false }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [dateFilter, setDateFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
   useEffect(() => {
@@ -898,7 +898,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [showBreakdownDays]);
   const columns = [
       ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
-      ...(showReason ? [["complaint", "Reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []),
+      ...(showReason ? [["complaint", "Reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
       ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
@@ -923,7 +923,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         return row[key];
       },
     })),
-    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.make, row.model) && (!statusFilter || row.status === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
+    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.closedBy, row.make, row.model) && (!statusFilter || row.status === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
     [sortedRows, sort, changeSort] = useSortableRows(searchedRows);
   return (
     <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
@@ -950,6 +950,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 </td>
                 {showReason && <td>{r.complaint || "—"}</td>}
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
+                {showClosedBy && <td>{r.closedBy || "—"}</td>}
                 {showAudio && <td>{r.chassis || "—"}</td>}
                 {showBreakdownDays && (
                   <td>
@@ -5167,7 +5168,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudio ? "Available" : "Not available"}] : []),
   ];
   const filteredRows = rows.filter((row) => {
-    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.idleReason, row.complaint, row.owner, row.requesterLogin);
+    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy);
     return matchesText && (!statusFilter || String(row.status || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows);
@@ -5210,7 +5211,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showClosedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div></>
@@ -5596,7 +5597,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showComplaintAudio showMeterData showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showReason showClosedBy showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showClosedBy showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
       {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
       </>}
     </main>
