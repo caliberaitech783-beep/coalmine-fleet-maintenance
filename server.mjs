@@ -1071,6 +1071,7 @@ async function addTicketNotifications(client,recipients,reference,message,workfl
 let consolidatedReportRunning=false;
 async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
   if(!databaseReady||consolidatedReportRunning)return {skipped:true};
+  return {skipped:true,reason:'Fleet consolidated schedule is handled by the hierarchy report flow'};
   if(!consolidatedReportDue(now))return {skipped:true,reason:'outside scheduled report window'};
   consolidatedReportRunning=true;
   try{
