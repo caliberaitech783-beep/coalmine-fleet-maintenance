@@ -6,7 +6,7 @@ import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
-import { HIERARCHY_REPORT_DESIGNATIONS } from "../hierarchy-report-flow.mjs";
+import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
@@ -3728,11 +3728,11 @@ const reportCategoryTabs = [
   {id: "mis", label: "MIS Report", description: "MIS verification and first-trip audit reports."},
 ];
 const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-const reportScheduleGroups = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
+const reportDesignationOptions = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
 function reportScheduleKind(schedule) {
-  if (schedule.eventBased) return "Every event";
-  if (schedule.intervalDays) return `Every ${schedule.intervalDays} days`;
-  if (schedule.weekday != null) return "Weekly";
+  if (schedule.cadence === "event") return "Every event";
+  if (schedule.cadence === "interval") return `Every ${schedule.intervalDays} days`;
+  if (schedule.cadence === "weekly") return "Weekly";
   return "Daily";
 }
 function reportAccessAllows(selection, label) {
@@ -3790,8 +3790,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [query, setQuery] = useState("");
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
   const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
-  const [directorSending, setDirectorSending] = useState(false);
-  const [directorResult, setDirectorResult] = useState(null);
+  const [reportScheduleSettings, setReportScheduleSettings] = useState(defaultHierarchyReportScheduleSettings);
+  const [reportScheduleRecipients, setReportScheduleRecipients] = useState({});
+  const [selectedScheduleDesignation, setSelectedScheduleDesignation] = useState("director");
+  const [reportScheduleLoading, setReportScheduleLoading] = useState(false);
+  const [reportScheduleSaving, setReportScheduleSaving] = useState(false);
   const [reportZipOpen, setReportZipOpen] = useState(false);
   const [selectedZipReports, setSelectedZipReports] = useState([]);
   const [reportZipDownloading, setReportZipDownloading] = useState(false);
@@ -3941,6 +3944,55 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const selectReportTab = (report) => {
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
   };
+  const openReportSchedules = async () => {
+    setDirectorTimingOpen(true);
+    setReportScheduleLoading(true);
+    try {
+      const response = await fetch("/api/report-schedule-settings", { headers: { Authorization: `Bearer ${authToken}` } });
+      const details = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(details.error || "Could not load report schedules.");
+      setReportScheduleSettings(details.settings || defaultHierarchyReportScheduleSettings());
+      setReportScheduleRecipients(details.recipients || {});
+    } catch (error) { alert(error.message); }
+    finally { setReportScheduleLoading(false); }
+  };
+  const updateScheduleDesignation = (updater) => {
+    setReportScheduleSettings((current) => ({
+      ...current,
+      designations: {
+        ...current.designations,
+        [selectedScheduleDesignation]: updater(current.designations[selectedScheduleDesignation]),
+      },
+    }));
+  };
+  const updateReportSchedule = (scheduleKey, changes) => updateScheduleDesignation((designation) => ({
+    ...designation,
+    schedules: designation.schedules.map((schedule) => schedule.key === scheduleKey ? { ...schedule, ...changes } : schedule),
+  }));
+  const addReportSchedule = () => updateScheduleDesignation((designation) => ({
+    ...designation,
+    schedules: [...designation.schedules, { key: `custom-${Date.now()}`, enabled: true, cadence: "daily", weekday: 1, intervalDays: 7, times: ["19:00"], reports: [] }],
+  }));
+  const removeReportSchedule = (scheduleKey) => updateScheduleDesignation((designation) => ({
+    ...designation,
+    schedules: designation.schedules.filter((schedule) => schedule.key !== scheduleKey),
+  }));
+  const saveReportSchedules = async () => {
+    if (reportScheduleSaving) return;
+    setReportScheduleSaving(true);
+    try {
+      const response = await fetch("/api/report-schedule-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify(reportScheduleSettings),
+      });
+      const details = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(details.error || "Could not save report schedules.");
+      setReportScheduleSettings(details);
+      setDirectorTimingOpen(false);
+    } catch (error) { alert(error.message); }
+    finally { setReportScheduleSaving(false); }
+  };
   const openReportZip = () => {
     setSelectedZipReports(reportGroups.map((report) => report.title));
     setReportZipOpen(true);
@@ -3977,23 +4029,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     } catch (error) { alert(error.message); }
     finally { setReportZipDownloading(false); }
   };
-  const sendDirectorTestReport = async () => {
-    const recipientPhone = window.prompt("Send Director daily report WhatsApp to:", "9925565281");
-    if (!recipientPhone) return;
-    setDirectorSending(true);
-    setDirectorResult(null);
-    try {
-      const response = await fetch("/api/reports/director/send-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ recipientPhone, recipientName: "Director test recipient" }),
-      });
-      const details = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(details.error || details.status || "Could not send the Director report WhatsApp.");
-      setDirectorResult(details);
-    } catch (error) { alert(error.message); }
-    finally { setDirectorSending(false); }
-  };
+  const selectedScheduleConfig = reportScheduleSettings.designations[selectedScheduleDesignation] || { enabled: true, allRecipients: true, recipientLogins: [], schedules: [] };
+  const selectedScheduleMeta = reportDesignationOptions.find((designation) => designation.key === selectedScheduleDesignation) || reportDesignationOptions[0];
+  const selectedScheduleRecipients = reportScheduleRecipients[selectedScheduleDesignation] || [];
   return (
     <section className="reports-page panel pagepanel">
       <header>
@@ -4002,7 +4040,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
-          <button type="button" className="secondary director-timing-trigger" onClick={() => setDirectorTimingOpen(true)}><Clock /> All report schedules</button>
+          <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules}><Clock /> Report schedules</button>
           <button type="button" className="primary" onClick={openReportZip}><Download /> Download reports ZIP</button>
         </div>
       </header>
@@ -4013,36 +4051,43 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
               <div><h3>Report delivery schedules</h3><p>All configured WhatsApp schedules by user designation</p></div>
               <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X /></button>
             </header>
-            <div className="director-timing-card">
-              <span><CalendarDays /> 7-day schedule</span>
-              <strong>IST timings</strong>
-              <p>Daily schedules run every day. Saturday also includes the weekly fleet report at 7:00 PM. Event and 3/5/7-day cycles are listed below.</p>
-            </div>
-            <div className="report-week-grid" aria-label="Seven day report schedule">
-              {reportWeekDays.map((day) => <article key={day} className={day === "Saturday" ? "weekly" : ""}>
-                <b>{day.slice(0, 3)}</b>
-                <span>Daily · 8 AM, 6 PM, 7 PM</span>
-                {day === "Saturday" && <small>Weekly fleet · 7 PM</small>}
-              </article>)}
-            </div>
-            <div className="report-schedule-list">
-              {reportScheduleGroups.map((designation) => <article key={designation.key}>
-                <div className="report-schedule-person"><span>Level {designation.level}</span><b>{designation.label}</b></div>
-                <div className="report-schedule-rules">
-                  {designation.schedules.map((schedule) => <div key={schedule.key}>
-                    <span className="report-schedule-kind">{reportScheduleKind(schedule)}</span>
-                    <p><b>{schedule.label}</b><small>{schedule.reports.length} linked report{schedule.reports.length === 1 ? "" : "s"}</small></p>
-                  </div>)}
-                </div>
-              </article>)}
-            </div>
-            {directorResult && <div className="director-send-result" role="status">
-              <b>{directorResult.status || "Generated"}</b>
-              <span>{directorResult.reportCount || 0} reports prepared for slot {directorResult.slotKey}.</span>
-            </div>}
+            {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : <>
+              <div className="report-schedule-toolbar">
+                <label><span>Assign schedule to</span><select value={selectedScheduleDesignation} onChange={(event) => setSelectedScheduleDesignation(event.target.value)}>{reportDesignationOptions.map((designation) => <option key={designation.key} value={designation.key}>{designation.label}</option>)}</select></label>
+                <label className="report-schedule-switch"><input type="checkbox" checked={selectedScheduleConfig.enabled} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, enabled: event.target.checked }))} /><span>Active</span></label>
+              </div>
+              <div className="report-week-grid compact" aria-label="Seven day report schedule summary">
+                {reportWeekDays.map((day, index) => {
+                  const weekday = (index + 1) % 7;
+                  const count = selectedScheduleConfig.schedules.filter((schedule) => schedule.enabled && (schedule.cadence === "daily" || (schedule.cadence === "weekly" && schedule.weekday === weekday))).length;
+                  return <article key={day} className={count ? "active" : ""}><b>{day.slice(0, 3)}</b><span>{count ? `${count} slot${count === 1 ? "" : "s"}` : "—"}</span></article>;
+                })}
+              </div>
+              <details className="report-recipient-picker">
+                <summary><span>Recipients</span><b>{selectedScheduleConfig.allRecipients ? `All ${selectedScheduleMeta.label}` : `${selectedScheduleConfig.recipientLogins.length} selected`}</b></summary>
+                <label className="report-recipient-all"><input type="checkbox" checked={selectedScheduleConfig.allRecipients} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, allRecipients: event.target.checked }))} /> Send to every matching user</label>
+                {!selectedScheduleConfig.allRecipients && <div>{selectedScheduleRecipients.length ? selectedScheduleRecipients.map((recipient) => <label key={recipient.login}><input type="checkbox" checked={selectedScheduleConfig.recipientLogins.includes(recipient.login)} onChange={() => updateScheduleDesignation((designation) => ({ ...designation, recipientLogins: designation.recipientLogins.includes(recipient.login) ? designation.recipientLogins.filter((login) => login !== recipient.login) : [...designation.recipientLogins, recipient.login] }))} /><span><b>{recipient.name}</b><small>{recipient.hasPhone ? recipient.login : `${recipient.login} · phone missing`}</small></span></label>) : <p>No matching users are configured.</p>}</div>}
+              </details>
+              <div className="report-schedule-editor-list">
+                {selectedScheduleConfig.schedules.map((schedule) => <article key={schedule.key}>
+                  <header>
+                    <label><input type="checkbox" checked={schedule.enabled} onChange={(event) => updateReportSchedule(schedule.key, { enabled: event.target.checked })} /><span><b>{reportScheduleKind(schedule)}</b><small>{hierarchyScheduleLabel(schedule)}</small></span></label>
+                    <button type="button" onClick={() => removeReportSchedule(schedule.key)} aria-label="Delete schedule"><Trash2 /></button>
+                  </header>
+                  <div className="report-schedule-fields">
+                    <label><span>Frequency</span><select value={schedule.cadence} onChange={(event) => updateReportSchedule(schedule.key, { cadence: event.target.value })}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every N days</option><option value="event">Every event</option></select></label>
+                    {schedule.cadence === "weekly" && <label><span>Day</span><select value={schedule.weekday} onChange={(event) => updateReportSchedule(schedule.key, { weekday: Number(event.target.value) })}>{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
+                    {schedule.cadence === "interval" && <label><span>Repeat every</span><div className="report-interval-input"><input type="number" min="2" max="31" value={schedule.intervalDays} onChange={(event) => updateReportSchedule(schedule.key, { intervalDays: Number(event.target.value) })} /><small>days</small></div></label>}
+                    {schedule.cadence !== "event" && <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>}
+                  </div>
+                  <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details>
+                </article>)}
+                <button type="button" className="report-add-schedule" onClick={addReportSchedule}><Plus /> Add schedule</button>
+              </div>
+            </>}
             <footer>
-              <button type="button" onClick={() => setDirectorTimingOpen(false)}>Close</button>
-              <button type="button" className="primary" onClick={sendDirectorTestReport} disabled={directorSending}><Send /> {directorSending ? "Sending..." : "Generate & send test now"}</button>
+              <button type="button" onClick={() => setDirectorTimingOpen(false)} disabled={reportScheduleSaving}>Cancel</button>
+              <button type="button" className="primary" onClick={saveReportSchedules} disabled={reportScheduleLoading || reportScheduleSaving}><Save /> {reportScheduleSaving ? "Saving…" : "Save schedules"}</button>
             </footer>
           </div>
         </div>,

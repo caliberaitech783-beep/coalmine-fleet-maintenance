@@ -19,7 +19,7 @@ import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleE
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
-import {flowDesignationForUser,reportsDueForDesignation} from './hierarchy-report-flow.mjs';
+import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation} from './hierarchy-report-flow.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
@@ -46,6 +46,7 @@ const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Ko
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
+const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
@@ -68,6 +69,11 @@ function maskedSecret(value){
 async function storedWhatsAppSettings(){
   const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[WHATSAPP_SETTING_KEY]);
   return rows[0]?.setting_value||{};
+}
+
+async function storedHierarchyReportScheduleSettings(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[HIERARCHY_REPORT_SCHEDULE_SETTING_KEY]);
+  return rows.length?normalizeHierarchyReportScheduleSettings(rows[0].setting_value):defaultHierarchyReportScheduleSettings();
 }
 
 async function metaWhatsAppRuntimeEnv(){
@@ -746,6 +752,35 @@ app.put('/api/navigation-settings',requireSuper,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+app.get('/api/report-schedule-settings',requireSuper,async(_req,res,next)=>{
+  try{
+    const [{rows},settings]=await Promise.all([
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
+      storedHierarchyReportScheduleSettings(),
+    ]);
+    const recipients={};
+    for(const row of rows){
+      const user=row.record_data||{};
+      const designation=flowDesignationForUser(user,resolveMobileAccess({user}));
+      const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
+      if(!designation||!login)continue;
+      (recipients[designation.key]??=[]).push({login,name:String(user.employee||user.name||user.login||login).trim(),hasPhone:Boolean(String(user.phone||user.phoneNo||user.phoneNumber||'').trim())});
+    }
+    res.json({settings,recipients});
+  }catch(error){next(error)}
+});
+
+app.put('/api/report-schedule-settings',requireSuper,async(req,res,next)=>{
+  try{
+    const settings=normalizeHierarchyReportScheduleSettings(req.body||{});
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
+      HIERARCHY_REPORT_SCHEDULE_SETTING_KEY,JSON.stringify(settings),
+    ]);
+    res.json(settings);
+  }catch(error){next(error)}
+});
+
 app.get('/api/whatsapp-alert-history',requireSuper,async(_req,res,next)=>{
   try{
     const {rows}=await pool.query(`SELECT id,report_type AS "reportType",target_name AS "targetName",
@@ -1330,9 +1365,10 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
   if(!databaseReady||hierarchyReportRunning)return {skipped:true};
   hierarchyReportRunning=true;
   try{
-    const [{rows:userRows},{rows:hierarchyRows}]=await Promise.all([
+    const [{rows:userRows},{rows:hierarchyRows},scheduleSettings]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
+      storedHierarchyReportScheduleSettings(),
     ]);
     let sent=0,failed=0,skipped=0;
     for(const row of userRows){
@@ -1340,7 +1376,10 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
       const profile=resolveMobileAccess({user});
       const designation=flowDesignationForUser(user,profile);
       if(!designation)continue;
-      const dueGroups=reportsDueForDesignation(designation.key,now);
+      const designationSettings=scheduleSettings.designations[designation.key];
+      const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
+      if(!designationSettings?.allRecipients&&!designationSettings?.recipientLogins?.includes(login)){skipped++;continue}
+      const dueGroups=reportsDueForDesignation(designation.key,now,20,scheduleSettings);
       if(!dueGroups.length)continue;
       const hierarchyRule=hierarchyRuleForDesignation(hierarchyRows,designation);
       const allowedReports=hierarchyRule?new Set(splitHierarchyValues(hierarchyRule.reportAccess)):null;
@@ -1349,7 +1388,6 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
       const scheduleLabel=[...new Set(dueGroups.map((group)=>group.scheduleLabel))].join(' + ');
       const slotKey=dueGroups.map((group)=>group.slotKey).sort().join('+');
       const scheduleKey=dueGroups.map((group)=>group.scheduleKey).sort().join('+');
-      const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
       const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       const recipientName=String(user.employee||user.name||user.login||designation.label);
       if(!phone){skipped++;continue}

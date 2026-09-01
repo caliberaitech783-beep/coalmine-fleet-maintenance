@@ -22,6 +22,8 @@ const weeklyFleet=[REPORT.VEHICLE_TRANSFER,REPORT.LOCATION_WISE];
 const dailyOperational=[REPORT.IDLE_VEHICLE,REPORT.RECENT_BREAKDOWN,REPORT.OFFROAD_TO_MIS,REPORT.EVENT_OPEN_TAT,REPORT.EVENT_CLOSE_MIS,REPORT.IDLE_PM,REPORT.IDLE_FIRST_TRIP];
 const eventCore=[REPORT.OPEN_BD,REPORT.CLOSING_BD,REPORT.MIS_VERIFICATION];
 const oemClosing=[REPORT.CLOSING_BD];
+const TIME_PATTERN=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
+const ALLOWED_REPORTS=new Set(DIRECTOR_REPORT_TITLES);
 
 export const HIERARCHY_REPORT_DESIGNATIONS={
   director:{label:"Director's",level:1,schedules:[
@@ -71,6 +73,66 @@ export const HIERARCHY_REPORT_DESIGNATIONS={
   ]},
 };
 
+function scheduleCadence(schedule={}){
+  if(schedule.eventBased||schedule.cadence==='event')return 'event';
+  if(schedule.intervalDays||schedule.cadence==='interval')return 'interval';
+  if(schedule.weekday!=null||schedule.cadence==='weekly')return 'weekly';
+  return 'daily';
+}
+
+function scheduleTimes(schedule={}){
+  const supplied=Array.isArray(schedule.times)?schedule.times:[];
+  const fromHours=Array.isArray(schedule.hours)?schedule.hours.map((hour)=>`${String(Number(hour)).padStart(2,'0')}:00`):[];
+  return [...new Set((supplied.length?supplied:fromHours).map(clean).filter((time)=>TIME_PATTERN.test(time)))].slice(0,6);
+}
+
+function configuredSchedule(schedule={},index=0){
+  const cadence=scheduleCadence(schedule);
+  const times=cadence==='event'?[]:scheduleTimes(schedule);
+  const reports=[...new Set((Array.isArray(schedule.reports)?schedule.reports:[]).map(clean).filter((title)=>ALLOWED_REPORTS.has(title)))];
+  return {
+    key:clean(schedule.key)||`schedule-${index+1}`,
+    enabled:schedule.enabled!==false,
+    cadence,
+    weekday:cadence==='weekly'?Math.min(6,Math.max(0,Number(schedule.weekday)||0)):null,
+    intervalDays:cadence==='interval'?Math.min(31,Math.max(2,Number(schedule.intervalDays)||7)):null,
+    times,
+    reports,
+  };
+}
+
+export function defaultHierarchyReportScheduleSettings(){
+  return {designations:Object.fromEntries(Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key,designation])=>[key,{
+    enabled:true,
+    allRecipients:true,
+    recipientLogins:[],
+    schedules:designation.schedules.map(configuredSchedule),
+  }]))};
+}
+
+export function normalizeHierarchyReportScheduleSettings(value={}){
+  const defaults=defaultHierarchyReportScheduleSettings();
+  const supplied=value?.designations&&typeof value.designations==='object'?value.designations:{};
+  return {designations:Object.fromEntries(Object.keys(HIERARCHY_REPORT_DESIGNATIONS).map((key)=>{
+    const current=supplied[key];
+    if(!current||typeof current!=='object')return [key,defaults.designations[key]];
+    return [key,{
+      enabled:current.enabled!==false,
+      allRecipients:current.allRecipients!==false,
+      recipientLogins:[...new Set((Array.isArray(current.recipientLogins)?current.recipientLogins:[]).map((login)=>clean(login).toLowerCase()).filter(Boolean))].slice(0,500),
+      schedules:(Array.isArray(current.schedules)?current.schedules:[]).slice(0,20).map(configuredSchedule),
+    }];
+  }))};
+}
+
+export function hierarchyScheduleLabel(schedule={}){
+  if(schedule.cadence==='event')return 'Every event';
+  const times=(schedule.times||[]).join(' & ')||'Time not set';
+  if(schedule.cadence==='weekly')return `Weekly on ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][schedule.weekday]||'Sunday'} @ ${times}`;
+  if(schedule.cadence==='interval')return `Every ${schedule.intervalDays||7} days @ ${times}`;
+  return `Daily @ ${times}`;
+}
+
 function clean(value){return String(value??'').trim()}
 function words(value){return clean(value).toLowerCase()}
 function includesAny(text,needles){return needles.some((needle)=>text.includes(needle))}
@@ -87,36 +149,42 @@ export function hierarchyIndiaParts(now=new Date()){
   };
 }
 
-function scheduleIsDue(schedule,now,graceMinutes){
-  if(schedule.eventBased)return false;
+function scheduleDueTime(schedule,now,graceMinutes){
+  if(schedule.enabled===false||schedule.eventBased||schedule.cadence==='event')return '';
   const local=hierarchyIndiaParts(now);
-  if(schedule.weekday!=null&&local.weekday!==schedule.weekday)return false;
-  if(schedule.intervalDays&&local.day%schedule.intervalDays!==0)return false;
-  return (schedule.hours||[]).some((hour)=>{
-    const slot=new Date(Date.UTC(local.year,local.month-1,local.day,hour)-INDIA_OFFSET_MS);
+  if((schedule.cadence==='weekly'||schedule.weekday!=null)&&local.weekday!==schedule.weekday)return '';
+  if((schedule.cadence==='interval'||schedule.intervalDays)&&local.day%schedule.intervalDays!==0)return '';
+  return scheduleTimes(schedule).find((time)=>{
+    const [hour,minute]=time.split(':').map(Number);
+    const slot=new Date(Date.UTC(local.year,local.month-1,local.day,hour,minute)-INDIA_OFFSET_MS);
     const delay=now.getTime()-slot.getTime();
     return delay>=0&&delay<=graceMinutes*60*1000;
-  });
+  })||'';
 }
 
-export function hierarchyReportSlotKey({now=new Date(),designationKey,scheduleKey}={}){
+export function hierarchyReportSlotKey({now=new Date(),designationKey,scheduleKey,slotTime}={}){
   const local=hierarchyIndiaParts(now);
-  return `${local.year}-${String(local.month).padStart(2,'0')}-${String(local.day).padStart(2,'0')}-${designationKey}-${scheduleKey}-${String(local.hour).padStart(2,'0')}`;
+  const timeKey=clean(slotTime).replace(':','')||String(local.hour).padStart(2,'0');
+  return `${local.year}-${String(local.month).padStart(2,'0')}-${String(local.day).padStart(2,'0')}-${designationKey}-${scheduleKey}-${timeKey}`;
 }
 
-export function reportsDueForDesignation(designationKey,now=new Date(),graceMinutes=20){
+export function reportsDueForDesignation(designationKey,now=new Date(),graceMinutes=20,settings=null){
   const designation=HIERARCHY_REPORT_DESIGNATIONS[designationKey];
   if(!designation)return [];
-  return designation.schedules
-    .filter((schedule)=>scheduleIsDue(schedule,now,graceMinutes))
-    .map((schedule)=>({
+  const configured=settings?normalizeHierarchyReportScheduleSettings(settings).designations[designationKey]:null;
+  if(configured?.enabled===false)return [];
+  const schedules=configured?configured.schedules:designation.schedules;
+  return schedules
+    .map((schedule)=>({schedule,slotTime:scheduleDueTime(schedule,now,graceMinutes)}))
+    .filter(({slotTime})=>Boolean(slotTime))
+    .map(({schedule,slotTime})=>({
       designationKey,
       designationLabel:designation.label,
       level:designation.level,
       scheduleKey:schedule.key,
-      scheduleLabel:schedule.label,
+      scheduleLabel:schedule.label||hierarchyScheduleLabel(schedule),
       reports:[...new Set(schedule.reports)],
-      slotKey:hierarchyReportSlotKey({now,designationKey,scheduleKey:schedule.key}),
+      slotKey:hierarchyReportSlotKey({now,designationKey,scheduleKey:schedule.key,slotTime}),
     }));
 }
 
