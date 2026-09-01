@@ -13,5 +13,6 @@ test("region metrics and equipment details share live request-based road status"
   assert.match(regionSource, /liveEquipmentMetrics\(siteRecords, siteRequests\)/);
   assert.match(equipmentSource, /const roadStatusFor = \(record\) => Array\.isArray\(statusRequests\)/);
   assert.match(equipmentSource, /roadStatusFor\(v\) === road/);
+  assert.match(equipmentSource, /!location \|\| recordBelongsToSite\(v, location\)/);
   assert.match(source, /<Equipment[\s\S]*statusRequests=\{requests\}[\s\S]*<Subsidiaries gotoEquipment=\{gotoEquipment\} requests=\{requests\} \/>/);
 });

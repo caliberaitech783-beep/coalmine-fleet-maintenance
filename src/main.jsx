@@ -2360,7 +2360,7 @@ function Equipment({
         roadStatusFor(v) === road) &&
       (assetCategory === "all" || String(v.category || "").trim().toLowerCase() === assetCategory) &&
       (!allowedLocations.length || allowedLocations.some((site) => recordBelongsToSite(v, site))) &&
-      (!location || (v.currentLocation || v.location) === location) &&
+      (!location || recordBelongsToSite(v, location)) &&
       matchesSmartSearch(q, v) &&
       tableRowMatchesFilters(v, filterColumns, columnFilters),
   );
