@@ -1,0 +1,563 @@
+:root {
+  --brand-purple: #522e90;
+  --brand-purple-deep: #3d1d70;
+  --brand-purple-soft: #eee8f7;
+  --brand-green: #007d3f;
+  --brand-green-soft: #e4f2e9;
+  --brand-red: #f04e53;
+  --brand-red-soft: #fdebec;
+  --brand-gradient: linear-gradient(125deg, #f04e53 0%, #b72d6e 48%, #522e90 100%);
+  --brand-gradient-hover: linear-gradient(125deg, #e53f4a 0%, #a92566 48%, #452579 100%);
+  --ink: #2b2233;
+  --muted: #766a7c;
+  --line: #eadde7;
+  --bg: #faf5f8;
+  --nav: #522e90;
+  --primary: #522e90;
+  --orange: #f04e53;
+}
+
+:root[data-theme="dark"] {
+  --ink: #f6f0f7;
+  --muted: #b9aabd;
+  --line: #45354d;
+  --bg: #171219;
+  --nav: #3d1d70;
+  --primary: #a67bd3;
+  --orange: #ff696d;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: Calibri, Carlito, "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+.hero h1,
+.pagepanel > header h1,
+.panel h3,
+.dashboard-shell h1,
+.dashboard-shell h2,
+.mine-dashboard h1,
+.mine-dashboard h2 {
+  font-family: "Good Times", Eurostile, Manrope, sans-serif;
+}
+
+::selection {
+  background: #f04e5340;
+}
+
+.caliber-app-brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+
+.caliber-logo-frame {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.caliber-logo-frame img {
+  display: block;
+  width: 104px;
+  height: auto;
+  object-fit: contain;
+}
+
+.caliber-app-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid #ffffff47;
+}
+
+.caliber-app-name strong,
+.caliber-app-name small {
+  display: block;
+  white-space: nowrap;
+}
+
+.caliber-app-name strong {
+  color: #fff;
+  font: 700 14px Manrope, sans-serif;
+}
+
+.caliber-app-name small {
+  margin-top: 2px;
+  color: #f3deeb;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.app > aside,
+.normal > header {
+  background: var(--brand-gradient);
+  border-color: #ffffff2b;
+  box-shadow: 0 8px 26px #69265326;
+}
+
+.app > aside .logo,
+.normal > header .logo {
+  padding: 0;
+}
+
+.app > aside nav button,
+.normal-header-nav button {
+  color: #eadcec;
+}
+
+.app > aside nav button.active,
+.app > aside nav button:hover,
+.normal-header-nav button.active,
+.normal-header-nav button:hover {
+  color: #fff;
+  background: #ffffff1f;
+}
+
+.masters-dropdown {
+  background: #49277a;
+  border-color: #ffffff26;
+  box-shadow: 0 18px 42px #3f174666;
+}
+
+.app > aside .user,
+.normal > header .user {
+  border-color: #ffffff35;
+}
+
+.user > div {
+  background: #ffffff20;
+  color: #fff;
+}
+
+.user small,
+.normal header span small {
+  color: #eadcec;
+}
+
+.primary,
+.loginbox .primary,
+.whatsapp-share {
+  background: var(--brand-gradient) !important;
+  color: #fff !important;
+  box-shadow: 0 9px 22px #b72d6e2e;
+}
+
+.primary:hover:not(:disabled),
+.loginbox .primary:hover:not(:disabled),
+.whatsapp-share:hover {
+  background: var(--brand-gradient-hover) !important;
+}
+
+.welcome {
+  position: relative;
+  overflow: hidden;
+  background: var(--brand-gradient);
+  box-shadow: 0 14px 34px #b72d6e25;
+}
+
+.welcome::after {
+  content: "";
+  position: absolute;
+  top: -80px;
+  right: 8%;
+  width: 190px;
+  height: 190px;
+  border: 24px solid #ffffff12;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.welcome > * {
+  position: relative;
+  z-index: 1;
+}
+
+.welcome small,
+.welcome p {
+  color: #f7e7ef;
+}
+
+.panel,
+.actioncard,
+.stats button,
+.dashboard-card,
+.dashboard-kpi,
+.site-fleet-card,
+.site-linked-list,
+.site-report-matrix,
+.request-age-report {
+  border-color: var(--line);
+  box-shadow: 0 8px 24px #522e900d;
+}
+
+.link,
+.secondary,
+.row-actions button,
+.panel header button,
+.dashboard-card-header > button,
+.reset-start-over,
+.privilege-user-link {
+  color: var(--brand-purple);
+}
+
+.secondary:hover,
+.row-actions button:hover,
+.click:hover,
+.bars button:hover,
+.bars button:focus-visible {
+  background: #f7f1fa;
+  border-color: #d5c2e1;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.login-input:focus-within {
+  border-color: var(--brand-purple) !important;
+  box-shadow: 0 0 0 4px #522e9018 !important;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--brand-purple);
+}
+
+.tabs button.active,
+.mobile-tabs button.active,
+.rolepick button.sel,
+.login-auth-tabs button.active {
+  color: var(--brand-purple);
+  background: var(--brand-purple-soft);
+  border-color: #bca4d3;
+}
+
+.stats .blue,
+.dashboard-kpi-icon.blue,
+.dashboard-kpi-icon.purple,
+.detailhead .truckicon,
+.bigicon {
+  color: var(--brand-purple);
+  background: var(--brand-purple-soft);
+}
+
+.stats .orange,
+.dashboard-kpi-icon.orange {
+  color: var(--brand-red);
+  background: var(--brand-red-soft);
+}
+
+.stats .green,
+.dashboard-kpi-icon.green {
+  color: var(--brand-green);
+  background: var(--brand-green-soft);
+}
+
+.status.in-progress,
+.readonly-badge {
+  color: var(--brand-purple);
+  background: var(--brand-purple-soft);
+}
+
+.status.breakdown,
+.status.open {
+  color: #c83842;
+  background: var(--brand-red-soft);
+}
+
+.status.operational,
+.status.closed {
+  color: var(--brand-green);
+  background: var(--brand-green-soft);
+}
+
+.bars .bar,
+.dashboard-status-fill,
+.progress span,
+.import-progress span {
+  background: var(--brand-gradient);
+}
+
+.bars .b1,
+.dashboard-status-fill.fill-1 {
+  background: var(--brand-red);
+}
+
+.bars .b2,
+.dashboard-status-fill.fill-2 {
+  background: var(--brand-purple);
+}
+
+.bars .b4,
+.dashboard-status-fill.fill-4 {
+  background: var(--brand-green);
+}
+
+.donut > div,
+.dashboard-donut {
+  background: conic-gradient(var(--brand-green) 0 var(--availability, 85%), var(--brand-purple) var(--availability, 85%) 94%, var(--brand-red) 94% 100%);
+}
+
+.login {
+  --login-navy: #3d1d70;
+  --login-blue: #522e90;
+  --login-blue-dark: #3d1d70;
+  --login-orange: #f04e53;
+  --login-surface: #faf5f8;
+  --login-line: #e5d8e8;
+  background: #faf5f8;
+}
+
+.login-visual {
+  background: radial-gradient(circle at 83% 18%, #ffffff1f 0, transparent 27%), var(--brand-gradient);
+}
+
+.login-grid {
+  opacity: .2;
+  background-image: linear-gradient(#ffffff28 1px, transparent 1px), linear-gradient(90deg, #ffffff28 1px, transparent 1px);
+}
+
+.login-grid::after {
+  border-color: #ffffff42;
+  box-shadow: 0 0 0 52px #ffffff12, 0 0 0 104px #ffffff0c;
+}
+
+.login-schematic {
+  border-color: #ffffff55;
+}
+
+.login-message .eyebrow,
+.login-proof span,
+.login-environment {
+  color: #f1dce9;
+}
+
+.login-message .eyebrow > span,
+.route-line {
+  border-color: #ffffff7a;
+  background: #fff;
+}
+
+.login .mine-art {
+  background: #351759;
+}
+
+.login .mine-art svg,
+.login-proof svg {
+  color: #fff;
+}
+
+.login > main {
+  background: radial-gradient(circle at 100% 0, #f7e7ef 0, transparent 30%), linear-gradient(135deg, #fff 0%, #faf5f8 100%);
+}
+
+.login > main::before {
+  border-color: #eadde7;
+}
+
+.loginbox h2,
+.rolepick b,
+.single-login-note b {
+  color: #392348;
+}
+
+.login-kicker,
+.single-login-note {
+  color: var(--brand-purple) !important;
+}
+
+.single-login-note {
+  border-color: #ddcde6;
+  background: #f8f2fa;
+}
+
+.rolepick button:hover {
+  border-color: #bca4d3;
+  background: #fbf7fc;
+}
+
+.rolepick button:focus-visible,
+.loginbox .primary:focus-visible {
+  outline-color: #522e9042;
+}
+
+.rolepick button.sel::after,
+.login-auth-tabs button.active::after {
+  background: var(--brand-red);
+}
+
+.login-brand .caliber-logo-frame img {
+  width: 128px;
+}
+
+.login-brand .caliber-logo-frame,
+.login-brand .caliber-app-name {
+  display: flex;
+}
+
+.login-brand .caliber-app-name {
+  flex-direction: column;
+}
+
+.login-brand .caliber-app-name strong {
+  font-size: 17px;
+}
+
+.login-brand .caliber-app-name small {
+  color: #f2dce9;
+  font-size: 9px;
+}
+
+.login-mobile-brand {
+  display: none;
+  color: #392348;
+}
+
+.login-mobile-brand .caliber-logo-frame {
+  min-width: 104px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--brand-gradient);
+}
+
+.login-mobile-brand .caliber-logo-frame img {
+  width: 84px;
+}
+
+.login-mobile-brand .caliber-app-name {
+  border-left-color: #d8c5e1;
+}
+
+.login-mobile-brand .caliber-app-name strong {
+  color: #392348;
+}
+
+.login-mobile-brand .caliber-app-name small {
+  color: #806d87;
+}
+
+.mine-dashboard,
+.mine-dashboard.mine-dashboard-day {
+  --mine-bg: #faf5f8;
+  --mine-panel: #fff;
+  --mine-line: #eadde7;
+  --mine-text: #2b2233;
+  --mine-muted: #766a7c;
+  background: linear-gradient(145deg, #fff 0%, #faf5f8 100%);
+  border-color: #dfcfe3;
+}
+
+.mine-dashboard-head,
+.mine-dashboard.mine-dashboard-day .mine-dashboard-head {
+  background: var(--brand-gradient);
+  border-color: #ffffff30;
+}
+
+.mine-dashboard-head h1,
+.mine-dashboard-head p,
+.mine-dashboard-head .mine-eyebrow {
+  color: #fff !important;
+}
+
+.mine-brandmark {
+  width: 82px;
+  height: 38px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+}
+
+.mine-head-actions select,
+.mine-updated {
+  color: #fff;
+  border-color: #ffffff3d;
+  background: #ffffff18;
+}
+
+:root[data-theme="dark"] body,
+:root[data-theme="dark"] .content,
+:root[data-theme="dark"] .normal {
+  background: #171219;
+}
+
+:root[data-theme="dark"] .top,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .modal,
+:root[data-theme="dark"] .actioncard,
+:root[data-theme="dark"] .stats button,
+:root[data-theme="dark"] .dashboard-card,
+:root[data-theme="dark"] .dashboard-kpi,
+:root[data-theme="dark"] .details div {
+  background: #241d27;
+  border-color: #45354d;
+}
+
+:root[data-theme="dark"] table th {
+  background: #2d2331;
+}
+
+:root[data-theme="dark"] table td {
+  border-color: #403145;
+}
+
+:root[data-theme="dark"] .secondary:hover,
+:root[data-theme="dark"] .row-actions button:hover,
+:root[data-theme="dark"] .click:hover {
+  background: #33273a;
+  border-color: #654c72;
+}
+
+@media (max-width: 1180px) {
+  .app > aside .caliber-logo-frame img {
+    width: 86px;
+  }
+
+  .app > aside .caliber-app-name {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .app > aside .caliber-logo-frame img {
+    width: 118px;
+  }
+
+  .app > aside .caliber-app-name {
+    display: flex;
+  }
+}
+
+@media (max-width: 600px) {
+  .normal > header .caliber-app-brand span {
+    display: flex !important;
+  }
+
+  .normal > header .caliber-logo-frame img {
+    width: 84px;
+  }
+
+  .normal > header .caliber-app-name {
+    display: none !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .login-mobile-brand {
+    display: flex;
+  }
+}

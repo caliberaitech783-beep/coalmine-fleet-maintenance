@@ -1,11 +1,11 @@
 {
   "name": "Nerve Center — Breakdown Management System",
-  "short_name": "NC",
+  "short_name": "Nerve Center",
   "description": "Fleet maintenance and breakdown management system.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0b2447",
+  "background_color": "#faf5f8",
+  "theme_color": "#522e90",
   "icons": [
     {
       "src": "/app-icon-192.png",

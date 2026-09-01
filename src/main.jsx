@@ -88,6 +88,7 @@ import "./ideal-flow.css";
 import "./idle-status.css";
 import "./daily-updates.css";
 import "./dashboard-concept-a.css";
+import "./brand-theme.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -175,6 +176,19 @@ function HeaderClock({ className = "" }) {
       <span className="header-clock-date">{date}</span>
       <span className="header-clock-time">{time}</span>
     </time>
+  );
+}
+function CaliberBrand({ subtitle = "Breakdown management system", className = "" }) {
+  return (
+    <div className={`caliber-app-brand ${className}`.trim()}>
+      <span className="caliber-logo-frame">
+        <img src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" />
+      </span>
+      <span className="caliber-app-name">
+        <strong>Nerve Center</strong>
+        <small>{subtitle}</small>
+      </span>
+    </div>
   );
 }
 function AuthModeTabs({ mode, onModeChange }) {
@@ -328,10 +342,7 @@ function Login({ onLogin, theme, toggleTheme }) {
         <div className="login-schematic" aria-hidden="true">
           <i /><i /><i /><i />
         </div>
-        <div className="login-brand">
-          <div className="brandmark">NC</div>
-          <div><strong>Nerve Center</strong><span>Fleet operations platform</span></div>
-        </div>
+        <CaliberBrand className="login-brand" subtitle="Fleet operations platform" />
         <div className="login-message">
           <div className="eyebrow"><span /> Mission-critical maintenance</div>
           <h1>Keep every machine<br />moving.</h1>
@@ -358,7 +369,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           className="loginbox password-change-box"
           onSubmit={(event) => { event.preventDefault(); changeInitialPassword(); }}
         >
-          <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
+          <CaliberBrand className="login-mobile-brand" subtitle="Fleet operations platform" />
           <small className="login-kicker"><LockKeyhole /> FIRST LOGIN SECURITY</small>
           <h2>Create your password</h2>
           <p>Welcome, {passwordChange.name}. You must replace your temporary phone-number password before continuing.</p>
@@ -373,7 +384,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           className="loginbox password-reset-box"
           onSubmit={(event) => { event.preventDefault(); resetRequest ? confirmPasswordReset() : requestPasswordReset(); }}
         >
-          <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
+          <CaliberBrand className="login-mobile-brand" subtitle="Fleet operations platform" />
           <AuthModeTabs mode="reset" onModeChange={(mode) => { setLoginMode(mode); setError(""); }} />
           <small className="login-kicker"><LockKeyhole /> ACCOUNT RECOVERY</small>
           <h2>{resetRequest ? "Enter OTP" : "Reset password"}</h2>
@@ -402,7 +413,7 @@ function Login({ onLogin, theme, toggleTheme }) {
             signIn();
           }}
         >
-          <div className="login-mobile-brand"><div className="brandmark">NC</div><strong>Nerve Center</strong></div>
+          <CaliberBrand className="login-mobile-brand" subtitle="Fleet operations platform" />
           <AuthModeTabs mode="signin" onModeChange={(mode) => { setLoginMode(mode); setError(""); setNotice(""); }} />
           <small className="login-kicker"><LockKeyhole /> SECURE OPERATIONS PORTAL</small>
           <h2>Welcome back</h2>
@@ -515,12 +526,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   return (
     <aside className={open ? "open" : ""}>
-      <div className="logo">
-        <b>NC</b>
-        <span>
-          Nerve Center<small>BREAKDOWN MANAGEMENT SYSTEM</small>
-        </span>
-      </div>
+      <CaliberBrand className="logo" />
       <nav>
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
@@ -863,7 +869,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
-        <div><span className="mine-brandmark">NC</span><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
+        <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <section className="mine-overview-charts" aria-label="Fleet overview charts">
@@ -5670,7 +5676,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
   const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><div className="logo"><b>NC</b><span>Nerve Center<small>MOBILE USER PORTAL</small></span></div><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout}><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
