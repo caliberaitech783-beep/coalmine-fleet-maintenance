@@ -982,12 +982,12 @@ const masterFields = {
     ["sites", "Sites (separate with |)"],
   ],
   "Hierarchy master": [
-    ["subsidiary", "Region"],
-    ["area", "Area"],
-    ["site", "Site / Mine"],
-    ["department", "Department"],
-    ["head", "Reporting head"],
+    ["section", "Section"],
+    ["designation", "Designation"],
     ["level", "User level (L1 / L2 / L3 / L4)"],
+    ["schedule", "Schedule"],
+    ["reportAccess", "Report ticks (separate with |)"],
+    ["siteAccess", "Site ticks (separate with |)"],
   ],
   "OEM master": [
     ["oem", "OEM name"],
@@ -1068,6 +1068,42 @@ const selectedAccessValues = (record, key, fallbackKey = "") => {
   return String(record[key] || "").split(/\s*[|,]\s*/).filter(Boolean);
 };
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
+const hierarchyReportGroups = [
+  {group:"Common Report", className:"common", reports:[
+    "Location wise Open BD report with Category (Prod)",
+    "Location wise Closing BD report with Category (Maint.)",
+    "MIS Verification Report (MIS)",
+    "Report for On Road / Off Road & Idle",
+    "Vehicle Transfer Report",
+    "Total Equipment / Vehicle Location Wise",
+    "Idle Vehicle Report",
+    "Recent Breakdown Cases",
+  ]},
+  {group:"Production Report", className:"production", reports:[
+    "Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.",
+  ]},
+  {group:"Maintenance Report", className:"maintenance", reports:[
+    "Event Open Report - Prod. Open with Maint. Close Time -- TAT",
+    "Event close Report - Maint. Closing to MIS Verif.",
+    "Idle Time with PM Verification Time",
+    "Idle Verification v/s MIS First Trip verification",
+  ]},
+];
+const hierarchyReportTitles = hierarchyReportGroups.flatMap((group) => group.reports);
+const hierarchyDefaults = [
+  {section:"Management", designation:"Director's", level:"1", schedule:"Daily 7 PM; weekly fleet Sat 7 PM", reportAccess:hierarchyReportTitles.join(" | ")},
+  {section:"Management", designation:"Project Manager (P.M)", level:"2", schedule:"8 AM & 6 PM common; 7 PM operational; weekly fleet Sat 7 PM", reportAccess:hierarchyReportTitles.join(" | ")},
+  {section:"Production Dept.", designation:"Production Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[...hierarchyReportTitles.slice(0,4), ...hierarchyReportTitles.slice(6)].join(" | ")},
+  {section:"Production Dept.", designation:"Production Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:hierarchyReportTitles.slice(0,3).join(" | ")},
+  {section:"Maintenance Dept.", designation:"Maintenance Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[...hierarchyReportTitles.slice(0,4), ...hierarchyReportTitles.slice(6)].join(" | ")},
+  {section:"Maintenance Dept.", designation:"Maintenance Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:hierarchyReportTitles.slice(0,3).join(" | ")},
+  {section:"MIS Dept.", designation:"MIS Manager", level:"3", schedule:"Every event for closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReportTitles[1], hierarchyReportTitles[2], hierarchyReportTitles[3], ...hierarchyReportTitles.slice(6)].join(" | ")},
+  {section:"MIS Dept.", designation:"MIS Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReportTitles[1], hierarchyReportTitles[2]].join(" | ")},
+  {section:"OEM", designation:"National Head", level:"1", schedule:"Every 7th day consolidate", reportAccess:hierarchyReportTitles[1]},
+  {section:"OEM", designation:"Regional Head / Zonal Head", level:"2", schedule:"Every 5th day consolidate", reportAccess:hierarchyReportTitles[1]},
+  {section:"OEM", designation:"Area Service engineer", level:"3", schedule:"Every 3rd day consolidate", reportAccess:hierarchyReportTitles[1]},
+  {section:"OEM", designation:"Service Engineer / Site Service Engineer", level:"4", schedule:"Every day consolidate", reportAccess:hierarchyReportTitles[1]},
+];
 const legacyPrivilegeFlagValues = new Set(["true", "false", "yes", "no", "1", "0", "enabled", "checked"]);
 function privilegeSelectionValue(value) {
   if (typeof value !== "string") return "";
@@ -4671,6 +4707,130 @@ const regionSites = (record = {}) => String(record.sites || "")
   .split(/\s*\|\s*/)
   .map((site) => site.trim())
   .filter(Boolean);
+const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).map((item) => item.trim()).filter(Boolean);
+
+function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
+  const [activeRegionCode, setActiveRegionCode] = useState("WCL");
+  const [savingKey, setSavingKey] = useState("");
+  const [query, setQuery] = useState("");
+  const activeRegion = subsidiaryData.find((region) => region.code === activeRegionCode) || subsidiaryData[0];
+  const byDesignation = new Map(records.map((record) => [String(record.designation || "").trim().toLowerCase(), record]));
+  const rows = hierarchyDefaults.map((row, index) => {
+    const stored = byDesignation.get(row.designation.toLowerCase()) || {};
+    return {
+      ...row,
+      ...stored,
+      rowKey: stored.id || `default-${index}`,
+      reportAccess: stored.reportAccess || row.reportAccess || "",
+      siteAccess: Object.prototype.hasOwnProperty.call(stored, "siteAccess") ? stored.siteAccess : (activeRegion?.sites || []).join(" | "),
+    };
+  }).filter((row) => matchesSmartSearch(query, row.section, row.designation, row.level, row.schedule));
+  const saveRow = async (row, updates) => {
+    const payload = {
+      section: row.section,
+      designation: row.designation,
+      level: row.level,
+      schedule: row.schedule,
+      reportAccess: row.reportAccess || "",
+      siteAccess: row.siteAccess || "",
+      ...updates,
+    };
+    setSavingKey(row.rowKey);
+    try {
+      if (row.id) await onEdit(row.id, payload);
+      else await onAdd([payload], {silent:true});
+    } catch (error) {
+      alert(error.message || "Could not save hierarchy setting.");
+    } finally {
+      setSavingKey("");
+    }
+  };
+  const toggleReport = (row, report, checked) => {
+    const selected = new Set(splitPipeValues(row.reportAccess));
+    if (checked) selected.add(report);
+    else selected.delete(report);
+    saveRow(row, {reportAccess:[...selected].join(" | ")});
+  };
+  const toggleSite = (row, site, checked) => {
+    const selected = new Set(splitPipeValues(row.siteAccess));
+    if (checked) selected.add(site);
+    else selected.delete(site);
+    saveRow(row, {siteAccess:[...selected].join(" | ")});
+  };
+  return (
+    <section className="hierarchy-master-page panel pagepanel">
+      <header>
+        <div>
+          <h1>Hierarchy master</h1>
+          <p>Designation-wise WhatsApp report matrix with report and site tick controls</p>
+        </div>
+        <MasterActions name="Hierarchy master" records={rows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
+      </header>
+      <div className="hierarchy-toolbar">
+        <div className="region-main-tabs hierarchy-region-tabs" role="tablist" aria-label="Hierarchy site region tabs">
+          {subsidiaryData.map((region) => (
+            <button key={region.code} type="button" role="tab" aria-selected={activeRegionCode === region.code} className={activeRegionCode === region.code ? "active" : ""} onClick={() => setActiveRegionCode(region.code)}>
+              <Building2 />
+              <span><b>{region.code}</b><small>{region.name}</small></span>
+            </button>
+          ))}
+        </div>
+        <label className="region-search"><Search /><input data-smart-search type="search" placeholder="Search hierarchy" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      </div>
+      <div className="hierarchy-site-strip">
+        <MapPin />
+        <div><b>{activeRegion?.code} site wise ticks</b><span>Select sites row-wise for report delivery and data scoping.</span></div>
+      </div>
+      <div className="hierarchy-matrix-scroll">
+        <table className="hierarchy-matrix">
+          <thead>
+            <tr className="hierarchy-group-row">
+              <th colSpan="4">Hierarchy Key Whatsapp Flow</th>
+              {hierarchyReportGroups.map((group) => <th key={group.group} className={group.className} colSpan={group.reports.length}>{group.group}</th>)}
+              <th colSpan={activeRegion?.sites?.length || 1}>Site Wise</th>
+            </tr>
+            <tr>
+              <th>Section</th>
+              <th>Designation</th>
+              <th>Level</th>
+              <th>Schedule</th>
+              {hierarchyReportTitles.map((report, index) => <th key={report} title={report}>R{index + 1}<small>{report}</small></th>)}
+              {(activeRegion?.sites || []).map((site) => <th key={site} title={site}>Site<small>{site}</small></th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const reports = new Set(splitPipeValues(row.reportAccess));
+              const sites = new Set(splitPipeValues(row.siteAccess));
+              return (
+                <tr key={row.rowKey} className={row.section === "Management" ? "management" : ""}>
+                  <td><span className="hierarchy-section-pill">{row.section}</span></td>
+                  <td><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</td>
+                  <td><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
+                  <td className="hierarchy-schedule">{row.schedule}</td>
+                  {hierarchyReportTitles.map((report) => (
+                    <td key={report}>
+                      <input type="checkbox" aria-label={`${row.designation} ${report}`} checked={reports.has(report)} onChange={(event) => toggleReport(row, report, event.target.checked)} disabled={savingKey === row.rowKey} />
+                    </td>
+                  ))}
+                  {(activeRegion?.sites || []).map((site) => (
+                    <td key={site}>
+                      <input type="checkbox" aria-label={`${row.designation} ${site}`} checked={sites.has(site)} onChange={(event) => toggleSite(row, site, event.target.checked)} disabled={savingKey === row.rowKey} />
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+            {!rows.length && <tr><td colSpan={4 + hierarchyReportTitles.length + (activeRegion?.sites?.length || 1)} className="empty-state">No hierarchy rows match this search.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="hierarchy-report-legend">
+        {hierarchyReportTitles.map((report, index) => <span key={report}><b>R{index + 1}</b>{report}</span>)}
+      </div>
+    </section>
+  );
+}
 
 function RegionMasterPage({ records = [], onAdd, onDeleteAll, gotoEquipment }) {
   const normalizedRegions = records.map((record, index) => ({
@@ -4796,6 +4956,8 @@ Generic = function GenericWithMasters(props) {
   return masterFields[name] ? (
     name === "Privilege" ? (
       <PrivilegeMasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
+    ) : name === "Hierarchy master" ? (
+      <HierarchyMasterPage records={records} onAdd={onAdd} onEdit={onEdit} onDeleteAll={onDeleteAll} />
     ) : (
       <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} siteOptions={masterSiteOptions} canCreateSuperAdmin={props.session?.permissions?.adminLevel==="Super Admin"} />
     )

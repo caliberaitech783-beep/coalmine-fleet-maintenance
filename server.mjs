@@ -1219,9 +1219,31 @@ async function directorReportSourceData(){
   };
 }
 
-async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST'}){
+function splitHierarchyValues(value){
+  return String(value||'').split(/\s*\|\s*/).map((item)=>item.trim()).filter(Boolean);
+}
+
+function sourceDataForSites(sourceData,siteAccess=''){
+  const sites=splitHierarchyValues(siteAccess).map(canonicalSiteName).filter(Boolean);
+  if(!sites.length)return sourceData;
+  const includesSite=(value)=>sites.includes(canonicalSiteName(value));
+  return {
+    requests:sourceData.requests.filter((request)=>includesSite(request.site||request.reportSite)),
+    equipmentRecords:sourceData.equipmentRecords.filter((record)=>includesSite(record.currentLocation||record.location||record.site)),
+    transferRecords:sourceData.transferRecords.filter((record)=>includesSite(record.destination||record.currentLocation||record.location||record.source)),
+  };
+}
+
+function hierarchyRuleForDesignation(records=[],designation={}){
+  const wanted=String(designation.label||'').trim().toLowerCase();
+  return records.map((row)=>row.record_data||row)
+    .find((record)=>String(record.designation||'').trim().toLowerCase()===wanted);
+}
+
+async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST',siteAccess=''}){
   const selectedTitles=reportTitles?new Set(reportTitles):null;
-  const tables=buildDirectorReportTables(await directorReportSourceData()).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
+  const sourceData=sourceDataForSites(await directorReportSourceData(),siteAccess);
+  const tables=buildDirectorReportTables(sourceData).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
   const links=[];
   const files=[];
@@ -1300,7 +1322,10 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
   if(!databaseReady||hierarchyReportRunning)return {skipped:true};
   hierarchyReportRunning=true;
   try{
-    const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`);
+    const [{rows:userRows},{rows:hierarchyRows}]=await Promise.all([
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
+    ]);
     let sent=0,failed=0,skipped=0;
     for(const row of userRows){
       const user=row.record_data||{};
@@ -1309,7 +1334,10 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
       if(!designation)continue;
       const dueGroups=reportsDueForDesignation(designation.key,now);
       if(!dueGroups.length)continue;
-      const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))];
+      const hierarchyRule=hierarchyRuleForDesignation(hierarchyRows,designation);
+      const allowedReports=hierarchyRule?new Set(splitHierarchyValues(hierarchyRule.reportAccess)):null;
+      const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))].filter((title)=>!allowedReports||allowedReports.has(title));
+      if(!reportTitles.length){skipped++;continue}
       const scheduleLabel=[...new Set(dueGroups.map((group)=>group.scheduleLabel))].join(' + ');
       const slotKey=dueGroups.map((group)=>group.slotKey).sort().join('+');
       const scheduleKey=dueGroups.map((group)=>group.scheduleKey).sort().join('+');
@@ -1331,6 +1359,7 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
           slotKey,
           now,
           reportTitles,
+          siteAccess:hierarchyRule?.siteAccess||'',
           heading:`${designation.label} Consolidated Report`,
           scheduleLabel,
         });
