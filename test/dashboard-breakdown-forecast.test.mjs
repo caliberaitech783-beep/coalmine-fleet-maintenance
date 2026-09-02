@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildBreakdownTrend } from "../dashboard-breakdown-forecast.mjs";
+import { buildBreakdownTrend } from "../src/dashboard-breakdown-forecast.mjs";
 
 test("breakdown trend separates recorded history from future forecasts", () => {
   const counts = {

@@ -10,7 +10,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
-import { buildBreakdownTrend, localDateKey } from "../dashboard-breakdown-forecast.mjs";
+import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { aiFeederAlerts, aiFeederSummary } from "../ai-feeder.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
