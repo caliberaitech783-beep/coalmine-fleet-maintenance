@@ -5,9 +5,10 @@ import fs from "node:fs";
 const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
 
 test("Idle is available throughout fleet KPIs, filters, status editing and site reports",()=>{
-  assert.match(source,/mine-primary-kpi-onroad[\s\S]*<b>On road<\/b>/);
-  assert.match(source,/mine-primary-kpi-offroad[\s\S]*<b>Off road<\/b>/);
-  assert.match(source,/mine-primary-kpi-idle[\s\S]*<b>Idle<\/b>/);
+  assert.match(source,/mine-road-status-graphic[\s\S]*<b>On road<\/b>/);
+  assert.match(source,/mine-road-status-graphic[\s\S]*<b>Off road<\/b>/);
+  assert.match(source,/mine-road-status-graphic[\s\S]*<b>Idle<\/b>/);
+  assert.match(source,/mine-road-status-bar/);
   assert.match(source,/gotoEquipment\("idle"/);
   assert.match(source,/<option value="idle">Idle<\/option>/);
   assert.match(source,/<option value="Idle">Idle<\/option>/);

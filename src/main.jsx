@@ -767,7 +767,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
-  const defaultKpiOrder = ["assets", "onroad", "offroad", "idle", "workload", "users"];
+  const defaultKpiOrder = ["assets", "roadstatus", "workload", "users"];
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
@@ -842,6 +842,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownTrendSites = trendAvailableSites.map((site) => ({ site, count: trendRangeRequests.filter((record) => recordBelongsToSite(record, site)).length })).sort((a, b) => b.count - a.count);
   const maxBreakdownTrendSite = Math.max(1, ...breakdownTrendSites.map((site) => site.count));
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
+  const roadStatusTotal = kpis.onRoad + kpis.offRoad + kpis.idle;
+  const roadStatusShare = (value) => roadStatusTotal ? (value / roadStatusTotal) * 100 : 0;
   const userCounts = visibleUsers.reduce((counts, record) => {
     const type = String(record.userType || record.role || "").toLowerCase();
     if (type.includes("mobile") || type.includes("normal")) counts.mobile += 1;
@@ -1011,24 +1013,20 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-kpi-composition" aria-label={`${equipmentShare}% equipment and ${vehicleShare}% vehicles`}><span style={{ width: `${equipmentShare}%` }} /><span style={{ width: `${vehicleShare}%` }} /></div>
         </article>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-onroad" onClick={() => openAssetDrilldown("onroad")} {...kpiLayoutProps("onroad")}>
-          {kpiMoveControls("onroad")}
-          <span className="mine-primary-kpi-icon"><CheckCircle2 /></span>
-          <span className="mine-primary-kpi-copy"><small>Road availability</small><b>On road</b><em>{kpis.availability}% available</em></span>
-          <strong>{kpis.onRoad.toLocaleString()}</strong>
-        </button>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-offroad" onClick={() => openAssetDrilldown("offroad")} {...kpiLayoutProps("offroad")}>
-          {kpiMoveControls("offroad")}
-          <span className="mine-primary-kpi-icon"><AlertTriangle /></span>
-          <span className="mine-primary-kpi-copy"><small>Road availability</small><b>Off road</b><em>Maintenance or breakdown</em></span>
-          <strong>{kpis.offRoad.toLocaleString()}</strong>
-        </button>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-idle" onClick={() => openAssetDrilldown("idle")} {...kpiLayoutProps("idle")}>
-          {kpiMoveControls("idle")}
-          <span className="mine-primary-kpi-icon"><Clock /></span>
-          <span className="mine-primary-kpi-copy"><small>Road availability</small><b>Idle</b><em>Available, not working</em></span>
-          <strong>{kpis.idle.toLocaleString()}</strong>
-        </button>
+        <article className="mine-primary-kpi-card mine-road-status-graphic" {...kpiLayoutProps("roadstatus")}>
+          {kpiMoveControls("roadstatus")}
+          <header><span>Road availability</span><strong>{kpis.availability}%</strong></header>
+          <div className="mine-road-status-bar" aria-label={`${kpis.onRoad} on road, ${kpis.offRoad} off road and ${kpis.idle} idle`}>
+            <span className="onroad" style={{ width: `${roadStatusShare(kpis.onRoad)}%` }} />
+            <span className="offroad" style={{ width: `${roadStatusShare(kpis.offRoad)}%` }} />
+            <span className="idle" style={{ width: `${roadStatusShare(kpis.idle)}%` }} />
+          </div>
+          <div className="mine-road-status-values">
+            <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><b>On road</b><small>Available</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
+            <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><b>Off road</b><small>Maintenance</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
+            <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><b>Idle</b><small>Not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
+          </div>
+        </article>
         <button type="button" className="mine-primary-kpi-card mine-primary-kpi-workload" onClick={() => setShowWorkloadBreakdown(true)} {...kpiLayoutProps("workload")}>
           {kpiMoveControls("workload")}
           <span className="mine-primary-kpi-icon"><Wrench /></span>

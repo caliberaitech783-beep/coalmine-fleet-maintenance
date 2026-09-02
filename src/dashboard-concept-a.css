@@ -351,7 +351,7 @@
 .mine-overview-legend strong { font-size: 11px; }
 .mine-primary-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 7px;
   margin-bottom: 8px;
 }
@@ -518,6 +518,33 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-primary-kpi-idle { --kpi-accent: #d4922e; }
 .mine-primary-kpi-workload { --kpi-accent: #2b8295; }
 .mine-primary-kpi-users { --kpi-accent: #d47b3d; }
+.mine-road-status-graphic {
+  --kpi-accent: #26956f;
+  grid-column: span 2;
+  display: grid;
+  grid-template-rows: auto 8px 1fr;
+  gap: 7px;
+  padding: 9px 10px 8px;
+}
+.mine-road-status-graphic > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mine-road-status-graphic > header span { color: var(--mine-muted); font-size: 8px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }
+.mine-road-status-graphic > header strong { color: #238361; font: 900 14px/1 Manrope; }
+.mine-road-status-bar { display: flex; overflow: hidden; min-width: 0; height: 8px; border-radius: 4px; background: #e7edf3; }
+.mine-road-status-bar span { min-width: 0; transition: width .28s ease; }
+.mine-road-status-bar .onroad { background: #34a77d; }
+.mine-road-status-bar .offroad { background: #df6d64; }
+.mine-road-status-bar .idle { background: #dda13d; }
+.mine-road-status-values { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 5px; }
+.mine-road-status-values button { display: grid; grid-template-columns: 20px minmax(0,1fr) auto; align-items: center; gap: 6px; min-width: 0; padding: 4px 5px; border: 0; border-radius: 5px; background: transparent; color: var(--mine-text); text-align: left; cursor: pointer; }
+.mine-road-status-values button:hover,.mine-road-status-values button:focus-visible { outline: 0; background: #edf4f5; }
+.mine-road-status-values button > svg { width: 15px; height: 15px; }
+.mine-road-status-values button.onroad > svg { color: #26956f; }
+.mine-road-status-values button.offroad > svg { color: #d15f58; }
+.mine-road-status-values button.idle > svg { color: #d4922e; }
+.mine-road-status-values span,.mine-road-status-values b,.mine-road-status-values small { display: block; min-width: 0; }
+.mine-road-status-values b { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.mine-road-status-values small { margin-top: 1px; overflow: hidden; color: var(--mine-muted); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.mine-road-status-values strong { font: 900 15px/1 Manrope; white-space: nowrap; }
 .mine-primary-kpi-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
