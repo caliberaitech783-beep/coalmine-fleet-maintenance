@@ -29,7 +29,8 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /flexGrow: site\.vehicles/);
   assert.match(source, /className="mine-fleet-chart-total"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
-  assert.match(css, /\.mine-fleet-chart-total\s*\{[\s\S]*justify-self:\s*center;[\s\S]*font:\s*900 20px/);
+  assert.match(source, /<span>Total Fleet<\/span>/);
+  assert.match(css, /\.mine-fleet-chart-total\s*\{[\s\S]*justify-self:\s*center;[\s\S]*border-radius:\s*999px;[\s\S]*linear-gradient\(135deg, #e53f86, #7138b7\)[\s\S]*font:\s*900 22px/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 

@@ -665,8 +665,8 @@ button.mine-primary-kpi-card:focus-visible,
   overflow: hidden;
 }
 .mine-fleet-region-chart > header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
-.mine-fleet-chart-total { justify-self: center; color: var(--mine-text); font: 900 20px/1 Manrope; white-space: nowrap; }
-.mine-fleet-chart-total span { font-size: 11px; }
+.mine-fleet-chart-total { display: inline-flex; align-items: center; justify-self: center; gap: 7px; min-height: 42px; padding: 8px 20px; border-radius: 999px; background: linear-gradient(135deg, #e53f86, #7138b7); box-shadow: 0 6px 16px #9d39742b; color: #fff; font: 900 22px/1 Manrope; white-space: nowrap; }
+.mine-fleet-chart-total span { font-size: 12px; }
 .mine-fleet-chart-legend { display: flex; align-items: center; gap: 12px; color: var(--mine-muted); font-size: 8px; }
 .mine-fleet-chart-legend { justify-self: end; }
 .mine-fleet-chart-legend span { display: flex; align-items: center; gap: 5px; }
