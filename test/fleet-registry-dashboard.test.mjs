@@ -19,6 +19,8 @@ test("fleet registry dashboard connects category, group, region and site-wise dr
 });
 
 test("breakdown trend is compact, responsive and site selectable", () => {
+  assert.match(source, /<div className="mine-trend-sites"/);
+  assert.doesNotMatch(source, /<aside className="mine-trend-sites"/);
   assert.match(css, /\.mine-breakdown-trend-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-trend-period button\.active/);
   assert.match(css, /\.mine-trend-chart\s*\{[\s\S]*overflow-x:\s*auto/);
