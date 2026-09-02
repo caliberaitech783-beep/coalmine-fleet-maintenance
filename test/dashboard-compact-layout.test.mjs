@@ -38,8 +38,12 @@ test("primary KPIs use one compact row with a graphical road-status block", () =
   assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic"/);
   assert.match(client, /Consolidated open requests/);
   assert.match(client, /openRequestStatusItems\.map/);
-  assert.match(css, /\.mine-open-requests-bar\s*\{/);
-  assert.match(css, /\.mine-open-requests-values\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,/);
+  assert.doesNotMatch(client, /className="mine-open-requests-bar"/);
+  assert.doesNotMatch(client, /\{ key: "Awaiting", label: "Awaiting"/);
+  assert.match(css, /\.mine-open-requests-values\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
+  assert.match(css, /button\.open\s*\{[\s\S]*#df6d64/);
+  assert.match(css, /button\.progress\s*\{[\s\S]*#f2c94c24/);
+  assert.match(css, /button\.idle\s*\{[\s\S]*#8b6abd18/);
   assert.match(client, /<b>Operations users<\/b>/);
 });
 

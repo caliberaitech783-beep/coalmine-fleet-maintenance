@@ -988,7 +988,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("group:")) return visibleEquipment.filter((record) => equipmentGroupLabel(record) === key.slice(6));
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
-    if (key === "status:Awaiting") return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase().startsWith("awaiting")));
     if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
     return [];
   };
@@ -1048,7 +1047,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const openRequestStatusItems = [
     { key: "Open", label: "Open", count: workloadCounts.Open, className: "open" },
     { key: "In progress", label: "In Progress", count: workloadCounts["In progress"], className: "progress" },
-    { key: "Awaiting", label: "Awaiting", count: workloadCounts["Awaiting parts"] + workloadCounts["Awaiting approval"], className: "awaiting" },
     { key: "Idle", label: "Idle", count: workloadCounts.Idle, className: "idle" },
   ];
   return (
@@ -1087,8 +1085,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <article className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic" {...kpiLayoutProps("workload")}>
           {kpiMoveControls("workload")}
           <header><span>Consolidated open requests</span><button type="button" onClick={() => setShowWorkloadBreakdown(true)}><strong>{activeBreakdowns.toLocaleString()}</strong><small>Total open</small></button></header>
-          <div className="mine-open-requests-bar" aria-label={`${activeBreakdowns} consolidated open requests`}>{openRequestStatusItems.map((item) => <i key={item.key} className={item.className} style={{ width: `${activeBreakdowns ? (item.count / activeBreakdowns) * 100 : 0}%` }} />)}</div>
-          <div className="mine-open-requests-values">{openRequestStatusItems.map((item) => <button type="button" key={item.key} className={item.className} onClick={() => openAssetDrilldown(`status:${item.key}`)}><span><i />{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div>
+          <div className="mine-open-requests-values">{openRequestStatusItems.map((item) => <button type="button" key={item.key} className={item.className} onClick={() => openAssetDrilldown(`status:${item.key}`)}><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div>
         </article>
         <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)} {...kpiLayoutProps("users")}>
           {kpiMoveControls("users")}

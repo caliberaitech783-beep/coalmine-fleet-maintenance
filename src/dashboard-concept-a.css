@@ -520,24 +520,20 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-primary-kpi-idle { --kpi-accent: #d4922e; }
 .mine-primary-kpi-workload { --kpi-accent: #2b8295; }
 .mine-primary-kpi-users { --kpi-accent: #d47b3d; }
-.mine-open-requests-graphic { display:grid; grid-template-rows:auto 7px 1fr; gap:7px; padding:9px 10px 8px; }
+.mine-open-requests-graphic { display:grid; grid-template-rows:auto 1fr; gap:7px; padding:9px 10px 8px; }
 .mine-open-requests-graphic > header { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .mine-open-requests-graphic > header > span { color:var(--mine-muted); font-size:8px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
 .mine-open-requests-graphic > header > button { display:flex; align-items:baseline; gap:4px; border:0; background:transparent; color:var(--mine-text); cursor:pointer; padding:0; }
 .mine-open-requests-graphic > header strong { font:900 16px/1 Manrope; }
 .mine-open-requests-graphic > header small { color:var(--mine-muted); font-size:7px; }
-.mine-open-requests-bar { display:flex; overflow:hidden; min-width:0; height:7px; border-radius:5px; background:#e7edf3; }
-.mine-open-requests-bar i { min-width:0; transition:width .25s ease; }
-.mine-open-requests-bar .open,.mine-open-requests-values .open i { background:#4f86c6; }
-.mine-open-requests-bar .progress,.mine-open-requests-values .progress i { background:#2b8295; }
-.mine-open-requests-bar .awaiting,.mine-open-requests-values .awaiting i { background:#d4922e; }
-.mine-open-requests-bar .idle,.mine-open-requests-values .idle i { background:#8b6abd; }
-.mine-open-requests-values { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px 6px; }
-.mine-open-requests-values button { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:5px; border:0; border-radius:4px; background:transparent; color:var(--mine-text); cursor:pointer; padding:2px 3px; }
-.mine-open-requests-values button:hover,.mine-open-requests-values button:focus-visible { outline:0; background:#2b82950c; }
-.mine-open-requests-values span { display:flex; min-width:0; align-items:center; gap:4px; overflow:hidden; color:var(--mine-muted); font-size:7px; text-overflow:ellipsis; white-space:nowrap; }
-.mine-open-requests-values span i { flex:0 0 auto; width:6px; height:6px; border-radius:50%; }
-.mine-open-requests-values strong { font:900 11px/1 Manrope; }
+.mine-open-requests-values { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; }
+.mine-open-requests-values button { display:flex; min-width:0; min-height:36px; align-items:center; justify-content:space-between; gap:5px; border:1px solid transparent; border-radius:6px; cursor:pointer; padding:5px 7px; }
+.mine-open-requests-values button:hover,.mine-open-requests-values button:focus-visible { outline:0; filter:brightness(.97); }
+.mine-open-requests-values button.open { border-color:#df6d64; background:#df6d6417; color:#b93e38; }
+.mine-open-requests-values button.progress { border-color:#d5a62d; background:#f2c94c24; color:#936c00; }
+.mine-open-requests-values button.idle { border-color:#8b6abd; background:#8b6abd18; color:#704da4; }
+.mine-open-requests-values span { min-width:0; overflow:hidden; font-size:7px; font-weight:850; text-overflow:ellipsis; white-space:nowrap; }
+.mine-open-requests-values strong { font:900 12px/1 Manrope; }
 .mine-road-status-graphic {
   --kpi-accent: #26956f;
   grid-column: span 2;
