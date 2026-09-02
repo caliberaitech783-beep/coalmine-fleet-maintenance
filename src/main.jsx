@@ -1033,8 +1033,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
               <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} aria-label={`${region.code} fleet sites`}>
-                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)} aria-label={`${site.name}: ${site.total} total fleet`} title={`${site.name}: ${site.total} total fleet`}>
-                  <strong>{site.total.toLocaleString()}</strong><span className="mine-fleet-chart-bar" style={{ height: `${(site.total / fleetChartAxisMax) * 100}%` }}><i className="equipment" style={{ flexGrow: site.equipment }} /><i className="vehicles" style={{ flexGrow: site.vehicles }} /></span><small>{site.name}</small>
+                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)} aria-label={`${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`} title={`${site.name}: ${site.equipment} equipment, ${site.vehicles} vehicles`}>
+                  <span className="mine-fleet-site-bars"><i className="equipment" style={{ height: `${site.equipment ? Math.max(3, (site.equipment / fleetChartAxisMax) * 100) : 1}%` }}><b>{site.equipment.toLocaleString()}</b></i><i className="vehicles" style={{ height: `${site.vehicles ? Math.max(3, (site.vehicles / fleetChartAxisMax) * 100) : 1}%` }}><b>{site.vehicles.toLocaleString()}</b></i></span><small>{site.name}</small>
                 </button>)}</div>
                 <footer><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
               </section>)}</div>

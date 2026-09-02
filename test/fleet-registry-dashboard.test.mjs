@@ -32,14 +32,22 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /fleetChartTicks\.map/);
   assert.match(source, /fleetRegionInsights\.map\(\(region\) => <section/);
   assert.match(source, /region\.sites\.map\(\(site\) => <button/);
-  assert.match(source, /site\.total \/ fleetChartAxisMax/);
-  assert.match(source, /flexGrow: site\.equipment/);
-  assert.match(source, /flexGrow: site\.vehicles/);
+  assert.match(source, /site\.equipment \/ fleetChartAxisMax/);
+  assert.match(source, /site\.vehicles \/ fleetChartAxisMax/);
+  assert.match(source, /className="mine-fleet-site-bars"/);
   assert.match(source, /className="mine-fleet-chart-total"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
   assert.match(source, /<span>Total Fleet<\/span>/);
   assert.match(css, /\.mine-fleet-chart-total\s*\{[\s\S]*justify-self:\s*center;[\s\S]*border-radius:\s*999px;[\s\S]*linear-gradient\(135deg, #e53f86, #7138b7\)[\s\S]*font:\s*900 22px/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
+});
+
+test("each fleet site uses separate orange equipment and violet vehicle bars with counts", () => {
+  assert.match(source, /className="mine-fleet-site-bars"/);
+  assert.match(source, /site\.equipment\.toLocaleString\(\)/);
+  assert.match(source, /site\.vehicles\.toLocaleString\(\)/);
+  assert.match(css, /\.mine-fleet-site-bars > i\.equipment\s*\{\s*background:\s*linear-gradient\([^}]*#df741f/);
+  assert.match(css, /\.mine-fleet-site-bars > i\.vehicles\s*\{\s*background:\s*linear-gradient\([^}]*#6540b8/);
 });
 
 test("breakdown trend is compact, responsive and site selectable", () => {
