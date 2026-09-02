@@ -629,6 +629,17 @@ button.mine-primary-kpi-card:focus-visible,
   white-space: nowrap;
 }
 .mine-repair-type-chart { margin-bottom: 8px; overflow: hidden; }
+.mine-dashboard-feature-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mine-dashboard-feature-row > .mine-panel { margin-bottom: 0; min-width: 0; }
+.mine-dashboard-feature-row .mine-fleet-chart-layout { min-height: 205px; padding: 9px 10px 0; }
+.mine-dashboard-feature-row .mine-fleet-chart-regions { min-width: 0; }
+.mine-dashboard-feature-row .mine-fleet-chart-regions > section { min-width: 250px; }
+.mine-dashboard-feature-row .mine-repair-type-bars { align-content: center; min-height: 205px; }
 .mine-repair-type-chart > header > strong { color: var(--mine-text); font: 850 12px Manrope; white-space: nowrap; }
 .mine-repair-type-bars { display: grid; gap: 7px; padding: 12px 14px 14px; }
 .mine-repair-type-bars button {
@@ -1128,6 +1139,7 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-trend-sites > div:last-child { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: none; }
 }
 @media (max-width: 1000px) {
+  .mine-dashboard-feature-row { grid-template-columns: 1fr; }
   .mine-primary-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {

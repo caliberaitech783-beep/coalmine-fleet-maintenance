@@ -1025,6 +1025,32 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
+      <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
+        <article className="mine-panel mine-fleet-region-chart" aria-label="Total fleet by region and site graph">
+          <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{assetCounts.total.toLocaleString()} <span>Total Fleet</span></strong><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div></header>
+          <div className="mine-fleet-chart-layout">
+            <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
+            <div className="mine-fleet-chart-plot">
+              <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
+              <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} aria-label={`${region.code} fleet sites`}>
+                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)} aria-label={`${site.name}: ${site.total} total fleet`} title={`${site.name}: ${site.total} total fleet`}>
+                  <strong>{site.total.toLocaleString()}</strong><span className="mine-fleet-chart-bar" style={{ height: `${(site.total / fleetChartAxisMax) * 100}%` }}><i className="equipment" style={{ flexGrow: site.equipment }} /><i className="vehicles" style={{ flexGrow: site.vehicles }} /></span><small>{site.name}</small>
+                </button>)}</div>
+                <footer><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
+              </section>)}</div>
+            </div>
+          </div>
+          <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div>
+        </article>
+        <article className="mine-panel mine-repair-type-chart" aria-label="Repair type breakdown graph">
+          <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Repair type</h2><p>Breakdown requests by configured repair type</p></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
+          <div className="mine-repair-type-bars">
+            {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
+              <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
+            </button>) : <div className="mine-empty">No repair types configured</div>}
+          </div>
+        </article>
+      </section>
       <div className="mine-kpi-layout-toolbar"><span>Key performance indicators</span><div>{editingKpiLayout && <button type="button" onClick={() => setKpiOrder(defaultKpiOrder)}><RotateCcw /> Reset</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Done" : "Arrange KPIs"}</button></div></div>
       <section className="mine-primary-kpi-grid" data-arranging={editingKpiLayout || undefined} aria-label="Fleet status key performance indicators">
         <article className="mine-primary-kpi-card mine-primary-kpi-assets" {...kpiLayoutProps("assets")}>
@@ -1064,30 +1090,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <strong>{visibleUsers.length.toLocaleString()}</strong>
         </button>
       </section>
-      <article className="mine-panel mine-repair-type-chart" aria-label="Repair type breakdown graph">
-        <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Repair type</h2><p>Breakdown requests by configured repair type</p></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
-        <div className="mine-repair-type-bars">
-          {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
-            <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
-          </button>) : <div className="mine-empty">No repair types configured</div>}
-        </div>
-      </article>
-      <article className="mine-panel mine-fleet-region-chart" aria-label="Total fleet by region and site graph">
-        <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{assetCounts.total.toLocaleString()} <span>Total Fleet</span></strong><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div></header>
-        <div className="mine-fleet-chart-layout">
-          <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
-          <div className="mine-fleet-chart-plot">
-            <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
-            <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} aria-label={`${region.code} fleet sites`}>
-              <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)} aria-label={`${site.name}: ${site.total} total fleet`} title={`${site.name}: ${site.total} total fleet`}>
-                <strong>{site.total.toLocaleString()}</strong><span className="mine-fleet-chart-bar" style={{ height: `${(site.total / fleetChartAxisMax) * 100}%` }}><i className="equipment" style={{ flexGrow: site.equipment }} /><i className="vehicles" style={{ flexGrow: site.vehicles }} /></span><small>{site.name}</small>
-              </button>)}</div>
-              <footer><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
-            </section>)}</div>
-          </div>
-        </div>
-        <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div>
-      </article>
       <section className="mine-dashboard-grid mine-dashboard-core">
         <article className="mine-panel mine-fleet-command mine-span-2">
           <header className="mine-fleet-command-head">

@@ -18,6 +18,16 @@ test("repair types render as a responsive graph instead of KPI cards", () => {
   assert.match(css, /@media \(max-width: 500px\)[\s\S]*\.mine-repair-type-bars button\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\) auto/);
 });
 
+test("Total Fleet and Repair Type share the first dashboard row", () => {
+  assert.match(client, /className="mine-dashboard-feature-row"/);
+  const featureRow = client.indexOf('className="mine-dashboard-feature-row"');
+  const totalFleet = client.indexOf('className="mine-panel mine-fleet-region-chart"', featureRow);
+  const repairType = client.indexOf('className="mine-panel mine-repair-type-chart"', featureRow);
+  const compactKpis = client.indexOf('className="mine-primary-kpi-grid"', featureRow);
+  assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && compactKpis > repairType);
+  assert.match(css, /\.mine-dashboard-feature-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+});
+
 test("primary KPIs use one compact row with a graphical road-status block", () => {
   assert.match(
     css,
