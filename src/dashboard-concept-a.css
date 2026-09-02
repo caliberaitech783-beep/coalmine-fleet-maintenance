@@ -810,9 +810,10 @@ button.mine-primary-kpi-card:focus-visible,
 
 /* Fleet registry workspace: Total -> category -> group -> region/site. */
 .mine-dashboard-core {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
 }
+.mine-dashboard-core > article { min-width: 0; }
 .mine-dashboard-core > .mine-fleet-command { grid-column: auto; }
 .mine-fleet-command-actions { display: flex; align-items: center; gap: 8px; }
 .mine-fleet-command-head .mine-view-full-fleet {
@@ -830,7 +831,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-intelligence-view-switch svg { width: 12px; height: 12px; }
 .mine-fleet-command-body {
   display: grid;
-  grid-template-columns: minmax(190px, .72fr) minmax(260px, 1.12fr) minmax(300px, 1.3fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-height: 270px;
 }
 .mine-fleet-command-body > section {
@@ -838,7 +839,7 @@ button.mine-primary-kpi-card:focus-visible,
   padding: 12px;
 }
 .mine-fleet-command-body > section + section { border-left: 1px solid var(--mine-line); }
-.mine-fleet-command-body.combined { grid-template-columns: minmax(480px, 1.84fr) minmax(300px, 1.3fr); }
+.mine-fleet-command-body.combined { grid-template-columns: minmax(0, 1fr); }
 .mine-fleet-combined { min-width: 0; }
 .mine-hierarchy-layout { display: grid; grid-template-columns: minmax(190px, .72fr) minmax(280px, 1.28fr); align-items: center; gap: 18px; min-height: 230px; }
 .mine-hierarchy-chart-wrap { position: relative; display: grid; place-items: center; width: min(225px, 92%); aspect-ratio: 1; margin: auto; filter: drop-shadow(0 8px 13px #522e9024); }
@@ -863,6 +864,81 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-hierarchy-categories small,.mine-hierarchy-groups small { color: var(--mine-muted); font-size: 7px; }
 .mine-hierarchy-categories strong { font: 900 15px Manrope; }
 .mine-hierarchy-groups strong { font: 850 10px Manrope; }
+.mine-request-lifecycle {
+  display: grid;
+  grid-template-rows: auto auto minmax(180px, 1fr);
+  overflow: hidden;
+  border-top: 3px solid #315fd4;
+}
+.mine-request-lifecycle > header {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mine-line);
+}
+.mine-request-lifecycle > header h2 { margin: 1px 0 0; font-size: 14px; }
+.mine-request-lifecycle > header p { margin: 2px 0 0; color: var(--mine-muted); font-size: 8px; font-weight: 700; }
+.mine-request-lifecycle-controls { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.mine-request-lifecycle-controls label {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 1fr);
+  align-items: center;
+  gap: 5px;
+  height: 31px;
+  padding: 0 6px;
+  border: 1px solid var(--mine-line);
+  border-radius: 6px;
+  background: var(--mine-panel);
+}
+.mine-request-lifecycle-controls label span { color: var(--mine-muted); font-size: 7px; font-weight: 800; text-transform: uppercase; }
+.mine-request-lifecycle-controls input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: var(--mine-text); font-size: 8px; font-weight: 750; }
+.mine-request-lifecycle-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 10px 12px 0; }
+.mine-request-lifecycle-summary button {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 7px 9px;
+  border: 1px solid var(--mine-line);
+  border-radius: 6px;
+  background: var(--mine-panel);
+  color: var(--mine-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+.mine-request-lifecycle-summary button:hover,.mine-request-lifecycle-summary button:focus-visible { transform: translateY(-1px); outline: 0; }
+.mine-request-lifecycle-summary button > i { width: 7px; height: 28px; border-radius: 4px; }
+.mine-request-lifecycle-summary button > span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.mine-request-lifecycle-summary button b { font-size: 9px; }
+.mine-request-lifecycle-summary button small { overflow: hidden; color: var(--mine-muted); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
+.mine-request-lifecycle-summary button strong { font: 900 18px/1 Manrope; }
+.mine-request-lifecycle-summary .opened > i { background: #315fd4; }
+.mine-request-lifecycle-summary .closed > i { background: #f04e53; }
+.mine-request-lifecycle-summary .verified > i { background: #26956f; }
+.mine-request-lifecycle-summary .opened:hover,.mine-request-lifecycle-summary .opened:focus-visible { border-color: #315fd466; background: #315fd408; }
+.mine-request-lifecycle-summary .closed:hover,.mine-request-lifecycle-summary .closed:focus-visible { border-color: #f04e5366; background: #f04e5308; }
+.mine-request-lifecycle-summary .verified:hover,.mine-request-lifecycle-summary .verified:focus-visible { border-color: #26956f66; background: #26956f08; }
+.mine-request-lifecycle-chart { position: relative; min-width: 0; margin: 10px 12px 12px; overflow-x: auto; border: 1px solid var(--mine-line); border-radius: 6px; background: linear-gradient(to bottom, #315fd404, transparent); scrollbar-width: thin; }
+.mine-request-chart-grid { position: absolute; inset: 12px 8px 29px; display: grid; grid-template-rows: repeat(4, 1fr); pointer-events: none; }
+.mine-request-chart-grid i { border-top: 1px dashed #cbd7e555; }
+.mine-request-chart-days { position: relative; display: grid; align-items: end; gap: 4px; height: 100%; min-height: 180px; padding: 12px 8px 7px; }
+.mine-request-chart-day { display: grid; grid-template-rows: minmax(130px, 1fr) 22px; min-width: 0; height: 100%; }
+.mine-request-chart-day > span { display: flex; align-items: flex-end; justify-content: center; gap: 2px; min-width: 0; border-bottom: 1px solid #aebed155; }
+.mine-request-chart-day button { position: relative; width: min(7px, 28%); min-height: 2px; padding: 0; border: 0; border-radius: 3px 3px 0 0; cursor: pointer; transition: filter .15s ease, transform .15s ease; }
+.mine-request-chart-day button:hover,.mine-request-chart-day button:focus-visible { z-index: 1; filter: brightness(.9) drop-shadow(0 0 3px currentColor); outline: 0; transform: scaleX(1.18); }
+.mine-request-chart-day button:disabled { cursor: default; opacity: .45; }
+.mine-request-chart-day button:disabled:hover { filter: none; transform: none; }
+.mine-request-chart-day button.opened { background: #315fd4; color: #315fd4; }
+.mine-request-chart-day button.closed { background: #f04e53; color: #f04e53; }
+.mine-request-chart-day button.verified { background: #26956f; color: #26956f; }
+.mine-request-chart-day button b { position: absolute; top: -12px; left: 50%; color: var(--mine-text); font-size: 7px; transform: translateX(-50%); }
+.mine-request-chart-day > small { align-self: end; overflow: hidden; color: var(--mine-muted); font-size: 7px; font-weight: 700; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .mine-fleet-pie-panel { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; align-items: center; }
 .mine-pie-chart-wrap { position: relative; display: grid; place-items: center; width: min(150px, 72%); aspect-ratio: 1; margin: 0 auto 8px; filter: drop-shadow(0 8px 12px #1c355225); }
 .mine-pie-chart { width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
@@ -1244,6 +1320,9 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-fleet-command-actions { width: 100%; justify-content: space-between; }
   .mine-hierarchy-layout { grid-template-columns: 1fr; }
   .mine-hierarchy-chart-wrap { width: min(220px, 70vw); }
+  .mine-request-lifecycle > header { align-items: flex-start; flex-direction: column; }
+  .mine-request-lifecycle-controls { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .mine-request-lifecycle-controls label { flex: 1 1 140px; }
   .mine-fleet-command-body > section + section { border-top: 1px solid var(--mine-line); border-left: 0; }
   .mine-fleet-geography { grid-column: auto; }
   .mine-fleet-region-list { grid-template-columns: 1fr; }
@@ -1264,6 +1343,7 @@ button.mine-primary-kpi-card:focus-visible,
   .workload-status-drilldown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 500px) {
+  .mine-request-lifecycle-summary { grid-template-columns: 1fr; }
   .mine-feature-road-availability .mine-road-status-values { width: 100%; }
   .mine-feature-road-availability .mine-road-status-values { grid-template-columns: 1fr; }
   .mine-repair-type-chart > header { align-items: flex-start; }

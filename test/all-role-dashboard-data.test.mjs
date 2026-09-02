@@ -13,8 +13,9 @@ test("every operational dashboard loads site-wide requests separately from perso
 });
 
 test("equipment and vehicle totals open a name list on every dashboard", () => {
-  assert.match(client, /onClick=\{\(\) => openAssetDrilldown\("equipment"\)\}/);
-  assert.match(client, /onClick=\{\(\) => openAssetDrilldown\("vehicle"\)\}/);
+  assert.match(client, /\{ label: "Equipment", total: assetCounts\.equipment, key: "equipment"/);
+  assert.match(client, /\{ label: "Vehicles", total: assetCounts\.vehicles, key: "vehicle"/);
+  assert.match(client, /assetCategoryPieSlices\.map\(\(slice\) => <button[^>]*onClick=\{\(\) => openAssetDrilldown\(slice\.key\)\}/);
   assert.match(client, /Step 1 · Select region/);
   assert.match(client, /Step 2 · Select \{selectedAssetRegion\.code\} site/);
   assert.match(client, /Step 3 · \{assetDrilldownSite\} fleet totals/);

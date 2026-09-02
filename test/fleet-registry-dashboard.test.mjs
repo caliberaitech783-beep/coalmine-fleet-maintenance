@@ -5,8 +5,8 @@ import test from "node:test";
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 
-test("fleet registry dashboard connects category, group, region and site-wise drilldowns", () => {
-  assert.match(source, /className="mine-panel mine-fleet-command mine-span-2"/);
+test("fleet intelligence connects category and group drilldowns without a region-site subpanel", () => {
+  assert.match(source, /className="mine-panel mine-fleet-command"/);
   assert.match(source, /Total Equipment Intelligence/);
   assert.doesNotMatch(source, /<span className="mine-eyebrow">Fleet registry<\/span>/);
   assert.doesNotMatch(source, /Category, equipment group, region and site-wise fleet distribution/);
@@ -23,7 +23,7 @@ test("fleet registry dashboard connects category, group, region and site-wise dr
   assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-pie-chart\s*\{/);
   assert.match(css, /\.mine-pie-slice\s*\{[\s\S]*cursor:\s*pointer/);
-  assert.match(css, /\.mine-fleet-site-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,/);
+  assert.doesNotMatch(source, /className="mine-fleet-geography"/);
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
 });
 

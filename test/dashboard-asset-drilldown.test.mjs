@@ -5,9 +5,9 @@ import test from "node:test";
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 test("dashboard equipment and vehicle totals drill down from region to site and type", () => {
-  assert.match(source, /openAssetDrilldown\("equipment"\)[\s\S]*Total equipment/);
-  assert.match(source, /Total vehicles[\s\S]*assetCounts\.vehicles/);
-  assert.match(source, /openAssetDrilldown\("vehicle"\)/);
+  assert.match(source, /\{ label: "Equipment", total: assetCounts\.equipment, key: "equipment"/);
+  assert.match(source, /\{ label: "Vehicles", total: assetCounts\.vehicles, key: "vehicle"/);
+  assert.match(source, /assetCategoryPieSlices\.map\(\(slice\) => <button[^>]*onClick=\{\(\) => openAssetDrilldown\(slice\.key\)\}/);
   assert.match(source, /const siteFirstAssetDrilldown = \["all", "equipment", "vehicle", "road-availability", "onroad", "offroad", "idle", "unknown"\]\.includes\(assetDrilldown\)/);
   assert.doesNotMatch(source, /Select location level/);
   assert.match(source, /Step 1 · Select region/);

@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-const css = fs.readFileSync(
-  new URL("../src/dashboard-concept-a.css", import.meta.url),
-  "utf8",
-);
+const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 test("repair types render as a responsive graph instead of KPI cards", () => {
@@ -20,64 +17,38 @@ test("repair types render as a responsive graph instead of KPI cards", () => {
 });
 
 test("Total Fleet leads the dashboard and Maintenance Type shares a row with Road Availability", () => {
-  assert.match(client, /className="mine-dashboard-feature-row"/);
   const featureRow = client.indexOf('className="mine-dashboard-feature-row"');
   const totalFleet = client.indexOf('mine-panel mine-fleet-region-chart', featureRow);
   const repairType = client.indexOf('className="mine-panel mine-repair-type-chart"', featureRow);
   const roadAvailability = client.indexOf('className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"', repairType);
-  const compactKpis = client.indexOf('className="mine-primary-kpi-grid"', featureRow);
-  assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && roadAvailability > repairType && compactKpis > roadAvailability);
+  const intelligence = client.indexOf('className="mine-dashboard-grid mine-dashboard-core"', featureRow);
+  assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && roadAvailability > repairType && intelligence > roadAvailability);
   assert.match(css, /\.mine-dashboard-feature-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
-  assert.match(css, /\.mine-dashboard-feature-row > \.mine-feature-road-availability\s*\{[\s\S]*?grid-column:\s*span 1/);
   assert.match(client, /className="mine-road-availability-summary"/);
   assert.match(client, /className="mine-road-distribution"/);
-  assert.doesNotMatch(client, /className="mine-road-status-chart"/);
   assert.match(client, /roadStatusShare\(kpis\.onRoad\)\.toFixed\(1\)/);
-  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values\s*\{\s*grid-template-columns:\s*repeat\(3,minmax\(0,1fr\)\)/);
 });
 
-test("primary KPIs remain compact after Road Availability moves beside Maintenance Type", () => {
-  assert.match(
-    css,
-    /\.mine-primary-kpi-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/,
-  );
-  assert.match(
-    css,
-    /@media \(max-width:\s*1000px\)[\s\S]*?\.mine-primary-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/,
-  );
-  assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-assets"/);
-  assert.match(client, /className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"/);
-  assert.match(client, /Fleet status distribution/);
-  assert.match(css, /\.mine-road-status-graphic\s*\{[\s\S]*?grid-column:\s*span 2;/);
-  assert.match(client, /<b>Total Fleet<\/b>/);
-  assert.match(client, /<b>On road<\/b>/);
-  assert.match(client, /<b>Off road<\/b>/);
-  assert.match(client, /<b>Idle<\/b>/);
-  assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic"/);
-  assert.match(client, /Consolidated open requests/);
-  assert.match(client, /openRequestStatusItems\.map/);
-  assert.doesNotMatch(client, /className="mine-open-requests-bar"/);
-  assert.doesNotMatch(client, /\{ key: "Awaiting", label: "Awaiting"/);
-  assert.match(css, /\.mine-open-requests-values\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
-  assert.match(css, /button\.open\s*\{[\s\S]*#df6d64/);
-  assert.match(css, /button\.progress\s*\{[\s\S]*#d5a62d/);
-  assert.match(css, /button\.idle\s*\{[\s\S]*#8b6abd18/);
-  assert.match(client, /<b>Operations users<\/b>/);
+test("equipment intelligence and request lifecycle share a responsive row", () => {
+  assert.match(css, /\.mine-dashboard-core\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /@media \(max-width: 1100px\)[\s\S]*?\.mine-dashboard-core\s*\{\s*grid-template-columns:\s*1fr/);
+  assert.match(client, /className="mine-panel mine-fleet-command"/);
+  assert.match(client, /className="mine-panel mine-request-lifecycle"/);
+  assert.doesNotMatch(client, /className="mine-primary-kpi-grid"/);
+  assert.doesNotMatch(client, /Key performance indicators/);
+  assert.doesNotMatch(client, /className="mine-fleet-geography"/);
 });
 
-test("the in-progress status button has no background fill", () => {
-  assert.match(
-    css,
-    /\.mine-open-requests-values button\.progress \{ border-color:#d5a62d; color:#936c00; \}/,
-  );
-  assert.doesNotMatch(css, /button\.progress\s*\{[^}]*background/);
+test("request lifecycle offers preset and custom date controls", () => {
+  assert.match(client, /\[7, 14, 30\]\.map/);
+  assert.match(client, /aria-label="Request lifecycle from date"/);
+  assert.match(client, /aria-label="Request lifecycle to date"/);
+  assert.match(css, /\.mine-request-lifecycle-controls/);
 });
 
-test("the fleet KPI card shows only the Total Fleet name", () => {
-  assert.match(
-    client,
-    /<span className="mine-primary-kpi-copy"><b>Total Fleet<\/b><\/span>/,
-  );
-  assert.doesNotMatch(client, /Equipment &amp; vehicles/);
-  assert.doesNotMatch(client, /All registered assets/);
+test("request lifecycle graph uses separate brand-colored bars", () => {
+  assert.match(client, /\["opened", "closed", "verified"\]/);
+  assert.match(css, /button\.opened\s*\{\s*background:\s*#315fd4/);
+  assert.match(css, /button\.closed\s*\{\s*background:\s*#f04e53/);
+  assert.match(css, /button\.verified\s*\{\s*background:\s*#26956f/);
 });

@@ -4,13 +4,13 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("all operational KPI cards open category, group, and full-detail drilldowns", () => {
+test("operational dashboard graphs open category, group, lifecycle, and full-detail drilldowns", () => {
   assert.match(source, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
-  assert.match(source, /openAssetDrilldown\(`region:\$\{region\.code\}`\)/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
   assert.match(source, /key: `group:\$\{group\.label\}`/);
-  assert.match(source, /openAssetDrilldown\(`status:\$\{item\.key\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`event:\$\{item\.key\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`event:\$\{event\}:\$\{day\.date\}`\)/);
   assert.match(source, /Step 1 · Select equipment category/);
   assert.match(source, /Step 2 · Select equipment group/);
   assert.match(source, /Step 3 · Full details for/);

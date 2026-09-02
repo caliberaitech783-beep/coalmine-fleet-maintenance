@@ -86,7 +86,6 @@ import {
   Printer,
   Columns3,
   RotateCcw,
-  GripVertical,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -759,12 +758,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
-  const defaultKpiOrder = ["assets", "workload", "users"];
   const [equipmentRecords] = useMasterRecords("Equipment master");
-  const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
-  const [showUserBreakdown, setShowUserBreakdown] = useState(false);
-  const [showWorkloadBreakdown, setShowWorkloadBreakdown] = useState(false);
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [assetDrilldownRegion, setAssetDrilldownRegion] = useState("");
   const [assetDrilldownSite, setAssetDrilldownSite] = useState("");
@@ -777,17 +772,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
-  const [editingKpiLayout, setEditingKpiLayout] = useState(false);
-  const [draggedKpi, setDraggedKpi] = useState("");
-  const [kpiOrder, setKpiOrder] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("nerveCenterDashboardKpiOrder") || "[]");
-      return saved.length === defaultKpiOrder.length && defaultKpiOrder.every((key) => saved.includes(key)) ? saved : defaultKpiOrder;
-    } catch {
-      return defaultKpiOrder;
-    }
-  });
-  useEffect(() => localStorage.setItem("nerveCenterDashboardKpiOrder", JSON.stringify(kpiOrder)), [kpiOrder]);
+  const [requestTrendDays, setRequestTrendDays] = useState(7);
+  const [requestTrendFrom, setRequestTrendFrom] = useState("");
+  const [requestTrendTo, setRequestTrendTo] = useState("");
   useEffect(() => localStorage.setItem("nerveCenterFleetWatermark", String(showFleetWatermark)), [showFleetWatermark]);
   useEffect(() => localStorage.setItem("nerveCenterFleetIntelligenceView", fleetIntelligenceView), [fleetIntelligenceView]);
   const now = new Date();
@@ -797,7 +784,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const normalizedAllowedRegions=Array.isArray(allowedRegions)?allowedRegions.filter((region)=>region&&region!=="All"):null;
   const scopedEquipment=normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords;
   const scopedBreakdowns=normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests;
-  const scopedUsers=normalizedAllowedSites?.length?usersAndEmployees.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:usersAndEmployees;
   const availableRegions=subsidiaryData.filter((region)=>{
     if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
@@ -806,7 +792,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const selectedSites = (selectedRegion?.sites || []).filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)));
   const activeSites = dashboardSite !== "all" ? [dashboardSite] : selectedSites;
   const visibleEquipment = selectedRegion ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment;
-  const visibleUsers = selectedRegion ? scopedUsers.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedUsers;
   const equipmentByReference=new Map();
   visibleEquipment.forEach((record)=>[record.manufacturerSerialNo,record.chassisNo,record.door,record.reg,record.equipmentName]
     .map((value)=>String(value||"").trim().toLowerCase()).filter(Boolean).forEach((key)=>equipmentByReference.set(key,record)));
@@ -837,13 +822,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
   const roadStatusTotal = kpis.onRoad + kpis.offRoad + kpis.idle;
   const roadStatusShare = (value) => roadStatusTotal ? (value / roadStatusTotal) * 100 : 0;
-  const userCounts = visibleUsers.reduce((counts, record) => {
-    const type = String(record.userType || record.role || "").toLowerCase();
-    if (type.includes("mobile") || type.includes("normal")) counts.mobile += 1;
-    else if (type.includes("super")) counts.super += 1;
-    else if (type.includes("admin")) counts.admin += 1;
-    return counts;
-  }, { mobile: 0, super: 0, admin: 0 });
   const repairTypeBreakdown = [...new Map(
     repairTypeRecords
       .map((record) => String(record.repairType || "").trim())
@@ -856,7 +834,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const maxRepairTypeCount = Math.max(1, ...repairTypeBreakdown.map((item) => item.value));
   const repairTypeTotal = repairTypeBreakdown.reduce((total, item) => total + item.value, 0);
   const openCaseRequests = activeOpenCases(visibleBreakdowns);
-  const activeBreakdowns = openCaseRequests.length;
   const assetCounts = fleetAssetCounts(visibleEquipment);
   const equipmentGroupLabel = (record = {}) => String(record.group || record.equipmentGroup || record.itemName || record.category || "Unclassified").trim() || "Unclassified";
   const equipmentCategoryLabel = (record = {}) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase())
@@ -914,35 +891,36 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetChartTicks = [100, 75, 50, 25, 0].map((percent) => Math.round((fleetChartAxisMax * percent) / 100));
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
-  const moveKpi = (key, direction) => setKpiOrder((current) => {
-    const from = current.indexOf(key);
-    const to = Math.max(0, Math.min(current.length - 1, from + direction));
-    if (from === to) return current;
-    const next = [...current];
-    [next[from], next[to]] = [next[to], next[from]];
-    return next;
-  });
-  const dropKpi = (target) => {
-    if (!draggedKpi || draggedKpi === target) return;
-    setKpiOrder((current) => {
-      const next = current.filter((key) => key !== draggedKpi);
-      next.splice(next.indexOf(target), 0, draggedKpi);
-      return next;
-    });
-    setDraggedKpi("");
+  const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
+  const localDateKey = (value) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  const requestEventDate = (record, event) => event === "opened"
+    ? dateKey(record.start) || dateKey(record.startedAt) || dateKey(record.createdAt)
+    : event === "closed" ? dateKey(record.closedAt) : dateKey(record.verifiedAt);
+  const requestTrendEndKey = requestTrendTo || dashboardDate || localDateKey(now);
+  const requestTrendEarliest = new Date(`${requestTrendEndKey}T12:00:00`);
+  requestTrendEarliest.setDate(requestTrendEarliest.getDate() - 365);
+  const requestTrendEarliestKey = localDateKey(requestTrendEarliest);
+  const presetTrendStart = new Date(`${requestTrendEndKey}T12:00:00`);
+  presetTrendStart.setDate(presetTrendStart.getDate() - (requestTrendDays - 1));
+  const requestTrendStartKey = requestTrendFrom || localDateKey(presetTrendStart);
+  const safeTrendStartKey = requestTrendStartKey > requestTrendEndKey ? requestTrendEndKey : requestTrendStartKey < requestTrendEarliestKey ? requestTrendEarliestKey : requestTrendStartKey;
+  const requestTrendDateKeys = [];
+  for (const cursor = new Date(`${safeTrendStartKey}T12:00:00`), end = new Date(`${requestTrendEndKey}T12:00:00`); cursor <= end && requestTrendDateKeys.length < 366; cursor.setDate(cursor.getDate() + 1)) {
+    requestTrendDateKeys.push(localDateKey(cursor));
+  }
+  const requestLifecycleRows = {
+    opened: locationBreakdowns.filter((record) => requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
+    closed: locationBreakdowns.filter((record) => requestEventDate(record, "closed") >= safeTrendStartKey && requestEventDate(record, "closed") <= requestTrendEndKey),
+    verified: locationBreakdowns.filter((record) => requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
   };
-  const kpiLayoutProps = (key) => ({
-    draggable: editingKpiLayout,
-    onDragStart: () => setDraggedKpi(key),
-    onDragOver: (event) => editingKpiLayout && event.preventDefault(),
-    onDrop: () => dropKpi(key),
-    style: { order: kpiOrder.indexOf(key) },
-  });
-  const kpiMoveControls = (key) => editingKpiLayout && <span className="mine-kpi-move-controls" onClick={(event) => event.stopPropagation()}>
-    <GripVertical aria-hidden="true" />
-    <span role="button" tabIndex="0" aria-label={`Move ${key} KPI left`} onClick={() => moveKpi(key, -1)} onKeyDown={(event) => event.key === "Enter" && moveKpi(key, -1)}><ChevronLeft /></span>
-    <span role="button" tabIndex="0" aria-label={`Move ${key} KPI right`} onClick={() => moveKpi(key, 1)} onKeyDown={(event) => event.key === "Enter" && moveKpi(key, 1)}><ChevronRight /></span>
-  </span>;
+  const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
+    date,
+    opened: requestLifecycleRows.opened.filter((record) => requestEventDate(record, "opened") === date).length,
+    closed: requestLifecycleRows.closed.filter((record) => requestEventDate(record, "closed") === date).length,
+    verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
+  }));
+  const requestLifecycleMaximum = Math.max(1, ...requestLifecycleTrend.flatMap((day) => [day.opened, day.closed, day.verified]));
+  const requestLifecycleRangeLabel = `${new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${safeTrendStartKey}T12:00:00`))} - ${new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${requestTrendEndKey}T12:00:00`))}`;
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
     return {
@@ -959,6 +937,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       requestStatus: request.status || "—",
       repairCategory: request.category || "—",
       requestStart: request.start || "—",
+      requestClosed: request.closedAt || "—",
+      requestVerified: request.verifiedAt || "—",
     };
   });
   const rowsForAssetDrilldown = (key = "") => {
@@ -975,6 +955,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
     if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
+    if (key.startsWith("event:")) {
+      const [, event, date] = key.split(":");
+      const rows = requestLifecycleRows[event] || [];
+      return requestAssetRows(date ? rows.filter((record) => requestEventDate(record, event) === date) : rows);
+    }
     return [];
   };
   const assetDrilldownRows = rowsForAssetDrilldown(assetDrilldown);
@@ -1017,8 +1002,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const assetGroupRows = assetDrilldownCategory && assetDrilldownGroup ? assetCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
   const assetCategoryBreakdown = summarizeEquipment(assetDrilldownRows, equipmentCategoryLabel);
   const assetGroupBreakdown = summarizeEquipment(assetCategoryRows);
-  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:");
-  const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
+  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:");
+  const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
+  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : "Verified requests";
+  const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
     setAssetDrilldownRegion("");
@@ -1033,15 +1020,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const selectAssetGroup = (group) => {
     setAssetDrilldownGroup(group);
   };
-  const workloadCounts = ["Open", "In progress", "Awaiting parts", "Awaiting approval", "Idle", "Closed"].reduce((counts, status) => {
-    counts[status] = visibleBreakdowns.filter((record) => record.status === status).length;
-    return counts;
-  }, {});
-  const openRequestStatusItems = [
-    { key: "Open", label: "Open", count: workloadCounts.Open, className: "open" },
-    { key: "In progress", label: "In Progress", count: workloadCounts["In progress"], className: "progress" },
-    { key: "Idle", label: "Idle", count: workloadCounts.Idle, className: "idle" },
-  ];
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
@@ -1091,35 +1069,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
         </article>
       </section>
-      <div className="mine-kpi-layout-toolbar"><span>Key performance indicators</span><div>{editingKpiLayout && <button type="button" onClick={() => setKpiOrder(defaultKpiOrder)}><RotateCcw /> Reset</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Done" : "Arrange KPIs"}</button></div></div>
-      <section className="mine-primary-kpi-grid" data-arranging={editingKpiLayout || undefined} aria-label="Fleet status key performance indicators">
-        <article className="mine-primary-kpi-card mine-primary-kpi-assets" {...kpiLayoutProps("assets")}>
-          {kpiMoveControls("assets")}
-          <button type="button" className="mine-primary-kpi-main" onClick={() => openAssetDrilldown("all")}>
-            <span className="mine-primary-kpi-icon"><Truck /></span>
-            <span className="mine-primary-kpi-copy"><b>Total Fleet</b></span>
-            <strong>{assetCounts.total.toLocaleString()}</strong>
-          </button>
-          <div className="mine-primary-kpi-split">
-            <button type="button" onClick={() => openAssetDrilldown("equipment")}><span>Total equipment</span><b>{assetCounts.equipment.toLocaleString()}</b></button>
-            <button type="button" onClick={() => openAssetDrilldown("vehicle")}><span>Total vehicles</span><b>{assetCounts.vehicles.toLocaleString()}</b></button>
-          </div>
-          <div className="mine-kpi-composition" aria-label={`${equipmentShare}% equipment and ${vehicleShare}% vehicles`}><span style={{ width: `${equipmentShare}%` }} /><span style={{ width: `${vehicleShare}%` }} /></div>
-        </article>
-        <article className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic" {...kpiLayoutProps("workload")}>
-          {kpiMoveControls("workload")}
-          <header><span>Consolidated open requests</span><button type="button" onClick={() => setShowWorkloadBreakdown(true)}><strong>{activeBreakdowns.toLocaleString()}</strong><small>Total open</small></button></header>
-          <div className="mine-open-requests-values">{openRequestStatusItems.map((item) => <button type="button" key={item.key} className={item.className} onClick={() => openAssetDrilldown(`status:${item.key}`)}><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div>
-        </article>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)} {...kpiLayoutProps("users")}>
-          {kpiMoveControls("users")}
-          <span className="mine-primary-kpi-icon"><Users /></span>
-          <span className="mine-primary-kpi-copy"><small>People</small><b>Operations users</b><em>Mobile {userCounts.mobile} · Super {userCounts.super} · Admin {userCounts.admin}</em></span>
-          <strong>{visibleUsers.length.toLocaleString()}</strong>
-        </button>
-      </section>
       <section className="mine-dashboard-grid mine-dashboard-core">
-        <article className="mine-panel mine-fleet-command mine-span-2">
+        <article className="mine-panel mine-fleet-command">
           <header className="mine-fleet-command-head">
             <div><h2>Total Equipment Intelligence</h2></div>
             <div className="mine-fleet-command-actions">
@@ -1159,18 +1110,33 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 {fleetGroupPieSlices.length ? <><div className="mine-pie-chart-wrap"><svg className="mine-pie-chart" viewBox="0 0 42 42" aria-label={`${fleetGroupInsights.length} equipment groups`}>{fleetGroupPieSlices.map((slice) => <circle key={slice.key} className="mine-pie-slice" cx="21" cy="21" r="15.9155" pathLength="100" fill="none" stroke={slice.color} strokeWidth="7" strokeDasharray={`${slice.percent} ${100 - slice.percent}`} strokeDashoffset={-slice.start} onClick={() => openAssetDrilldown(slice.key)} role="button" tabIndex="0" onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openAssetDrilldown(slice.key); }}><title>{slice.label}: {slice.total}</title></circle>)}</svg><span className="mine-pie-center"><b>{fleetGroupInsights.length}</b><small>Groups</small></span></div><div className="mine-pie-legend mine-group-pie-legend">{fleetGroupPieSlices.map((slice) => <button type="button" key={slice.key} onClick={() => openAssetDrilldown(slice.key)}><i style={{ background: slice.color }} /><span>{slice.label}</span><b>{slice.total.toLocaleString()}</b></button>)}</div></> : <p className="mine-empty">No equipment groups available</p>}
               </section>
             </>}
-            <section className="mine-fleet-geography" aria-label="Region and site-wise fleet">
-              <div className="mine-fleet-section-title"><span>Region &amp; site wise</span><b>{fleetRegionInsights.reduce((sum, region) => sum + region.sites.length, 0)} sites</b></div>
-              <div className="mine-fleet-region-list">{fleetRegionInsights.map((region) => <div className="mine-fleet-region" key={region.code}>
-                <button type="button" className="mine-fleet-region-head" onClick={() => openAssetDrilldown(`region:${region.code}`)}><span><Building2 /><b>{region.code}</b><small>{region.name}</small></span><span><strong>{region.total.toLocaleString()}</strong><small>{region.equipment} Eq. · {region.vehicles} Veh.</small></span><ChevronRight /></button>
-                <div className="mine-fleet-site-grid">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)}><MapPin /><span><b>{site.name}</b><small>{site.equipment} Eq. · {site.vehicles} Veh.</small></span><strong>{site.total.toLocaleString()}</strong></button>)}</div>
-              </div>)}</div>
-            </section>
+          </div>
+        </article>
+        <article className="mine-panel mine-request-lifecycle" aria-label="Opened, closed and verified request trend">
+          <header>
+            <div><span className="mine-eyebrow">Workflow throughput</span><h2>Request Lifecycle</h2><p>{requestLifecycleRangeLabel}</p></div>
+            <div className="mine-request-lifecycle-controls">
+              <div className="mine-trend-period" role="group" aria-label="Request lifecycle period">{[7, 14, 30].map((days) => <button type="button" key={days} className={!requestTrendFrom && !requestTrendTo && requestTrendDays === days ? "active" : ""} onClick={() => { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); }}>{days}D</button>)}</div>
+              <label><span>From</span><input type="date" aria-label="Request lifecycle from date" value={requestTrendFrom} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
+              <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
+            </div>
+          </header>
+          <div className="mine-request-lifecycle-summary">
+            {[{ key: "opened", label: "Opened", note: "New requests" }, { key: "closed", label: "Closed", note: "Maintenance completed" }, { key: "verified", label: "Verified", note: "MIS verified" }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{requestLifecycleRows[item.key].length.toLocaleString()}</strong></button>)}
+          </div>
+          <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
+            <div className="mine-request-chart-grid" aria-hidden="true"><i /><i /><i /><i /></div>
+            <div className="mine-request-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, requestLifecycleTrend.length)}, minmax(28px, 1fr))`, minWidth: `${Math.max(100, requestLifecycleTrend.length * 34)}px` }}>
+              {requestLifecycleTrend.map((day, index) => <div className="mine-request-chart-day" key={day.date}>
+                <span>
+                  {(["opened", "closed", "verified"]).map((event) => <button type="button" key={event} className={event} disabled={!day[event]} style={{ height: `${day[event] ? Math.max(7, (day[event] / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${day.date}: ${day[event]} ${event} requests`} title={`${day.date}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
+                </span>
+                <small>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small>
+              </div>)}
+            </div>
           </div>
         </article>
       </section>
-      {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{visibleUsers.length}</strong></div></Modal>}
-      {showWorkloadBreakdown && <Modal title="Open requests by status" close={() => setShowWorkloadBreakdown(false)}><div className="user-count-drilldown workload-status-drilldown">{openRequestStatusItems.map((item) => <button type="button" key={item.key} onClick={() => { setShowWorkloadBreakdown(false); openAssetDrilldown(`status:${item.key}`); }}><Wrench /><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div><div className="user-count-total"><span>Consolidated open requests</span><strong>{activeBreakdowns.toLocaleString()}</strong></div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={`${assetDrilldownTitle} · ${assetDrilldownRows.length}`} close={() => { setAssetDrilldown(""); setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><div className="dashboard-asset-drilldown">
         {repairTypeSiteDrilldown ? <>
           <section><h4>Step 1 · Select region</h4><div className="dashboard-asset-summary">{repairTypeRegionBreakdown.length ? repairTypeRegionBreakdown.map((region) => <button type="button" key={region.code} className={assetDrilldownRegion === region.code ? "active" : ""} onClick={() => { setAssetDrilldownRegion(region.code); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{region.count.toLocaleString()}</b>{region.code}</button>) : <p>No regions available</p>}</div></section>
@@ -1187,7 +1153,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </> : <>
           <section><h4>Step 1 · Select equipment category</h4><div className="dashboard-asset-summary">{assetCategoryBreakdown.length ? assetCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment records found</p>}</div></section>
           {assetDrilldownCategory && <section><h4>Step 2 · Select equipment group</h4><div className="dashboard-asset-groups">{assetGroupBreakdown.length ? assetGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No equipment group found</p>}</div></section>}
-          {assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><table><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}</tr>)}</tbody></table></div></section>}
+          {assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><table><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}{assetDrilldown.startsWith("event:") && <><th>Closed</th><th>Verified</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}{assetDrilldown.startsWith("event:") && <><td>{formatTwelveHourDateTime(record.requestClosed)}</td><td>{formatTwelveHourDateTime(record.requestVerified)}</td></>}</tr>)}</tbody></table></div></section>}
         </>}
       </div></Modal>}
       <section className="mine-panel mine-breakdown-trend">

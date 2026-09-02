@@ -10,7 +10,7 @@ test("dashboard region selection exposes its sites and filters every scoped data
   assert.match(source, /const selectedSites = \(selectedRegion\?\.sites \|\| \[\]\)\.filter/);
   assert.match(source, /const activeSites = dashboardSite !== "all" \? \[dashboardSite\] : selectedSites/);
   assert.match(source, /visibleEquipment = selectedRegion \? scopedEquipment\.filter\(\(record\) => activeSites\.some/);
-  assert.match(source, /visibleUsers = selectedRegion \? scopedUsers\.filter\(\(record\) => activeSites\.some/);
+  assert.doesNotMatch(source, /visibleUsers = selectedRegion/);
   assert.match(source, /locationBreakdowns = selectedRegion \? scopedBreakdowns\.filter\(\(record\) => activeSites\.some/);
   assert.match(source, /selectedRegion && <label className="mine-site-filter">/);
   assert.match(source, /<select aria-label="Site" value=\{dashboardSite\}/);
