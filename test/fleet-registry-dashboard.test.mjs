@@ -61,6 +61,8 @@ test("Total Fleet fits every site evenly across the available width", () => {
   assert.match(source, /flexGrow: Math\.max\(1, region\.sites\.length\)/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0/);
   assert.match(css, /\.mine-fleet-chart-sites\s*\{[^}]*grid-auto-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*0/);
+  assert.match(css, /\.mine-fleet-site-bars\s*\{[^}]*width:\s*94%;[^}]*max-width:\s*190px/);
+  assert.match(css, /\.mine-fleet-site-bars > i\s*\{[^}]*flex:\s*1 1 0;[^}]*max-width:\s*90px/);
 });
 
 test("breakdown trend is compact, responsive and site selectable", () => {
