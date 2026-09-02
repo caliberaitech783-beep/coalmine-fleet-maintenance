@@ -107,20 +107,62 @@
   margin: 4px 0 8px;
 }
 
-/* Horizontal scrollbar above the table as well as below it, kept in sync. */
-.table-top-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-bottom: 1px solid var(--line);
+/* The workspace fills the window so the table keeps its one horizontal
+   scrollbar on screen without scrolling the page down to reach it. */
+.normal:not(.embedded-workspace):has(.mobile-workspace) {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.table-top-scroll-rail {
-  height: 1px;
+.normal:not(.embedded-workspace) > main:has(.mobile-workspace) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.mobile-workspace .scroll.mobile-workflow-table {
-  max-height: calc(100vh - 300px);
-  min-height: 320px;
+.normal:not(.embedded-workspace) .mobile-workspace {
+  flex: 1;
+  min-height: 0;
+}
+
+.mobile-workspace > .welcome,
+.mobile-workspace > .sectiontitle {
+  flex: none;
+}
+
+.normal:not(.embedded-workspace) .mobile-workspace > section.panel {
+  flex: 1;
+  min-height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.normal:not(.embedded-workspace) .mobile-workspace .scroll.mobile-workflow-table {
+  flex: 1;
+  min-height: 0;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar-track {
+  background: #f2f4f8;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar-thumb {
+  background: #c3cad8;
+  border-radius: 8px;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar-thumb:hover {
+  background: #a9b3c5;
 }
 
 @media (max-width: 600px) {
@@ -132,8 +174,13 @@
     display: none;
   }
 
-  .mobile-workspace .scroll.mobile-workflow-table {
-    max-height: none;
+  .normal:not(.embedded-workspace):has(.mobile-workspace),
+  .normal:not(.embedded-workspace) > main:has(.mobile-workspace) {
+    height: auto;
+    overflow: visible;
+  }
+
+  .normal:not(.embedded-workspace) .mobile-workspace > section.panel {
     min-height: 0;
   }
 }

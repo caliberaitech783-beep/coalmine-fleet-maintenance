@@ -26,10 +26,16 @@ test("the workspace body claims the full width and starts right under the banner
   assert.match(workflowStyles, /\.mobile-workspace \.sectiontitle\s*\{[^}]*margin:\s*4px 0 8px/s);
 });
 
-test("workflow tables expose a horizontal scrollbar above the table as well as below it", () => {
-  assert.match(mainSource, /<div className="table-top-scroll" ref=\{topScrollRef\} onScroll=\{\(\) => syncScroll\(topScrollRef, bodyScrollRef\)\}/);
-  assert.match(mainSource, /<div className="scroll mobile-workflow-table" ref=\{bodyScrollRef\} onScroll=\{\(\) => syncScroll\(bodyScrollRef, topScrollRef\)\}/);
-  assert.match(mainSource, /<table className="workflow-table" ref=\{tableRef\}>/);
-  assert.match(mainSource, /const measure = \(\) => setTableWidth\(table\.scrollWidth\);/);
-  assert.match(workflowStyles, /\.table-top-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+test("workflow tables keep a single horizontal scrollbar that stays on screen", () => {
+  assert.doesNotMatch(mainSource, /table-top-scroll/);
+  assert.doesNotMatch(workflowStyles, /table-top-scroll/);
+  assert.match(mainSource, /<div className="scroll mobile-workflow-table">/);
+  assert.match(
+    workflowStyles,
+    /\.normal:not\(\.embedded-workspace\):has\(\.mobile-workspace\)\s*\{[^}]*height:\s*100vh;[^}]*overflow:\s*hidden/s,
+  );
+  assert.match(
+    workflowStyles,
+    /\.normal:not\(\.embedded-workspace\) \.mobile-workspace \.scroll\.mobile-workflow-table\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0/s,
+  );
 });
