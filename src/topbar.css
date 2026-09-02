@@ -190,14 +190,18 @@
   .app > aside .user small { font-size: 11px; }
 }
 
+/* One fluid size drives every clock instance: icon, gaps and text all derive
+   from --header-clock-size, so the clock fits whichever bar it renders in. */
 .header-clock {
+  --header-clock-size: clamp(16px, 1.45vw, 25px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 11px;
-  min-width: 330px;
+  gap: 0.44em;
+  min-width: 0;
+  max-width: 100%;
   color: var(--ink);
-  font: 900 25px/1 Manrope, sans-serif;
+  font: 900 var(--header-clock-size)/1 Manrope, sans-serif;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   white-space: nowrap;
@@ -205,8 +209,8 @@
 
 .header-clock svg {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 0.88em;
+  height: 0.88em;
   color: #315ed0;
   stroke-width: 2.4;
 }
@@ -232,13 +236,13 @@
 }
 
 .normal-header-clock {
-  min-width: 282px;
+  --header-clock-size: clamp(15px, 1.2vw, 20px);
+  min-width: 0;
   padding: 9px 12px;
   border: 1px solid #ffffff24;
   border-radius: 8px;
   background: #ffffff0a;
   color: #fff;
-  font-size: 20px;
 }
 
 .normal-header-clock .header-clock-date,
@@ -280,7 +284,7 @@
 
 .normal-header-nav::-webkit-scrollbar { display: none; }
 .normal-header-nav button { flex: 0 0 auto; padding: 10px clamp(9px, .8vw, 15px); white-space: nowrap; }
-.normal-header-clock { width: 100%; min-width: 0; padding-inline: 10px; font-size: clamp(16px, 1.25vw, 20px); }
+.normal-header-clock { width: 100%; min-width: 0; padding-inline: 10px; }
 .normal-header-actions { min-width: 0; justify-self: end; gap: 9px !important; white-space: nowrap; }
 .normal-header-user { max-width: 126px; overflow: hidden; }
 .normal-header-user b,
@@ -292,17 +296,13 @@
 }
 
 @media (max-width: 1300px) {
-  .top > .header-clock {
-    min-width: 285px;
-    font-size: 20px;
-  }
-
   .normal > header {
     grid-template-columns: max-content minmax(0, 1fr) max-content;
     row-gap: 9px;
   }
 
-  .normal-header-clock { grid-column: 1 / -1; grid-row: 2; }
+  /* Clock drops to its own full-width row, so it can size to that wider track. */
+  .normal-header-clock { --header-clock-size: clamp(16px, 2.2vw, 22px); grid-column: 1 / -1; grid-row: 2; }
 }
 
 @media (max-width: 900px) {
@@ -348,7 +348,6 @@
     justify-self: center;
     min-width: 0;
     transform: none;
-    font-size: 20px;
   }
 }
 
@@ -439,22 +438,10 @@
     padding-left: 12px;
   }
 
-  .header-clock,
-  .top > .header-clock,
-  .normal-header-clock {
-    gap: 7px;
-    font-size: 18px;
-  }
-
-  .header-clock svg {
-    width: 18px;
-    height: 18px;
-  }
-
   .normal > header { padding: 9px 12px 11px; }
   .normal-header-nav { margin: 0; padding-bottom: 1px; }
   .normal-header-nav button { width: auto; min-height: 38px; justify-content: flex-start; padding: 8px 10px; font-size: 11px; }
-  .normal-header-clock { justify-content: flex-start; min-height: 38px; font-size: 15px; }
+  .normal-header-clock { justify-content: flex-start; min-height: 38px; }
   .normal-header-clock span { display: inline-block !important; }
   .normal-header-actions { gap: 5px !important; }
   .normal-header-user { display: none !important; }
