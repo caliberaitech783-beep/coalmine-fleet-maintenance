@@ -24,6 +24,7 @@ import { submitMaintenanceRequest } from "../request-submit.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
 import {MANAGER_REGION_OPTIONS, REGION_DATA, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
+import {DEFAULT_DASHBOARD_LAYOUT, normalizeDashboardLayout} from "../dashboard-layout.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -36,6 +37,7 @@ import {
   LogOut,
   Search,
   Plus,
+  Minus,
   ChevronRight,
   Bell,
   MapPin,
@@ -754,8 +756,12 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
   </section>;
 }
-function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
-  const defaultKpiOrder = ["assets", "roadstatus", "workload", "users"];
+function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false, layoutUser = "user", layoutToken = "" }) {
+  const layoutStorageKey = `nerveCenterDashboardLayout:${String(layoutUser || "user").trim().toLowerCase()}`;
+  const storedDashboardLayout = () => {
+    try{return normalizeDashboardLayout(JSON.parse(localStorage.getItem(layoutStorageKey) || "{}"))}
+    catch{return normalizeDashboardLayout()}
+  };
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
@@ -773,15 +779,31 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const [editingKpiLayout, setEditingKpiLayout] = useState(false);
   const [draggedKpi, setDraggedKpi] = useState("");
-  const [kpiOrder, setKpiOrder] = useState(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("nerveCenterDashboardKpiOrder") || "[]");
-      return saved.length === defaultKpiOrder.length && defaultKpiOrder.every((key) => saved.includes(key)) ? saved : defaultKpiOrder;
-    } catch {
-      return defaultKpiOrder;
-    }
-  });
-  useEffect(() => localStorage.setItem("nerveCenterDashboardKpiOrder", JSON.stringify(kpiOrder)), [kpiOrder]);
+  const [kpiOrder, setKpiOrder] = useState(() => storedDashboardLayout().order);
+  const [kpiSizes, setKpiSizes] = useState(() => storedDashboardLayout().sizes);
+  const [dashboardLayoutReady, setDashboardLayoutReady] = useState(false);
+  useEffect(() => {
+    let activeRequest=true;
+    const localLayout=storedDashboardLayout();
+    setKpiOrder(localLayout.order);
+    setKpiSizes(localLayout.sizes);
+    setDashboardLayoutReady(false);
+    if(!layoutToken){setDashboardLayoutReady(true);return()=>{activeRequest=false}}
+    fetch("/api/me/dashboard-layout",{headers:{Authorization:`Bearer ${layoutToken}`}})
+      .then((response)=>response.ok?response.json():Promise.reject())
+      .then((value)=>{if(activeRequest){const layout=normalizeDashboardLayout(value);setKpiOrder(layout.order);setKpiSizes(layout.sizes)}})
+      .catch(()=>{})
+      .finally(()=>{if(activeRequest)setDashboardLayoutReady(true)});
+    return()=>{activeRequest=false};
+  },[layoutStorageKey,layoutToken]);
+  useEffect(() => {
+    if(!dashboardLayoutReady)return undefined;
+    const layout=normalizeDashboardLayout({order:kpiOrder,sizes:kpiSizes});
+    localStorage.setItem(layoutStorageKey,JSON.stringify(layout));
+    if(!layoutToken)return undefined;
+    const timer=window.setTimeout(()=>fetch("/api/me/dashboard-layout",{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${layoutToken}`},body:JSON.stringify(layout)}).catch(()=>{}),350);
+    return()=>window.clearTimeout(timer);
+  },[dashboardLayoutReady,kpiOrder,kpiSizes,layoutStorageKey,layoutToken]);
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
@@ -911,8 +933,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     });
     setDraggedKpi("");
   };
+  const resizeKpi = (key, difference) => setKpiSizes((current) => ({
+    ...current,
+    [key]: Math.max(1, Math.min(3, Number(current[key] || 1) + difference)),
+  }));
+  const resetKpiLayout = () => {
+    setKpiOrder([...DEFAULT_DASHBOARD_LAYOUT.order]);
+    setKpiSizes({...DEFAULT_DASHBOARD_LAYOUT.sizes});
+  };
   const kpiLayoutProps = (key) => ({
     draggable: editingKpiLayout,
+    "data-kpi-size": kpiSizes[key] || 1,
     onDragStart: () => setDraggedKpi(key),
     onDragOver: (event) => editingKpiLayout && event.preventDefault(),
     onDrop: () => dropKpi(key),
@@ -922,6 +953,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <GripVertical aria-hidden="true" />
     <span role="button" tabIndex="0" aria-label={`Move ${key} KPI left`} onClick={() => moveKpi(key, -1)} onKeyDown={(event) => event.key === "Enter" && moveKpi(key, -1)}><ChevronLeft /></span>
     <span role="button" tabIndex="0" aria-label={`Move ${key} KPI right`} onClick={() => moveKpi(key, 1)} onKeyDown={(event) => event.key === "Enter" && moveKpi(key, 1)}><ChevronRight /></span>
+    <span role="button" tabIndex="0" aria-label={`Make ${key} KPI smaller`} aria-disabled={kpiSizes[key] <= 1} onClick={() => resizeKpi(key, -1)} onKeyDown={(event) => event.key === "Enter" && resizeKpi(key, -1)}><Minus /></span>
+    <b>{kpiSizes[key] || 1}x</b>
+    <span role="button" tabIndex="0" aria-label={`Make ${key} KPI larger`} aria-disabled={kpiSizes[key] >= 3} onClick={() => resizeKpi(key, 1)} onKeyDown={(event) => event.key === "Enter" && resizeKpi(key, 1)}><Plus /></span>
   </span>;
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
@@ -1016,7 +1050,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
-      <div className="mine-kpi-layout-toolbar"><span>Key performance indicators</span><div>{editingKpiLayout && <button type="button" onClick={() => setKpiOrder(defaultKpiOrder)}><RotateCcw /> Reset</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Done" : "Arrange KPIs"}</button></div></div>
+      <div className="mine-kpi-layout-toolbar"><span>Key performance indicators</span><div>{editingKpiLayout && <button type="button" onClick={resetKpiLayout}><RotateCcw /> Reset</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Save layout" : "Customize KPIs"}</button></div></div>
       <section className="mine-primary-kpi-grid" data-arranging={editingKpiLayout || undefined} aria-label="Fleet status key performance indicators">
         <article className="mine-primary-kpi-card mine-primary-kpi-assets" {...kpiLayoutProps("assets")}>
           {kpiMoveControls("assets")}
@@ -6403,7 +6437,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
+      {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope layoutUser={session?.login||session?.name} layoutToken={session?.token} />}
       {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<div className="mobile-workspace">
@@ -6745,7 +6779,7 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} allowedSites={adminPermissions.adminLevel==="Manager"?(profileManagerSites.length?profileManagerSites:profileLocation?[profileLocation]:[]):null} allowedRegions={adminPermissions.adminLevel==="Manager"?profileManagerRegions:null} restrictToScope={adminPermissions.adminLevel==="Manager"} />
+            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} allowedSites={adminPermissions.adminLevel==="Manager"?(profileManagerSites.length?profileManagerSites:profileLocation?[profileLocation]:[]):null} allowedRegions={adminPermissions.adminLevel==="Manager"?profileManagerRegions:null} restrictToScope={adminPermissions.adminLevel==="Manager"} layoutUser={session?.login||session?.name} layoutToken={session?.token} />
           ) : active === "Manager Profile" ? (
             <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} onCancelIdeal={async(row)=>{if(!window.confirm(`Cancel Idle status for ${row.ref}? The request will return to active maintenance and will not be closed.`))return;try{await updateRequest(row.ref,{},"idle-cancel")}catch(error){alert(error.message)}}} />
           ) : active === "Tickets" ? (

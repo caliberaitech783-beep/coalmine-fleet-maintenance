@@ -9,6 +9,7 @@ import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
+import {normalizeDashboardLayout} from './dashboard-layout.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
@@ -312,6 +313,11 @@ async function migrate(){
     CREATE TABLE IF NOT EXISTS app_settings (
       setting_key TEXT PRIMARY KEY,
       setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS dashboard_layout_preferences (
+      login_name TEXT PRIMARY KEY,
+      layout JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS whatsapp_alert_history (
@@ -724,6 +730,27 @@ async function requireSuper(req,res,next){
     next();
   }catch(error){next(error)}
 }
+
+app.get('/api/me/dashboard-layout',requireSession,async(req,res,next)=>{
+  try{
+    const login=String(req.session.login||req.session.name||'').trim().toLowerCase();
+    if(!login)return res.json(normalizeDashboardLayout());
+    const {rows}=await pool.query('SELECT layout FROM dashboard_layout_preferences WHERE login_name=$1',[login]);
+    res.json(normalizeDashboardLayout(rows[0]?.layout||{}));
+  }catch(error){next(error)}
+});
+
+app.put('/api/me/dashboard-layout',requireSession,async(req,res,next)=>{
+  try{
+    const login=String(req.session.login||req.session.name||'').trim().toLowerCase();
+    if(!login)return res.status(400).json({error:'A signed-in user is required.'});
+    const layout=normalizeDashboardLayout(req.body||{});
+    await pool.query(`INSERT INTO dashboard_layout_preferences (login_name,layout,updated_at)
+      VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (login_name) DO UPDATE SET layout=EXCLUDED.layout,updated_at=NOW()`,[login,JSON.stringify(layout)]);
+    res.json(layout);
+  }catch(error){next(error)}
+});
 
 app.get('/api/navigation-settings',requireSuper,async(_req,res,next)=>{
   try{
