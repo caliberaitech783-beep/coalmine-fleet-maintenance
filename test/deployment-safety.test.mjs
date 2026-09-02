@@ -23,3 +23,12 @@ test('deployment validates staging, swaps, and automatically rolls back',()=>{
   assert.match(workflow,/Production verification failed; restoring the previous production package/);
   assert.match(workflow,/scheduledJobsEnabled!==true/);
 });
+
+test('deployment restores and verifies Front Door-only origin access after every swap',()=>{
+  assert.match(workflow,/Enforce Front Door-only production origin/);
+  assert.match(workflow,/if: always\(\)/);
+  assert.match(workflow,/AzureFrontDoor\.Backend/);
+  assert.match(workflow,/x-azure-fdid/);
+  assert.match(workflow,/direct origin returned \$\{origin_status\}/);
+  assert.match(workflow,/\[ "\$origin_status" = "403" \]/);
+});

@@ -18,6 +18,7 @@ concurrency:
 env:
   AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
   AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
+  AZURE_FRONT_DOOR_PROFILE: coalmine-afd-783
   LIVE_URL: https://bdms.cmll.in
 
 jobs:
@@ -119,6 +120,45 @@ jobs:
             sleep 5
           done
           echo "Automatic rollback did not restore a healthy response"
+          exit 1
+
+      - name: Enforce Front Door-only production origin
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          frontdoor_id="$(az afd profile show --resource-group "$AZURE_RESOURCE_GROUP" --profile-name "$AZURE_FRONT_DOOR_PROFILE" --query frontDoorId -o tsv)"
+          origin_host="$(az webapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query defaultHostName -o tsv)"
+          test -n "$frontdoor_id"
+          test -n "$origin_host"
+
+          existing_rule="$(az webapp config access-restriction show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query "ipSecurityRestrictions[?name=='Allow-Coal-FrontDoor'] | [0]" -o json)"
+          rule_matches="$(RULE_JSON="$existing_rule" EXPECTED_FDID="$frontdoor_id" node -e 'const r=JSON.parse(process.env.RULE_JSON||"null");const id=process.env.EXPECTED_FDID;process.stdout.write(String(r?.name==="Allow-Coal-FrontDoor"&&r?.action==="Allow"&&r?.priority===100&&r?.ipAddress==="AzureFrontDoor.Backend"&&r?.headers?.["x-azure-fdid"]?.includes(id)));')"
+
+          if [ "$rule_matches" != "true" ]; then
+            if [ "$(az webapp config access-restriction show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query "ipSecurityRestrictions[?name=='Allow-Coal-FrontDoor'].name | [0]" -o tsv)" = "Allow-Coal-FrontDoor" ]; then
+              az webapp config access-restriction remove --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --rule-name Allow-Coal-FrontDoor
+            fi
+            az webapp config access-restriction add \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$AZURE_WEBAPP_NAME" \
+              --rule-name Allow-Coal-FrontDoor \
+              --action Allow \
+              --priority 100 \
+              --service-tag AzureFrontDoor.Backend \
+              --http-header "x-azure-fdid=${frontdoor_id}"
+          fi
+
+          for attempt in {1..12}; do
+            live_response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?origin-lock=${GITHUB_SHA}")" || true
+            origin_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 "https://${origin_host}/api/health" || true)"
+            if HEALTH_RESPONSE="$live_response" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.database!=="connected"||h.scheduledJobsEnabled!==true)process.exit(1)' && [ "$origin_status" = "403" ]; then
+              echo "Front Door-only production origin verified; direct origin returned ${origin_status}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Front Door-only production origin verification failed"
           exit 1
 
       - name: Stop staging slot
