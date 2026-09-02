@@ -21,3 +21,12 @@ export const MOBILE_NAVIGATION_ITEMS = [
 export function normalizeMobileNavigationVisibility(value = {}) {
   return Object.fromEntries(MOBILE_NAVIGATION_ITEMS.map((item) => [item, value?.[item] !== false]));
 }
+
+// Menu names double as stored access keys, so display-only renames live here.
+export const NAVIGATION_LABELS = {
+  "Daily site-wise report": "Daily site-wise reports",
+};
+
+export function navigationLabel(name) {
+  return NAVIGATION_LABELS[name] || name;
+}

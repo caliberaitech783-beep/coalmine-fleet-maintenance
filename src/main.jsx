@@ -23,6 +23,7 @@ import {
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
 import {MANAGER_REGION_OPTIONS, REGION_DATA, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
+import {navigationLabel} from "../navigation-visibility.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -598,7 +599,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
             {visibleWhatsAppNav.map(([name, Icon]) => (
               <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onPointerDown={closeMenus} onClick={() => selectPage(name)}>
-                <Icon /><span className="nav-label">{name}</span>
+                <Icon /><span className="nav-label">{navigationLabel(name)}</span>
               </button></div>
             ))}
           </div>
@@ -2154,7 +2155,7 @@ function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs
     </fieldset>
     {shownTabs.map((tab)=>{const submenu=ADMIN_SUBMENU_OPTIONS[tab];if(!submenu)return null;const field=keyFor(submenu.field);return <fieldset key={tab} className="user-access-field access-section-card access-submenu-card">
       <legend>{tab} · Submenus</legend>
-      <div>{submenu.options.map((option)=><label key={option}><input type="checkbox" name={field} value={option} defaultChecked={selectedAccessValues(record,field,prefix?submenu.field:"").includes(option)} /><span>{option}</span></label>)}</div>
+      <div>{submenu.options.map((option)=><label key={option}><input type="checkbox" name={field} value={option} defaultChecked={selectedAccessValues(record,field,prefix?submenu.field:"").includes(option)} /><span>{navigationLabel(option)}</span></label>)}</div>
     </fieldset>})}
   </section>;
 }
@@ -5233,7 +5234,7 @@ function WhatsAppReport({type, requests = []}) {
   return (
     <section className="panel pagepanel generic whatsapp-report">
       <header>
-        <div><h1>{type}</h1><p>{today} · {visibleRows.length} {isSite ? "sites" : "OEMs"} included</p></div>
+        <div><h1>{navigationLabel(type)}</h1><p>{today} · {visibleRows.length} {isSite ? "sites" : "OEMs"} included</p></div>
         <div className="whatsapp-report-actions">
           {!isSite && <select aria-label="Filter OEMs by coalfield" value={oemRegion} onChange={(event) => setOemRegion(event.target.value)}>
             <option value="all">All coalfields</option><option value="WCL">WCL</option><option value="NCL">NCL</option>
@@ -5252,7 +5253,7 @@ function WhatsAppReport({type, requests = []}) {
       {isSite && (
         <div className="site-report-matrix">
           <div className="site-report-matrix-heading">
-            <div><h2>Daily site-wise report dispatch</h2><p>Select a report to send it directly through the connected Meta WhatsApp Business number.</p></div>
+            <div><h2>Daily site-wise reports dispatch</h2><p>Select a report to send it directly through the connected Meta WhatsApp Business number.</p></div>
             {lastPrepared && <span>{lastPrepared}</span>}
           </div>
           <div className="site-report-matrix-table">
@@ -6651,7 +6652,7 @@ function App() {
             >
               <ArrowLeft />
             </button>
-            Operations <ChevronRight /> <b>{active}</b>
+            Operations <ChevronRight /> <b>{navigationLabel(active)}</b>
           </div>
           <HeaderClock />
           <div>
