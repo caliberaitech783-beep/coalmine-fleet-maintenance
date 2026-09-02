@@ -228,6 +228,19 @@ function AuthModeTabs({ mode, onModeChange }) {
           </span>
         </button>
       ))}
+      <a
+        className="login-auth-link"
+        href="https://bdms.cmll.in"
+        role="tab"
+        aria-selected="false"
+        aria-label="Open Accident application"
+      >
+        <span className="login-auth-tab-icon accident" aria-hidden="true"><AlertTriangle /></span>
+        <span className="login-auth-tab-copy">
+          <span>Accident</span>
+          <small>Open application</small>
+        </span>
+      </a>
     </div>
   );
 }

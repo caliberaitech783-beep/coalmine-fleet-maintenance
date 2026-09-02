@@ -180,6 +180,29 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
   .login-auth-tabs button.active:after{right:8px;top:8px;width:6px;height:6px}
 }
 
+.login-auth-tabs{grid-template-columns:repeat(3,minmax(0,1fr))}
+.login-auth-tabs .login-auth-link{
+  position:relative;
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr);
+  align-items:center;
+  gap:10px;
+  min-height:58px;
+  padding:9px 12px;
+  border:1px solid transparent;
+  border-radius:8px;
+  color:#697991;
+  text-align:left;
+  text-decoration:none;
+  transition:background .18s,border-color .18s,box-shadow .18s,transform .18s,color .18s;
+}
+.login-auth-tabs .login-auth-link:hover{background:#fff;border-color:#efb8b8;color:#b42318;box-shadow:0 8px 20px #10213f10}
+.login-auth-tabs .login-auth-link:focus-visible{outline:3px solid #d92d202e;outline-offset:2px}
+.login-auth-tab-icon.accident{background:#fff0ef;color:#d64545}
+@media(max-width:560px){
+  .login-auth-tabs .login-auth-link{grid-template-columns:32px minmax(0,1fr);gap:8px;min-height:54px;padding:8px}
+}
+
 /* Region master graphical workspace */
 .region-master-page{overflow:hidden}
 .region-master-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:14px;align-items:center;padding:18px 22px;border-bottom:1px solid var(--line);background:#f8fafc}
