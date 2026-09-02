@@ -23,8 +23,11 @@
   flex-direction: row;
   align-items: center;
   gap: 4px;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
 }
+.app > aside nav::-webkit-scrollbar { display: none; }
 
 .app > aside nav > .nav-config-row,
 .app > aside nav > .masters-menu {
@@ -112,9 +115,10 @@
 
 @media (max-width: 1600px) and (min-width: 1251px) {
   .app > aside {
-    grid-template-columns: max-content minmax(0, 1fr) 154px;
+    grid-template-columns: max-content minmax(0, 1fr) 210px;
     gap: 10px;
     padding: 9px 14px;
+    height: 96px;
   }
 
   .app > aside .caliber-logo-frame img {
@@ -130,7 +134,8 @@
   }
 
   .app > aside .caliber-app-name strong {
-    font-size: 12px;
+    font-size: 24px;
+    font-weight: 900;
   }
 
   .app > aside .caliber-app-name small {
@@ -144,7 +149,8 @@
   .app > aside nav button {
     gap: 5px;
     padding: 8px 6px;
-    font-size: 11px;
+    font-size: 22px;
+    font-weight: 900;
   }
 
   .app > aside nav > .nav-config-row > button > svg:first-child,
@@ -173,6 +179,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .app > aside .user b { font-size: 22px; font-weight: 900; }
+  .app > aside .user small { font-size: 20px; font-weight: 800; }
+
+  .app > .content { margin-top: 96px; }
 }
 
 .app > .content {
@@ -182,11 +193,20 @@
 }
 
 @media (min-width: 1601px) {
-  .app > aside .caliber-app-name strong { font-size: 17px; }
+  .app > aside {
+    grid-template-columns: max-content minmax(0, 1fr) 260px;
+    height: 112px;
+    padding-block: 14px;
+  }
+  .app > aside .caliber-app-name strong { font-size: 34px; font-weight: 900; }
   .app > aside nav > .nav-config-row > button,
-  .app > aside nav > .masters-menu > .nav-config-row > button { font-size: 15px; }
-  .app > aside .user b { font-size: 14px; }
-  .app > aside .user small { font-size: 13px; }
+  .app > aside nav > .masters-menu > .nav-config-row > button { font-size: 30px; font-weight: 900; }
+  .app > aside .user b { font-size: 28px; font-weight: 900; }
+  .app > aside .user small { font-size: 26px; font-weight: 800; }
+  .app > aside nav button { gap: 9px; padding-inline: 12px; }
+  .app > aside nav button svg { width: 28px; height: 28px; }
+  .app > aside .user > div { width: 54px; height: 54px; }
+  .app > .content { margin-top: 112px; }
 }
 
 .header-clock {
