@@ -34,10 +34,19 @@ test("six primary KPIs share one compact desktop row", () => {
     /@media \(max-width:\s*1000px\)[\s\S]*?\.mine-primary-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/,
   );
   assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-assets"/);
-  assert.match(client, /<b>Equipment &amp; vehicles<\/b>/);
+  assert.match(client, /<b>Total Fleet<\/b>/);
   assert.match(client, /<b>On road<\/b>/);
   assert.match(client, /<b>Off road<\/b>/);
   assert.match(client, /<b>Idle<\/b>/);
   assert.match(client, /<b>Maintenance workload<\/b>/);
   assert.match(client, /<b>Operations users<\/b>/);
+});
+
+test("the fleet KPI card shows only the Total Fleet name", () => {
+  assert.match(
+    client,
+    /<span className="mine-primary-kpi-copy"><b>Total Fleet<\/b><\/span>/,
+  );
+  assert.doesNotMatch(client, /Equipment &amp; vehicles/);
+  assert.doesNotMatch(client, /All registered assets/);
 });

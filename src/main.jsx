@@ -979,7 +979,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           {kpiMoveControls("assets")}
           <button type="button" className="mine-primary-kpi-main" onClick={() => openAssetDrilldown("all")}>
             <span className="mine-primary-kpi-icon"><Truck /></span>
-            <span className="mine-primary-kpi-copy"><small>Fleet registry</small><b>Equipment &amp; vehicles</b><em>All registered assets</em></span>
+            <span className="mine-primary-kpi-copy"><b>Total Fleet</b></span>
             <strong>{assetCounts.total.toLocaleString()}</strong>
           </button>
           <div className="mine-primary-kpi-split">
