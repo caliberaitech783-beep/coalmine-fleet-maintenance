@@ -10,7 +10,8 @@ test("all operational KPI cards open category, group, and full-detail drilldowns
   assert.match(source, /openAssetDrilldown\(`region:\$\{region\.code\}`\)/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
   assert.match(source, /key: `group:\$\{group\.label\}`/);
-  assert.match(source, /openAssetDrilldown\(`status:\$\{status\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`status:\$\{item\.key\}`\)/);
+  assert.match(source, /key === "status:Awaiting"/);
   assert.match(source, /Step 1 · Select equipment category/);
   assert.match(source, /Step 2 · Select equipment group/);
   assert.match(source, /Step 3 · Full details for/);

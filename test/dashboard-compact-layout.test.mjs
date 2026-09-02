@@ -35,7 +35,11 @@ test("primary KPIs use one compact row with a graphical road-status block", () =
   assert.match(client, /<b>On road<\/b>/);
   assert.match(client, /<b>Off road<\/b>/);
   assert.match(client, /<b>Idle<\/b>/);
-  assert.match(client, /<b>Maintenance workload<\/b>/);
+  assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic"/);
+  assert.match(client, /Consolidated open requests/);
+  assert.match(client, /openRequestStatusItems\.map/);
+  assert.match(css, /\.mine-open-requests-bar\s*\{/);
+  assert.match(css, /\.mine-open-requests-values\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,/);
   assert.match(client, /<b>Operations users<\/b>/);
 });
 

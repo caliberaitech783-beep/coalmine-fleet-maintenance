@@ -988,6 +988,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("group:")) return visibleEquipment.filter((record) => equipmentGroupLabel(record) === key.slice(6));
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
+    if (key === "status:Awaiting") return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase().startsWith("awaiting")));
     if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
     return [];
   };
@@ -1044,6 +1045,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     counts[status] = visibleBreakdowns.filter((record) => record.status === status).length;
     return counts;
   }, {});
+  const openRequestStatusItems = [
+    { key: "Open", label: "Open", count: workloadCounts.Open, className: "open" },
+    { key: "In progress", label: "In Progress", count: workloadCounts["In progress"], className: "progress" },
+    { key: "Awaiting", label: "Awaiting", count: workloadCounts["Awaiting parts"] + workloadCounts["Awaiting approval"], className: "awaiting" },
+    { key: "Idle", label: "Idle", count: workloadCounts.Idle, className: "idle" },
+  ];
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
@@ -1077,12 +1084,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><b>Idle</b><small>Not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
           </div>
         </article>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-workload" onClick={() => setShowWorkloadBreakdown(true)} {...kpiLayoutProps("workload")}>
+        <article className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic" {...kpiLayoutProps("workload")}>
           {kpiMoveControls("workload")}
-          <span className="mine-primary-kpi-icon"><Wrench /></span>
-          <span className="mine-primary-kpi-copy"><small>Requests</small><b>Maintenance workload</b><em>Open {workloadCounts.Open} · In progress {workloadCounts["In progress"]} · Idle {workloadCounts.Idle}</em></span>
-          <strong>{activeBreakdowns.toLocaleString()}</strong>
-        </button>
+          <header><span>Consolidated open requests</span><button type="button" onClick={() => setShowWorkloadBreakdown(true)}><strong>{activeBreakdowns.toLocaleString()}</strong><small>Total open</small></button></header>
+          <div className="mine-open-requests-bar" aria-label={`${activeBreakdowns} consolidated open requests`}>{openRequestStatusItems.map((item) => <i key={item.key} className={item.className} style={{ width: `${activeBreakdowns ? (item.count / activeBreakdowns) * 100 : 0}%` }} />)}</div>
+          <div className="mine-open-requests-values">{openRequestStatusItems.map((item) => <button type="button" key={item.key} className={item.className} onClick={() => openAssetDrilldown(`status:${item.key}`)}><span><i />{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div>
+        </article>
         <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)} {...kpiLayoutProps("users")}>
           {kpiMoveControls("users")}
           <span className="mine-primary-kpi-icon"><Users /></span>
@@ -1141,7 +1148,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </article>
       </section>
       {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{visibleUsers.length}</strong></div></Modal>}
-      {showWorkloadBreakdown && <Modal title="Maintenance workload by status" close={() => setShowWorkloadBreakdown(false)}><div className="user-count-drilldown workload-status-drilldown">{Object.entries(workloadCounts).map(([status, count]) => <button type="button" key={status} onClick={() => { setShowWorkloadBreakdown(false); openAssetDrilldown(`status:${status}`); }}><Wrench /><span>{status}</span><strong>{count.toLocaleString()}</strong></button>)}</div><div className="user-count-total"><span>Active maintenance workload</span><strong>{activeBreakdowns.toLocaleString()}</strong></div></Modal>}
+      {showWorkloadBreakdown && <Modal title="Open requests by status" close={() => setShowWorkloadBreakdown(false)}><div className="user-count-drilldown workload-status-drilldown">{openRequestStatusItems.map((item) => <button type="button" key={item.key} onClick={() => { setShowWorkloadBreakdown(false); openAssetDrilldown(`status:${item.key}`); }}><Wrench /><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div><div className="user-count-total"><span>Consolidated open requests</span><strong>{activeBreakdowns.toLocaleString()}</strong></div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={`${assetDrilldownTitle} · ${assetDrilldownRows.length}`} close={() => { setAssetDrilldown(""); setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><div className="dashboard-asset-drilldown">
         {repairTypeSiteDrilldown ? <>
           <section><h4>Step 1 · Select region</h4><div className="dashboard-asset-summary">{repairTypeRegionBreakdown.length ? repairTypeRegionBreakdown.map((region) => <button type="button" key={region.code} className={assetDrilldownRegion === region.code ? "active" : ""} onClick={() => { setAssetDrilldownRegion(region.code); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{region.count.toLocaleString()}</b>{region.code}</button>) : <p>No regions available</p>}</div></section>
