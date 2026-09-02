@@ -5,18 +5,13 @@ import test from "node:test";
 const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 
-test("dashboard KPI order and size persist separately for each user", () => {
-  assert.match(client, /nerveCenterDashboardLayout:\$\{String\(layoutUser/);
-  assert.match(client, /\/api\/me\/dashboard-layout/);
-  assert.match(client, /Customize KPIs/);
+test("dashboard KPI order can be arranged and persists locally", () => {
+  assert.match(client, /nerveCenterDashboardKpiOrder/);
+  assert.match(client, /Arrange KPIs/);
   assert.match(client, /draggable: editingKpiLayout/);
   assert.match(client, /Move \$\{key\} KPI left/);
   assert.match(client, /Move \$\{key\} KPI right/);
-  assert.match(client, /Make \$\{key\} KPI smaller/);
-  assert.match(client, /Make \$\{key\} KPI larger/);
-  assert.match(client, /"data-kpi-size": kpiSizes\[key\]/);
   assert.match(css, /\.mine-primary-kpi-grid\[data-arranging="true"\]/);
-  assert.match(css, /\.mine-primary-kpi-card\[data-kpi-size="3"\]/);
 });
 
 test("equipment KPI renders a live equipment and vehicle composition bar", () => {

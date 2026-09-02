@@ -430,8 +430,6 @@
 }
 .mine-kpi-move-controls > span:hover,
 .mine-kpi-move-controls > span:focus-visible { outline: 0; background: #eaf2ff; color: #285ea3; }
-.mine-kpi-move-controls > span[aria-disabled="true"] { opacity: .32; pointer-events: none; }
-.mine-kpi-move-controls > b { min-width: 21px; color: #285ea3; font-size: 7px; text-align: center; }
 .mine-kpi-move-controls span svg { width: 12px; height: 12px; }
 button.mine-primary-kpi-card,
 .mine-primary-kpi-main {
@@ -561,9 +559,6 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-road-status-values b { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .mine-road-status-values small { margin-top: 1px; overflow: hidden; color: var(--mine-muted); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
 .mine-road-status-values strong { font: 900 15px/1 Manrope; white-space: nowrap; }
-.mine-primary-kpi-card[data-kpi-size="1"] { grid-column: span 1; }
-.mine-primary-kpi-card[data-kpi-size="2"] { grid-column: span 2; }
-.mine-primary-kpi-card[data-kpi-size="3"] { grid-column: span 3; }
 .mine-primary-kpi-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1135,7 +1130,7 @@ button.mine-primary-kpi-card:focus-visible,
 @media (max-width: 1000px) {
   .mine-primary-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-    @media (max-width: 700px) {
+@media (max-width: 700px) {
   .mine-dashboard {
     margin: -19px;
     padding: 9px;
@@ -1173,9 +1168,7 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-trend-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mine-trend-sites { grid-column: auto; }
   .mine-trend-sites > div:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .mine-primary-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .mine-primary-kpi-card[data-kpi-size="2"],
-      .mine-primary-kpi-card[data-kpi-size="3"] { grid-column: 1 / -1; }
+  .mine-primary-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-counter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-span-2,
   .mine-people-panel,
