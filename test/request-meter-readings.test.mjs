@@ -34,33 +34,30 @@ test("meter readings and evidence files are validated", () => {
   assert.equal(validMeterEvidenceDataUrl("data:text/plain;base64,SGVsbG8="), false);
 });
 
-test("opening and closing KMR/HMR values and files are captured in request edit", () => {
+test("request edit captures opening KMR/HMR evidence but leaves closing evidence to the close workflow", () => {
   const createForm = source.slice(source.indexOf("function MaintenanceForm"), source.indexOf("function Subsidiaries"));
   const editForm = source.slice(source.indexOf("function RequestEditForm"), source.indexOf("function CloseRequestForm"));
   const closeForm = source.slice(source.indexOf("function CloseRequestForm"), source.indexOf("function VerifyRequestForm"));
 
   assert.doesNotMatch(createForm, /name="openingMeterReading"|name="openingMeterFile"|name="closingMeterReading"|name="closingMeterFile"/);
   assert.match(editForm, /name="openingMeterReading"[\s\S]*name="openingMeterFile"/);
-  assert.match(editForm, /name="closingMeterReading"[\s\S]*name="closingMeterFile"/);
+  assert.doesNotMatch(editForm, /name="closingMeterReading"|name="closingMeterFile"/);
   assert.match(editForm, /required=\{!request\.openingMeterFileUploaded\}/);
-  assert.match(editForm, /required=\{!request\.closingMeterFileUploaded\}/);
   assert.match(closeForm, /Opening \{meterType\}[\s\S]*stage="opening"[\s\S]*Closing \{meterType\}[\s\S]*stage="closing"/);
   assert.match(source, /showMeterData[\s\S]*Opening KMR\/HMR[\s\S]*Closing KMR\/HMR/);
   assert.match(source, /Opening \{request\.meterType \|\| "KMR\/HMR"\}[\s\S]*MeterFileCell/);
   assert.match(server, /opening_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /closing_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.get\('\/api\/requests\/:reference\/meter-file'/);
-  assert.match(server, /opening_meter_reading=\$11[\s\S]*closing_meter_reading=\$14/);
+  assert.match(server, /opening_meter_reading=\$11/);
   assert.match(server, /closing_meter_reading=\$6,closing_meter_file=\$7/);
 });
 
-test("request edit validates both readings and preserves existing evidence unless replaced", () => {
+test("request edit validates opening evidence and does not modify closing evidence", () => {
   const editRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference'"), server.indexOf("app.patch('/api/requests/:reference/close'"));
 
   assert.match(editRoute, /validMeterReading\(normalizedOpeningMeterReading\)/);
-  assert.match(editRoute, /validMeterReading\(normalizedClosingMeterReading\)/);
+  assert.doesNotMatch(editRoute, /normalizedClosingMeterReading|closing_meter_reading=|closing_meter_file=/);
   assert.match(editRoute, /if\(!openingMeterFile&&!meterRows\[0\]\.opening_meter_file\)/);
-  assert.match(editRoute, /if\(!closingMeterFile&&!meterRows\[0\]\.closing_meter_file\)/);
   assert.match(editRoute, /opening_meter_file=CASE WHEN \$12<>'' THEN \$12 ELSE opening_meter_file END/);
-  assert.match(editRoute, /closing_meter_file=CASE WHEN \$15<>'' THEN \$15 ELSE closing_meter_file END/);
 });

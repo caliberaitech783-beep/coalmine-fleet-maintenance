@@ -5891,18 +5891,15 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
-  const [closingMeterFile, setClosingMeterFile] = useState(null);
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
   return <Modal title={`Edit request ${request.ref}`} close={close}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
       if (!request.openingMeterFileUploaded && !openingMeterFile) return alert(`Upload an opening ${meterType} evidence file.`);
-      if (!request.closingMeterFileUploaded && !closingMeterFile) return alert(`Upload a closing ${meterType} evidence file.`);
       const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
-      const closingMeterEvidence = closingMeterFile ? await readMeterEvidence(closingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
-      if ((openingMeterFile && !openingMeterEvidence) || (closingMeterFile && !closingMeterEvidence)) return;
-      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), start: `${form.get("date")} · ${form.get("time")}`, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", closingMeterReading: String(form.get("closingMeterReading") || "").trim(), closingMeterFile: closingMeterEvidence, closingMeterFileName: closingMeterFile?.name || ""});
+      if (openingMeterFile && !openingMeterEvidence) return;
+      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), start: `${form.get("date")} · ${form.get("time")}`, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
     }}>
       <div className="formgrid">
         <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>
@@ -5932,8 +5929,6 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
         <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required defaultValue={String(request.expectedCompletionAt || "").replace(" ", "T")} /></label>
         <label>Opening {meterType} reading *<input name="openingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required defaultValue={request.openingMeterReading || ""} placeholder={`Enter opening ${meterType}`} /><small>{meterType === "KMR" ? "KMR is used for Vehicle-category assets." : "HMR is used for Equipment-category assets."}</small></label>
         <label>Opening {meterType} file *<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required={!request.openingMeterFileUploaded} onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
-        <label>Closing {meterType} reading *<input name="closingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required defaultValue={request.closingMeterReading || ""} placeholder={`Enter closing ${meterType}`} /></label>
-        <label>Closing {meterType} file *<input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required={!request.closingMeterFileUploaded} onChange={(event) => setClosingMeterFile(event.target.files?.[0] || null)} /><small>{closingMeterFile ? `${closingMeterFile.name} · ${(closingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.closingMeterFileUploaded && <MeterFileCell request={request} stage="closing" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save changes <ChevronRight /></button></footer>
