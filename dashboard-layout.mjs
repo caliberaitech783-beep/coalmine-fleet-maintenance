@@ -1,12 +1,17 @@
-export const DASHBOARD_KPI_KEYS = ["assets", "roadstatus", "workload", "users", "repairtypes", "fleetregions", "intelligence", "trend"];
+export const DASHBOARD_LAYOUT_VERSION = 2;
+export const DASHBOARD_KPI_KEYS = ["assets", "roadstatus", "repairtypes", "intelligence", "workload", "users", "fleetregions", "trend"];
 
 export const DEFAULT_DASHBOARD_LAYOUT = {
   order: DASHBOARD_KPI_KEYS,
-  sizes: { assets: 1, roadstatus: 2, workload: 1, users: 1, repairtypes: 3, fleetregions: 3, intelligence: 3, trend: 3 },
+  version: DASHBOARD_LAYOUT_VERSION,
+  sizes: { assets: 3, roadstatus: 1, repairtypes: 2, intelligence: 3, workload: 1, users: 1, fleetregions: 3, trend: 3 },
   hidden: [],
 };
 
 export function normalizeDashboardLayout(value = {}) {
+  if (value && Object.keys(value).length && value.version !== DASHBOARD_LAYOUT_VERSION) {
+    return {...DEFAULT_DASHBOARD_LAYOUT, order:[...DEFAULT_DASHBOARD_LAYOUT.order], sizes:{...DEFAULT_DASHBOARD_LAYOUT.sizes}, hidden:[]};
+  }
   const requestedOrder = Array.isArray(value.order) ? value.order : [];
   const order = [
     ...requestedOrder.filter((key, index) => DASHBOARD_KPI_KEYS.includes(key) && requestedOrder.indexOf(key) === index),
@@ -19,5 +24,5 @@ export function normalizeDashboardLayout(value = {}) {
   }));
   const requestedHidden = Array.isArray(value.hidden) ? value.hidden : [];
   const hidden = requestedHidden.filter((key, index) => DASHBOARD_KPI_KEYS.includes(key) && requestedHidden.indexOf(key) === index);
-  return { order, sizes, hidden };
+  return { version: DASHBOARD_LAYOUT_VERSION, order, sizes, hidden };
 }

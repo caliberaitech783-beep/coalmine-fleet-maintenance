@@ -1067,6 +1067,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <div className="mine-kpi-layout-toolbar"><span>Dashboard widgets</span><div>{editingKpiLayout && hiddenKpis.length > 0 && <details className="mine-hidden-kpis"><summary><Plus /> Add KPI ({hiddenKpis.length})</summary><div>{hiddenKpis.map((key)=><button type="button" key={key} onClick={()=>restoreKpi(key)}><Plus /> {kpiLabels[key]}</button>)}</div></details>}{editingKpiLayout && <button type="button" onClick={resetKpiLayout}><RotateCcw /> Reset all</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Save layout" : "Customize dashboard"}</button></div></div>
+      <div className="mine-all-widget-grid">
       <section className="mine-primary-kpi-grid" data-arranging={editingKpiLayout || undefined} aria-label="Fleet status key performance indicators">
         {!hiddenKpis.includes("assets") && <article className="mine-primary-kpi-card mine-primary-kpi-assets" {...kpiLayoutProps("assets")}>
           {kpiMoveControls("assets")}
@@ -1190,6 +1191,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </div>
       </section>}
       </section>
+      </div>
     </div>
   );
 }
