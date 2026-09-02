@@ -12,7 +12,6 @@ test("dashboard replaces recent cases with a site-wise selectable breakdown tren
   assert.match(source, /\[breakdownTrendSite, setBreakdownTrendSite\] = useState\("all"\)/);
   assert.match(source, /\[7, 14, 30\]\.map/);
   assert.match(source, /aria-label="Breakdown trend site"/);
-  assert.match(source, /breakdownTrendSites\.map/);
   assert.match(source, /showDateFilter = false, rowLimit = 0/);
   assert.match(source, /\[dateFilter, setDateFilter\] = useState\(""\)/);
   assert.match(source, /dashboardRecordDate\(row\) === dateFilter/);

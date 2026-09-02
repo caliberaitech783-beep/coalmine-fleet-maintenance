@@ -814,6 +814,40 @@ button.mine-primary-kpi-card:focus-visible,
   align-items: stretch;
 }
 .mine-dashboard-core > .mine-fleet-command { grid-column: auto; }
+.mine-fleet-intelligence-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.mine-fleet-command-compact { min-width: 0; border-top: 3px solid var(--brand-purple); }
+.mine-fleet-command-compact .mine-fleet-command-head { min-height: 52px; }
+.mine-compact-hierarchy {
+  display: grid;
+  grid-template-columns: minmax(175px, .8fr) minmax(260px, 1.2fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 248px;
+  padding: 12px 14px;
+}
+.mine-fleet-command-compact .mine-hierarchy-chart-wrap { width: min(205px, 100%); }
+.mine-compact-hierarchy-details { display: grid; align-content: center; gap: 8px; min-width: 0; }
+.mine-compact-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--mine-muted); font-size: 7px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.mine-compact-group-heading b { color: var(--mine-text); font-size: 8px; }
+.mine-compact-group-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.mine-compact-group-list button { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-width: 0; min-height: 40px; padding: 5px 7px; border: 1px solid var(--mine-line); border-radius: 6px; background: transparent; color: var(--mine-text); text-align: left; cursor: pointer; }
+.mine-compact-group-list button:hover,.mine-compact-group-list button:focus-visible { border-color: #522e9066; background: #522e9008; outline: 0; }
+.mine-compact-group-list i { width: 8px; height: 8px; border-radius: 2px; }
+.mine-compact-group-list span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.mine-compact-group-list span b { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.mine-compact-group-list span small { color: var(--mine-muted); font-size: 7px; }
+.mine-compact-group-list strong { font: 850 10px Manrope; }
+.mine-compact-regions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.mine-compact-regions button { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: 6px; min-height: 28px; padding: 4px 7px; border: 1px solid #315fd433; border-radius: 5px; background: #315fd408; color: var(--mine-text); text-align: left; cursor: pointer; }
+.mine-compact-regions button:hover,.mine-compact-regions button:focus-visible { border-color: #315fd477; background: #315fd410; outline: 0; }
+.mine-compact-regions svg { width: 12px; height: 12px; color: #315fd4; }
+.mine-compact-regions span { font-size: 8px; font-weight: 850; }
+.mine-compact-regions strong { font: 850 9px Manrope; }
 .mine-fleet-command-actions { display: flex; align-items: center; gap: 8px; }
 .mine-fleet-command-head .mine-view-full-fleet {
   min-height: 30px;
@@ -1132,7 +1166,7 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-breakdown-trend-body {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr) minmax(210px, .7fr);
+  grid-template-columns: 160px minmax(0, 1fr);
   min-height: 205px;
 }
 .mine-breakdown-trend-body > * { min-width: 0; padding: 12px; }
@@ -1198,41 +1232,8 @@ button.mine-primary-kpi-card:focus-visible,
   line-height: 1.1;
   white-space: nowrap;
 }
-.mine-trend-sites { overflow: hidden; }
-.mine-trend-sites > div:last-child {
-  display: flex;
-  max-height: 160px;
-  flex-direction: column;
-  gap: 3px;
-  overflow: auto;
-  scrollbar-width: thin;
-}
-.mine-trend-sites button {
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px;
-  min-height: 31px;
-  padding: 4px 5px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--mine-text);
-  text-align: left;
-  cursor: pointer;
-}
-.mine-trend-sites button:hover,
-.mine-trend-sites button:focus-visible,
-.mine-trend-sites button.active { outline: 0; border-color: #26956f55; background: #26956f0b; }
-.mine-trend-sites button > svg { width: 11px; color: #26956f; }
-.mine-trend-sites button > span { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
-.mine-trend-sites button b { overflow: hidden; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
-.mine-trend-sites button i { height: 3px; overflow: hidden; border-radius: 3px; background: #e5ebf1; }
-.mine-trend-sites button em { display: block; height: 100%; border-radius: inherit; background: #62b393; }
-.mine-trend-sites button strong { font: 850 9px Manrope; }
 .mine-dashboard-night .mine-trend-summary article { background: #315fd40f; }
 .mine-dashboard-night .mine-trend-day > span { background: linear-gradient(to top, #8eb5ff08, transparent); }
-.mine-dashboard-night .mine-trend-sites button i { background: #273c40; }
 
 @media (max-width: 1100px) {
   .mine-counter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1243,11 +1244,10 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-fleet-geography { grid-column: 1 / -1; border-top: 1px solid var(--mine-line); border-left: 0 !important; }
   .mine-fleet-region-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
   .mine-breakdown-trend-body { grid-template-columns: 150px minmax(0, 1fr); }
-  .mine-trend-sites { grid-column: 1 / -1; border-top: 1px solid var(--mine-line); border-left: 0 !important; }
-  .mine-trend-sites > div:last-child { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-height: none; }
 }
 @media (max-width: 1000px) {
   .mine-dashboard-feature-row { grid-template-columns: 1fr; }
+  .mine-fleet-intelligence-row { grid-template-columns: 1fr; }
   .mine-primary-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
@@ -1279,6 +1279,8 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-fleet-command-actions { width: 100%; justify-content: space-between; }
   .mine-hierarchy-layout { grid-template-columns: 1fr; }
   .mine-hierarchy-chart-wrap { width: min(220px, 70vw); }
+  .mine-compact-hierarchy { grid-template-columns: 1fr; }
+  .mine-fleet-command-compact .mine-hierarchy-chart-wrap { width: min(205px, 62vw); }
   .mine-fleet-command-body > section + section { border-top: 1px solid var(--mine-line); border-left: 0; }
   .mine-fleet-geography { grid-column: auto; }
   .mine-fleet-region-list { grid-template-columns: 1fr; }
@@ -1290,8 +1292,6 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-breakdown-trend-body { grid-template-columns: 1fr; }
   .mine-breakdown-trend-body > * + * { border-top: 1px solid var(--mine-line); border-left: 0; }
   .mine-trend-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .mine-trend-sites { grid-column: auto; }
-  .mine-trend-sites > div:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-primary-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-counter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-span-2,

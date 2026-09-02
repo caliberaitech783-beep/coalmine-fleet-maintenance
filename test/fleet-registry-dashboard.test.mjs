@@ -6,37 +6,32 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 
 test("fleet registry dashboard connects category, group, region and site-wise drilldowns", () => {
-  assert.match(source, /className="mine-panel mine-fleet-command mine-span-2"/);
+  assert.match(source, /className="mine-panel mine-fleet-command mine-fleet-command-compact"/);
   assert.match(source, /Total Equipment Intelligence/);
   assert.doesNotMatch(source, /<span className="mine-eyebrow">Fleet registry<\/span>/);
   assert.doesNotMatch(source, /Category, equipment group, region and site-wise fleet distribution/);
-  assert.match(source, /aria-label="Interactive asset category pie chart"/);
-  assert.match(source, /aria-label="Interactive equipment groups pie chart"/);
+  assert.match(source, /aria-label="Compact combined asset category and equipment group chart"/);
   assert.match(source, /assetCategoryPieSlices\.map/);
-  assert.match(source, /fleetGroupPieSlices\.map/);
   assert.match(source, /fleetHierarchySlices\.map/);
-  assert.match(source, /openAssetDrilldown\(slice\.key\)/);
+  assert.match(source, /fleetTopGroups\.map/);
   assert.match(source, /fleetRegionInsights\.map/);
   assert.match(source, /region\.sites\.map/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
   assert.match(source, /key\.startsWith\("site:"\)/);
-  assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
-  assert.match(css, /\.mine-pie-chart\s*\{/);
-  assert.match(css, /\.mine-pie-slice\s*\{[\s\S]*cursor:\s*pointer/);
-  assert.match(css, /\.mine-fleet-site-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,/);
+  assert.match(css, /\.mine-compact-hierarchy\s*\{[\s\S]*grid-template-columns:/);
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
 });
 
-test("equipment intelligence offers a remembered combined hierarchical chart and split view", () => {
-  assert.match(source, /nerveCenterFleetIntelligenceView/);
-  assert.match(source, /setFleetIntelligenceView\("combined"\)/);
-  assert.match(source, /setFleetIntelligenceView\("split"\)/);
-  assert.match(source, /Combined asset category and equipment group chart/);
+test("equipment intelligence uses the selected compact double ring before the KPI toolbar", () => {
+  assert.doesNotMatch(source, /nerveCenterFleetIntelligenceView/);
+  assert.doesNotMatch(source, /Equipment intelligence chart view/);
+  assert.ok(source.indexOf('className="mine-fleet-intelligence-row"') < source.indexOf('className="mine-kpi-layout-toolbar"'));
   assert.match(source, /className="mine-hierarchy-slice outer"/);
   assert.match(source, /className="mine-hierarchy-slice inner"/);
   assert.match(source, /openAssetDrilldown\(slice\.drilldownKey\)/);
-  assert.match(css, /\.mine-hierarchy-layout\s*\{[^}]*grid-template-columns:/);
-  assert.match(css, /\.mine-hierarchy-groups\s*\{[^}]*overflow-y:\s*auto/);
+  assert.match(css, /\.mine-fleet-intelligence-row\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
+  assert.match(css, /@media \(max-width:\s*1000px\)[\s\S]*\.mine-fleet-intelligence-row\s*\{\s*grid-template-columns:\s*1fr/);
+  assert.match(css, /\.mine-compact-group-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
 });
 
 test("total fleet renders a region-grouped site count graph", () => {
@@ -77,8 +72,15 @@ test("Total Fleet fits every site evenly across the available width", () => {
 });
 
 test("breakdown trend is compact, responsive and site selectable", () => {
-  assert.match(source, /<div className="mine-trend-sites"/);
-  assert.doesNotMatch(source, /<aside className="mine-trend-sites"/);
+  // Site ranking was removed from the dashboard; nothing may reintroduce it.
+  assert.doesNotMatch(source, /mine-trend-sites/);
+  assert.doesNotMatch(source, /Site ranking/);
+  assert.doesNotMatch(css, /\.mine-trend-sites/);
+  // The constants that only fed that list must go with it.
+  assert.doesNotMatch(source, /breakdownTrendSites/);
+  assert.doesNotMatch(source, /maxBreakdownTrendSite/);
+  // The trend body drops from three columns to two.
+  assert.match(css, /\.mine-breakdown-trend-body\s*\{[^}]*grid-template-columns: 160px minmax\(0, 1fr\);/);
   assert.match(css, /\.mine-breakdown-trend-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-trend-period button\.active/);
   assert.match(css, /\.mine-trend-chart\s*\{[\s\S]*overflow-x:\s*auto/);
