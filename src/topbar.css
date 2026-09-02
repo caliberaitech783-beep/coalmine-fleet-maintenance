@@ -181,6 +181,14 @@
   margin-top: 76px;
 }
 
+@media (min-width: 1601px) {
+  .app > aside .caliber-app-name strong { font-size: 17px; }
+  .app > aside nav > .nav-config-row > button,
+  .app > aside nav > .masters-menu > .nav-config-row > button { font-size: 15px; }
+  .app > aside .user b { font-size: 14px; }
+  .app > aside .user small { font-size: 13px; }
+}
+
 .header-clock {
   display: inline-flex;
   align-items: center;
