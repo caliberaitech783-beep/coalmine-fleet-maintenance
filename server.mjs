@@ -40,7 +40,13 @@ const versionFile=path.join(staticRoot,'app-version.txt');
 const currentAppVersion=existsSync(versionFile)
   ? readFileSync(versionFile,'utf8').trim()
   : createHash('sha256').update(readFileSync(path.join(staticRoot,'index.html'))).digest('hex').slice(0,16);
+const deploymentShaFile=path.join(root,'DEPLOYMENT_SHA');
+const deploymentShaCandidate=String(process.env.DEPLOYMENT_SHA||(
+  existsSync(deploymentShaFile)?readFileSync(deploymentShaFile,'utf8'):''
+)).trim().toLowerCase();
+const deploymentSha=/^[0-9a-f]{40}$/.test(deploymentShaCandidate)?deploymentShaCandidate:'';
 const connectionString=process.env.DATABASE_URL;
+const scheduledJobsEnabled=String(process.env.DISABLE_SCHEDULED_JOBS||'').trim().toLowerCase()!=='true';
 const driverSyncIntervalMs=2*60*1000;
 const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
@@ -433,7 +439,7 @@ app.use(express.json({limit:'20mb'}));
 
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
-  res.json({version:currentAppVersion});
+  res.json({version:currentAppVersion,commit:deploymentSha});
 });
 
 app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
@@ -857,7 +863,7 @@ app.get('/api/health',async(_req,res)=>{
     const result=await pool.query('SELECT NOW() AS database_time');
     databaseReady=true;
     databaseError='';
-    res.json({status:'ok',database:'connected',databaseTime:result.rows[0].database_time});
+    res.json({status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled});
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database connection failed.';
@@ -2345,28 +2351,32 @@ async function initializeDatabase(){
     databaseReady=true;
     databaseError='';
     console.log('Database initialization completed.');
-    if(oracleConfigured)void syncTemporaryRequestDrivers()
-      .then(result=>console.log('Oracle request-driver sync completed.',result))
-      .catch(error=>console.error('Oracle request-driver startup sync failed.',error));
-    void sendScheduledConsolidatedWhatsAppReports()
-      .then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result))
-      .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
-    void sendScheduledConsolidatedTicketReports()
-      .then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result))
-      .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
-    void sendScheduledDirectorReportBundles()
-      .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
-      .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
-    void sendScheduledHierarchyReportBundles()
-      .then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result))
-      .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
-    void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
-    void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
-      if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
-        .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
-        .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
-      return null;
-    }).catch(error=>console.error('Meta WhatsApp template configuration check failed.',error));
+    if(scheduledJobsEnabled){
+      if(oracleConfigured)void syncTemporaryRequestDrivers()
+        .then(result=>console.log('Oracle request-driver sync completed.',result))
+        .catch(error=>console.error('Oracle request-driver startup sync failed.',error));
+      void sendScheduledConsolidatedWhatsAppReports()
+        .then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result))
+        .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
+      void sendScheduledConsolidatedTicketReports()
+        .then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result))
+        .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
+      void sendScheduledDirectorReportBundles()
+        .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
+        .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
+      void sendScheduledHierarchyReportBundles()
+        .then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result))
+        .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
+      void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
+      void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
+        if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
+          .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
+          .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
+        return null;
+      }).catch(error=>console.error('Meta WhatsApp template configuration check failed.',error));
+    }else{
+      console.log('Scheduled background jobs are disabled for this deployment slot.');
+    }
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database initialization failed.';
@@ -2376,35 +2386,37 @@ async function initializeDatabase(){
 }
 
 void initializeDatabase();
-const requestDriverSyncTimer=setInterval(()=>{
-  void syncTemporaryRequestDrivers()
-    .then(result=>console.log('Scheduled Oracle request-driver sync completed.',result))
-    .catch(error=>console.error('Scheduled Oracle request-driver sync failed.',error));
-},driverSyncIntervalMs);
-requestDriverSyncTimer.unref?.();
-const consolidatedWhatsAppTimer=setInterval(()=>{
-  void sendScheduledConsolidatedWhatsAppReports()
-    .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})
-    .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
-},60*1000);
-consolidatedWhatsAppTimer.unref?.();
-const consolidatedTicketWhatsAppTimer=setInterval(()=>{
-  void sendScheduledConsolidatedTicketReports()
-    .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)})
-    .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
-},60*1000);
-consolidatedTicketWhatsAppTimer.unref?.();
-const directorWhatsAppTimer=setInterval(()=>{
-  void sendScheduledDirectorReportBundles()
-    .then(result=>{if(!result?.skipped)console.log('Scheduled Director WhatsApp report check completed.',result)})
-    .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
-},60*1000);
-directorWhatsAppTimer.unref?.();
-const hierarchyWhatsAppTimer=setInterval(()=>{
-  void sendScheduledHierarchyReportBundles()
-    .then(result=>{if(!result?.skipped)console.log('Scheduled hierarchy WhatsApp report check completed.',result)})
-    .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
-},60*1000);
-hierarchyWhatsAppTimer.unref?.();
-const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
-adminLockAuditTimer.unref?.();
+if(scheduledJobsEnabled){
+  const requestDriverSyncTimer=setInterval(()=>{
+    void syncTemporaryRequestDrivers()
+      .then(result=>console.log('Scheduled Oracle request-driver sync completed.',result))
+      .catch(error=>console.error('Scheduled Oracle request-driver sync failed.',error));
+  },driverSyncIntervalMs);
+  requestDriverSyncTimer.unref?.();
+  const consolidatedWhatsAppTimer=setInterval(()=>{
+    void sendScheduledConsolidatedWhatsAppReports()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})
+      .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
+  },60*1000);
+  consolidatedWhatsAppTimer.unref?.();
+  const consolidatedTicketWhatsAppTimer=setInterval(()=>{
+    void sendScheduledConsolidatedTicketReports()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)})
+      .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
+  },60*1000);
+  consolidatedTicketWhatsAppTimer.unref?.();
+  const directorWhatsAppTimer=setInterval(()=>{
+    void sendScheduledDirectorReportBundles()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled Director WhatsApp report check completed.',result)})
+      .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
+  },60*1000);
+  directorWhatsAppTimer.unref?.();
+  const hierarchyWhatsAppTimer=setInterval(()=>{
+    void sendScheduledHierarchyReportBundles()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled hierarchy WhatsApp report check completed.',result)})
+      .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
+  },60*1000);
+  hierarchyWhatsAppTimer.unref?.();
+  const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
+  adminLockAuditTimer.unref?.();
+}

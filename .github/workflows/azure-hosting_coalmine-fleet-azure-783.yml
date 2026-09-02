@@ -7,6 +7,19 @@ on:
       - azure-hosting-1.0
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: coalmine-fleet-production
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
+  AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
+  LIVE_URL: https://bdms.cmll.in
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,11 +37,13 @@ jobs:
           npm ci
           npm test
           npm run build
+          printf '%s' "$GITHUB_SHA" > DEPLOYMENT_SHA
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v6
         with:
-          name: node-app
+          name: node-app-${{ github.sha }}
           path: .
+          retention-days: 30
 
   deploy:
     runs-on: ubuntu-latest
@@ -40,24 +55,76 @@ jobs:
       - name: Download deployment artifact
         uses: actions/download-artifact@v8
         with:
-          name: node-app
+          name: node-app-${{ github.sha }}
       - name: Login to Azure
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
-      - name: Deploy to Azure Web App
+
+      - name: Start staging slot and discover its URL
+        shell: bash
+        run: |
+          az webapp start --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
+          staging_host="$(az webapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging --query defaultHostName -o tsv)"
+          test -n "$staging_host"
+          printf 'STAGING_URL=https://%s\n' "$staging_host" >> "$GITHUB_ENV"
+
+      - name: Deploy to Azure staging slot
         uses: azure/webapps-deploy@v3
         with:
-          app-name: coalmine-fleet-azure-783
-          slot-name: Production
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: staging
           package: .
-      - name: Restart Azure Web App
+
+      - name: Restart and verify staging
+        shell: bash
         run: |
-          APP_ID=$(az webapp list --query "[?name=='coalmine-fleet-azure-783'].id | [0]" -o tsv)
-          if [ -z "$APP_ID" ]; then
-            echo "Azure Web App coalmine-fleet-azure-783 was not found."
-            exit 1
-          fi
-          az webapp restart --ids "$APP_ID"
+          az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
+          for attempt in {1..24}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${STAGING_URL}/api/health?deployment=${GITHUB_SHA}")" && \
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$GITHUB_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false) process.exit(1)"; then
+              echo "Staging verified at ${GITHUB_SHA}: ${response}"
+              break
+            fi
+            if [ "$attempt" -eq 24 ]; then
+              echo "Staging verification failed"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Swap staging into production with automatic rollback
+        shell: bash
+        run: |
+          set -u
+          az webapp deployment slot swap --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging --target-slot production
+          for attempt in {1..24}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?deployment=${GITHUB_SHA}")" && \
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$GITHUB_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true) process.exit(1)"; then
+              echo "Production verified at ${GITHUB_SHA}: ${response}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production verification failed; restoring the previous production package"
+          az webapp deployment slot swap --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging --target-slot production
+          for attempt in {1..24}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?rollback=${GITHUB_SHA}")" && \
+              HEALTH_RESPONSE="$response" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected') process.exit(1)"; then
+              echo "Previous production package restored and healthy: ${response}"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Automatic rollback did not restore a healthy response"
+          exit 1
+
+      - name: Stop staging slot
+        if: always()
+        run: az webapp stop --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
+
+      - name: Logout from Azure
+        if: always()
+        run: az logout
