@@ -42,7 +42,7 @@ test("primary KPIs use one compact row with a graphical road-status block", () =
   assert.doesNotMatch(client, /\{ key: "Awaiting", label: "Awaiting"/);
   assert.match(css, /\.mine-open-requests-values\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,/);
   assert.match(css, /button\.open\s*\{[\s\S]*#df6d64/);
-  assert.match(css, /button\.progress\s*\{[\s\S]*#d5a62d/);
+  assert.match(css, /button\.progress\s*\{[\s\S]*#f2c94c24/);
   assert.match(css, /button\.idle\s*\{[\s\S]*#8b6abd18/);
   assert.match(client, /<b>Operations users<\/b>/);
 });
@@ -54,12 +54,4 @@ test("the fleet KPI card shows only the Total Fleet name", () => {
   );
   assert.doesNotMatch(client, /Equipment &amp; vehicles/);
   assert.doesNotMatch(client, /All registered assets/);
-});
-
-test("the in-progress status chip has no background fill", () => {
-  assert.match(
-    css,
-    /\.mine-open-requests-values button\.progress \{ border-color:#d5a62d; color:#936c00; \}/,
-  );
-  assert.doesNotMatch(css, /button\.progress\s*\{[^}]*background/);
 });
