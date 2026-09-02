@@ -147,8 +147,12 @@
   min-height: 0;
 }
 
-.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar {
-  width: 12px;
+/* Only the bottom scrollbar is drawn; the table still scrolls vertically. */
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar:vertical {
+  width: 0;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar:horizontal {
   height: 12px;
 }
 

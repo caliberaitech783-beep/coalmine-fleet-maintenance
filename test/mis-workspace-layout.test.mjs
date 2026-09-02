@@ -39,3 +39,9 @@ test("workflow tables keep a single horizontal scrollbar that stays on screen", 
     /\.normal:not\(\.embedded-workspace\) \.mobile-workspace \.scroll\.mobile-workflow-table\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0/s,
   );
 });
+
+test("only the bottom scrollbar is drawn on the workflow table", () => {
+  assert.match(workflowStyles, /::-webkit-scrollbar:vertical\s*\{[^}]*width:\s*0/s);
+  assert.match(workflowStyles, /::-webkit-scrollbar:horizontal\s*\{[^}]*height:\s*12px/s);
+  assert.doesNotMatch(workflowStyles, /::-webkit-scrollbar \{/);
+});
