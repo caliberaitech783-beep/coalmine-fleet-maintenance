@@ -15,9 +15,9 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(server,/if\(!validTripCardImageDataUrl\(firstTripCardImage\)\)return res\.status\(400\)/);
   assert.match(source,/if \(!tripCardFile\) return alert\("Upload the first-trip card image\."\)/);
   assert.match(source,/First trip card image \*[\s\S]*name="firstTripCardImage"[\s\S]*required/);
-  assert.match(source,/showClosedBy && <th>Closed by<\/th>/);
+  assert.match(source,/showClosedBy && workflowHeader\("closedBy", "Closed by"\)/);
   assert.match(source,/showClosedBy && <td>\{row\.closedBy \|\| "—"\}<\/td>/);
-  assert.match(source,/showTripCard && <th>Trip card image<\/th>/);
+  assert.match(source,/showTripCard && workflowHeader\("tripCard", "Trip card image"\)/);
   assert.match(source,/<TripCardCell request=\{row\} \/>/);
   assert.match(source,/tab === "requests"[\s\S]*showReason showClosedBy showTurnaroundTime/);
   assert.match(source,/showVerifiedBy=\{isMis\} showTripCard=\{isMis\}/);

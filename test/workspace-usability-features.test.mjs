@@ -9,7 +9,8 @@ const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 test("operational tables expose search, filters, sorting, and the MIS idle queue", () => {
   assert.match(ui, /table-search-toolbar/);
   assert.match(ui, /ListFilter/);
-  assert.match(ui, /SortableHeader label="Job reference"/);
+  assert.match(ui, /workflowHeader\("ref", "Job reference"\)/);
+  assert.match(ui, /const workflowHeader = \(key, label\) => <FilterableHeader/);
   assert.match(ui, />Idle Vehicles</);
   assert.match(ui, /tab === "idle"/);
   assert.match(ui, /showRequestsMenu&&canSeeRequestMenu\("Closed history"\)&&<button className=\{tab === "idle"/);

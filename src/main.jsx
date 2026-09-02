@@ -1019,6 +1019,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
 function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, stableToolbar = false }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [dateFilter, setDateFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
+  const [openFilter, setOpenFilter] = useState(null);
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
     const timer = window.setInterval(() => setBreakdownNow(Date.now()), 60000);
@@ -1053,13 +1054,31 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     })),
     searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.closedBy, row.make, row.model) && (!statusFilter || row.status === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
     [sortedRows, sort, changeSort] = useSortableRows(searchedRows);
+  const updateColumnFilter = (key, value) => setParameterFilters((current) => {
+    const next = { ...current };
+    if (value) next[key] = value;
+    else delete next[key];
+    return next;
+  });
+  const columnValues = Object.fromEntries(filterColumns.map((column) => [
+    column.key,
+    [...new Set(displayRows.map((row) => tableFilterText(column.value(row))))].sort((a, b) => sortCollator.compare(a, b)),
+  ]));
+  useEffect(() => {
+    if (!openFilter) return undefined;
+    const closeFilter = (event) => {
+      if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
+    };
+    document.addEventListener("mousedown", closeFilter);
+    return () => document.removeEventListener("mousedown", closeFilter);
+  }, [openFilter]);
   return (
     <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <table className="breakdown-table-auto-fit">
         <thead>
           <tr>
             {columns.map(([key, label]) => (
-              <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} />
+              key === "idealAction" ? <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} /> : <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />
             ))}
           </tr>
         </thead>
@@ -5771,6 +5790,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
+  const [openFilter, setOpenFilter] = useState(null);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
@@ -5802,12 +5822,31 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     return matchesText && (!statusFilter || String(row.status || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows);
+  const updateColumnFilter = (key, value) => setParameterFilters((current) => {
+    const next = { ...current };
+    if (value) next[key] = value;
+    else delete next[key];
+    return next;
+  });
+  const columnValues = Object.fromEntries(filterColumns.map((column) => [
+    column.key,
+    [...new Set(rows.map((row) => tableFilterText(column.value(row))))].sort((a, b) => sortCollator.compare(a, b)),
+  ]));
+  const workflowHeader = (key, label) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />;
+  useEffect(() => {
+    if (!openFilter) return undefined;
+    const closeFilter = (event) => {
+      if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
+    };
+    document.addEventListener("mousedown", closeFilter);
+    return () => document.removeEventListener("mousedown", closeFilter);
+  }, [openFilter]);
   return (
     <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="scroll mobile-workflow-table">
       <table className="workflow-table">
         <thead><tr>
-          <SortableHeader label="Job reference" sortKey="ref" sort={sort} onSort={changeSort}/><SortableHeader label="Equipment group" sortKey="equipmentGroup" sort={sort} onSort={changeSort}/><SortableHeader label="Door no." sortKey="door" sort={sort} onSort={changeSort}/><SortableHeader label="Site location" sortKey="site" sort={sort} onSort={changeSort}/>
-          <SortableHeader label="Status" sortKey="status" sort={sort} onSort={changeSort}/><SortableHeader label="Idle reason" sortKey="idleReason" sort={sort} onSort={changeSort}/>{showReason && <SortableHeader label="Reason" sortKey="complaint" sort={sort} onSort={changeSort}/>} {showCreatedBy && <SortableHeader label="Created by" sortKey="owner" sort={sort} onSort={changeSort}/>} {showVerifiedBy && <SortableHeader label="Verified by" sortKey="verifiedBy" sort={sort} onSort={changeSort}/>} {showClosedBy && <SortableHeader label="Closed by" sortKey="closedBy" sort={sort} onSort={changeSort}/>}<SortableHeader label="Started" sortKey="start" sort={sort} onSort={changeSort}/>{showTurnaroundTime && <SortableHeader label="Turn around time (TAT)" sortKey="hours" sort={sort} onSort={changeSort}/>}<th>Days of breakdown</th><th>Daily remarks</th>{showMeterData && <><th>Opening KMR/HMR</th><th>Closing KMR/HMR</th></>}{showTripCard && <th>Trip card image</th>}{showComplaintAudio && <th>Complaint audio</th>}{showActions && <th>Actions</th>}
+          {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{workflowHeader("site", "Site location")}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showClosedBy && workflowHeader("closedBy", "Closed by")}{workflowHeader("start", "Started")}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
