@@ -41,3 +41,9 @@ test("breakdown trend is compact, responsive and site selectable", () => {
   assert.match(css, /\.mine-trend-chart\s*\{[\s\S]*overflow-x:\s*auto/);
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mine-breakdown-trend-body\s*\{\s*grid-template-columns:\s*1fr/);
 });
+
+test("the region and site graph panel is titled only Total Fleet", () => {
+  assert.match(source, /<header><div><h2>Total Fleet<\/h2><\/div><strong className="mine-fleet-chart-total"/);
+  assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);
+  assert.doesNotMatch(source, /Region-wise site distribution with total fleet count/);
+});
