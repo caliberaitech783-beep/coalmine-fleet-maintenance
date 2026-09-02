@@ -1042,8 +1042,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div>
         </article>
-        <article className="mine-panel mine-repair-type-chart" aria-label="Repair type breakdown graph">
-          <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Repair type</h2><p>Breakdown requests by configured repair type</p></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
+        <article className="mine-panel mine-repair-type-chart" aria-label="Maintenance type graph">
+          <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Maintenance Type</h2></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
           <div className="mine-repair-type-bars">
             {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
               <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
@@ -1093,7 +1093,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       <section className="mine-dashboard-grid mine-dashboard-core">
         <article className="mine-panel mine-fleet-command mine-span-2">
           <header className="mine-fleet-command-head">
-            <div><span className="mine-eyebrow">Fleet registry</span><h2>Total equipment intelligence</h2><p>Category, equipment group, region and site-wise fleet distribution</p></div>
+            <div><h2>Total Equipment Intelligence</h2></div>
             <button type="button" onClick={() => openAssetDrilldown("all")}>View full fleet <ChevronRight /></button>
           </header>
           <div className="mine-fleet-command-body">

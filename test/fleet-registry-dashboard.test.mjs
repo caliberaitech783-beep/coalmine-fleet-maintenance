@@ -7,7 +7,9 @@ const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.met
 
 test("fleet registry dashboard connects category, group, region and site-wise drilldowns", () => {
   assert.match(source, /className="mine-panel mine-fleet-command mine-span-2"/);
-  assert.match(source, /Total equipment intelligence/);
+  assert.match(source, /Total Equipment Intelligence/);
+  assert.doesNotMatch(source, /<span className="mine-eyebrow">Fleet registry<\/span>/);
+  assert.doesNotMatch(source, /Category, equipment group, region and site-wise fleet distribution/);
   assert.match(source, /aria-label="Interactive asset category pie chart"/);
   assert.match(source, /aria-label="Interactive equipment groups pie chart"/);
   assert.match(source, /assetCategoryPieSlices\.map/);
