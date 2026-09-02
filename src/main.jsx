@@ -10,6 +10,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
+import { aiFeederAlerts, aiFeederSummary } from "../ai-feeder.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
@@ -98,6 +99,7 @@ import "./privilege.css";
 import "./sortable-table.css";
 import "./theme.css";
 import "./mobile-workflow.css";
+import "./ai-feeder.css";
 import "./ideal-flow.css";
 import "./idle-status.css";
 import "./daily-updates.css";
@@ -6364,6 +6366,84 @@ function TicketPage({ session }) {
   </section>;
 }
 
+const AI_FEEDER_AUTO_CLOSE_SECONDS = 10;
+const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
+function AiFeederPanel({ alerts = [], summary, onClose }) {
+  const [seconds, setSeconds] = useState(AI_FEEDER_AUTO_CLOSE_SECONDS);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused) return undefined;
+    if (seconds <= 0) { onClose(); return undefined; }
+    const timer = window.setTimeout(() => setSeconds((current) => current - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [seconds, paused]);
+  useEffect(() => {
+    const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, []);
+  const headline = summary.critical
+    ? `${summary.critical} item${summary.critical === 1 ? "" : "s"} need attention now`
+    : summary.total
+      ? `${summary.total} update${summary.total === 1 ? "" : "s"} from your fleet`
+      : "Nothing needs your attention";
+  return <div className="ai-feeder-overlay" role="dialog" aria-modal="true" aria-label="AI Feeder" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+    <div className="ai-feeder-panel">
+      <header>
+        <div>
+          <span className="ai-feeder-kicker"><Activity /> AI FEEDER</span>
+          <h2>{headline}</h2>
+          <p>Live alerts picked from your requests. Hover to keep this open.</p>
+        </div>
+        <div className="ai-feeder-actions">
+          <span className={paused ? "ai-feeder-countdown paused" : "ai-feeder-countdown"} aria-live="polite" title={paused ? "Paused while you read" : `Closing in ${seconds} seconds`}>{seconds}</span>
+          <button type="button" onClick={onClose} aria-label="Close AI Feeder"><X /></button>
+        </div>
+      </header>
+      <div className="ai-feeder-counts">
+        <span className="critical"><i />{summary.critical} critical</span>
+        <span className="warning"><i />{summary.warning} warning</span>
+        <span className="info"><i />{summary.info} info</span>
+      </div>
+      <div className="ai-feeder-list">
+        {alerts.length ? alerts.map((alert) => {
+          const SeverityIcon = AI_FEEDER_SEVERITY_ICONS[alert.severity] || Bell;
+          return <article className={`ai-feeder-item ${alert.severity}`} key={alert.id}>
+            <SeverityIcon aria-hidden="true" />
+            <div>
+              <b>{alert.title}</b>
+              <p>{alert.detail}</p>
+              <small>{alert.ref ? `${alert.ref} · ` : ""}{alert.site}</small>
+            </div>
+          </article>;
+        }) : <p className="ai-feeder-empty">All clear. No overdue jobs, idle vehicles or pending verifications right now.</p>}
+      </div>
+    </div>
+  </div>;
+}
+function AiFeeder({ requests = [], role = "" }) {
+  const [open, setOpen] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let greeted = "yes";
+    try { greeted = sessionStorage.getItem("aiFeederGreeted") || ""; } catch { greeted = "yes"; }
+    if (greeted === "yes") return;
+    try { sessionStorage.setItem("aiFeederGreeted", "yes"); } catch { greeted = "yes"; }
+    setOpen(true);
+  }, []);
+  const alerts = useMemo(() => aiFeederAlerts(requests, { role, now }), [requests, role, now]);
+  const summary = aiFeederSummary(alerts);
+  return <>
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="AI Feeder" aria-label={`AI Feeder, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
+      <Activity /><span>AI Feeder</span>{summary.total > 0 && <i className="ai-feeder-dot" aria-hidden="true" />}
+    </button>
+    {open && <AiFeederPanel alerts={alerts} summary={summary} onClose={() => setOpen(false)} />}
+  </>;
+}
 function NotificationBell({ session, onOpenTickets }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false);
   const reminderShown = useRef("");
@@ -6439,7 +6519,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
   const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder requests={requests} role={mobileRole} /><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope layoutUser={session?.login||session?.name} layoutToken={session?.token} />}
       {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
@@ -6668,6 +6748,7 @@ function App() {
       currentEmployeeName = "";
       localStorage.removeItem("nerveCenterSession");
       sessionStorage.removeItem("nerveCenterSession");
+      sessionStorage.removeItem("aiFeederGreeted");
       setSession(null);
     },
     addRequest = async (request) => {
@@ -6775,6 +6856,7 @@ function App() {
           <HeaderClock />
           <div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            <AiFeeder requests={requests} role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} />
             <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <Search />
             </button>
