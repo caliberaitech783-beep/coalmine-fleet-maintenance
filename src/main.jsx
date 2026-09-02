@@ -228,19 +228,6 @@ function AuthModeTabs({ mode, onModeChange }) {
           </span>
         </button>
       ))}
-      <a
-        className="login-auth-link"
-        href="https://bdms.cmll.in"
-        role="tab"
-        aria-selected="false"
-        aria-label="Open Accident application"
-      >
-        <span className="login-auth-tab-icon accident" aria-hidden="true"><AlertTriangle /></span>
-        <span className="login-auth-tab-copy">
-          <span>Accident</span>
-          <small>Open application</small>
-        </span>
-      </a>
     </div>
   );
 }
@@ -380,6 +367,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <div className="login-proof">
             <div><Activity /><span><strong>Live oversight</strong>Across every site</span></div>
             <div><ShieldCheck /><span><strong>Secure access</strong>Role-based control</span></div>
+            <a className="login-accident-link" href="https://bdms.cmll.in" aria-label="Open Accident application"><AlertTriangle /><span><strong>Accident</strong>Open application</span></a>
           </div>
         </div>
         <div className="mine-art">
