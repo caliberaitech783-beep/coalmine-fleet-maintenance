@@ -38,3 +38,102 @@
     flex: 0 0 16px;
   }
 }
+
+/* Workspace hero: the tab strip lives inside the banner and the table starts right under it. */
+.mobile-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.normal > main:has(.mobile-workspace) {
+  padding: 22px clamp(12px, 1.6vw, 26px) 26px;
+}
+
+.welcome.workspace-hero {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  padding: 26px clamp(20px, 2.4vw, 34px);
+}
+
+.workspace-hero-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.workspace-hero-intro > svg {
+  flex: none;
+  width: 70px;
+  height: 70px;
+  color: #ffffff24;
+}
+
+.welcome.workspace-hero h1 {
+  margin: 6px 0 5px;
+}
+
+.welcome.workspace-hero .mobile-tabs {
+  margin: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.welcome.workspace-hero .mobile-tabs button {
+  background: #ffffff1f;
+  border: 1px solid #ffffff40;
+  color: #fdf3f8;
+}
+
+.welcome.workspace-hero .mobile-tabs button:hover {
+  background: #ffffff33;
+}
+
+.welcome.workspace-hero .mobile-tabs button.active {
+  background: #fff;
+  border-color: #fff;
+  color: var(--brand-purple, #7a2f6a);
+}
+
+.welcome.workspace-hero .mobile-tabs button.primary {
+  background: #fff !important;
+  border-color: #fff;
+  color: var(--brand-purple, #7a2f6a) !important;
+}
+
+.mobile-workspace .sectiontitle {
+  margin: 4px 0 8px;
+}
+
+/* Horizontal scrollbar above the table as well as below it, kept in sync. */
+.table-top-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--line);
+}
+
+.table-top-scroll-rail {
+  height: 1px;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table {
+  max-height: calc(100vh - 300px);
+  min-height: 320px;
+}
+
+@media (max-width: 600px) {
+  .welcome.workspace-hero {
+    padding: 20px;
+  }
+
+  .workspace-hero-intro > svg {
+    display: none;
+  }
+
+  .mobile-workspace .scroll.mobile-workflow-table {
+    max-height: none;
+    min-height: 0;
+  }
+}

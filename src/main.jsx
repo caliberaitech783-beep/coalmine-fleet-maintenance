@@ -5972,9 +5972,23 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     document.addEventListener("mousedown", closeFilter);
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
+  const bodyScrollRef = useRef(null), topScrollRef = useRef(null), tableRef = useRef(null);
+  const [tableWidth, setTableWidth] = useState(0);
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table || typeof ResizeObserver === "undefined") return undefined;
+    const measure = () => setTableWidth(table.scrollWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [sortedRows.length]);
+  const syncScroll = (from, to) => {
+    if (from.current && to.current && to.current.scrollLeft !== from.current.scrollLeft) to.current.scrollLeft = from.current.scrollLeft;
+  };
   return (
-    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="scroll mobile-workflow-table">
-      <table className="workflow-table">
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="table-top-scroll" ref={topScrollRef} onScroll={() => syncScroll(topScrollRef, bodyScrollRef)} aria-hidden="true"><div className="table-top-scroll-rail" style={{width: tableWidth ? `${tableWidth}px` : "100%"}} /></div><div className="scroll mobile-workflow-table" ref={bodyScrollRef} onScroll={() => syncScroll(bodyScrollRef, topScrollRef)}>
+      <table className="workflow-table" ref={tableRef}>
         <thead><tr>
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{workflowHeader("site", "Site location")}
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showClosedBy && workflowHeader("closedBy", "Closed by")}{workflowHeader("start", "Started")}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && <th>Actions</th>}
@@ -6407,8 +6421,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
       {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
-      {(embedded||section==="profile")&&<>
-      <div className="welcome"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
+      {(embedded||section==="profile")&&<div className="mobile-workspace">
+      <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
@@ -6417,6 +6431,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
       </div>
+      </div>
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showReason showCreatedBy showComplaintAudio showMeterData showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showCreatedBy showComplaintAudio showMeterData showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
@@ -6424,7 +6439,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showClosedBy showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
       {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
-      </>}
+      </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
