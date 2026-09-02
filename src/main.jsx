@@ -1047,7 +1047,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </button>
       </section>
       <article className="mine-panel mine-repair-type-chart" aria-label="Repair type breakdown graph">
-        <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Repair type distribution</h2><p>Breakdown requests by configured repair type</p></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
+        <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Repair type</h2><p>Breakdown requests by configured repair type</p></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
         <div className="mine-repair-type-bars">
           {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
             <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>

@@ -10,7 +10,7 @@ const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 
 test("repair types render as a responsive graph instead of KPI cards", () => {
   assert.match(client, /className="mine-panel mine-repair-type-chart"/);
-  assert.match(client, /Repair type distribution/);
+  assert.match(client, /<h2>Repair type<\/h2>/);
   assert.match(client, /value \/ maxRepairTypeCount/);
   assert.match(client, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
   assert.doesNotMatch(client, /<section className="mine-counter-grid"/);
