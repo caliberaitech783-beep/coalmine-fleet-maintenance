@@ -969,3 +969,10 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-overview-chart-body { padding-inline: 10px; }
   .workload-status-drilldown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Keep all command-centre copy readable without changing the dashboard layout. */
+.mine-dashboard h1 { font-size: 22px !important; }
+.mine-dashboard h2 { font-size: 15px !important; }
+.mine-dashboard :is(p, label, small, em, span, b) { font-size: 11px !important; }
+.mine-dashboard :is(button, input, select, th) { font-size: 11px !important; }
+.mine-dashboard td { font-size: 12px !important; }
