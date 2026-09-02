@@ -29,9 +29,11 @@ test("Total Fleet leads the dashboard and Maintenance Type shares a row with Roa
   assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && roadAvailability > repairType && compactKpis > roadAvailability);
   assert.match(css, /\.mine-dashboard-feature-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   assert.match(css, /\.mine-dashboard-feature-row > \.mine-feature-road-availability\s*\{[\s\S]*?grid-column:\s*span 1/);
+  assert.match(client, /className="mine-road-availability-summary"/);
   assert.match(client, /className="mine-road-distribution"/);
+  assert.doesNotMatch(client, /className="mine-road-status-chart"/);
   assert.match(client, /roadStatusShare\(kpis\.onRoad\)\.toFixed\(1\)/);
-  assert.match(css, /\.mine-road-availability-body\s*\{[\s\S]*?grid-template-columns:\s*118px minmax\(0, 1fr\)/);
+  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values\s*\{\s*grid-template-columns:\s*repeat\(3,minmax\(0,1fr\)\)/);
 });
 
 test("primary KPIs remain compact after Road Availability moves beside Maintenance Type", () => {
@@ -45,7 +47,7 @@ test("primary KPIs remain compact after Road Availability moves beside Maintenan
   );
   assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-assets"/);
   assert.match(client, /className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"/);
-  assert.match(client, /className="mine-road-status-chart"/);
+  assert.match(client, /Fleet status distribution/);
   assert.match(css, /\.mine-road-status-graphic\s*\{[\s\S]*?grid-column:\s*span 2;/);
   assert.match(client, /<b>Total Fleet<\/b>/);
   assert.match(client, /<b>On road<\/b>/);

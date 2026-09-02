@@ -1053,18 +1053,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <article className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability">
           <header><div><span className="mine-eyebrow">Fleet status</span><h2>Road Availability</h2></div><strong>{roadStatusTotal.toLocaleString()} <small>Total fleet</small></strong></header>
           <div className="mine-road-availability-body">
-            <div className="mine-road-status-chart" aria-label={`${kpis.onRoad} on road, ${kpis.offRoad} off road and ${kpis.idle} idle`} style={{ background: `conic-gradient(#34a77d 0 ${roadStatusShare(kpis.onRoad)}%, #df6d64 ${roadStatusShare(kpis.onRoad)}% ${roadStatusShare(kpis.onRoad + kpis.offRoad)}%, #dda13d ${roadStatusShare(kpis.onRoad + kpis.offRoad)}% 100%)` }}>
-              <span><strong>{kpis.availability}%</strong><small>Available</small></span>
+            <div className="mine-road-availability-summary"><strong>{kpis.availability}%</strong><span>Fleet available</span><small>{kpis.onRoad.toLocaleString()} of {roadStatusTotal.toLocaleString()} assets are on road</small></div>
+            <div className="mine-road-distribution" aria-label="Road availability distribution">
+              <div><i className="onroad" style={{ width: `${roadStatusShare(kpis.onRoad)}%` }} /><i className="offroad" style={{ width: `${roadStatusShare(kpis.offRoad)}%` }} /><i className="idle" style={{ width: `${roadStatusShare(kpis.idle)}%` }} /></div>
+              <span><b>0%</b><b>Fleet status distribution</b><b>100%</b></span>
             </div>
             <div className="mine-road-status-values">
               <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><b>On road</b><small>{roadStatusShare(kpis.onRoad).toFixed(1)}% available</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
               <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><b>Off road</b><small>{roadStatusShare(kpis.offRoad).toFixed(1)}% maintenance</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
               <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><b>Idle</b><small>{roadStatusShare(kpis.idle).toFixed(1)}% not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
             </div>
-          </div>
-          <div className="mine-road-distribution" aria-label="Road availability distribution">
-            <div><i className="onroad" style={{ width: `${roadStatusShare(kpis.onRoad)}%` }} /><i className="offroad" style={{ width: `${roadStatusShare(kpis.offRoad)}%` }} /><i className="idle" style={{ width: `${roadStatusShare(kpis.idle)}%` }} /></div>
-            <span><b>0%</b><b>Fleet availability distribution</b><b>100%</b></span>
           </div>
         </article>
       </section>
