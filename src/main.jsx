@@ -849,16 +849,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     else if (type.includes("admin")) counts.admin += 1;
     return counts;
   }, { mobile: 0, super: 0, admin: 0 });
-  const repairTypeCards = [...new Map(
+  const repairTypeBreakdown = [...new Map(
     repairTypeRecords
       .map((record) => String(record.repairType || "").trim())
       .filter(Boolean)
       .map((label) => [label.toLowerCase(), label]),
-  ).values()].map((label) => [
+  ).values()].map((label) => ({
     label,
-    visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === label.toLowerCase()).length,
-    "Breakdown requests",
-  ]);
+    value: visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === label.toLowerCase()).length,
+  }));
+  const maxRepairTypeCount = Math.max(1, ...repairTypeBreakdown.map((item) => item.value));
+  const repairTypeTotal = repairTypeBreakdown.reduce((total, item) => total + item.value, 0);
   const openCaseRequests = activeOpenCases(visibleBreakdowns);
   const activeBreakdowns = openCaseRequests.length;
   const assetCounts = fleetAssetCounts(visibleEquipment);
@@ -1041,9 +1042,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <strong>{visibleUsers.length.toLocaleString()}</strong>
         </button>
       </section>
-      <section className="mine-counter-grid" aria-label="Mining fleet summary">
-        {repairTypeCards.length ? repairTypeCards.map(([label, value, hint]) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)}><Wrench /><span><strong>{value.toLocaleString()}</strong><b>{label}</b><small>{hint}</small></span></button>) : <div className="mine-empty">No repair types configured</div>}
-      </section>
+      <article className="mine-panel mine-repair-type-chart" aria-label="Repair type breakdown graph">
+        <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Repair type distribution</h2><p>Breakdown requests by configured repair type</p></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
+        <div className="mine-repair-type-bars">
+          {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
+            <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
+          </button>) : <div className="mine-empty">No repair types configured</div>}
+        </div>
+      </article>
       <section className="mine-dashboard-grid mine-dashboard-core">
         <article className="mine-panel mine-fleet-command mine-span-2">
           <header className="mine-fleet-command-head">

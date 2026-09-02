@@ -587,6 +587,28 @@ button.mine-primary-kpi-card:focus-visible,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.mine-repair-type-chart { margin-bottom: 8px; overflow: hidden; }
+.mine-repair-type-chart > header > strong { color: var(--mine-text); font: 850 12px Manrope; white-space: nowrap; }
+.mine-repair-type-bars { display: grid; gap: 7px; padding: 12px 14px 14px; }
+.mine-repair-type-bars button {
+  display: grid;
+  grid-template-columns: minmax(110px, .55fr) minmax(160px, 2fr) 48px;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--mine-text);
+  padding: 4px 0;
+  text-align: left;
+}
+.mine-repair-type-bars button:hover,
+.mine-repair-type-bars button:focus-visible { outline: 0; color: #315fd4; }
+.mine-repair-type-bars button > span { overflow: hidden; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.mine-repair-type-bars button > i { height: 12px; overflow: hidden; border-radius: 8px; background: #e8edf3; }
+.mine-repair-type-bars button > i > b { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: linear-gradient(90deg,#4f86c6,#62b393); transition: width .25s ease; }
+.mine-repair-type-bars button > strong { color: var(--mine-text); font: 850 12px Manrope; text-align: right; }
+.mine-dashboard-night .mine-repair-type-bars button > i { background: #273c40; }
 .mine-dashboard-grid { gap: 7px; }
 .mine-panel { border-radius: 6px; }
 .mine-panel > header {
@@ -1042,6 +1064,13 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-recent { grid-column: auto; }
   .mine-overview-chart-body { padding-inline: 10px; }
   .workload-status-drilldown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 500px) {
+  .mine-repair-type-chart > header { align-items: flex-start; }
+  .mine-repair-type-bars { padding-inline: 10px; }
+  .mine-repair-type-bars button { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; }
+  .mine-repair-type-bars button > i { grid-column: 1 / -1; grid-row: 2; }
+  .mine-repair-type-bars button > strong { grid-column: 2; grid-row: 1; }
 }
 
 /* Keep all command-centre copy readable without changing the dashboard layout. */

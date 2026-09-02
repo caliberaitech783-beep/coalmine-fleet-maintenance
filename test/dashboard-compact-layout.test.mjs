@@ -8,20 +8,14 @@ const css = fs.readFileSync(
 );
 const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("dashboard KPI cards use a compact responsive grid", () => {
-  assert.match(css, /Compact command-centre density/);
-  assert.match(
-    css,
-    /\.mine-counter-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(145px,\s*1fr\)\);[\s\S]*?grid-auto-rows:\s*49px;/,
-  );
-  assert.match(
-    css,
-    /@media \(max-width:\s*1100px\)[\s\S]*?\.mine-counter-grid\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/,
-  );
-  assert.match(
-    css,
-    /@media \(max-width:\s*700px\)[\s\S]*?\.mine-counter-grid\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/,
-  );
+test("repair types render as a responsive graph instead of KPI cards", () => {
+  assert.match(client, /className="mine-panel mine-repair-type-chart"/);
+  assert.match(client, /Repair type distribution/);
+  assert.match(client, /value \/ maxRepairTypeCount/);
+  assert.match(client, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
+  assert.doesNotMatch(client, /<section className="mine-counter-grid"/);
+  assert.match(css, /\.mine-repair-type-bars button\s*\{[\s\S]*grid-template-columns:\s*minmax\(110px, \.55fr\) minmax\(160px, 2fr\) 48px/);
+  assert.match(css, /@media \(max-width: 500px\)[\s\S]*\.mine-repair-type-bars button\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\) auto/);
 });
 
 test("six primary KPIs share one compact desktop row", () => {
