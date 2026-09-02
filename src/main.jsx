@@ -879,6 +879,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
       return { ...region, sites, ...fleetAssetCounts(records) };
     });
+  const maxFleetSiteTotal = Math.max(1, ...fleetRegionInsights.flatMap((region) => region.sites.map((site) => site.total)));
+  const fleetChartAxisMax = Math.max(10, Math.ceil(maxFleetSiteTotal / 10) * 10);
+  const fleetChartTicks = [100, 75, 50, 25, 0].map((percent) => Math.round((fleetChartAxisMax * percent) / 100));
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
   const moveKpi = (key, direction) => setKpiOrder((current) => {
@@ -1037,6 +1040,22 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
           </button>) : <div className="mine-empty">No repair types configured</div>}
         </div>
+      </article>
+      <article className="mine-panel mine-fleet-region-chart" aria-label="Total fleet by region and site graph">
+        <header><div><span className="mine-eyebrow">Fleet registry</span><h2>Total fleet by region and site</h2><p>Region-wise site distribution with total fleet count</p></div><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span><strong>{assetCounts.total.toLocaleString()} total fleet</strong></div></header>
+        <div className="mine-fleet-chart-layout">
+          <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
+          <div className="mine-fleet-chart-plot">
+            <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
+            <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} aria-label={`${region.code} fleet sites`}>
+              <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)} aria-label={`${site.name}: ${site.total} total fleet`} title={`${site.name}: ${site.total} total fleet`}>
+                <strong>{site.total.toLocaleString()}</strong><span className="mine-fleet-chart-bar" style={{ height: `${(site.total / fleetChartAxisMax) * 100}%` }}><i className="equipment" style={{ flexGrow: site.equipment }} /><i className="vehicles" style={{ flexGrow: site.vehicles }} /></span><small>{site.name}</small>
+              </button>)}</div>
+              <footer><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
+            </section>)}</div>
+          </div>
+        </div>
+        <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div>
       </article>
       <section className="mine-dashboard-grid mine-dashboard-core">
         <article className="mine-panel mine-fleet-command mine-span-2">

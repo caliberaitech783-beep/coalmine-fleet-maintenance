@@ -18,6 +18,19 @@ test("fleet registry dashboard connects category, group, region and site-wise dr
   assert.match(css, /\.mine-fleet-site-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,/);
 });
 
+test("total fleet renders a region-grouped site count graph", () => {
+  assert.match(source, /aria-label="Total fleet by region and site graph"/);
+  assert.match(source, /const fleetChartAxisMax =/);
+  assert.match(source, /fleetChartTicks\.map/);
+  assert.match(source, /fleetRegionInsights\.map\(\(region\) => <section/);
+  assert.match(source, /region\.sites\.map\(\(site\) => <button/);
+  assert.match(source, /site\.total \/ fleetChartAxisMax/);
+  assert.match(source, /flexGrow: site\.equipment/);
+  assert.match(source, /flexGrow: site\.vehicles/);
+  assert.match(css, /\.mine-fleet-region-chart\s*\{/);
+  assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
+});
+
 test("breakdown trend is compact, responsive and site selectable", () => {
   assert.match(source, /<div className="mine-trend-sites"/);
   assert.doesNotMatch(source, /<aside className="mine-trend-sites"/);

@@ -658,6 +658,52 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-people > strong { font-size: 23px; }
 .mine-recent { margin-top: 7px; }
 
+/* Total fleet graph: regions on the horizontal axis and site fleet totals vertically. */
+.mine-fleet-region-chart {
+  grid-column: 1 / -1;
+  padding-bottom: 10px;
+  overflow: hidden;
+}
+.mine-fleet-region-chart > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.mine-fleet-chart-legend { display: flex; align-items: center; gap: 12px; color: var(--mine-muted); font-size: 8px; }
+.mine-fleet-chart-legend span { display: flex; align-items: center; gap: 5px; }
+.mine-fleet-chart-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.mine-fleet-chart-legend i.equipment { background: #4f86c6; }
+.mine-fleet-chart-legend i.vehicles { background: #2ca57c; }
+.mine-fleet-chart-legend strong { color: var(--mine-text); font: 900 12px Manrope; }
+.mine-fleet-chart-layout { display: grid; grid-template-columns: 72px minmax(0, 1fr); min-height: 250px; padding: 12px 16px 0; }
+.mine-fleet-chart-y { display: grid; grid-template-rows: repeat(5, 1fr); position: relative; padding: 0 12px 37px 0; color: var(--mine-muted); font-size: 8px; text-align: right; }
+.mine-fleet-chart-y b { position: absolute; left: -5px; top: 50%; transform: translate(-38%, -50%) rotate(-90deg); color: var(--mine-text); font-size: 8px; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.mine-fleet-chart-y span { transform: translateY(-5px); }
+.mine-fleet-chart-y span:last-child { align-self: end; transform: translateY(4px); }
+.mine-fleet-chart-plot { position: relative; min-width: 0; overflow-x: auto; }
+.mine-fleet-chart-grid { position: absolute; inset: 0 0 37px; display: grid; grid-template-rows: repeat(5, 1fr); pointer-events: none; }
+.mine-fleet-chart-grid i { border-top: 1px dashed var(--mine-line); }
+.mine-fleet-chart-grid i:last-child { align-self: end; width: 100%; }
+.mine-fleet-chart-regions { display: flex; position: relative; z-index: 1; min-width: 760px; height: 100%; }
+.mine-fleet-chart-regions > section { display: grid; grid-template-rows: minmax(0, 1fr) 37px; flex: 1 0 0; min-width: 300px; border-left: 1px solid #4f86c61f; }
+.mine-fleet-chart-regions > section:last-child { border-right: 1px solid #4f86c61f; }
+.mine-fleet-chart-sites { display: flex; align-items: end; justify-content: space-around; gap: 8px; min-height: 0; padding: 12px 10px 0; }
+.mine-fleet-chart-sites button { display: grid; grid-template-rows: 17px minmax(0, 1fr) 30px; align-items: end; justify-items: center; width: min(58px, 18%); height: 100%; padding: 0; border: 0; background: transparent; color: var(--mine-text); cursor: pointer; }
+.mine-fleet-chart-sites button:hover .mine-fleet-chart-bar,.mine-fleet-chart-sites button:focus-visible .mine-fleet-chart-bar { outline: 2px solid #315fd455; outline-offset: 2px; }
+.mine-fleet-chart-sites button:focus-visible { outline: 0; }
+.mine-fleet-chart-sites strong { align-self: start; font: 900 9px Manrope; }
+.mine-fleet-chart-sites small { align-self: start; width: 76px; overflow: hidden; color: var(--mine-muted); font-size: 7px; line-height: 1.15; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.mine-fleet-chart-bar { display: flex; align-self: end; flex-direction: column-reverse; width: 24px; max-height: 100%; overflow: hidden; border-radius: 4px 4px 0 0; background: #e8eef4; box-shadow: inset 0 0 0 1px #dfe7ef; transition: height .25s ease; }
+.mine-fleet-chart-bar i { display: block; width: 100%; min-height: 1px; }
+.mine-fleet-chart-bar i.equipment { background: linear-gradient(180deg, #6ca1df, #3f77ba); }
+.mine-fleet-chart-bar i.vehicles { background: linear-gradient(180deg, #45bd93, #218b69); }
+.mine-fleet-chart-regions footer { display: flex; align-items: center; justify-content: center; gap: 7px; border-top: 2px solid #315fd4; background: #315fd408; }
+.mine-fleet-chart-regions footer b { color: #315fd4; font: 900 10px Manrope; }
+.mine-fleet-chart-regions footer span { color: var(--mine-muted); font-size: 7px; }
+.mine-fleet-chart-x { color: var(--mine-text); font-size: 8px; font-weight: 850; letter-spacing: .05em; text-align: center; text-transform: uppercase; }
+.mine-dashboard-night .mine-fleet-chart-bar { background: #26344b; box-shadow: inset 0 0 0 1px #ffffff12; }
+@media (max-width: 700px) {
+  .mine-fleet-region-chart > header { align-items: flex-start; flex-direction: column; }
+  .mine-fleet-chart-layout { grid-template-columns: 52px minmax(0, 1fr); min-height: 220px; padding-inline: 8px; }
+  .mine-fleet-chart-legend { flex-wrap: wrap; }
+}
+
 /* Fleet registry workspace: Total -> category -> group -> region/site. */
 .mine-dashboard-core {
   grid-template-columns: minmax(0, 3fr) minmax(210px, 1fr);
