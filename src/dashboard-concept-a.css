@@ -1142,11 +1142,18 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-dashboard-night .mine-fleet-group-name > i { background: #273c40; }
 .mine-dashboard-night .mine-fleet-command-head .mine-view-full-fleet { color: #8eb5ff !important; border-color: #8eb5ff44 !important; background: #8eb5ff0c !important; }
 .mine-dashboard-night .mine-intelligence-view-switch { background: #203338; }
-.mine-breakdown-trend {
-  grid-column: 1 / -1;
+.mine-dashboard-lower-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 7px;
   margin-top: 7px;
 }
+.mine-dashboard-lower-grid > * { min-width: 0; }
+.mine-breakdown-trend { height: 100%; }
 .mine-breakdown-trend > header { min-height: 54px; }
+.mine-dashboard-lower-grid .mine-breakdown-trend > header { align-items: flex-start; flex-direction: column; gap: 8px; }
+.mine-dashboard-lower-grid .mine-trend-controls { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
 .mine-trend-controls {
   display: flex;
   align-items: center;
@@ -1242,8 +1249,8 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-breakdown-trend-body {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr) 270px;
-  min-height: 205px;
+  grid-template-columns: 135px minmax(0, 1fr);
+  min-height: 245px;
 }
 .mine-breakdown-trend-body > * { min-width: 0; padding: 12px; }
 .mine-breakdown-trend-body > * + * { border-left: 1px solid var(--mine-line); }
@@ -1338,27 +1345,41 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-dashboard-night .mine-trend-summary article { background: #315fd40f; }
 .mine-dashboard-night .mine-trend-day > span { background: linear-gradient(to top, #8eb5ff08, transparent); }
+.mine-fleet-performance { height: 100%; }
+.mine-fleet-performance > header strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--mine-text);
+  font-size: 9px;
+}
+.mine-fleet-performance > header strong svg { width: 15px; color: #522e90; }
+.mine-fleet-performance-body { display: grid; grid-template-rows: 1fr auto; min-height: 319px; padding: 12px; gap: 12px; }
 .mine-performance-gauges {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
 }
-.mine-performance-gauges article {
+.mine-performance-gauges button {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr auto auto;
   align-items: center;
   justify-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  padding: 9px 6px;
+  padding: 12px 8px 9px;
   border: 1px solid var(--mine-line);
   border-top: 3px solid var(--gauge-color);
   border-radius: 6px;
   background: color-mix(in srgb, var(--gauge-color) 4%, var(--mine-panel));
+  color: var(--mine-text);
   text-align: center;
+  cursor: pointer;
+  transition: border-color .15s ease, transform .15s ease;
 }
-.mine-performance-gauges article > span {
+.mine-performance-gauges button:hover,.mine-performance-gauges button:focus-visible { transform: translateY(-1px); outline: 0; border-color: var(--gauge-color); }
+.mine-performance-gauges button > span {
   color: var(--mine-text);
   font-size: 7px;
   font-weight: 850;
@@ -1367,8 +1388,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-radial-gauge {
   position: relative;
   display: grid;
-  width: 88px;
-  height: 88px;
+  width: 112px;
+  height: 112px;
   place-content: center;
   border-radius: 50%;
   background: conic-gradient(from -135deg, var(--gauge-color) 0deg var(--gauge-angle), var(--mine-line) var(--gauge-angle) 270deg, transparent 270deg 360deg);
@@ -1382,9 +1403,23 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-radial-gauge strong,
 .mine-radial-gauge small { position: relative; z-index: 1; }
-.mine-radial-gauge strong { color: var(--gauge-color); font: 850 19px Manrope; }
+.mine-radial-gauge strong { color: var(--gauge-color); font: 850 23px Manrope; }
 .mine-radial-gauge small { color: var(--mine-muted); font-size: 6px; }
 .mine-performance-gauges p { margin: 0; color: var(--mine-muted); font-size: 6px; line-height: 1.25; }
+.mine-performance-gauges em { display: inline-flex; align-items: center; gap: 2px; color: var(--gauge-color); font-size: 6px; font-style: normal; font-weight: 800; }
+.mine-performance-gauges em svg { width: 11px; }
+.mine-performance-composition { display: grid; gap: 7px; padding-top: 10px; border-top: 1px solid var(--mine-line); }
+.mine-performance-composition > div:first-child { display: flex; justify-content: space-between; color: var(--mine-muted); font-size: 7px; font-weight: 750; }
+.mine-performance-composition > div:first-child b { color: var(--mine-text); }
+.mine-performance-bar { display: flex; overflow: hidden; height: 12px; border-radius: 3px; background: var(--mine-line); }
+.mine-performance-bar i { display: block; height: 100%; }
+.mine-performance-bar .utilized,.mine-performance-legend .utilized { background: #315fd4; }
+.mine-performance-bar .idle,.mine-performance-legend .idle { background: #d4922e; }
+.mine-performance-bar .unavailable,.mine-performance-legend .unavailable { background: #f04e53; }
+.mine-performance-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.mine-performance-legend span { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px; color: var(--mine-muted); font-size: 6px; }
+.mine-performance-legend i { width: 7px; height: 7px; border-radius: 2px; }
+.mine-performance-legend b { color: var(--mine-text); }
 
 @media (max-width: 1100px) {
   .mine-counter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1394,13 +1429,11 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-fleet-command-body.combined .mine-fleet-geography { grid-column: auto; }
   .mine-fleet-geography { grid-column: 1 / -1; border-top: 1px solid var(--mine-line); border-left: 0 !important; }
   .mine-fleet-region-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
-  .mine-breakdown-trend-body { grid-template-columns: 150px minmax(0, 1fr); }
-  .mine-performance-gauges { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--mine-line); border-left: 0 !important; }
-  .mine-performance-gauges article { grid-template-columns: auto auto 1fr; grid-template-rows: 1fr; justify-items: start; text-align: left; }
-  .mine-radial-gauge { width: 72px; height: 72px; }
+  .mine-breakdown-trend-body { grid-template-columns: 130px minmax(0, 1fr); }
 }
 @media (max-width: 1000px) {
   .mine-dashboard-feature-row { grid-template-columns: 1fr; }
+  .mine-dashboard-lower-grid { grid-template-columns: 1fr; }
   .mine-primary-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
@@ -1467,9 +1500,12 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-repair-type-bars button > strong { grid-column: 2; grid-row: 1; }
   .mine-trend-summary,
   .mine-performance-gauges { grid-template-columns: 1fr; }
-  .mine-performance-gauges article { grid-template-columns: auto 1fr; }
-  .mine-performance-gauges article > span { grid-column: 2; }
+  .mine-performance-gauges button { grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; justify-items: start; text-align: left; }
+  .mine-performance-gauges button > span { grid-column: 2; }
+  .mine-radial-gauge { grid-row: 1 / 4; }
   .mine-performance-gauges p { grid-column: 2; }
+  .mine-performance-gauges em { grid-column: 2; }
+  .mine-performance-legend { grid-template-columns: 1fr; }
 }
 
 /* Keep all command-centre copy readable without changing the dashboard layout. */

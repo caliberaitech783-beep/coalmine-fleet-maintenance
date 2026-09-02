@@ -8,7 +8,7 @@ test("dashboard equipment and vehicle totals drill down from region to site and 
   assert.match(source, /\{ label: "Equipment", total: assetCounts\.equipment, key: "equipment"/);
   assert.match(source, /\{ label: "Vehicles", total: assetCounts\.vehicles, key: "vehicle"/);
   assert.match(source, /assetCategoryPieSlices\.map\(\(slice\) => <button[^>]*onClick=\{\(\) => openAssetDrilldown\(slice\.key\)\}/);
-  assert.match(source, /const siteFirstAssetDrilldown = \["all", "equipment", "vehicle", "road-availability", "onroad", "offroad", "idle", "unknown"\]\.includes\(assetDrilldown\)/);
+  assert.match(source, /const siteFirstAssetDrilldown = \["all", "equipment", "vehicle", "road-availability", "available", "onroad", "offroad", "idle", "unknown"\]\.includes\(assetDrilldown\)/);
   assert.doesNotMatch(source, /Select location level/);
   assert.match(source, /Step 1 · Select region/);
   assert.match(source, /assetDrilldownRegions\.map/);

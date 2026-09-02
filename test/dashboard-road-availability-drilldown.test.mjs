@@ -12,7 +12,7 @@ test("road availability KPIs open live-state equipment drilldowns", () => {
   assert.doesNotMatch(source, /className="mine-primary-kpi-grid"/);
   assert.match(source, /rowsForAssetDrilldown = \(key = ""\)/);
   assert.match(source, /liveEquipmentRoadStatus\(record, visibleBreakdowns\) === key/);
-  assert.match(source, /\["all", "equipment", "vehicle", "road-availability", "onroad", "offroad", "idle", "unknown"\]\.includes\(assetDrilldown\)/);
+  assert.match(source, /\["all", "equipment", "vehicle", "road-availability", "available", "onroad", "offroad", "idle", "unknown"\]\.includes\(assetDrilldown\)/);
   assert.match(source, /assetDrilldownRows\.filter\(\(record\) => recordBelongsToSite\(record, site\.name\)\)/);
   assert.match(source, /assetDrilldownSite \? assetDrilldownRows\.filter/);
   assert.match(source, /Step 1 · Select region[\s\S]*Step 2 · Select \{selectedAssetRegion\.code\} site[\s\S]*Step 3 · \{assetDrilldownSite\} fleet totals/);

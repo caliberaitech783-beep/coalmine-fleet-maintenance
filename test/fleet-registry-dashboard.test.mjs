@@ -84,7 +84,10 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
   // The constants that only fed that list must go with it.
   assert.doesNotMatch(source, /breakdownTrendSites/);
   assert.doesNotMatch(source, /maxBreakdownTrendSite/);
-  assert.match(css, /\.mine-breakdown-trend-body\s*\{[^}]*grid-template-columns: 160px minmax\(0, 1fr\) 270px;/);
+  assert.match(source, /className="mine-dashboard-lower-grid"/);
+  assert.match(source, /<h2>Overall Fleet Performance<\/h2>/);
+  assert.match(css, /\.mine-dashboard-lower-grid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.mine-breakdown-trend-body\s*\{[^}]*grid-template-columns: 135px minmax\(0, 1fr\);/);
   assert.match(css, /\.mine-breakdown-trend-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-trend-period button\.active/);
   assert.match(css, /\.mine-trend-day\.forecast > span i/);
