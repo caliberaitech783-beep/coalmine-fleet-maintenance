@@ -1,0 +1,228 @@
+name: Fast UI deploy to BDMS production
+
+on:
+  push:
+    branches:
+      - azure-hosting
+      - azure-hosting-1.0
+    paths:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "test/**"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: coalmine-fleet-production
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
+  AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
+  LIVE_URL: https://bdms.cmll.in
+
+jobs:
+  classify:
+    name: Confirm UI-only change
+    runs-on: ubuntu-latest
+    outputs:
+      eligible: ${{ steps.files.outputs.eligible }}
+      previous_sha: ${{ steps.files.outputs.previous_sha }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - id: files
+        name: Enforce the fast-lane file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous_sha="${{ github.event.before }}"
+          if [ -z "$previous_sha" ] || [[ "$previous_sha" =~ ^0+$ ]]; then
+            previous_sha="$(git rev-parse HEAD^)"
+          fi
+          printf 'previous_sha=%s\n' "$previous_sha" >> "$GITHUB_OUTPUT"
+
+          mapfile -t changed < <(git diff --name-only "$previous_sha" "$GITHUB_SHA")
+          printf 'Changed files:\n%s\n' "${changed[*]}"
+          eligible=true
+          runtime_changed=false
+          for file in "${changed[@]}"; do
+            case "$file" in
+              src/*|public/*|index.html) runtime_changed=true ;;
+              test/*.test.mjs) ;;
+              *) eligible=false ;;
+            esac
+          done
+          if [ "$runtime_changed" != true ]; then eligible=false; fi
+          printf 'eligible=%s\n' "$eligible" >> "$GITHUB_OUTPUT"
+          if [ "$eligible" != true ]; then
+            echo "Fast deployment skipped: this commit is empty, test-only, mixed, or contains a protected file."
+          fi
+
+  build:
+    name: Focused checks and complete packages
+    if: needs.classify.outputs.eligible == 'true'
+    needs: classify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22.x"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run focused UI checks
+        shell: bash
+        run: |
+          node --test \
+            test/branding.test.mjs \
+            test/caliber-activity-loader.test.mjs \
+            test/dashboard-*.test.mjs \
+            test/fleet-registry-dashboard.test.mjs \
+            test/header-*.test.mjs \
+            test/hierarchy-master-ui.test.mjs \
+            test/login-view-labels.test.mjs \
+            test/master-filter-layout.test.mjs \
+            test/masters-dropdown.test.mjs \
+            test/mobile-access.test.mjs \
+            test/navigation-visibility.test.mjs \
+            test/normal-header-responsive.test.mjs \
+            test/production-maintenance-header.test.mjs \
+            test/region-master-ui.test.mjs \
+            test/report-parameter-filter.test.mjs \
+            test/report-table-filters.test.mjs \
+            test/report-zip-download.test.mjs \
+            test/request-column-filters.test.mjs \
+            test/request-form-features.test.mjs \
+            test/smart-search.test.mjs \
+            test/super-operational-workspaces.test.mjs \
+            test/topbar-readable-typography.test.mjs \
+            test/user-privileges.test.mjs \
+            test/workspace-usability-features.test.mjs
+      - name: Build current complete application package
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          printf '%s' "$GITHUB_SHA" > DEPLOYMENT_SHA
+          zip -q -r "$RUNNER_TEMP/current-package.zip" . \
+            -x '.git/*' 'node_modules/.cache/*'
+      - name: Build previous-version rollback package
+        env:
+          PREVIOUS_SHA: ${{ needs.classify.outputs.previous_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rollback="$RUNNER_TEMP/rollback-source"
+          mkdir -p "$rollback"
+          git archive "$PREVIOUS_SHA" | tar -x -C "$rollback"
+          cp -a node_modules "$rollback/node_modules"
+          cd "$rollback"
+          npm run build
+          printf '%s' "$PREVIOUS_SHA" > DEPLOYMENT_SHA
+          zip -q -r "$RUNNER_TEMP/rollback-package.zip" . \
+            -x '.git/*' 'node_modules/.cache/*'
+      - uses: actions/upload-artifact@v6
+        with:
+          name: fast-ui-current-${{ github.sha }}
+          path: ${{ runner.temp }}/current-package.zip
+          retention-days: 14
+      - uses: actions/upload-artifact@v6
+        with:
+          name: fast-ui-rollback-${{ github.sha }}
+          path: ${{ runner.temp }}/rollback-package.zip
+          retention-days: 14
+
+  deploy:
+    name: Deploy, verify, and automatically roll back
+    if: needs.classify.outputs.eligible == 'true'
+    needs: [classify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: fast-ui-current-${{ github.sha }}
+          path: packages/current
+      - uses: actions/download-artifact@v8
+        with:
+          name: fast-ui-rollback-${{ github.sha }}
+          path: packages/rollback
+      - name: Login to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
+      - name: Deploy complete UI package and health-check production
+        id: production
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp deploy \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --src-path packages/current/current-package.zip \
+            --type zip \
+            --clean true \
+            --restart true
+          for attempt in {1..18}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?fast-ui=${GITHUB_SHA}")" && \
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$GITHUB_SHA" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.database!=="connected"||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true)process.exit(1)'; then
+              page="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/")"
+              asset="$(printf '%s' "$page" | grep -oE 'src="/assets/[^"]+\.js"' | head -1 | cut -d'"' -f2)"
+              test -n "$asset"
+              curl --fail --silent --show-error --max-time 20 --output /dev/null "${LIVE_URL}${asset}"
+              echo "Fast UI production verified at ${GITHUB_SHA}: ${response}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Fast UI production verification failed"
+          exit 1
+      - name: Restore previous complete package on failure
+        if: steps.production.outcome == 'failure'
+        env:
+          PREVIOUS_SHA: ${{ needs.classify.outputs.previous_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp deploy \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --src-path packages/rollback/rollback-package.zip \
+            --type zip \
+            --clean true \
+            --restart true
+          for attempt in {1..18}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?fast-ui-rollback=${GITHUB_SHA}")" && \
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$PREVIOUS_SHA" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.database!=="connected"||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true)process.exit(1)'; then
+              page="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/")"
+              asset="$(printf '%s' "$page" | grep -oE 'src="/assets/[^"]+\.js"' | head -1 | cut -d'"' -f2)"
+              test -n "$asset"
+              curl --fail --silent --show-error --max-time 20 --output /dev/null "${LIVE_URL}${asset}"
+              echo "Previous package ${PREVIOUS_SHA} restored and healthy: ${response}"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Automatic rollback failed to restore a healthy previous package"
+          exit 1
+      - name: Mark failed deployment after rollback decision
+        if: steps.production.outcome == 'failure' && always()
+        run: exit 1
+      - name: Logout from Azure
+        if: always()
+        run: az logout

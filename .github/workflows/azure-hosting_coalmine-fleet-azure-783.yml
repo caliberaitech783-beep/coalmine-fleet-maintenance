@@ -5,6 +5,11 @@ on:
     branches:
       - azure-hosting
       - azure-hosting-1.0
+    paths-ignore:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "test/**"
   workflow_dispatch:
 
 permissions:
