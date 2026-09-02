@@ -355,6 +355,36 @@
   gap: 7px;
   margin-bottom: 8px;
 }
+.mine-kpi-layout-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 31px;
+  margin-bottom: 6px;
+  color: var(--mine-muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.mine-kpi-layout-toolbar > div { display: flex; gap: 6px; }
+.mine-kpi-layout-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 5px 9px;
+  border: 1px solid var(--mine-line);
+  border-radius: 6px;
+  background: var(--mine-panel);
+  color: var(--mine-muted);
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.mine-kpi-layout-toolbar button:hover,
+.mine-kpi-layout-toolbar button.active { border-color: #4f86c6; background: #edf4ff; color: #285ea3; }
+.mine-kpi-layout-toolbar svg { width: 13px; height: 13px; }
 .mine-primary-kpi-card {
   --kpi-accent: #4f86c6;
   min-width: 0;
@@ -366,7 +396,41 @@
   background: var(--mine-panel);
   color: var(--mine-text);
   box-shadow: 0 4px 12px #08141818;
+  position: relative;
 }
+.mine-primary-kpi-grid[data-arranging="true"] .mine-primary-kpi-card {
+  border-style: dashed;
+  cursor: grab;
+  animation: mine-kpi-ready .22s ease both;
+}
+.mine-primary-kpi-grid[data-arranging="true"] .mine-primary-kpi-card:active { cursor: grabbing; }
+@keyframes mine-kpi-ready { from { transform: scale(.985); opacity: .78; } to { transform: scale(1); opacity: 1; } }
+.mine-kpi-move-controls {
+  position: absolute;
+  z-index: 3;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid #cbd8ec;
+  border-radius: 5px;
+  background: var(--mine-panel);
+  color: #58708e;
+  box-shadow: 0 3px 8px #102a4a1a;
+}
+.mine-kpi-move-controls > svg { width: 11px; height: 11px; margin: 0 2px; }
+.mine-kpi-move-controls > span {
+  display: grid;
+  width: 19px;
+  height: 19px;
+  place-items: center;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.mine-kpi-move-controls > span:hover,
+.mine-kpi-move-controls > span:focus-visible { outline: 0; background: #eaf2ff; color: #285ea3; }
+.mine-kpi-move-controls span svg { width: 12px; height: 12px; }
 button.mine-primary-kpi-card,
 .mine-primary-kpi-main {
   display: grid;
@@ -477,6 +541,16 @@ button.mine-primary-kpi-card:focus-visible,
   color: var(--mine-text);
   font-size: 9px;
 }
+.mine-kpi-composition {
+  display: flex;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  background: #edf1f6;
+}
+.mine-kpi-composition span:first-child { background: #4f86c6; }
+.mine-kpi-composition span:last-child { background: #64c59a; }
+.mine-kpi-composition span { min-width: 0; transition: width .28s ease; }
 .workload-status-drilldown { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .mine-counter-grid {
   display: grid;

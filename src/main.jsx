@@ -83,6 +83,7 @@ import {
   Printer,
   Columns3,
   RotateCcw,
+  GripVertical,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -752,6 +753,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
+  const defaultKpiOrder = ["assets", "onroad", "offroad", "idle", "workload", "users"];
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const [usersAndEmployees] = useMasterRecords("Users & employees");
   const [repairTypeRecords] = useMasterRecords("Repair type master");
@@ -765,6 +767,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardDate, setDashboardDate] = useState("");
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
+  const [editingKpiLayout, setEditingKpiLayout] = useState(false);
+  const [draggedKpi, setDraggedKpi] = useState("");
+  const [kpiOrder, setKpiOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("nerveCenterDashboardKpiOrder") || "[]");
+      return saved.length === defaultKpiOrder.length && defaultKpiOrder.every((key) => saved.includes(key)) ? saved : defaultKpiOrder;
+    } catch {
+      return defaultKpiOrder;
+    }
+  });
+  useEffect(() => localStorage.setItem("nerveCenterDashboardKpiOrder", JSON.stringify(kpiOrder)), [kpiOrder]);
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
@@ -861,6 +874,35 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     });
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
+  const moveKpi = (key, direction) => setKpiOrder((current) => {
+    const from = current.indexOf(key);
+    const to = Math.max(0, Math.min(current.length - 1, from + direction));
+    if (from === to) return current;
+    const next = [...current];
+    [next[from], next[to]] = [next[to], next[from]];
+    return next;
+  });
+  const dropKpi = (target) => {
+    if (!draggedKpi || draggedKpi === target) return;
+    setKpiOrder((current) => {
+      const next = current.filter((key) => key !== draggedKpi);
+      next.splice(next.indexOf(target), 0, draggedKpi);
+      return next;
+    });
+    setDraggedKpi("");
+  };
+  const kpiLayoutProps = (key) => ({
+    draggable: editingKpiLayout,
+    onDragStart: () => setDraggedKpi(key),
+    onDragOver: (event) => editingKpiLayout && event.preventDefault(),
+    onDrop: () => dropKpi(key),
+    style: { order: kpiOrder.indexOf(key) },
+  });
+  const kpiMoveControls = (key) => editingKpiLayout && <span className="mine-kpi-move-controls" onClick={(event) => event.stopPropagation()}>
+    <GripVertical aria-hidden="true" />
+    <span role="button" tabIndex="0" aria-label={`Move ${key} KPI left`} onClick={() => moveKpi(key, -1)} onKeyDown={(event) => event.key === "Enter" && moveKpi(key, -1)}><ChevronLeft /></span>
+    <span role="button" tabIndex="0" aria-label={`Move ${key} KPI right`} onClick={() => moveKpi(key, 1)} onKeyDown={(event) => event.key === "Enter" && moveKpi(key, 1)}><ChevronRight /></span>
+  </span>;
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
     return {
@@ -924,8 +966,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
-      <section className="mine-primary-kpi-grid" aria-label="Fleet status key performance indicators">
-        <article className="mine-primary-kpi-card mine-primary-kpi-assets">
+      <div className="mine-kpi-layout-toolbar"><span>Key performance indicators</span><div>{editingKpiLayout && <button type="button" onClick={() => setKpiOrder(defaultKpiOrder)}><RotateCcw /> Reset</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Done" : "Arrange KPIs"}</button></div></div>
+      <section className="mine-primary-kpi-grid" data-arranging={editingKpiLayout || undefined} aria-label="Fleet status key performance indicators">
+        <article className="mine-primary-kpi-card mine-primary-kpi-assets" {...kpiLayoutProps("assets")}>
+          {kpiMoveControls("assets")}
           <button type="button" className="mine-primary-kpi-main" onClick={() => openAssetDrilldown("all")}>
             <span className="mine-primary-kpi-icon"><Truck /></span>
             <span className="mine-primary-kpi-copy"><small>Fleet registry</small><b>Equipment &amp; vehicles</b><em>All registered assets</em></span>
@@ -935,28 +979,34 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <button type="button" onClick={() => openAssetDrilldown("equipment")}><span>Total equipment</span><b>{assetCounts.equipment.toLocaleString()}</b></button>
             <button type="button" onClick={() => openAssetDrilldown("vehicle")}><span>Total vehicles</span><b>{assetCounts.vehicles.toLocaleString()}</b></button>
           </div>
+          <div className="mine-kpi-composition" aria-label={`${equipmentShare}% equipment and ${vehicleShare}% vehicles`}><span style={{ width: `${equipmentShare}%` }} /><span style={{ width: `${vehicleShare}%` }} /></div>
         </article>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-onroad" onClick={() => openAssetDrilldown("onroad")}>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-onroad" onClick={() => openAssetDrilldown("onroad")} {...kpiLayoutProps("onroad")}>
+          {kpiMoveControls("onroad")}
           <span className="mine-primary-kpi-icon"><CheckCircle2 /></span>
           <span className="mine-primary-kpi-copy"><small>Road availability</small><b>On road</b><em>{kpis.availability}% available</em></span>
           <strong>{kpis.onRoad.toLocaleString()}</strong>
         </button>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-offroad" onClick={() => openAssetDrilldown("offroad")}>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-offroad" onClick={() => openAssetDrilldown("offroad")} {...kpiLayoutProps("offroad")}>
+          {kpiMoveControls("offroad")}
           <span className="mine-primary-kpi-icon"><AlertTriangle /></span>
           <span className="mine-primary-kpi-copy"><small>Road availability</small><b>Off road</b><em>Maintenance or breakdown</em></span>
           <strong>{kpis.offRoad.toLocaleString()}</strong>
         </button>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-idle" onClick={() => openAssetDrilldown("idle")}>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-idle" onClick={() => openAssetDrilldown("idle")} {...kpiLayoutProps("idle")}>
+          {kpiMoveControls("idle")}
           <span className="mine-primary-kpi-icon"><Clock /></span>
           <span className="mine-primary-kpi-copy"><small>Road availability</small><b>Idle</b><em>Available, not working</em></span>
           <strong>{kpis.idle.toLocaleString()}</strong>
         </button>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-workload" onClick={() => setShowWorkloadBreakdown(true)}>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-workload" onClick={() => setShowWorkloadBreakdown(true)} {...kpiLayoutProps("workload")}>
+          {kpiMoveControls("workload")}
           <span className="mine-primary-kpi-icon"><Wrench /></span>
           <span className="mine-primary-kpi-copy"><small>Requests</small><b>Maintenance workload</b><em>Open {workloadCounts.Open} · In progress {workloadCounts["In progress"]} · Idle {workloadCounts.Idle}</em></span>
           <strong>{activeBreakdowns.toLocaleString()}</strong>
         </button>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)}>
+        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)} {...kpiLayoutProps("users")}>
+          {kpiMoveControls("users")}
           <span className="mine-primary-kpi-icon"><Users /></span>
           <span className="mine-primary-kpi-copy"><small>People</small><b>Operations users</b><em>Mobile {userCounts.mobile} · Super {userCounts.super} · Admin {userCounts.admin}</em></span>
           <strong>{visibleUsers.length.toLocaleString()}</strong>
