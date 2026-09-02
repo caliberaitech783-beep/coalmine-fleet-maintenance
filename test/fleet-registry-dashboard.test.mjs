@@ -76,7 +76,7 @@ test("Total Fleet fits every site evenly across the available width", () => {
   assert.match(css, /\.mine-fleet-chart-sites\s*\{[^}]*grid-auto-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*0/);
 });
 
-test("breakdown trend is compact, responsive and site selectable", () => {
+test("breakdown trend is compact, forecast-aware, responsive and site selectable", () => {
   // Site ranking was removed from the dashboard; nothing may reintroduce it.
   assert.doesNotMatch(source, /mine-trend-sites/);
   assert.doesNotMatch(source, /Site ranking/);
@@ -84,10 +84,11 @@ test("breakdown trend is compact, responsive and site selectable", () => {
   // The constants that only fed that list must go with it.
   assert.doesNotMatch(source, /breakdownTrendSites/);
   assert.doesNotMatch(source, /maxBreakdownTrendSite/);
-  // The trend body drops from three columns to two.
-  assert.match(css, /\.mine-breakdown-trend-body\s*\{[^}]*grid-template-columns: 160px minmax\(0, 1fr\);/);
+  assert.match(css, /\.mine-breakdown-trend-body\s*\{[^}]*grid-template-columns: 160px minmax\(0, 1fr\) 270px;/);
   assert.match(css, /\.mine-breakdown-trend-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-trend-period button\.active/);
+  assert.match(css, /\.mine-trend-day\.forecast > span i/);
+  assert.match(css, /\.mine-performance-gauges/);
   assert.match(css, /\.mine-trend-chart\s*\{[\s\S]*overflow-x:\s*auto/);
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mine-breakdown-trend-body\s*\{\s*grid-template-columns:\s*1fr/);
 });

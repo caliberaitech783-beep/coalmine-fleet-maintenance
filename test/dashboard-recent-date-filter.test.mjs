@@ -10,6 +10,12 @@ test("dashboard replaces recent cases with a site-wise selectable breakdown tren
   assert.match(source, /className="mine-panel mine-breakdown-trend"/);
   assert.match(source, /\[breakdownTrendDays, setBreakdownTrendDays\] = useState\(7\)/);
   assert.match(source, /\[breakdownTrendSite, setBreakdownTrendSite\] = useState\("all"\)/);
+  assert.match(source, /\[breakdownTrendView, setBreakdownTrendView\] = useState\("both"\)/);
+  assert.match(source, /aria-label="Breakdown trend anchor day"/);
+  assert.match(source, /aria-label="Breakdown trend view"/);
+  assert.match(source, /Overall Utilization/);
+  assert.match(source, /Overall Availability/);
+  assert.match(source, /const availableFleet = kpis\.onRoad \+ kpis\.idle/);
   assert.match(source, /\[7, 14, 30\]\.map/);
   assert.match(source, /aria-label="Breakdown trend site"/);
   assert.match(source, /showDateFilter = false, rowLimit = 0/);

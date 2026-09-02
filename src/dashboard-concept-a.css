@@ -1174,6 +1174,37 @@ button.mine-primary-kpi-card:focus-visible,
   font-size: 8px;
   font-weight: 750;
 }
+.mine-trend-anchor { min-width: 125px !important; }
+.mine-trend-anchor input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--mine-text);
+  font-size: 8px;
+  font-weight: 750;
+}
+.mine-trend-view {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  overflow: hidden;
+  border: 1px solid var(--mine-line);
+  border-radius: 6px;
+}
+.mine-trend-view button {
+  height: 29px;
+  padding: 0 7px;
+  border: 0;
+  border-right: 1px solid var(--mine-line);
+  background: transparent;
+  color: var(--mine-muted);
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.mine-trend-view button:last-child { border-right: 0; }
+.mine-trend-view button.active { background: #522e90; color: #fff; }
 .mine-trend-period {
   display: grid;
   grid-template-columns: repeat(3, 32px);
@@ -1208,7 +1239,7 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-breakdown-trend-body {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
+  grid-template-columns: 160px minmax(0, 1fr) 270px;
   min-height: 205px;
 }
 .mine-breakdown-trend-body > * { min-width: 0; padding: 12px; }
@@ -1227,11 +1258,31 @@ button.mine-primary-kpi-card:focus-visible,
   border-left: 3px solid #315fd4;
   background: #315fd409;
 }
-.mine-trend-summary article:nth-child(2) { border-left-color: #26956f; background: #26956f09; }
-.mine-trend-summary article:nth-child(3) { border-left-color: #d4922e; background: #d4922e09; }
+.mine-trend-summary article:nth-child(2) { border-left-color: #522e90; background: #522e9009; }
+.mine-trend-summary article:nth-child(3) { border-left-color: #26956f; background: #26956f09; }
 .mine-trend-summary span { color: var(--mine-muted); font-size: 7px; font-weight: 750; }
 .mine-trend-summary strong { grid-row: 1 / 3; grid-column: 2; color: var(--mine-text); font: 850 17px Manrope; }
 .mine-trend-summary small { color: var(--mine-muted); font-size: 6px; }
+.mine-trend-visual {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 6px;
+}
+.mine-trend-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--mine-muted);
+  font-size: 7px;
+  font-weight: 750;
+}
+.mine-trend-legend span { display: inline-flex; align-items: center; gap: 4px; }
+.mine-trend-legend i { width: 8px; height: 8px; border-radius: 2px; background: #315fd4; }
+.mine-trend-legend i.forecast {
+  border: 1px solid #522e90;
+  background: repeating-linear-gradient(135deg, #522e90 0 2px, #522e9020 2px 4px);
+}
+.mine-trend-legend b { margin-left: auto; color: var(--mine-text); font-size: 7px; }
 .mine-trend-chart {
   display: flex;
   align-items: stretch;
@@ -1267,6 +1318,14 @@ button.mine-primary-kpi-card:focus-visible,
   transition: height .2s ease, background .15s ease;
 }
 .mine-trend-day:hover > span i { background: #315fd4; }
+.mine-trend-day.forecast > b { color: #522e90; }
+.mine-trend-day.forecast > span i {
+  border: 1px solid #522e90;
+  background: repeating-linear-gradient(135deg, #522e90 0 3px, #8b65bd 3px 6px);
+}
+.mine-trend-day.forecast:hover > span i { background: #522e90; }
+.mine-trend-day.anchor > span { border-bottom-color: #f04e53; box-shadow: inset 0 -2px 0 #f04e53; }
+.mine-trend-day.anchor > small { color: #f04e53; font-weight: 850; }
 .mine-trend-day > small {
   align-self: start;
   color: var(--mine-muted);
@@ -1276,6 +1335,53 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-dashboard-night .mine-trend-summary article { background: #315fd40f; }
 .mine-dashboard-night .mine-trend-day > span { background: linear-gradient(to top, #8eb5ff08, transparent); }
+.mine-performance-gauges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+.mine-performance-gauges article {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 6px;
+  border: 1px solid var(--mine-line);
+  border-top: 3px solid var(--gauge-color);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--gauge-color) 4%, var(--mine-panel));
+  text-align: center;
+}
+.mine-performance-gauges article > span {
+  color: var(--mine-text);
+  font-size: 7px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+.mine-radial-gauge {
+  position: relative;
+  display: grid;
+  width: 88px;
+  height: 88px;
+  place-content: center;
+  border-radius: 50%;
+  background: conic-gradient(from -135deg, var(--gauge-color) 0deg var(--gauge-angle), var(--mine-line) var(--gauge-angle) 270deg, transparent 270deg 360deg);
+}
+.mine-radial-gauge::before {
+  position: absolute;
+  inset: 9px;
+  border-radius: 50%;
+  background: var(--mine-panel);
+  content: "";
+}
+.mine-radial-gauge strong,
+.mine-radial-gauge small { position: relative; z-index: 1; }
+.mine-radial-gauge strong { color: var(--gauge-color); font: 850 19px Manrope; }
+.mine-radial-gauge small { color: var(--mine-muted); font-size: 6px; }
+.mine-performance-gauges p { margin: 0; color: var(--mine-muted); font-size: 6px; line-height: 1.25; }
 
 @media (max-width: 1100px) {
   .mine-counter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1286,6 +1392,9 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-fleet-geography { grid-column: 1 / -1; border-top: 1px solid var(--mine-line); border-left: 0 !important; }
   .mine-fleet-region-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
   .mine-breakdown-trend-body { grid-template-columns: 150px minmax(0, 1fr); }
+  .mine-performance-gauges { grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--mine-line); border-left: 0 !important; }
+  .mine-performance-gauges article { grid-template-columns: auto auto 1fr; grid-template-rows: 1fr; justify-items: start; text-align: left; }
+  .mine-radial-gauge { width: 72px; height: 72px; }
 }
 @media (max-width: 1000px) {
   .mine-dashboard-feature-row { grid-template-columns: 1fr; }
@@ -1334,6 +1443,8 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-breakdown-trend-body { grid-template-columns: 1fr; }
   .mine-breakdown-trend-body > * + * { border-top: 1px solid var(--mine-line); border-left: 0; }
   .mine-trend-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mine-trend-legend { flex-wrap: wrap; }
+  .mine-trend-legend b { width: 100%; margin-left: 0; }
   .mine-primary-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-counter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-span-2,
@@ -1351,6 +1462,11 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-repair-type-bars button { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 10px; }
   .mine-repair-type-bars button > i { grid-column: 1 / -1; grid-row: 2; }
   .mine-repair-type-bars button > strong { grid-column: 2; grid-row: 1; }
+  .mine-trend-summary,
+  .mine-performance-gauges { grid-template-columns: 1fr; }
+  .mine-performance-gauges article { grid-template-columns: auto 1fr; }
+  .mine-performance-gauges article > span { grid-column: 2; }
+  .mine-performance-gauges p { grid-column: 2; }
 }
 
 /* Keep all command-centre copy readable without changing the dashboard layout. */

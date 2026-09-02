@@ -10,6 +10,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
+import { buildBreakdownTrend, localDateKey } from "../dashboard-breakdown-forecast.mjs";
 import { aiFeederAlerts, aiFeederSummary } from "../ai-feeder.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
@@ -770,6 +771,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardDate, setDashboardDate] = useState("");
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
+  const [breakdownTrendView, setBreakdownTrendView] = useState("both");
+  const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState("");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
@@ -778,6 +781,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   useEffect(() => localStorage.setItem("nerveCenterFleetWatermark", String(showFleetWatermark)), [showFleetWatermark]);
   useEffect(() => localStorage.setItem("nerveCenterFleetIntelligenceView", fleetIntelligenceView), [fleetIntelligenceView]);
   const now = new Date();
+  const todayKey = localDateKey(now);
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
   const normalizedAllowedSites=Array.isArray(allowedSites)?allowedSites.filter(Boolean):null;
@@ -803,25 +807,26 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
-  const trendEndDate = dashboardDate ? new Date(`${dashboardDate}T12:00:00`) : new Date();
-  const trendDateKeys = Array.from({ length: breakdownTrendDays }, (_, index) => {
-    const date = new Date(trendEndDate);
-    date.setDate(date.getDate() - (breakdownTrendDays - index - 1));
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  });
-  const trendRangeRequests = locationBreakdowns.filter((record) => {
+  const trendRequests = activeTrendSite === "all" ? locationBreakdowns : locationBreakdowns.filter((record) => recordBelongsToSite(record, activeTrendSite));
+  const breakdownDateCounts = trendRequests.reduce((counts, record) => {
     const date = dashboardRecordDate(record);
-    return date >= trendDateKeys[0] && date <= trendDateKeys[trendDateKeys.length - 1];
-  });
-  const trendRequests = activeTrendSite === "all" ? trendRangeRequests : trendRangeRequests.filter((record) => recordBelongsToSite(record, activeTrendSite));
-  const breakdownTrend = trendDateKeys.map((date) => ({ date, count: trendRequests.filter((record) => dashboardRecordDate(record) === date).length }));
+    if (date) counts[date] = (counts[date] || 0) + 1;
+    return counts;
+  }, {});
+  const breakdownTrendAnchorKey = breakdownTrendAnchor || dashboardDate || todayKey;
+  const breakdownTrend = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: breakdownTrendView });
   const maxBreakdownTrend = Math.max(1, ...breakdownTrend.map((day) => day.count));
-  const breakdownTrendTotal = trendRequests.length;
+  const actualTrendDays = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "past" });
+  const forecastTrendDays = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "upcoming" });
+  const breakdownTrendTotal = actualTrendDays.reduce((total, day) => total + day.count, 0);
+  const breakdownForecastTotal = forecastTrendDays.reduce((total, day) => total + day.count, 0);
   const breakdownTrendAverage = breakdownTrendDays ? (breakdownTrendTotal / breakdownTrendDays).toFixed(1) : "0.0";
-  const breakdownTrendPeak = breakdownTrend.reduce((peak, day) => day.count > peak.count ? day : peak, { date: trendDateKeys[0], count: 0 });
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
   const roadStatusTotal = kpis.onRoad + kpis.offRoad + kpis.idle;
   const roadStatusShare = (value) => roadStatusTotal ? (value / roadStatusTotal) * 100 : 0;
+  const utilizationPercent = kpis.total ? Math.round((kpis.onRoad / kpis.total) * 100) : 0;
+  const availableFleet = kpis.onRoad + kpis.idle;
+  const availabilityPercent = kpis.total ? Math.round((availableFleet / kpis.total) * 100) : 0;
   const repairTypeBreakdown = [...new Map(
     repairTypeRecords
       .map((record) => String(record.repairType || "").trim())
@@ -892,7 +897,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
   const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
-  const localDateKey = (value) => `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   const requestEventDate = (record, event) => event === "opened"
     ? dateKey(record.start) || dateKey(record.startedAt) || dateKey(record.createdAt)
     : event === "closed" ? dateKey(record.closedAt) : dateKey(record.verifiedAt);
@@ -1157,10 +1161,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </>}
       </div></Modal>}
       <section className="mine-panel mine-breakdown-trend">
-        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Site-wise breakdown volume across the selected period</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
+        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend & forecast</h2><p>Recorded history and weekday-weighted upcoming estimates</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-view" role="group" aria-label="Breakdown trend view">{[["past", "Past"], ["both", "Both"], ["upcoming", "Upcoming"]].map(([value, label]) => <button type="button" key={value} className={breakdownTrendView === value ? "active" : ""} onClick={() => setBreakdownTrendView(value)}>{label}</button>)}</div><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
         <div className="mine-breakdown-trend-body">
-          <div className="mine-trend-summary"><article><span>Total breakdowns</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendDays}-day period</small></article><article><span>Daily average</span><strong>{breakdownTrendAverage}</strong><small>Breakdowns per day</small></article><article><span>Peak day</span><strong>{breakdownTrendPeak.count.toLocaleString()}</strong><small>{new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${breakdownTrendPeak.date}T12:00:00`))}</small></article></div>
-          <div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day breakdown chart`}>{breakdownTrend.map((day, index) => <div className="mine-trend-day" key={day.date} title={`${day.date}: ${day.count} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div>
+          <div className="mine-trend-summary"><article><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>Past {breakdownTrendDays} days</small></article><article><span>Forecast</span><strong>{breakdownForecastTotal.toLocaleString()}</strong><small>Next {breakdownTrendDays} days</small></article><article><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
+          <section className="mine-trend-visual"><div className="mine-trend-legend"><span><i className="actual" />Actual</span><span><i className="forecast" />Forecast</span><b>Selected day: {new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${breakdownTrendAnchorKey}T12:00:00`))}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day actual and forecast breakdown chart`}>{breakdownTrend.map((day, index) => <div className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div></section>
+          <aside className="mine-performance-gauges" aria-label="Overall fleet performance gauges">{[
+            { label: "Overall Utilization", value: utilizationPercent, count: kpis.onRoad, note: "On road / total fleet", color: "#315fd4" },
+            { label: "Overall Availability", value: availabilityPercent, count: availableFleet, note: "On road + idle / total fleet", color: "#26956f" },
+          ].map((gauge) => <article key={gauge.label} style={{ "--gauge-angle": `${gauge.value * 2.7}deg`, "--gauge-color": gauge.color }}><span>{gauge.label}</span><div className="mine-radial-gauge"><strong>{gauge.value}%</strong><small>{gauge.count}/{kpis.total}</small></div><p>{gauge.note}</p></article>)}</aside>
         </div>
       </section>
     </div>
