@@ -22,3 +22,24 @@ test("mobile request forms enforce chassis, search, duplicate confirmation, and 
   assert.match(source, /r\.equipmentGroup \|\| r\.equipment/);
   assert.match(server, /duplicate:true/);
 });
+
+test("the maintenance request form shows read-only make and model fetched from Equipment Master", async () => {
+  const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+
+  for (const field of ["make", "model"]) {
+    const label = field[0].toUpperCase() + field.slice(1);
+    // \s* rather than \n: main.jsx is stored with CRLF line endings.
+    const block = source.match(new RegExp(`<label>\\s*${label}\\s*<input[^>]*>`));
+    assert.ok(block, `expected a ${label} field in the request form`);
+    assert.match(block[0], new RegExp(`value=\\{equipmentDetails\\.${field}\\}`));
+    // Auto-filled from the selected equipment, never typed by the requester.
+    assert.match(block[0], /readOnly/);
+    // No name attribute keeps it out of the submitted FormData, like Chassis number.
+    assert.doesNotMatch(block[0], /\sname=/);
+    assert.match(block[0], /Not recorded in Equipment Master/);
+  }
+
+  // Make and model are informational: unlike chassis they must not block submission.
+  assert.doesNotMatch(source, /Make is not available\. Contact the admin team/);
+  assert.doesNotMatch(source, /Model is not available\. Contact the admin team/);
+});

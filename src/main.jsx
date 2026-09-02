@@ -3713,6 +3713,14 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             {v && !equipmentDetails.chassis && <small>Contact the admin team to update the chassis number before creating a request.</small>}
           </label>
           <label>
+            Make
+            <input value={equipmentDetails.make} readOnly placeholder={v ? "Not recorded in Equipment Master" : "Select equipment to fetch make"} />
+          </label>
+          <label>
+            Model
+            <input value={equipmentDetails.model} readOnly placeholder={v ? "Not recorded in Equipment Master" : "Select equipment to fetch model"} />
+          </label>
+          <label>
             Driver / operator name
             <input
               name="driverName"

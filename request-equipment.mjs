@@ -31,6 +31,8 @@ export function requestEquipmentDetails(record = {}) {
     door,
     reg,
     chassis: text(record.chassisNo) || text(record.chassis),
+    make: text(record.make),
+    model: text(record.model) || text(record.modelNo),
     site: text(record.currentLocation) || text(record.location),
   };
 }
