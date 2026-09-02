@@ -899,7 +899,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
   const requestEventDate = (record, event) => event === "opened"
     ? dateKey(record.start) || dateKey(record.startedAt) || dateKey(record.createdAt)
-    : event === "closed" ? dateKey(record.closedAt) : dateKey(record.verifiedAt);
+    : event === "closed" ? dateKey(record.closedAt)
+      : event === "verified" ? dateKey(record.verifiedAt)
+        : dateKey(record.closedAt) || dateKey(record.start);
   const requestTrendEndKey = requestTrendTo || dashboardDate || localDateKey(now);
   const requestTrendEarliest = new Date(`${requestTrendEndKey}T12:00:00`);
   requestTrendEarliest.setDate(requestTrendEarliest.getDate() - 365);
@@ -914,16 +916,18 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   }
   const requestLifecycleRows = {
     opened: locationBreakdowns.filter((record) => requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
-    closed: locationBreakdowns.filter((record) => requestEventDate(record, "closed") >= safeTrendStartKey && requestEventDate(record, "closed") <= requestTrendEndKey),
+    closed: locationBreakdowns.filter((record) => !["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "closed") >= safeTrendStartKey && requestEventDate(record, "closed") <= requestTrendEndKey),
     verified: locationBreakdowns.filter((record) => requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
+    idle: locationBreakdowns.filter((record) => ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
   };
   const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
     date,
     opened: requestLifecycleRows.opened.filter((record) => requestEventDate(record, "opened") === date).length,
     closed: requestLifecycleRows.closed.filter((record) => requestEventDate(record, "closed") === date).length,
     verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
+    idle: requestLifecycleRows.idle.filter((record) => requestEventDate(record, "idle") === date).length,
   }));
-  const requestLifecycleMaximum = Math.max(1, ...requestLifecycleTrend.flatMap((day) => [day.opened, day.closed, day.verified]));
+  const requestLifecycleMaximum = Math.max(1, ...requestLifecycleTrend.flatMap((day) => [day.opened, day.closed, day.verified, day.idle]));
   const requestLifecycleRangeLabel = `${new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${safeTrendStartKey}T12:00:00`))} - ${new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${requestTrendEndKey}T12:00:00`))}`;
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
@@ -968,7 +972,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   const assetDrilldownRows = rowsForAssetDrilldown(assetDrilldown);
   const siteFirstAssetDrilldown = ["all", "equipment", "vehicle", "road-availability", "onroad", "offroad", "idle", "unknown"].includes(assetDrilldown);
-  const repairTypeSiteDrilldown = assetDrilldown.startsWith("repair:");
+  const repairTypeSiteDrilldown = assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("event:");
   const repairTypeRegionBreakdown = availableRegions
     .filter((region) => !selectedRegion || region.code === selectedRegion.code)
     .map((region) => {
@@ -1008,7 +1012,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const assetGroupBreakdown = summarizeEquipment(assetCategoryRows);
   const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
-  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : "Verified requests";
+  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
@@ -1116,7 +1120,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </>}
           </div>
         </article>
-        <article className="mine-panel mine-request-lifecycle" aria-label="Opened, closed and verified request trend">
+        <article className="mine-panel mine-request-lifecycle" aria-label="Opened, closed, verified and idle request trend">
           <header>
             <div><span className="mine-eyebrow">Workflow throughput</span><h2>Request Lifecycle</h2><p>{requestLifecycleRangeLabel}</p></div>
             <div className="mine-request-lifecycle-controls">
@@ -1126,14 +1130,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </header>
           <div className="mine-request-lifecycle-summary">
-            {[{ key: "opened", label: "Opened", note: "New requests" }, { key: "closed", label: "Closed", note: "Maintenance completed" }, { key: "verified", label: "Verified", note: "MIS verified" }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{requestLifecycleRows[item.key].length.toLocaleString()}</strong></button>)}
+            {[{ key: "opened", label: "Opened", note: "New requests" }, { key: "closed", label: "Closed", note: "Maintenance completed" }, { key: "verified", label: "Verified", note: "MIS verified" }, { key: "idle", label: "Idle Vehicles", note: "Available, not working" }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{requestLifecycleRows[item.key].length.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
             <div className="mine-request-chart-grid" aria-hidden="true"><i /><i /><i /><i /></div>
             <div className="mine-request-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, requestLifecycleTrend.length)}, minmax(28px, 1fr))`, minWidth: `${Math.max(100, requestLifecycleTrend.length * 34)}px` }}>
               {requestLifecycleTrend.map((day, index) => <div className="mine-request-chart-day" key={day.date}>
                 <span>
-                  {(["opened", "closed", "verified"]).map((event) => <button type="button" key={event} className={event} disabled={!day[event]} style={{ height: `${day[event] ? Math.max(7, (day[event] / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${day.date}: ${day[event]} ${event} requests`} title={`${day.date}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
+                  {(["opened", "closed", "verified", "idle"]).map((event) => <button type="button" key={event} className={event} disabled={!day[event]} style={{ height: `${day[event] ? Math.max(7, (day[event] / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${day.date}: ${day[event]} ${event} requests`} title={`${day.date}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
                 </span>
                 <small>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small>
               </div>)}

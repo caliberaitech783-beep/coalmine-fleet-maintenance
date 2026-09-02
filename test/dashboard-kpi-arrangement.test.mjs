@@ -15,9 +15,12 @@ test("removed KPI strip no longer leaves arrangement controls", () => {
 test("request lifecycle counts each workflow timestamp separately", () => {
   assert.match(client, /requestEventDate = \(record, event\)/);
   assert.match(client, /dateKey\(record\.start\).*dateKey\(record\.startedAt\).*dateKey\(record\.createdAt\)/);
-  assert.match(client, /event === "closed" \? dateKey\(record\.closedAt\) : dateKey\(record\.verifiedAt\)/);
+  assert.match(client, /event === "closed" \? dateKey\(record\.closedAt\)/);
+  assert.match(client, /event === "verified" \? dateKey\(record\.verifiedAt\)/);
   assert.match(client, /requestLifecycleRows\.opened/);
   assert.match(client, /requestLifecycleRows\.closed/);
   assert.match(client, /requestLifecycleRows\.verified/);
+  assert.match(client, /requestLifecycleRows\.idle/);
+  assert.match(client, /repairTypeSiteDrilldown = assetDrilldown\.startsWith\("repair:"\) \|\| assetDrilldown\.startsWith\("event:"\)/);
   assert.match(css, /\.mine-request-lifecycle-chart/);
 });
