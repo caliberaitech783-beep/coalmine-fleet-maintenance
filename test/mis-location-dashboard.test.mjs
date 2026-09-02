@@ -31,5 +31,5 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(manager,/detailRows=queueTab==="history"\?historyRows:activeRows/);
   assert.match(manager,/showTurnaroundTime=\{activeManagerRole === "MIS Manager"\}/);
   assert.match(source,/showTurnaroundTime \? "Turn around time \(TAT\)" : "Downtime"/);
-  assert.match(source,/isMis[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} showTurnaroundTime/);
+  assert.match(source,/isMis[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} showMakeModel showTurnaroundTime/);
 });

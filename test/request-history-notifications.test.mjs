@@ -10,7 +10,7 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/showReason \? \[\["complaint", "Reason"\]\]/);
   assert.match(source,/\["status", "Status"\]/);
   assert.match(source,/Closed history/);
-  assert.match(source,/activeRequests=requests\.filter[\s\S]*!=="closed"/);
+  assert.match(source,/activeRequests=requestRows\.filter[\s\S]*!=="closed"/);
   assert.match(source,/historyRows=isMis\?closedRequests/);
   assert.match(source,/showReason && <th>Reason<\/th>/);
   assert.match(source,/showReason && <td>\{row\.complaint \|\| "—"\}<\/td>/);
@@ -20,12 +20,12 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/showClosedBy && <td>\{row\.closedBy \|\| "—"\}<\/td>/);
   assert.match(source,/showVerifiedBy && <th>Verified by<\/th>/);
   assert.match(source,/showVerifiedBy && <td>\{row\.verifiedBy \|\| "—"\}<\/td>/);
-  assert.match(source,/rows=\{activeRequests\} showReason showCreatedBy showBreakdownDays/);
-  assert.match(source,/rows=\{historyRows\} showReason showCreatedBy showClosedBy showBreakdownDays/);
+  assert.match(source,/rows=\{activeRequests\} showMakeModel showReason showCreatedBy showBreakdownDays/);
+  assert.match(source,/rows=\{historyRows\} showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays/);
   assert.match(mobileStyles,/\.normal \.table \.mobile-breakdown-table th,[\s\S]*display: table-cell/);
-  assert.match(source,/rows=\{activeRequests\} showReason showCreatedBy showComplaintAudio/);
+  assert.match(source,/rows=\{activeRequests\} showMakeModel showReason showCreatedBy showComplaintAudio/);
   assert.match(source,/rows=\{activeRequests\.filter\(\(row\) => !row\.verifiedAt[\s\S]*showCreatedBy showComplaintAudio showMeterData showActions/);
-  assert.match(source,/rows=\{visibleRows\} showReason showClosedBy showTurnaroundTime/);
+  assert.match(source,/rows=\{visibleRows\} showMakeModel showReason showClosedBy showTurnaroundTime/);
   assert.match(source,/showClosedBy showVerifiedBy=\{isMis\} showTripCard=\{isMis\}/);
   assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showVerifiedBy=\{isMis\}/);
   assert.match(source,/showReason=\{activeManagerRole === "Production Manager"\} showClosedBy=\{queueTab==="history"\}/);

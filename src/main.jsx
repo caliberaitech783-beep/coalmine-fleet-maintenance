@@ -20,6 +20,7 @@ import {
   requestEquipmentMeterType,
   requestEquipmentRecordsForGroup,
   requestMeterTypeForRequest,
+  requestWithEquipmentMasterDetails,
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
@@ -703,7 +704,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
   const [equipmentRecords] = useMasterRecords("Equipment master");
   const siteEquipment = managerLocation?equipmentRecords.filter((record) => recordBelongsToSite(record, managerLocation)):equipmentRecords;
-  const openRequests = requests.filter((request) => String(request.status || "").toLowerCase() !== "closed");
+  const requestRows = requests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
+  const openRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() !== "closed");
   const offRoadKeys = new Set(openRequests.map((request) => String(request.chassis || request.door || request.equipment || "").trim().toLowerCase()).filter(Boolean));
   const offRoad = Math.min(siteEquipment.length, offRoadKeys.size);
   const idleEquipment=siteEquipment.filter((record)=>equipmentRoadStatus(record)==="idle"&&!offRoadKeys.has(String(record.chassisNo||record.manufacturerSerialNo||record.door||record.equipmentName||"").trim().toLowerCase()));
@@ -714,8 +716,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
   const idleTypes=typeSummary(idleEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
   const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
-  const closedRequests = requests.filter((request) => String(request.status || "").toLowerCase() === "closed");
-  const verifiedRequests = requests.filter((request) => Boolean(request.verifiedAt));
+  const closedRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() === "closed");
+  const verifiedRequests = requestRows.filter((request) => Boolean(request.verifiedAt));
   const cards = activeManagerRole === "Production Manager"
     ? [
         ["Total equipment", fleet.total, "Registered fleet", "all", totalTypes],
@@ -736,7 +738,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
   const pendingVerification=closedRequests.filter((request)=>!request.verifiedAt);
-  const idealRows=activeManagerRole==="Maintenance Manager"?requests.filter((request)=>["idle","ideal"].includes(String(request.status||"").toLowerCase())):[];
+  const idealRows=activeManagerRole==="Maintenance Manager"?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").toLowerCase())):[];
   const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
   const visibleActiveRows=activeManagerRole==="Maintenance Manager"?activeRows.filter((request)=>!["idle","ideal"].includes(String(request.status||"").toLowerCase())):activeRows;
   const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
@@ -755,7 +757,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
       <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{activeManagerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{activeManagerRole==="Maintenance Manager"&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false, layoutUser = "user", layoutToken = "" }) {
@@ -5470,8 +5472,9 @@ function WhatsAppAlertHistory() {
 const OriginalBreakdown = Breakdown;
 Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
   const [manualRecords, onAdd, loaded, , , onDeleteAll] = useMasterRecords("Breakdown master");
+  const [equipmentRecords] = useMasterRecords("Equipment master");
   if (!loaded) return <MasterLoader name="Breakdown master" />;
-  const rows = [...requests, ...manualRecords];
+  const rows = [...requests, ...manualRecords].map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
   const count = (status) => rows.filter((record) => record.status === status).length;
   return (
     <section className="panel table pagepanel">
@@ -5495,7 +5498,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
           </button>
         ))}
       </div>
-      <BreakdownTable rows={rows} stickyHeader showAudio />
+      <BreakdownTable rows={rows} stickyHeader showAudio showMakeModel />
     </section>
   );
 };
@@ -5969,7 +5972,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, showMeterData = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, showMeterData = false, showMakeModel = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
@@ -5982,6 +5985,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     {key: "ref", label: "Job reference", value: (row) => row.ref},
     {key: "equipmentGroup", label: "Equipment group", value: (row) => row.equipmentGroup || row.equipment},
     {key: "door", label: "Door no.", value: (row) => row.door},
+    ...(showMakeModel ? [{key: "make", label: "Make", value: (row) => row.make}, {key: "model", label: "Model", value: (row) => row.model}] : []),
     {key: "site", label: "Site location", value: (row) => row.site},
     {key: "status", label: "Status", value: (row) => row.status},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
@@ -6001,7 +6005,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudio ? "Available" : "Not available"}] : []),
   ];
   const filteredRows = rows.filter((row) => {
-    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy);
+    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, row.status, row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy);
     return matchesText && (!statusFilter || String(row.status || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows);
@@ -6028,7 +6032,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="scroll mobile-workflow-table">
       <table className="workflow-table">
         <thead><tr>
-          {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{workflowHeader("site", "Site location")}
+          {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showClosedBy && workflowHeader("closedBy", "Closed by")}{workflowHeader("start", "Started")}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && <th>Actions</th>}
         </tr></thead>
         <tbody>
@@ -6039,6 +6043,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
               <td><b>{row.ref}</b></td>
               <td>{row.equipmentGroup || row.equipment || "—"}</td>
               <td>{row.door || "—"}</td>
+              {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
               <td><Status>{row.status || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
@@ -6063,7 +6068,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
                 {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
               </td>}
             </tr>;
-          }) : <tr><td colSpan={8 + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showClosedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={8 + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showClosedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </table>
     </div></>
@@ -6526,11 +6531,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
   const verifyRequest = async (payload) => { try { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); } catch (error) { alert(error.message); } };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
-  const activeRequests=requests.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
-  const closedRequests=requests.filter((row)=>String(row.status||"").toLowerCase()==="closed");
+  const requestRows=requests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
+  const activeRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
+  const closedRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="closed");
   const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt) : activeRequests;
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):closedRequests;
-  const idleRows=requests.filter((row)=>String(row.status||"").toLowerCase()==="idle");
+  const idleRows=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder requests={requests} role={mobileRole} /><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
@@ -6548,13 +6554,13 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
       </div>
       </div>
-      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReason showCreatedBy showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showReason showCreatedBy showComplaintAudio showMeterData showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showCreatedBy showComplaintAudio showMeterData showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
-      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showReason showClosedBy showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
-      {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showReason={isMaintenance || isMis} showClosedBy showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
-      {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showReason showCreatedBy showTurnaroundTime /></section></>}
+      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showMakeModel showCreatedBy showComplaintAudio showMeterData showActions onRemark={setRemarking} onClose={setClosing} /></section></>}
+      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
+      {isMis && tab === "verify" && <><h3 className="sectiontitle">Verify closed requests</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showMakeModel showReason={isMaintenance || isMis} showClosedBy showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}

@@ -11,8 +11,12 @@ test("production, maintenance, and MIS request tables use header filter popovers
   assert.match(workflowTable, /const workflowHeader = \(key, label\) => <FilterableHeader/);
   assert.match(workflowTable, /workflowHeader\("breakdownDays", "Days of breakdown"\)/);
   assert.match(workflowTable, /workflowHeader\("dailyRemarks", "Daily remarks"\)/);
-  assert.match(source, /isProduction && tab === "requests"[\s\S]*<BreakdownTable rows=\{activeRequests\}/);
-  assert.match(source, /isMaintenance && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{activeRequests\}/);
-  assert.match(source, /isMis && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{visibleRows\}/);
+  assert.match(workflowTable, /showMakeModel && <>\{workflowHeader\("make", "Make"\)\}\{workflowHeader\("model", "Model"\)\}<\/>/);
+  assert.match(workflowTable, /showMakeModel && <><td>\{row\.make \|\| "—"\}<\/td><td>\{row\.model \|\| "—"\}<\/td><\/>/);
+  assert.match(source, /isProduction && tab === "requests"[\s\S]*<BreakdownTable rows=\{activeRequests\} showMakeModel/);
+  assert.match(source, /isMaintenance && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{activeRequests\} showMakeModel/);
+  assert.match(source, /isMaintenance && tab === "close"[\s\S]*showMakeModel/);
+  assert.match(source, /isMis && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} showMakeModel/);
+  assert.match(source, /tab === "idle"[\s\S]*<MobileWorkflowTable rows=\{idleRows\} showMakeModel/);
   assert.match(source, /tab === "history"[\s\S]*<BreakdownTable rows=\{historyRows\}[\s\S]*<MobileWorkflowTable rows=\{historyRows\}/);
 });

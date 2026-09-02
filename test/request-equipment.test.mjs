@@ -7,6 +7,7 @@ import {
   requestEquipmentGroupOptionLabel,
   requestEquipmentGroupOptions,
   requestEquipmentRecordsForGroup,
+  requestWithEquipmentMasterDetails,
   requestVehicleOptionLabel,
 } from "../request-equipment.mjs";
 
@@ -78,6 +79,17 @@ test("request details expose the equipment make and model for the request form",
   // Equipment without make/model must not break the lookup.
   assert.equal(requestEquipmentDetails({ equipmentName: "Loader" }).make, "");
   assert.equal(requestEquipmentDetails({ equipmentName: "Loader" }).model, "");
+});
+
+test("request rows inherit make and model from their Equipment Master record", () => {
+  const request = { ref: "JOB-1", chassis: " sn-99 ", make: "Legacy", model: "Old" };
+  const enriched = requestWithEquipmentMasterDetails(request, [
+    { manufacturerSerialNo: "SN-99", make: "Caterpillar", modelNo: "777D" },
+  ]);
+  assert.equal(enriched.make, "Caterpillar");
+  assert.equal(enriched.model, "777D");
+  assert.equal(enriched.ref, "JOB-1");
+  assert.deepEqual(requestWithEquipmentMasterDetails({ ref: "JOB-2", make: "Tata", model: "Signa" }, []), { ref: "JOB-2", make: "Tata", model: "Signa" });
 });
 
 test("equipment option labels include context that distinguishes duplicate names", () => {

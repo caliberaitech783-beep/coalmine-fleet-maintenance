@@ -37,6 +37,24 @@ export function requestEquipmentDetails(record = {}) {
   };
 }
 
+export function requestWithEquipmentMasterDetails(request = {}, records = []) {
+  const requestKeys = [request.chassis, request.door, request.reg, request.equipment]
+    .map((value) => text(value).toLowerCase())
+    .filter(Boolean);
+  const equipment = records.find((record) => {
+    const details = requestEquipmentDetails(record);
+    return [details.chassis, details.door, details.reg, details.equipment, record.manufacturerSerialNo]
+      .map((value) => text(value).toLowerCase())
+      .some((value) => value && requestKeys.includes(value));
+  });
+  const details = requestEquipmentDetails(equipment || {});
+  return {
+    ...request,
+    make: details.make || text(request.make),
+    model: details.model || text(request.model),
+  };
+}
+
 export function requestEquipmentMeterType(record = {}) {
   return ["vehicle", "vehicles"].includes(text(record.category).toLowerCase()) ? "KMR" : "HMR";
 }

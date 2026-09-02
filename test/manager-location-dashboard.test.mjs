@@ -18,6 +18,8 @@ test("manager requests, equipment, and dashboard metrics are scoped to selected 
   assert.match(source,/\["Idle", fleet\.idle/);
   assert.doesNotMatch(source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard")),/Active breakdowns/);
   assert.match(source,/<BreakdownTable rows=\{visibleDetailRows\}[\s\S]*stableToolbar/);
+  assert.match(source,/requestWithEquipmentMasterDetails\(request, equipmentRecords\)/);
+  assert.match(source,/<BreakdownTable rows=\{visibleDetailRows\} showMakeModel/);
   assert.match(styles,/\.manager-table-search-toolbar\{min-height:66px;flex-wrap:nowrap\}/);
   assert.match(styles,/\.manager-table-search-toolbar \.table-parameter-filter-trigger\{min-width:108px;justify-content:center\}/);
   assert.match(source,/formatTwelveHourDateTime\(r\.start\)/);
