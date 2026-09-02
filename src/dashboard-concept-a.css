@@ -530,7 +530,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-open-requests-values button { display:flex; min-width:0; min-height:36px; align-items:center; justify-content:space-between; gap:5px; border:1px solid transparent; border-radius:6px; cursor:pointer; padding:5px 7px; }
 .mine-open-requests-values button:hover,.mine-open-requests-values button:focus-visible { outline:0; filter:brightness(.97); }
 .mine-open-requests-values button.open { border-color:#df6d64; background:#df6d6417; color:#b93e38; }
-.mine-open-requests-values button.progress { border-color:#d5a62d; background:#f2c94c24; color:#936c00; }
+.mine-open-requests-values button.progress { border-color:#d5a62d; color:#936c00; }
 .mine-open-requests-values button.idle { border-color:#8b6abd; background:#8b6abd18; color:#704da4; }
 .mine-open-requests-values span { min-width:0; overflow:hidden; font-size:7px; font-weight:850; text-overflow:ellipsis; white-space:nowrap; }
 .mine-open-requests-values strong { font:900 12px/1 Manrope; }
