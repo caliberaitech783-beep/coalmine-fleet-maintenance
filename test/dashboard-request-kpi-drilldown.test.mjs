@@ -9,7 +9,7 @@ test("all operational KPI cards open category, group, and full-detail drilldowns
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
   assert.match(source, /openAssetDrilldown\(`region:\$\{region\.code\}`\)/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
-  assert.match(source, /drilldownKey: `group:\$\{label\}`/);
+  assert.match(source, /key: `group:\$\{group\.label\}`/);
   assert.match(source, /openAssetDrilldown\(`status:\$\{item\.key\}`\)/);
   assert.match(source, /Step 1 · Select equipment category/);
   assert.match(source, /Step 2 · Select equipment group/);
