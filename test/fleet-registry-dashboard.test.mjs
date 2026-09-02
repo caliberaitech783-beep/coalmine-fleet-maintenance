@@ -6,7 +6,7 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 
 test("fleet registry dashboard connects category, group, region and site-wise drilldowns", () => {
-  assert.match(source, /className="mine-panel mine-fleet-command mine-span-2 mine-custom-widget"/);
+  assert.match(source, /className="mine-panel mine-fleet-command mine-span-2"/);
   assert.match(source, /Total equipment intelligence/);
   assert.match(source, /aria-label="Interactive asset category pie chart"/);
   assert.match(source, /aria-label="Interactive equipment groups pie chart"/);
