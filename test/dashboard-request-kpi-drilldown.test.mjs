@@ -25,13 +25,17 @@ test("request KPI drilldowns merge job fields with Equipment Master details", ()
   assert.match(source, /<Status>\{record\.requestStatus\}<\/Status>/);
 });
 
-test("repair type graph drills down by site before request details", () => {
+test("repair type graph drills down by region and site before request details", () => {
   assert.match(source, /const repairTypeSiteDrilldown = assetDrilldown\.startsWith\("repair:"\)/);
-  assert.match(source, /const repairTypeSiteBreakdown = trendAvailableSites\.map/);
+  assert.match(source, /const repairTypeRegionBreakdown = availableRegions/);
+  assert.match(source, /const selectedRepairTypeRegion = repairTypeRegionBreakdown\.find/);
+  assert.match(source, /Step 1 · Select region/);
+  assert.match(source, /setAssetDrilldownRegion\(region\.code\)/);
+  assert.match(source, /Step 2 · Select \{selectedRepairTypeRegion\.code\} site/);
+  assert.match(source, /const repairTypeSiteBreakdown = \(selectedRepairTypeRegion\?\.sites \|\| \[\]\)\.map/);
   assert.match(source, /assetDrilldownRows\.filter\(\(record\) => recordBelongsToSite\(record, site\)\)/);
-  assert.match(source, /Step 1 · Select site/);
   assert.match(source, /setAssetDrilldownSite\(site\)/);
-  assert.match(source, /Step 2 · \{assetDrilldownSite\} request details/);
+  assert.match(source, /Step 3 · \{assetDrilldownSite\} request details/);
   assert.match(source, /repairTypeSiteRows\.map/);
-  assert.match(source, /aria-label="Back to repair sites"/);
+  assert.match(source, /aria-label="Back to repair regions"/);
 });
