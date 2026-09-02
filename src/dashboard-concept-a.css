@@ -640,6 +640,11 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-dashboard-feature-row .mine-fleet-chart-regions { min-width: 0; }
 .mine-dashboard-feature-row .mine-fleet-chart-regions > section { min-width: 250px; }
 .mine-dashboard-feature-row .mine-repair-type-bars { align-content: center; min-height: 205px; }
+.mine-dashboard-feature-row > .mine-feature-road-availability {
+  align-self: stretch;
+  min-height: 100%;
+  margin: 0;
+}
 .mine-repair-type-chart > header > strong { color: var(--mine-text); font: 850 12px Manrope; white-space: nowrap; }
 .mine-repair-type-bars { display: grid; gap: 7px; padding: 12px 14px 14px; }
 .mine-repair-type-bars button {

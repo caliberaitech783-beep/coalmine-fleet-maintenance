@@ -19,17 +19,18 @@ test("repair types render as a responsive graph instead of KPI cards", () => {
   assert.match(css, /@media \(max-width: 500px\)[\s\S]*\.mine-repair-type-bars button\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\) auto/);
 });
 
-test("Total Fleet and Repair Type share the first dashboard row", () => {
+test("Total Fleet leads the dashboard and Maintenance Type shares a row with Road Availability", () => {
   assert.match(client, /className="mine-dashboard-feature-row"/);
   const featureRow = client.indexOf('className="mine-dashboard-feature-row"');
   const totalFleet = client.indexOf('className="mine-panel mine-fleet-region-chart"', featureRow);
   const repairType = client.indexOf('className="mine-panel mine-repair-type-chart"', featureRow);
+  const roadAvailability = client.indexOf('className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"', repairType);
   const compactKpis = client.indexOf('className="mine-primary-kpi-grid"', featureRow);
-  assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && compactKpis > repairType);
+  assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && roadAvailability > repairType && compactKpis > roadAvailability);
   assert.match(css, /\.mine-dashboard-feature-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
 });
 
-test("primary KPIs use one compact row with a graphical road-status block", () => {
+test("primary KPIs remain compact after Road Availability moves beside Maintenance Type", () => {
   assert.match(
     css,
     /\.mine-primary-kpi-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\);/,
@@ -39,7 +40,7 @@ test("primary KPIs use one compact row with a graphical road-status block", () =
     /@media \(max-width:\s*1000px\)[\s\S]*?\.mine-primary-kpi-grid\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/,
   );
   assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-assets"/);
-  assert.match(client, /className="mine-primary-kpi-card mine-road-status-graphic"/);
+  assert.match(client, /className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"/);
   assert.match(client, /className="mine-road-status-chart"/);
   assert.match(css, /\.mine-road-status-graphic\s*\{[\s\S]*?grid-column:\s*span 2;/);
   assert.match(client, /<b>Total Fleet<\/b>/);
