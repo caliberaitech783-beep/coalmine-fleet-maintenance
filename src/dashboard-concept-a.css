@@ -814,7 +814,8 @@ button.mine-primary-kpi-card:focus-visible,
   align-items: stretch;
 }
 .mine-dashboard-core > .mine-fleet-command { grid-column: auto; }
-.mine-fleet-command-head > button {
+.mine-fleet-command-actions { display: flex; align-items: center; gap: 8px; }
+.mine-fleet-command-head .mine-view-full-fleet {
   min-height: 30px;
   padding: 6px 9px !important;
   border: 1px solid #315fd433 !important;
@@ -823,6 +824,10 @@ button.mine-primary-kpi-card:focus-visible,
   color: #315fd4 !important;
   font-weight: 800;
 }
+.mine-intelligence-view-switch { display: inline-grid; grid-template-columns: repeat(2, auto); padding: 2px; border: 1px solid var(--mine-line); border-radius: 6px; background: #f4f6f9; }
+.mine-intelligence-view-switch button { display: inline-flex; min-height: 25px; align-items: center; gap: 4px; padding: 4px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--mine-muted); font: 800 8px Manrope; cursor: pointer; }
+.mine-intelligence-view-switch button.active { background: var(--mine-panel); box-shadow: 0 1px 4px #522e901f; color: var(--brand-purple); }
+.mine-intelligence-view-switch svg { width: 12px; height: 12px; }
 .mine-fleet-command-body {
   display: grid;
   grid-template-columns: minmax(190px, .72fr) minmax(260px, 1.12fr) minmax(300px, 1.3fr);
@@ -833,6 +838,31 @@ button.mine-primary-kpi-card:focus-visible,
   padding: 12px;
 }
 .mine-fleet-command-body > section + section { border-left: 1px solid var(--mine-line); }
+.mine-fleet-command-body.combined { grid-template-columns: minmax(480px, 1.84fr) minmax(300px, 1.3fr); }
+.mine-fleet-combined { min-width: 0; }
+.mine-hierarchy-layout { display: grid; grid-template-columns: minmax(190px, .72fr) minmax(280px, 1.28fr); align-items: center; gap: 18px; min-height: 230px; }
+.mine-hierarchy-chart-wrap { position: relative; display: grid; place-items: center; width: min(225px, 92%); aspect-ratio: 1; margin: auto; filter: drop-shadow(0 8px 13px #522e9024); }
+.mine-hierarchy-chart { width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
+.mine-hierarchy-track { stroke: #e9edf3; }
+.mine-hierarchy-track.inner { stroke: #f0f2f6; }
+.mine-hierarchy-slice { cursor: pointer; transition: opacity .16s ease, stroke-width .16s ease, filter .16s ease; }
+.mine-hierarchy-chart:hover .mine-hierarchy-slice { opacity: .68; }
+.mine-hierarchy-chart .mine-hierarchy-slice:hover,.mine-hierarchy-chart .mine-hierarchy-slice:focus-visible { opacity: 1; filter: drop-shadow(0 0 2px currentColor); outline: 0; }
+.mine-hierarchy-chart .mine-hierarchy-slice.outer:hover,.mine-hierarchy-chart .mine-hierarchy-slice.outer:focus-visible { stroke-width: 5.3; }
+.mine-hierarchy-chart .mine-hierarchy-slice.inner:hover,.mine-hierarchy-chart .mine-hierarchy-slice.inner:focus-visible { stroke-width: 7; }
+.mine-hierarchy-details { display: grid; align-content: center; gap: 8px; min-width: 0; }
+.mine-hierarchy-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.mine-hierarchy-categories button,.mine-hierarchy-groups button { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-width: 0; border: 1px solid var(--mine-line); border-radius: 6px; background: transparent; color: var(--mine-text); text-align: left; cursor: pointer; }
+.mine-hierarchy-categories button { min-height: 52px; padding: 7px 9px; }
+.mine-hierarchy-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; max-height: 146px; overflow-y: auto; scrollbar-width: thin; }
+.mine-hierarchy-groups button { min-height: 43px; padding: 5px 7px; }
+.mine-hierarchy-categories button:hover,.mine-hierarchy-categories button:focus-visible,.mine-hierarchy-groups button:hover,.mine-hierarchy-groups button:focus-visible { border-color: #522e9066; background: #522e9008; outline: 0; }
+.mine-hierarchy-categories i,.mine-hierarchy-groups i { width: 8px; height: 8px; border-radius: 2px; }
+.mine-hierarchy-categories span,.mine-hierarchy-groups span { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.mine-hierarchy-categories b,.mine-hierarchy-groups b { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.mine-hierarchy-categories small,.mine-hierarchy-groups small { color: var(--mine-muted); font-size: 7px; }
+.mine-hierarchy-categories strong { font: 900 15px Manrope; }
+.mine-hierarchy-groups strong { font: 850 10px Manrope; }
 .mine-fleet-pie-panel { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; align-items: center; }
 .mine-pie-chart-wrap { position: relative; display: grid; place-items: center; width: min(150px, 72%); aspect-ratio: 1; margin: 0 auto 8px; filter: drop-shadow(0 8px 12px #1c355225); }
 .mine-pie-chart { width: 100%; height: 100%; overflow: visible; transform: rotate(-90deg); }
@@ -1031,7 +1061,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-dashboard-day .mine-fleet-site-grid button { color: #142943; }
 .mine-dashboard-night .mine-fleet-share,
 .mine-dashboard-night .mine-fleet-group-name > i { background: #273c40; }
-.mine-dashboard-night .mine-fleet-command-head > button { color: #8eb5ff !important; border-color: #8eb5ff44 !important; background: #8eb5ff0c !important; }
+.mine-dashboard-night .mine-fleet-command-head .mine-view-full-fleet { color: #8eb5ff !important; border-color: #8eb5ff44 !important; background: #8eb5ff0c !important; }
+.mine-dashboard-night .mine-intelligence-view-switch { background: #203338; }
 .mine-breakdown-trend {
   grid-column: 1 / -1;
   margin-top: 7px;
@@ -1207,6 +1238,8 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-counter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mine-dashboard-core { grid-template-columns: 1fr; }
   .mine-fleet-command-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mine-fleet-command-body.combined { grid-template-columns: 1fr; }
+  .mine-fleet-command-body.combined .mine-fleet-geography { grid-column: auto; }
   .mine-fleet-geography { grid-column: 1 / -1; border-top: 1px solid var(--mine-line); border-left: 0 !important; }
   .mine-fleet-region-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; }
   .mine-breakdown-trend-body { grid-template-columns: 150px minmax(0, 1fr); }
@@ -1242,6 +1275,10 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-overview-charts,
   .mine-dashboard-grid { grid-template-columns: 1fr; }
   .mine-fleet-command-body { grid-template-columns: 1fr; }
+  .mine-fleet-command-head { align-items: flex-start !important; flex-direction: column; }
+  .mine-fleet-command-actions { width: 100%; justify-content: space-between; }
+  .mine-hierarchy-layout { grid-template-columns: 1fr; }
+  .mine-hierarchy-chart-wrap { width: min(220px, 70vw); }
   .mine-fleet-command-body > section + section { border-top: 1px solid var(--mine-line); border-left: 0; }
   .mine-fleet-geography { grid-column: auto; }
   .mine-fleet-region-list { grid-template-columns: 1fr; }

@@ -14,6 +14,7 @@ test("fleet registry dashboard connects category, group, region and site-wise dr
   assert.match(source, /aria-label="Interactive equipment groups pie chart"/);
   assert.match(source, /assetCategoryPieSlices\.map/);
   assert.match(source, /fleetGroupPieSlices\.map/);
+  assert.match(source, /fleetHierarchySlices\.map/);
   assert.match(source, /openAssetDrilldown\(slice\.key\)/);
   assert.match(source, /fleetRegionInsights\.map/);
   assert.match(source, /region\.sites\.map/);
@@ -24,6 +25,18 @@ test("fleet registry dashboard connects category, group, region and site-wise dr
   assert.match(css, /\.mine-pie-slice\s*\{[\s\S]*cursor:\s*pointer/);
   assert.match(css, /\.mine-fleet-site-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,/);
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
+});
+
+test("equipment intelligence offers a remembered combined hierarchical chart and split view", () => {
+  assert.match(source, /nerveCenterFleetIntelligenceView/);
+  assert.match(source, /setFleetIntelligenceView\("combined"\)/);
+  assert.match(source, /setFleetIntelligenceView\("split"\)/);
+  assert.match(source, /Combined asset category and equipment group chart/);
+  assert.match(source, /className="mine-hierarchy-slice outer"/);
+  assert.match(source, /className="mine-hierarchy-slice inner"/);
+  assert.match(source, /openAssetDrilldown\(slice\.drilldownKey\)/);
+  assert.match(css, /\.mine-hierarchy-layout\s*\{[^}]*grid-template-columns:/);
+  assert.match(css, /\.mine-hierarchy-groups\s*\{[^}]*overflow-y:\s*auto/);
 });
 
 test("total fleet renders a region-grouped site count graph", () => {
