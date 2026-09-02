@@ -157,8 +157,9 @@ test("the AI feeder panel opens on login, counts down, and is reachable from the
   // Both shells carry the header entry.
   assert.equal(mainSource.match(/<AiFeeder\b/g)?.length, 2);
   assert.match(styles, /@keyframes ai-feeder-blink/);
-  // The countdown reads backwards: a ring that drains alongside the number.
-  assert.match(mainSource, /className="ai-feeder-countdown-value"/);
-  assert.match(mainSource, /strokeDasharray=/);
-  assert.match(styles, /\.ai-feeder-countdown-value\s*\{[^}]*transition:\s*stroke-dasharray 1s linear/s);
+  // The countdown is a clock-style chip whose fill drains as the seconds run out.
+  assert.match(mainSource, /className="ai-feeder-countdown-fill"/);
+  assert.match(mainSource, /00:\{String\(Math\.max\(0, seconds\)\)\.padStart\(2, "0"\)\}/);
+  assert.doesNotMatch(mainSource, /ai-feeder-countdown-value/);
+  assert.match(styles, /\.ai-feeder-countdown-fill\s*\{[^}]*transition:\s*width 1s linear/s);
 });
