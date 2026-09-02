@@ -946,7 +946,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     };
   });
   const rowsForAssetDrilldown = (key = "") => {
-    if (!key || key === "all") return visibleEquipment;
+    if (!key || key === "all" || key === "road-availability") return visibleEquipment;
     if (key === "equipment") return visibleEquipment.filter((record) => ["equipment","equipments"].includes(String(record.category || "").trim().toLowerCase()));
     if (key === "vehicle") return visibleEquipment.filter((record) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase()));
     if (["onroad","offroad","idle","unknown"].includes(key)) return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === key);
@@ -962,7 +962,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return [];
   };
   const assetDrilldownRows = rowsForAssetDrilldown(assetDrilldown);
-  const siteFirstAssetDrilldown = ["all", "equipment", "vehicle"].includes(assetDrilldown);
+  const siteFirstAssetDrilldown = ["all", "equipment", "vehicle", "road-availability", "onroad", "offroad", "idle", "unknown"].includes(assetDrilldown);
   const repairTypeSiteDrilldown = assetDrilldown.startsWith("repair:");
   const repairTypeRegionBreakdown = availableRegions
     .filter((region) => !selectedRegion || region.code === selectedRegion.code)
@@ -982,10 +982,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const repairTypeSiteCategoryRows = assetDrilldownCategory ? repairTypeSiteRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
   const repairTypeSiteGroupBreakdown = summarizeEquipment(repairTypeSiteCategoryRows);
   const repairTypeSiteGroupRows = assetDrilldownGroup ? repairTypeSiteCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
-  const assetDrilldownRegions = fleetRegionInsights;
+  const assetDrilldownRegions = fleetRegionInsights.map((region) => {
+    const sites = region.sites.map((site) => {
+      const records = assetDrilldownRows.filter((record) => recordBelongsToSite(record, site.name));
+      return { ...site, ...fleetAssetCounts(records) };
+    });
+    const records = assetDrilldownRows.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
+    return { ...region, sites, ...fleetAssetCounts(records) };
+  });
   const selectedAssetRegion = assetDrilldownRegions.find((region) => region.code === assetDrilldownRegion);
   const assetDrilldownSites = selectedAssetRegion?.sites || [];
-  const assetSiteRows = assetDrilldownSite ? visibleEquipment.filter((record) => recordBelongsToSite(record, assetDrilldownSite)) : [];
+  const assetSiteRows = assetDrilldownSite ? assetDrilldownRows.filter((record) => recordBelongsToSite(record, assetDrilldownSite)) : [];
   const assetSiteCategoryBreakdown = summarizeEquipment(assetSiteRows, equipmentCategoryLabel);
   const assetSiteCategoryRows = assetDrilldownCategory ? assetSiteRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
   const assetSiteGroupBreakdown = summarizeEquipment(assetSiteCategoryRows);
@@ -995,7 +1002,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const assetCategoryBreakdown = summarizeEquipment(assetDrilldownRows, equipmentCategoryLabel);
   const assetGroupBreakdown = summarizeEquipment(assetCategoryRows);
   const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:");
-  const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
+  const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
     setAssetDrilldownRegion("");
@@ -1053,11 +1060,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <article className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability">
           <header><div><span className="mine-eyebrow">Fleet status</span><h2>Road Availability</h2></div><strong>{roadStatusTotal.toLocaleString()} <small>Total fleet</small></strong></header>
           <div className="mine-road-availability-body">
-            <div className="mine-road-availability-summary"><strong>{kpis.availability}%</strong><span>Fleet available</span><small>{kpis.onRoad.toLocaleString()} of {roadStatusTotal.toLocaleString()} assets are on road</small></div>
-            <div className="mine-road-distribution" aria-label="Road availability distribution">
-              <div><i className="onroad" style={{ width: `${roadStatusShare(kpis.onRoad)}%` }} /><i className="offroad" style={{ width: `${roadStatusShare(kpis.offRoad)}%` }} /><i className="idle" style={{ width: `${roadStatusShare(kpis.idle)}%` }} /></div>
-              <span><b>0%</b><b>Fleet status distribution</b><b>100%</b></span>
-            </div>
+            <button type="button" className="mine-road-availability-overview" onClick={() => openAssetDrilldown("road-availability")} aria-label="Drill down Road Availability by region and site">
+              <span className="mine-road-availability-summary"><strong>{kpis.availability}%</strong><span>Fleet available</span><small>{kpis.onRoad.toLocaleString()} of {roadStatusTotal.toLocaleString()} assets are on road</small></span>
+              <span className="mine-road-distribution" aria-label="Road availability distribution">
+                <span><i className="onroad" style={{ width: `${roadStatusShare(kpis.onRoad)}%` }} /><i className="offroad" style={{ width: `${roadStatusShare(kpis.offRoad)}%` }} /><i className="idle" style={{ width: `${roadStatusShare(kpis.idle)}%` }} /></span>
+                <span><b>0%</b><b>Fleet status distribution</b><b>100%</b></span>
+              </span>
+            </button>
             <div className="mine-road-status-values">
               <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><b>On road</b><small>{roadStatusShare(kpis.onRoad).toFixed(1)}% available</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
               <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><b>Off road</b><small>{roadStatusShare(kpis.offRoad).toFixed(1)}% maintenance</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>

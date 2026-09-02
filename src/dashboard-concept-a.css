@@ -674,6 +674,8 @@ button.mine-primary-kpi-card:focus-visible,
   flex: 1;
   padding: 18px 16px;
 }
+.mine-road-availability-overview { display: grid; gap: 14px; width: 100%; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.mine-road-availability-overview:hover,.mine-road-availability-overview:focus-visible { outline: 2px solid #26956f38; outline-offset: 5px; }
 .mine-road-availability-summary { display: grid; grid-template-columns: auto 1fr; align-items: end; gap: 2px 10px; }
 .mine-road-availability-summary strong { grid-row: 1 / span 2; color: #238361; font: 900 38px/1 Manrope; }
 .mine-road-availability-summary span { color: var(--mine-text); font-size: 11px; font-weight: 850; text-transform: uppercase; }
@@ -695,13 +697,13 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-feature-road-availability .mine-road-status-values small { font-size: 8px; }
 .mine-feature-road-availability .mine-road-status-values strong { grid-column: 1 / -1; font-size: 20px; text-align: right; }
 .mine-road-distribution { padding: 0; }
-.mine-road-distribution > div { display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: #e8edf3; }
+.mine-road-distribution > span:first-child { display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: #e8edf3; }
 .mine-road-distribution i { display: block; min-width: 0; height: 100%; }
 .mine-road-distribution i.onroad { background: #34a77d; }
 .mine-road-distribution i.offroad { background: #df6d64; }
 .mine-road-distribution i.idle { background: #dda13d; }
-.mine-road-distribution > span { display: flex; justify-content: space-between; margin-top: 5px; color: var(--mine-muted); font-size: 7px; }
-.mine-road-distribution > span b:nth-child(2) { text-transform: uppercase; }
+.mine-road-distribution > span:last-child { display: flex; justify-content: space-between; margin-top: 5px; color: var(--mine-muted); font-size: 7px; }
+.mine-road-distribution > span:last-child b:nth-child(2) { text-transform: uppercase; }
 .mine-dashboard-night .mine-feature-road-availability .mine-road-status-values button { background: #203338; }
 .mine-repair-type-chart > header > strong { color: var(--mine-text); font: 850 12px Manrope; white-space: nowrap; }
 .mine-repair-type-bars { display: grid; gap: 7px; padding: 12px 14px 14px; }
