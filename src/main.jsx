@@ -6387,6 +6387,7 @@ function TicketPage({ session }) {
 }
 
 const AI_FEEDER_AUTO_CLOSE_SECONDS = 10;
+const AI_FEEDER_COUNTDOWN_CIRCUMFERENCE = 2 * Math.PI * 17;
 const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
 function AiFeederPanel({ alerts = [], summary, onClose }) {
   const [seconds, setSeconds] = useState(AI_FEEDER_AUTO_CLOSE_SECONDS);
@@ -6416,7 +6417,13 @@ function AiFeederPanel({ alerts = [], summary, onClose }) {
           <p>Live alerts picked from your requests. Hover to keep this open.</p>
         </div>
         <div className="ai-feeder-actions">
-          <span className={paused ? "ai-feeder-countdown paused" : "ai-feeder-countdown"} aria-live="polite" title={paused ? "Paused while you read" : `Closing in ${seconds} seconds`}>{seconds}</span>
+          <span className={paused ? "ai-feeder-countdown paused" : "ai-feeder-countdown"} aria-live="polite" title={paused ? "Paused while you read" : `Closing in ${seconds} seconds`}>
+            <svg viewBox="0 0 40 40" aria-hidden="true">
+              <circle className="ai-feeder-countdown-track" cx="20" cy="20" r="17" />
+              <circle className="ai-feeder-countdown-value" cx="20" cy="20" r="17" strokeDasharray={`${Math.max(0, seconds) / AI_FEEDER_AUTO_CLOSE_SECONDS * AI_FEEDER_COUNTDOWN_CIRCUMFERENCE} ${AI_FEEDER_COUNTDOWN_CIRCUMFERENCE}`} />
+            </svg>
+            <b>{seconds}</b>
+          </span>
           <button type="button" onClick={onClose} aria-label="Close AI Feeder"><X /></button>
         </div>
       </header>
