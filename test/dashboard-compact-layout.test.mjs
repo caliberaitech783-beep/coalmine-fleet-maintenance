@@ -28,6 +28,7 @@ test("Total Fleet leads the dashboard and Maintenance Type shares a row with Roa
   const compactKpis = client.indexOf('className="mine-primary-kpi-grid"', featureRow);
   assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && roadAvailability > repairType && compactKpis > roadAvailability);
   assert.match(css, /\.mine-dashboard-feature-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /\.mine-dashboard-feature-row > \.mine-feature-road-availability\s*\{[\s\S]*?grid-column:\s*span 1/);
 });
 
 test("primary KPIs remain compact after Road Availability moves beside Maintenance Type", () => {
