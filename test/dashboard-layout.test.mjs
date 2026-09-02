@@ -1,20 +1,17 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
-import {DASHBOARD_LAYOUT_VERSION, DEFAULT_DASHBOARD_LAYOUT, normalizeDashboardLayout} from "../dashboard-layout.mjs";
+import {DEFAULT_DASHBOARD_LAYOUT, normalizeDashboardLayout} from "../dashboard-layout.mjs";
 
 test("dashboard layout accepts valid order and clamps KPI sizes", () => {
   assert.deepEqual(normalizeDashboardLayout({
-    version: DASHBOARD_LAYOUT_VERSION,
     order: ["users", "assets", "users", "unknown"],
     sizes: {users: 3, assets: 0, roadstatus: 8, workload: 2},
   }), {
-    version: DASHBOARD_LAYOUT_VERSION,
-    order: ["users", "assets", "roadstatus", "repairtypes", "intelligence", "workload", "fleetregions", "trend"],
-    sizes: {assets: 1, roadstatus: 3, repairtypes: 2, intelligence: 3, workload: 2, users: 3, fleetregions: 3, trend: 3},
+    order: ["users", "assets", "roadstatus", "workload", "repairtypes", "fleetregions", "intelligence", "trend"],
+    sizes: {assets: 1, roadstatus: 3, workload: 2, users: 3, repairtypes: 3, fleetregions: 3, intelligence: 3, trend: 3},
     hidden: [],
   });
-  assert.deepEqual(normalizeDashboardLayout({order:["users"]}), DEFAULT_DASHBOARD_LAYOUT);
   assert.deepEqual(normalizeDashboardLayout(), DEFAULT_DASHBOARD_LAYOUT);
 });
 

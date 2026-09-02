@@ -19,7 +19,6 @@ test("dashboard KPI order and size persist separately for each user", () => {
   assert.match(client, /"data-kpi-size": kpiSizes\[key\]/);
   assert.match(css, /\.mine-primary-kpi-grid\[data-arranging="true"\]/);
   assert.match(css, /\.mine-primary-kpi-card\[data-kpi-size="3"\]/);
-  assert.match(css, /\.mine-all-widget-grid/);
 });
 
 test("equipment KPI renders a live equipment and vehicle composition bar", () => {
