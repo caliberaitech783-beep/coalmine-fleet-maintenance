@@ -1055,7 +1055,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </div>
       </article>
       <article className="mine-panel mine-fleet-region-chart" aria-label="Total fleet by region and site graph">
-        <header><div><span className="mine-eyebrow">Fleet registry</span><h2>Total fleet by region and site</h2><p>Region-wise site distribution with total fleet count</p></div><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span><strong>{assetCounts.total.toLocaleString()} total fleet</strong></div></header>
+        <header><div><span className="mine-eyebrow">Fleet registry</span><h2>Total fleet by region and site</h2><p>Region-wise site distribution with total fleet count</p></div><strong className="mine-fleet-chart-total">{assetCounts.total.toLocaleString()} <span>total fleet</span></strong><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div></header>
         <div className="mine-fleet-chart-layout">
           <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
           <div className="mine-fleet-chart-plot">
