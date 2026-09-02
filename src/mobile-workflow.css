@@ -147,9 +147,24 @@
   min-height: 0;
 }
 
-/* Only the bottom scrollbar is drawn; the table still scrolls vertically. */
+/* Only the bottom scrollbar is drawn; the table still scrolls vertically.
+   The unqualified rule is what switches Chrome to custom scrollbars, so it
+   has to stay for the :vertical override below to take effect. */
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
 .mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar:vertical {
   width: 0;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar-button {
+  display: none;
+}
+
+.mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar:horizontal {
