@@ -15,12 +15,10 @@ test("every operational dashboard loads site-wide requests separately from perso
 test("equipment and vehicle totals open a name list on every dashboard", () => {
   assert.match(client, /onClick=\{\(\) => openAssetDrilldown\("equipment"\)\}/);
   assert.match(client, /onClick=\{\(\) => openAssetDrilldown\("vehicle"\)\}/);
-  assert.match(client, /Step 1 · Select equipment category/);
-  assert.match(client, /Step 2 · Select equipment group/);
-  assert.match(client, /Step 3 · Full details for/);
-  assert.match(client, /assetGroupBreakdown\.map/);
-  assert.match(client, /assetDrilldownCategory && <section>/);
-  assert.match(client, /assetDrilldownCategory && assetDrilldownGroup && <section>/);
+  assert.match(client, /Step 1 · Select site/);
+  assert.match(client, /assetSiteBreakdown\.map/);
+  assert.match(client, /assetDrilldownSite && <section>/);
+  assert.match(client, /assetSiteRows\.length \? assetSiteRows\.map/);
   assert.match(client, /className="dashboard-asset-list"[\s\S]*Equipment name[\s\S]*equipmentName/);
   assert.match(client, /<Modal className="dashboard-asset-modal"/);
   assert.match(client, /Equipment category<\/th><th>Equipment group<\/th><th>Make<\/th><th>Model<\/th>/);
