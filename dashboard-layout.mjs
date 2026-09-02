@@ -1,8 +1,9 @@
-export const DASHBOARD_KPI_KEYS = ["assets", "roadstatus", "workload", "users"];
+export const DASHBOARD_KPI_KEYS = ["assets", "roadstatus", "workload", "users", "repairtypes", "fleetregions", "intelligence", "trend"];
 
 export const DEFAULT_DASHBOARD_LAYOUT = {
   order: DASHBOARD_KPI_KEYS,
-  sizes: { assets: 1, roadstatus: 2, workload: 1, users: 1 },
+  sizes: { assets: 1, roadstatus: 2, workload: 1, users: 1, repairtypes: 3, fleetregions: 3, intelligence: 3, trend: 3 },
+  hidden: [],
 };
 
 export function normalizeDashboardLayout(value = {}) {
@@ -16,5 +17,7 @@ export function normalizeDashboardLayout(value = {}) {
     const size = Number(requestedSizes[key]);
     return [key, Number.isInteger(size) ? Math.max(1, Math.min(3, size)) : DEFAULT_DASHBOARD_LAYOUT.sizes[key]];
   }));
-  return { order, sizes };
+  const requestedHidden = Array.isArray(value.hidden) ? value.hidden : [];
+  const hidden = requestedHidden.filter((key, index) => DASHBOARD_KPI_KEYS.includes(key) && requestedHidden.indexOf(key) === index);
+  return { order, sizes, hidden };
 }

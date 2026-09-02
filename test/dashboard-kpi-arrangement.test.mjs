@@ -8,7 +8,9 @@ const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.met
 test("dashboard KPI order and size persist separately for each user", () => {
   assert.match(client, /nerveCenterDashboardLayout:\$\{String\(layoutUser/);
   assert.match(client, /\/api\/me\/dashboard-layout/);
-  assert.match(client, /Customize KPIs/);
+  assert.match(client, /Customize dashboard/);
+  assert.match(client, /Remove \$\{kpiLabels\[key\]\} from dashboard/);
+  assert.match(client, /Add KPI/);
   assert.match(client, /draggable: editingKpiLayout/);
   assert.match(client, /Move \$\{key\} KPI left/);
   assert.match(client, /Move \$\{key\} KPI right/);

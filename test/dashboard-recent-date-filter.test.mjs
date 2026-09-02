@@ -7,7 +7,7 @@ const styles = await readFile(new URL("../src/style.css", import.meta.url), "utf
 
 test("dashboard replaces recent cases with a site-wise selectable breakdown trend", () => {
   assert.doesNotMatch(source, /<BreakdownTable rows=\{visibleBreakdowns\} showMakeModel showDateFilter rowLimit=\{5\} \/>/);
-  assert.match(source, /className="mine-panel mine-breakdown-trend"/);
+  assert.match(source, /className="mine-panel mine-breakdown-trend mine-custom-widget"/);
   assert.match(source, /\[breakdownTrendDays, setBreakdownTrendDays\] = useState\(7\)/);
   assert.match(source, /\[breakdownTrendSite, setBreakdownTrendSite\] = useState\("all"\)/);
   assert.match(source, /\[7, 14, 30\]\.map/);

@@ -8,8 +8,9 @@ test("dashboard layout accepts valid order and clamps KPI sizes", () => {
     order: ["users", "assets", "users", "unknown"],
     sizes: {users: 3, assets: 0, roadstatus: 8, workload: 2},
   }), {
-    order: ["users", "assets", "roadstatus", "workload"],
-    sizes: {assets: 1, roadstatus: 3, workload: 2, users: 3},
+    order: ["users", "assets", "roadstatus", "workload", "repairtypes", "fleetregions", "intelligence", "trend"],
+    sizes: {assets: 1, roadstatus: 3, workload: 2, users: 3, repairtypes: 3, fleetregions: 3, intelligence: 3, trend: 3},
+    hidden: [],
   });
   assert.deepEqual(normalizeDashboardLayout(), DEFAULT_DASHBOARD_LAYOUT);
 });

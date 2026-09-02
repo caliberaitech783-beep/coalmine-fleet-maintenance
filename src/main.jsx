@@ -783,29 +783,31 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [draggedKpi, setDraggedKpi] = useState("");
   const [kpiOrder, setKpiOrder] = useState(() => storedDashboardLayout().order);
   const [kpiSizes, setKpiSizes] = useState(() => storedDashboardLayout().sizes);
+  const [hiddenKpis, setHiddenKpis] = useState(() => storedDashboardLayout().hidden);
   const [dashboardLayoutReady, setDashboardLayoutReady] = useState(false);
   useEffect(() => {
     let activeRequest=true;
     const localLayout=storedDashboardLayout();
     setKpiOrder(localLayout.order);
     setKpiSizes(localLayout.sizes);
+    setHiddenKpis(localLayout.hidden);
     setDashboardLayoutReady(false);
     if(!layoutToken){setDashboardLayoutReady(true);return()=>{activeRequest=false}}
     fetch("/api/me/dashboard-layout",{headers:{Authorization:`Bearer ${layoutToken}`}})
       .then((response)=>response.ok?response.json():Promise.reject())
-      .then((value)=>{if(activeRequest){const layout=normalizeDashboardLayout(value);setKpiOrder(layout.order);setKpiSizes(layout.sizes)}})
+      .then((value)=>{if(activeRequest){const layout=normalizeDashboardLayout(value);setKpiOrder(layout.order);setKpiSizes(layout.sizes);setHiddenKpis(layout.hidden)}})
       .catch(()=>{})
       .finally(()=>{if(activeRequest)setDashboardLayoutReady(true)});
     return()=>{activeRequest=false};
   },[layoutStorageKey,layoutToken]);
   useEffect(() => {
     if(!dashboardLayoutReady)return undefined;
-    const layout=normalizeDashboardLayout({order:kpiOrder,sizes:kpiSizes});
+    const layout=normalizeDashboardLayout({order:kpiOrder,sizes:kpiSizes,hidden:hiddenKpis});
     localStorage.setItem(layoutStorageKey,JSON.stringify(layout));
     if(!layoutToken)return undefined;
     const timer=window.setTimeout(()=>fetch("/api/me/dashboard-layout",{method:"PUT",headers:{"Content-Type":"application/json",Authorization:`Bearer ${layoutToken}`},body:JSON.stringify(layout)}).catch(()=>{}),350);
     return()=>window.clearTimeout(timer);
-  },[dashboardLayoutReady,kpiOrder,kpiSizes,layoutStorageKey,layoutToken]);
+  },[dashboardLayoutReady,kpiOrder,kpiSizes,hiddenKpis,layoutStorageKey,layoutToken]);
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
@@ -942,7 +944,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const resetKpiLayout = () => {
     setKpiOrder([...DEFAULT_DASHBOARD_LAYOUT.order]);
     setKpiSizes({...DEFAULT_DASHBOARD_LAYOUT.sizes});
+    setHiddenKpis([]);
   };
+  const hideKpi = (key) => setHiddenKpis((current) => current.includes(key) ? current : [...current, key]);
+  const restoreKpi = (key) => setHiddenKpis((current) => current.filter((item) => item !== key));
+  const kpiLabels = {assets:"Total Fleet",roadstatus:"Road availability",workload:"Maintenance workload",users:"Operations users",repairtypes:"Repair type",fleetregions:"Fleet by region and site",intelligence:"Equipment intelligence",trend:"Breakdown trend"};
   const kpiLayoutProps = (key) => ({
     draggable: editingKpiLayout,
     "data-kpi-size": kpiSizes[key] || 1,
@@ -958,6 +964,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <span role="button" tabIndex="0" aria-label={`Make ${key} KPI smaller`} aria-disabled={kpiSizes[key] <= 1} onClick={() => resizeKpi(key, -1)} onKeyDown={(event) => event.key === "Enter" && resizeKpi(key, -1)}><Minus /></span>
     <b>{kpiSizes[key] || 1}x</b>
     <span role="button" tabIndex="0" aria-label={`Make ${key} KPI larger`} aria-disabled={kpiSizes[key] >= 3} onClick={() => resizeKpi(key, 1)} onKeyDown={(event) => event.key === "Enter" && resizeKpi(key, 1)}><Plus /></span>
+    <span role="button" tabIndex="0" className="delete" aria-label={`Remove ${kpiLabels[key]} from dashboard`} onClick={() => hideKpi(key)} onKeyDown={(event) => event.key === "Enter" && hideKpi(key)}><Trash2 /></span>
   </span>;
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
@@ -1057,9 +1064,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
-      <div className="mine-kpi-layout-toolbar"><span>Key performance indicators</span><div>{editingKpiLayout && <button type="button" onClick={resetKpiLayout}><RotateCcw /> Reset</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Save layout" : "Customize KPIs"}</button></div></div>
+      <div className="mine-kpi-layout-toolbar"><span>Dashboard widgets</span><div>{editingKpiLayout && hiddenKpis.length > 0 && <details className="mine-hidden-kpis"><summary><Plus /> Add KPI ({hiddenKpis.length})</summary><div>{hiddenKpis.map((key)=><button type="button" key={key} onClick={()=>restoreKpi(key)}><Plus /> {kpiLabels[key]}</button>)}</div></details>}{editingKpiLayout && <button type="button" onClick={resetKpiLayout}><RotateCcw /> Reset all</button>}<button type="button" className={editingKpiLayout ? "active" : ""} onClick={() => setEditingKpiLayout((value) => !value)}><GripVertical /> {editingKpiLayout ? "Save layout" : "Customize dashboard"}</button></div></div>
       <section className="mine-primary-kpi-grid" data-arranging={editingKpiLayout || undefined} aria-label="Fleet status key performance indicators">
-        <article className="mine-primary-kpi-card mine-primary-kpi-assets" {...kpiLayoutProps("assets")}>
+        {!hiddenKpis.includes("assets") && <article className="mine-primary-kpi-card mine-primary-kpi-assets" {...kpiLayoutProps("assets")}>
           {kpiMoveControls("assets")}
           <button type="button" className="mine-primary-kpi-main" onClick={() => openAssetDrilldown("all")}>
             <span className="mine-primary-kpi-icon"><Truck /></span>
@@ -1071,8 +1078,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <button type="button" onClick={() => openAssetDrilldown("vehicle")}><span>Total vehicles</span><b>{assetCounts.vehicles.toLocaleString()}</b></button>
           </div>
           <div className="mine-kpi-composition" aria-label={`${equipmentShare}% equipment and ${vehicleShare}% vehicles`}><span style={{ width: `${equipmentShare}%` }} /><span style={{ width: `${vehicleShare}%` }} /></div>
-        </article>
-        <article className="mine-primary-kpi-card mine-road-status-graphic" {...kpiLayoutProps("roadstatus")}>
+        </article>}
+        {!hiddenKpis.includes("roadstatus") && <article className="mine-primary-kpi-card mine-road-status-graphic" {...kpiLayoutProps("roadstatus")}>
           {kpiMoveControls("roadstatus")}
           <header><span>Road availability</span></header>
           <div className="mine-road-status-chart" aria-label={`${kpis.onRoad} on road, ${kpis.offRoad} off road and ${kpis.idle} idle`} style={{ background: `conic-gradient(#34a77d 0 ${roadStatusShare(kpis.onRoad)}%, #df6d64 ${roadStatusShare(kpis.onRoad)}% ${roadStatusShare(kpis.onRoad + kpis.offRoad)}%, #dda13d ${roadStatusShare(kpis.onRoad + kpis.offRoad)}% 100%)` }}>
@@ -1083,28 +1090,31 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><b>Off road</b><small>Maintenance</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
             <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><b>Idle</b><small>Not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
           </div>
-        </article>
-        <article className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic" {...kpiLayoutProps("workload")}>
+        </article>}
+        {!hiddenKpis.includes("workload") && <article className="mine-primary-kpi-card mine-primary-kpi-workload mine-open-requests-graphic" {...kpiLayoutProps("workload")}>
           {kpiMoveControls("workload")}
           <header><span>Consolidated open requests</span><button type="button" onClick={() => setShowWorkloadBreakdown(true)}><strong>{activeBreakdowns.toLocaleString()}</strong><small>Total open</small></button></header>
           <div className="mine-open-requests-values">{openRequestStatusItems.map((item) => <button type="button" key={item.key} className={item.className} onClick={() => openAssetDrilldown(`status:${item.key}`)}><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div>
-        </article>
-        <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)} {...kpiLayoutProps("users")}>
+        </article>}
+        {!hiddenKpis.includes("users") && <button type="button" className="mine-primary-kpi-card mine-primary-kpi-users" onClick={() => setShowUserBreakdown(true)} {...kpiLayoutProps("users")}>
           {kpiMoveControls("users")}
           <span className="mine-primary-kpi-icon"><Users /></span>
           <span className="mine-primary-kpi-copy"><small>People</small><b>Operations users</b><em>Mobile {userCounts.mobile} · Super {userCounts.super} · Admin {userCounts.admin}</em></span>
           <strong>{visibleUsers.length.toLocaleString()}</strong>
-        </button>
+        </button>}
       </section>
-      <article className="mine-panel mine-repair-type-chart" aria-label="Repair type breakdown graph">
+      <section className="mine-secondary-kpi-grid" data-arranging={editingKpiLayout || undefined} aria-label="Dashboard analysis widgets">
+      {!hiddenKpis.includes("repairtypes") && <article className="mine-panel mine-repair-type-chart mine-custom-widget" aria-label="Repair type breakdown graph" {...kpiLayoutProps("repairtypes")}>
+        {kpiMoveControls("repairtypes")}
         <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Repair type</h2><p>Breakdown requests by configured repair type</p></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
         <div className="mine-repair-type-bars">
           {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
             <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
           </button>) : <div className="mine-empty">No repair types configured</div>}
         </div>
-      </article>
-      <article className="mine-panel mine-fleet-region-chart" aria-label="Total fleet by region and site graph">
+      </article>}
+      {!hiddenKpis.includes("fleetregions") && <article className="mine-panel mine-fleet-region-chart mine-custom-widget" aria-label="Total fleet by region and site graph" {...kpiLayoutProps("fleetregions")}>
+        {kpiMoveControls("fleetregions")}
         <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{assetCounts.total.toLocaleString()} <span>Total Fleet</span></strong><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div></header>
         <div className="mine-fleet-chart-layout">
           <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
@@ -1119,9 +1129,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
         </div>
         <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div>
-      </article>
+      </article>}
       <section className="mine-dashboard-grid mine-dashboard-core">
-        <article className="mine-panel mine-fleet-command mine-span-2">
+        {!hiddenKpis.includes("intelligence") && <article className="mine-panel mine-fleet-command mine-span-2 mine-custom-widget" {...kpiLayoutProps("intelligence")}>
+          {kpiMoveControls("intelligence")}
           <header className="mine-fleet-command-head">
             <div><span className="mine-eyebrow">Fleet registry</span><h2>Total equipment intelligence</h2><p>Category, equipment group, region and site-wise fleet distribution</p></div>
             <button type="button" onClick={() => openAssetDrilldown("all")}>View full fleet <ChevronRight /></button>
@@ -1144,7 +1155,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               </div>)}</div>
             </section>
           </div>
-        </article>
+        </article>}
       </section>
       {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{visibleUsers.length}</strong></div></Modal>}
       {showWorkloadBreakdown && <Modal title="Open requests by status" close={() => setShowWorkloadBreakdown(false)}><div className="user-count-drilldown workload-status-drilldown">{openRequestStatusItems.map((item) => <button type="button" key={item.key} onClick={() => { setShowWorkloadBreakdown(false); openAssetDrilldown(`status:${item.key}`); }}><Wrench /><span>{item.label}</span><strong>{item.count.toLocaleString()}</strong></button>)}</div><div className="user-count-total"><span>Consolidated open requests</span><strong>{activeBreakdowns.toLocaleString()}</strong></div></Modal>}
@@ -1167,13 +1178,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           {assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><table><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}</tr>)}</tbody></table></div></section>}
         </>}
       </div></Modal>}
-      <section className="mine-panel mine-breakdown-trend">
+      {!hiddenKpis.includes("trend") && <section className="mine-panel mine-breakdown-trend mine-custom-widget" {...kpiLayoutProps("trend")}>
+        {kpiMoveControls("trend")}
         <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Site-wise breakdown volume across the selected period</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
         <div className="mine-breakdown-trend-body">
           <div className="mine-trend-summary"><article><span>Total breakdowns</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendDays}-day period</small></article><article><span>Daily average</span><strong>{breakdownTrendAverage}</strong><small>Breakdowns per day</small></article><article><span>Peak day</span><strong>{breakdownTrendPeak.count.toLocaleString()}</strong><small>{new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${breakdownTrendPeak.date}T12:00:00`))}</small></article></div>
           <div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day breakdown chart`}>{breakdownTrend.map((day, index) => <div className="mine-trend-day" key={day.date} title={`${day.date}: ${day.count} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div>
           <div className="mine-trend-sites"><div className="mine-fleet-section-title"><span>Site ranking</span><b>{breakdownTrendSites.length} sites</b></div><div>{breakdownTrendSites.length ? breakdownTrendSites.map((site) => <button type="button" key={site.site} className={activeTrendSite === site.site ? "active" : ""} onClick={() => setBreakdownTrendSite((current) => current === site.site ? "all" : site.site)}><MapPin /><span><b>{site.site}</b><i><em style={{ width: `${(site.count / maxBreakdownTrendSite) * 100}%` }} /></i></span><strong>{site.count.toLocaleString()}</strong></button>) : <p className="mine-empty">No site breakdowns in this period</p>}</div></div>
         </div>
+      </section>}
       </section>
     </div>
   );
