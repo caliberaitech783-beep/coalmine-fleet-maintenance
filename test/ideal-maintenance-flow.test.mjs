@@ -13,9 +13,15 @@ test("Idle requests require a reason and assigned-site Maintenance Manager appro
   assert.match(server,/userManagesSite\(manager,eligible\.rows\[0\]\.site\)/);
   assert.match(server,/status='Closed',closed_at=NOW\(\)/);
   assert.match(server,/awaiting MIS verification/);
+  assert.match(server,/app\.patch\('\/api\/requests\/:reference\/idle-cancel'/);
+  assert.match(server,/status='In progress',idle_reason=''/);
+  assert.match(server,/The request has returned to active maintenance/);
   assert.match(server,/status NOT IN \('Closed','Idle','Ideal'\)/);
   assert.match(client,/Idle approvals \(\{idealRows\.length\}\)/);
   assert.match(client,/Make on road/);
+  assert.match(client,/Cancel idle/);
+  assert.match(client,/The request will return to active maintenance and will not be closed/);
+  assert.match(client,/"idle-cancel"/);
   assert.match(client,/name="idealChoice"/);
   assert.match(client,/status: ideal \? "Idle"/);
   assert.match(client,/Idle reason \*/);

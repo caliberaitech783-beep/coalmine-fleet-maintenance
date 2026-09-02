@@ -1977,6 +1977,25 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
   }catch(error){next(error)}
 });
 
+app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,next)=>{
+  try{
+    if(req.session.role!=='super'||req.session.permissions?.adminLevel!=='Manager'||!managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).includes('Maintenance Manager'))
+      return res.status(403).json({error:'Only the assigned Maintenance Manager can cancel an Idle request.'});
+    const manager=await currentUserRecord(req.session);
+    const reference=String(req.params.reference||'').trim();
+    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
+    if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your decision or is outside your assigned sites.'});
+    const {rows}=await pool.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
+      ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by=''
+      WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[reference]);
+    if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your decision.'});
+    const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+    await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Idle status for request ${rows[0].ref} was cancelled by ${req.session.name||'Maintenance Manager'}. The request has returned to active maintenance.`,null,{whatsapp:false});
+    res.json(rows[0]);
+  }catch(error){next(error)}
+});
+
 app.delete('/api/requests/:reference',requireSession,requirePermission('deleteRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
