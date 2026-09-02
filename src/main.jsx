@@ -865,7 +865,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     const records = visibleEquipment.filter((record) => equipmentGroupLabel(record) === label);
     return { label, total, ...fleetAssetCounts(records) };
   });
-  const maxFleetGroupTotal = Math.max(1, ...fleetGroupInsights.map((group) => group.total));
+  const fleetPieColors = ["#4f86c6", "#2ca57c", "#8b5cf6", "#f59e0b", "#ef6461", "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#6366f1", "#14b8a6", "#a855f7", "#64748b"];
+  const pieSlices = (items) => items.reduce((result, item, index) => {
+    const start = result.reduce((sum, slice) => sum + slice.percent, 0);
+    const percent = assetCounts.total ? item.total / assetCounts.total * 100 : 0;
+    return [...result, { ...item, start, percent, color: fleetPieColors[index % fleetPieColors.length] }];
+  }, []);
+  const assetCategoryPieSlices = pieSlices([
+    { label: "Equipment", total: assetCounts.equipment, key: "equipment" },
+    { label: "Vehicles", total: assetCounts.vehicles, key: "vehicle" },
+  ]);
+  const fleetGroupPieSlices = pieSlices(fleetGroupInsights.map((group) => ({ ...group, key: `group:${group.label}` })));
   const fleetRegionInsights = availableRegions
     .filter((region) => !selectedRegion || region.code === selectedRegion.code)
     .map((region) => {
@@ -1077,24 +1087,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <button type="button" onClick={() => openAssetDrilldown("all")}>View full fleet <ChevronRight /></button>
           </header>
           <div className="mine-fleet-command-body">
-            <section className="mine-fleet-category" aria-label="Equipment and vehicle bifurcation">
+            <section className="mine-fleet-category mine-fleet-pie-panel" aria-label="Interactive asset category pie chart">
               <div className="mine-fleet-section-title"><span>Asset category</span><b>{assetCounts.total.toLocaleString()} total</b></div>
-              <button type="button" className="mine-fleet-category-card equipment" onClick={() => openAssetDrilldown("equipment")}>
-                <span className="mine-fleet-category-icon"><Wrench /></span><span><b>Equipment</b><small>Non-vehicle mining assets</small></span><strong>{assetCounts.equipment.toLocaleString()}</strong><em>{equipmentShare}%</em>
-              </button>
-              <button type="button" className="mine-fleet-category-card vehicle" onClick={() => openAssetDrilldown("vehicle")}>
-                <span className="mine-fleet-category-icon"><Truck /></span><span><b>Vehicles</b><small>Registered mobile fleet</small></span><strong>{assetCounts.vehicles.toLocaleString()}</strong><em>{vehicleShare}%</em>
-              </button>
-              <div className="mine-fleet-share" aria-label={`${equipmentShare}% equipment and ${vehicleShare}% vehicles`}><i style={{ width: `${equipmentShare}%` }} /><i style={{ width: `${vehicleShare}%` }} /></div>
-              <div className="mine-fleet-share-legend"><span><i />Equipment</span><span><i />Vehicles</span></div>
+              <div className="mine-pie-chart-wrap"><svg className="mine-pie-chart" viewBox="0 0 42 42" aria-label={`${equipmentShare}% equipment and ${vehicleShare}% vehicles`}>{assetCategoryPieSlices.map((slice) => <circle key={slice.key} className="mine-pie-slice" cx="21" cy="21" r="15.9155" pathLength="100" fill="none" stroke={slice.color} strokeWidth="7" strokeDasharray={`${slice.percent} ${100 - slice.percent}`} strokeDashoffset={-slice.start} onClick={() => openAssetDrilldown(slice.key)} role="button" tabIndex="0" onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openAssetDrilldown(slice.key); }}><title>{slice.label}: {slice.total} ({Math.round(slice.percent)}%)</title></circle>)}</svg><span className="mine-pie-center"><b>{assetCounts.total.toLocaleString()}</b><small>Total fleet</small></span></div>
+              <div className="mine-pie-legend">{assetCategoryPieSlices.map((slice) => <button type="button" key={slice.key} onClick={() => openAssetDrilldown(slice.key)}><i style={{ background: slice.color }} /><span>{slice.label}</span><b>{slice.total.toLocaleString()}</b><em>{Math.round(slice.percent)}%</em></button>)}</div>
             </section>
-            <section className="mine-fleet-groups" aria-label="Equipment groups">
+            <section className="mine-fleet-groups mine-fleet-pie-panel" aria-label="Interactive equipment groups pie chart">
               <div className="mine-fleet-section-title"><span>Equipment groups</span><b>{fleetGroupInsights.length} groups</b></div>
-              <div className="mine-fleet-group-list">{fleetGroupInsights.length ? fleetGroupInsights.map((group) => <button type="button" key={group.label} onClick={() => openAssetDrilldown(`group:${group.label}`)}>
-                <span className="mine-fleet-group-rank">{String(fleetGroupInsights.indexOf(group) + 1).padStart(2, "0")}</span>
-                <span className="mine-fleet-group-name"><b>{group.label}</b><small>{group.equipment} equipment · {group.vehicles} vehicles</small><i><em style={{ width: `${(group.total / maxFleetGroupTotal) * 100}%` }} /></i></span>
-                <strong>{group.total.toLocaleString()}</strong><ChevronRight />
-              </button>) : <p className="mine-empty">No equipment groups available</p>}</div>
+              {fleetGroupPieSlices.length ? <><div className="mine-pie-chart-wrap"><svg className="mine-pie-chart" viewBox="0 0 42 42" aria-label={`${fleetGroupInsights.length} equipment groups`}>{fleetGroupPieSlices.map((slice) => <circle key={slice.key} className="mine-pie-slice" cx="21" cy="21" r="15.9155" pathLength="100" fill="none" stroke={slice.color} strokeWidth="7" strokeDasharray={`${slice.percent} ${100 - slice.percent}`} strokeDashoffset={-slice.start} onClick={() => openAssetDrilldown(slice.key)} role="button" tabIndex="0" onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openAssetDrilldown(slice.key); }}><title>{slice.label}: {slice.total}</title></circle>)}</svg><span className="mine-pie-center"><b>{fleetGroupInsights.length}</b><small>Groups</small></span></div><div className="mine-pie-legend mine-group-pie-legend">{fleetGroupPieSlices.map((slice) => <button type="button" key={slice.key} onClick={() => openAssetDrilldown(slice.key)}><i style={{ background: slice.color }} /><span>{slice.label}</span><b>{slice.total.toLocaleString()}</b></button>)}</div></> : <p className="mine-empty">No equipment groups available</p>}
             </section>
             <section className="mine-fleet-geography" aria-label="Region and site-wise fleet">
               <div className="mine-fleet-section-title"><span>Region &amp; site wise</span><b>{fleetRegionInsights.reduce((sum, region) => sum + region.sites.length, 0)} sites</b></div>
@@ -1105,7 +1105,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </section>
           </div>
         </article>
-        <article className="mine-panel mine-open-cases"><header><div><span className="mine-eyebrow">Maintenance workload</span><h2>Open cases</h2><p>Current action queue</p></div><button type="button" aria-label="Open case category drilldown" onClick={() => openAssetDrilldown("open-cases")}><ChevronRight /></button></header><button type="button" className="mine-open-cases-trigger" onClick={() => openAssetDrilldown("open-cases")}><div className="mine-big-number"><strong>{activeBreakdowns.toLocaleString()}</strong><span>Active breakdowns</span><small>{visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length.toLocaleString()} awaiting action</small></div><div className="mine-mini-bars"><span><i style={{ width: `${activeBreakdowns ? 100 : 0}%` }} />Active</span><span><i className="mine-bar-orange" style={{ width: `${activeBreakdowns ? Math.min(100, visibleBreakdowns.filter((record) => record.status?.startsWith("Awaiting")).length / activeBreakdowns * 100) : 0}%` }} />Awaiting</span></div></button></article>
       </section>
       {showUserBreakdown && <Modal title="Users & employees breakdown" close={() => setShowUserBreakdown(false)}><div className="user-count-drilldown"><button onClick={() => goto("Users & employees")}><Users /><span>Mobile Users</span><strong>{userCounts.mobile}</strong></button><button onClick={() => goto("Users & employees")}><ShieldCheck /><span>Super Users</span><strong>{userCounts.super}</strong></button><button onClick={() => goto("Users & employees")}><UserRound /><span>Admins</span><strong>{userCounts.admin}</strong></button></div><div className="user-count-total"><span>Total users &amp; employees</span><strong>{visibleUsers.length}</strong></div></Modal>}
       {showWorkloadBreakdown && <Modal title="Maintenance workload by status" close={() => setShowWorkloadBreakdown(false)}><div className="user-count-drilldown workload-status-drilldown">{Object.entries(workloadCounts).map(([status, count]) => <button type="button" key={status} onClick={() => { setShowWorkloadBreakdown(false); openAssetDrilldown(`status:${status}`); }}><Wrench /><span>{status}</span><strong>{count.toLocaleString()}</strong></button>)}</div><div className="user-count-total"><span>Active maintenance workload</span><strong>{activeBreakdowns.toLocaleString()}</strong></div></Modal>}

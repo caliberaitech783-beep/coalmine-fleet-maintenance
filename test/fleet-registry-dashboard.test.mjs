@@ -8,14 +8,20 @@ const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.met
 test("fleet registry dashboard connects category, group, region and site-wise drilldowns", () => {
   assert.match(source, /className="mine-panel mine-fleet-command mine-span-2"/);
   assert.match(source, /Total equipment intelligence/);
-  assert.match(source, /aria-label="Equipment and vehicle bifurcation"/);
-  assert.match(source, /fleetGroupInsights\.map/);
+  assert.match(source, /aria-label="Interactive asset category pie chart"/);
+  assert.match(source, /aria-label="Interactive equipment groups pie chart"/);
+  assert.match(source, /assetCategoryPieSlices\.map/);
+  assert.match(source, /fleetGroupPieSlices\.map/);
+  assert.match(source, /openAssetDrilldown\(slice\.key\)/);
   assert.match(source, /fleetRegionInsights\.map/);
   assert.match(source, /region\.sites\.map/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
   assert.match(source, /key\.startsWith\("site:"\)/);
   assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
+  assert.match(css, /\.mine-pie-chart\s*\{/);
+  assert.match(css, /\.mine-pie-slice\s*\{[\s\S]*cursor:\s*pointer/);
   assert.match(css, /\.mine-fleet-site-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,/);
+  assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
 });
 
 test("total fleet renders a region-grouped site count graph", () => {
