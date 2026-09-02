@@ -24,3 +24,14 @@ test("request KPI drilldowns merge job fields with Equipment Master details", ()
   assert.match(source, /<th>Repair category<\/th><th>Status<\/th><th>Started<\/th>/);
   assert.match(source, /<Status>\{record\.requestStatus\}<\/Status>/);
 });
+
+test("repair type graph drills down by site before request details", () => {
+  assert.match(source, /const repairTypeSiteDrilldown = assetDrilldown\.startsWith\("repair:"\)/);
+  assert.match(source, /const repairTypeSiteBreakdown = trendAvailableSites\.map/);
+  assert.match(source, /assetDrilldownRows\.filter\(\(record\) => recordBelongsToSite\(record, site\)\)/);
+  assert.match(source, /Step 1 · Select site/);
+  assert.match(source, /setAssetDrilldownSite\(site\)/);
+  assert.match(source, /Step 2 · \{assetDrilldownSite\} request details/);
+  assert.match(source, /repairTypeSiteRows\.map/);
+  assert.match(source, /aria-label="Back to repair sites"/);
+});
