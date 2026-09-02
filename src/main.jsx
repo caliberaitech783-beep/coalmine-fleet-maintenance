@@ -1019,11 +1019,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </article>
         <article className="mine-primary-kpi-card mine-road-status-graphic" {...kpiLayoutProps("roadstatus")}>
           {kpiMoveControls("roadstatus")}
-          <header><span>Road availability</span><strong>{kpis.availability}%</strong></header>
-          <div className="mine-road-status-bar" aria-label={`${kpis.onRoad} on road, ${kpis.offRoad} off road and ${kpis.idle} idle`}>
-            <span className="onroad" style={{ width: `${roadStatusShare(kpis.onRoad)}%` }} />
-            <span className="offroad" style={{ width: `${roadStatusShare(kpis.offRoad)}%` }} />
-            <span className="idle" style={{ width: `${roadStatusShare(kpis.idle)}%` }} />
+          <header><span>Road availability</span></header>
+          <div className="mine-road-status-chart" aria-label={`${kpis.onRoad} on road, ${kpis.offRoad} off road and ${kpis.idle} idle`} style={{ background: `conic-gradient(#34a77d 0 ${roadStatusShare(kpis.onRoad)}%, #df6d64 ${roadStatusShare(kpis.onRoad)}% ${roadStatusShare(kpis.onRoad + kpis.offRoad)}%, #dda13d ${roadStatusShare(kpis.onRoad + kpis.offRoad)}% 100%)` }}>
+            <span><strong>{kpis.availability}%</strong><small>On road</small></span>
           </div>
           <div className="mine-road-status-values">
             <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><b>On road</b><small>Available</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>

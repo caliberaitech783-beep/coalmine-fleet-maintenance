@@ -29,6 +29,7 @@ test("primary KPIs use one compact row with a graphical road-status block", () =
   );
   assert.match(client, /className="mine-primary-kpi-card mine-primary-kpi-assets"/);
   assert.match(client, /className="mine-primary-kpi-card mine-road-status-graphic"/);
+  assert.match(client, /className="mine-road-status-chart"/);
   assert.match(css, /\.mine-road-status-graphic\s*\{[\s\S]*?grid-column:\s*span 2;/);
   assert.match(client, /<b>Total Fleet<\/b>/);
   assert.match(client, /<b>On road<\/b>/);
