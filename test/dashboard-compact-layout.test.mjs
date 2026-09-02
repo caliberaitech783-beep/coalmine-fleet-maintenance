@@ -22,7 +22,7 @@ test("repair types render as a responsive graph instead of KPI cards", () => {
 test("Total Fleet leads the dashboard and Maintenance Type shares a row with Road Availability", () => {
   assert.match(client, /className="mine-dashboard-feature-row"/);
   const featureRow = client.indexOf('className="mine-dashboard-feature-row"');
-  const totalFleet = client.indexOf('className="mine-panel mine-fleet-region-chart"', featureRow);
+  const totalFleet = client.indexOf('mine-panel mine-fleet-region-chart', featureRow);
   const repairType = client.indexOf('className="mine-panel mine-repair-type-chart"', featureRow);
   const roadAvailability = client.indexOf('className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"', repairType);
   const compactKpis = client.indexOf('className="mine-primary-kpi-grid"', featureRow);

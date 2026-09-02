@@ -53,8 +53,14 @@ test("each fleet site uses separate Caliber red equipment and purple vehicle bar
 test("Total Fleet provides a persistent Caliber watermark option", () => {
   assert.match(source, /nerveCenterFleetWatermark/);
   assert.match(source, /className="mine-fleet-watermark-toggle"/);
-  assert.match(source, /showFleetWatermark \? " watermarked" : ""/);
-  assert.match(css, /\.mine-fleet-chart-plot\.watermarked::before[\s\S]*caliber-logo-reverse\.png/);
+  assert.match(source, /mine-fleet-region-chart\$\{showFleetWatermark \? " watermarked" : ""\}/);
+  assert.match(css, /\.mine-fleet-region-chart\.watermarked::before[\s\S]*caliber-logo-reverse\.png[\s\S]*88% 88%/);
+});
+
+test("Total Fleet fits every site evenly across the available width", () => {
+  assert.match(source, /flexGrow: Math\.max\(1, region\.sites\.length\)/);
+  assert.match(css, /\.mine-fleet-chart-regions\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0/);
+  assert.match(css, /\.mine-fleet-chart-sites\s*\{[^}]*grid-auto-columns:\s*minmax\(0, 1fr\);[^}]*gap:\s*0/);
 });
 
 test("breakdown trend is compact, responsive and site selectable", () => {
