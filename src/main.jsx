@@ -775,6 +775,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardDate, setDashboardDate] = useState("");
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
+  const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [editingKpiLayout, setEditingKpiLayout] = useState(false);
   const [draggedKpi, setDraggedKpi] = useState("");
   const [kpiOrder, setKpiOrder] = useState(() => {
@@ -786,6 +787,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     }
   });
   useEffect(() => localStorage.setItem("nerveCenterDashboardKpiOrder", JSON.stringify(kpiOrder)), [kpiOrder]);
+  useEffect(() => localStorage.setItem("nerveCenterFleetWatermark", String(showFleetWatermark)), [showFleetWatermark]);
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
@@ -1034,10 +1036,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article className="mine-panel mine-fleet-region-chart" aria-label="Total fleet by region and site graph">
-          <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{assetCounts.total.toLocaleString()} <span>Total Fleet</span></strong><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div></header>
+          <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{assetCounts.total.toLocaleString()} <span>Total Fleet</span></strong><div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div></header>
           <div className="mine-fleet-chart-layout">
             <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
-            <div className="mine-fleet-chart-plot">
+            <div className={`mine-fleet-chart-plot${showFleetWatermark ? " watermarked" : ""}`}>
               <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
               <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} aria-label={`${region.code} fleet sites`}>
                 <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)} aria-label={`${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`} title={`${site.name}: ${site.equipment} equipment, ${site.vehicles} vehicles`}>

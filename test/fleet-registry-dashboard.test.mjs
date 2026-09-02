@@ -42,12 +42,19 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
-test("each fleet site uses separate orange equipment and violet vehicle bars with counts", () => {
+test("each fleet site uses separate Caliber red equipment and purple vehicle bars with counts", () => {
   assert.match(source, /className="mine-fleet-site-bars"/);
   assert.match(source, /site\.equipment\.toLocaleString\(\)/);
   assert.match(source, /site\.vehicles\.toLocaleString\(\)/);
-  assert.match(css, /\.mine-fleet-site-bars > i\.equipment\s*\{\s*background:\s*linear-gradient\([^}]*#df741f/);
-  assert.match(css, /\.mine-fleet-site-bars > i\.vehicles\s*\{\s*background:\s*linear-gradient\([^}]*#6540b8/);
+  assert.match(css, /\.mine-fleet-site-bars > i\.equipment\s*\{\s*background:\s*linear-gradient\([^}]*var\(--brand-red\)/);
+  assert.match(css, /\.mine-fleet-site-bars > i\.vehicles\s*\{\s*background:\s*linear-gradient\([^}]*var\(--brand-purple\)/);
+});
+
+test("Total Fleet provides a persistent Caliber watermark option", () => {
+  assert.match(source, /nerveCenterFleetWatermark/);
+  assert.match(source, /className="mine-fleet-watermark-toggle"/);
+  assert.match(source, /showFleetWatermark \? " watermarked" : ""/);
+  assert.match(css, /\.mine-fleet-chart-plot\.watermarked::before[\s\S]*caliber-logo-reverse\.png/);
 });
 
 test("breakdown trend is compact, responsive and site selectable", () => {
