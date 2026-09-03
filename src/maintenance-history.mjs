@@ -1,4 +1,4 @@
-const hiddenClosers = new Set(["anoop paul", "maimaintenance manager"]);
+const hiddenClosers = new Set(["anoop paul", "maimaintenance manager", "sanskar manohare"]);
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
 
 // Display-only: the request and its related records remain persisted.
