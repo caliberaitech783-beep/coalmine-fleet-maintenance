@@ -105,6 +105,7 @@ function configuredSchedule(schedule={},index=0){
   };
 }
 
+// Keep General Reports on a daily slot so event notifications remain request-specific.
 function withGeneralReportSchedule(designationKey,schedules=[]){
   if(!GENERAL_REPORT_DESIGNATIONS.has(designationKey))return schedules;
   const assigned=new Set(schedules.flatMap((schedule)=>schedule.reports||[]));
