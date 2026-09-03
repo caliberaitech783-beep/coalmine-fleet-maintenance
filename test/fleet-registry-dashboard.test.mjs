@@ -97,7 +97,8 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
 });
 
 test("the region and site graph panel is titled only Total Fleet", () => {
-  assert.match(source, /<header><div><h2>Total Fleet<\/h2><\/div><strong className="mine-fleet-chart-total"/);
+  assert.match(source, /<header><div><h2>Total Fleet<\/h2><\/div><button type="button" className="mine-fleet-chart-total"/);
+  assert.match(source, /aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
   assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);
   assert.doesNotMatch(source, /Region-wise site distribution with total fleet count/);
 });

@@ -758,7 +758,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-region-chart.watermarked::before { content: ""; position: absolute; z-index: 0; inset: 0; background: var(--brand-purple); opacity: .032; pointer-events: none; -webkit-mask: url("/caliber-logo-reverse.png") center / 88% 88% no-repeat; mask: url("/caliber-logo-reverse.png") center / 88% 88% no-repeat; }
 .mine-fleet-region-chart > * { position: relative; z-index: 1; }
 .mine-fleet-region-chart > header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
-.mine-fleet-chart-total { display: inline-flex; align-items: center; justify-self: center; gap: 7px; min-height: 42px; padding: 8px 20px; border-radius: 999px; background: linear-gradient(135deg, #e53f86, #7138b7); box-shadow: 0 6px 16px #9d39742b; color: #fff; font: 900 22px/1 Manrope; white-space: nowrap; }
+.mine-fleet-chart-total { display: inline-flex; align-items: center; justify-self: center; gap: 7px; min-height: 42px; padding: 8px 20px; border: 0; border-radius: 999px; background: linear-gradient(135deg, #e53f86, #7138b7); box-shadow: 0 6px 16px #9d39742b; color: #fff; font: 900 22px/1 Manrope; white-space: nowrap; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+.mine-fleet-chart-total:hover,.mine-fleet-chart-total:focus-visible { transform: translateY(-1px); outline: 2px solid #7138b744; outline-offset: 2px; box-shadow: 0 8px 20px #9d397444; }
 .mine-fleet-chart-total span { font-size: 12px; }
 .mine-fleet-chart-tools { display: flex; align-items: center; justify-self: end; gap: 12px; }
 .mine-fleet-chart-legend { display: flex; align-items: center; gap: 12px; color: var(--mine-muted); font-size: 8px; }
