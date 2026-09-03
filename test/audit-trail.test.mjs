@@ -30,6 +30,7 @@ test("audit routes classify security, master, workflow, and CRM activity", () =>
 test("server persists append-only audit events and exposes the detailed report", () => {
   assert.match(server, /CREATE TABLE IF NOT EXISTS audit_events/);
   assert.match(server, /res\.on\('finish',[\s\S]*appendAuditEvent/);
+  assert.match(server, /headers\?\.\['x-forwarded-for'\][\s\S]*auditIpAddress\(req\)/);
   assert.match(server, /action:profile\.sessionRole==='super'\?'Administrator login':'User login'/);
   assert.match(server, /app\.get\('\/api\/audit-events',requireSuper/);
   assert.match(server, /action:'Administrator password change'/);

@@ -109,6 +109,7 @@ const auditSessionId=(req)=>{
 };
 const auditRole=(session={})=>auditClean(session.permissions?.adminLevel||session.assignedRole||session.userType||session.role||'Unauthenticated',100);
 const auditTargetReference=(req)=>auditClean(req.params?.reference||req.params?.id||req.body?.reference||req.body?.username||'',160);
+const auditIpAddress=(req)=>auditClean(String(req.headers?.['x-forwarded-for']||'').split(',')[0]||req.ip||req.socket?.remoteAddress,100);
 
 async function appendAuditEvent(req,event={}){
   try{
@@ -121,7 +122,7 @@ async function appendAuditEvent(req,event={}){
       auditClean(event.eventType||route.eventType,80),auditClean(event.outcome||'Success',30),
       auditClean(event.actorLogin||session.login||req.body?.username,120),auditClean(event.actorName||session.name,160),auditClean(event.actorRole||auditRole(session),100),
       auditClean(event.module||route.module,120),auditClean(event.action||route.action,160),auditClean(event.targetType||'',100),auditClean(event.targetReference||auditTargetReference(req),160),
-      auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditClean(req.ip||req.socket?.remoteAddress,100),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
+      auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditIpAddress(req),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
     ]);
   }catch(error){console.error('Audit event could not be recorded:',error.message)}
 }
