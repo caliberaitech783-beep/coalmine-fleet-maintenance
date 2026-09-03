@@ -57,6 +57,7 @@ const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
 const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
 const AUDIT_REASON_HEADER='x-audit-reason';
+const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
@@ -117,12 +118,12 @@ async function appendAuditEvent(req,event={}){
     const session=req.session||{};
     const changes=event.changedFields||auditSubmittedFields(req.body);
     await pool.query(`INSERT INTO audit_events
-      (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,ip_address,user_agent,session_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)`,[
+      (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,ip_address,device_id,user_agent,session_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15)`,[
       auditClean(event.eventType||route.eventType,80),auditClean(event.outcome||'Success',30),
       auditClean(event.actorLogin||session.login||req.body?.username,120),auditClean(event.actorName||session.name,160),auditClean(event.actorRole||auditRole(session),100),
       auditClean(event.module||route.module,120),auditClean(event.action||route.action,160),auditClean(event.targetType||'',100),auditClean(event.targetReference||auditTargetReference(req),160),
-      auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditIpAddress(req),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
+      auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditIpAddress(req),auditClean(req.get?.(AUDIT_DEVICE_ID_HEADER),80),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
     ]);
   }catch(error){console.error('Audit event could not be recorded:',error.message)}
 }
@@ -318,11 +319,13 @@ async function migrate(){
       reason TEXT NOT NULL DEFAULT '',
       changed_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
       ip_address TEXT NOT NULL DEFAULT '',
+      device_id TEXT NOT NULL DEFAULT '',
       user_agent TEXT NOT NULL DEFAULT '',
       session_id TEXT NOT NULL DEFAULT '',
       occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS audit_events_occurred_at_idx ON audit_events (occurred_at DESC);
+    ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS device_id TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS audit_events_actor_idx ON audit_events (actor_login, occurred_at DESC);
     CREATE INDEX IF NOT EXISTS audit_events_module_idx ON audit_events (module, occurred_at DESC);
     CREATE TABLE IF NOT EXISTS password_change_sessions (
@@ -854,7 +857,7 @@ app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
     const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||2000));
     const {rows}=await pool.query(`SELECT id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
       actor_role AS "actorRole",module,action,target_type AS "targetType",target_reference AS "targetReference",reason,
-      changed_fields AS "changedFields",ip_address AS "ipAddress",user_agent AS "userAgent",session_id AS "sessionId",occurred_at AS "occurredAt"
+      changed_fields AS "changedFields",ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",session_id AS "sessionId",occurred_at AS "occurredAt"
       FROM audit_events ORDER BY occurred_at DESC LIMIT $1`,[limit]);
     res.set('Cache-Control','no-store');
     res.json(rows);

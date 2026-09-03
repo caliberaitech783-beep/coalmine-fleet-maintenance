@@ -37,6 +37,7 @@ import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelecti
 import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
+import {auditDeviceDetails} from "../device-details.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -98,6 +99,8 @@ import {
   Printer,
   Columns3,
   RotateCcw,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -137,6 +140,21 @@ let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
 const SESSION_EXPIRED_PARAM = "session-expired";
 const LOGIN_LANDING_PAGE = "Dashboard";
+const DEVICE_ID_STORAGE_KEY = "nerveCenterDeviceId";
+const clientDeviceId = (() => {
+  try {
+    const saved = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    if (saved) return saved;
+    const randomPart = typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID().replaceAll("-", "").slice(0, 16)
+      : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`.slice(0, 16);
+    const generated = `BDMS-${randomPart.toUpperCase()}`;
+    localStorage.setItem(DEVICE_ID_STORAGE_KEY, generated);
+    return generated;
+  } catch {
+    return "";
+  }
+})();
 const clearStoredSession = () => {
   authToken = "";
   currentEmployeeName = "";
@@ -151,8 +169,14 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
   const nativeFetch = window.fetch.bind(window);
   window.__sessionExpiryFetch = true;
   window.fetch = async (input, init) => {
-    const response = await nativeFetch(input, init);
     const url = typeof input === "string" ? input : input?.url || "";
+    let requestInit = init;
+    if (url.startsWith("/api/") && clientDeviceId) {
+      const headers = new Headers(init?.headers || (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined));
+      headers.set("X-BDMS-Device-ID", clientDeviceId);
+      requestInit = {...init, headers};
+    }
+    const response = await nativeFetch(input, requestInit);
     if (response.status === 401 && authToken && url.startsWith("/api/") && !url.startsWith("/api/login")) {
       clearStoredSession();
       window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
@@ -4366,13 +4390,6 @@ function auditChangesLabel(changes = []) {
     : "—";
 }
 
-function auditDeviceLabel(userAgent = "") {
-  const agent = String(userAgent);
-  const browser = agent.includes("Edg/") ? "Edge" : agent.includes("Chrome/") ? "Chrome" : agent.includes("Firefox/") ? "Firefox" : agent.includes("Safari/") ? "Safari" : "Browser";
-  const device = /Android|iPhone|iPad|Mobile/i.test(agent) ? "Mobile" : /Windows/i.test(agent) ? "Windows" : /Macintosh|Mac OS/i.test(agent) ? "Mac" : /Linux/i.test(agent) ? "Linux" : "Device";
-  return agent ? `${browser} · ${device}` : "—";
-}
-
 function auditTimestampLabel(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value || "—";
@@ -4382,8 +4399,22 @@ function auditTimestampLabel(value) {
   }).format(date);
 }
 
+const auditDeviceTypeOptions = [
+  {value:"All", label:"All", icon:null},
+  {value:"Computer", label:"Computer", icon:Monitor},
+  {value:"Mobile", label:"Mobile", icon:Smartphone},
+];
+const auditPlatformOptions = ["All", "Windows", "macOS", "Android", "iOS", "Linux"];
+function AuditToggleGroup({label, value, options, onChange}) {
+  return <div className="audit-toggle-group"><span>{label}</span><div className="audit-toggle-track" role="group" aria-label={`${label} filter`}>{options.map((option) => {
+    const item = typeof option === "string" ? {value:option,label:option,icon:null} : option;
+    const Icon = item.icon;
+    return <button key={item.value} type="button" aria-pressed={value === item.value} onClick={() => onChange(item.value)}>{Icon && <Icon />}<span>{item.label}</span></button>;
+  })}</div></div>;
+}
+
 function AuditTrailPage({ session }) {
-  const [events, setEvents] = useState([]), [loading, setLoading] = useState(true), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  const [events, setEvents] = useState([]), [loading, setLoading] = useState(true), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const load = async () => {
     setLoading(true);
     try {
@@ -4395,36 +4426,50 @@ function AuditTrailPage({ session }) {
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [session?.token]);
-  const valueFor = (event, key) => ({
-    occurredAt: auditTimestampLabel(event.occurredAt),
-    eventType: event.eventType,
-    actor: event.actorName ? `${event.actorName} (${event.actorLogin || "no login"})` : event.actorLogin,
-    actorRole: event.actorRole,
-    module: event.module,
-    action: event.action,
-    target: [event.targetType, event.targetReference].filter(Boolean).join(" · "),
-    outcome: event.outcome,
-    reason: event.reason,
-    changes: auditChangesLabel(event.changedFields),
-    ipAddress: event.ipAddress,
-    device: auditDeviceLabel(event.userAgent),
-    sessionId: event.sessionId,
-  })[key] || "—";
+  const valueFor = (event, key) => {
+    if (["deviceType", "platform", "browser"].includes(key)) {
+      const device = auditDeviceDetails(event.userAgent);
+      return ({deviceType:device.type, platform:device.platform, browser:device.browser})[key];
+    }
+    return ({
+      occurredAt: auditTimestampLabel(event.occurredAt),
+      eventType: event.eventType,
+      actor: event.actorName ? `${event.actorName} (${event.actorLogin || "no login"})` : event.actorLogin,
+      actorRole: event.actorRole,
+      module: event.module,
+      action: event.action,
+      target: [event.targetType, event.targetReference].filter(Boolean).join(" · "),
+      outcome: event.outcome,
+      reason: event.reason,
+      changes: auditChangesLabel(event.changedFields),
+      ipAddress: event.ipAddress,
+      deviceId: event.deviceId,
+      sessionId: event.sessionId,
+    })[key] || "—";
+  };
   const columns = [
     ["occurredAt", "Date & time"], ["eventType", "Event"], ["actor", "User / login"], ["actorRole", "Role"],
     ["module", "Module"], ["action", "Action"], ["target", "Target / record"], ["outcome", "Outcome"],
-    ["reason", "Reason / details"], ["changes", "Changes"], ["ipAddress", "IP address"], ["device", "Device / browser"], ["sessionId", "Session ID"],
+    ["reason", "Reason / details"], ["changes", "Changes"], ["ipAddress", "IP address"], ["deviceId", "App Device ID"],
+    ["deviceType", "Device type"], ["platform", "Platform"], ["browser", "Browser"], ["sessionId", "Session ID"],
   ];
   const filterColumns = columns.map(([key, label]) => ({key, label, value:(event) => valueFor(event, key)}));
-  const filtered = events.filter((event) => matchesSmartSearch(query, event) && tableRowMatchesFilters(event, filterColumns, filters));
+  const filtered = events.filter((event) => {
+    const device = auditDeviceDetails(event.userAgent);
+    return (deviceType === "All" || device.type === deviceType)
+      && (platform === "All" || device.platform === platform)
+      && matchesSmartSearch(query, event, device.type, device.platform, device.browser)
+      && tableRowMatchesFilters(event, filterColumns, filters);
+  });
   const [rows, sort, changeSort] = useSortableRows(filtered, "", (event, key) => key === "occurredAt" ? event.occurredAt : valueFor(event, key));
   const exportColumns = columns.map(([key, label]) => ({label, value:(event) => valueFor(event, key)}));
   const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
   return <section className="panel pagepanel generic audit-page">
     <header><div><h1>Audit Trail</h1><p>Append-only security, administration, master-data, workflow, and integration activity</p></div><button type="button" className="secondary" onClick={load} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></header>
-    <div className="audit-summary"><span><b>{events.length.toLocaleString("en-IN")}</b> recorded events</span><span><b>{events.filter((event) => event.outcome === "Failed").length.toLocaleString("en-IN")}</b> failed actions</span><span><b>{new Set(events.map((event) => event.actorLogin).filter(Boolean)).size.toLocaleString("en-IN")}</b> users</span></div>
-    <div className="toolbar audit-toolbar"><div><Search /><input data-smart-search type="search" placeholder="Search audit trail" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="toolbar-actions-end"><div className="master-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={events} filters={filters} onFilterChange={updateFilter} onClearFilters={() => setFilters({})} /><ExportMenu title="Audit Trail" columns={exportColumns} rows={rows} /></div></div>
-    <div className="emptytable master-table-scroll audit-table-wrap" onClick={() => setOpenFilter(null)}><ActionsTable className="audit-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr>{columns.map(([key,label]) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(field) => setOpenFilter((current) => current === field ? null : field)} values={[...new Set(events.map((event) => valueFor(event,key)))].sort((a,b) => sortCollator.compare(a,b))} filterValue={filters[key] || ""} onFilterChange={(value) => updateFilter(key,value)} />)}</tr></thead><tbody>{rows.length ? rows.map((event) => <tr key={event.id}><td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td><td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td><td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td title={event.userAgent || ""}>{valueFor(event,"device")}</td><td><code>{event.sessionId || "—"}</code></td></tr>) : <tr><td colSpan="13" className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody></ActionsTable></div>
+    <div className="audit-summary"><span><b>{events.length.toLocaleString("en-IN")}</b> recorded events</span><span><b>{events.filter((event) => event.outcome === "Failed").length.toLocaleString("en-IN")}</b> failed actions</span><span><b>{new Set(events.map((event) => event.actorLogin).filter(Boolean)).size.toLocaleString("en-IN")}</b> users</span><span><b>{new Set(events.map((event) => event.deviceId).filter(Boolean)).size.toLocaleString("en-IN")}</b> devices</span></div>
+    <div className="audit-device-filter-band"><AuditToggleGroup label="Device" value={deviceType} options={auditDeviceTypeOptions} onChange={setDeviceType} /><AuditToggleGroup label="Platform" value={platform} options={auditPlatformOptions} onChange={setPlatform} /><span className="audit-visible-count"><b>{rows.length.toLocaleString("en-IN")}</b> visible</span></div>
+    <div className="toolbar audit-toolbar"><div><Search /><input data-smart-search type="search" placeholder="Search audit trail" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="toolbar-actions-end"><div className="master-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={events} filters={filters} onFilterChange={updateFilter} onClearFilters={() => {setFilters({});setDeviceType("All");setPlatform("All");}} /><ExportMenu title="Audit Trail" columns={exportColumns} rows={rows} /></div></div>
+    <div className="emptytable master-table-scroll audit-table-wrap" onClick={() => setOpenFilter(null)}><ActionsTable className="audit-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr>{columns.map(([key,label]) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(field) => setOpenFilter((current) => current === field ? null : field)} values={[...new Set(events.map((event) => valueFor(event,key)))].sort((a,b) => sortCollator.compare(a,b))} filterValue={filters[key] || ""} onFilterChange={(value) => updateFilter(key,value)} />)}</tr></thead><tbody>{rows.length ? rows.map((event) => <tr key={event.id}><td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td><td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td><td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td><code>{event.deviceId || "—"}</code></td><td><span className={`audit-device-badge ${valueFor(event,"deviceType").toLowerCase()}`}>{valueFor(event,"deviceType")}</span></td><td>{valueFor(event,"platform")}</td><td title={event.userAgent || ""}>{valueFor(event,"browser")}</td><td><code>{event.sessionId || "—"}</code></td></tr>) : <tr><td colSpan={columns.length} className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody></ActionsTable></div>
   </section>;
 }
 function reportCategoryIdsForUser(permissions = {}, session = {}) {

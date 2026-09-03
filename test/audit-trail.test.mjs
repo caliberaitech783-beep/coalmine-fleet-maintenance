@@ -31,10 +31,15 @@ test("server persists append-only audit events and exposes the detailed report",
   assert.match(server, /CREATE TABLE IF NOT EXISTS audit_events/);
   assert.match(server, /res\.on\('finish',[\s\S]*appendAuditEvent/);
   assert.match(server, /headers\?\.\['x-forwarded-for'\][\s\S]*auditIpAddress\(req\)/);
+  assert.match(server, /device_id TEXT NOT NULL DEFAULT ''/);
+  assert.match(server, /req\.get\?\.\(AUDIT_DEVICE_ID_HEADER\)/);
   assert.match(server, /action:profile\.sessionRole==='super'\?'Administrator login':'User login'/);
   assert.match(server, /app\.get\('\/api\/audit-events',requireSuper/);
   assert.match(server, /action:'Administrator password change'/);
   assert.match(client, /function AuditTrailPage/);
-  for (const column of ["Date & time", "Event", "User / login", "Role", "Module", "Action", "Target / record", "Outcome", "Reason / details", "Changes", "IP address", "Device / browser", "Session ID"])
+  for (const column of ["Date & time", "Event", "User / login", "Role", "Module", "Action", "Target / record", "Outcome", "Reason / details", "Changes", "IP address", "App Device ID", "Device type", "Platform", "Browser", "Session ID"])
     assert.match(client, new RegExp(column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(client, /headers\.set\("X-BDMS-Device-ID", clientDeviceId\)/);
+  assert.match(client, /label="Device"[\s\S]*label="Platform"/);
+  assert.match(client, /className="toolbar-actions-end"><div className="master-actions-slot"[\s\S]*?<TableParameterFilter/);
 });

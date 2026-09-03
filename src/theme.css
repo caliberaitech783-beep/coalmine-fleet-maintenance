@@ -414,6 +414,12 @@ textarea {
 }
 :root[data-theme="dark"] .employee-password-require-change,
 :root[data-theme="dark"] .audit-summary span{background:#142136;border-color:#2c415e}
+:root[data-theme="dark"] .audit-device-filter-band{background:#101d31;border-color:#2c415e}
+:root[data-theme="dark"] .audit-toggle-track{background:#17263c;border-color:#344b68}
+:root[data-theme="dark"] .audit-toggle-track button{color:#b9c8dc}
+:root[data-theme="dark"] .audit-toggle-track button[aria-pressed="true"]{background:#7544b5;color:#fff}
 :root[data-theme="dark"] .audit-outcome{background:#263a55;color:#c6d4e8}
 :root[data-theme="dark"] .audit-outcome.success{background:#153d34;color:#8cddc2}
 :root[data-theme="dark"] .audit-outcome.failed{background:#482729;color:#ffb1b1}
+:root[data-theme="dark"] .audit-device-badge.computer{background:#203a63;color:#a9c8ff}
+:root[data-theme="dark"] .audit-device-badge.mobile{background:#183f38;color:#99e1cb}
