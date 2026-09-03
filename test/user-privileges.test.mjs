@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import {resolveMobileAccess} from "../mobile-access.mjs";
-import {profileHeaderDesignation} from "../src/profile-designation.mjs";
+import {profileHeaderDesignation, profileHeaderName} from "../src/profile-designation.mjs";
 
 test("user creation contains every existing privilege option", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -51,6 +51,13 @@ test("director profiles use the Director header designation without changing man
     assert.equal(profileHeaderDesignation({name,permissions}), "Director");
   }
   assert.equal(profileHeaderDesignation({name:"Other Manager",permissions}), "Production Manager · Maintenance Manager · MIS Manager");
+});
+
+test("header user names are normalized and displayed in bold uppercase before the login icon", () => {
+  assert.equal(profileHeaderName("  Anoop   Paul  "), "ANOOP PAUL");
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(source, /className="header-user-name">\{profileHeaderName/);
+  assert.match(source, /header-user-name[\s\S]*header-login-icon/);
 });
 
 test("each Manager receives a role-specific dashboard", () => {

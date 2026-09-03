@@ -36,7 +36,7 @@ import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAl
 import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
-import {profileHeaderDesignation} from "./profile-designation.mjs";
+import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -715,14 +715,14 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
         {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button className={active === "Admin locks" ? "active" : ""} onClick={() => selectPage("Admin locks")}><ShieldCheck /><span className="nav-label">Admin locks</span></button></div>}
       </nav>
       <div className="user">
-        <div>
+        <span className="header-user-copy">
+          <b className="header-user-name">{profileHeaderName(session?.name, permissions.adminLevel === "Manager" ? "Manager" : "Administrator")}</b>
+          <small>{[profileHeaderDesignation({name:session?.name,permissions}), profileLocation].filter(Boolean).join(" · ")}</small>
+        </span>
+        <div className="header-login-icon">
           <UserRound />
         </div>
-        <span>
-          <b>{profileHeaderDesignation({name:session?.name,permissions})}</b>
-          <small>{[session?.name || (permissions.adminLevel === "Manager" ? "Manager" : "Administrator"), profileLocation].filter(Boolean).join(" · ")}</small>
-        </span>
-        <button onClick={logout}>
+        <button onClick={logout} aria-label="Sign out">
           <LogOut />
         </button>
       </div>

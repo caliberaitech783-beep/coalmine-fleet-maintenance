@@ -6,6 +6,10 @@ const DIRECTOR_PROFILE_NAMES = new Set([
 
 const normalizedName = (value) => String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 
+export function profileHeaderName(value, fallback = "Administrator") {
+  return String(value || fallback).trim().replace(/\s+/g, " ").toUpperCase();
+}
+
 export function profileHeaderDesignation({ name = "", permissions = {} } = {}) {
   if (DIRECTOR_PROFILE_NAMES.has(normalizedName(name))) return "Director";
   if (permissions.adminLevel === "Manager") {
