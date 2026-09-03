@@ -49,12 +49,13 @@ jobs:
         run: |
           set -euo pipefail
           zip -q -r "$RUNNER_TEMP/node-app.zip" . \
-            -x '.git/*' 'node_modules/.cache/*'
+            -x '.git/*' '.github/*' 'test/*' 'node_modules/.cache/*'
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v6
         with:
           name: node-app-${{ github.sha }}
           path: ${{ runner.temp }}/node-app.zip
+          compression-level: 0
           retention-days: 30
 
   deploy:
