@@ -4,6 +4,7 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const styles = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
+const brandStyles = fs.readFileSync(new URL("../src/brand-theme.css", import.meta.url), "utf8");
 
 test("dashboard region selection exposes its sites and filters every scoped data source", () => {
   assert.match(source, /const \[dashboardSite, setDashboardSite\] = useState\("all"\)/);
@@ -26,4 +27,10 @@ test("dashboard date control filters request-based metrics and remains responsiv
   assert.match(styles, /\.mine-head-actions\{[^}]*flex-wrap:wrap/);
   assert.match(styles, /\.mine-site-filter select\{min-width:165px\}/);
   assert.match(styles, /@media\(max-width:700px\)[\s\S]*\.mine-head-actions\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+});
+
+test("dashboard region and date controls keep white labels and native icons", () => {
+  assert.match(brandStyles, /:root \.mine-dashboard-head \.mine-head-actions label \{\s*color: #fff;/);
+  assert.match(brandStyles, /:root \.mine-dashboard-head \.mine-head-actions select,[\s\S]*color: #fff;[\s\S]*color-scheme: dark;/);
+  assert.match(brandStyles, /\.mine-date-filter input::\-webkit-calendar-picker-indicator \{[\s\S]*filter: brightness\(0\) invert\(1\);/);
 });

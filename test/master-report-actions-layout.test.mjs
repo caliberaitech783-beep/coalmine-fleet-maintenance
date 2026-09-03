@@ -12,11 +12,11 @@ test("all tabular masters place Actions beside Search", () => {
   const hierarchy = source.slice(source.indexOf("function HierarchyMasterPage("), source.indexOf("function RegionMasterPage("));
 
   assert.match(equipment, /placeholder="Search equipment, category, serial no\.\.\.\."[\s\S]*className="master-actions-slot"/);
-  assert.match(equipment, /<ActionsTable toolbarTarget=\{actionsToolbarTarget\}>/);
+  assert.match(equipment, /<ActionsTable toolbarTarget=\{actionsToolbarTarget\} toolbarPortal>/);
   assert.match(generic, /placeholder=\{"Search " \+ name\.toLowerCase\(\)\}[\s\S]*className="master-actions-slot"/);
-  assert.match(generic, /<ActionsTable toolbarTarget=\{actionsToolbarTarget\}>/);
+  assert.match(generic, /<ActionsTable toolbarTarget=\{actionsToolbarTarget\} toolbarPortal>/);
   assert.match(hierarchy, /className="master-search-actions"[\s\S]*className="master-actions-slot"/);
-  assert.match(hierarchy, /<ActionsTable className="hierarchy-matrix" toolbarTarget=\{actionsToolbarTarget\}>/);
+  assert.match(hierarchy, /<ActionsTable className="hierarchy-matrix" toolbarTarget=\{actionsToolbarTarget\} toolbarPortal>/);
   assert.match(source, /<BreakdownTable rows=\{rows\} stickyHeader showAudio showMakeModel actionsBesideSearch \/>/);
   assert.match(tableStyles, /\.master-actions-slot \.shared-table-actions-toolbar \{ position: static; width: auto;/);
 });
@@ -27,7 +27,8 @@ test("report Rows and Actions controls render to the left of Generate", () => {
 
   assert.match(reportSection, /className="report-heading-table-actions"[\s\S]*label="Generate"/);
   assert.match(reportSection, /toolbarTarget=\{tableToolbarTarget\}/);
+  assert.match(reportSection, /toolbarTarget=\{tableToolbarTarget\}[\s\S]*toolbarPortal/);
   assert.match(reportTable, /className="report-row-limit"[\s\S]*<ReportActionsMenu/);
-  assert.match(reportTable, /toolbarTarget \? createPortal\(reportTableToolbar, toolbarTarget\) : reportTableToolbar/);
+  assert.match(reportTable, /toolbarTarget \? createPortal\(reportTableToolbar, toolbarTarget\) : toolbarPortal \? null : reportTableToolbar/);
   assert.match(reportStyles, /\.generated-report-heading-actions \{[\s\S]*display: flex;[\s\S]*justify-content: flex-end;/);
 });

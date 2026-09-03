@@ -3,13 +3,13 @@ import { createPortal } from "react-dom";
 import { tableElements, tableModel, projectTableRow, selectTableRows } from "./table-actions-model.mjs";
 import "./table-actions.css";
 
-export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget = null, ...tableProps }) {
+export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
   const { sections, columns } = tableModel(children);
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget, toolbarPortal, tableProps }} />;
 }
 
-function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget, tableProps }) {
+function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget, toolbarPortal, tableProps }) {
   const [visible, setVisible] = useState(columns.map((column) => column.key));
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "", direction: "asc" });
@@ -49,7 +49,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
     </div>
   );
   return <>
-    {toolbarTarget ? createPortal(actionsToolbar, toolbarTarget) : actionsToolbar}
+    {toolbarTarget ? createPortal(actionsToolbar, toolbarTarget) : toolbarPortal ? null : actionsToolbar}
     <table {...tableProps}>{sections.map((section) => {
       if (!["thead", "tbody", "tfoot"].includes(section.type)) return section;
       let sectionRows = tableElements(section.props.children);

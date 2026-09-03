@@ -489,6 +489,28 @@ input[type="radio"] {
   background: #ffffff18;
 }
 
+:root .mine-dashboard-head .mine-head-actions label {
+  color: #fff;
+}
+
+:root .mine-dashboard-head .mine-head-actions select,
+:root .mine-dashboard-head .mine-head-actions input {
+  color: #fff;
+  border-color: #ffffff66;
+  background: #ffffff1a;
+  color-scheme: dark;
+}
+
+:root .mine-dashboard-head .mine-head-actions select option {
+  color: #17233c;
+  background: #fff;
+}
+
+:root .mine-dashboard-head .mine-date-filter input::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  filter: brightness(0) invert(1);
+}
+
 :root[data-theme="dark"] body,
 :root[data-theme="dark"] .content,
 :root[data-theme="dark"] .normal {

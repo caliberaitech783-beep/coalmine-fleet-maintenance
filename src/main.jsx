@@ -1295,7 +1295,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [openFilter]);
   return (
     <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label>{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
-      <ActionsTable className="breakdown-table-auto-fit" toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null}>
+      <ActionsTable className="breakdown-table-auto-fit" toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
             {columns.map(([key, label]) => (
@@ -2173,7 +2173,7 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
 function ActionsTable(props) {
   return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} />;
 }
-function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null }) {
+function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false }) {
   const [columnFilters, setColumnFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
@@ -2233,7 +2233,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   );
   return (
     <>
-      {toolbarTarget ? createPortal(reportTableToolbar, toolbarTarget) : reportTableToolbar}
+      {toolbarTarget ? createPortal(reportTableToolbar, toolbarTarget) : toolbarPortal ? null : reportTableToolbar}
       <table className="report-filter-table">
         <thead><tr>{displayedColumns.map((column) => (
           <FilterableHeader
@@ -3072,7 +3072,7 @@ function Equipment({
         <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="scroll master-table-scroll" onClick={() => setOpenFilter(null)}>
-        <ActionsTable toolbarTarget={actionsToolbarTarget}>
+        <ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal>
           <thead>
             <tr>
               {equipmentColumns.map(([key, label]) => (
@@ -4430,6 +4430,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
             visibleColumnKeys={visibleColumnKeys}
             onVisibleColumnsChange={setVisibleColumnKeys}
             toolbarTarget={tableToolbarTarget}
+            toolbarPortal
           />
         </div>
       )}
@@ -5059,7 +5060,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="emptytable master-table-scroll" onClick={() => setOpenFilter(null)}>
-        <ActionsTable toolbarTarget={actionsToolbarTarget}>
+        <ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal>
           <thead>
             <tr>
               {displayFields.map(([key, label]) => (
@@ -5910,7 +5911,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         </div>
       </div>
       <div className="hierarchy-matrix-scroll">
-        {matrixColumnCount ? <ActionsTable className="hierarchy-matrix" toolbarTarget={actionsToolbarTarget}>
+        {matrixColumnCount ? <ActionsTable className="hierarchy-matrix" toolbarTarget={actionsToolbarTarget} toolbarPortal>
           <thead>
             <tr className="hierarchy-group-row">
               {showIdentityColumns && <th className="hierarchy-admin-group" colSpan="4">Hierarchy Key Whatsapp Flow</th>}
@@ -6256,7 +6257,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
   }, [openFilter]);
   return (
     <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="scroll mobile-workflow-table">
-      <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget}>
+      <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showClosedBy && workflowHeader("closedBy", "Closed by")}{workflowHeader("start", "Started")}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && <th>Actions</th>}
