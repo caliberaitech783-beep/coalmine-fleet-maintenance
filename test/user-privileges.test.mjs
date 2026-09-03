@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import {resolveMobileAccess} from "../mobile-access.mjs";
+import {profileHeaderDesignation} from "../src/profile-designation.mjs";
 
 test("user creation contains every existing privilege option", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -38,10 +39,18 @@ test("user modal uses one role selector with role-specific sections", () => {
 
 test("manager profile and navigation honor assigned role, location, and parent menu access", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /permissions\.managerRoles\?\.join\(" · "\)/);
+  assert.match(source, /profileHeaderDesignation\(\{name:session\?\.name,permissions\}\)/);
   assert.match(source, /session\?\.name[\s\S]*profileLocation[\s\S]*\.join\(" · "\)/);
   assert.match(source, /accessAllows\(viewPermissions\.tabAccess, "Masters"\)[\s\S]*visibleMasterNav\.length > 0/);
   assert.match(source, /accessAllows\(activeNavigationPermissions\.tabAccess, "Masters"\) && accessAllows\(activeNavigationPermissions\.masterAccess, name\)/);
+});
+
+test("director profiles use the Director header designation without changing manager permissions", () => {
+  const permissions = {adminLevel:"Manager",managerRoles:["Production Manager","Maintenance Manager","MIS Manager"]};
+  for (const name of ["MOHIT CHADDA","Manish Chadda"," Rahul   Chadda "]) {
+    assert.equal(profileHeaderDesignation({name,permissions}), "Director");
+  }
+  assert.equal(profileHeaderDesignation({name:"Other Manager",permissions}), "Production Manager · Maintenance Manager · MIS Manager");
 });
 
 test("each Manager receives a role-specific dashboard", () => {

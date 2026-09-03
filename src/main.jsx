@@ -36,6 +36,7 @@ import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAl
 import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
+import {profileHeaderDesignation} from "./profile-designation.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -718,7 +719,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           <UserRound />
         </div>
         <span>
-          <b>{permissions.adminLevel === "Manager" ? permissions.managerRoles?.join(" · ") || permissions.managerRole || "Manager" : permissions.adminLevel === "Super Admin" ? "Super Admin" : "Admin"}</b>
+          <b>{profileHeaderDesignation({name:session?.name,permissions})}</b>
           <small>{[session?.name || (permissions.adminLevel === "Manager" ? "Manager" : "Administrator"), profileLocation].filter(Boolean).join(" · ")}</small>
         </span>
         <button onClick={logout}>
