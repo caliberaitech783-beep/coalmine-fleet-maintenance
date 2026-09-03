@@ -491,3 +491,7 @@
   border-color: #36516f;
   color: #dce7f7;
 }
+
+/* In and Out Report net movement column */
+.in-out-net.positive { color: #b42318; }
+.in-out-net.negative { color: #1c7c54; }

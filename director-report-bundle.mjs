@@ -1,5 +1,6 @@
 import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
+import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows} from './in-out-report.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
 export const DIRECTOR_REPORT_TITLES=[
@@ -16,6 +17,7 @@ export const DIRECTOR_REPORT_TITLES=[
   'Event close Report - Maint. Closing to MIS Verif.',
   'Idle with PM verif.',
   'On Road with first trip veri.',
+  IN_OUT_REPORT_TITLE,
 ];
 
 export const LEGACY_REPORT_TITLE_ALIASES=new Map([
@@ -52,6 +54,7 @@ const WHATSAPP_REPORT_LABELS=new Map([
   ['Event close Report - Maint. Closing to MIS Verif.','Event Close to MIS'],
   ['Idle with PM verif.','Idle with PM verif.'],
   ['On Road with first trip veri.','On Road with first trip veri.'],
+  [IN_OUT_REPORT_TITLE,'In and Out'],
 ]);
 
 function indiaParts(date){
@@ -132,8 +135,9 @@ function table(title,department,description,columns,rows){
   return {title,department,description,columns,rows:rows.map((row)=>columns.map((column)=>cell(typeof column.value==='function'?column.value(row):row[column.key])))};
 }
 
-export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[]}={}){
+export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[],now=new Date()}={}){
   const reportRequests=enrichRequests(requests,equipmentRecords);
+  const inOutRows=buildInOutReportRows(reportRequests,{today:now});
   const openBreakdownRows=reportRequests.filter((request)=>clean(request.status).toLowerCase()!=='closed');
   const closedBreakdownRows=reportRequests.filter((request)=>clean(request.closedAt)||clean(request.status).toLowerCase()==='closed');
   const misVerificationRows=reportRequests.filter((request)=>clean(request.verifiedAt)||clean(request.verifiedBy));
@@ -197,6 +201,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     table(DIRECTOR_REPORT_TITLES[10],'Maintenance','Elapsed time from Maintenance close to MIS verification.',[...misColumns,{key:'maintToMis',label:'Maintenance close to MIS verification',value:(request)=>elapsedLabel(request.closedAt,request.verifiedAt)}],elapsedRows.filter((row)=>row.closedAt&&row.verifiedAt)),
     table(DIRECTOR_REPORT_TITLES[11],'Maintenance','Idle cases with maintenance idle time and verification timestamp.',[...misColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'idleTime',label:'Idle to PM verification time',value:(request)=>elapsedLabel(request.closedAt||request.start,request.verifiedAt)}],idleRequestRows),
     table(DIRECTOR_REPORT_TITLES[12],'MIS','Comparison of MIS verification against first-trip confirmation for idle cases.',[...misColumns,{key:'firstTripDone',label:'First trip done',value:(request)=>request.firstTripDone?'Yes':'No'},{key:'firstTrip',label:'First trip verification',value:firstTripTimestamp},{key:'misToFirstTrip',label:'MIS to first trip',value:(request)=>elapsedLabel(request.verifiedAt,firstTripTimestamp(request))}],idleRequestRows.filter((row)=>row.verifiedAt||firstTripTimestamp(row))),
+    table(DIRECTOR_REPORT_TITLES[13],'General',IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_COLUMNS,inOutRows),
   ];
 }
 

@@ -219,6 +219,8 @@ The Super User dashboard is the mining-operations view. It loads Equipment maste
 
 Reports include request-age highlighting. The shared styles mark requests about one day old yellow, two to four days orange, and more than five days red. The Reports and request tables use the same stored request start time as the Mobile days-of-breakdown value.
 
+The General Report tab also carries the **In and Out Report**, the tabular twin of the dashboard Request Lifecycle graph. `in-out-report.mjs` builds one row per IST calendar day (from the earliest workflow event, capped at 366 days) with vehicles in (opened), vehicles out (maintenance closed, idle excluded), MIS verified, idle vehicles, net movement, the balance still in workshop and awaiting MIS verification at day end, average closure turnaround, and the vehicle and location lists behind each movement. The same module feeds the director bundle (`DIRECTOR_REPORT_TITLES[13]`, General department) and the daily 7 PM operational schedule, so the report can be scheduled, emailed, and downloaded in the reports ZIP like every other report.
+
 ## 10. WhatsApp Integration
 
 The WhatsApp Integration menu contains:

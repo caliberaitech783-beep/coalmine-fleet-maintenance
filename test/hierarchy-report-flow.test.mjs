@@ -8,7 +8,7 @@ test('Director receives one daily 7 PM group excluding weekly-only fleet reports
   const due=reportsDueForDesignation('director',new Date('2026-09-01T13:35:00Z'));
   assert.equal(due.length,1);
   assert.equal(due[0].scheduleKey,'daily-19');
-  assert.equal(due[0].reports.length,11);
+  assert.equal(due[0].reports.length,12);
   assert.equal(due[0].reports.includes(DIRECTOR_REPORT_TITLES[4]),false);
   assert.equal(due[0].reports.includes(DIRECTOR_REPORT_TITLES[5]),false);
 });
@@ -16,7 +16,7 @@ test('Director receives one daily 7 PM group excluding weekly-only fleet reports
 test('Director weekly fleet reports are due on Saturday at 7 PM with the daily group',()=>{
   const due=reportsDueForDesignation('director',new Date('2026-09-05T13:35:00Z'));
   assert.deepEqual(due.map((group)=>group.scheduleKey).sort(),['daily-19','weekly-sat-19']);
-  assert.equal(new Set(due.flatMap((group)=>group.reports)).size,13);
+  assert.equal(new Set(due.flatMap((group)=>group.reports)).size,14);
 });
 
 test('Project manager receives common reports at 8 AM and operational reports at 7 PM',()=>{
@@ -25,7 +25,7 @@ test('Project manager receives common reports at 8 AM and operational reports at
   assert.deepEqual(morning[0].reports,DIRECTOR_REPORT_TITLES.slice(0,4));
   const evening=reportsDueForDesignation('projectManager',new Date('2026-09-01T13:35:00Z'));
   assert.deepEqual(evening.map((group)=>group.scheduleKey),['daily-19']);
-  assert.deepEqual(evening[0].reports,DIRECTOR_REPORT_TITLES.slice(6,13));
+  assert.deepEqual(evening[0].reports,DIRECTOR_REPORT_TITLES.slice(6,14));
 });
 
 test('department managers use every-event rules separately from scheduled consolidated reports',()=>{
@@ -33,7 +33,7 @@ test('department managers use every-event rules separately from scheduled consol
   assert.equal(production.key,'productionManager');
   const due=reportsDueForDesignation(production.key,new Date('2026-09-01T13:35:00Z'));
   assert.equal(due.length,1);
-  assert.deepEqual(due[0].reports,DIRECTOR_REPORT_TITLES.slice(6,13));
+  assert.deepEqual(due[0].reports,DIRECTOR_REPORT_TITLES.slice(6,14));
   const supervisor=flowDesignationForUser({designation:'Production Incharge / Supervisor'});
   assert.equal(supervisor.key,'productionSupervisor');
   assert.equal(reportsDueForDesignation(supervisor.key,new Date('2026-09-01T13:35:00Z')).length,0);
