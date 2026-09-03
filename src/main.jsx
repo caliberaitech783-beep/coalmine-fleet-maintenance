@@ -7066,7 +7066,21 @@ function App() {
       if (!response.ok) throw new Error(details.error || "Could not delete request");
       setRequests((current) => current.filter((row) => row.ref !== reference));
     };
-  if (!session) return <Login onLogin={setSession} theme={theme} toggleTheme={toggleTheme} />;
+  const completeLogin = (nextSession) => {
+    setActive("Dashboard");
+    pageHistory.current = ["Dashboard"];
+    setCanGoBack(false);
+    setMenu(false);
+    setLoadTime(null);
+    setEquipmentFilter("all");
+    setEquipmentLocation("");
+    setEquipmentCategory("all");
+    setBreakdownFleetFilter("");
+    setBreakdownFleetSites([]);
+    setActiveReportCategory("general");
+    setSession(nextSession);
+  };
+  if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.role === "normal")
     return (
       <Normal
