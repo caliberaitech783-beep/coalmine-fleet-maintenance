@@ -44,11 +44,17 @@ jobs:
           npm test
           npm run build
           printf '%s' "$GITHUB_SHA" > DEPLOYMENT_SHA
+      - name: Build deployment package
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -q -r "$RUNNER_TEMP/node-app.zip" . \
+            -x '.git/*' 'node_modules/.cache/*'
       - name: Upload deployment artifact
         uses: actions/upload-artifact@v6
         with:
           name: node-app-${{ github.sha }}
-          path: .
+          path: ${{ runner.temp }}/node-app.zip
           retention-days: 30
 
   deploy:
@@ -62,6 +68,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: node-app-${{ github.sha }}
+          path: packages/current
       - name: Login to Azure
         uses: azure/login@v3
         with:
@@ -78,11 +85,17 @@ jobs:
           printf 'STAGING_URL=https://%s\n' "$staging_host" >> "$GITHUB_ENV"
 
       - name: Deploy to Azure staging slot
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          slot-name: staging
-          package: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp deploy \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --slot staging \
+            --src-path packages/current/node-app.zip \
+            --type zip \
+            --clean true \
+            --restart true
 
       - name: Restart and verify staging
         shell: bash
