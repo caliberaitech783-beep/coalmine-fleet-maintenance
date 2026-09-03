@@ -6,6 +6,19 @@
 .workflow-actions-slot .shared-table-actions-toolbar,
 .master-actions-slot .shared-table-actions-toolbar { position: static; width: auto; padding: 0; border: 0; background: transparent; }
 .toolbar > .master-actions-slot { min-width: 0; padding: 0; border: 0; }
+.toolbar > .toolbar-actions-end,
+.table-search-toolbar > .toolbar-actions-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+.toolbar-actions-end > .table-parameter-filter { margin-left: 0; }
 .master-search-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .master-search-actions .region-search { flex: 1 1 auto; min-width: 0; }
 @media (max-width: 700px) {
@@ -19,4 +32,10 @@
   .master-actions-slot .report-actions-menu,
   .master-actions-slot .report-actions-trigger { width: 100%; }
   .master-search-actions { align-items: stretch; flex-direction: column; }
+  .toolbar > .toolbar-actions-end,
+  .table-search-toolbar > .toolbar-actions-end { align-items: stretch; flex-direction: column; width: 100%; margin-left: 0; }
+  .toolbar-actions-end > .table-parameter-filter,
+  .toolbar-actions-end > .export-menu { width: 100%; }
+  .toolbar-actions-end .table-parameter-filter-trigger,
+  .toolbar-actions-end .export-menu-trigger { width: 100%; justify-content: center; }
 }

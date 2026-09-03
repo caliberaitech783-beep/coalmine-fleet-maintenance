@@ -412,3 +412,8 @@ textarea {
 :root[data-theme="dark"] .login-auth-tabs button.active .login-auth-tab-copy small{
   color:#91a2bd;
 }
+:root[data-theme="dark"] .employee-password-require-change,
+:root[data-theme="dark"] .audit-summary span{background:#142136;border-color:#2c415e}
+:root[data-theme="dark"] .audit-outcome{background:#263a55;color:#c6d4e8}
+:root[data-theme="dark"] .audit-outcome.success{background:#153d34;color:#8cddc2}
+:root[data-theme="dark"] .audit-outcome.failed{background:#482729;color:#ffb1b1}

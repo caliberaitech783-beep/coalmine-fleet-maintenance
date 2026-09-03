@@ -1294,7 +1294,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
   return (
-    <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label>{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <ActionsTable className="breakdown-table-auto-fit" toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
@@ -2564,7 +2564,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     fileInput = useRef(null),
     fields = masterFields[name],
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
-    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
+    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : name === "Users & employees" && ["login", "employee"].includes(key) ? String(record[key] || "").toUpperCase() : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
   if (!fields) return null;
   const saveManual = (e) => {
     e.preventDefault();
@@ -2579,7 +2579,11 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
               : String(fd.get(key) || "").trim(),
         ]),
       );
-    if (name === "Users & employees") applyUserRoleDefaults(record);
+    if (name === "Users & employees") {
+      record.login = record.login.toUpperCase();
+      record.employee = record.employee.toUpperCase();
+      applyUserRoleDefaults(record);
+    }
     if (name === "Users & employees" && record.userType === "Super Admin" && record.adminLevel === "Manager" && !record.managerRole) {
       alert("Select at least one manager role for this Non Admin user.");
       return;
@@ -2791,6 +2795,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                   ) : (
                     <>{label} *
                     <input
+                      className={name === "Users & employees" && ["login", "employee"].includes(key) ? "uppercase-user-field" : ""}
                       name={key}
                       required={key === fields[0][0]}
                       placeholder={"Enter " + label.toLowerCase()}
@@ -4354,6 +4359,74 @@ function reportScheduleKind(schedule) {
 function reportAccessAllows(selection, label) {
   return accessAllows(selection, "Reports") || accessAllows(selection, label);
 }
+
+function auditChangesLabel(changes = []) {
+  return Array.isArray(changes) && changes.length
+    ? changes.map((change) => `${change.field}: ${change.before || "—"} → ${change.after || "—"}`).join("; ")
+    : "—";
+}
+
+function auditDeviceLabel(userAgent = "") {
+  const agent = String(userAgent);
+  const browser = agent.includes("Edg/") ? "Edge" : agent.includes("Chrome/") ? "Chrome" : agent.includes("Firefox/") ? "Firefox" : agent.includes("Safari/") ? "Safari" : "Browser";
+  const device = /Android|iPhone|iPad|Mobile/i.test(agent) ? "Mobile" : /Windows/i.test(agent) ? "Windows" : /Macintosh|Mac OS/i.test(agent) ? "Mac" : /Linux/i.test(agent) ? "Linux" : "Device";
+  return agent ? `${browser} · ${device}` : "—";
+}
+
+function auditTimestampLabel(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "—";
+  return new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
+  }).format(date);
+}
+
+function AuditTrailPage({ session }) {
+  const [events, setEvents] = useState([]), [loading, setLoading] = useState(true), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/audit-events?limit=5000", {cache:"no-store", headers:{Authorization:`Bearer ${session?.token || authToken}`}});
+      const result = await response.json().catch(() => ([]));
+      if (!response.ok) throw new Error(result.error || "Could not load the Audit Trail.");
+      setEvents(result);
+    } catch (error) { alert(error.message); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, [session?.token]);
+  const valueFor = (event, key) => ({
+    occurredAt: auditTimestampLabel(event.occurredAt),
+    eventType: event.eventType,
+    actor: event.actorName ? `${event.actorName} (${event.actorLogin || "no login"})` : event.actorLogin,
+    actorRole: event.actorRole,
+    module: event.module,
+    action: event.action,
+    target: [event.targetType, event.targetReference].filter(Boolean).join(" · "),
+    outcome: event.outcome,
+    reason: event.reason,
+    changes: auditChangesLabel(event.changedFields),
+    ipAddress: event.ipAddress,
+    device: auditDeviceLabel(event.userAgent),
+    sessionId: event.sessionId,
+  })[key] || "—";
+  const columns = [
+    ["occurredAt", "Date & time"], ["eventType", "Event"], ["actor", "User / login"], ["actorRole", "Role"],
+    ["module", "Module"], ["action", "Action"], ["target", "Target / record"], ["outcome", "Outcome"],
+    ["reason", "Reason / details"], ["changes", "Changes"], ["ipAddress", "IP address"], ["device", "Device / browser"], ["sessionId", "Session ID"],
+  ];
+  const filterColumns = columns.map(([key, label]) => ({key, label, value:(event) => valueFor(event, key)}));
+  const filtered = events.filter((event) => matchesSmartSearch(query, event) && tableRowMatchesFilters(event, filterColumns, filters));
+  const [rows, sort, changeSort] = useSortableRows(filtered, "", (event, key) => key === "occurredAt" ? event.occurredAt : valueFor(event, key));
+  const exportColumns = columns.map(([key, label]) => ({label, value:(event) => valueFor(event, key)}));
+  const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
+  return <section className="panel pagepanel generic audit-page">
+    <header><div><h1>Audit Trail</h1><p>Append-only security, administration, master-data, workflow, and integration activity</p></div><button type="button" className="secondary" onClick={load} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></header>
+    <div className="audit-summary"><span><b>{events.length.toLocaleString("en-IN")}</b> recorded events</span><span><b>{events.filter((event) => event.outcome === "Failed").length.toLocaleString("en-IN")}</b> failed actions</span><span><b>{new Set(events.map((event) => event.actorLogin).filter(Boolean)).size.toLocaleString("en-IN")}</b> users</span></div>
+    <div className="toolbar audit-toolbar"><div><Search /><input data-smart-search type="search" placeholder="Search audit trail" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="toolbar-actions-end"><div className="master-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={events} filters={filters} onFilterChange={updateFilter} onClearFilters={() => setFilters({})} /><ExportMenu title="Audit Trail" columns={exportColumns} rows={rows} /></div></div>
+    <div className="emptytable master-table-scroll audit-table-wrap" onClick={() => setOpenFilter(null)}><ActionsTable className="audit-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr>{columns.map(([key,label]) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(field) => setOpenFilter((current) => current === field ? null : field)} values={[...new Set(events.map((event) => valueFor(event,key)))].sort((a,b) => sortCollator.compare(a,b))} filterValue={filters[key] || ""} onFilterChange={(value) => updateFilter(key,value)} />)}</tr></thead><tbody>{rows.length ? rows.map((event) => <tr key={event.id}><td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td><td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td><td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td title={event.userAgent || ""}>{valueFor(event,"device")}</td><td><code>{event.sessionId || "—"}</code></td></tr>) : <tr><td colSpan="13" className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody></ActionsTable></div>
+  </section>;
+}
 function reportCategoryIdsForUser(permissions = {}, session = {}) {
   const adminLevel = String(permissions.adminLevel || "").trim();
   if (["Admin", "Super Admin"].includes(adminLevel) || (session.role === "super" && adminLevel !== "Manager")) return reportCategoryTabs.map((category) => category.id);
@@ -4892,6 +4965,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
 function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, userOptions = [], siteOptions = [], canCreateSuperAdmin = false }) {
   const [q, setQ] = useState(""),
     [editing, setEditing] = useState(null),
+    [changingPassword, setChangingPassword] = useState(null),
     [pendingPrivilegeRows, setPendingPrivilegeRows] = useState({}),
     [savingAllPrivileges, setSavingAllPrivileges] = useState(false),
     [columnFilters, setColumnFilters] = useState({}),
@@ -4906,6 +4980,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       const type = fields.find(([field]) => field === key)?.[2];
       if (name === "Users & employees" && key === "userType")
         return userMasterRole(record);
+      if (name === "Users & employees" && ["login", "employee"].includes(key)) return String(record[key] || "").toUpperCase();
       return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
     },
     filterColumns = displayFields.map(([key, label]) => ({ key, label, value: (record) => masterValue(record, key) })),
@@ -4962,6 +5037,10 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
             ? form.getAll(key).map((value) => String(value).trim()).filter(Boolean).join(" | ")
             : String(form.get(key) || "").trim(),
     ]));
+    if (name === "Users & employees") {
+      updated.login = updated.login.toUpperCase();
+      updated.employee = updated.employee.toUpperCase();
+    }
     if (name === "Users & employees") applyUserRoleDefaults(updated);
     if (name === "Users & employees" && updated.userType === "Super Admin" && updated.adminLevel === "Manager" && !updated.managerRole) {
       alert("Select at least one manager role for this Non Admin user.");
@@ -4987,8 +5066,23 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const deleteRow = async (record) => {
     const recordName = record.oem || record.employee || record.login || record.username || "this record";
     if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
-    try { await onDelete(record.id); }
+    const reason = window.prompt(`Enter the reason for deleting ${recordName}:`, "");
+    if (reason === null) return;
+    if (!reason.trim()) return alert("A deletion reason is required for the Audit Trail.");
+    try { await onDelete(record.id, reason.trim()); }
     catch (error) { alert(error.message); }
+  };
+  const changeEmployeePassword = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const response = await fetch(`/api/masters/${encodeURIComponent(name)}/${changingPassword.id}/password`, {
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},
+      body:JSON.stringify({password:form.get("password"),confirmation:form.get("confirmation"),requireChange:form.has("requireChange")}),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return alert(result.error || "Could not change this password.");
+    setChangingPassword(null);
+    alert(result.message || "Password changed successfully.");
   };
   const privilegeValue = (record, key) => pendingPrivilegeRows[record.id]?.[key] ?? record[key];
   const stagePrivilegeField = (record, key, value) => {
@@ -5047,8 +5141,10 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
-        <div className="master-actions-slot" ref={setActionsToolbarTarget} />
-        <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
+        <div className="toolbar-actions-end">
+          <div className="master-actions-slot" ref={setActionsToolbarTarget} />
+          <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
+        </div>
       </div>
       <div className="emptytable master-table-scroll" onClick={() => setOpenFilter(null)}>
         <ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal>
@@ -5079,6 +5175,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 <tr key={row.id || ri}>
                   {displayFields.map(([key, , type], ci) => {
                     const value = name === "Privilege" ? privilegeValue(row, key) : name === "Users & employees" && key === "site" ? userMasterLocation(row) : name === "Users & employees" && key === "userType" ? userMasterRole(row) : row[key];
+                    const displayValue = name === "Users & employees" && ["login", "employee"].includes(key) ? String(value || "").toUpperCase() : value;
                     return (
                     <td key={key}>
                       {name === "Privilege" && key === "username" ? (
@@ -5142,12 +5239,13 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                           {isCheckedValue(row[key]) ? <CheckCircle2 /> : <X />}
                           {isCheckedValue(row[key]) ? "Yes" : "No"}
                         </span>
-                      ) : ci === 0 ? <b>{value}</b> : value}
+                      ) : ci === 0 ? <b>{displayValue}</b> : displayValue}
                     </td>
                     );
                   })}
                   {canManageRows && (
                     <td className="row-actions">
+                      {name === "Users & employees" && <button aria-label={`Change password for ${row.employee || row.login || "employee"}`} onClick={() => setChangingPassword(row)}><LockKeyhole /> Change password</button>}
                       {name !== "Privilege" && (
                         <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
                       )}
@@ -5232,7 +5330,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                     {persistedUserTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                     {editing[key] && !persistedUserTypeOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
                   </select>
-                ) : <input name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
+                ) : <input className={name === "Users & employees" && ["login","employee"].includes(key) ? "uppercase-user-field" : ""} name={key} defaultValue={editing[key] || ""} required={key === fields[0][0]} />}
               </label>)
             )}
             {name === "Users & employees" && <UserTypeAccessFields record={editing} siteOptions={siteOptions} canCreateSuperAdmin={canCreateSuperAdmin} />}
@@ -5244,6 +5342,14 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         </form>
       </Modal>
     )}
+    {changingPassword && <Modal title={`Change password · ${String(changingPassword.employee || changingPassword.login || "Employee").toUpperCase()}`} close={() => setChangingPassword(null)}>
+      <form className="form employee-password-form" onSubmit={changeEmployeePassword}>
+        <p>Set a secure temporary password for <b>{String(changingPassword.login || "").toUpperCase()}</b>. Existing login sessions will be signed out.</p>
+        <div className="formgrid"><label>New password *<input name="password" type="password" minLength="8" autoComplete="new-password" required /></label><label>Confirm password *<input name="confirmation" type="password" minLength="8" autoComplete="new-password" required /></label></div>
+        <label className="employee-password-require-change"><input name="requireChange" type="checkbox" defaultChecked /><span><b>Require password change at next login</b><small>Recommended for administrator-issued passwords.</small></span></label>
+        <footer><button type="button" onClick={() => setChangingPassword(null)}>Cancel</button><button className="primary"><LockKeyhole /> Change password</button></footer>
+      </form>
+    </Modal>}
     </>
   );
 }
@@ -5337,10 +5443,10 @@ function useMasterRecords(name, seed = []) {
     if (!response.ok) throw new Error(details.error || "Could not update this record.");
     setRecords((current) => current.map((item) => item.id === id ? details : item));
   };
-  const remove = async (id) => {
+  const remove = async (id, reason = "") => {
     const response = await fetch(`/api/masters/${encodeURIComponent(name)}/${id}`, {
       method: "DELETE",
-      headers: {Authorization: `Bearer ${authToken}`},
+      headers: {Authorization: `Bearer ${authToken}`, "X-Audit-Reason": reason},
     });
     if (!response.ok) {
       const details = await response.json().catch(() => ({}));
@@ -5350,9 +5456,12 @@ function useMasterRecords(name, seed = []) {
   };
   const removeAll = async () => {
     if (!confirm(`Delete all records from ${name}? This cannot be undone.`)) return;
+    const reason = window.prompt(`Enter the reason for deleting all ${name} records:`, "");
+    if (reason === null) return;
+    if (!reason.trim()) return alert("A deletion reason is required for the Audit Trail.");
     const response = await fetch(`/api/masters/${encodeURIComponent(name)}/all`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${authToken}` },
+      headers: { Authorization: `Bearer ${authToken}`, "X-Audit-Reason": reason.trim() },
     });
     const details = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(details.error || "Could not delete all records.");
@@ -6247,7 +6356,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
   return (
-    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="scroll mobile-workflow-table">
+    <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div></div><div className="scroll mobile-workflow-table">
       <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
@@ -6576,7 +6685,7 @@ function AdminLockManagement({session}){
 }
 
 function TicketPage({ session }) {
-  const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null);
+  const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const canCreate = Boolean(session?.token);
   const ticketExportColumns = [
@@ -6595,8 +6704,8 @@ function TicketPage({ session }) {
   useEffect(() => { load(); }, [category, session?.token]);
   return <section className="ticket-page">
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
-    <div className="ticket-toolbar"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
-    <div className="ticket-table-wrap"><ActionsTable><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
+    <div className="ticket-toolbar"><div className="ticket-toolbar-controls"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
+    <div className="ticket-table-wrap"><ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
     {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}
     {resolving && <TicketResolutionForm ticket={resolving} session={session} close={() => setResolving(null)} onResolved={(result) => setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket))} />}
   </section>;
@@ -7069,7 +7178,10 @@ function App() {
       return saved;
     },
     deleteRequest = async (reference) => {
-      const response = await fetch(`/api/requests/${encodeURIComponent(reference)}`, {method: "DELETE", headers: {Authorization: `Bearer ${authToken}`}});
+      const reason = window.prompt(`Enter the reason for deleting ${reference}:`, "");
+      if (reason === null) return;
+      if (!reason.trim()) throw new Error("A deletion reason is required for the Audit Trail.");
+      const response = await fetch(`/api/requests/${encodeURIComponent(reference)}`, {method: "DELETE", headers: {Authorization: `Bearer ${authToken}`, "X-Audit-Reason": reason.trim()}});
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not delete request");
       setRequests((current) => current.filter((row) => row.ref !== reference));
@@ -7179,9 +7291,11 @@ function App() {
             <MetaWhatsAppSetup />
           ) : active === "WhatsApp alert history" ? (
             <WhatsAppAlertHistory />
-          ) : active === "Reports" ? (
-            <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
-          ) : operationalSession ? (
+              ) : active === "Reports" ? (
+                <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
+              ) : active === "Audit Trail" ? (
+                <AuditTrailPage session={session} />
+              ) : operationalSession ? (
             <Normal
               embedded
               requests={requests}

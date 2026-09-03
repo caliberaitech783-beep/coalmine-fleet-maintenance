@@ -31,6 +31,7 @@ import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage} from './request-conflict.mjs';
+import {auditChangedFields,auditRouteDetails,auditSubmittedFields} from './audit-trail.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -55,6 +56,7 @@ const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.p
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
 const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
+const AUDIT_REASON_HEADER='x-audit-reason';
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
@@ -98,6 +100,30 @@ async function metaWhatsAppRuntimeEnv(){
     console.warn('Could not load stored WhatsApp settings; falling back to environment variables:',error.message);
     return process.env;
   }
+}
+
+const auditClean=(value,limit=500)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,limit);
+const auditSessionId=(req)=>{
+  const token=String(req.headers?.authorization||'').replace(/^Bearer\s+/i,'').trim();
+  return token?createHash('sha256').update(token).digest('hex').slice(0,16):'';
+};
+const auditRole=(session={})=>auditClean(session.permissions?.adminLevel||session.assignedRole||session.userType||session.role||'Unauthenticated',100);
+const auditTargetReference=(req)=>auditClean(req.params?.reference||req.params?.id||req.body?.reference||req.body?.username||'',160);
+
+async function appendAuditEvent(req,event={}){
+  try{
+    const route=auditRouteDetails(req.method,req.path);
+    const session=req.session||{};
+    const changes=event.changedFields||auditSubmittedFields(req.body);
+    await pool.query(`INSERT INTO audit_events
+      (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,ip_address,user_agent,session_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)`,[
+      auditClean(event.eventType||route.eventType,80),auditClean(event.outcome||'Success',30),
+      auditClean(event.actorLogin||session.login||req.body?.username,120),auditClean(event.actorName||session.name,160),auditClean(event.actorRole||auditRole(session),100),
+      auditClean(event.module||route.module,120),auditClean(event.action||route.action,160),auditClean(event.targetType||'',100),auditClean(event.targetReference||auditTargetReference(req),160),
+      auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditClean(req.ip||req.socket?.remoteAddress,100),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
+    ]);
+  }catch(error){console.error('Audit event could not be recorded:',error.message)}
 }
 
 async function publicWhatsAppSettings(){
@@ -277,6 +303,27 @@ async function migrate(){
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS assigned_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
+    CREATE TABLE IF NOT EXISTS audit_events (
+      id BIGSERIAL PRIMARY KEY,
+      event_type TEXT NOT NULL DEFAULT 'Activity',
+      outcome TEXT NOT NULL DEFAULT 'Success',
+      actor_login TEXT NOT NULL DEFAULT '',
+      actor_name TEXT NOT NULL DEFAULT '',
+      actor_role TEXT NOT NULL DEFAULT '',
+      module TEXT NOT NULL DEFAULT '',
+      action TEXT NOT NULL DEFAULT '',
+      target_type TEXT NOT NULL DEFAULT '',
+      target_reference TEXT NOT NULL DEFAULT '',
+      reason TEXT NOT NULL DEFAULT '',
+      changed_fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ip_address TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      session_id TEXT NOT NULL DEFAULT '',
+      occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS audit_events_occurred_at_idx ON audit_events (occurred_at DESC);
+    CREATE INDEX IF NOT EXISTS audit_events_actor_idx ON audit_events (actor_login, occurred_at DESC);
+    CREATE INDEX IF NOT EXISTS audit_events_module_idx ON audit_events (module, occurred_at DESC);
     CREATE TABLE IF NOT EXISTS password_change_sessions (
       token UUID PRIMARY KEY,
       master_record_id BIGINT NOT NULL REFERENCES master_records(id) ON DELETE CASCADE,
@@ -469,6 +516,26 @@ async function migrate(){
 
 app.use(express.json({limit:'20mb'}));
 
+app.use((req,res,next)=>{
+  const auditable=['POST','PUT','PATCH','DELETE'].includes(req.method)&&req.path!=='/api/notifications/read';
+  if(!auditable)return next();
+  const originalJson=res.json.bind(res);
+  res.json=(body)=>{
+    if(body?.error)req.auditResponseError=auditClean(body.error,500);
+    return originalJson(body);
+  };
+  res.on('finish',()=>{
+    if(req.audit===false)return;
+    const outcome=res.statusCode>=200&&res.statusCode<400?'Success':'Failed';
+    void appendAuditEvent(req,{
+      ...(req.audit||{}),
+      outcome,
+      reason:req.audit?.reason||req.get(AUDIT_REASON_HEADER)||req.auditResponseError||(outcome==='Failed'?`HTTP ${res.statusCode}`:''),
+    });
+  });
+  next();
+});
+
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
   res.json({version:currentAppVersion,commit:deploymentSha});
@@ -588,6 +655,17 @@ app.post('/api/login',async(req,res,next)=>{
     const identifiers=new Set([...userLoginCandidates(employee),login.toLowerCase(),username]);
     const {rows:privilegeRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`);
     const profile=resolveMobileAccess({user:employee,privilege:privilegeForUser(privilegeRows,identifiers)});
+    req.audit={
+      actorLogin:login,
+      actorName:employee.employee,
+      actorRole:profile.permissions?.adminLevel||profile.assignedRole||profile.userType,
+      eventType:'Security',
+      module:'Authentication',
+      action:profile.sessionRole==='super'?'Administrator login':'User login',
+      targetType:'User account',
+      targetReference:login,
+      changedFields:[],
+    };
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
     if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, or MIS User in Users & employees.'});
     if(profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
@@ -595,6 +673,7 @@ app.post('/api/login',async(req,res,next)=>{
       if(incidents.length)return res.status(423).json({error:`This admin account is locked because CRM ticket ${incidents[0].ticketReference} has remained open for 72 hours. Contact a Super Admin.`});
     }
     if(employee.mustChangePassword===true){
+      req.audit.reason='Initial password change required';
       const changeToken=randomUUID();
       await pool.query(`INSERT INTO password_change_sessions
         (token,master_record_id,role,employee_name,login_name,user_type,assigned_role,permissions)
@@ -616,6 +695,7 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
   try{
     res.set('Cache-Control','no-store');
     const username=String(req.body?.username||'').trim().toLowerCase();
+    req.audit={eventType:'Security',module:'Authentication',action:'Request password reset',actorLogin:username,targetType:'User account',targetReference:username,changedFields:[]};
     if(!username)return res.status(400).json({error:'Enter your user name.'});
     const fallbackToken=randomUUID();
     const {rows:userRows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
@@ -687,6 +767,7 @@ app.post('/api/password-reset/confirm',async(req,res,next)=>{
       WHERE id=$1 AND master_name='Users & employees' FOR UPDATE`,[reset.master_record_id]);
     const user=userResult.rows[0]?.record_data;
     if(!user){await client.query('ROLLBACK');return res.status(400).json({error:'This OTP is invalid or has expired. Request a new OTP.'})}
+    req.audit={eventType:'Security',module:'Authentication',action:'Complete password reset',actorLogin:String(user.login||'').trim(),actorName:user.employee,targetType:'User account',targetReference:String(user.login||reset.master_record_id),changedFields:[{field:'password',before:'[protected]',after:'[protected]'}]};
     const validationError=passwordResetValidationError({password,confirmation,phone:passwordResetPhone(user)});
     if(validationError){await client.query('ROLLBACK');return res.status(400).json({error:validationError})}
     const updated={...user,passwordHash:hashPassword(password),mustChangePassword:false};
@@ -715,6 +796,7 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
       WHERE id=$1 AND master_name='Users & employees'`,[reset.master_record_id]);
     const user=userResult.rows[0]?.record_data;
     if(!user)return res.status(404).json({error:'The user account no longer exists.'});
+    req.audit={eventType:'Security',module:'Authentication',action:'Change initial password',actorLogin:reset.login_name,actorName:reset.employee_name,actorRole:reset.permissions?.adminLevel||reset.assigned_role||reset.user_type,targetType:'User account',targetReference:reset.login_name,changedFields:[{field:'password',before:'[protected]',after:'[protected]'}]};
     if(password===String(user.phone||'').trim())return res.status(400).json({error:'Choose a password different from your registered phone number.'});
     const updated={...user,passwordHash:hashPassword(password),mustChangePassword:false};
     await pool.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(updated),reset.master_record_id]);
@@ -762,6 +844,21 @@ async function requireSuper(req,res,next){
     next();
   }catch(error){next(error)}
 }
+
+app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
+  try{
+    const isAdministrator=req.session.permissions?.adminLevel!=='Manager';
+    if(!isAdministrator&&!accessAllows(req.session.permissions?.tabAccess,'Audit Trail')&&!accessAllows(req.session.permissions?.mobileTabAccess,'Audit Trail'))
+      return res.status(403).json({error:'You do not have access to the Audit Trail.'});
+    const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||2000));
+    const {rows}=await pool.query(`SELECT id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
+      actor_role AS "actorRole",module,action,target_type AS "targetType",target_reference AS "targetReference",reason,
+      changed_fields AS "changedFields",ip_address AS "ipAddress",user_agent AS "userAgent",session_id AS "sessionId",occurred_at AS "occurredAt"
+      FROM audit_events ORDER BY occurred_at DESC LIMIT $1`,[limit]);
+    res.set('Cache-Control','no-store');
+    res.json(rows);
+  }catch(error){next(error)}
+});
 
 app.get('/api/navigation-settings',requireSuper,async(_req,res,next)=>{
   try{
@@ -2223,7 +2320,12 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     let prepared;
     try{
       prepared=records.map((record,index)=>{
-        try{return master==='Users & employees'?initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record))):record}
+        try{
+          if(master!=='Users & employees')return record;
+          record.login=String(record.login||'').trim().toUpperCase();
+          record.employee=String(record.employee||'').trim().toUpperCase();
+          return initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record)));
+        }
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
     }catch(error){return res.status(400).json({error:error.message})}
@@ -2314,8 +2416,46 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         RETURNING id,record_data`,[master,JSON.stringify(prepared)]));
     }
     const saved=rows.map(row=>({id:row.id,...(master==='Users & employees'?publicUserRecord(row.record_data):row.record_data)}));
+    req.audit={eventType:'Master data',module:master,action:records.length>1?'Import records':'Create record',targetType:master,targetReference:records.length>1?`${saved.length} records`:String(saved[0]?.id||''),reason:`${saved.length} record${saved.length===1?'':'s'} saved`,changedFields:[]};
     res.status(201).json(saved);
   }catch(error){next(error)}
+});
+
+app.post('/api/masters/:master/:id/password',requireSuper,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const master=decodeURIComponent(req.params.master);
+    const id=Number(req.params.id);
+    if(master!=='Users & employees'||!Number.isInteger(id)||id<=0)
+      return res.status(400).json({error:'A valid employee account is required.'});
+    const password=String(req.body?.password||'');
+    const confirmation=String(req.body?.confirmation||'');
+    const requireChange=req.body?.requireChange!==false;
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT record_data FROM master_records
+      WHERE id=$1 AND master_name='Users & employees' FOR UPDATE`,[id]);
+    const user=rows[0]?.record_data;
+    if(!user){await client.query('ROLLBACK');return res.status(404).json({error:'Employee account not found.'})}
+    if(isTrueSuperAdmin(user)&&!isTrueSuperAdmin(req.session.permissions)){
+      await client.query('ROLLBACK');
+      return res.status(403).json({error:'Only a Super Admin can change a Super Admin password.'});
+    }
+    const validationError=passwordResetValidationError({password,confirmation,phone:passwordResetPhone(user)});
+    if(validationError){await client.query('ROLLBACK');return res.status(400).json({error:validationError})}
+    const login=String(user.login||userLoginCandidates(user)[0]||'').trim();
+    const updated={...user,passwordHash:hashPassword(password),mustChangePassword:requireChange};
+    await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(updated),id]);
+    await client.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE master_record_id=$1 AND used_at IS NULL',[id]);
+    await client.query('DELETE FROM password_change_sessions WHERE master_record_id=$1',[id]);
+    if(login)await client.query('DELETE FROM auth_sessions WHERE lower(login_name)=lower($1)',[login]);
+    await client.query('COMMIT');
+    req.audit={
+      eventType:'Security',module:'Users & employees',action:'Administrator password change',targetType:'User account',
+      targetReference:login||String(id),reason:requireChange?'Temporary password set; change required at next login':'Password changed by administrator',
+      changedFields:[{field:'password',before:'[protected]',after:'[protected]'},{field:'mustChangePassword',before:String(Boolean(user.mustChangePassword)),after:String(requireChange)}],
+    };
+    res.json({message:requireChange?'Temporary password saved. The employee must change it at next login.':'Password changed successfully.'});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
 
 app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
@@ -2325,13 +2465,19 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const record=req.body;
     if(!master||!Number.isInteger(id)||id<=0||!record||typeof record!=='object'||Array.isArray(record))
       return res.status(400).json({error:'A valid master record is required.'});
+    const existingSnapshot=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
+    if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
+    const previousRecord=existingSnapshot.rows[0].record_data;
     let storedRecord=record;
     if(master==='Users & employees'){
-      const existing=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
-      if(!existing.rows.length)return res.status(404).json({error:'Master record not found.'});
-      if((isTrueSuperAdmin(record)||isTrueSuperAdmin(existing.rows[0].record_data))&&!isTrueSuperAdmin(req.session.permissions))
+      if((isTrueSuperAdmin(record)||isTrueSuperAdmin(previousRecord))&&!isTrueSuperAdmin(req.session.permissions))
         return res.status(403).json({error:'Only a Super Admin can manage Super Admin accounts.'});
-      storedRecord={...normalizeUserSiteFields(normalizeUserAccessLabels(record)),passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
+      storedRecord={...normalizeUserSiteFields(normalizeUserAccessLabels(record)),
+        login:String(record.login||'').trim().toUpperCase(),
+        employee:String(record.employee||'').trim().toUpperCase(),
+        passwordHash:previousRecord.passwordHash,
+        mustChangePassword:previousRecord.mustChangePassword,
+      };
     }
     if(master==='Privilege'){
       const client=await pool.connect();
@@ -2365,6 +2511,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
         );
         await client.query('COMMIT');
         const saved=updated.rows.find(row=>Number(row.id)===id)||updated.rows[0];
+        req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:currentUsername||String(id),changedFields:auditChangedFields(previousRecord,storedRecord)};
         return res.json({id:saved.id,...saved.record_data});
       }catch(error){
         await client.query('ROLLBACK');
@@ -2376,6 +2523,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       [JSON.stringify(storedRecord),id,master]
     );
     if(!rows.length)return res.status(404).json({error:'Master record not found.'});
+    req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:String(storedRecord.login||storedRecord.employee||storedRecord.door||storedRecord.repairType||id),changedFields:auditChangedFields(previousRecord,storedRecord)};
     res.json({id:rows[0].id,...(master==='Users & employees'?publicUserRecord(rows[0].record_data):rows[0].record_data)});
   }catch(error){next(error)}
 });
@@ -2392,11 +2540,13 @@ app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
         const manual=await client.query('DELETE FROM master_records WHERE master_name=$1',[master]);
         const requests=await client.query('DELETE FROM maintenance_requests');
         await client.query('COMMIT');
+        req.audit={eventType:'Master data',module:master,action:'Delete all records',targetType:master,targetReference:`${manual.rowCount+requests.rowCount} records`,changedFields:[]};
         return res.json({deleted:manual.rowCount+requests.rowCount});
       }catch(error){await client.query('ROLLBACK');throw error}
       finally{client.release()}
     }
     const result=await pool.query('DELETE FROM master_records WHERE master_name=$1',[master]);
+    req.audit={eventType:'Master data',module:master,action:'Delete all records',targetType:master,targetReference:`${result.rowCount} records`,changedFields:[]};
     res.json({deleted:result.rowCount});
   }catch(error){next(error)}
 });
@@ -2406,9 +2556,11 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const master=decodeURIComponent(req.params.master);
     const id=Number(req.params.id);
     if(!master||!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid master record is required.'});
+    const existingRecordResult=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
+    const deletedRecord=existingRecordResult.rows[0]?.record_data;
+    if(!deletedRecord)return res.status(404).json({error:'Master record not found.'});
     if(master==='Users & employees'){
-      const existing=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
-      if(isTrueSuperAdmin(existing.rows[0]?.record_data)&&!isTrueSuperAdmin(req.session.permissions))return res.status(403).json({error:'Only a Super Admin can delete Super Admin accounts.'});
+      if(isTrueSuperAdmin(deletedRecord)&&!isTrueSuperAdmin(req.session.permissions))return res.status(403).json({error:'Only a Super Admin can delete Super Admin accounts.'});
     }
     if(master==='Privilege'){
       const client=await pool.connect();
@@ -2434,6 +2586,7 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
           [master,matchingIds]
         );
         await client.query('COMMIT');
+        req.audit={eventType:'Master data',module:master,action:'Delete record',targetType:master,targetReference:targetUsername||String(id),changedFields:[]};
         return res.status(204).end();
       }catch(error){
         await client.query('ROLLBACK');
@@ -2442,6 +2595,7 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     }
     const result=await pool.query('DELETE FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     if(!result.rowCount)return res.status(404).json({error:'Master record not found.'});
+    req.audit={eventType:'Master data',module:master,action:'Delete record',targetType:master,targetReference:String(deletedRecord.login||deletedRecord.employee||deletedRecord.door||deletedRecord.repairType||id),changedFields:[]};
     res.status(204).end();
   }catch(error){next(error)}
 });
