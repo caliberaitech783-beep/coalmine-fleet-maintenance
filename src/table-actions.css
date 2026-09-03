@@ -1,4 +1,12 @@
 .shared-table-actions-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 12px; position: sticky; left: 0; width: 100%; box-sizing: border-box; background: var(--mine-panel, #fff); border-bottom: 1px solid #dce4ef; }
 .shared-table-actions-toolbar > .table-parameter-filter { display: none; }
 .shared-table-actions-toolbar .report-actions-trigger { min-height: 40px; }
-@media (max-width: 700px) { .shared-table-actions-toolbar { padding: 8px; } }
+.workflow-actions-slot { flex: 0 0 auto; }
+.workflow-actions-slot .shared-table-actions-toolbar { position: static; width: auto; padding: 0; border: 0; background: transparent; }
+@media (max-width: 700px) {
+  .shared-table-actions-toolbar { padding: 8px; }
+  .workflow-actions-slot { width: 100%; }
+  .workflow-actions-slot .shared-table-actions-toolbar { width: 100%; padding: 0; }
+  .workflow-actions-slot .report-actions-menu,
+  .workflow-actions-slot .report-actions-trigger { width: 100%; }
+}
