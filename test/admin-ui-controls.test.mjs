@@ -17,6 +17,7 @@ test("employee rows place Change password before Edit and normalize identity fie
 });
 
 test("Actions sits immediately before Filter across master and workspace toolbars", () => {
+  assert.match(source, /function BreakdownTable\([\s\S]*?actionsBesideSearch = true/);
   assert.match(source, /className="toolbar-actions-end">\s*<div className="master-actions-slot"[\s\S]*?<TableParameterFilter/);
   assert.match(source, /className="toolbar-actions-end"><div className="workflow-actions-slot"[\s\S]*?<TableParameterFilter/);
   assert.match(tableStyles, /\.toolbar > \.toolbar-actions-end,[\s\S]*margin-left: auto/);
