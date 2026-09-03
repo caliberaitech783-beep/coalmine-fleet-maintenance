@@ -20,7 +20,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
-import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation} from './hierarchy-report-flow.mjs';
+import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
@@ -1362,9 +1362,10 @@ function hierarchyRuleForDesignation(records=[],designation={}){
     .find((record)=>String(record.designation||'').trim().toLowerCase()===wanted);
 }
 
-async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST',siteAccess=''}){
+async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST',siteAccess='',eventRequest=null}){
   const selectedTitles=reportTitles?new Set(reportTitles):null;
   const sourceData=sourceDataForSites(await directorReportSourceData(),siteAccess);
+  if(eventRequest)sourceData.requests=sourceDataForSites({requests:[eventRequest],equipmentRecords:[],transferRecords:[]},siteAccess).requests;
   const tables=buildDirectorReportTables(sourceData).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
   const links=[];
@@ -1440,15 +1441,16 @@ async function sendScheduledDirectorReportBundles(now=new Date()){
 }
 
 let hierarchyReportRunning=false;
-async function sendScheduledHierarchyReportBundles(now=new Date()){
-  if(!databaseReady||hierarchyReportRunning)return {skipped:true};
-  hierarchyReportRunning=true;
+async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
+  if(!databaseReady||(!event&&hierarchyReportRunning))return {skipped:true};
+  if(!event)hierarchyReportRunning=true;
   try{
     const [{rows:userRows},{rows:hierarchyRows},scheduleSettings]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
       storedHierarchyReportScheduleSettings(),
     ]);
+    const eventRecipients=event?new Set(await requestStakeholderLogins(pool,{site:event.request.site,requesterLogin:event.request.requesterLogin})):null;
     let sent=0,failed=0,skipped=0;
     for(const row of userRows){
       const user=row.record_data||{};
@@ -1457,10 +1459,12 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
       if(!designation)continue;
       const designationSettings=scheduleSettings.designations[designation.key];
       const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
+      if(eventRecipients&&!eventRecipients.has(login)){skipped++;continue}
       if(!designationSettings?.allRecipients&&!designationSettings?.recipientLogins?.includes(login)){skipped++;continue}
-      const dueGroups=reportsDueForDesignation(designation.key,now,20,scheduleSettings);
+      const dueGroups=event?reportsForHierarchyEvent(designation.key,event,scheduleSettings):reportsDueForDesignation(designation.key,now,20,scheduleSettings);
       if(!dueGroups.length)continue;
       const hierarchyRule=hierarchyRuleForDesignation(hierarchyRows,designation);
+      if(event&&hierarchyRule?.siteAccess&&!sourceDataForSites({requests:[event.request],equipmentRecords:[],transferRecords:[]},hierarchyRule.siteAccess).requests.length){skipped++;continue}
       const allowedReports=hierarchyRule?new Set(splitHierarchyValues(hierarchyRule.reportAccess)):null;
       const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))].filter((title)=>!allowedReports||allowedReports.has(title));
       if(!reportTitles.length){skipped++;continue}
@@ -1485,10 +1489,15 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
           now,
           reportTitles,
           siteAccess:hierarchyRule?.siteAccess||'',
-          heading:`${designation.label} Consolidated Report`,
+          heading:`${designation.label} ${event?'Event':'Consolidated'} Report`,
           scheduleLabel,
+          eventRequest:event?.request||null,
         });
-        await sendMetaWhatsAppText({to:phone,message:bundle.message},{env:await metaWhatsAppRuntimeEnv()});
+        if(event){
+          const env=await metaWhatsAppRuntimeEnv();
+          try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
+          catch(templateError){await sendMetaWhatsAppText({to:phone,message:bundle.message},{env})}
+        }else await sendMetaWhatsAppText({to:phone,message:bundle.message},{env:await metaWhatsAppRuntimeEnv()});
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;
@@ -1503,7 +1512,12 @@ async function sendScheduledHierarchyReportBundles(now=new Date()){
       ]);
     }
     return {sent,failed,skipped};
-  }finally{hierarchyReportRunning=false}
+  }finally{if(!event)hierarchyReportRunning=false}
+}
+
+async function sendRequestEventReports(type,request){
+  try{return await sendScheduledHierarchyReportBundles(new Date(),{type,request})}
+  catch(error){console.error(`Request ${request.ref} saved, but event report delivery failed.`,error.message);return {failed:true}}
 }
 
 app.post('/api/reports/director/send-test',requireSuper,async(req,res,next)=>{
@@ -1875,12 +1889,15 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'Open',$15,$16,$17,$18,$19,$20)
       RETURNING ${requestProjection}`,
       [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']);
+    await sendRequestEventReports('opened',rows[0]);
+    try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
     const openedAt=requestNotificationTime(startedAt);
     const openedBy=req.session.name||'Production User';
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened for ${equipmentDetails}. Breakdown: ${rows[0].category}. Date & time: ${openedAt}. Location: ${rows[0].site}. User: ${openedBy}.`,
-      {templateKey:'requestOpened',parameters:[rows[0].ref,equipmentDetails,rows[0].category,openedAt,rows[0].site,openedBy]},{whatsapp:false});
+    await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened for ${equipmentDetails}. Breakdown: ${rows[0].category}. Date & time: ${openedAt}. Location: ${rows[0].site}. User: ${openedBy}.`,
+      {templateKey:'requestOpened',parameters:[rows[0].ref,equipmentDetails,rows[0].category,openedAt,rows[0].site,openedBy]},{whatsapp:true});
+    }catch(error){console.error(`Request ${rows[0].ref} saved, but opening notification recipients could not be resolved.`,error.message)}
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
 });
@@ -1966,6 +1983,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
         {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User',rows[0].idleReason]},{whatsapp:false});
     }else if(status==='Closed'){
+      await sendRequestEventReports('closed',rows[0]);
       try{
         const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
         const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
@@ -1993,6 +2011,7 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
       ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL
       RETURNING ${requestProjection}`,[req.session.name||'Maintenance Manager',reference]);
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your approval.'});
+    await sendRequestEventReports('closed',rows[0]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const approvedAt=requestNotificationTime(new Date());
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Maintenance Manager'}. It is now awaiting MIS verification.`,
@@ -2052,6 +2071,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
       first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6,closing_meter_file=$7,closing_meter_file_name=$8 WHERE reference=$9 AND status='Closed' AND verified_at IS NULL
       RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,closingMeterFile,closingMeterFileName,reference]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
+    await sendRequestEventReports('verified',rows[0]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`,
       {templateKey:'requestVerified',parameters:[rows[0].ref,req.session.name||'MIS User',firstTripDone?'Completed':'Pending']},{whatsapp:false});

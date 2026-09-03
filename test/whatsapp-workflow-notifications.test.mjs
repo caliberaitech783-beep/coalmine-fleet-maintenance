@@ -4,10 +4,10 @@ import fs from 'node:fs';
 
 const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 
-test('request WhatsApp alerts are consolidated while in-app notifications remain immediate',()=>{
+test('new request WhatsApp alerts are immediate while unrelated notification policies remain unchanged',()=>{
   assert.match(server,/async function addTicketNotifications\(client,recipients,reference,message,workflowTemplate,\{whatsapp=true\}=\{\}\)/);
   assert.match(server,/if\(whatsapp\)await sendWhatsAppNotifications/);
-  assert.match(server,/templateKey:'requestOpened'[\s\S]*\{whatsapp:false\}/);
+  assert.match(server,/templateKey:'requestOpened'[^\n]*\{whatsapp:true\}/);
   assert.match(server,/templateKey:'requestClosed'[\s\S]*\{whatsapp:false\}/);
   assert.match(server,/templateKey:'requestVerified'[\s\S]*\{whatsapp:false\}/);
   assert.match(server,/templateKey:'ticketCreated'[\s\S]*\{whatsapp:false\}/);

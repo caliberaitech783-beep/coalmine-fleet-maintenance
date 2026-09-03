@@ -189,6 +189,19 @@ export function reportsDueForDesignation(designationKey,now=new Date(),graceMinu
     }));
 }
 
+export function reportsForHierarchyEvent(designationKey,event,settings=null){
+  const title={opened:REPORT.OPEN_BD,closed:REPORT.CLOSING_BD,verified:REPORT.MIS_VERIFICATION}[event?.type];
+  if(!title||!clean(event?.request?.ref))return [];
+  const designation=HIERARCHY_REPORT_DESIGNATIONS[designationKey];
+  const configured=normalizeHierarchyReportScheduleSettings(settings||{}).designations[designationKey];
+  if(!designation||!configured?.enabled)return [];
+  return configured.schedules.filter((schedule)=>schedule.enabled&&schedule.cadence==='event'&&schedule.reports.includes(title)).map((schedule)=>({
+    designationKey,designationLabel:designation.label,level:designation.level,
+    scheduleKey:schedule.key,scheduleLabel:`Every event: ${event.type}`,
+    reports:[title],slotKey:`event-${encodeURIComponent(event.request.ref)}-${event.type}-${schedule.key}`,
+  }));
+}
+
 export function flowDesignationForUser(user={},profile={}){
   const managerRoles=profile?.permissions?.managerRoles||[];
   const fields=[user.level,user.hierarchyLevel,user.userGroup,user.adminLevel,user.designation,user.role,user.department,user.employee,user.name,user.oemRole,user.managerRole,managerRoles.join(' '),profile.assignedRole].map(words).join(' ');
