@@ -2511,6 +2511,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     [importing, setImporting] = useState(false),
     [dragActive, setDragActive] = useState(false),
     [syncingOracle, setSyncingOracle] = useState(false),
+    [oracleSyncFromDate, setOracleSyncFromDate] = useState(""),
     fileInput = useRef(null),
     fields = masterFields[name],
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
@@ -2598,7 +2599,8 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     try {
       const response = await fetch(name === "Equipment master" ? "/api/oracle/equipment/sync" : "/api/oracle/equipment-transfers/sync", {
         method: "POST",
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(name === "Vehicle transfers" ? { fromDate: oracleSyncFromDate || null } : {}),
       });
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not synchronize equipment transfers.");
@@ -2614,6 +2616,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
   return (
     <>
       <div className="master-actions">
+        {name === "Vehicle transfers" && <label>Sync from (optional)<input aria-label="Oracle transfer sync from date" type="date" value={oracleSyncFromDate} onChange={(event) => setOracleSyncFromDate(event.target.value)} disabled={syncingOracle} title="Applies only to this sync. Leave blank for all history; older records are preserved when a date is selected." /></label>}
         {["Equipment master", "Vehicle transfers"].includes(name) && (
           <button className="secondary" type="button" onClick={syncOracle} disabled={syncingOracle}>
             <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : "Sync Oracle"}

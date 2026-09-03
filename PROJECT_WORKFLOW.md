@@ -6,6 +6,8 @@ Production URL: [https://bdms.cmll.in/](https://bdms.cmll.in/)
 
 ## 1. What the application does
 
+Vehicle transfers offers an optional **Sync from** date for a single Oracle sync. The date is inclusive, is not saved as a default, and preserves earlier Oracle transfer records. Leaving it blank retains the full-history sync behavior. The protected transfer-sync API accepts `fromDate` as `YYYY-MM-DD`; the existing Equipment Master sync remains unchanged.
+
 Nerve Center is a mining-operations portal for:
 
 - equipment and vehicle records;

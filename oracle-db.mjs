@@ -1,4 +1,5 @@
 import oracledb from "oracledb";
+import { transferSyncDate } from "./transfer-sync-date.mjs";
 
 const user = String(process.env.ORACLE_DB_USER || "").trim();
 const password = String(process.env.ORACLE_DB_PASSWORD || "");
@@ -117,7 +118,8 @@ export async function oracleDriverLookup({ date, time, location, equipmentNo }) 
   }
 }
 
-export async function oracleEquipmentTransfers() {
+export async function oracleEquipmentTransfers(fromDate = null) {
+  fromDate = transferSyncDate(fromDate);
   const pool = await oraclePool();
   const connection = await pool.getConnection();
   try {
@@ -142,8 +144,9 @@ export async function oracleEquipmentTransfers() {
        FROM cmpl.equipmenttransfer transfer
        LEFT JOIN cmpl.equipment equipment ON equipment.tno = transfer.equipmenttno
        LEFT JOIN cmpl.employee employee ON employee.employeecode = transfer.drivercode
+       WHERE (:from_date IS NULL OR transfer.equipmenttransferdate >= TO_DATE(:from_date, 'YYYY-MM-DD'))
        ORDER BY transfer.equipmenttransferdate ASC, transfer.tno ASC`,
-      [],
+      { from_date: fromDate },
       { outFormat: oracledb.OUT_FORMAT_OBJECT, maxRows: 100000 },
     );
     return (result.rows || []).map((row) => ({

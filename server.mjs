@@ -16,6 +16,7 @@ import {accessAllows,managerRoleSelection} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
+import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
@@ -1037,10 +1038,10 @@ app.post('/api/oracle/equipment/sync',requireSuper,async(_req,res)=>{
   }
 });
 
-async function syncOracleEquipmentTransfers(){
-  if(equipmentTransferSyncPromise)return equipmentTransferSyncPromise;
+async function syncOracleEquipmentTransfers(fromDate=null){
+  if(equipmentTransferSyncPromise)throw Object.assign(new Error('A transfer sync is already running. Please retry after it finishes.'),{status:409});
   equipmentTransferSyncPromise=(async()=>{
-    const transfers=await oracleEquipmentTransfers();
+    const transfers=await oracleEquipmentTransfers(fromDate);
     const transferRecords=transfers.map(transferMasterRecord);
     const latest=latestTransferByEquipment(transfers);
     const client=await pool.connect();
@@ -1048,7 +1049,8 @@ async function syncOracleEquipmentTransfers(){
       await client.query('BEGIN');
       await client.query("SELECT pg_advisory_xact_lock(hashtext('oracle-equipment-transfer-sync'))");
       await client.query(`DELETE FROM master_records
-        WHERE master_name='Vehicle transfers' AND record_data->>'oracleSource'='EQUIPMENTTRANSFER'`);
+        WHERE master_name='Vehicle transfers' AND record_data->>'oracleSource'='EQUIPMENTTRANSFER'
+          AND ($1::text IS NULL OR record_data->>'transferDate'>=$1)`,[fromDate]);
       if(transferRecords.length){
         await client.query(`INSERT INTO master_records (master_name,record_data)
           SELECT 'Vehicle transfers',value FROM jsonb_array_elements($1::jsonb) AS value`,[JSON.stringify(transferRecords)]);
@@ -1071,7 +1073,7 @@ async function syncOracleEquipmentTransfers(){
         VALUES ('oracle_equipment_transfer_sync',$1,NOW())
         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[JSON.stringify({transfers:transferRecords.length,equipmentUpdated:changed.length})]);
       await client.query('COMMIT');
-      return {transfersImported:transferRecords.length,equipmentUpdated:changed.length};
+      return {transfersImported:transferRecords.length,equipmentUpdated:changed.length,fromDate};
     }catch(error){
       await client.query('ROLLBACK');
       throw error;
@@ -1080,13 +1082,15 @@ async function syncOracleEquipmentTransfers(){
   return equipmentTransferSyncPromise;
 }
 
-app.post('/api/oracle/equipment-transfers/sync',requireSuper,async(_req,res)=>{
+app.post('/api/oracle/equipment-transfers/sync',requireSuper,async(req,res)=>{
+  let fromDate;
+  try{fromDate=transferSyncDate(req.body?.fromDate)}catch(error){return res.status(400).json({error:error.message})}
   if(!oracleConfigured)return res.status(503).json({error:'Oracle equipment-transfer sync is not configured.'});
   try{
-    res.json(await syncOracleEquipmentTransfers());
+    res.json(await syncOracleEquipmentTransfers(fromDate));
   }catch(error){
     console.error('Oracle equipment-transfer sync failed.',error);
-    res.status(503).json({error:'Equipment transfers could not be synchronized from Oracle.'});
+    res.status(error.status===409?409:503).json({error:error.status===409?error.message:'Equipment transfers could not be synchronized from Oracle.'});
   }
 });
 
