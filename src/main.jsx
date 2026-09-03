@@ -4456,10 +4456,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const reportGeneratedAt = useMemo(() => indiaDateTimeInputValue(new Date()), []);
   const allowedReportCategoryIds = reportCategoryIdsForUser(permissions, session);
   const departmentReportCategoryTabs = reportCategoryTabs.filter((category) => allowedReportCategoryIds.includes(category.id));
-  const reportToolRole = [permissions.adminLevel, permissions.managerRole, ...(permissions.managerRoles || []), session.designation]
-    .filter(Boolean).join(" ").toLowerCase();
-  const canUseReportWorkspaceTools = ["Admin", "Super Admin", "Manager"].includes(String(permissions.adminLevel || ""))
-    || reportToolRole.includes("project manager") || reportToolRole.includes("director");
 
   const equipmentByReference = useMemo(() => {
     const records = new Map();
@@ -4744,10 +4740,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <h1>Reports</h1>
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
-        {canUseReportWorkspaceTools && <div className="reports-header-actions">
+        <div className="reports-header-actions">
           <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules} disabled={!reportAccessLoaded}><Clock /> Report schedules</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!reportAccessLoaded || !accessibleReportGroups.length}><Download /> Download reports ZIP</button>
-        </div>}
+        </div>
       </header>
       {directorTimingOpen && createPortal(
         <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>

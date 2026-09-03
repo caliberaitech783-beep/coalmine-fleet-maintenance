@@ -19,11 +19,13 @@ test("all users receive General Reports plus every report for their department",
   assert.match(source, /section==="reports"[\s\S]*<ReportsPage[\s\S]*department: mobileRole/);
 });
 
-test("manager defaults include Reports, schedules and ZIP download tools", () => {
+test("every signed-in Reports page includes schedules and ZIP download tools", () => {
+  const reportsPage = source.slice(source.indexOf("function ReportsPage("), source.indexOf("function MasterPage("));
   assert.match(source, /tabs\.add\("Reports"\)/);
   assert.match(source, /mobileTabs\.add\("Reports"\)/);
   assert.match(source, /record\.reportAccess = \[\.\.\.departmentReportLabels\]\.join/);
-  assert.match(source, /canUseReportWorkspaceTools/);
-  assert.match(source, /Report schedules/);
-  assert.match(source, /Download reports ZIP/);
+  assert.match(reportsPage, /className="reports-header-actions"/);
+  assert.match(reportsPage, /<Clock \/> Report schedules/);
+  assert.match(reportsPage, /<Download \/> Download reports ZIP/);
+  assert.doesNotMatch(reportsPage, /canUseReportWorkspaceTools/);
 });
