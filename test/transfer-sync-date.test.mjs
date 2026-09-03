@@ -20,5 +20,6 @@ test("scoped sync binds the Oracle date and preserves older PostgreSQL history",
   assert.match(server, /oracleEquipmentTransfers\(fromDate\)/);
   assert.match(server, /transferSyncDate\(req.body\?\.fromDate\)/);
   assert.match(server, /if\(equipmentTransferSyncPromise\)throw/);
-  assert.match(client, /\[oracleSyncFromDate, setOracleSyncFromDate\] = useState\(""\)/);
+  assert.doesNotMatch(client, /oracleSyncFromDate|Sync from \(optional\)|Oracle transfer sync from date/);
+  assert.match(client, /body: JSON.stringify\(\{\}\)/);
 });
