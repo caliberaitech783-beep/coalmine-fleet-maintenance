@@ -10,8 +10,9 @@ test("every successful login resets the application to Dashboard", () => {
   const completeLogin = source.slice(start, end);
 
   assert.ok(start >= 0, "completeLogin handler should exist");
-  assert.match(completeLogin, /setActive\("Dashboard"\)/);
-  assert.match(completeLogin, /pageHistory\.current = \["Dashboard"\]/);
+  assert.match(source, /const LOGIN_LANDING_PAGE = "Dashboard"/);
+  assert.match(completeLogin, /setActive\(LOGIN_LANDING_PAGE\)/);
+  assert.match(completeLogin, /pageHistory\.current = \[LOGIN_LANDING_PAGE\]/);
   assert.match(completeLogin, /setCanGoBack\(false\)/);
   assert.match(completeLogin, /setSession\(nextSession\)/);
   assert.match(source, /<Login onLogin=\{completeLogin\}/);

@@ -136,6 +136,7 @@ const storedSession = (() => {
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
 const SESSION_EXPIRED_PARAM = "session-expired";
+const LOGIN_LANDING_PAGE = "Dashboard";
 const clearStoredSession = () => {
   authToken = "";
   currentEmployeeName = "";
@@ -6824,7 +6825,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
 }
 function App() {
   const [session, setSession] = useState(storedSession?.token ? storedSession : null),
-    [active, setActive] = useState("Dashboard"),
+    [active, setActive] = useState(LOGIN_LANDING_PAGE),
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
     [equipmentCategory, setEquipmentCategory] = useState("all"),
@@ -6841,7 +6842,7 @@ function App() {
       return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     });
   const menuLoadStartedAt = useRef(performance.now());
-  const pageHistory = useRef(["Dashboard"]);
+  const pageHistory = useRef([LOGIN_LANDING_PAGE]);
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
   useEffect(() => {
@@ -7067,8 +7068,8 @@ function App() {
       setRequests((current) => current.filter((row) => row.ref !== reference));
     };
   const completeLogin = (nextSession) => {
-    setActive("Dashboard");
-    pageHistory.current = ["Dashboard"];
+    setActive(LOGIN_LANDING_PAGE);
+    pageHistory.current = [LOGIN_LANDING_PAGE];
     setCanGoBack(false);
     setMenu(false);
     setLoadTime(null);
