@@ -133,6 +133,30 @@ const storedSession = (() => {
 })();
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
+const SESSION_EXPIRED_PARAM = "session-expired";
+const clearStoredSession = () => {
+  authToken = "";
+  currentEmployeeName = "";
+  localStorage.removeItem("nerveCenterSession");
+  sessionStorage.removeItem("nerveCenterSession");
+  sessionStorage.removeItem("aiFeederGreeted");
+};
+// A deploy that changes the UI version clears every server session while the
+// browser still holds its old token. Any authenticated API call then answers
+// 401, so return to the sign-in screen instead of surfacing it as a save error.
+if (typeof window !== "undefined" && typeof window.fetch === "function" && !window.__sessionExpiryFetch) {
+  const nativeFetch = window.fetch.bind(window);
+  window.__sessionExpiryFetch = true;
+  window.fetch = async (input, init) => {
+    const response = await nativeFetch(input, init);
+    const url = typeof input === "string" ? input : input?.url || "";
+    if (response.status === 401 && authToken && url.startsWith("/api/") && !url.startsWith("/api/login")) {
+      clearStoredSession();
+      window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
+    }
+    return response;
+  };
+}
 const subsidiaryData = REGION_DATA;
 const nav = [
   ["Dashboard", LayoutDashboard],
@@ -259,6 +283,17 @@ function Login({ onLogin, theme, toggleTheme }) {
   const [resetRequest, setResetRequest] = useState(null);
   const [resetOtp, setResetOtp] = useState("");
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has(SESSION_EXPIRED_PARAM)) {
+      setNotice("Your sign-in expired, usually because the application was updated. Please sign in again.");
+    } else if (params.has("updated")) {
+      setNotice("The application was updated. Please sign in again.");
+    } else {
+      return;
+    }
+    window.history.replaceState(null, "", window.location.pathname);
+  }, []);
   const saveSession = (data) => {
     authToken = data.token;
     currentEmployeeName = data.name;
@@ -6939,11 +6974,7 @@ function App() {
       selectMenu("Breakdown master");
     },
     logout = () => {
-      authToken = "";
-      currentEmployeeName = "";
-      localStorage.removeItem("nerveCenterSession");
-      sessionStorage.removeItem("nerveCenterSession");
-      sessionStorage.removeItem("aiFeederGreeted");
+      clearStoredSession();
       setSession(null);
     },
     addRequest = async (request) => {

@@ -721,7 +721,8 @@ function requirePermission(permission,{role}={}){
 async function requireSuper(req,res,next){
   try{
     const session=await readSession(req);
-    if(session?.role!=='super')return res.status(403).json({error:'Your sign-in has expired. Please sign in again as Super User.'});
+    if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
+    if(session.role!=='super')return res.status(403).json({error:'Only a Super User can perform this action.'});
     const requestedMaster=req.params?.master?decodeURIComponent(req.params.master):'';
     if(requestedMaster&&!accessAllows(session.permissions?.masterAccess,requestedMaster)&&!accessAllows(session.permissions?.mobileMasterAccess,requestedMaster))
       return res.status(403).json({error:'You do not have access to this master.'});
