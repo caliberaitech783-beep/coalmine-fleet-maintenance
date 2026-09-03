@@ -28,7 +28,7 @@ export const ADMIN_REPORT_OPTIONS = [
 export const ADMIN_SUBMENU_OPTIONS = {
   Dashboard: {field: "dashboardAccess", label: "Visible dashboard menus", options: ["Dashboard"]},
   Masters: {field: "masterAccess", label: "Visible masters", options: ADMIN_MASTER_OPTIONS},
-  "WhatsApp Integration": {field: "whatsappAccess", label: "Visible WhatsApp menus", options: ["Daily site-wise report", "Daily OEM report", "WhatsApp alert history"]},
+  "WhatsApp Integration": {field: "whatsappAccess", label: "Visible WhatsApp menus", options: ["Meta API setup", "Daily site-wise report", "Daily OEM report", "WhatsApp alert history"]},
   Reports: {field: "reportAccess", label: "Visible report menus", options: ADMIN_REPORT_OPTIONS},
   "Audit Trail": {field: "auditAccess", label: "Visible audit menus", options: ["Audit Trail"]},
   Tickets: {field: "ticketAccess", label: "Visible ticket menus", options: ["Tickets"]},

@@ -11,6 +11,7 @@ export const MOBILE_NAVIGATION_ITEMS = [
   "Hierarchy master",
   "OEM master",
   "WhatsApp Integration",
+  "Meta API setup",
   "Daily site-wise report",
   "Daily OEM report",
   "WhatsApp alert history",

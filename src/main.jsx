@@ -72,6 +72,7 @@ import {
   ArrowDown,
   Pencil,
   Save,
+  Settings,
   Trash2,
   MessageCircle,
   Send,
@@ -108,6 +109,7 @@ import "./dashboard-concept-a.css";
 import "./brand-theme.css";
 import "./report-schedule-polish.css";
 import "./reports-workspace.css";
+import "./meta-whatsapp-setup.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -143,6 +145,7 @@ const masterNav = [
   ["OEM master", ShieldCheck],
 ];
 const whatsappNav = [
+  ["Meta API setup", Settings],
   ["Daily site-wise report", Building2],
   ["Daily OEM report", ShieldCheck],
   ["WhatsApp alert history", History],
@@ -539,7 +542,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
-  const visibleWhatsAppNav = whatsappNav.filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
+  const visibleWhatsAppNav = whatsappNav.filter(([name]) => name !== "Meta API setup" || permissions.adminLevel !== "Manager").filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
   const departmentReportNav = reportCategoryTabs.filter((category) => visibleReportCategoryIds.includes(category.id));
@@ -5233,6 +5236,90 @@ function useMasterRecords(name, seed = []) {
   };
   return [records, add, loaded, edit, remove, removeAll];
 }
+function MetaWhatsAppSetup() {
+  const [employees] = useMasterRecords("Users & employees");
+  const [form, setForm] = useState({phoneNumberId:"", businessAccountId:"", graphVersion:"v25.0", accessToken:""});
+  const [settings, setSettings] = useState(null);
+  const [connection, setConnection] = useState(null);
+  const [working, setWorking] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const loadMetaSettings = async () => {
+    const settingsResponse = await fetch("/api/whatsapp/settings", {headers:{Authorization:`Bearer ${authToken}`}});
+    const saved = await settingsResponse.json().catch(() => ({}));
+    if (!settingsResponse.ok) throw new Error(saved.error || "Unable to load Meta WhatsApp settings.");
+    setSettings(saved);
+    setForm((current) => ({...current, phoneNumberId:saved.phoneNumberId || "", businessAccountId:saved.businessAccountId || "", graphVersion:saved.graphVersion || "v25.0", accessToken:""}));
+    const statusResponse = await fetch("/api/whatsapp/status", {headers:{Authorization:`Bearer ${authToken}`}});
+    const status = await statusResponse.json().catch(() => ({}));
+    setConnection(statusResponse.ok ? status : {connected:false,error:status.error || "Meta connection is not ready."});
+  };
+  useEffect(() => {
+    let active = true;
+    loadMetaSettings().catch((loadError) => active && setError(loadError.message));
+    return () => { active = false; };
+  }, []);
+  const phoneDigits = (employee) => String(employee.phone || employee.phoneNo || employee.phoneNumber || "").replace(/\D/g, "");
+  const readyRecipients = employees.filter((employee) => {
+    const digits = phoneDigits(employee);
+    return digits.length >= 10 && digits.length <= 15;
+  }).length;
+  const missingRecipients = Math.max(0, employees.length - readyRecipients);
+  const updateField = (field) => (event) => setForm((current) => ({...current,[field]:event.target.value}));
+  const saveSettings = async (event) => {
+    event.preventDefault();
+    setWorking(true);
+    setError("");
+    setNotice("");
+    try {
+      const payload = {phoneNumberId:form.phoneNumberId, businessAccountId:form.businessAccountId, graphVersion:form.graphVersion};
+      if (form.accessToken.trim()) payload.accessToken = form.accessToken.trim();
+      const response = await fetch("/api/whatsapp/settings", {
+        method:"PUT",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},
+        body:JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Unable to save Meta WhatsApp settings.");
+      const templateMessage = result.templateSync?.ok
+        ? `${result.templateSync.approved} templates approved; ${result.templateSync.pending} pending.`
+        : `Credentials saved. Template sync needs attention${result.templateSync?.error ? `: ${result.templateSync.error}` : "."}`;
+      setNotice(templateMessage);
+      await loadMetaSettings();
+    } catch (saveError) {
+      setError(saveError.message || "Unable to connect Meta WhatsApp.");
+    } finally {
+      setWorking(false);
+    }
+  };
+  return <section className="panel pagepanel generic meta-whatsapp-setup">
+    <header>
+      <div><h1>Meta API setup</h1><p>CMLL WhatsApp Business connection and recipient readiness</p></div>
+      <span className={`meta-connection-state ${connection?.connected ? "connected" : "disconnected"}`}>
+        {connection?.connected ? <CheckCircle2 /> : <AlertTriangle />}
+        {connection?.connected ? "Connected" : "Not connected"}
+      </span>
+    </header>
+    <div className="meta-whatsapp-overview" aria-label="Meta WhatsApp connection overview">
+      <div><span>Business number</span><strong>{connection?.displayPhoneNumber || "Not verified"}</strong><small>{connection?.verifiedName || "Meta verification pending"}</small></div>
+      <div><span>Quality</span><strong>{connection?.qualityRating || "--"}</strong><small>Meta phone quality rating</small></div>
+      <div><span>Recipients ready</span><strong>{readyRecipients}</strong><small>Users with a valid mobile number</small></div>
+      <div><span>Mobile missing</span><strong>{missingRecipients}</strong><small>Complete in Users & employees</small></div>
+    </div>
+    <form className="meta-whatsapp-form" onSubmit={saveSettings}>
+      <div className="meta-whatsapp-form-heading"><div><h2>Cloud API credentials</h2><p>Credentials are encrypted in transit and the access token is never returned to this page.</p></div><ShieldCheck /></div>
+      <div className="meta-whatsapp-fields">
+        <label><span>Phone Number ID</span><input inputMode="numeric" required value={form.phoneNumberId} onChange={updateField("phoneNumberId")} placeholder="Meta phone number ID" /></label>
+        <label><span>WhatsApp Business Account ID</span><input inputMode="numeric" value={form.businessAccountId} onChange={updateField("businessAccountId")} placeholder="Meta business account ID" /></label>
+        <label><span>Graph API version</span><input required value={form.graphVersion} onChange={updateField("graphVersion")} placeholder="v25.0" /></label>
+        <label className="meta-token-field"><span>Permanent access token</span><input type="password" autoComplete="new-password" value={form.accessToken} onChange={updateField("accessToken")} placeholder={settings?.accessTokenConfigured ? `Configured: ${settings.accessTokenPreview}` : "Enter permanent system-user token"} /><small>{settings?.accessTokenConfigured ? "Leave blank to retain the configured token." : "A token is required for the first connection."}</small></label>
+      </div>
+      {(notice || error || connection?.error) && <div className={`meta-whatsapp-feedback ${error || connection?.error ? "error" : "success"}`} role={error || connection?.error ? "alert" : "status"}>{error || notice || connection.error}</div>}
+      <footer><button type="submit" className="primary" disabled={working || !form.phoneNumberId.trim() || (!settings?.accessTokenConfigured && !form.accessToken.trim())}>{working ? <RefreshCw className="spin" /> : <Save />}{working ? "Connecting..." : "Save, verify and sync templates"}</button></footer>
+    </form>
+  </section>;
+}
+
 function WhatsAppReport({type, requests = []}) {
   const isSite = type === "Daily site-wise report";
   const [records] = useMasterRecords(isSite ? "Equipment master" : "OEM master", isSite ? vehicles : []);
@@ -6626,7 +6713,7 @@ function App() {
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && accessAllows(activeNavigationPermissions.masterAccess, name);
-    if (whatsappNav.some(([page]) => page === name)) return accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
+    if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
@@ -6635,7 +6722,7 @@ function App() {
     if (canOpenAdminPage("Dashboard")) return "Dashboard";
     const firstMaster = masterNav.find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
-    if (accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => accessAllows(activeNavigationPermissions.whatsappAccess, name))?.[0];
+    if (accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.whatsappAccess, name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
   };
   const selectedOperationalRole = operationalWorkspaceNav.find(([name]) => name === active)?.[2];
@@ -6910,6 +6997,8 @@ function App() {
             breakdownFleetFilter ? <Equipment initialFilter={breakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={breakdownFleetSites} /> : <Breakdown requests={requests} />
           ) : active === "Region master" ? (
             <Subsidiaries gotoEquipment={gotoEquipment} requests={requests} />
+          ) : active === "Meta API setup" ? (
+            <MetaWhatsAppSetup />
           ) : active === "WhatsApp alert history" ? (
             <WhatsAppAlertHistory />
           ) : active === "Reports" ? (

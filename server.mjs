@@ -523,6 +523,11 @@ function requireTrueSuperAdmin(req,res,next){
   return res.status(403).json({error:'Only a Super Admin can perform this action.'});
 }
 
+function requireWhatsAppAdministrator(req,res,next){
+  if(req.session?.role==='super'&&req.session?.permissions?.adminLevel!=='Manager')return next();
+  return res.status(403).json({error:'Only an Admin or Super Admin can change Meta WhatsApp settings.'});
+}
+
 app.post('/api/login',async(req,res,next)=>{
   try{
     const username=String(req.body?.username||'').trim().toLowerCase();
@@ -876,12 +881,12 @@ app.get('/api/whatsapp/status',requireSuper,async(_req,res)=>{
   catch(error){res.status(503).json({configured:true,connected:false,error:error instanceof Error?error.message:'Meta WhatsApp connection failed.'})}
 });
 
-app.get('/api/whatsapp/settings',requireSuper,async(_req,res,next)=>{
+app.get('/api/whatsapp/settings',requireSuper,requireWhatsAppAdministrator,async(_req,res,next)=>{
   try{res.json(await publicWhatsAppSettings())}
   catch(error){next(error)}
 });
 
-app.put('/api/whatsapp/settings',requireSuper,async(req,res,next)=>{
+app.put('/api/whatsapp/settings',requireSuper,requireWhatsAppAdministrator,async(req,res,next)=>{
   try{
     const current=await storedWhatsAppSettings();
     const nextSettings={...current};
@@ -891,11 +896,26 @@ app.put('/api/whatsapp/settings',requireSuper,async(req,res,next)=>{
     if(Object.prototype.hasOwnProperty.call(req.body||{},'graphVersion'))nextSettings.graphVersion=String(req.body.graphVersion||'v25.0').trim()||'v25.0';
     if(!nextSettings.phoneNumberId)return res.status(400).json({error:'Meta WhatsApp phone number ID is required.'});
     if(!nextSettings.accessToken)return res.status(400).json({error:'Meta WhatsApp access token is required.'});
+    const candidateEnv={
+      ...process.env,
+      META_WHATSAPP_PHONE_NUMBER_ID:nextSettings.phoneNumberId,
+      META_WHATSAPP_ACCESS_TOKEN:nextSettings.accessToken,
+      META_WHATSAPP_BUSINESS_ACCOUNT_ID:nextSettings.businessAccountId||'',
+      META_GRAPH_VERSION:nextSettings.graphVersion,
+    };
+    await metaWhatsAppStatus({env:candidateEnv});
     await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
       ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
       WHATSAPP_SETTING_KEY,JSON.stringify(nextSettings),
     ]);
-    res.json(await publicWhatsAppSettings());
+    let templateSync;
+    try{
+      const templates=await submitMetaWhatsAppTemplates({env:candidateEnv});
+      templateSync={ok:true,total:templates.length,approved:templates.filter((template)=>template.status==='APPROVED').length,pending:templates.filter((template)=>template.status!=='APPROVED').length};
+    }catch(error){
+      templateSync={ok:false,error:String(error?.message||'Meta template synchronization failed.').slice(0,300)};
+    }
+    res.json({...await publicWhatsAppSettings(),templateSync});
   }catch(error){next(error)}
 });
 
