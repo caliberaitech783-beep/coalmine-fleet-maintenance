@@ -26,6 +26,27 @@ export function normalizeMobileUserRole(value) {
   return "";
 }
 
+// The MIS request submenu was previously labelled "Verify closed requests".
+// That phrase is rejected by the production edge firewall when it appears in
+// a request body, so the option is now stored and shown as "MIS verification".
+// Stored records that still carry the old label keep working through the alias.
+export const MIS_VERIFICATION_MENU = "MIS verification";
+const LEGACY_REQUEST_MENU_LABELS = new Map([["verify closed requests", MIS_VERIFICATION_MENU]]);
+
+export function normalizeRequestMenuLabel(value) {
+  const label = String(value || "").trim();
+  return LEGACY_REQUEST_MENU_LABELS.get(label.toLowerCase()) || label;
+}
+
+export function normalizeUserAccessLabels(record = {}) {
+  const next = { ...record };
+  for (const key of ["desktopUserRequestAccess", "mobileUserRequestAccess"]) {
+    if (typeof next[key] !== "string" || !next[key].trim()) continue;
+    next[key] = [...new Set(next[key].split(/\s*[|,]\s*/).map(normalizeRequestMenuLabel).filter(Boolean))].join(" | ");
+  }
+  return next;
+}
+
 export function userLoginCandidates(record = {}) {
   const login = String(record.login || "").trim().toLowerCase();
   const firstName = String(record.employee || "").trim().split(/\s+/)[0].toLowerCase();
@@ -80,13 +101,13 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
 
   const maintenance = assignedRole === "Maintenance User";
   const accessList=(key,fallback=[])=>Object.hasOwn(user,key)
-    ? [...new Set(String(user[key]||"").split(/\s*[|,]\s*/).map((value)=>value.trim()).filter(Boolean))]
+    ? [...new Set(String(user[key]||"").split(/\s*[|,]\s*/).map(normalizeRequestMenuLabel).filter(Boolean))]
     : fallback;
   const roleRequestMenus=assignedRole==="Production User"
     ? ["View requests","Create request","Closed history"]
     : maintenance
       ? ["View requests","Create request","Close request form","Closed history"]
-      : ["View requests","Verify closed requests","Closed history"];
+      : ["View requests",MIS_VERIFICATION_MENU,"Closed history"];
   return {
     sessionRole: "normal",
     userType: "Mobile User",

@@ -12,7 +12,7 @@ test("the workspace tab strip sits inside the banner", () => {
   );
   assert.match(hero, /<div className="workspace-hero-intro">/);
   assert.match(hero, /<div className="mobile-tabs" role="tablist">/);
-  for (const label of ["Requests", "Verify closed requests", "Closed history", "Idle Vehicles"]) {
+  for (const label of ["Requests", "MIS verification", "Closed history", "Idle Vehicles"]) {
     assert.ok(hero.includes(`>${label}</button>`), `${label} tab should render inside the banner`);
   }
   assert.match(hero, /<\/div>\s*<\/div>\s*$/);

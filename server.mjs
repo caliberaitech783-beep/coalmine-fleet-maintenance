@@ -10,7 +10,7 @@ import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} 
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
-import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
+import {loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {accessAllows,managerRoleSelection} from './admin-access.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
@@ -443,6 +443,21 @@ async function migrate(){
       }
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('user_site_names_normalized','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
+    // One-time rename of the stored MIS request submenu label
+    // ("Verify closed requests" -> "MIS verification"). Every other field is
+    // left untouched.
+    const {rows:accessLabelsNormalized}=await client.query("SELECT value FROM app_metadata WHERE key='user_access_labels_normalized' FOR UPDATE");
+    if(!accessLabelsNormalized.length){
+      const {rows:userRows}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees' FOR UPDATE");
+      for(const row of userRows){
+        const normalized=normalizeUserAccessLabels(row.record_data);
+        if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
+          await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('user_access_labels_normalized','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     await client.query('COMMIT');
@@ -2208,7 +2223,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     let prepared;
     try{
       prepared=records.map((record,index)=>{
-        try{return master==='Users & employees'?initializeUserCredentials(normalizeUserSiteFields(record)):record}
+        try{return master==='Users & employees'?initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record))):record}
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
     }catch(error){return res.status(400).json({error:error.message})}
@@ -2316,7 +2331,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       if(!existing.rows.length)return res.status(404).json({error:'Master record not found.'});
       if((isTrueSuperAdmin(record)||isTrueSuperAdmin(existing.rows[0].record_data))&&!isTrueSuperAdmin(req.session.permissions))
         return res.status(403).json({error:'Only a Super Admin can manage Super Admin accounts.'});
-      storedRecord={...normalizeUserSiteFields(record),passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
+      storedRecord={...normalizeUserSiteFields(normalizeUserAccessLabels(record)),passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
     }
     if(master==='Privilege'){
       const client=await pool.connect();

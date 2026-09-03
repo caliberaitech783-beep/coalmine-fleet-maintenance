@@ -28,8 +28,8 @@ test('user records are normalised without losing any other field',()=>{
 });
 
 test('server normalises user site names on write and migrates stored users once',()=>{
-  assert.match(server,/initializeUserCredentials\(normalizeUserSiteFields\(record\)\)/);
-  assert.match(server,/storedRecord=\{\.\.\.normalizeUserSiteFields\(record\)/);
+  assert.match(server,/initializeUserCredentials\(normalizeUserSiteFields\(normalizeUserAccessLabels\(record\)\)\)/);
+  assert.match(server,/storedRecord=\{\.\.\.normalizeUserSiteFields\(normalizeUserAccessLabels\(record\)\)/);
   assert.match(server,/key='user_site_names_normalized'/);
   assert.match(server,/master_name='Users & employees' FOR UPDATE/);
 });
