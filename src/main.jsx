@@ -4,6 +4,7 @@ import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
+import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
@@ -2520,7 +2521,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     fileInput = useRef(null),
     fields = masterFields[name],
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
-    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
+    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
   if (!fields) return null;
   const saveManual = (e) => {
     e.preventDefault();
@@ -4861,7 +4862,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];
       if (name === "Users & employees" && key === "userType")
-        return String(record.userGroup || (String(record.userType || "").toLowerCase().includes("super") ? `User — ${record.adminLevel || "Admin"}` : record.userType) || "").trim();
+        return userMasterRole(record);
       return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
     },
     filterColumns = displayFields.map(([key, label]) => ({ key, label, value: (record) => masterValue(record, key) })),
@@ -4877,6 +4878,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     ),
     [rows, sort, changeSort] = useSortableRows(filteredRows, "", (record, key) => {
       if (name === "Users & employees" && key === "site") return userMasterLocation(record);
+      if (name === "Users & employees" && key === "userType") return userMasterRole(record);
       const type = fields.find(([field]) => field === key)?.[2];
       return type === "checkbox" ? isCheckedValue(record[key]) : record[key];
     });
@@ -5032,7 +5034,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                   return (
                 <tr key={row.id || ri}>
                   {displayFields.map(([key, , type], ci) => {
-                    const value = name === "Privilege" ? privilegeValue(row, key) : name === "Users & employees" && key === "site" ? userMasterLocation(row) : row[key];
+                    const value = name === "Privilege" ? privilegeValue(row, key) : name === "Users & employees" && key === "site" ? userMasterLocation(row) : name === "Users & employees" && key === "userType" ? userMasterRole(row) : row[key];
                     return (
                     <td key={key}>
                       {name === "Privilege" && key === "username" ? (

@@ -23,5 +23,5 @@ test("location display, filtering, sorting and export share the same user-only r
   assert.match(source, /exportColumns = fields\?\.map[^\n]*name === "Users & employees" && key === "site" \? userMasterLocation\(record\)/);
   assert.match(source, /masterValue = \(record, key\) => \{\s*if \(name === "Users & employees" && key === "site"\) return userMasterLocation\(record\)/);
   assert.match(source, /useSortableRows\(filteredRows, "", \(record, key\) => \{\s*if \(name === "Users & employees" && key === "site"\) return userMasterLocation\(record\)/);
-  assert.match(source, /const value = name === "Privilege"[^\n]*name === "Users & employees" && key === "site" \? userMasterLocation\(row\) : row\[key\]/);
+  assert.match(source, /const value = name === "Privilege"[^\n]*name === "Users & employees" && key === "site" \? userMasterLocation\(row\)/);
 });
