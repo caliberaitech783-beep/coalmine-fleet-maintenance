@@ -4372,10 +4372,8 @@ function reportCategoryIdsForUser(permissions = {}, session = {}) {
   if (roleText.includes("production")) categoryIds.add("production");
   if (roleText.includes("maintenance")) categoryIds.add("maintenance");
   if (roleText.includes("mis")) categoryIds.add("mis");
-  const departmentScoped = categoryIds.size > 1 || adminLevel === "Manager";
   return reportCategoryTabs
     .filter((category) => categoryIds.has(category.id))
-    .filter((category) => departmentScoped || reportAccessAllows(permissions.reportAccess, category.label))
     .map((category) => category.id);
 }
 function firstTripTimestamp(request) {
@@ -4610,10 +4608,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
     ], dateValue: (row) => firstTripTimestamp(row) || row.verifiedAt, emptyMessage: "No idle first-trip verification records available"},
   ];
-  const hierarchyAccessibleReportGroups = reportAccess.canManageAll || !reportAccess.allowedReports.length
-    ? reportGroups
-    : reportGroups.filter((report) => reportAccess.allowedReports.includes(report.title));
-  const accessibleReportGroups = hierarchyAccessibleReportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
+  const accessibleReportGroups = reportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
   const availableReportCategories = departmentReportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
   const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
   const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
