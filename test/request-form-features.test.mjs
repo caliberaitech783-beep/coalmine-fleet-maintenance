@@ -2,13 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-test("mobile request forms enforce chassis, search, duplicate confirmation, and stored audio", async () => {
+test("mobile request forms enforce chassis, search, duplicate blocking, and stored audio", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
 
   assert.match(source, /aria-label="Search equipment or vehicle"/);
   assert.match(source, /Chassis number is not available\. Contact the admin team/);
-  assert.match(source, /forceDuplicate: true/);
+  assert.match(source, /\/api\/requests\/conflict/);
+  assert.match(source, /request-conflict-warning/);
+  assert.match(source, /Already off road \/ under maintenance/);
+  assert.doesNotMatch(source, /forceDuplicate: true/);
+  assert.doesNotMatch(source, /Do you still want to add this request/);
   assert.match(source, /audioName="maintenanceAudio"/);
   assert.match(source, /request-audio-list/);
   assert.match(server, /chassis_number TEXT NOT NULL DEFAULT ''/);
@@ -21,6 +25,8 @@ test("mobile request forms enforce chassis, search, duplicate confirmation, and 
   assert.match(source, /row\.equipmentGroup \|\| row\.equipment/);
   assert.match(source, /r\.equipmentGroup \|\| r\.equipment/);
   assert.match(server, /duplicate:true/);
+  assert.match(server, /lower\(trim\(door_number\)\)/);
+  assert.doesNotMatch(server, /forceDuplicate/);
 });
 
 test("the maintenance request form shows read-only make and model fetched from Equipment Master", async () => {

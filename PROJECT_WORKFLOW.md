@@ -170,14 +170,20 @@ sequenceDiagram
   participant DB as PostgreSQL
   P->>UI: Choose Equipment group
   UI->>API: Load Equipment master
-  P->>UI: Enter door, date, time, complaint
+  P->>UI: Select equipment / door number
+  UI->>API: Check for an active request on the door or chassis
+  API-->>UI: Block immediately when the asset is already off road / under maintenance
+  P->>UI: Enter date, time, complaint
   UI->>API: POST /api/requests
+  API->>DB: Repeat the active-request conflict check
   API->>DB: Insert Open request with session owner/login
   DB-->>API: Saved request projection
   API-->>UI: Request row
 ~~~
 
 The first selector in Create Request is **Equipment group**. It displays the Equipment master `group` value and uses the database record ID internally. Selecting a group still fills the matching door, registration, and site values. The request payload keeps the existing `equipment` key for compatibility.
+
+After an equipment or vehicle is selected, the form checks `GET /api/requests/conflict` by normalized door number and chassis. Any request whose status is not `Closed` blocks the form, identifies the existing request in a popup and inline warning, and disables submission. `POST /api/requests` repeats the same check and has no duplicate override, so Production and Maintenance users cannot create a second active request for the same asset.
 
 The form also supports manual 24-hour `HH:MM:SS` time entry and speech-to-text complaint input in supported Chrome/Edge browsers. The mobile submitted table shows Job reference, Equipment group, Door number, Site location, Days of breakdown, and the existing request fields. Days are calculated from the stored start timestamp and are not a separate database parameter.
 

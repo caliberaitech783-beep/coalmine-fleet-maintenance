@@ -30,6 +30,7 @@ import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from '
 import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
+import {activeRequestConflictMessage} from './request-conflict.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -1867,18 +1868,39 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
   }catch(error){next(error)}
 });
 
+async function activeRequestConflict({door='',chassis=''}={}){
+  const normalizedDoor=String(door||'').trim();
+  const normalizedChassis=String(chassis||'').trim();
+  if(!normalizedDoor&&!normalizedChassis)return null;
+  const {rows}=await pool.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status
+    FROM maintenance_requests
+    WHERE status<>'Closed' AND (
+      ($1<>'' AND lower(trim(door_number))=lower(trim($1))) OR
+      ($2<>'' AND lower(trim(chassis_number))=lower(trim($2)))
+    ) ORDER BY created_at DESC LIMIT 1`,[normalizedDoor,normalizedChassis]);
+  return rows[0]||null;
+}
+
+app.get('/api/requests/conflict',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
+  try{
+    const door=String(req.query.door||'').trim(),chassis=String(req.query.chassis||'').trim();
+    if(!door&&!chassis)return res.status(400).json({error:'Select a door number before checking active requests.'});
+    const conflict=await activeRequestConflict({door,chassis});
+    if(!conflict)return res.json({duplicate:false});
+    res.json({duplicate:true,existingReference:conflict.ref,status:conflict.status,door:conflict.door,message:activeRequestConflictMessage(conflict,door)});
+  }catch(error){next(error)}
+});
+
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,meterType='',forceDuplicate=false}=req.body||{};
+    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,meterType=''}=req.body||{};
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-    if(forceDuplicate!==true){
-      const duplicate=await pool.query(`SELECT reference FROM maintenance_requests WHERE lower(trim(chassis_number))=lower(trim($1)) AND status<>'Closed' ORDER BY created_at DESC LIMIT 1`,[chassis]);
-      if(duplicate.rows.length)return res.status(409).json({duplicate:true,existingReference:duplicate.rows[0].reference,error:`Request ${duplicate.rows[0].reference} already exists for this equipment. Do you still want to add another request?`});
-    }
+    const duplicate=await activeRequestConflict({door,chassis});
+    if(duplicate)return res.status(409).json({duplicate:true,existingReference:duplicate.ref,error:activeRequestConflictMessage(duplicate,door)});
     const startedAt=parseIndiaRequestDateTime(start);
     const requester=await currentUserRecord(req.session);
     const superior=String(requester.superior||'').trim().slice(0,200);

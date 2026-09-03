@@ -28,6 +28,7 @@ import {
   requestWithEquipmentMasterDetails,
 } from "../request-equipment.mjs";
 import { submitMaintenanceRequest } from "../request-submit.mjs";
+import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
 import {MANAGER_REGION_OPTIONS, REGION_DATA, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
@@ -3573,7 +3574,7 @@ function readMeterEvidence(file) {
     reader.readAsDataURL(file);
   });
 }
-function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "" }) {
+function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
     [door, setDoor] = useState(""),
@@ -3603,6 +3604,9 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const [requestDate, setRequestDate] = useState(systemDate);
   const [driverLookup, setDriverLookup] = useState({status: "idle", name: "", source: ""});
   const [submitting, setSubmitting] = useState(false);
+  const [checkingConflict, setCheckingConflict] = useState(false);
+  const [duplicateConflict, setDuplicateConflict] = useState(null);
+  const conflictAlerted = useRef("");
   useEffect(() => {
     const timer = window.setInterval(() => setElapsedSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
@@ -3630,9 +3634,71 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     }, 350);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [equipmentDetails.door, equipmentDetails.equipment, currentLocation, requestDate, requestTime]);
+  useEffect(() => {
+    const selectedDoor = String(door || "").trim();
+    const selectedChassis = String(equipmentDetails.chassis || "").trim();
+    if (!selectedDoor) {
+      setDuplicateConflict(null);
+      setCheckingConflict(false);
+      conflictAlerted.current = "";
+      return undefined;
+    }
+
+    let cancelled = false;
+    const showConflict = (conflict) => {
+      if (cancelled || !conflict) return;
+      const normalizedConflict = {
+        ...conflict,
+        duplicate: true,
+        existingReference: conflict.existingReference || conflict.ref || conflict.reference || "",
+      };
+      const message = conflict.message || activeRequestConflictMessage(normalizedConflict, selectedDoor);
+      setDuplicateConflict({...normalizedConflict, message});
+      const alertKey = `${selectedDoor.toLocaleLowerCase()}|${normalizedConflict.existingReference}`;
+      if (conflictAlerted.current !== alertKey) {
+        conflictAlerted.current = alertKey;
+        window.alert(message);
+      }
+    };
+
+    const localConflict = findActiveRequestConflict(activeRequestRecords, {door: selectedDoor, chassis: selectedChassis});
+    if (localConflict) {
+      setCheckingConflict(false);
+      showConflict(localConflict);
+      return () => { cancelled = true; };
+    }
+
+    setDuplicateConflict(null);
+    setCheckingConflict(true);
+    conflictAlerted.current = "";
+    const timer = window.setTimeout(async () => {
+      try {
+        const query = new URLSearchParams({door: selectedDoor});
+        if (selectedChassis) query.set("chassis", selectedChassis);
+        const response = await fetch(`/api/requests/conflict?${query}`, {
+          cache: "no-store",
+          headers: {Authorization: `Bearer ${authToken}`},
+        });
+        const result = await response.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!response.ok) throw new Error(result.error || "Could not check the selected door number.");
+        if (result.duplicate) showConflict(result);
+        else setDuplicateConflict(null);
+      } catch (error) {
+        if (!cancelled) setDuplicateConflict({checkFailed: true, message: error.message});
+      } finally {
+        if (!cancelled) setCheckingConflict(false);
+      }
+    }, 200);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [door, equipmentDetails.chassis, activeRequestRecords]);
   const submit = async (e) => {
     e.preventDefault();
-    if (submitting) return;
+    if (submitting || checkingConflict) return;
+    if (duplicateConflict) {
+      alert(duplicateConflict.message || "This door number already has an active maintenance request.");
+      return;
+    }
     const fd = new FormData(e.currentTarget),
       meterType = requestEquipmentMeterType(v || {});
     const request = {
@@ -3666,18 +3732,11 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         "Maintenance request submitted successfully. It is now visible to the Super User.",
       );
     } catch (error) {
-      if (error?.duplicate && window.confirm(`${error.message}\n\nDo you still want to add this request?`)) {
-        try {
-          await submitMaintenanceRequest(onSubmit, {...request, forceDuplicate: true});
-          close();
-          alert("Maintenance request submitted successfully.");
-          return;
-        } catch (retryError) {
-          alert(retryError?.message || "Could not save request. Please retry.");
-        }
-      } else if (!error?.duplicate) {
-        alert(error?.message || "Could not save request. Please retry.");
-      }
+      if (error?.duplicate) {
+        const conflict = {...error, message: error.message || activeRequestConflictMessage(error, request.door)};
+        setDuplicateConflict(conflict);
+        alert(conflict.message);
+      } else alert(error?.message || "Could not save request. Please retry.");
     } finally {
       setSubmitting(false);
     }
@@ -3857,12 +3916,22 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </span>
           </div>
         )}
+        {checkingConflict && <div className="request-conflict-check" role="status"><RefreshCw /> Checking active requests for this door number...</div>}
+        {duplicateConflict && (
+          <div className={`request-conflict-warning${duplicateConflict.checkFailed ? " check-failed" : ""}`} role="alert">
+            <AlertTriangle />
+            <span>
+              <b>{duplicateConflict.checkFailed ? "Door-number check unavailable" : "Already off road / under maintenance"}</b>
+              {duplicateConflict.message}
+            </span>
+          </div>
+        )}
         <footer>
           <button type="button" onClick={close}>
             Cancel
           </button>
-          <button className="primary" disabled={submitting}>
-            {submitting ? "Submitting…" : "Submit request"} <ChevronRight />
+          <button className="primary" disabled={submitting || checkingConflict || Boolean(duplicateConflict)}>
+            {submitting ? "Submitting…" : checkingConflict ? "Checking door…" : duplicateConflict ? "Request already open" : "Submit request"} <ChevronRight />
           </button>
         </footer>
       </form>
@@ -6661,7 +6730,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
-    {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} close={() => setShow(false)} />}
+    {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
     {editing && <RequestEditForm request={editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
