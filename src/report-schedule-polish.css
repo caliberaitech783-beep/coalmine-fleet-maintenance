@@ -336,20 +336,16 @@
 .report-zip-range input { width: 100%; min-height: 38px; border: 1px solid #dccccf; border-radius: 8px; background: #fff; color: #3a2a3e; padding: 7px 9px; font: 750 10px Manrope; }
 .report-zip-range input:focus { border-color: #ad4a83; outline: 2px solid #ad4a8318; }
 
-.report-assigned-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 11px 11px;
-  padding: 9px 11px;
-  border: 1px solid #eadde6;
-  border-radius: 8px;
-  background: #fcf8fb;
+.report-assignment-readonly input { pointer-events: none; }
+.report-assignment-readonly label { cursor: default; }
+.report-assignment-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px;
+  background: #fff;
   color: #76536d;
   font-size: 9px;
 }
-.report-assigned-summary b { color: #3b2e3e; }
 
 .report-zip-toolbar {
   margin: 14px 18px 0;
