@@ -17,6 +17,38 @@ export function managerSiteSelection(value){
   return [...new Set(raw.map(canonicalSiteName).filter(Boolean))];
 }
 
+// One display name per site, keyed by its canonical form, so "sasti ob",
+// "Sasti OB" and "SASTI II" all render and save as "Sasti OB".
+const SITE_DISPLAY_NAMES=new Map(REGION_DATA.flatMap(({sites})=>sites).map((site)=>[canonicalSiteName(site),site]));
+
+export function displaySiteName(value){
+  const raw=String(value||'').trim();
+  if(!raw)return '';
+  return SITE_DISPLAY_NAMES.get(canonicalSiteName(raw))||raw;
+}
+
+export function displaySiteSelection(value){
+  const raw=Array.isArray(value)?value:String(value||'').split(/\s*\|\s*/);
+  const seen=new Set();
+  const sites=[];
+  for(const item of raw){
+    const key=canonicalSiteName(item);
+    if(!key||seen.has(key))continue;
+    seen.add(key);
+    sites.push(displaySiteName(item));
+  }
+  return sites;
+}
+
+export function normalizeUserSiteFields(record={}){
+  const next={...record};
+  for(const key of ['site','location']){
+    if(typeof next[key]==='string'&&next[key].trim())next[key]=displaySiteName(next[key]);
+  }
+  if(next.managerSites!=null&&String(next.managerSites).trim())next.managerSites=displaySiteSelection(next.managerSites).join(' | ');
+  return next;
+}
+
 export function sitesForManagerRegions(value){
   const regions=managerRegionSelection(value);
   const selected=regions.includes('All')?REGION_DATA:REGION_DATA.filter(({code})=>regions.includes(code));

@@ -24,7 +24,7 @@ import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeH
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
-import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
+import {managerReportScope,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
@@ -430,6 +430,21 @@ async function migrate(){
     await client.query(`INSERT INTO master_records (master_name,record_data)
       SELECT 'Users & employees',$1::jsonb
       WHERE NOT EXISTS (SELECT 1 FROM master_records WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))='superadamin')`,[JSON.stringify(seededSuperAdmin)]);
+    // One-time rewrite of stored user site names ("sasti ob", "Sasti ob") to
+    // the single display form ("Sasti OB"). Only known sites are rewritten;
+    // unrecognised values are kept exactly as entered so no data is lost.
+    const {rows:siteNamesNormalized}=await client.query("SELECT value FROM app_metadata WHERE key='user_site_names_normalized' FOR UPDATE");
+    if(!siteNamesNormalized.length){
+      const {rows:userRows}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees' FOR UPDATE");
+      for(const row of userRows){
+        const normalized=normalizeUserSiteFields(row.record_data);
+        if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
+          await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('user_site_names_normalized','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
     await client.query('COMMIT');
   }catch(error){
     await client.query('ROLLBACK');
@@ -2193,7 +2208,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     let prepared;
     try{
       prepared=records.map((record,index)=>{
-        try{return master==='Users & employees'?initializeUserCredentials(record):record}
+        try{return master==='Users & employees'?initializeUserCredentials(normalizeUserSiteFields(record)):record}
         catch(error){throw new Error(`CSV row ${index+2}: ${error.message}`)}
       });
     }catch(error){return res.status(400).json({error:error.message})}
@@ -2301,7 +2316,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       if(!existing.rows.length)return res.status(404).json({error:'Master record not found.'});
       if((isTrueSuperAdmin(record)||isTrueSuperAdmin(existing.rows[0].record_data))&&!isTrueSuperAdmin(req.session.permissions))
         return res.status(403).json({error:'Only a Super Admin can manage Super Admin accounts.'});
-      storedRecord={...record,passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
+      storedRecord={...normalizeUserSiteFields(record),passwordHash:existing.rows[0].record_data.passwordHash,mustChangePassword:existing.rows[0].record_data.mustChangePassword};
     }
     if(master==='Privilege'){
       const client=await pool.connect();

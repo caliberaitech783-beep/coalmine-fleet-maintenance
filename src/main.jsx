@@ -33,7 +33,7 @@ import {
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
-import {MANAGER_REGION_OPTIONS, REGION_DATA, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
+import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
 import {
   LayoutDashboard,
@@ -2352,8 +2352,8 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
   const [managerRoles, setManagerRoles] = useState(managerRoleSelection(record.managerRole));
   const [managerRegions, setManagerRegions] = useState(managerRegionSelection(record.managerRegion));
   const [managerSites, setManagerSites] = useState(() => {
-    const saved=managerSiteSelection(record.managerSites);
-    return saved.length?saved:sitesForManagerRegions(record.managerRegion);
+    const saved=displaySiteSelection(record.managerSites);
+    return saved.length?saved:sitesForManagerRegions(record.managerRegion).map(displaySiteName);
   });
   const [visibleTabs, setVisibleTabs] = useState(selectedAccessValues(record, "tabAccess"));
   const [mobileVisibleTabs, setMobileVisibleTabs] = useState(selectedAccessValues(record,"mobileTabAccess","tabAccess"));
@@ -2400,7 +2400,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
           const nextRegions=option==="All"
             ? event.target.checked?["All"]:[]
             : event.target.checked?[...new Set([...managerRegions.filter((region)=>region!=="All"),option])]:managerRegions.filter((region)=>region!==option&&region!=="All");
-          const nextAvailable=sitesForManagerRegions(nextRegions);
+          const nextAvailable=sitesForManagerRegions(nextRegions).map(displaySiteName);
           setManagerRegions(nextRegions);
           setManagerSites((current)=>event.target.checked?[...new Set([...current,...nextAvailable])]:current.filter((site)=>nextAvailable.includes(site)));
         }} />
@@ -2408,17 +2408,17 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       </label>)}</div>
       {!!managerRegions.length&&<div className="manager-site-options">
         <b>Included sites</b><small>All sites are checked initially. Uncheck a site to exclude its requests and tickets for this user.</small>
-        <div>{sitesForManagerRegions(managerRegions).map((site)=><label key={site} className={managerSites.includes(site)?"selected":""}>
+        <div>{sitesForManagerRegions(managerRegions).map(displaySiteName).map((site)=><label key={site} className={managerSites.includes(site)?"selected":""}>
           <input type="checkbox" name="managerSites" value={site} checked={managerSites.includes(site)} onChange={(event)=>setManagerSites((current)=>event.target.checked?[...new Set([...current,site])]:current.filter((item)=>item!==site))}/>
           <span><b>{site}</b><small>{managerSites.includes(site)?"Included":"Excluded"}</small></span>
         </label>)}</div>
       </div>}
     </fieldset>}
     {accountRole && !isDesktopUser && <label>Location *
-      <select name="site" required defaultValue={record.site || record.location || ""}>
+      <select name="site" required defaultValue={displaySiteName(record.site || record.location)}>
         <option value="" disabled>Select location</option>
         {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
-        {(record.site || record.location) && !siteOptions.includes(record.site || record.location) && <option value={record.site || record.location}>{record.site || record.location}</option>}
+        {displaySiteName(record.site || record.location) && !siteOptions.includes(displaySiteName(record.site || record.location)) && <option value={displaySiteName(record.site || record.location)}>{displaySiteName(record.site || record.location)}</option>}
       </select>
     </label>}
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
@@ -2446,7 +2446,7 @@ function applyUserRoleDefaults(record) {
       record.site = "";
       record.managerRole = "";
       record.managerRegion = managerRegionSelection(record.managerRegion).join(" | ");
-      record.managerSites = managerSiteSelection(record.managerSites).join(" | ");
+      record.managerSites = displaySiteSelection(record.managerSites).join(" | ");
       if(!Object.prototype.hasOwnProperty.call(record,"mobileTabAccess")&&!Object.prototype.hasOwnProperty.call(record,"dashboardAccess")){
         record.masterAccess = ADMIN_MASTER_OPTIONS.join(" | ");
         record.tabAccess = ADMIN_TAB_OPTIONS.join(" | ");
@@ -2458,7 +2458,7 @@ function applyUserRoleDefaults(record) {
       const selectedManagerRoles=managerRoleSelection(record.managerRole);
       record.managerRole=selectedManagerRoles.join(" | ");
       record.managerRegion=managerRegionSelection(record.managerRegion).join(" | ");
-      record.managerSites=managerSiteSelection(record.managerSites).join(" | ");
+      record.managerSites=displaySiteSelection(record.managerSites).join(" | ");
       const tabs = new Set(String(record.tabAccess || "").split(/\s*\|\s*/).filter(Boolean));
       tabs.add("Dashboard");
       tabs.add("Reports");
@@ -2489,6 +2489,7 @@ function applyUserRoleDefaults(record) {
     }
   } else if (mobileUserRoleOptions.includes(role)) {
     record.userType = "Mobile User";
+    record.site = displaySiteName(record.site || record.location);
     record.adminLevel = "";
     record.managerRole = "";
     record.managerRegion = "";
@@ -5212,10 +5213,10 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                     {["L1", "L2", "L3", "L4"].map((level) => <option key={level}>{level}</option>)}
                   </select>
                 ) : name === "Users & employees" && key === "site" ? (
-                  <select name={key} required defaultValue={editing[key] || ""}>
+                  <select name={key} required defaultValue={displaySiteName(editing[key])}>
                     <option value="" disabled>Select location</option>
                     {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
-                    {editing[key] && !siteOptions.includes(editing[key]) && <option value={editing[key]}>{editing[key]}</option>}
+                    {displaySiteName(editing[key]) && !siteOptions.includes(displaySiteName(editing[key])) && <option value={displaySiteName(editing[key])}>{displaySiteName(editing[key])}</option>}
                   </select>
                 ) : name === "Users & employees" && key === "userType" ? (
                   <select name={key} required defaultValue={editing[key] || ""}>
@@ -6064,7 +6065,7 @@ Generic = function GenericWithMasters(props) {
   const masterSiteOptions = name === "Users & employees"
     ? [...new Set([
         ...privilegeSiteOptions,
-        ...records.map((record) => String(record.site || "").trim()).filter(Boolean),
+        ...records.map((record) => displaySiteName(record.site)).filter(Boolean),
       ])]
     : [];
   if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
