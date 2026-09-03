@@ -14,6 +14,9 @@ test("every successful login resets the application to Dashboard", () => {
   assert.match(completeLogin, /setActive\(LOGIN_LANDING_PAGE\)/);
   assert.match(completeLogin, /pageHistory\.current = \[LOGIN_LANDING_PAGE\]/);
   assert.match(completeLogin, /setCanGoBack\(false\)/);
+  assert.match(completeLogin, /setProfileLocation\(""\)/);
+  assert.match(completeLogin, /setProfileManagerRegions\(\[\]\)/);
+  assert.match(completeLogin, /setProfileManagerSites\(\[\]\)/);
   assert.match(completeLogin, /setSession\(nextSession\)/);
   assert.match(source, /<Login onLogin=\{completeLogin\}/);
 });

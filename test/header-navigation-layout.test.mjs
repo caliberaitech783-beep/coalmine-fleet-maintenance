@@ -7,7 +7,7 @@ test("desktop navigation uses bounded tracks and collapses before labels can ove
   const styles = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
 
   assert.match(source, /className="nav-label"/);
-  assert.match(styles, /grid-template-columns: max-content minmax\(0, 1fr\) clamp\(150px, 12vw, 190px\)/);
+  assert.match(styles, /grid-template-columns: max-content minmax\(0, 1fr\) clamp\(235px, 18vw, 310px\)/);
   assert.match(styles, /\.app > aside nav \.nav-label \{[\s\S]*text-overflow: ellipsis/);
   assert.match(styles, /@media \(max-width: 1600px\) and \(min-width: 1251px\)/);
   assert.match(styles, /@media \(max-width: 1250px\) \{[\s\S]*\.menubtn \{[\s\S]*display: block !important/);
