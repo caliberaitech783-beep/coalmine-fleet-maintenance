@@ -151,7 +151,10 @@ test("the AI feeder panel opens on login, counts down, and is reachable from the
   assert.match(mainSource, /function AiFeeder\(/);
   // Auto-opens once per sign in, not on every re-render or refresh.
   assert.match(mainSource, /sessionStorage\.getItem\("aiFeederGreeted"\)/);
-  assert.match(mainSource, /setSeconds\(\(current\) => current - 1\)/);
+  assert.match(mainSource, /AI_FEEDER_AUTO_CLOSE_SECONDS = 59/);
+  assert.match(mainSource, /window\.setInterval\(tick, 1000\)/);
+  assert.match(mainSource, /if \(remaining === 0\) closeRef\.current\(\)/);
+  assert.doesNotMatch(mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder(")), /setPaused|onMouseEnter|onMouseLeave/);
   assert.match(mainSource, /AI Feeder<\/span>/);
   assert.match(mainSource, /className="ai-feeder-dot"/);
   // Both shells carry the header entry.

@@ -6593,37 +6593,63 @@ function TicketPage({ session }) {
   </section>;
 }
 
-const AI_FEEDER_AUTO_CLOSE_SECONDS = 10;
+const AI_FEEDER_AUTO_CLOSE_SECONDS = 59;
 const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
-function AiFeederPanel({ alerts = [], summary, onClose }) {
+function AiFeederPanel({ alerts = [], summary, requests = [], onClose }) {
   const [seconds, setSeconds] = useState(AI_FEEDER_AUTO_CLOSE_SECONDS);
-  const [paused, setPaused] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const [expanded, setExpanded] = useState(null);
+  const panelRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    if (paused) return undefined;
-    if (seconds <= 0) { onClose(); return undefined; }
-    const timer = window.setTimeout(() => setSeconds((current) => current - 1), 1000);
-    return () => window.clearTimeout(timer);
-  }, [seconds, paused]);
-  useEffect(() => {
-    const closeOnEscape = (event) => { if (event.key === "Escape") onClose(); };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
+    const deadline = Date.now() + AI_FEEDER_AUTO_CLOSE_SECONDS * 1000;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setSeconds(remaining);
+      if (remaining === 0) closeRef.current();
+    };
+    const timer = window.setInterval(tick, 1000);
+    document.addEventListener("visibilitychange", tick);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
   }, []);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.focus();
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") closeRef.current();
+      if (event.key === "Tab") {
+        const buttons = panelRef.current?.querySelectorAll("button:not(:disabled), [href], [tabindex='0']");
+        if (!buttons?.length) return;
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || document.activeElement === panelRef.current)) { event.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("keydown", closeOnEscape); document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
+  }, []);
+  const visibleAlerts = alerts.filter((alert) => filter === "all" || alert.severity === filter);
+  const priority = alerts.find((alert) => alert.severity === "critical") || alerts[0];
+  const criticalPercent = summary.total ? summary.critical / summary.total * 100 : 0;
+  const warningPercent = summary.total ? summary.warning / summary.total * 100 : 0;
   const headline = summary.critical
-    ? `${summary.critical} item${summary.critical === 1 ? "" : "s"} need attention now`
+    ? `${summary.critical} critical alert${summary.critical === 1 ? "" : "s"}. Action needed.`
     : summary.total
       ? `${summary.total} update${summary.total === 1 ? "" : "s"} from your fleet`
       : "Nothing needs your attention";
-  return <div className="ai-feeder-overlay" role="dialog" aria-modal="true" aria-label="AI Feeder" onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
-    <div className="ai-feeder-panel">
+  return createPortal(<div className="ai-feeder-overlay">
+    <div className="ai-feeder-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
         <div>
           <span className="ai-feeder-kicker"><Activity /> AI FEEDER</span>
-          <h2>{headline}</h2>
-          <p>Live alerts picked from your requests. Hover to keep this open.</p>
+          <h2 id="ai-feeder-title">{headline}</h2>
+          <p>Your fleet at a glance. Review the highest-priority cases first.</p>
         </div>
         <div className="ai-feeder-actions">
-          <span className={paused ? "ai-feeder-countdown paused" : "ai-feeder-countdown"} aria-live="polite" title={paused ? "Paused while you read" : `Closing in ${seconds} seconds`}>
+          <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Closes in ${seconds} seconds`} title={`Closes automatically in ${seconds} seconds`}>
             <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_AUTO_CLOSE_SECONDS * 100}%`}} aria-hidden="true" />
             <Clock aria-hidden="true" />
             <b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
@@ -6631,26 +6657,38 @@ function AiFeederPanel({ alerts = [], summary, onClose }) {
           <button type="button" onClick={onClose} aria-label="Close AI Feeder"><X /></button>
         </div>
       </header>
-      <div className="ai-feeder-counts">
-        <span className="critical"><i />{summary.critical} critical</span>
-        <span className="warning"><i />{summary.warning} warning</span>
-        <span className="info"><i />{summary.info} info</span>
+      <div className="ai-feeder-overview">
+        <div className="ai-feeder-chart" role="img" aria-label={`${summary.total} alerts: ${summary.critical} critical, ${summary.warning} warning, ${summary.info} informational`} style={{background: summary.total ? `conic-gradient(#dc384b 0% ${criticalPercent}%, #d58a21 ${criticalPercent}% ${criticalPercent + warningPercent}%, #5275da ${criticalPercent + warningPercent}% 100%)` : "#e5eaf2"}}><div><b>{summary.total}</b><small>ALERTS</small></div></div>
+        <div className="ai-feeder-counts" aria-label="Filter alerts by severity">
+          {[["all", "All alerts", summary.total], ["critical", "Critical", summary.critical], ["warning", "Warnings", summary.warning], ["info", "Updates", summary.info]].map(([key, label, count]) => <button type="button" className={`${key}${filter === key ? " selected" : ""}`} key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}><b>{count}</b><span>{label}</span></button>)}
+        </div>
       </div>
       <div className="ai-feeder-list">
-        {alerts.length ? alerts.map((alert) => {
+        {priority && filter === "all" && <button type="button" className={`ai-feeder-priority ${priority.severity}`} onClick={() => { setExpanded(priority.id); requestAnimationFrame(() => document.getElementById(`feeder-${priority.id}`)?.scrollIntoView({block: "nearest"})); }}>
+          <span className="ai-feeder-priority-icon"><Truck aria-hidden="true" /></span>
+          <span><small>{priority.severity === "critical" ? "PRIORITY ATTENTION" : "NEXT TO REVIEW"}</small><b>{priority.title}</b><span>{priority.detail}</span><em>Review case <ChevronDown aria-hidden="true" /></em></span>
+        </button>}
+        <div className="ai-feeder-list-heading"><b>{filter === "all" ? "Your attention queue" : `${filter === "info" ? "Informational" : filter === "critical" ? "Critical" : "Warning"} alerts`}</b><span>{visibleAlerts.length} alerts · Click to inspect</span></div>
+        {visibleAlerts.length ? visibleAlerts.map((alert) => {
           const SeverityIcon = AI_FEEDER_SEVERITY_ICONS[alert.severity] || Bell;
-          return <article className={`ai-feeder-item ${alert.severity}`} key={alert.id}>
+          const request = alert.ref ? requests.find((item) => item.ref === alert.ref) : null;
+          return <article className={`ai-feeder-item ${alert.severity}`} key={alert.id} id={`feeder-${alert.id}`}>
+            <button type="button" className="ai-feeder-case" aria-expanded={expanded === alert.id} aria-controls={`feeder-detail-${alert.id}`} onClick={() => setExpanded(expanded === alert.id ? null : alert.id)}>
             <SeverityIcon aria-hidden="true" />
             <div>
+              <span className="ai-feeder-severity">{alert.severity} · {alert.type.replaceAll("-", " ")}</span>
               <b>{alert.title}</b>
-              <p>{alert.detail}</p>
               <small>{alert.ref ? `${alert.ref} · ` : ""}{alert.site}</small>
             </div>
+            <ChevronDown className={expanded === alert.id ? "rotated" : ""} aria-hidden="true" />
+            </button>
+            {expanded === alert.id && <div className="ai-feeder-detail" id={`feeder-detail-${alert.id}`}><strong>Recommended next step</strong><p>{alert.detail}</p>{request && <dl>{[["Status", request.status], ["Breakdown started", request.start], ["Expected completion", request.expectedCompletionAt], ["Reported issue", request.complaint], ["Latest remark", request.dailyRemarks]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "Not recorded")}</dd></div>)}</dl>}</div>}
           </article>;
-        }) : <p className="ai-feeder-empty">All clear. No overdue jobs, idle vehicles or pending verifications right now.</p>}
+        }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Based on current request records</span><span>Closes at 00:00 · Reopen from AI Feeder</span></footer>
     </div>
-  </div>;
+  </div>, document.body);
 }
 function AiFeeder({ requests = [], role = "" }) {
   const [open, setOpen] = useState(false);
@@ -6670,9 +6708,9 @@ function AiFeeder({ requests = [], role = "" }) {
   const summary = aiFeederSummary(alerts);
   return <>
     <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="AI Feeder" aria-label={`AI Feeder, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
-      <Activity /><span>AI Feeder</span>{summary.total > 0 && <i className="ai-feeder-dot" aria-hidden="true" />}
+      <Activity /><span>AI Feeder</span>{summary.total > 0 && <><b className="ai-feeder-trigger-count">{summary.critical || summary.total}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {open && <AiFeederPanel alerts={alerts} summary={summary} onClose={() => setOpen(false)} />}
+    {open && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} onClose={() => setOpen(false)} />}
   </>;
 }
 function NotificationBell({ session, onOpenTickets }) {
