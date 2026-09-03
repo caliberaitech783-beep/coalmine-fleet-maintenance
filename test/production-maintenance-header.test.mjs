@@ -8,6 +8,7 @@ test("mobile workspaces display the correct role-specific header", () => {
 
   assert.match(normalWorkspace, /isProduction \? "Production Maintenance Request"/);
   assert.match(normalWorkspace, /isMaintenance \? "Maintenance workspace"/);
-  assert.match(normalWorkspace, /: "MIS verification"/);
+  assert.match(normalWorkspace, /: "MIS Verification"/);
+  assert.doesNotMatch(normalWorkspace, /: "MIS verification"/);
   assert.doesNotMatch(normalWorkspace, /isProduction \? "Maintenance requests"/);
 });
