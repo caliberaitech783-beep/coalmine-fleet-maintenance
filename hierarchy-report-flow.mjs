@@ -23,6 +23,9 @@ const weeklyFleet=[REPORT.VEHICLE_TRANSFER,REPORT.LOCATION_WISE];
 const dailyOperational=[REPORT.IDLE_VEHICLE,REPORT.RECENT_BREAKDOWN,REPORT.OFFROAD_TO_MIS,REPORT.EVENT_OPEN_TAT,REPORT.EVENT_CLOSE_MIS,REPORT.IDLE_PM,REPORT.IDLE_FIRST_TRIP,REPORT.IN_OUT];
 const eventCore=[REPORT.OPEN_BD,REPORT.CLOSING_BD,REPORT.MIS_VERIFICATION];
 const oemClosing=[REPORT.CLOSING_BD];
+export const GENERAL_REPORT_TITLES=[REPORT.ROAD_STATUS,REPORT.VEHICLE_TRANSFER,REPORT.LOCATION_WISE,REPORT.RECENT_BREAKDOWN,REPORT.IN_OUT];
+const GENERAL_REPORT_DESIGNATIONS=new Set(['director','projectManager','productionManager','productionSupervisor','maintenanceManager','maintenanceSupervisor','misManager','misSupervisor']);
+const GENERAL_REPORT_SCHEDULE_KEY='general-daily-19';
 const TIME_PATTERN=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const ALLOWED_REPORTS=new Set(DIRECTOR_REPORT_TITLES);
 
@@ -102,12 +105,22 @@ function configuredSchedule(schedule={},index=0){
   };
 }
 
+function withGeneralReportSchedule(designationKey,schedules=[]){
+  if(!GENERAL_REPORT_DESIGNATIONS.has(designationKey))return schedules;
+  const assigned=new Set(schedules.flatMap((schedule)=>schedule.reports||[]));
+  const missing=GENERAL_REPORT_TITLES.filter((title)=>!assigned.has(title));
+  if(!missing.length)return schedules;
+  const existingIndex=schedules.findIndex((schedule)=>schedule.key===GENERAL_REPORT_SCHEDULE_KEY);
+  if(existingIndex>=0)return schedules.map((schedule,index)=>index===existingIndex?{...schedule,reports:[...new Set([...schedule.reports,...missing])]}:schedule);
+  return [...schedules,configuredSchedule({key:GENERAL_REPORT_SCHEDULE_KEY,cadence:'daily',times:['19:00'],reports:missing},schedules.length)];
+}
+
 export function defaultHierarchyReportScheduleSettings(){
   return {designations:Object.fromEntries(Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key,designation])=>[key,{
     enabled:true,
     allRecipients:true,
     recipientLogins:[],
-    schedules:designation.schedules.map(configuredSchedule),
+    schedules:withGeneralReportSchedule(key,designation.schedules.map(configuredSchedule)),
   }]))};
 }
 
@@ -121,7 +134,7 @@ export function normalizeHierarchyReportScheduleSettings(value={}){
       enabled:current.enabled!==false,
       allRecipients:current.allRecipients!==false,
       recipientLogins:[...new Set((Array.isArray(current.recipientLogins)?current.recipientLogins:[]).map((login)=>clean(login).toLowerCase()).filter(Boolean))].slice(0,500),
-      schedules:(Array.isArray(current.schedules)?current.schedules:[]).slice(0,20).map(configuredSchedule),
+      schedules:withGeneralReportSchedule(key,(Array.isArray(current.schedules)?current.schedules:[]).slice(0,20).map(configuredSchedule)),
     }];
   }))};
 }
@@ -172,10 +185,9 @@ export function hierarchyReportSlotKey({now=new Date(),designationKey,scheduleKe
 export function reportsDueForDesignation(designationKey,now=new Date(),graceMinutes=20,settings=null){
   const designation=HIERARCHY_REPORT_DESIGNATIONS[designationKey];
   if(!designation)return [];
-  const configured=settings?normalizeHierarchyReportScheduleSettings(settings).designations[designationKey]:null;
+  const configured=normalizeHierarchyReportScheduleSettings(settings||{}).designations[designationKey];
   if(configured?.enabled===false)return [];
-  const schedules=configured?configured.schedules:designation.schedules;
-  return schedules
+  return configured.schedules
     .map((schedule)=>({schedule,slotTime:scheduleDueTime(schedule,now,graceMinutes)}))
     .filter(({slotTime})=>Boolean(slotTime))
     .map(({schedule,slotTime})=>({

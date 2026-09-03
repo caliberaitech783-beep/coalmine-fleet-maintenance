@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
-import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation} from '../hierarchy-report-flow.mjs';
+import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,GENERAL_REPORT_TITLES,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation} from '../hierarchy-report-flow.mjs';
 
 test('Director receives one daily 7 PM group excluding weekly-only fleet reports on weekdays',()=>{
   const due=reportsDueForDesignation('director',new Date('2026-09-01T13:35:00Z'));
@@ -32,17 +32,40 @@ test('department managers use every-event rules separately from scheduled consol
   const production=flowDesignationForUser({managerRole:'Production Manager'},{permissions:{managerRoles:['Production Manager']}});
   assert.equal(production.key,'productionManager');
   const due=reportsDueForDesignation(production.key,new Date('2026-09-01T13:35:00Z'));
-  assert.equal(due.length,1);
+  assert.deepEqual(due.map((group)=>group.scheduleKey),['daily-19','general-daily-19']);
   assert.deepEqual(due[0].reports,DIRECTOR_REPORT_TITLES.slice(6,14));
+  assert.deepEqual(due[1].reports,DIRECTOR_REPORT_TITLES.slice(4,6));
   const supervisor=flowDesignationForUser({designation:'Production Incharge / Supervisor'});
   assert.equal(supervisor.key,'productionSupervisor');
-  assert.equal(reportsDueForDesignation(supervisor.key,new Date('2026-09-01T13:35:00Z')).length,0);
+  const supervisorDue=reportsDueForDesignation(supervisor.key,new Date('2026-09-01T13:35:00Z'));
+  assert.equal(supervisorDue.length,1);
+  assert.equal(supervisorDue[0].scheduleKey,'general-daily-19');
+  assert.deepEqual(supervisorDue[0].reports,GENERAL_REPORT_TITLES);
 });
 
 test('mobile operational profiles inherit their department report designation',()=>{
   assert.equal(flowDesignationForUser({}, {assignedRole:'Production User'}).key,'productionSupervisor');
   assert.equal(flowDesignationForUser({}, {assignedRole:'Maintenance User'}).key,'maintenanceSupervisor');
   assert.equal(flowDesignationForUser({}, {assignedRole:'MIS User'}).key,'misSupervisor');
+});
+
+test('every operational user schedule includes all General Reports',()=>{
+  const settings=defaultHierarchyReportScheduleSettings();
+  for(const key of ['productionManager','productionSupervisor','maintenanceManager','maintenanceSupervisor','misManager','misSupervisor']){
+    const assigned=new Set(settings.designations[key].schedules.flatMap((schedule)=>schedule.reports));
+    assert.equal(GENERAL_REPORT_TITLES.every((title)=>assigned.has(title)),true,key);
+  }
+});
+
+test('stored operational schedules are upgraded with missing General Reports',()=>{
+  const settings=normalizeHierarchyReportScheduleSettings({designations:{productionSupervisor:{
+    enabled:true,allRecipients:true,recipientLogins:[],schedules:[{
+      key:'every-event',cadence:'event',reports:DIRECTOR_REPORT_TITLES.slice(0,3),
+    }],
+  }}});
+  const schedule=settings.designations.productionSupervisor.schedules.find((item)=>item.key==='general-daily-19');
+  assert.deepEqual(schedule?.reports,GENERAL_REPORT_TITLES);
+  assert.deepEqual(schedule?.times,['19:00']);
 });
 
 test('OEM designations follow their day-cycle consolidate schedules',()=>{
