@@ -1236,10 +1236,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, stableToolbar = false }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, stableToolbar = false, actionsBesideSearch = false }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [dateFilter, setDateFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
+  const [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   useEffect(() => {
     if (!showBreakdownDays) return undefined;
     const timer = window.setInterval(() => setBreakdownNow(Date.now()), 60000);
@@ -1293,8 +1294,8 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
   return (
-    <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
-      <ActionsTable className="breakdown-table-auto-fit">
+    <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label>{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+      <ActionsTable className="breakdown-table-auto-fit" toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null}>
         <thead>
           <tr>
             {columns.map(([key, label]) => (
@@ -2172,7 +2173,7 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
 function ActionsTable(props) {
   return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} />;
 }
-function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
+function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null }) {
   const [columnFilters, setColumnFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
@@ -2223,13 +2224,16 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
     document.addEventListener("mousedown", closeFilter);
     return () => document.removeEventListener("mousedown", closeFilter);
   }, [openFilter]);
-  return (
-    <>
+  const reportTableToolbar = (
       <div className="report-table-filter-toolbar">
         <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
         <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); changeSort("", "asc"); setPageSize(50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} />
         {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
       </div>
+  );
+  return (
+    <>
+      {toolbarTarget ? createPortal(reportTableToolbar, toolbarTarget) : reportTableToolbar}
       <table className="report-filter-table">
         <thead><tr>{displayedColumns.map((column) => (
           <FilterableHeader
@@ -2925,7 +2929,8 @@ function Equipment({
     [openFilter, setOpenFilter] = useState(null),
     [detail, setDetail] = useState(null),
     [editing, setEditing] = useState(null),
-    [savingEdit, setSavingEdit] = useState(false);
+    [savingEdit, setSavingEdit] = useState(false),
+    [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const equipmentColumns = [
       ["currentLocation", "Current location"], ["equipmentName", "Equipment name"],
       ["category", "Equipment category"], ["group", "Equipment group"],
@@ -3046,6 +3051,7 @@ function Equipment({
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+        <div className="master-actions-slot" ref={setActionsToolbarTarget} />
         <select value={road} onChange={(e) => setRoad(e.target.value)}>
           <option value="all">All road statuses</option>
           <option value="onroad">On Road</option>
@@ -3066,7 +3072,7 @@ function Equipment({
         <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="scroll master-table-scroll" onClick={() => setOpenFilter(null)}>
-        <ActionsTable>
+        <ActionsTable toolbarTarget={actionsToolbarTarget}>
           <thead>
             <tr>
               {equipmentColumns.map(([key, label]) => (
@@ -4395,6 +4401,7 @@ function locationCountRows(records = []) {
 }
 function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, children }) {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
+  const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
   const visibleColumns = visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
   return (
     <div className="reports-section generated-report-section" data-category={category}>
@@ -4406,7 +4413,10 @@ function ReportSection({ title, description, category = "general", icon: ReportI
             <p>{description}</p>
           </div>
         </div>
-        <ExportMenu title={title} columns={visibleColumns} rows={rows} className="secondary" label="Generate" />
+        <div className="generated-report-heading-actions">
+          <div className="report-heading-table-actions" ref={setTableToolbarTarget} />
+          <ExportMenu title={title} columns={visibleColumns} rows={rows} className="secondary" label="Generate" />
+        </div>
       </div>
       {children || (
         <div className="reports-detail-table emptytable">
@@ -4419,6 +4429,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
             columns={columns}
             visibleColumnKeys={visibleColumnKeys}
             onVisibleColumnsChange={setVisibleColumnKeys}
+            toolbarTarget={tableToolbarTarget}
           />
         </div>
       )}
@@ -4892,7 +4903,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     [pendingPrivilegeRows, setPendingPrivilegeRows] = useState({}),
     [savingAllPrivileges, setSavingAllPrivileges] = useState(false),
     [columnFilters, setColumnFilters] = useState({}),
-    [openFilter, setOpenFilter] = useState(null);
+    [openFilter, setOpenFilter] = useState(null),
+    [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const fields = masterFields[name],
     editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
@@ -5043,10 +5055,11 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+        <div className="master-actions-slot" ref={setActionsToolbarTarget} />
         <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="emptytable master-table-scroll" onClick={() => setOpenFilter(null)}>
-        <ActionsTable>
+        <ActionsTable toolbarTarget={actionsToolbarTarget}>
           <thead>
             <tr>
               {displayFields.map(([key, label]) => (
@@ -5709,7 +5722,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
           </button>
         ))}
       </div>
-      <BreakdownTable rows={rows} stickyHeader showAudio showMakeModel />
+      <BreakdownTable rows={rows} stickyHeader showAudio showMakeModel actionsBesideSearch />
     </section>
   );
 };
@@ -5785,6 +5798,7 @@ const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).ma
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const [savingKey, setSavingKey] = useState("");
   const [query, setQuery] = useState("");
+  const [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [visibleColumnGroups, setVisibleColumnGroups] = useState(() => hierarchyColumnViewOptions.map((option) => option.key));
   const [visibleRowGroups, setVisibleRowGroups] = useState(() => hierarchyRowViewOptions.map((option) => option.key));
   const byDesignation = new Map(records.map((record) => [String(record.designation || "").trim().toLowerCase(), record]));
@@ -5863,7 +5877,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
             </button>
           ))}
         </div>
-        <label className="region-search"><Search /><input data-smart-search type="search" placeholder="Search hierarchy" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+        <div className="master-search-actions"><label className="region-search"><Search /><input data-smart-search type="search" placeholder="Search hierarchy" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div>
       </div>
       <div className="hierarchy-site-strip">
         <MapPin />
@@ -5896,7 +5910,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         </div>
       </div>
       <div className="hierarchy-matrix-scroll">
-        {matrixColumnCount ? <ActionsTable className="hierarchy-matrix">
+        {matrixColumnCount ? <ActionsTable className="hierarchy-matrix" toolbarTarget={actionsToolbarTarget}>
           <thead>
             <tr className="hierarchy-group-row">
               {showIdentityColumns && <th className="hierarchy-admin-group" colSpan="4">Hierarchy Key Whatsapp Flow</th>}
