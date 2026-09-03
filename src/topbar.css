@@ -226,7 +226,10 @@
 }
 
 .top {
-  position: relative;
+  position: sticky;
+  top: 76px;
+  z-index: 9;
+  box-shadow: 0 4px 14px #17233c0d;
 }
 
 .top > .header-clock {
@@ -256,6 +259,9 @@
 
 /* Operational profile header: left-led navigation with bounded, responsive tracks. */
 .normal > header {
+  position: sticky;
+  top: 0;
+  z-index: 12;
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr) clamp(220px, 19vw, 282px) max-content;
   justify-content: start;
@@ -317,6 +323,7 @@
 
 @media (max-width: 1250px) {
   .top {
+    top: 0;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-rows: 48px 34px;

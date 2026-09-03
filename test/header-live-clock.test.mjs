@@ -44,3 +44,11 @@ test("the header clock scales to fit every bar it is rendered in", () => {
     assert.doesNotMatch(body, /font-size:\s*\d+px/);
   }
 });
+
+test("every signed-in time row remains visible while its page scrolls", () => {
+  const styles = readFileSync(new URL("../src/topbar.css", import.meta.url), "utf8");
+
+  assert.match(styles, /\.top \{\s*position: sticky;\s*top: 76px;\s*z-index: 9;/);
+  assert.match(styles, /\.normal > header \{\s*position: sticky;\s*top: 0;\s*z-index: 12;/);
+  assert.match(styles, /@media \(max-width: 1250px\)[\s\S]*?\.top \{\s*top: 0;/);
+});
