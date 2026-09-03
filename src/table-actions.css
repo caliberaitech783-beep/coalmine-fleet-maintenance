@@ -1,0 +1,4 @@
+.shared-table-actions-toolbar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 12px; position: sticky; left: 0; width: 100%; box-sizing: border-box; background: var(--mine-panel, #fff); border-bottom: 1px solid #dce4ef; }
+.shared-table-actions-toolbar > .table-parameter-filter { display: none; }
+.shared-table-actions-toolbar .report-actions-trigger { min-height: 40px; }
+@media (max-width: 700px) { .shared-table-actions-toolbar { padding: 8px; } }

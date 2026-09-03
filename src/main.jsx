@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import SharedActionsTable from "./shared-actions-table.jsx";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
@@ -1160,17 +1161,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           {selectedRepairTypeRegion && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to repair regions" onClick={() => { setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 2 · Select {selectedRepairTypeRegion.code} site</span></h4><div className="dashboard-asset-summary">{repairTypeSiteBreakdown.length ? repairTypeSiteBreakdown.map(({ site, count }) => <button type="button" key={site} className={assetDrilldownSite === site ? "active" : ""} onClick={() => { setAssetDrilldownSite(site); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{count.toLocaleString()}</b>{site}</button>) : <p>No sites available</p>}</div></section>}
           {assetDrilldownSite && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${selectedRepairTypeRegion.code} repair sites`} onClick={() => { setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 3 · {assetDrilldownSite} fleet totals</span></h4><div className="dashboard-asset-summary">{repairTypeSiteCategoryBreakdown.length ? repairTypeSiteCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment or vehicles found for {assetDrilldownSite}</p>}</div></section>}
           {assetDrilldownCategory && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownSite} repair fleet totals`} onClick={() => { setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 4 · Select {assetDrilldownCategory === "Total vehicles" ? "vehicle" : "equipment"} type</span></h4><div className="dashboard-asset-groups">{repairTypeSiteGroupBreakdown.length ? repairTypeSiteGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No types found</p>}</div></section>}
-          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownCategory} repair types`} onClick={() => setAssetDrilldownGroup("")}><ChevronLeft /> Back</button><span>Step 5 · Request details for {assetDrilldownGroup}</span></h4><div className="dashboard-asset-list"><table><thead><tr><th>Job reference</th><th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th><th>Status</th><th>Started</th></tr></thead><tbody>{repairTypeSiteGroupRows.length ? repairTypeSiteGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.requestReference}</b></td><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></tr>) : <tr><td colSpan="10">No matching requests for {assetDrilldownGroup}</td></tr>}</tbody></table></div></section>}
+          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownCategory} repair types`} onClick={() => setAssetDrilldownGroup("")}><ChevronLeft /> Back</button><span>Step 5 · Request details for {assetDrilldownGroup}</span></h4><div className="dashboard-asset-list"><ActionsTable><thead><tr><th>Job reference</th><th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th><th>Status</th><th>Started</th></tr></thead><tbody>{repairTypeSiteGroupRows.length ? repairTypeSiteGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.requestReference}</b></td><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></tr>) : <tr><td colSpan="10">No matching requests for {assetDrilldownGroup}</td></tr>}</tbody></ActionsTable></div></section>}
         </> : siteFirstAssetDrilldown ? <>
           <section><h4>Step 1 · Select region</h4><div className="dashboard-asset-summary">{assetDrilldownRegions.length ? assetDrilldownRegions.map((region) => <button type="button" key={region.code} className={assetDrilldownRegion === region.code ? "active" : ""} onClick={() => { setAssetDrilldownRegion(region.code); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{region.total.toLocaleString()}</b>{region.code}</button>) : <p>No regions available</p>}</div></section>
           {selectedAssetRegion && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to regions" onClick={() => { setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 2 · Select {selectedAssetRegion.code} site</span></h4><div className="dashboard-asset-summary">{assetDrilldownSites.length ? assetDrilldownSites.map((site) => <button type="button" key={site.name} className={assetDrilldownSite === site.name ? "active" : ""} onClick={() => { setAssetDrilldownSite(site.name); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{site.total.toLocaleString()}</b>{site.name}</button>) : <p>No sites available</p>}</div></section>}
           {assetDrilldownSite && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${selectedAssetRegion.code} sites`} onClick={() => { setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 3 · {assetDrilldownSite} fleet totals</span></h4><div className="dashboard-asset-summary">{assetSiteCategoryBreakdown.length ? assetSiteCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No equipment or vehicles found for {assetDrilldownSite}</p>}</div></section>}
           {assetDrilldownCategory && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownSite} fleet totals`} onClick={() => { setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 4 · Select {assetDrilldownCategory === "Total vehicles" ? "vehicle" : "equipment"} type</span></h4><div className="dashboard-asset-groups">{assetSiteGroupBreakdown.length ? assetSiteGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No types found</p>}</div></section>}
-          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownCategory} types`} onClick={() => setAssetDrilldownGroup("")}><ChevronLeft /> Back</button><span>Step 5 · Full details for {assetDrilldownGroup}</span></h4><div className="dashboard-asset-list"><table><thead><tr><th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th></tr></thead><tbody>{assetSiteGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td></tr>)}</tbody></table></div></section>}
+          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownCategory} types`} onClick={() => setAssetDrilldownGroup("")}><ChevronLeft /> Back</button><span>Step 5 · Full details for {assetDrilldownGroup}</span></h4><div className="dashboard-asset-list"><ActionsTable><thead><tr><th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th></tr></thead><tbody>{assetSiteGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td></tr>)}</tbody></ActionsTable></div></section>}
         </> : <>
           <section><h4>Step 1 · Select equipment category</h4><div className="dashboard-asset-summary">{assetCategoryBreakdown.length ? assetCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment records found</p>}</div></section>
           {assetDrilldownCategory && <section><h4>Step 2 · Select equipment group</h4><div className="dashboard-asset-groups">{assetGroupBreakdown.length ? assetGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No equipment group found</p>}</div></section>}
-          {assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><table><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}{assetDrilldown.startsWith("event:") && <><th>Closed</th><th>Verified</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}{assetDrilldown.startsWith("event:") && <><td>{formatTwelveHourDateTime(record.requestClosed)}</td><td>{formatTwelveHourDateTime(record.requestVerified)}</td></>}</tr>)}</tbody></table></div></section>}
+          {assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><ActionsTable><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}{assetDrilldown.startsWith("event:") && <><th>Closed</th><th>Verified</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}{assetDrilldown.startsWith("event:") && <><td>{formatTwelveHourDateTime(record.requestClosed)}</td><td>{formatTwelveHourDateTime(record.requestVerified)}</td></>}</tr>)}</tbody></ActionsTable></div></section>}
         </>}
       </div></Modal>}
       <section className="mine-dashboard-lower-grid">
@@ -1253,7 +1254,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [openFilter]);
   return (
     <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
-      <table className="breakdown-table-auto-fit">
+      <ActionsTable className="breakdown-table-auto-fit">
         <thead>
           <tr>
             {columns.map(([key, label]) => (
@@ -1308,7 +1309,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
             </tr>
           )}
         </tbody>
-      </table>
+      </ActionsTable>
     </div></>
   );
 }
@@ -2089,7 +2090,7 @@ function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
     document.body,
   );
 }
-function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort, onClearSort, onReset }) {
+function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort, onClearSort, onReset, resetLabel = "Reset report" }) {
   const [open, setOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
   const triggerRef = useRef(null);
@@ -2124,9 +2125,12 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
       <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={dataOpen} onClick={() => setDataOpen((current) => !current)}><ArrowUpDown /><span>Data</span><ChevronRight /></button>
       {dataOpen && <div className="report-actions-submenu" role="menu" aria-label="Report data actions"><button type="button" role="menuitem" onClick={() => run(onSort)}><ArrowUpDown /><span>Sort</span></button><button type="button" role="menuitem" onClick={() => run(onClearSort)}><X /><span>Clear sort</span></button></div>}
       <div className="report-actions-divider" />
-      <button type="button" role="menuitem" onClick={() => run(onReset)}><RotateCcw /><span>Reset report</span></button>
+      <button type="button" role="menuitem" onClick={() => run(onReset)}><RotateCcw /><span>{resetLabel}</span></button>
     </div>, document.body)}
   </div>;
+}
+function ActionsTable(props) {
+  return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName }) {
   const [columnFilters, setColumnFilters] = useState({});
@@ -3021,7 +3025,7 @@ function Equipment({
         <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="scroll master-table-scroll" onClick={() => setOpenFilter(null)}>
-        <table>
+        <ActionsTable>
           <thead>
             <tr>
               {equipmentColumns.map(([key, label]) => (
@@ -3092,7 +3096,7 @@ function Equipment({
               </tr>
             )}
           </tbody>
-        </table>
+        </ActionsTable>
       </div>
       {detail && (
         <Modal title="Equipment details" close={() => setDetail(null)}>
@@ -3970,7 +3974,7 @@ function Subsidiaries({ gotoEquipment }) {
         </div>
       </div>
       <div className="emptytable">
-        <table>
+        <ActionsTable>
           <thead>
             <tr>
               <th>Region name</th>
@@ -4068,7 +4072,7 @@ function Subsidiaries({ gotoEquipment }) {
               </React.Fragment>
             ))}
           </tbody>
-        </table>
+        </ActionsTable>
       </div>
     </section>
   );
@@ -4237,7 +4241,7 @@ function Generic({ name, requests = [] }) {
             </div>
           </div>
           <div className="emptytable">
-            <table>
+            <ActionsTable>
               <thead><tr><th>Job reference</th><th>Door no.</th><th>Site</th><th>Complaint</th><th>Created</th><th>Age</th><th>Status</th></tr></thead>
               <tbody>
                 {visibleRequests.length ? visibleRequests.map((request) => {
@@ -4250,12 +4254,12 @@ function Generic({ name, requests = [] }) {
                   );
                 }) : <tr><td colSpan="7" className="empty-state">No service or maintenance requests available</td></tr>}
               </tbody>
-            </table>
+            </ActionsTable>
           </div>
         </div>
       )}
       <div className="emptytable">
-        <table>
+        <ActionsTable>
           <thead>
             <tr>
               {columns.map((x) => (
@@ -4280,7 +4284,7 @@ function Generic({ name, requests = [] }) {
               </tr>
             )}
           </tbody>
-        </table>
+        </ActionsTable>
       </div>
     </section>
   );
@@ -4998,7 +5002,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
         <TableParameterFilter columns={filterColumns} rows={records} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} />
       </div>
       <div className="emptytable master-table-scroll" onClick={() => setOpenFilter(null)}>
-        <table>
+        <ActionsTable>
           <thead>
             <tr>
               {displayFields.map(([key, label]) => (
@@ -5112,7 +5116,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
               </tr>
             )}
           </tbody>
-        </table>
+        </ActionsTable>
       </div>
     </section>
     {editing && (
@@ -5554,7 +5558,7 @@ function WhatsAppReport({type, requests = []}) {
             {lastPrepared && <span>{lastPrepared}</span>}
           </div>
           <div className="site-report-matrix-table">
-            <table>
+            <ActionsTable>
               <thead><tr><th>Sites</th>{dummyReportTypes.map((reportType) => <th key={reportType}>Report {reportType}</th>)}</tr></thead>
               <tbody>{visibleRows.map((site) => (
                 <tr key={site.name}>
@@ -5565,7 +5569,7 @@ function WhatsAppReport({type, requests = []}) {
                   })}
                 </tr>
               ))}</tbody>
-            </table>
+            </ActionsTable>
           </div>
         </div>
       )}
@@ -5576,7 +5580,7 @@ function WhatsAppReport({type, requests = []}) {
             {lastPrepared && <span>{lastPrepared}</span>}
           </div>
           <div className="site-report-matrix-table">
-            <table>
+            <ActionsTable>
               <thead><tr><th>OEM</th>{oemReportLevels.map((level) => <th key={level}>{level}</th>)}</tr></thead>
               <tbody>{visibleRows.map((oem) => (
                 <tr key={oem.name}>
@@ -5587,18 +5591,18 @@ function WhatsAppReport({type, requests = []}) {
                   })}
                 </tr>
               ))}</tbody>
-            </table>
+            </ActionsTable>
           </div>
         </div>
       )}
-      <div className="emptytable"><table>
+      <div className="emptytable"><ActionsTable>
         <thead><tr>{(isSite ? ["Site","Total equipment","On road","Off road","Idle","Open breakdowns"] : ["OEM","Contacts","Levels","Locations"]).map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
         <tbody>{visibleRows.length ? visibleRows.map((row) => isSite ? (
           <tr key={row.name}><td><b>{row.name}</b></td><td>{row.total}</td><td>{row.onRoad}</td><td>{row.offRoad}</td><td>{row.idle}</td><td>{row.breakdowns}</td></tr>
         ) : (
           <tr key={row.name}><td><b>{row.name}</b></td><td>{row.contacts}</td><td>{row.levels || "—"}</td><td>{row.locations || "—"}</td></tr>
         )) : <tr><td colSpan={isSite ? 6 : 4} className="empty-state">No data available for this report</td></tr>}</tbody>
-      </table></div>
+      </ActionsTable></div>
     </section>
   );
 }
@@ -5623,13 +5627,13 @@ function WhatsAppAlertHistory() {
   }).format(new Date(value));
   return <section className="panel table pagepanel generic whatsapp-history">
     <header><div><h1>WhatsApp alert history</h1><p>{loaded ? `${history.length} prepared alerts recorded` : "Loading alert history..."}</p></div></header>
-    <div className="emptytable"><table>
+    <div className="emptytable"><ActionsTable>
       <thead><tr>{["Date & time","Report type","Site / OEM","Level","Recipient","Phone","Status"].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead>
       <tbody>{history.length ? history.map((entry) => <tr key={entry.id}>
         <td>{formatDate(entry.createdAt)}</td><td>{entry.reportType}</td><td><b>{entry.targetName}</b></td>
         <td>{entry.reportLevel || "—"}</td><td>{entry.recipientName || "—"}</td><td>{entry.recipientPhone || "—"}</td><td><Status>{entry.status}</Status></td>
       </tr>) : <tr><td colSpan="7" className="empty-state">{loaded ? "No WhatsApp alerts have been prepared yet" : "Loading..."}</td></tr>}</tbody>
-    </table></div>
+    </ActionsTable></div>
   </section>;
 }
 const OriginalBreakdown = Breakdown;
@@ -5848,7 +5852,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         </div>
       </div>
       <div className="hierarchy-matrix-scroll">
-        {matrixColumnCount ? <table className="hierarchy-matrix">
+        {matrixColumnCount ? <ActionsTable className="hierarchy-matrix">
           <thead>
             <tr className="hierarchy-group-row">
               {showIdentityColumns && <th className="hierarchy-admin-group" colSpan="4">Hierarchy Key Whatsapp Flow</th>}
@@ -5893,7 +5897,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
             })}
             {!rows.length && <tr><td colSpan={matrixColumnCount} className="empty-state">No hierarchy rows match this view.</td></tr>}
           </tbody>
-        </table> : <div className="hierarchy-view-empty">Select at least one column group to view the matrix.</div>}
+        </ActionsTable> : <div className="hierarchy-view-empty">Select at least one column group to view the matrix.</div>}
       </div>
       {!!visibleReportTitles.length && <div className="hierarchy-report-legend">
         {visibleReportTitles.map((report) => <span key={report}><b>{hierarchyReportCodes.get(report)}</b>{report}</span>)}
@@ -6193,7 +6197,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
   }, [openFilter]);
   return (
     <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div><div className="scroll mobile-workflow-table">
-      <table className="workflow-table">
+      <ActionsTable className="workflow-table">
         <thead><tr>
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showClosedBy && workflowHeader("closedBy", "Closed by")}{workflowHeader("start", "Started")}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && <th>Actions</th>}
@@ -6233,7 +6237,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
             </tr>;
           }) : <tr><td colSpan={8 + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showClosedBy ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
-      </table>
+      </ActionsTable>
     </div></>
   );
 }
@@ -6516,7 +6520,7 @@ function AdminLockManagement({session}){
   const unlock=async()=>{if(!window.confirm('Unlock all Admin and Non Admin Manager accounts for the current CRM lock incidents?'))return;const response=await fetch('/api/admin-locks/unlock',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}});const body=await response.json();if(!response.ok)return alert(body.error||'Could not unlock accounts');await load()};
   return <section className="admin-lock-page"><header><div><small>SUPER ADMIN CONTROL</small><h1>Admin account locks</h1><p>CRM tickets created from 28 August 2026 that remain open for 72 hours lock every Admin and Non Admin Manager login.</p></div><ShieldCheck /></header>
     {loading?<p>Loading lock status…</p>:<><div className={`admin-lock-status ${data.locked?'locked':'clear'}`}><div><b>{data.locked?'Admin logins are locked':'Admin logins are available'}</b><span>{data.locked?`${data.incidents.length} overdue CRM ticket incident${data.incidents.length===1?'':'s'} active`:'No active 72-hour CRM lock incident'}</span></div>{data.locked&&<button className="primary" onClick={unlock}>Unlock all accounts</button>}</div>
-    {data.locked&&<><h2>Triggering CRM tickets</h2><div className="emptytable"><table><thead><tr><th>Ticket reference</th><th>Ticket created</th><th>Locked at</th></tr></thead><tbody>{data.incidents.map(row=><tr key={row.ticketReference}><td><b>{row.ticketReference}</b></td><td>{formatTwelveHourDateTime(row.ticketCreatedAt)}</td><td>{formatTwelveHourDateTime(row.lockedAt)}</td></tr>)}</tbody></table></div><h2>Locked accounts</h2><div className="emptytable"><table><thead><tr><th>Login</th><th>Employee</th><th>Authority</th></tr></thead><tbody>{data.accounts.map(row=><tr key={row.id}><td><b>{row.login}</b></td><td>{row.employee||'—'}</td><td>{row.adminLevel==='Manager'?'Non Admin Manager':row.adminLevel}</td></tr>)}</tbody></table></div></>}</>}
+    {data.locked&&<><h2>Triggering CRM tickets</h2><div className="emptytable"><ActionsTable><thead><tr><th>Ticket reference</th><th>Ticket created</th><th>Locked at</th></tr></thead><tbody>{data.incidents.map(row=><tr key={row.ticketReference}><td><b>{row.ticketReference}</b></td><td>{formatTwelveHourDateTime(row.ticketCreatedAt)}</td><td>{formatTwelveHourDateTime(row.lockedAt)}</td></tr>)}</tbody></ActionsTable></div><h2>Locked accounts</h2><div className="emptytable"><ActionsTable><thead><tr><th>Login</th><th>Employee</th><th>Authority</th></tr></thead><tbody>{data.accounts.map(row=><tr key={row.id}><td><b>{row.login}</b></td><td>{row.employee||'—'}</td><td>{row.adminLevel==='Manager'?'Non Admin Manager':row.adminLevel}</td></tr>)}</tbody></ActionsTable></div></>}</>}
   </section>;
 }
 
@@ -6541,7 +6545,7 @@ function TicketPage({ session }) {
   return <section className="ticket-page">
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
-    <div className="ticket-table-wrap"><table><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></table></div>
+    <div className="ticket-table-wrap"><ActionsTable><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
     {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}
     {resolving && <TicketResolutionForm ticket={resolving} session={session} close={() => setResolving(null)} onResolved={(result) => setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket))} />}
   </section>;
