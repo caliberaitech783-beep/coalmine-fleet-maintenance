@@ -51,7 +51,8 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /className="mine-fleet-chart-total"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
   assert.match(source, /<span>Total Fleet<\/span>/);
-  assert.match(css, /:root\s+\.mine-fleet-region-chart\s*>\s*header\s*>\s*\.mine-fleet-chart-total\s*\{[\s\S]*justify-self:\s*center;[\s\S]*linear-gradient\(135deg, #e53f86, #7138b7\)[\s\S]*color:\s*#fff;[\s\S]*font:\s*900 22px/);
+  assert.match(css, /\.mine-fleet-chart-total\s*\{[\s\S]*justify-self:\s*center;[\s\S]*border-radius:\s*999px;[\s\S]*linear-gradient\(135deg, #e53f86, #7138b7\)[\s\S]*color:\s*#fff;[\s\S]*font:\s*900 22px/);
+  assert.match(css, /\.mine-fleet-chart-total-trigger\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset:\s*0;[\s\S]*background:\s*transparent;/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
@@ -97,8 +98,8 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
 });
 
 test("the region and site graph panel is titled only Total Fleet", () => {
-  assert.match(source, /<header><div><h2>Total Fleet<\/h2><\/div><button type="button" className="mine-fleet-chart-total"/);
-  assert.match(source, /aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
+  assert.match(source, /<header><div><h2>Total Fleet<\/h2><\/div><strong className="mine-fleet-chart-total"/);
+  assert.match(source, /className="mine-fleet-chart-total-trigger" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
   assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);
   assert.doesNotMatch(source, /Region-wise site distribution with total fleet count/);
 });
