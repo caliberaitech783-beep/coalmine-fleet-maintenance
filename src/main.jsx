@@ -3,6 +3,7 @@ import SharedActionsTable from "./shared-actions-table.jsx";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
+import { userMasterLocation } from "./user-master-location.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
@@ -2519,7 +2520,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     fileInput = useRef(null),
     fields = masterFields[name],
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
-    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
+    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
   if (!fields) return null;
   const saveManual = (e) => {
     e.preventDefault();
@@ -4857,6 +4858,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
     canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master",
     masterValue = (record, key) => {
+      if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];
       if (name === "Users & employees" && key === "userType")
         return String(record.userGroup || (String(record.userType || "").toLowerCase().includes("super") ? `User — ${record.adminLevel || "Admin"}` : record.userType) || "").trim();
@@ -4874,6 +4876,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       tableRowMatchesFilters(record, filterColumns, columnFilters),
     ),
     [rows, sort, changeSort] = useSortableRows(filteredRows, "", (record, key) => {
+      if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];
       return type === "checkbox" ? isCheckedValue(record[key]) : record[key];
     });
@@ -5029,7 +5032,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                   return (
                 <tr key={row.id || ri}>
                   {displayFields.map(([key, , type], ci) => {
-                    const value = name === "Privilege" ? privilegeValue(row, key) : row[key];
+                    const value = name === "Privilege" ? privilegeValue(row, key) : name === "Users & employees" && key === "site" ? userMasterLocation(row) : row[key];
                     return (
                     <td key={key}>
                       {name === "Privilege" && key === "username" ? (
