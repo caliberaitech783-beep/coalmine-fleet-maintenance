@@ -2,6 +2,18 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
+test("notification loading never opens the dropdown on login or polling", () => {
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const bell = source.slice(source.indexOf("function NotificationBell("), source.indexOf("function Normal("));
+  const loading = bell.slice(0, bell.indexOf("const unread"));
+  assert.match(loading, /\[open, setOpen\] = useState\(false\)/);
+  assert.match(loading, /setItems\(next\)/);
+  assert.match(loading, /window\.setInterval\(load, 30000\)/);
+  assert.doesNotMatch(loading, /setOpen\(/);
+  assert.match(bell, /onClick=\{toggle\}/);
+  assert.equal(source.match(/<NotificationBell\b/g)?.length, 2);
+});
+
 test("notification menu contains a close control and isolated scrolling list",()=>{
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const styles=fs.readFileSync(new URL("../src/style.css",import.meta.url),"utf8");

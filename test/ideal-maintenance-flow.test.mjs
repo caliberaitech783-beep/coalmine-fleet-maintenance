@@ -26,6 +26,5 @@ test("Idle requests require a reason and assigned-site Maintenance Manager appro
   assert.match(client,/status: ideal \? "Idle"/);
   assert.match(client,/Idle reason \*/);
   assert.match(client,/<option>No driver<\/option><option>No work<\/option>/);
-  assert.match(client,/includes\("was marked Idle"\)/);
   assert.match(client,/row\.idleReason \|\| "—"/);
 });

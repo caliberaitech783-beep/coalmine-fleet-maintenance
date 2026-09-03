@@ -21,6 +21,6 @@ test("overdue maintenance requests support daily remarks and twice-daily reminde
   assert.match(source, /Today’s update can be edited/);
   assert.match(source, /defaultValue=\{todayRemark\?\.remark\|\|""\}/);
   assert.match(source, /onRemark && String\(row\.status\)/);
-  assert.match(source, /reminder: add today’s maintenance update/);
+  assert.match(server, /reminder: add today’s maintenance update/);
   assert.match(source, /<MaintenanceRemarks remarks=\{r\.dailyRemarks\}/);
 });

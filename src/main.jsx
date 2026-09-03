@@ -6715,8 +6715,8 @@ function AiFeeder({ requests = [], role = "" }) {
 }
 function NotificationBell({ session, onOpenTickets }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false);
-  const reminderShown = useRef("");
-  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then((next) => {setItems(next);const reminder=next.find((item)=>!item.isRead&&(String(item.message).includes("reminder: add today’s maintenance update")||String(item.message).includes("was marked Idle")));if(reminder&&reminderShown.current!==String(reminder.id)){reminderShown.current=String(reminder.id);setOpen(true)}}).catch(() => {});
+  // Loading reminders updates the badge; only a bell click opens the dropdown.
+  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then((next) => setItems(next)).catch(() => {});
   useEffect(() => { load(); const timer = window.setInterval(load, 30000); return () => window.clearInterval(timer); }, [session?.token]);
   const unread = items.filter((item) => !item.isRead).length;
   const toggle = async () => {
