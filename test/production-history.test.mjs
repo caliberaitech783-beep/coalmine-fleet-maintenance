@@ -30,6 +30,6 @@ test("the two additional shown requests are hidden without hiding other Sanskar 
 
 test("exclusion is applied only to Production User history, not other queues", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /historyRows=isMis\?closedRequests\.filter\(\(row\)=>Boolean\(row\.verifiedAt\)\):isProduction\?closedRequests\.filter\(visibleInProductionHistory\):closedRequests/);
+  assert.match(source, /historyRows=isMis\?closedRequests\.filter\(\(row\)=>Boolean\(row\.verifiedAt\)\):isProduction\?closedRequests\.filter\(visibleInProductionHistory\):isMaintenance\?closedRequests\.filter\(visibleInMaintenanceHistory\):closedRequests/);
   assert.equal((source.match(/filter\(visibleInProductionHistory\)/g) || []).length, 1);
 });

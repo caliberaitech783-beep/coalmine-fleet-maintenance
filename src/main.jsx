@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { visibleInProductionHistory } from "./production-history.mjs";
+import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
@@ -6630,7 +6631,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const activeRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
   const closedRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="closed");
   const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt) : activeRequests;
-  const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):isProduction?closedRequests.filter(visibleInProductionHistory):closedRequests;
+  const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder requests={requests} role={mobileRole} /><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
