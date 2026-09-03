@@ -20,6 +20,8 @@ test('deployment validates staging, swaps, and automatically rolls back',()=>{
   assert.match(workflow,/az webapp deploy/);
   assert.match(workflow,/--slot staging/);
   assert.match(workflow,/--src-path packages\/current\/node-app\.zip/);
+  assert.match(workflow,/for attempt in 1 2 3/);
+  assert.match(workflow,/Staging ZIP deployment failed after/);
   assert.match(workflow,/scheduledJobsEnabled!==false/);
   assert.match(workflow,/deployment slot swap/);
   assert.match(workflow,/Production verification failed; restoring the previous production package/);

@@ -89,14 +89,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          az webapp deploy \
-            --resource-group "$AZURE_RESOURCE_GROUP" \
-            --name "$AZURE_WEBAPP_NAME" \
-            --slot staging \
-            --src-path packages/current/node-app.zip \
-            --type zip \
-            --clean true \
-            --restart true
+          for attempt in 1 2 3; do
+            if az webapp deploy \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$AZURE_WEBAPP_NAME" \
+              --slot staging \
+              --src-path packages/current/node-app.zip \
+              --type zip \
+              --clean true \
+              --restart true; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Staging ZIP deployment failed after ${attempt} attempts"
+              exit 1
+            fi
+            echo "Staging ZIP deployment attempt ${attempt} failed; restarting the slot before retry"
+            az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging || true
+            sleep 20
+          done
 
       - name: Restart and verify staging
         shell: bash
