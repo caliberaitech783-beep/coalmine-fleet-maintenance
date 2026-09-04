@@ -2310,6 +2310,18 @@ app.get('/api/requests/:reference/meter-file',requireSession,async(req,res,next)
   }catch(error){next(error)}
 });
 
+app.get('/api/reference/repair-types',requireSession,async(req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`
+      SELECT id, record_data->>'repairType' AS repair_type
+      FROM master_records
+      WHERE master_name=$1
+      ORDER BY created_at ASC
+    `,['Repair type master']);
+    res.json(rows.map((row)=>({id:row.id,repairType:String(row.repair_type||'').trim()})).filter((row)=>row.repairType));
+  }catch(error){next(error)}
+});
+
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
     const superCanView=(master)=>req.session.role==='super'&&(accessAllows(req.session.permissions?.masterAccess,master)||accessAllows(req.session.permissions?.mobileMasterAccess,master));

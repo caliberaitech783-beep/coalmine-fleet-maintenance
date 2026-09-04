@@ -835,9 +835,23 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
   </section>;
 }
+const dashboardRepairTypeDefaults = ["Breakdown", "Accidental", "Preventive", "Aggregate Repair", "Super Structure", "WGM"];
+
+function useDashboardRepairTypes() {
+  const fallback = dashboardRepairTypeDefaults.map((repairType, index) => ({ id: `fallback-${index}`, repairType }));
+  const [records, setRecords] = useState(fallback);
+  useEffect(() => {
+    fetch("/api/reference/repair-types", {headers: {Authorization: `Bearer ${authToken}`}})
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then((data) => { if (Array.isArray(data) && data.length) setRecords(data); })
+      .catch(() => {});
+  }, []);
+  return records;
+}
+
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
   const [equipmentRecords] = useMasterRecords("Equipment master");
-  const [repairTypeRecords] = useMasterRecords("Repair type master");
+  const repairTypeRecords = useDashboardRepairTypes();
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [assetDrilldownRegion, setAssetDrilldownRegion] = useState("");
   const [assetDrilldownSite, setAssetDrilldownSite] = useState("");
@@ -905,8 +919,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const availableFleet = kpis.onRoad + kpis.idle;
   const availabilityPercent = kpis.total ? Math.round((availableFleet / kpis.total) * 100) : 0;
   const repairTypeBreakdown = [...new Map(
-    repairTypeRecords
-      .map((record) => String(record.repairType || "").trim())
+    [...repairTypeRecords.map((record) => record.repairType), ...visibleBreakdowns.map((record) => record.category)]
+      .map((repairType) => String(repairType || "").trim())
       .filter(Boolean)
       .map((label) => [label.toLowerCase(), label]),
   ).values()].map((label) => ({
