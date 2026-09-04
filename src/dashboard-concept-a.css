@@ -686,16 +686,22 @@ button.mine-primary-kpi-card:focus-visible,
   grid-template-rows: auto auto;
   min-height: 72px;
   padding: 9px;
-  border: 1px solid var(--mine-line);
+  border: 1px solid #cbd9e3;
   border-radius: 6px;
   background: #f8fafc;
+  color: #172b3f;
 }
-.mine-feature-road-availability .mine-road-status-values button:hover { background: #edf4f5; }
+.mine-feature-road-availability .mine-road-status-values button.onroad { background: #edf9f4; border-color: #b9e0d0; color: #173d31; }
+.mine-feature-road-availability .mine-road-status-values button.offroad { background: #fff2f1; border-color: #efc3bf; color: #572b28; }
+.mine-feature-road-availability .mine-road-status-values button.idle { background: #fff8e8; border-color: #efd69d; color: #513c17; }
+.mine-feature-road-availability .mine-road-status-values button.onroad:hover { background: #e2f5ed; }
+.mine-feature-road-availability .mine-road-status-values button.offroad:hover { background: #fee8e6; }
+.mine-feature-road-availability .mine-road-status-values button.idle:hover { background: #fff1cf; }
 .mine-feature-road-availability .mine-road-status-values button > svg { width: 18px; height: 18px; }
 .mine-feature-road-availability .mine-road-status-values button > svg { grid-row: 1 / span 2; }
-.mine-feature-road-availability .mine-road-status-values b { font-size: 10px; }
-.mine-feature-road-availability .mine-road-status-values small { font-size: 8px; }
-.mine-feature-road-availability .mine-road-status-values strong { grid-column: 1 / -1; font-size: 20px; text-align: right; }
+.mine-feature-road-availability .mine-road-status-values b { color: currentColor; font-size: 10px; }
+.mine-feature-road-availability .mine-road-status-values small { color: currentColor; font-size: 8px; opacity: .78; }
+.mine-feature-road-availability .mine-road-status-values strong { grid-column: 1 / -1; color: currentColor; font-size: 20px; text-align: right; }
 .mine-road-distribution { padding: 0; }
 .mine-road-distribution > span:first-child { display: flex; height: 14px; overflow: hidden; border-radius: 7px; background: #e8edf3; }
 .mine-road-distribution i { display: block; min-width: 0; height: 100%; }
@@ -704,7 +710,9 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-road-distribution i.idle { background: #dda13d; }
 .mine-road-distribution > span:last-child { display: flex; justify-content: space-between; margin-top: 5px; color: var(--mine-muted); font-size: 7px; }
 .mine-road-distribution > span:last-child b:nth-child(2) { text-transform: uppercase; }
-.mine-dashboard-night .mine-feature-road-availability .mine-road-status-values button { background: #203338; }
+.mine-dashboard-night .mine-feature-road-availability .mine-road-status-values button.onroad { background: #edf9f4; }
+.mine-dashboard-night .mine-feature-road-availability .mine-road-status-values button.offroad { background: #fff2f1; }
+.mine-dashboard-night .mine-feature-road-availability .mine-road-status-values button.idle { background: #fff8e8; }
 .mine-repair-type-chart > header > strong { color: var(--mine-text); font: 850 12px Manrope; white-space: nowrap; }
 .mine-repair-type-bars { display: grid; gap: 7px; padding: 12px 14px 14px; }
 .mine-repair-type-bars button {

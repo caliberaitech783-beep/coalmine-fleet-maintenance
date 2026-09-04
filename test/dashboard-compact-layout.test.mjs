@@ -29,6 +29,14 @@ test("Total Fleet leads the dashboard and Maintenance Type shares a row with Roa
   assert.match(client, /roadStatusShare\(kpis\.onRoad\)\.toFixed\(1\)/);
 });
 
+test("Road Availability status tiles keep readable contrast in both themes", () => {
+  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values button\.onroad \{ background: #edf9f4;[^}]*color: #173d31;/);
+  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values button\.offroad \{ background: #fff2f1;[^}]*color: #572b28;/);
+  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values button\.idle \{ background: #fff8e8;[^}]*color: #513c17;/);
+  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values small \{ color: currentColor;/);
+  assert.doesNotMatch(css, /\.mine-dashboard-night \.mine-feature-road-availability \.mine-road-status-values button \{ background: #203338; \}/);
+});
+
 test("equipment intelligence and request lifecycle share a responsive row", () => {
   assert.match(css, /\.mine-dashboard-core\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   assert.match(css, /@media \(max-width: 1100px\)[\s\S]*?\.mine-dashboard-core\s*\{\s*grid-template-columns:\s*1fr/);
