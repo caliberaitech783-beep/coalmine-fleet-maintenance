@@ -6,6 +6,7 @@ test("legacy WCL locations match their renamed dashboard sites", () => {
   assert.equal(canonicalSiteName("Sasti II"), canonicalSiteName("Sasti OB"));
   assert.equal(canonicalSiteName("SASTI"), canonicalSiteName("Sasti OB"));
   assert.equal(canonicalSiteName("Majri II"), canonicalSiteName("Majri OB"));
+  assert.equal(canonicalSiteName("Majri"), canonicalSiteName("Majri OB"));
   assert.equal(
     canonicalSiteName("Dhoptala II"),
     canonicalSiteName("Dhoptala OB (2nd)"),

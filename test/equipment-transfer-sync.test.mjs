@@ -9,7 +9,7 @@ test("maps Oracle equipment transfers to the Vehicle transfers master", () => {
     equipmentId: "D37-7585", modelNo: "D37", manufacturerSerialNo: "SER-1",
     chassisNo: "CH-1", dieselQty: "5", kmr: "10", hmr: "20", driver: "Santosh",
   }), {
-    transferNo: "ETR-1", transferDate: "2026-08-22", source: "SASTI OB", destination: "MAJRI OB",
+    transferNo: "ETR-1", transferDate: "2026-08-22", source: "Sasti OB", destination: "Majri OB",
     equipment: "D37-7585", modelNo: "D37", manufacturerSerialNo: "SER-1", lastMaintenanceDate: "",
     driver: "Santosh", chassisNo: "CH-1", dieselQty: "5", kmr: "10", hmr: "20",
     oracleSource: "EQUIPMENTTRANSFER", oracleTno: "10", oracleEquipmentTno: "20",
@@ -25,7 +25,7 @@ test("latest transfer updates matching Equipment Master current location", () =>
     {equipmentName: "D37 - 7585", manufacturerSerialNo: "SER-1", status: "Operational"},
     latestTransferByEquipment(transfers),
   );
-  assert.equal(updated.currentLocation, "MAJRI OB");
+  assert.equal(updated.currentLocation, "Majri OB");
   assert.equal(updated.lastTransferNo, "ETR-2");
   assert.equal(updated.status, "Operational");
 });
@@ -41,7 +41,7 @@ test("maps Oracle fleet assets without removing app-maintained status or latest 
   assert.equal(mapped.door, "V1-100");
   assert.equal(mapped.group, "Volvo Tipper");
   assert.equal(mapped.status, "Off road");
-  assert.equal(mapped.currentLocation, "MAJRI OB");
+  assert.equal(mapped.currentLocation, "Majri OB");
   assert.equal(mapped.oracleSource, "EQUIPMENT");
 });
 

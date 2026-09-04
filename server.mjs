@@ -25,7 +25,7 @@ import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeH
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
-import {managerReportScope,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
+import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
@@ -510,6 +510,24 @@ async function migrate(){
       }
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('user_access_labels_normalized','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
+    // Canonicalize stored operational locations without deleting or re-syncing
+    // records. Legacy/raw "Majri" values use the configured "Majri OB" name.
+    const {rows:operationalSitesNormalized}=await client.query("SELECT value FROM app_metadata WHERE key='operational_site_names_normalized_v2' FOR UPDATE");
+    if(!operationalSitesNormalized.length){
+      const {rows:masterRows}=await client.query('SELECT id,master_name,record_data FROM master_records FOR UPDATE');
+      for(const row of masterRows){
+        const normalized=row.master_name==='Users & employees'
+          ? normalizeUserSiteFields(row.record_data)
+          : normalizeOperationalSiteFields(row.record_data);
+        if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
+          await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
+      }
+      await client.query("UPDATE maintenance_requests SET site='Majri OB' WHERE lower(trim(site)) IN ('majri','majri ii','majri ob')");
+      await client.query("UPDATE crm_tickets SET site='Majri OB' WHERE lower(trim(site)) IN ('majri','majri ii','majri ob')");
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('operational_site_names_normalized_v2','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     await client.query('COMMIT');
@@ -2340,7 +2358,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     try{
       prepared=records.map((record,index)=>{
         try{
-          if(master!=='Users & employees')return record;
+          if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
           return initializeUserCredentials(normalizeUserSiteFields(normalizeUserAccessLabels(record)));
@@ -2487,7 +2505,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const existingSnapshot=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
     const previousRecord=existingSnapshot.rows[0].record_data;
-    let storedRecord=record;
+    let storedRecord=normalizeOperationalSiteFields(record);
     if(master==='Users & employees'){
       if((isTrueSuperAdmin(record)||isTrueSuperAdmin(previousRecord))&&!isTrueSuperAdmin(req.session.permissions))
         return res.status(403).json({error:'Only a Super Admin can manage Super Admin accounts.'});

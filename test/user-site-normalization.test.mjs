@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {displaySiteName,displaySiteSelection,normalizeUserSiteFields} from '../region-scope.mjs';
+import {displaySiteName,displaySiteSelection,normalizeOperationalSiteFields,normalizeUserSiteFields} from '../region-scope.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
@@ -9,11 +9,18 @@ const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 test('every spelling of a site resolves to the single display name',()=>{
   assert.equal(displaySiteName('sasti ob'),'Sasti OB');
   assert.equal(displaySiteName('SASTI II'),'Sasti OB');
+  assert.equal(displaySiteName('Majri'),'Majri OB');
   assert.equal(displaySiteName('dhoptala ob 2nd'),'Dhoptala OB (2nd)');
   assert.equal(displaySiteName('Gouri Pouni'),'Gauri Pauni OB (2nd)');
   assert.equal(displaySiteName('Jayant OB 2nd'),'Jayant OB 2nd');
   assert.equal(displaySiteName('  '),'');
   assert.equal(displaySiteName('Some New Site'),'Some New Site');
+});
+
+test('operational records normalize Majri across stored site fields',()=>{
+  assert.deepEqual(normalizeOperationalSiteFields({currentLocation:'MAJRI',source:'Majri II',destination:'Majri OB',door:'D1'}),{
+    currentLocation:'Majri OB',source:'Majri OB',destination:'Majri OB',door:'D1',
+  });
 });
 
 test('manager site selections dedupe case variants and keep unknown sites',()=>{
@@ -32,6 +39,9 @@ test('server normalises user site names on write and migrates stored users once'
   assert.match(server,/storedRecord=\{\.\.\.normalizeUserSiteFields\(normalizeUserAccessLabels\(record\)\)/);
   assert.match(server,/key='user_site_names_normalized'/);
   assert.match(server,/master_name='Users & employees' FOR UPDATE/);
+  assert.match(server,/operational_site_names_normalized_v2/);
+  assert.match(server,/UPDATE maintenance_requests SET site='Majri OB'/);
+  assert.match(server,/UPDATE crm_tickets SET site='Majri OB'/);
 });
 
 test('the user form shows the same display names for manager sites and team locations',()=>{

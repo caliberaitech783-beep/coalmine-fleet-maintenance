@@ -1,3 +1,5 @@
+import {displaySiteName} from './region-scope.mjs';
+
 const normalized = (value) => String(value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 
 export const allowedEquipmentGroups = [
@@ -21,8 +23,8 @@ export function transferMasterRecord(transfer = {}) {
   return {
     transferNo: transfer.transferNo || "",
     transferDate: transfer.transferDate || "",
-    source: transfer.source || "",
-    destination: transfer.destination || "",
+    source: displaySiteName(transfer.source),
+    destination: displaySiteName(transfer.destination),
     equipment,
     modelNo: transfer.modelNo || "",
     manufacturerSerialNo: transfer.manufacturerSerialNo || "",
@@ -67,7 +69,7 @@ export function applyLatestTransfer(record, latestByEquipment) {
   if (!transfer?.destination) return record;
   return {
     ...record,
-    currentLocation: transfer.destination,
+    currentLocation: displaySiteName(transfer.destination),
     oracleEquipmentTno: transfer.equipmentTno || record.oracleEquipmentTno || "",
     lastTransferNo: transfer.transferNo || "",
     lastTransferDate: transfer.transferDate || "",
@@ -79,7 +81,7 @@ export function oracleEquipmentMasterRecord(equipment = {}, existing = {}) {
     ...existing,
     door: equipment.equipmentId || equipment.equipmentName || existing.door || "",
     reg: equipment.registrationNo || equipment.vrnNo || existing.reg || "",
-    currentLocation: existing.lastTransferDate ? existing.currentLocation : (equipment.currentLocation || existing.currentLocation || ""),
+    currentLocation: displaySiteName(existing.lastTransferDate ? existing.currentLocation : (equipment.currentLocation || existing.currentLocation || "")),
     equipmentName: equipment.equipmentName || equipment.equipmentId || existing.equipmentName || "",
     category: equipment.category || existing.category || "",
     group: equipment.group || existing.group || "",

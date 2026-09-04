@@ -41,11 +41,19 @@ export function displaySiteSelection(value){
 }
 
 export function normalizeUserSiteFields(record={}){
-  const next={...record};
+  const next=normalizeOperationalSiteFields(record);
   for(const key of ['site','location']){
     if(typeof next[key]==='string'&&next[key].trim())next[key]=displaySiteName(next[key]);
   }
   if(next.managerSites!=null&&String(next.managerSites).trim())next.managerSites=displaySiteSelection(next.managerSites).join(' | ');
+  return next;
+}
+
+export function normalizeOperationalSiteFields(record={}){
+  const next={...record};
+  for(const key of ['site','location','currentLocation','source','destination']){
+    if(typeof next[key]==='string'&&next[key].trim())next[key]=displaySiteName(next[key]);
+  }
   return next;
 }
 
