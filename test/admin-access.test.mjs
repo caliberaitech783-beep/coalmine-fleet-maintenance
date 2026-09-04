@@ -10,6 +10,10 @@ test("legacy administrators retain full access when allowlists are absent", () =
   assert.equal(accessAllows(permissions.masterAccess, "Equipment master"), true);
 });
 
+test("Super Admin authority is normalized without becoming an ordinary Admin", () => {
+  assert.equal(adminAccessPermissions({adminLevel:" super   ADMIN "}).adminLevel, "Super Admin");
+});
+
 test("manager authority is retained in the admin session permissions", () => {
   const permissions = adminAccessPermissions({adminLevel: "Manager", managerRole: "Maintenance Manager", tabAccess: "Dashboard"});
   assert.equal(permissions.adminLevel, "Manager");

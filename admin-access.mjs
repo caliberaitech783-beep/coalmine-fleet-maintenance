@@ -47,14 +47,20 @@ export function accessAllows(selection, name) {
 
 export const MANAGER_ROLE_OPTIONS = ["Production Manager", "Maintenance Manager", "MIS Manager"];
 
+export function normalizeAdminLevel(value = "") {
+  const level = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+  if (level === "super admin") return "Super Admin";
+  if (level === "manager") return "Manager";
+  return "Admin";
+}
+
 export function managerRoleSelection(value) {
   const raw=Array.isArray(value)?value:String(value||"").split(/\s*[|,]\s*/);
   return [...new Set(raw.map((role)=>String(role).trim()).filter((role)=>MANAGER_ROLE_OPTIONS.includes(role)))];
 }
 
 export function adminAccessPermissions(user = {}) {
-  const rawAdminLevel = String(user.adminLevel || "Admin").trim();
-  const adminLevel = rawAdminLevel === "Super Admin" ? "Super Admin" : rawAdminLevel === "Manager" ? "Manager" : "Admin";
+  const adminLevel = normalizeAdminLevel(user.adminLevel);
   const selectedTabs = accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS);
   const ticketAccount = adminLevel === "Manager" || ["Admin", "Manager"].includes(String(user.adminLevel || "").trim()) || String(user.userType || "").toLowerCase().includes("super");
   const tabAccess = ticketAccount && selectedTabs != null

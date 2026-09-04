@@ -21,3 +21,9 @@ test('new request WhatsApp alerts are immediate while unrelated notification pol
   assert.match(server,/sendScheduledConsolidatedWhatsAppReports[\s\S]*if\(isAdmin&&scope\.sites!==null&&!scope\.sites\.length\)scope=\{key:'ALL',label:'All regions',sites:null\};/);
   assert.match(server,/setInterval\(\(\)=>\{[\s\S]*sendScheduledConsolidatedWhatsAppReports/);
 });
+
+test('Super Admin request traffic is excluded even when a duplicate Admin login exists',()=>{
+  assert.match(server,/const superAdminLogins=new Set/);
+  assert.match(server,/requestTemplate&&superAdminLogins\.has\(login\)/);
+  assert.match(server,/eligibleLogins=requestTemplate\?logins\.filter/);
+});

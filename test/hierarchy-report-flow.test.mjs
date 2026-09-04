@@ -4,6 +4,12 @@ import test from 'node:test';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,GENERAL_REPORT_TITLES,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation} from '../hierarchy-report-flow.mjs';
 
+test('Super Admin receives only the configurable consolidated schedule even when designated Director',()=>{
+  const designation=flowDesignationForUser({adminLevel:' SUPER  ADMIN ',designation:'Director'});
+  assert.equal(designation.key,'superAdmin');
+  assert.deepEqual(reportsDueForDesignation('superAdmin',new Date('2026-09-01T13:35:00Z')).map(({scheduleKey})=>scheduleKey),['daily-19']);
+});
+
 test('Director receives one daily 7 PM group excluding weekly-only fleet reports on weekdays',()=>{
   const due=reportsDueForDesignation('director',new Date('2026-09-01T13:35:00Z'));
   assert.equal(due.length,1);

@@ -17,6 +17,7 @@ test('event schedules select only the matching report and use a stable per-reque
   }
   assert.deepEqual(reportsForHierarchyEvent('misSupervisor',{type:'opened',request}),[]);
   assert.deepEqual(reportsForHierarchyEvent('director',{type:'opened',request}),[]);
+  assert.deepEqual(reportsForHierarchyEvent('superAdmin',{type:'opened',request}),[]);
   assert.deepEqual(reportsForHierarchyEvent('unknown',{type:'opened',request}),[]);
   assert.deepEqual(reportsForHierarchyEvent('productionSupervisor',{type:'idle',request}),[]);
   assert.deepEqual(reportsForHierarchyEvent('productionSupervisor',{type:'opened',request:{}}),[]);

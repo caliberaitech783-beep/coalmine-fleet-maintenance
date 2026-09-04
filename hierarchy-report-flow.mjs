@@ -30,6 +30,10 @@ const TIME_PATTERN=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const ALLOWED_REPORTS=new Set(DIRECTOR_REPORT_TITLES);
 
 export const HIERARCHY_REPORT_DESIGNATIONS={
+  superAdmin:{label:'Super Admin',level:1,schedules:[
+    {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:[...commonDaily,...dailyOperational]},
+    {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 7:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
+  ]},
   director:{label:"Director's",level:1,schedules:[
     {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:[...commonDaily,...dailyOperational]},
     {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 7:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
@@ -149,7 +153,7 @@ export function hierarchyScheduleLabel(schedule={}){
 }
 
 function clean(value){return String(value??'').trim()}
-function words(value){return clean(value).toLowerCase()}
+function words(value){return clean(value).toLowerCase().replace(/\s+/g,' ')}
 function includesAny(text,needles){return needles.some((needle)=>text.includes(needle))}
 
 export function hierarchyIndiaParts(now=new Date()){
@@ -219,6 +223,9 @@ export function flowDesignationForUser(user={},profile={}){
   const managerRoles=profile?.permissions?.managerRoles||[];
   const fields=[user.level,user.hierarchyLevel,user.userGroup,user.adminLevel,user.designation,user.role,user.department,user.employee,user.name,user.oemRole,user.managerRole,managerRoles.join(' '),profile.assignedRole].map(words).join(' ');
   const adminLevel=words(user.adminLevel||profile?.permissions?.adminLevel);
+  // Super Admin is a reporting authority of its own. Resolve it before job
+  // designations so a Director label cannot opt it into event-based delivery.
+  if(adminLevel==='super admin')return {key:'superAdmin',...HIERARCHY_REPORT_DESIGNATIONS.superAdmin};
   if(fields.includes('director'))return {key:'director',...HIERARCHY_REPORT_DESIGNATIONS.director};
   if(includesAny(fields,['project manager','p.m','pm manager'])||adminLevel==='project manager')return {key:'projectManager',...HIERARCHY_REPORT_DESIGNATIONS.projectManager};
   if(includesAny(fields,['national head']))return {key:'oemNationalHead',...HIERARCHY_REPORT_DESIGNATIONS.oemNationalHead};

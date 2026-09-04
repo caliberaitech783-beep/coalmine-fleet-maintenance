@@ -15,5 +15,6 @@ test("locks desktop Admin and Non Admin Manager accounts only",()=>{
 
 test("recognizes the distinct Super Admin authority",()=>{
   assert.equal(isTrueSuperAdmin({adminLevel:"Super Admin"}),true);
+  assert.equal(isTrueSuperAdmin({adminLevel:"  SUPER   ADMIN "}),true);
   assert.equal(isTrueSuperAdmin({adminLevel:"Admin"}),false);
 });
