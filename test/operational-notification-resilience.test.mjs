@@ -20,3 +20,15 @@ test("closing a request is idempotent and independent from follow-up notificatio
   assert.match(closeRoute, /addTicketNotificationsBestEffort/);
   assert.match(closeRoute, /was closed, but its notification recipients could not be resolved/);
 });
+
+test("MIS verification responds before report and notification side effects", () => {
+  const verifyRoute = server.slice(
+    server.indexOf("app.patch('/api/requests/:reference/verify'"),
+    server.indexOf("app.get('/api/requests/:reference/trip-card'"),
+  );
+
+  assert.match(verifyRoute, /res\.json\(rows\[0\]\);\s*void sendRequestEventReports\('verified',rows\[0\]\)/);
+  assert.match(verifyRoute, /addTicketNotificationsBestEffort/);
+  assert.match(verifyRoute, /was verified, but its notification recipients could not be resolved/);
+  assert.doesNotMatch(verifyRoute, /await sendRequestEventReports\('verified'/);
+});

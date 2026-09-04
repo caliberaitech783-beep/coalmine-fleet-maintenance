@@ -94,7 +94,7 @@ test('failed delivery is recorded and does not throw after a request was saved',
 test('creation, both closing paths and verification invoke event delivery after successful writes',()=>{
   assert.equal(server.split("await sendRequestEventReports('opened',rows[0])").length-1,1);
   assert.equal(server.split("await sendRequestEventReports('closed',rows[0])").length-1,2);
-  assert.equal(server.split("await sendRequestEventReports('verified',rows[0])").length-1,1);
-  assert.match(server,/if\(!rows.length\)return res.status\(409\).json\(\{error:'Only unverified closed requests can be verified.'\}\);\s*await sendRequestEventReports\('verified'/);
+  assert.equal(server.split("void sendRequestEventReports('verified',rows[0])").length-1,1);
+  assert.match(server,/if\(!rows.length\)return res.status\(409\).json\(\{error:'Only unverified closed requests can be verified.'\}\);\s*res.json\(rows\[0\]\);\s*void sendRequestEventReports\('verified'/);
   assert.match(server,/if\(eventRequest\)sourceData.requests=sourceDataForSites\(\{requests:\[eventRequest\]/);
 });
