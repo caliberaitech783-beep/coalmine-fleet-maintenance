@@ -9,12 +9,16 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(server,/dashboardScope\|\|req\.session\.assignedRole==='MIS User'[\s\S]*scopedSite=String\(operationalUser\.site\|\|operationalUser\.location/);
   assert.match(server,/rows\.filter\(\(row\)=>canonicalSiteName\(row\.site\)===canonicalSiteName\(scopedSite\)\)/);
   assert.match(server,/A location must be assigned before this MIS user can verify requests/);
-  assert.match(server,/canonicalSiteName\(eligible\.rows\[0\]\.site\)!==canonicalSiteName\(misSite\)/);
+  assert.match(server,/canonicalSiteName\(existing\.site\)!==canonicalSiteName\(misSite\)/);
   assert.match(server,/This request belongs to a different location/);
   assert.match(server,/const firstTripCardImage=String\(req\.body\?\.firstTripCardImage\|\|''\)/);
   assert.match(server,/if\(!validTripCardImageDataUrl\(firstTripCardImage\)\)return res\.status\(400\)/);
   assert.match(source,/if \(!tripCardFile\) return alert\("Upload the first-trip card image\."\)/);
   assert.match(source,/First trip card image \*[\s\S]*name="firstTripCardImage"[\s\S]*required/);
+  assert.match(source,/const submitLock = useRef\(false\)/);
+  assert.match(source,/if \(submitLock\.current\) return/);
+  assert.match(source,/await onSave\(\{firstTripDone/);
+  assert.match(source,/submitting \? "Verifying…" : "Verify request"/);
   assert.match(source,/showClosedBy && workflowHeader\("closedBy", "Closed by"\)/);
   assert.match(source,/showClosedBy && <td>\{row\.closedBy \|\| "—"\}<\/td>/);
   assert.match(source,/showTripCard && workflowHeader\("tripCard", "Trip card image"\)/);

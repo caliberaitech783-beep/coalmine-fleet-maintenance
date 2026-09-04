@@ -32,3 +32,15 @@ test("MIS verification responds before report and notification side effects", ()
   assert.match(verifyRoute, /was verified, but its notification recipients could not be resolved/);
   assert.doesNotMatch(verifyRoute, /await sendRequestEventReports\('verified'/);
 });
+
+test("MIS verification is idempotent across mobile retries and concurrent submissions", () => {
+  const verifyRoute = server.slice(
+    server.indexOf("app.patch('/api/requests/:reference/verify'"),
+    server.indexOf("app.get('/api/requests/:reference/trip-card'"),
+  );
+
+  assert.match(verifyRoute, /if\(existing\.verifiedAt\)return res\.json\(existing\)/);
+  assert.match(verifyRoute, /retryRows\[0\]\?\.verifiedAt[\s\S]*return res\.json\(retryRows\[0\]\)/);
+  assert.match(verifyRoute, /canonicalSiteName\(existing\.site\)!==canonicalSiteName\(misSite\)/);
+  assert.match(verifyRoute, /existing\.status!=='Closed'/);
+});

@@ -6560,6 +6560,8 @@ function VerifyRequestForm({ request, close, onSave }) {
   const [firstTripDone, setFirstTripDone] = useState(false);
   const [tripCardFile, setTripCardFile] = useState(null);
   const [tripCardPreview, setTripCardPreview] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
   const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -6570,13 +6572,23 @@ function VerifyRequestForm({ request, close, onSave }) {
   return <Modal title={`Verify closed request ${request.ref}`} close={close}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
+      if (submitLock.current) return;
       const form = new FormData(event.currentTarget);
       if (!tripCardFile) return alert("Upload the first-trip card image.");
       if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
         return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
-      const firstTripCardImage = tripCardFile ? await fileAsDataUrl(tripCardFile) : "";
-      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim()});
+      submitLock.current = true;
+      setSubmitting(true);
+      try {
+        const firstTripCardImage = await fileAsDataUrl(tripCardFile);
+        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim()});
+      } catch (error) {
+        alert(error?.message || "Could not verify this request. Please try again.");
+      } finally {
+        submitLock.current = false;
+        setSubmitting(false);
+      }
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
@@ -6605,7 +6617,7 @@ function VerifyRequestForm({ request, close, onSave }) {
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Verify request <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={close} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -6940,7 +6952,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
   const saveEdit = async (payload) => { try { await onUpdateRequest(payload.ref, payload); setEditing(null); } catch (error) { alert(error.message); } };
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
-  const verifyRequest = async (payload) => { try { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); } catch (error) { alert(error.message); } };
+  const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const requestRows=requests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
   const activeRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
@@ -7207,8 +7219,17 @@ function App() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
         body: JSON.stringify(payload),
       });
-      const saved = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(saved.error || "Could not update request");
+      const responseText = await response.text();
+      let saved = {};
+      try { saved = responseText ? JSON.parse(responseText) : {}; } catch {}
+      if (!response.ok) {
+        const fallback = response.status === 413
+          ? "The uploaded file is too large. Choose a smaller file and try again."
+          : response.status === 403 && !saved.error
+            ? "The update was blocked before reaching the application. Refresh, choose a smaller image, and try again."
+            : "Could not update request";
+        throw new Error(saved.error || fallback);
+      }
       setRequests((current) => current.map((row) => row.ref === reference ? saved : row));
       return saved;
     },

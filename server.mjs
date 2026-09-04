@@ -2218,13 +2218,22 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const misUser=await currentUserRecord(req.session);
     const misSite=String(misUser.site||misUser.location||'').trim();
     if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
-    const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status='Closed' AND verified_at IS NULL`,[reference]);
-    if(!eligible.rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
-    if(canonicalSiteName(eligible.rows[0].site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
+    const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
+    const existing=existingRows[0];
+    if(canonicalSiteName(existing.site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
+    if(existing.status!=='Closed')return res.status(409).json({error:'Only closed requests can be verified.'});
+    // Mobile browsers can retry a slow image upload after the first request has
+    // already committed. Return the saved row so that retry is idempotent.
+    if(existing.verifiedAt)return res.json(existing);
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
       first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL
       RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference]);
-    if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
+    if(!rows.length){
+      const {rows:retryRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+      if(retryRows[0]?.verifiedAt&&canonicalSiteName(retryRows[0].site)===canonicalSiteName(misSite))return res.json(retryRows[0]);
+      return res.status(409).json({error:'This request could not be verified because its status changed. Refresh and try again.'});
+    }
     res.json(rows[0]);
     void sendRequestEventReports('verified',rows[0]);
     void (async()=>{

@@ -35,6 +35,8 @@ test('the server parses text/plain bodies as JSON and the UI routes API calls th
   assert.deepEqual(JSON_BODY_CONTENT_TYPES,['application/json','text/plain']);
   assert.match(server,/express\.json\(\{limit:'20mb',type:JSON_BODY_CONTENT_TYPES\}\)/);
   assert.match(ui,/requestInit = edgeSafeJsonInit\(requestInit\)/);
+  assert.match(ui,/response\.status === 403 && !saved\.error[\s\S]*blocked before reaching the application/);
+  assert.match(ui,/response\.status === 413[\s\S]*uploaded file is too large/);
 });
 
 test('the request edit form sends only the fields the edit route reads',()=>{
