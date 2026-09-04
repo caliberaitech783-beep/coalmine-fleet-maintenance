@@ -50,7 +50,17 @@ test("request edit captures opening KMR/HMR evidence but leaves closing evidence
   assert.match(server, /closing_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.get\('\/api\/requests\/:reference\/meter-file'/);
   assert.match(server, /opening_meter_reading=\$11/);
-  assert.match(server, /closing_meter_reading=\$6,closing_meter_file=\$7/);
+  assert.match(server, /closing_meter_reading=\$6 WHERE reference=\$7/);
+});
+
+test("MIS verification requires the closing reading without a closing meter file", () => {
+  const verifyForm = source.slice(source.indexOf("function VerifyRequestForm"), source.indexOf("const ticketCategories"));
+  const verifyRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference/verify'"), server.indexOf("app.get('/api/requests/:reference/trip-card'"));
+
+  assert.match(verifyForm, /name="closingMeterReading"[\s\S]*required/);
+  assert.doesNotMatch(verifyForm, /closingMeterFile|Closing \{request\.meterType \|\| "KMR\/HMR"\} file/);
+  assert.doesNotMatch(verifyRoute, /closingMeterFile|validMeterEvidenceDataUrl|closing_meter_file=/);
+  assert.match(verifyRoute, /closing_meter_reading=\$6 WHERE reference=\$7/);
 });
 
 test("request edit validates opening evidence and does not modify closing evidence", () => {

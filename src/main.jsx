@@ -6555,7 +6555,6 @@ function VerifyRequestForm({ request, close, onSave }) {
   const today = requestStartParts("");
   const [firstTripDone, setFirstTripDone] = useState(false);
   const [tripCardFile, setTripCardFile] = useState(null);
-  const [closingMeterFile, setClosingMeterFile] = useState(null);
   const [tripCardPreview, setTripCardPreview] = useState("");
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
   const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
@@ -6573,9 +6572,7 @@ function VerifyRequestForm({ request, close, onSave }) {
         return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
       const firstTripCardImage = tripCardFile ? await fileAsDataUrl(tripCardFile) : "";
-      const closingMeterEvidence = await readMeterEvidence(closingMeterFile).catch((error) => { alert(error.message); return ""; });
-      if (!closingMeterEvidence) return;
-      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim(), closingMeterFile: closingMeterEvidence, closingMeterFileName: closingMeterFile?.name || ""});
+      onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim()});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
@@ -6593,10 +6590,6 @@ function VerifyRequestForm({ request, close, onSave }) {
           <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
         </>}
         <label>Closing {request.meterType || "KMR/HMR"} reading *<input name="closingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required placeholder={`Enter closing ${request.meterType || "KMR/HMR"}`} /></label>
-        <label>Closing {request.meterType || "KMR/HMR"} file *
-          <input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required onChange={(event) => setClosingMeterFile(event.target.files?.[0] || null)} />
-          <small>{closingMeterFile ? `${closingMeterFile.name} · ${(closingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>
-        </label>
         <label className="full">First trip card image *
           <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
             const file = event.target.files?.[0] || null;

@@ -2209,12 +2209,9 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const firstTripAt=firstTripDone?requestDateTimeValue(req.body?.firstTripDate,req.body?.firstTripTime):null;
     const firstTripCardImage=String(req.body?.firstTripCardImage||'');
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
-    const closingMeterFile=String(req.body?.closingMeterFile||'');
-    const closingMeterFileName=String(req.body?.closingMeterFileName||'').trim().slice(0,255);
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
     if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     if(!validMeterReading(closingMeterReading))return res.status(400).json({error:'Enter a valid closing KMR/HMR reading.'});
-    if(!validMeterEvidenceDataUrl(closingMeterFile))return res.status(400).json({error:'Upload a closing KMR/HMR JPEG, PNG, WebP, or PDF up to 5 MB.'});
     const misUser=await currentUserRecord(req.session);
     const misSite=String(misUser.site||misUser.location||'').trim();
     if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
@@ -2222,8 +2219,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(!eligible.rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     if(canonicalSiteName(eligible.rows[0].site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6,closing_meter_file=$7,closing_meter_file_name=$8 WHERE reference=$9 AND status='Closed' AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,closingMeterFile,closingMeterFileName,reference]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference]);
     if(!rows.length)return res.status(409).json({error:'Only unverified closed requests can be verified.'});
     await sendRequestEventReports('verified',rows[0]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
