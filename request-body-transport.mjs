@@ -5,6 +5,10 @@
  * text/plain are not size-checked, so large JSON payloads (meter evidence,
  * trip cards, complaint audio, CSV imports) travel as text/plain and the
  * server parses them as JSON.
+ *
+ * Measured against https://bdms.cmll.in on 2026-09-04: JSON and multipart
+ * bodies of 129 KB and above returned an HTML 403 from the edge, 127 KB and
+ * below reached the app, and text/plain bodies of 200 KB reached the app.
  */
 export const EDGE_INSPECTED_BODY_LIMIT_BYTES = 128 * 1024;
 export const LARGE_JSON_BODY_THRESHOLD_BYTES = 100 * 1024;
