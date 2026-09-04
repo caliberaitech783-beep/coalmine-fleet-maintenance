@@ -36,6 +36,7 @@ import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAl
 import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
+import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {
@@ -176,6 +177,9 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
       headers.set("X-BDMS-Device-ID", clientDeviceId);
       requestInit = {...init, headers};
     }
+    // The edge firewall rejects JSON bodies above 128 KB with an HTML 403, so
+    // oversized payloads (meter evidence, trip cards, audio) go as text/plain.
+    if (url.startsWith("/api/")) requestInit = edgeSafeJsonInit(requestInit);
     const response = await nativeFetch(input, requestInit);
     if (response.status === 401 && authToken && url.startsWith("/api/") && !url.startsWith("/api/login")) {
       clearStoredSession();
@@ -6459,7 +6463,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
       if (!request.openingMeterFileUploaded && !openingMeterFile) return alert(`Upload an opening ${meterType} evidence file.`);
       const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
       if (openingMeterFile && !openingMeterEvidence) return;
-      onSave({...request, equipment: form.get("equipment"), door: form.get("door"), chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), start: `${form.get("date")} · ${form.get("time")}`, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      onSave({ref: request.ref, equipment: form.get("equipment"), door: form.get("door"), reg: request.reg || "", chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), start: `${form.get("date")} · ${form.get("time")}`, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
     }}>
       <div className="formgrid">
         <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>

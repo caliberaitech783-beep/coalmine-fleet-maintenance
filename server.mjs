@@ -13,6 +13,7 @@ import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {accessAllows,managerRoleSelection} from './admin-access.mjs';
+import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
 import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleEquipmentTransfers,oracleHealth} from './oracle-db.mjs';
@@ -518,7 +519,9 @@ async function migrate(){
   }finally{client.release()}
 }
 
-app.use(express.json({limit:'20mb'}));
+// Large JSON payloads arrive as text/plain: the edge firewall rejects inspected
+// bodies above 128 KB, see request-body-transport.mjs.
+app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
 
 app.use((req,res,next)=>{
   const auditable=['POST','PUT','PATCH','DELETE'].includes(req.method)&&req.path!=='/api/notifications/read';
