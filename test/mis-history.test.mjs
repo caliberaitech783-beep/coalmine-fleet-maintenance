@@ -10,6 +10,15 @@ test("MIS request queue hides the specified closers without changing records", (
   assert.equal(visibleInMisRequests({status: "Closed", closedBy: "Other", owner: "Anoop Paul", verifiedBy: "Damini Rai"}), true);
 });
 
+test("MIS request queue hides only the specified request reference", () => {
+  const row = Object.freeze({status: "Closed", ref: " REQ-1787759984730 ", closedBy: "Other"});
+  assert.equal(visibleInMisRequests(row), false);
+  assert.equal(visibleInMisRequests({...row, ref: "REQ-1787759984731"}), true);
+  assert.equal(visibleInMisRequests({status: "Closed", reference: "REQ-1787759984730", closedBy: "Other"}), false);
+  assert.equal(visibleInMisRequests({...row, status: "Open"}), true);
+  assert.equal(row.ref, " REQ-1787759984730 ");
+});
+
 test("MIS history hides either specified closer or verifier independently", () => {
   for (const closedBy of ["maimaintenance manager", "Sanskar Manohare", " SANSKAR MANOHARE "]) {
     assert.equal(visibleInMisHistory(Object.freeze({status: "Closed", closedBy, verifiedBy: "Other"})), false);
