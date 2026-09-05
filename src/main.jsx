@@ -124,6 +124,7 @@ import "./report-schedule-polish.css";
 import "./reports-workspace.css";
 import "./meta-whatsapp-setup.css";
 import "./mobile-compat.css";
+import "./username-help.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -307,6 +308,7 @@ function Login({ onLogin, theme, toggleTheme }) {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const usernameHelp = useRef(null);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
   const [passwordChange, setPasswordChange] = useState(null);
@@ -518,7 +520,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <div className="single-login-note"><ShieldCheck /><span><b>One secure login</b><small>Your workspace and permissions are assigned by your administrator.</small></span></div>
           <label className="login-label" htmlFor="login-username">User name</label>
           <div className="login-input">
-            <User aria-hidden="true" />
+            <button type="button" className="password-toggle" aria-label="User creation and login help" aria-haspopup="dialog" title="User creation and login help" onClick={() => usernameHelp.current?.showModal()}><User aria-hidden="true" /></button>
             <input id="login-username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
@@ -573,6 +575,16 @@ function Login({ onLogin, theme, toggleTheme }) {
           <p className="login-help">Having trouble signing in? Contact your site administrator.</p>
         </form>}
       </main>
+      <dialog ref={usernameHelp} className="username-help-dialog" aria-labelledby="username-help-title" onClick={(event) => { if (event.target === event.currentTarget) usernameHelp.current.close(); }}>
+        <h2 id="username-help-title">User creation and login</h2>
+        <h3>Creating an account</h3>
+        <p>Contact your Admin or Super Admin to create your account in Users &amp; employees. Provide your full name, a unique username, registered mobile number and work site. Your administrator assigns your role and access.</p>
+        <p>Usernames must be unique. For example, if “sanskar” already exists, choose a different username such as “sanskar m”. Capital letters and spaces at the beginning or end do not make a username different.</p>
+        <h3>Signing in</h3>
+        <p>Enter the username and password assigned to you, then select Sign in. Complete the password change if prompted on your first login.</p>
+        <p>If you forget your username or need password assistance, contact your site administrator.</p>
+        <button type="button" className="primary" autoFocus onClick={() => usernameHelp.current.close()}>Got it</button>
+      </dialog>
     </div>
   );
 }
