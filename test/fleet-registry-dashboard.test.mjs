@@ -18,7 +18,7 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /openAssetDrilldown\(slice\.key\)/);
   assert.match(source, /fleetRegionInsights\.map/);
   assert.match(source, /region\.sites\.map/);
-  assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
+  assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /key\.startsWith\("site:"\)/);
   assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-pie-chart\s*\{/);
@@ -40,17 +40,17 @@ test("equipment intelligence offers a remembered combined hierarchical chart and
 });
 
 test("total fleet renders a region-grouped site count graph", () => {
-  assert.match(source, /aria-label="Total fleet by region and site graph"/);
+  assert.match(source, /data-mode=\{fleetChartMode\}/);
   assert.match(source, /const fleetChartAxisMax =/);
   assert.match(source, /fleetChartTicks\.map/);
   assert.match(source, /fleetRegionInsights\.map\(\(region\) => <section/);
   assert.match(source, /region\.sites\.map\(\(site\) => <button/);
-  assert.match(source, /site\.equipment \/ fleetChartAxisMax/);
-  assert.match(source, /site\.vehicles \/ fleetChartAxisMax/);
+  assert.match(source, /count \/ fleetChartAxisMax/);
+  assert.match(source, /site\.offroad\[category\]/);
   assert.match(source, /className="mine-fleet-site-bars"/);
-  assert.match(source, /className="mine-fleet-chart-total"/);
+  assert.match(source, /className="mine-fleet-mode"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
-  assert.match(source, /<span>Total Fleet<\/span>/);
+  assert.match(source, /aria-label="Fleet chart view"/);
   assert.match(css, /\.mine-fleet-chart-total\s*\{[\s\S]*justify-self:\s*center;[\s\S]*border-radius:\s*999px;[\s\S]*linear-gradient\(135deg, #e53f86, #7138b7\)[\s\S]*color:\s*#fff;[\s\S]*font:\s*900 22px/);
   assert.match(css, /\.mine-fleet-chart-total-trigger\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset:\s*0;[\s\S]*background:\s*transparent;/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
@@ -58,8 +58,8 @@ test("total fleet renders a region-grouped site count graph", () => {
 
 test("each fleet site uses separate Caliber red equipment and purple vehicle bars with counts", () => {
   assert.match(source, /className="mine-fleet-site-bars"/);
-  assert.match(source, /site\.equipment\.toLocaleString\(\)/);
-  assert.match(source, /site\.vehicles\.toLocaleString\(\)/);
+  assert.match(source, /count\.toLocaleString\(\)/);
+  assert.match(source, /site\.offroad\[category\]/);
   assert.match(css, /\.mine-fleet-site-bars > i\.equipment\s*\{\s*background:\s*linear-gradient\([^}]*var\(--brand-red\)/);
   assert.match(css, /\.mine-fleet-site-bars > i\.vehicles\s*\{\s*background:\s*linear-gradient\([^}]*var\(--brand-purple\)/);
 });
@@ -97,9 +97,8 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mine-breakdown-trend-body\s*\{\s*grid-template-columns:\s*1fr/);
 });
 
-test("the region and site graph panel is titled only Total Fleet", () => {
-  assert.match(source, /<header><div><h2>Total Fleet<\/h2><\/div><strong className="mine-fleet-chart-total"/);
-  assert.match(source, /className="mine-fleet-chart-total-trigger" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
-  assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);
-  assert.doesNotMatch(source, /Region-wise site distribution with total fleet count/);
+test("the chart uses a Total and Breakdown toggle without the left axis", () => {
+  assert.match(source, /aria-label="Fleet chart view"/);
+  assert.doesNotMatch(source, /className="mine-fleet-chart-y"/);
+  assert.match(source, /fleetChartMode !== mode/);
 });

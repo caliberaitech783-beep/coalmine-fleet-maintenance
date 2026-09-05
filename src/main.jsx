@@ -943,6 +943,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const [breakdownTrendView, setBreakdownTrendView] = useState("both");
   const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState("");
+  const [fleetChartMode, setFleetChartMode] = useState("total");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
@@ -1057,10 +1058,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         .filter((site) => dashboardSite === "all" || site === dashboardSite)
         .map((site) => {
           const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
-          return { name: site, ...fleetAssetCounts(records) };
+          return { name: site, ...fleetAssetCounts(records), offroad: fleetAssetCounts(records.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === "offroad")) };
         });
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
-      return { ...region, sites, ...fleetAssetCounts(records) };
+      return { ...region, sites, ...fleetAssetCounts(records), offroad: fleetAssetCounts(records.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === "offroad")) };
     });
   const maxFleetSiteTotal = Math.max(1, ...fleetRegionInsights.flatMap((region) => region.sites.map((site) => site.total)));
   const fleetChartAxisMax = Math.max(10, Math.ceil(maxFleetSiteTotal / 10) * 10);
@@ -1130,6 +1131,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const region = availableRegions.find((item) => item.code === key.slice(7));
       return region ? visibleEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))) : [];
     }
+    if (key.startsWith("offroad-site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(13)) && liveEquipmentRoadStatus(record, visibleBreakdowns) === "offroad");
     if (key.startsWith("site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(5)));
     if (key.startsWith("group:")) return visibleEquipment.filter((record) => equipmentGroupLabel(record) === key.slice(6));
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
@@ -1185,7 +1187,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
-  const assetDrilldownTitle = assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
+  const assetDrilldownTitle = assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
     setAssetDrilldownRegion("");
@@ -1207,17 +1209,19 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
-        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} aria-label="Total fleet by region and site graph">
-          <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{equipmentLoaded?assetCounts.total.toLocaleString():"—"} <span>Total Fleet</span><button type="button" className="mine-fleet-chart-total-trigger" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")} disabled={!equipmentLoaded} /></strong><div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div></header>
+        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${fleetChartMode === "total" ? "Total fleet" : "Off-road fleet"} by region and site graph`}>
+          <header><div /><div className="mine-fleet-mode" role="group" aria-label="Fleet chart view">{[["total","Total"],["breakdown","Breakdown"]].map(([mode,label]) => <button type="button" key={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : fleetRegionInsights.reduce((sum,region) => sum + region.offroad.total,0)).toLocaleString() : "—"}</b></button>)}</div><div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div></header>
           {equipmentLoaded?<><div className="mine-fleet-chart-layout">
-            <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
               <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length) }} aria-label={`${region.code} fleet sites`}>
-                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`site:${site.name}`)} aria-label={`${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`} title={`${site.name}: ${site.equipment} equipment, ${site.vehicles} vehicles`}>
-                  <span className="mine-fleet-site-bars"><i className="equipment" style={{ height: `${site.equipment ? Math.max(3, (site.equipment / fleetChartAxisMax) * 100) : 1}%` }}><b>{site.equipment.toLocaleString()}</b></i><i className="vehicles" style={{ height: `${site.vehicles ? Math.max(3, (site.vehicles / fleetChartAxisMax) * 100) : 1}%` }}><b>{site.vehicles.toLocaleString()}</b></i></span><small>{site.name}</small>
+                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`)} aria-label={`${site.name}: ${(fleetChartMode === "total" ? site.equipment : site.offroad.equipment)} equipment and ${(fleetChartMode === "total" ? site.vehicles : site.offroad.vehicles)} vehicles`} title={`${site.name}: ${(fleetChartMode === "total" ? site.equipment : site.offroad.equipment)} equipment, ${(fleetChartMode === "total" ? site.vehicles : site.offroad.vehicles)} vehicles`}>
+                  <span className="mine-fleet-site-bars">{["total","breakdown"].flatMap((mode) => ["equipment","vehicles"].map((category) => {
+                    const count = mode === "total" ? site[category] : site.offroad[category];
+                    return <i key={`${mode}-${category}`} className={`${category} ${mode}${fleetChartMode !== mode ? " fleet-muted" : ""}`} aria-hidden={fleetChartMode !== mode} style={{height:`${count ? Math.max(3,count / fleetChartAxisMax * 100) : 1}%`}}>{fleetChartMode === mode && <b>{count.toLocaleString()}</b>}</i>;
+                  }))}</span><small>{site.name}</small>
                 </button>)}</div>
-                <footer><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
+                <footer><b>{region.code}</b><span>{(fleetChartMode === "total" ? region.total : region.offroad.total).toLocaleString()} {fleetChartMode === "total" ? "fleet" : "off road"}</span></footer>
               </section>)}</div>
             </div>
           </div>

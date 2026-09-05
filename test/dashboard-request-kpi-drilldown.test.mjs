@@ -7,7 +7,7 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 test("operational dashboard graphs open category, group, lifecycle, and full-detail drilldowns", () => {
   assert.match(source, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
-  assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)/);
+  assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /key: `group:\$\{group\.label\}`/);
   assert.match(source, /openAssetDrilldown\(`event:\$\{item\.key\}`\)/);
   assert.match(source, /openAssetDrilldown\(`event:\$\{event\}:\$\{day\.date\}`\)/);

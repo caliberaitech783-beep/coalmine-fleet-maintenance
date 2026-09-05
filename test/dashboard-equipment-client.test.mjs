@@ -39,7 +39,7 @@ test("fleet panels distinguish loading and failure from a confirmed empty fleet"
   assert.match(state,/Fleet data is unavailable/);
   assert.match(state,/Loading fleet data/);
   assert.match(state,/onClick=\{retry\}/);
-  assert.match(dashboard,/equipmentLoaded\?assetCounts\.total\.toLocaleString\(\):"—"/);
+  assert.match(dashboard,/equipmentLoaded \? \(mode === "total" \? assetCounts.total[\s\S]*?toLocaleString\(\) : "—"/);
   assert.match(dashboard,/equipmentLoaded\?roadStatusTotal\.toLocaleString\(\):"—"/);
   assert.match(dashboard,/equipmentLoaded\?kpis\.total\.toLocaleString\(\):"—"/);
   assert.ok((dashboard.match(/<FleetDataState /g)||[]).length>=4);

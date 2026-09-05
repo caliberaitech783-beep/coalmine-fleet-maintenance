@@ -839,6 +839,16 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-chart-sites button:hover .mine-fleet-site-bars,.mine-fleet-chart-sites button:focus-visible .mine-fleet-site-bars { outline: 2px solid #315fd455; outline-offset: 3px; }
 .mine-fleet-chart-sites button:focus-visible { outline: 0; }
 .mine-fleet-chart-sites small { align-self: start; width: 100%; padding: 0 3px; overflow: hidden; color: var(--mine-text); font-size: 11px; font-weight: 800; line-height: 1.15; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.mine-fleet-region-chart .mine-fleet-chart-layout { grid-template-columns: minmax(0, 1fr); }
+.mine-fleet-region-chart[data-mode="breakdown"] .mine-fleet-chart-legend i.equipment { background:#d97706; }
+.mine-fleet-region-chart[data-mode="breakdown"] .mine-fleet-chart-legend i.vehicles { background:#0891b2; }
+.mine-fleet-mode { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; justify-self:center; }
+.mine-fleet-mode button { border:1px solid #b9b0cb; border-radius:20px; padding:8px 14px; background:transparent; color:var(--ink); }
+.mine-fleet-mode button[aria-pressed="true"] { background:linear-gradient(100deg,#dc388e,#7939b0);color:white; }
+.mine-fleet-mode b { margin-left:6px; }
+.mine-fleet-site-bars > i.fleet-muted { opacity:.15; pointer-events:none; }
+.mine-fleet-site-bars > i.breakdown.equipment, .mine-fleet-site-bars > i.breakdown.equipment > b { background:#d97706; }
+.mine-fleet-site-bars > i.breakdown.vehicles, .mine-fleet-site-bars > i.breakdown.vehicles > b { background:#0891b2; }
 .mine-fleet-site-bars { display: flex; align-items: end; justify-content: center; gap: 6px; width: 100%; height: calc(100% - 20px); }
 .mine-fleet-site-bars > i { position: relative; display: block; width: 23px; min-height: 2px; border-radius: 4px 4px 1px 1px; transition: height .25s ease; }
 .mine-fleet-site-bars > i.equipment { background: linear-gradient(180deg, #f4777b, var(--brand-red)); }
