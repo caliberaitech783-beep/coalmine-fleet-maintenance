@@ -7641,8 +7641,6 @@ function App() {
     setBreakdownFleetSites([]);
     setActiveReportCategory("general");
     setProfileLocation("");
-    setProfileManagerRegions([]);
-    setProfileManagerSites([]);
     setSession(nextSession);
   };
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;

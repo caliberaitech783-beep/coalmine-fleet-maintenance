@@ -15,10 +15,10 @@ test("every successful login resets the application to Dashboard", () => {
   assert.match(completeLogin, /pageHistory\.current = \[LOGIN_LANDING_PAGE\]/);
   assert.match(completeLogin, /setCanGoBack\(false\)/);
   assert.match(completeLogin, /setProfileLocation\(""\)/);
-  assert.match(completeLogin, /setProfileManagerRegions\(\[\]\)/);
-  assert.match(completeLogin, /setProfileManagerSites\(\[\]\)/);
   assert.match(completeLogin, /setSession\(nextSession\)/);
   assert.match(source, /<Login onLogin=\{completeLogin\}/);
+  assert.match(source, /const \[profileLocation, setProfileLocation\] = useState\(""\)/);
+  assert.doesNotMatch(source, /setProfileManagerRegions|setProfileManagerSites/);
 });
 
 test("normal user login starts on its dashboard section", () => {
