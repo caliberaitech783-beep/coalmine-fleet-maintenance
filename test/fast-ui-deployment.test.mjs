@@ -11,7 +11,8 @@ test("UI-only commits use the fast lane while protected changes retain staging",
   assert.match(fast, /src\/\*\|public\/\*\|index\.html/);
   assert.match(fast, /\*\) eligible=false/);
   assert.match(fast, /if: needs\.classify\.outputs\.eligible == 'true'/);
-  assert.match(fast, /group: coalmine-fleet-fast-ui-production/);
+  assert.doesNotMatch(fast, /^concurrency:/m);
+  assert.match(fast, /  deploy:[\s\S]*    concurrency:[\s\S]*group: coalmine-fleet-production/);
   assert.match(full, /group: coalmine-fleet-production/);
 });
 

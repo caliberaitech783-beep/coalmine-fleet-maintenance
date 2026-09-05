@@ -15,12 +15,6 @@ permissions:
   contents: read
   id-token: write
 
-concurrency:
-  # Classification may run beside the full workflow for mixed commits. Its own
-  # queue prevents GitHub from cancelling the required staging deployment.
-  group: coalmine-fleet-fast-ui-production
-  cancel-in-progress: false
-
 env:
   AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
   AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
@@ -149,6 +143,11 @@ jobs:
     if: needs.classify.outputs.eligible == 'true'
     needs: [classify, build]
     runs-on: ubuntu-latest
+    # Only a confirmed UI-only deployment takes the production lock. This lets
+    # mixed commits classify and skip without cancelling the full safe workflow.
+    concurrency:
+      group: coalmine-fleet-production
+      cancel-in-progress: false
     permissions:
       id-token: write
       contents: read
