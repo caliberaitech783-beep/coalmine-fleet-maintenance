@@ -16,7 +16,9 @@ permissions:
   id-token: write
 
 concurrency:
-  group: coalmine-fleet-production
+  # Classification may run beside the full workflow for mixed commits. Its own
+  # queue prevents GitHub from cancelling the required staging deployment.
+  group: coalmine-fleet-fast-ui-production
   cancel-in-progress: false
 
 env:

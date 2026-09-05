@@ -11,6 +11,8 @@ test("UI-only commits use the fast lane while protected changes retain staging",
   assert.match(fast, /src\/\*\|public\/\*\|index\.html/);
   assert.match(fast, /\*\) eligible=false/);
   assert.match(fast, /if: needs\.classify\.outputs\.eligible == 'true'/);
+  assert.match(fast, /group: coalmine-fleet-fast-ui-production/);
+  assert.match(full, /group: coalmine-fleet-production/);
 });
 
 test("fast lane builds complete current and rollback packages", () => {
