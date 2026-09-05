@@ -45,7 +45,7 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /fleetChartTicks\.map/);
   assert.match(source, /fleetRegionInsights\.map\(\(region\) => <section/);
   assert.match(source, /region\.sites\.map\(\(site\) => <button/);
-  assert.match(source, /<FleetSiteBars site=\{site\} axisMax=\{fleetChartAxisMax\} breakdownOnly=\{fleetBreakdownOnly\}/);
+  assert.match(source, /<FleetSiteBars site=\{site\} axisMax=\{fleetChartAxisMax\} showBreakdown=\{showFleetBreakdowns\}/);
   assert.match(source, /className="mine-fleet-chart-toggle"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
   assert.match(source, /<h2>Total Fleet<\/h2>/);
@@ -56,7 +56,8 @@ test("each fleet site includes breakdowns in its equipment and vehicle bars", ()
   assert.match(source, /fleetChartCounts\(records, visibleBreakdowns\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background:\s*var\(--fleet-breakdown\)/);
-  assert.match(css, /\.mine-fleet-bar\.breakdown-only\s*\{\s*background:\s*var\(--fleet-breakdown\)/);
+  assert.match(css, /--fleet-equipment: var\(--brand-red\)/);
+  assert.match(css, /--fleet-vehicles: var\(--brand-purple\)/);
 });
 
 test("Total Fleet provides a persistent Caliber watermark option", () => {

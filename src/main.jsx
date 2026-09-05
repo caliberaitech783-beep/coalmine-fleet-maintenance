@@ -1065,7 +1065,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
       return { ...region, sites, ...fleetChartCounts(records, visibleBreakdowns) };
     });
-  const fleetBreakdownOnly = fleetChartMode === "breakdown";
+  const showFleetBreakdowns = fleetChartMode === "breakdown";
   const maxFleetSiteTotal = Math.max(1, ...fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])));
   const fleetChartAxisMax = Math.max(10, Math.ceil(maxFleetSiteTotal / 10) * 10);
   const fleetChartTicks = [100, 75, 50, 25, 0].map((percent) => Math.round((fleetChartAxisMax * percent) / 100));
@@ -1212,7 +1212,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
-        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${fleetBreakdownOnly ? "Off-road fleet" : "Total fleet"} by region and site graph`}>
+        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
           <header>
             <div className="mine-fleet-chart-heading">
               <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")}><h2>Total Fleet</h2></button>
@@ -1220,16 +1220,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : fleetRegionInsights.reduce((sum, region) => sum + region.breakdown.total, 0)).toLocaleString() : "—"}</b></button>)}
               </div>
             </div>
-            <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span>{!fleetBreakdownOnly && <i className="equipment" />}Equipment</span><span>{!fleetBreakdownOnly && <i className="vehicles" />}Vehicles</span><span><i className="breakdown" />Breakdown</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
+            <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
-          {equipmentLoaded?<><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={fleetBreakdownOnly ? "Breakdown fleet by region and site" : "Total fleet with breakdowns included at the bottom of each bar"}>
+          {equipmentLoaded?<><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
               <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
-                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`)} aria-label={fleetBreakdownOnly ? `${site.name}: ${site.breakdown.equipment} equipment and ${site.breakdown.vehicles} vehicles in breakdown` : `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)`}>
-                  <FleetSiteBars site={site} axisMax={fleetChartAxisMax} breakdownOnly={fleetBreakdownOnly} /><small>{site.name}</small>
+                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`)} aria-label={showFleetBreakdowns ? `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)` : `${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`}>
+                  <FleetSiteBars site={site} axisMax={fleetChartAxisMax} showBreakdown={showFleetBreakdowns} /><small>{site.name}</small>
                 </button>)}</div>
-                <footer><b>{region.code}</b><span>{fleetBreakdownOnly ? `${region.breakdown.total.toLocaleString()} off road` : `${region.total.toLocaleString()} fleet`}</span></footer>
+                <footer><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
               </section>)}</div>
             </div>
           </div>
