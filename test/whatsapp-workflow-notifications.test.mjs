@@ -4,8 +4,8 @@ import fs from 'node:fs';
 
 const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 
-test('all server WhatsApp delivery is paused until the hierarchy is configured',()=>{
-  assert.match(server,/const WHATSAPP_DELIVERY_PAUSED=true;/);
+test('server WhatsApp delivery is enabled through the shared runtime switch',()=>{
+  assert.match(server,/const WHATSAPP_DELIVERY_PAUSED=false;/);
   assert.match(server,/META_WHATSAPP_DELIVERY_PAUSED:String\(WHATSAPP_DELIVERY_PAUSED\)/);
   assert.match(server,/return \{\.\.\.process\.env,META_WHATSAPP_DELIVERY_PAUSED:String\(WHATSAPP_DELIVERY_PAUSED\)\}/);
 });

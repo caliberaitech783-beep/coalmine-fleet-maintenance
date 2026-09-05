@@ -67,6 +67,16 @@ export async function metaWhatsAppStatus(options={}){
     qualityRating:details.quality_rating||''};
 }
 
+export async function registerMetaWhatsAppPhone({pin},{env=process.env,fetchImpl=fetch}={}){
+  const config=metaWhatsAppConfiguration(env);
+  const verificationPin=clean(pin);
+  if(!/^\d{6}$/.test(verificationPin))throw new Error('A valid six-digit Meta two-step verification PIN is required.');
+  const details=await metaRequest(`${config.phoneNumberId}/register`,{method:'POST',env,fetchImpl,body:{
+    messaging_product:'whatsapp',pin:verificationPin,
+  }});
+  return {registered:details.success===true,phoneNumberId:config.phoneNumberId};
+}
+
 export async function sendMetaWhatsAppText({to,message},{env=process.env,fetchImpl=fetch}={}){
   assertDeliveryActive(env);
   const config=metaWhatsAppConfiguration(env);

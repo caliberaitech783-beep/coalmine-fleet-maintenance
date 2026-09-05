@@ -23,7 +23,7 @@ import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
-import {metaWhatsAppStatus,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
+import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
@@ -58,7 +58,7 @@ const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Ko
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
-const WHATSAPP_DELIVERY_PAUSED=true;
+const WHATSAPP_DELIVERY_PAUSED=false;
 const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
 const AUDIT_REASON_HEADER='x-audit-reason';
 const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
@@ -1057,6 +1057,12 @@ app.get('/api/whatsapp/status',requireSuper,async(_req,res)=>{
 
 app.get('/api/whatsapp/settings',requireSuper,requireWhatsAppAdministrator,async(_req,res,next)=>{
   try{res.json(await publicWhatsAppSettings())}
+  catch(error){next(error)}
+});
+
+app.post('/api/whatsapp/register',requireSuper,requireWhatsAppAdministrator,async(req,res,next)=>{
+  req.audit={eventType:'Integration',module:'WhatsApp Integration',action:'Register Meta WhatsApp number',targetType:'WhatsApp phone number',changedFields:[]};
+  try{res.json(await registerMetaWhatsAppPhone({pin:req.body?.pin},{env:await metaWhatsAppRuntimeEnv()}))}
   catch(error){next(error)}
 });
 
