@@ -1976,7 +1976,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
-    if(req.session.role==='normal'&&(dashboardScope||req.session.assignedRole==='MIS User')){
+    if(req.session.role==='normal'&&(dashboardScope||req.session.assignedRole==='MIS User'||req.session.assignedRole==='Maintenance User')){
       const operationalUser=await currentUserRecord(req.session);
       scopedSite=String(operationalUser.site||operationalUser.location||'').trim();
     }

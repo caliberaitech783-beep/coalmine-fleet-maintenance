@@ -7044,7 +7044,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
   const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
-  const requestRows=requests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)).filter(visibleInOperationalUserRequests);
+  const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):requests;
+  const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)).filter(visibleInOperationalUserRequests);
   const activeRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
   const closedRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="closed");
   const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt).filter(visibleInMisRequests) : activeRequests;

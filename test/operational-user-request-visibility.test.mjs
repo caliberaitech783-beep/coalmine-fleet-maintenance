@@ -18,7 +18,7 @@ test("operational user workspaces hide only the two specified requests", () => {
 
 test("filter is applied once before all Production, Maintenance, and MIS user queues", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /const requestRows=requests\.map\(\(request\)=>requestWithEquipmentMasterDetails\(request,equipmentRecords\)\)\.filter\(visibleInOperationalUserRequests\);/);
+  assert.match(source, /const requestRows=siteRequests\.map\(\(request\)=>requestWithEquipmentMasterDetails\(request,equipmentRecords\)\)\.filter\(visibleInOperationalUserRequests\);/);
   assert.equal(source.split("filter(visibleInOperationalUserRequests)").length - 1, 1);
   assert.match(source, /const activeRequests=requestRows\.filter/);
   assert.match(source, /const closedRequests=requestRows\.filter/);
