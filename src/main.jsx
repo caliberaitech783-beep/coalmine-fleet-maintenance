@@ -5,6 +5,7 @@ import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import { userMasterRole } from "./user-master-role.mjs";
+import { visibleInOperationalUserRequests } from "./operational-user-request-visibility.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
@@ -6968,7 +6969,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
   const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
-  const requestRows=requests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
+  const requestRows=requests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)).filter(visibleInOperationalUserRequests);
   const activeRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
   const closedRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="closed");
   const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt).filter(visibleInMisRequests) : activeRequests;
