@@ -20,8 +20,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/showClosedBy && <td>\{row\.closedBy \|\| "—"\}<\/td>/);
   assert.match(source,/showVerifiedBy && <th>Verified by<\/th>/);
   assert.match(source,/showVerifiedBy && <td>\{row\.verifiedBy \|\| "—"\}<\/td>/);
-  assert.match(source,/rows=\{activeRequests\} showMakeModel showReason showCreatedBy showBreakdownDays/);
-  assert.match(source,/rows=\{historyRows\} showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays/);
+  assert.match(source,/rows=\{activeRequests\} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays/);
+  assert.match(source,/rows=\{historyRows\} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays/);
   assert.match(mobileStyles,/\.normal \.table \.mobile-breakdown-table th,[\s\S]*display: table-cell/);
   assert.match(source,/rows=\{activeRequests\} showMakeModel showReason showCreatedBy showComplaintAudio/);
   assert.match(source,/rows=\{activeRequests\.filter\(\(row\) => !row\.verifiedAt[\s\S]*showCreatedBy showComplaintAudio showMeterData showActions/);

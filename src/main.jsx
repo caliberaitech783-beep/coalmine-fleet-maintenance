@@ -1284,7 +1284,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, stableToolbar = false, actionsBesideSearch = true }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [dateFilter, setDateFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
@@ -1295,7 +1295,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => window.clearInterval(timer);
   }, [showBreakdownDays]);
   const columns = [
-      ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
+      ...(showReadOnlyAction ? [["requestAction", "Actions"]] : []), ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
       ...(showReason ? [["complaint", "Reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
@@ -1310,7 +1310,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
           breakdownDays: calculateBreakdownDaysFromStart(row.start, breakdownNow),
         }))
       : sourceRows,
-    filterColumns = columns.filter(([key]) => key !== "idealAction").map(([key, label]) => ({
+    filterColumns = columns.filter(([key]) => !["idealAction", "requestAction"].includes(key)).map(([key, label]) => ({
       key,
       label,
       value: (row) => {
@@ -1355,6 +1355,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
           {sortedRows.length ? (
             sortedRows.map((r) => (
               <tr key={r.ref}>
+                {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
                 <td>
                   <b>{r.ref}</b>
                 </td>
@@ -6432,7 +6433,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, showMeterData = false, showMakeModel = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showClosedBy = false, showTripCard = false, showMeterData = false, showMakeModel = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
@@ -7065,12 +7066,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
       </div>
       </div>
-      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
+      {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">MIS verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showMakeModel showReason={isMaintenance || isMis} showClosedBy showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showMakeModel showReason={isMaintenance || isMis} showClosedBy showVerifiedBy={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
       {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
