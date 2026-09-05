@@ -19,6 +19,7 @@ test("ticket media accepts supported bounded data URLs", () => {
   assert.equal(validTicketMediaDataUrl("data:audio/webm;base64,YQ==", {kind: "audio"}), true);
   assert.equal(validTicketMediaDataUrl("data:image/png;base64,YQ=="), true);
   assert.equal(validTicketMediaDataUrl("data:video/mp4;base64,YQ=="), true);
+  assert.equal(validTicketMediaDataUrl("data:video/quicktime;base64,YQ=="), true);
   assert.equal(validTicketMediaDataUrl("data:text/html;base64,YQ=="), false);
 });
 
@@ -40,7 +41,7 @@ test("ticket UI and API enforce scoped lists, admin resolution, and notification
   assert.match(source, /URL\.createObjectURL\(new Blob/);
   assert.match(source, /URL\.revokeObjectURL\(objectUrl\)/);
   assert.doesNotMatch(source, /href=\{ticket\.(?:attachmentData|resolutionAttachmentData)\}/);
-  assert.match(source, /image\/jpeg,image\/png,image\/webp,video\/mp4,video\/webm/);
+  assert.match(source, /image\/jpeg,image\/png,image\/webp,video\/mp4,video\/webm,video\/quicktime/);
   assert.match(source, /function NotificationBell/);
   assert.match(server, /CREATE TABLE IF NOT EXISTS crm_tickets/);
   assert.match(server, /resolution_audio TEXT NOT NULL DEFAULT ''/);

@@ -1350,8 +1350,8 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     const closeFilter = (event) => {
       if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
     };
-    document.addEventListener("mousedown", closeFilter);
-    return () => document.removeEventListener("mousedown", closeFilter);
+    document.addEventListener("pointerdown", closeFilter);
+    return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
     <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
@@ -1737,6 +1737,24 @@ function SortableHeader({ label, sortKey, sort, onSort }) {
     </th>
   );
 }
+function visibleViewportBounds() {
+  const viewport = window.visualViewport;
+  const left = viewport?.offsetLeft || 0;
+  const top = viewport?.offsetTop || 0;
+  const width = viewport?.width || window.innerWidth;
+  const height = viewport?.height || window.innerHeight;
+  return { left, top, width, height, right: left + width, bottom: top + height };
+}
+function observeVisibleViewport(listener) {
+  window.addEventListener("resize", listener);
+  window.visualViewport?.addEventListener("resize", listener);
+  window.visualViewport?.addEventListener("scroll", listener);
+  return () => {
+    window.removeEventListener("resize", listener);
+    window.visualViewport?.removeEventListener("resize", listener);
+    window.visualViewport?.removeEventListener("scroll", listener);
+  };
+}
 function FilterableHeader({
   label,
   sortKey,
@@ -1762,17 +1780,20 @@ function FilterableHeader({
     const positionPopover = () => {
       const bounds = triggerRef.current?.getBoundingClientRect();
       if (!bounds) return;
-      const width = Math.min(240, window.innerWidth - 24);
+      const viewport = visibleViewportBounds();
+      const width = Math.min(240, viewport.width - 24);
+      const height = Math.min(420, viewport.height - 24);
+      const below = bounds.bottom + 5;
       setPopoverPosition({
-        top: bounds.bottom + 5,
-        left: Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12)),
+        top: below + height > viewport.bottom - 12 ? Math.max(viewport.top + 12, bounds.top - height - 5) : below,
+        left: Math.max(viewport.left + 12, Math.min(bounds.left, viewport.right - width - 12)),
       });
     };
     positionPopover();
-    window.addEventListener("resize", positionPopover);
+    const stopObservingViewport = observeVisibleViewport(positionPopover);
     window.addEventListener("scroll", positionPopover, true);
     return () => {
-      window.removeEventListener("resize", positionPopover);
+      stopObservingViewport();
       window.removeEventListener("scroll", positionPopover, true);
     };
   }, [open]);
@@ -1790,7 +1811,7 @@ function FilterableHeader({
         {filterValue && <i className="column-filter-dot" aria-label="Filtered" />}
       </button>
       {open && createPortal(
-        <div className="column-filter-popover column-filter-popover-portal" style={popoverPosition} role="dialog" aria-label={`${label} filter`} onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+        <div className="column-filter-popover column-filter-popover-portal" style={popoverPosition} role="dialog" aria-label={`${label} filter`} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
           <div className="column-filter-popover-head">
             <strong>{label}</strong>
             <button type="button" className="column-filter-close" onClick={() => onToggle(sortKey)} aria-label={`Close ${label} filter`} title="Close">
@@ -1856,32 +1877,33 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
     const closeFilter = (event) => {
       if (!event.target.closest?.(".table-parameter-filter, .table-parameter-filter-popover")) setOpen(false);
     };
-    document.addEventListener("mousedown", closeFilter);
-    return () => document.removeEventListener("mousedown", closeFilter);
+    document.addEventListener("pointerdown", closeFilter);
+    return () => document.removeEventListener("pointerdown", closeFilter);
   }, [open]);
   useEffect(() => {
     if (!open) return undefined;
     const positionPopover = () => {
       const bounds = triggerRef.current?.getBoundingClientRect();
       if (!bounds) return;
-      const width = Math.min(560, window.innerWidth - 24);
-      const height = Math.min(620, window.innerHeight * 0.7);
+      const viewport = visibleViewportBounds();
+      const width = Math.min(560, viewport.width - 24);
+      const height = Math.min(620, viewport.height * 0.7);
       const top = bounds.bottom + 6;
       setPopoverPosition({
-        top: top + height > window.innerHeight - 12 ? Math.max(12, bounds.top - height - 6) : top,
-        left: Math.max(12, Math.min(bounds.left, window.innerWidth - width - 12)),
+        top: top + height > viewport.bottom - 12 ? Math.max(viewport.top + 12, bounds.top - height - 6) : top,
+        left: Math.max(viewport.left + 12, Math.min(bounds.left, viewport.right - width - 12)),
       });
     };
     positionPopover();
-    window.addEventListener("resize", positionPopover);
+    const stopObservingViewport = observeVisibleViewport(positionPopover);
     window.addEventListener("scroll", positionPopover, true);
     return () => {
-      window.removeEventListener("resize", positionPopover);
+      stopObservingViewport();
       window.removeEventListener("scroll", positionPopover, true);
     };
   }, [open, dialogMode]);
   const filterDialog = (
-    <div className={`table-parameter-filter-popover ${dialogMode ? "dialog-mode" : ""}`} style={dialogMode ? undefined : popoverPosition} role="dialog" aria-modal={dialogMode || undefined} aria-label="Filter report parameters" onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+    <div className={`table-parameter-filter-popover ${dialogMode ? "dialog-mode" : ""}`} style={dialogMode ? undefined : popoverPosition} role="dialog" aria-modal={dialogMode || undefined} aria-label="Filter report parameters" onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
       <div className="table-parameter-filter-head"><div><strong>Filter report</strong><span>Choose values to compare report records.</span></div><button type="button" onClick={() => setOpen(false)} aria-label="Close report filters" title="Close"><X /></button></div>
       <div className="table-parameter-filter-fields">
         {columns.map((column) => (
@@ -1900,7 +1922,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
         <ListFilter aria-hidden="true" /><span>{label}{activeFilterCount ? ` (${activeFilterCount})` : ""}</span>
       </button>}
       {open && createPortal(
-        dialogMode ? <div className="report-action-dialog-backdrop" onMouseDown={() => setOpen(false)}>{filterDialog}</div> : filterDialog,
+        dialogMode ? <div className="report-action-dialog-backdrop" onPointerDown={() => setOpen(false)}>{filterDialog}</div> : filterDialog,
         document.body,
       )}
     </div>
@@ -2036,21 +2058,25 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
     const closeMenu = (event) => {
       if (!event.target.closest?.(".export-menu, .export-menu-popover")) setOpen(false);
     };
-    document.addEventListener("mousedown", closeMenu);
-    return () => document.removeEventListener("mousedown", closeMenu);
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
   }, [open]);
   useEffect(() => {
     if (!open) return undefined;
     const positionMenu = () => {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
-      setPopoverPosition({ top: Math.min(window.innerHeight - 176, rect.bottom + 6), left: Math.max(12, Math.min(rect.right - 214, window.innerWidth - 226)) });
+      const viewport = visibleViewportBounds();
+      setPopoverPosition({
+        top: Math.max(viewport.top + 12, Math.min(viewport.bottom - 176, rect.bottom + 6)),
+        left: Math.max(viewport.left + 12, Math.min(rect.right - 214, viewport.right - 226)),
+      });
     };
     positionMenu();
-    window.addEventListener("resize", positionMenu);
+    const stopObservingViewport = observeVisibleViewport(positionMenu);
     window.addEventListener("scroll", positionMenu, true);
     return () => {
-      window.removeEventListener("resize", positionMenu);
+      stopObservingViewport();
       window.removeEventListener("scroll", positionMenu, true);
     };
   }, [open]);
@@ -2142,8 +2168,8 @@ function ReportColumnSelector({ columns = [], visibleColumnKeys = [], onApply, o
     });
   };
   return createPortal(
-    <div className="report-action-dialog-backdrop" onMouseDown={onClose}>
-      <section className="report-columns-dialog" role="dialog" aria-modal="true" aria-labelledby="report-columns-title" onMouseDown={(event) => event.stopPropagation()}>
+    <div className="report-action-dialog-backdrop" onPointerDown={onClose}>
+      <section className="report-columns-dialog" role="dialog" aria-modal="true" aria-labelledby="report-columns-title" onPointerDown={(event) => event.stopPropagation()}>
         <header><h2 id="report-columns-title">Select Columns</h2><button type="button" onClick={onClose} aria-label="Close column selector" title="Close"><X /></button></header>
         <div className="report-columns-body">
           <div className="report-column-list-panel">
@@ -2181,8 +2207,8 @@ function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
   const [columnKey, setColumnKey] = useState(sort.key || columns[0]?.key || "");
   const [direction, setDirection] = useState(sort.direction || "asc");
   return createPortal(
-    <div className="report-action-dialog-backdrop" onMouseDown={onClose}>
-      <section className="report-sort-dialog" role="dialog" aria-modal="true" aria-labelledby="report-sort-title" onMouseDown={(event) => event.stopPropagation()}>
+    <div className="report-action-dialog-backdrop" onPointerDown={onClose}>
+      <section className="report-sort-dialog" role="dialog" aria-modal="true" aria-labelledby="report-sort-title" onPointerDown={(event) => event.stopPropagation()}>
         <header><h2 id="report-sort-title">Sort Report</h2><button type="button" onClick={onClose} aria-label="Close sort dialog" title="Close"><X /></button></header>
         <div><label><span>Column</span><select value={columnKey} onChange={(event) => setColumnKey(event.target.value)}>{columns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select></label><label><span>Direction</span><select value={direction} onChange={(event) => setDirection(event.target.value)}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label></div>
         <footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="primary" disabled={!columnKey} onClick={() => onApply(columnKey, direction)}>Apply</button></footer>
@@ -2204,15 +2230,20 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
     const placeMenu = () => {
       const bounds = triggerRef.current?.getBoundingClientRect();
       if (!bounds) return;
-      setPosition({ top: bounds.bottom + 6, left: Math.max(12, Math.min(bounds.left, window.innerWidth - 244)) });
+      const viewport = visibleViewportBounds();
+      const below = bounds.bottom + 6;
+      setPosition({
+        top: below + 250 > viewport.bottom - 12 ? Math.max(viewport.top + 12, bounds.top - 256) : below,
+        left: Math.max(viewport.left + 12, Math.min(bounds.left, viewport.right - 244)),
+      });
     };
     placeMenu();
-    document.addEventListener("mousedown", closeMenu);
-    window.addEventListener("resize", placeMenu);
+    document.addEventListener("pointerdown", closeMenu);
+    const stopObservingViewport = observeVisibleViewport(placeMenu);
     window.addEventListener("scroll", placeMenu, true);
     return () => {
-      document.removeEventListener("mousedown", closeMenu);
-      window.removeEventListener("resize", placeMenu);
+      document.removeEventListener("pointerdown", closeMenu);
+      stopObservingViewport();
       window.removeEventListener("scroll", placeMenu, true);
     };
   }, [open]);
@@ -2281,8 +2312,8 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
     const closeFilter = (event) => {
       if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
     };
-    document.addEventListener("mousedown", closeFilter);
-    return () => document.removeEventListener("mousedown", closeFilter);
+    document.addEventListener("pointerdown", closeFilter);
+    return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   const reportTableToolbar = (
       <div className="report-table-filter-toolbar">
@@ -3035,8 +3066,8 @@ function Equipment({
     const closeFilter = (event) => {
       if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
     };
-    document.addEventListener("mousedown", closeFilter);
-    return () => document.removeEventListener("mousedown", closeFilter);
+    document.addEventListener("pointerdown", closeFilter);
+    return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   const locations = [
       ...new Set([
@@ -3508,6 +3539,7 @@ function EnhancedSpeechComplaint({
     [note, setNote] = useState(""),
     [audioData, setAudioData] = useState("");
   const recognition = useRef(null),
+    audioOnlyMode = useRef(false),
     silenceTimer = useRef(null),
     maxTimer = useRef(null),
     recorder = useRef(null),
@@ -3521,7 +3553,19 @@ function EnhancedSpeechComplaint({
     if (recorder.current?.state === "recording") recorder.current.stop();
     else mediaStream.current?.getTracks().forEach((track) => track.stop());
   };
-  const stop = () => recognition.current?.stop();
+  const finishAudioOnly = (message = "Audio recording saved. You can play it back before submitting.") => {
+    clearTimers();
+    audioOnlyMode.current = false;
+    recognition.current = null;
+    stopAudio();
+    setListening(false);
+    if (required) setText((current) => current.trim() ? current : "Details recorded in the attached audio.");
+    setNote(message);
+  };
+  const stop = () => {
+    if (recognition.current) recognition.current.stop();
+    else if (audioOnlyMode.current) finishAudioOnly();
+  };
   useEffect(() => () => {
     clearTimers();
     recognition.current?.abort?.();
@@ -3529,10 +3573,6 @@ function EnhancedSpeechComplaint({
   }, []);
   const start = async () => {
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Speech) {
-      setNote("Speech recognition requires Chrome or Edge.");
-      return;
-    }
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setNote("Audio recording is not supported here. Please use current Chrome or Edge.");
       return;
@@ -3542,14 +3582,21 @@ function EnhancedSpeechComplaint({
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStream.current = stream;
       audioChunks.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
+      const preferredType = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((type) => window.MediaRecorder.isTypeSupported?.(type));
+      const mediaRecorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
       recorder.current = mediaRecorder;
       mediaRecorder.ondataavailable = (event) => {
         if (event.data?.size) audioChunks.current.push(event.data);
       };
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach((track) => track.stop());
-        const blob = new Blob(audioChunks.current, { type: mediaRecorder.mimeType.split(";")[0] || "audio/webm" });
+        const recordedType = String(mediaRecorder.mimeType || preferredType || "audio/webm").split(";")[0];
+        const blob = new Blob(audioChunks.current, { type: recordedType });
+        if (!blob.size) {
+          setAudioData("");
+          setNote("No audio was captured. Please try recording again.");
+          return;
+        }
         if (blob.size > 3 * 1024 * 1024) {
           setAudioData("");
           setNote("Recording is too large. Please record a shorter message.");
@@ -3564,17 +3611,25 @@ function EnhancedSpeechComplaint({
       setNote("Microphone permission is required to save the audio clip.");
       return;
     }
+    if (!Speech) {
+      audioOnlyMode.current = true;
+      setListening(true);
+      setNote("Recording audio… live transcription is unavailable in this browser. Tap Stop when finished.");
+      maxTimer.current = setTimeout(() => finishAudioOnly("Recording stopped after 45 seconds. Audio saved."), 45000);
+      return;
+    }
     const r = new Speech();
     recognition.current = r;
     r.lang = lang;
     r.interimResults = true;
     r.continuous = true;
-    let final = "";
+    let final = "", recognitionFailed = false;
     const resetSilence = () => {
       clearTimeout(silenceTimer.current);
       silenceTimer.current = setTimeout(stop, 5000);
     };
     r.onstart = () => {
+      audioOnlyMode.current = false;
       setListening(true);
       setNote("Listening… pause up to 5 seconds while speaking.");
       resetSilence();
@@ -3590,18 +3645,21 @@ function EnhancedSpeechComplaint({
       resetSilence();
     };
     r.onerror = (e) => {
-      clearTimers();
-      stopAudio();
-      setListening(false);
-      setNote(
+      recognitionFailed = true;
+      recognition.current = null;
+      audioOnlyMode.current = true;
+      finishAudioOnly(
         e.error === "not-allowed"
-          ? "Microphone permission was denied."
+          ? "Audio saved, but speech transcription permission was denied."
           : e.error === "no-speech"
-            ? "No clear speech was detected."
-            : "Speech recognition failed. Please try again.",
+            ? "Audio saved, but no clear speech was detected for transcription."
+            : "Audio saved, but speech transcription was unavailable.",
       );
     };
     r.onend = async () => {
+      recognition.current = null;
+      audioOnlyMode.current = false;
+      if (recognitionFailed) return;
       clearTimers();
       stopAudio();
       setListening(false);
@@ -3632,8 +3690,11 @@ function EnhancedSpeechComplaint({
     try {
       r.start();
     } catch {
-      stopAudio();
-      setNote("Could not start the microphone. Please try again.");
+      recognition.current = null;
+      audioOnlyMode.current = true;
+      setListening(true);
+      setNote("Recording audio… live transcription could not start. Tap Stop when finished.");
+      maxTimer.current = setTimeout(() => finishAudioOnly("Recording stopped after 45 seconds. Audio saved."), 45000);
     }
   };
   return (
@@ -5098,8 +5159,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     const closeFilter = (event) => {
       if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
     };
-    document.addEventListener("mousedown", closeFilter);
-    return () => document.removeEventListener("mousedown", closeFilter);
+    document.addEventListener("pointerdown", closeFilter);
+    return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   const saveEdit = async (event) => {
     event.preventDefault();
@@ -6437,8 +6498,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, showComplaintAudi
     const closeFilter = (event) => {
       if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
     };
-    document.addEventListener("mousedown", closeFilter);
-    return () => document.removeEventListener("mousedown", closeFilter);
+    document.addEventListener("pointerdown", closeFilter);
+    return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
     <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div></div><div className="scroll mobile-workflow-table">
@@ -6662,8 +6723,8 @@ const ticketCategories = ["General", "Production", "Maintenance", "MIS", "Equipm
 function readTicketAttachment(file) {
   return new Promise((resolve, reject) => {
     if (!file) return resolve("");
-    const supported = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"];
-    if (!supported.includes(file.type) || file.size > 10 * 1024 * 1024) return reject(new Error("Upload a JPEG, PNG, WebP, MP4, or WebM file up to 10 MB."));
+    const supported = ["image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm", "video/quicktime"];
+    if (!supported.includes(file.type) || file.size > 10 * 1024 * 1024) return reject(new Error("Upload a JPEG, PNG, WebP, MP4, WebM, or MOV file up to 10 MB."));
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(new Error("Could not read the selected attachment."));
@@ -6700,7 +6761,7 @@ function TicketCreateForm({ session, close, onCreated }) {
       <div className="formgrid">
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
         <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue here or record an audio message." required={false} />
-        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, or WebM · maximum 10 MB"}</small></label>
+        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
     </form>
@@ -6756,7 +6817,7 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
   return <Modal title={`Resolve ${ticket.reference}`} close={close}>
     <form className="form ticket-resolution-form" onSubmit={submit}>
       <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain how this ticket was resolved or record an audio message." required={false} />
-      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, or WebM · maximum 10 MB"}</small></label>
+      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
     </form>
   </Modal>;

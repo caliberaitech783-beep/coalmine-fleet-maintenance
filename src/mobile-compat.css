@@ -45,7 +45,97 @@ body {
   background: #fff;
 }
 
+/* Keep fixed and scrollable panels inside the visible iOS viewport as its bars or keyboard move. */
+.mine-dashboard {
+  min-height: calc(100dvh - 66px);
+}
+
+.master-form .formgrid {
+  max-height: 55dvh;
+}
+
+.master-table-scroll {
+  max-height: max(320px, calc(100dvh - 400px));
+}
+
+.notification-popover {
+  max-height: min(520px, calc(100dvh - 110px));
+}
+
+.dashboard-asset-modal {
+  max-height: 94dvh;
+}
+
+.dashboard-asset-list {
+  max-height: min(50dvh, 560px);
+}
+
+.director-timing-modal {
+  max-height: min(88dvh, 850px);
+}
+
+.report-zip-modal {
+  max-height: min(88dvh, 820px);
+}
+
+.hierarchy-matrix-scroll {
+  max-height: calc(100dvh - 390px);
+}
+
+.audit-table-wrap {
+  max-height: calc(100dvh - 414px);
+}
+
+.table-parameter-filter-popover {
+  max-height: min(70dvh, 620px);
+}
+
+.report-columns-dialog,
+.report-sort-dialog,
+.table-parameter-filter-popover.dialog-mode {
+  max-height: calc(100dvh - 48px);
+}
+
+.report-column-list {
+  height: min(340px, 45dvh);
+}
+
+.master-form .formgrid,
+.master-table-scroll,
+.notification-list,
+.dashboard-asset-list,
+.hierarchy-matrix-scroll,
+.audit-table-wrap,
+.table-parameter-filter-popover,
+.report-column-list {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+input,
+select,
+textarea,
+button {
+  scroll-margin-block: 96px;
+}
+
+@media (max-width: 1100px) {
+  .hierarchy-matrix-scroll {
+    max-height: calc(100dvh - 450px);
+  }
+}
+
 @media (max-width: 900px) {
+  .normal > header {
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+
+  .audit-table-wrap {
+    max-height: none;
+  }
+
   .login > main {
     min-height: calc(100svh - 200px);
     min-height: calc(100dvh - 200px);
@@ -62,6 +152,18 @@ body {
     height: 100vh;
     height: 100svh;
     height: 100dvh;
+  }
+}
+
+@media (max-width: 700px) {
+  .report-columns-dialog,
+  .report-sort-dialog,
+  .table-parameter-filter-popover.dialog-mode {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .report-column-list {
+    height: 42dvh;
   }
 }
 
@@ -83,6 +185,12 @@ body {
 }
 
 @media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
   .login-theme-toggle,
   .password-toggle,
   .modal > header button {

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const ui = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const css = readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
+const mobileCss = readFileSync(new URL("../src/mobile-compat.css", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 
 test("operational tables expose search, filters, sorting, and the MIS idle queue", () => {
@@ -40,4 +41,13 @@ test("workspaces, masters, tables, and forms use the expanded readable layout", 
   assert.match(css, /\.body\{max-width:none;width:100%/);
   assert.match(css, /\.modal\{width:min\(960px/);
   assert.match(css, /table\{font-size:13px\}/);
+});
+
+test("mobile dialogs and popovers follow touch input and the visible iOS viewport", () => {
+  assert.doesNotMatch(ui, /onMouseDown|addEventListener\("mousedown"|removeEventListener\("mousedown"/);
+  assert.match(ui, /window\.visualViewport\?\.addEventListener\("resize"/);
+  assert.match(ui, /onPointerDown=\{onClose\}/);
+  assert.match(mobileCss, /\.report-columns-dialog,[\s\S]*max-height: calc\(100dvh - 48px\)/);
+  assert.match(mobileCss, /\.report-column-list \{[\s\S]*height: min\(340px, 45dvh\)/);
+  assert.match(mobileCss, /touch-action: manipulation/);
 });
