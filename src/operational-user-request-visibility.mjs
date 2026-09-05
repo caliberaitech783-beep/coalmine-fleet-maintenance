@@ -7,5 +7,5 @@ const normalize = (value) => String(value ?? "").trim().toLowerCase();
 
 // Display-only filter for Production, Maintenance, and MIS user workspaces.
 export function visibleInOperationalUserRequests(row = {}) {
-  return !hiddenReferences.has(normalize(row.ref || row.reference));
+  return !hiddenReferences.has(normalize(row.ref) || normalize(row.reference));
 }

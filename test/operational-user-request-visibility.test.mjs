@@ -10,6 +10,7 @@ test("operational user workspaces hide only the two specified requests", () => {
     assert.equal(row.ref, ref);
   }
   assert.equal(visibleInOperationalUserRequests({reference:"REQ-1788429762428"}), false);
+  assert.equal(visibleInOperationalUserRequests({ref:" ", reference:"REQ-1788428319118"}), false);
   for (const ref of ["REQ-1788429762429", "REQ-1788428319119", "", undefined]) {
     assert.equal(visibleInOperationalUserRequests({ref, door:"V257 - MH34BZ5560"}), true);
   }
