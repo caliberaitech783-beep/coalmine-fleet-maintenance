@@ -636,7 +636,7 @@ button.mine-primary-kpi-card:focus-visible,
   margin-bottom: 8px;
 }
 .mine-dashboard-feature-row > .mine-panel { margin-bottom: 0; min-width: 0; }
-.mine-dashboard-feature-row .mine-fleet-chart-layout { min-height: 205px; padding: 9px 10px 0; }
+.mine-dashboard-feature-row .mine-fleet-chart-layout { min-height: 205px; height: 250px; padding: 9px 10px 0; }
 .mine-dashboard-feature-row .mine-fleet-chart-regions { min-width: 0; }
 .mine-dashboard-feature-row .mine-fleet-chart-regions > section { min-width: 250px; }
 .mine-dashboard-feature-row .mine-repair-type-bars { align-content: center; min-height: 205px; }
@@ -801,6 +801,9 @@ button.mine-primary-kpi-card:focus-visible,
 
 /* Total fleet graph: regions on the horizontal axis and site fleet totals vertically. */
 .mine-fleet-region-chart {
+  --fleet-equipment: #c57608;
+  --fleet-vehicles: #008da8;
+  --fleet-breakdown: #dc303b;
   grid-column: 1 / -1;
   position: relative;
   padding-bottom: 10px;
@@ -808,54 +811,59 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-fleet-region-chart.watermarked::before { content: ""; position: absolute; z-index: 0; inset: 0; background: var(--brand-purple); opacity: .032; pointer-events: none; -webkit-mask: url("/caliber-logo-reverse.png") center / 88% 88% no-repeat; mask: url("/caliber-logo-reverse.png") center / 88% 88% no-repeat; }
 .mine-fleet-region-chart > * { position: relative; z-index: 1; }
-.mine-fleet-region-chart > header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 16px; }
-.mine-fleet-chart-total { position: relative; display: inline-flex; align-items: center; justify-self: center; gap: 7px; min-height: 42px; padding: 8px 20px; border-radius: 999px; background: linear-gradient(135deg, #e53f86, #7138b7); box-shadow: 0 6px 16px #9d39742b; color: #fff; font: 900 22px/1 Manrope; white-space: nowrap; }
-.mine-fleet-chart-total span { font-size: 12px; }
-.mine-fleet-chart-total-trigger { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
-.mine-fleet-chart-total-trigger:focus-visible { outline: 2px solid #7138b7; outline-offset: 2px; }
+.mine-fleet-region-chart > header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.mine-fleet-chart-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+.mine-fleet-chart-title { padding: 0; border: 0; background: transparent; color: var(--mine-text); cursor: pointer; }
+.mine-fleet-chart-title:hover { color: var(--brand-purple); }
+.mine-fleet-chart-title:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 4px; }
+.mine-fleet-chart-toggle { display: inline-flex; align-items: stretch; gap: 2px; padding: 3px; border: 1px solid var(--mine-line); border-radius: 9px; background: var(--mine-bg); }
+.mine-fleet-chart-toggle button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 34px; padding: 6px 12px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--mine-text); font-family: inherit; font-weight: 700; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.mine-fleet-chart-toggle button b { padding: 3px 6px; border-radius: 4px; background: var(--mine-panel); font-variant-numeric: tabular-nums; }
+.mine-fleet-chart-toggle button:hover { background: var(--mine-panel); }
+.mine-fleet-chart-toggle button[aria-pressed="true"] { background: var(--brand-purple); color: #fff; box-shadow: 0 1px 3px #18223820; }
+.mine-fleet-chart-toggle button.breakdown[aria-pressed="true"] { background: var(--fleet-breakdown); }
+.mine-fleet-chart-toggle button[aria-pressed="true"] b { background: #ffffff26; }
+.mine-fleet-chart-toggle button:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 2px; }
 .mine-fleet-chart-tools { display: flex; align-items: center; justify-self: end; gap: 12px; }
 .mine-fleet-chart-legend { display: flex; align-items: center; gap: 12px; color: var(--mine-muted); font-size: 8px; }
 .mine-fleet-chart-legend span { display: flex; align-items: center; gap: 5px; }
 .mine-fleet-chart-legend i { width: 8px; height: 8px; border-radius: 2px; }
-.mine-fleet-chart-legend i.equipment { background: var(--brand-red); }
-.mine-fleet-chart-legend i.vehicles { background: var(--brand-purple); }
+.mine-fleet-chart-legend i.equipment { background: var(--fleet-equipment); }
+.mine-fleet-chart-legend i.vehicles { background: var(--fleet-vehicles); }
+.mine-fleet-chart-legend i.breakdown { background: var(--fleet-breakdown); }
 .mine-fleet-watermark-toggle { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 4px 7px; border: 1px solid var(--mine-line); border-radius: 5px; background: var(--mine-panel); color: var(--mine-muted); font: 800 8px Manrope; cursor: pointer; }
 .mine-fleet-watermark-toggle:hover,.mine-fleet-watermark-toggle:focus-visible,.mine-fleet-watermark-toggle[aria-pressed="true"] { border-color: var(--brand-purple); color: var(--brand-purple); outline: 0; }
 .mine-fleet-watermark-toggle svg { width: 12px; height: 12px; }
 .mine-fleet-chart-layout { display: grid; grid-template-columns: 72px minmax(0, 1fr); min-height: 250px; padding: 12px 16px 0; }
-.mine-fleet-chart-y { display: grid; grid-template-rows: repeat(5, 1fr); position: relative; padding: 0 12px 37px 0; color: var(--mine-muted); font-size: 8px; text-align: right; }
+.mine-fleet-chart-y { display: flex; flex-direction: column; justify-content: space-between; position: relative; padding: 24px 12px 85px 0; color: var(--mine-muted); font-size: 8px; text-align: right; }
 .mine-fleet-chart-y b { position: absolute; left: -5px; top: 50%; transform: translate(-38%, -50%) rotate(-90deg); color: var(--mine-text); font-size: 8px; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
-.mine-fleet-chart-y span { transform: translateY(-5px); }
-.mine-fleet-chart-y span:last-child { align-self: end; transform: translateY(4px); }
-.mine-fleet-chart-plot { position: relative; min-width: 0; overflow: hidden; }
-.mine-fleet-chart-grid { position: absolute; inset: 0 0 37px; display: grid; grid-template-rows: repeat(5, 1fr); pointer-events: none; }
-.mine-fleet-chart-grid i { border-top: 1px dashed var(--mine-line); }
+.mine-fleet-chart-y span { line-height: 0; }
+.mine-fleet-chart-plot { position: relative; min-width: 0; overflow-x: auto; }
+.mine-fleet-chart-grid { position: absolute; inset: 24px 0 85px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.mine-fleet-chart-grid i { width: 100%; border-top: 1px dashed var(--mine-line); }
 .mine-fleet-chart-grid i:last-child { align-self: end; width: 100%; }
 .mine-fleet-chart-regions { display: flex; position: relative; z-index: 1; width: 100%; min-width: 0; height: 100%; }
 .mine-fleet-chart-regions > section { display: grid; grid-template-rows: minmax(0, 1fr) 37px; flex-basis: 0; min-width: 0; border-left: 1px solid #4f86c61f; }
 .mine-fleet-chart-regions > section:last-child { border-right: 1px solid #4f86c61f; }
-.mine-fleet-chart-sites { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: end; gap: 0; min-height: 0; padding: 12px 0 0; }
+.mine-fleet-chart-sites { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: end; gap: 0; min-height: 0; padding: 24px 0 0; }
 .mine-fleet-chart-sites button { display: grid; grid-template-rows: minmax(0, 1fr) 30px; align-items: end; justify-items: center; width: 100%; min-width: 0; height: 100%; padding: 0; border: 0; background: transparent; color: var(--mine-text); cursor: pointer; }
 .mine-fleet-chart-sites button:hover .mine-fleet-site-bars,.mine-fleet-chart-sites button:focus-visible .mine-fleet-site-bars { outline: 2px solid #315fd455; outline-offset: 3px; }
 .mine-fleet-chart-sites button:focus-visible { outline: 0; }
 .mine-fleet-chart-sites small { align-self: start; width: 100%; padding: 0 3px; overflow: hidden; color: var(--mine-text); font-size: 11px; font-weight: 800; line-height: 1.15; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
 .mine-fleet-region-chart .mine-fleet-chart-layout { grid-template-columns: minmax(0, 1fr); }
-.mine-fleet-region-chart[data-mode="breakdown"] .mine-fleet-chart-legend i.equipment { background:#d97706; }
-.mine-fleet-region-chart[data-mode="breakdown"] .mine-fleet-chart-legend i.vehicles { background:#0891b2; }
-.mine-fleet-mode { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; justify-self:center; }
-.mine-fleet-mode button { border:1px solid #b9b0cb; border-radius:20px; padding:8px 14px; background:transparent; color:var(--ink); }
-.mine-fleet-mode button[aria-pressed="true"] { background:linear-gradient(100deg,#dc388e,#7939b0);color:white; }
-.mine-fleet-mode b { margin-left:6px; }
-.mine-fleet-site-bars > i.fleet-muted { opacity:.15; pointer-events:none; }
-.mine-fleet-site-bars > i.breakdown.equipment, .mine-fleet-site-bars > i.breakdown.equipment > b { background:#d97706; }
-.mine-fleet-site-bars > i.breakdown.vehicles, .mine-fleet-site-bars > i.breakdown.vehicles > b { background:#0891b2; }
-.mine-fleet-site-bars { display: flex; align-items: end; justify-content: center; gap: 6px; width: 100%; height: calc(100% - 20px); }
-.mine-fleet-site-bars > i { position: relative; display: block; width: 23px; min-height: 2px; border-radius: 4px 4px 1px 1px; transition: height .25s ease; }
-.mine-fleet-site-bars > i.equipment { background: linear-gradient(180deg, #f4777b, var(--brand-red)); }
-.mine-fleet-site-bars > i.vehicles { background: linear-gradient(180deg, #8054b5, var(--brand-purple)); }
-.mine-fleet-site-bars > i > b { position: absolute; top: -19px; left: 50%; min-width: 23px; padding: 2px 3px; transform: translateX(-50%); border-radius: 4px; color: #fff; font: 900 8px/1.2 Manrope; text-align: center; }
-.mine-fleet-site-bars > i.equipment > b { background: var(--brand-red); }
-.mine-fleet-site-bars > i.vehicles > b { background: var(--brand-purple); }
+.mine-fleet-site-bars { display: flex; align-items: end; justify-content: center; gap: 12px; width: 100%; height: 100%; padding-bottom: 18px; }
+.mine-fleet-bar-column { position: relative; display: flex; align-items: end; width: 30px; height: 100%; }
+.mine-fleet-bar { position: relative; display: block; width: 100%; border-radius: 4px 4px 0 0; font-style: normal; }
+.mine-fleet-bar.equipment { background: var(--fleet-equipment); }
+.mine-fleet-bar.vehicles { background: var(--fleet-vehicles); }
+.mine-fleet-bar.breakdown-only { background: var(--fleet-breakdown); }
+.mine-fleet-bar-count { position: absolute; bottom: calc(100% + 4px); left: 50%; padding: 1px 3px; transform: translateX(-50%); color: var(--mine-text); font-weight: 900; line-height: 1.2; text-align: center; }
+.mine-fleet-bar.breakdown-only > .mine-fleet-bar-count { color: var(--fleet-breakdown); }
+.mine-fleet-breakdown-segment { position: absolute; inset: auto 0 0; background: var(--fleet-breakdown); border-radius: inherit; }
+.mine-fleet-breakdown-count { position: absolute; bottom: max(0px, calc(50% - 8px)); left: 50%; min-width: 18px; padding: 1px 3px; transform: translateX(-50%); border-radius: 3px; background: var(--fleet-breakdown); color: #fff; font-weight: 800; line-height: 14px; text-align: center; }
+.mine-fleet-bar.equipment .small-segment .mine-fleet-breakdown-count { bottom: 0; left: auto; right: calc(100% + 2px); transform: none; }
+.mine-fleet-bar.vehicles .small-segment .mine-fleet-breakdown-count { bottom: 0; left: calc(100% + 2px); transform: none; }
+.mine-fleet-bar-category { position: absolute; top: calc(100% + 3px); left: 0; width: 100%; color: var(--mine-muted); font-weight: 800; line-height: 12px; text-align: center; }
 .mine-fleet-chart-regions footer { display: flex; align-items: center; justify-content: center; gap: 7px; border-top: 2px solid #315fd4; background: #315fd408; }
 .mine-fleet-chart-regions footer b { color: #315fd4; font: 900 14px Manrope; }
 .mine-fleet-chart-regions footer span { color: var(--mine-text); font-size: 11px; font-weight: 700; }
@@ -863,9 +871,11 @@ button.mine-primary-kpi-card:focus-visible,
 @media (max-width: 700px) {
   .dashboard-fleet-data-state { grid-template-columns: auto minmax(0, 1fr); }
   .dashboard-fleet-data-state > button { grid-column: 1 / -1; justify-self: start; }
-  .mine-fleet-region-chart > header { grid-template-columns: 1fr; align-items: start; }
-  .mine-fleet-chart-total { justify-self: start; }
-  .mine-fleet-chart-tools { justify-self: start; }
+  .mine-fleet-region-chart > header { align-items: start; }
+  .mine-fleet-chart-heading { gap: 10px; width: 100%; }
+  .mine-fleet-chart-toggle { flex: 1; }
+  .mine-fleet-chart-toggle button { flex: 1; padding-inline: 8px; }
+  .mine-fleet-chart-tools { justify-self: start; flex-wrap: wrap; }
   .mine-fleet-chart-legend { justify-self: start; }
   .mine-fleet-chart-layout { grid-template-columns: 52px minmax(0, 1fr); min-height: 220px; padding-inline: 8px; }
   .mine-fleet-chart-plot { overflow-x: auto; }

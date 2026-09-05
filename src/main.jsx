@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import UserProfile from "./user-profile.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
+import FleetSiteBars from "./fleet-site-bars.jsx";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
@@ -18,7 +19,7 @@ import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, 
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { aiFeederAlerts, aiFeederSummary } from "../ai-feeder.mjs";
@@ -1059,12 +1060,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         .filter((site) => dashboardSite === "all" || site === dashboardSite)
         .map((site) => {
           const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
-          return { name: site, ...fleetAssetCounts(records), offroad: fleetAssetCounts(records.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === "offroad")) };
+          return { name: site, ...fleetChartCounts(records, visibleBreakdowns) };
         });
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
-      return { ...region, sites, ...fleetAssetCounts(records), offroad: fleetAssetCounts(records.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === "offroad")) };
+      return { ...region, sites, ...fleetChartCounts(records, visibleBreakdowns) };
     });
-  const maxFleetSiteTotal = Math.max(1, ...fleetRegionInsights.flatMap((region) => region.sites.map((site) => site.total)));
+  const fleetBreakdownOnly = fleetChartMode === "breakdown";
+  const maxFleetSiteTotal = Math.max(1, ...fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])));
   const fleetChartAxisMax = Math.max(10, Math.ceil(maxFleetSiteTotal / 10) * 10);
   const fleetChartTicks = [100, 75, 50, 25, 0].map((percent) => Math.round((fleetChartAxisMax * percent) / 100));
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
@@ -1210,19 +1212,24 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
-        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${fleetChartMode === "total" ? "Total fleet" : "Off-road fleet"} by region and site graph`}>
-          <header><div /><div className="mine-fleet-mode" role="group" aria-label="Fleet chart view">{[["total","Total"],["breakdown","Breakdown"]].map(([mode,label]) => <button type="button" key={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : fleetRegionInsights.reduce((sum,region) => sum + region.offroad.total,0)).toLocaleString() : "—"}</b></button>)}</div><div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div></header>
-          {equipmentLoaded?<><div className="mine-fleet-chart-layout">
+        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${fleetBreakdownOnly ? "Off-road fleet" : "Total fleet"} by region and site graph`}>
+          <header>
+            <div className="mine-fleet-chart-heading">
+              <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")}><h2>Total Fleet</h2></button>
+              <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
+                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : fleetRegionInsights.reduce((sum, region) => sum + region.breakdown.total, 0)).toLocaleString() : "—"}</b></button>)}
+              </div>
+            </div>
+            <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span>{!fleetBreakdownOnly && <i className="equipment" />}E · Equipment</span><span>{!fleetBreakdownOnly && <i className="vehicles" />}V · Vehicles</span><span><i className="breakdown" />Breakdown</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
+          </header>
+          {equipmentLoaded?<><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={fleetBreakdownOnly ? "Breakdown fleet by region and site" : "Total fleet with breakdowns included at the bottom of each bar"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
-              <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length) }} aria-label={`${region.code} fleet sites`}>
-                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`)} aria-label={`${site.name}: ${(fleetChartMode === "total" ? site.equipment : site.offroad.equipment)} equipment and ${(fleetChartMode === "total" ? site.vehicles : site.offroad.vehicles)} vehicles`} title={`${site.name}: ${(fleetChartMode === "total" ? site.equipment : site.offroad.equipment)} equipment, ${(fleetChartMode === "total" ? site.vehicles : site.offroad.vehicles)} vehicles`}>
-                  <span className="mine-fleet-site-bars">{["total","breakdown"].flatMap((mode) => ["equipment","vehicles"].map((category) => {
-                    const count = mode === "total" ? site[category] : site.offroad[category];
-                    return <i key={`${mode}-${category}`} className={`${category} ${mode}${fleetChartMode !== mode ? " fleet-muted" : ""}`} aria-hidden={fleetChartMode !== mode} style={{height:`${count ? Math.max(3,count / fleetChartAxisMax * 100) : 1}%`}}>{fleetChartMode === mode && <b>{count.toLocaleString()}</b>}</i>;
-                  }))}</span><small>{site.name}</small>
+              <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
+                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`)} aria-label={fleetBreakdownOnly ? `${site.name}: ${site.breakdown.equipment} equipment and ${site.breakdown.vehicles} vehicles in breakdown` : `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)`}>
+                  <FleetSiteBars site={site} axisMax={fleetChartAxisMax} breakdownOnly={fleetBreakdownOnly} /><small>{site.name}</small>
                 </button>)}</div>
-                <footer><b>{region.code}</b><span>{(fleetChartMode === "total" ? region.total : region.offroad.total).toLocaleString()} {fleetChartMode === "total" ? "fleet" : "off road"}</span></footer>
+                <footer><b>{region.code}</b><span>{fleetBreakdownOnly ? `${region.breakdown.total.toLocaleString()} off road` : `${region.total.toLocaleString()} fleet`}</span></footer>
               </section>)}</div>
             </div>
           </div>

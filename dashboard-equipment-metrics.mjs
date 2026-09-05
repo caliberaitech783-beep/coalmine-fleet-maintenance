@@ -76,3 +76,10 @@ export function liveEquipmentMetrics(records = [], requests = []) {
     availability: records.length ? Math.round((onRoad / records.length) * 100) : 0,
   };
 }
+
+export function fleetChartCounts(records = [], requests = []) {
+  return {
+    ...fleetAssetCounts(records),
+    breakdown: fleetAssetCounts(records.filter((record) => liveEquipmentRoadStatus(record, requests) === "offroad")),
+  };
+}

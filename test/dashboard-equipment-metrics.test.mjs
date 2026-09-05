@@ -4,6 +4,7 @@ import {
   equipmentMetrics,
   equipmentRoadStatus,
   fleetAssetCounts,
+  fleetChartCounts,
   liveEquipmentMetrics,
 } from "../dashboard-equipment-metrics.mjs";
 
@@ -16,6 +17,39 @@ test("dashboard equipment totals use all persisted master records", () => {
     ]),
     { total: 3, onRoad: 2, offRoad: 1, idle: 0, unknown: 0, availability: 67 },
   );
+});
+
+test("fleet chart breakdowns are a subset of each category total, counting assets once", () => {
+  const records = [
+    ...Array.from({ length: 48 }, (_, index) => ({ category: "Equipment", door: `E${index}` })),
+    ...Array.from({ length: 142 }, (_, index) => ({ category: "Vehicle", door: `V${index}` })),
+  ];
+  const requests = [
+    ...Array.from({ length: 8 }, (_, index) => ({ door: `E${index}`, status: "Open" })),
+    ...Array.from({ length: 20 }, (_, index) => ({ door: `V${index}`, status: "Open" })),
+    { door: "E0", status: "Open" },
+    { door: "V20", status: "Closed" },
+    { door: "V21", status: "Idle" },
+    { door: "V22", status: "Ideal" },
+  ];
+  assert.deepEqual(fleetChartCounts(records, requests), {
+    equipment: 48, vehicles: 142, total: 190,
+    breakdown: { equipment: 8, vehicles: 20, total: 28 },
+  });
+});
+
+test("fleet chart handles empty, healthy and entirely broken-down categories", () => {
+  assert.deepEqual(fleetChartCounts(), {
+    equipment: 0, vehicles: 0, total: 0,
+    breakdown: { equipment: 0, vehicles: 0, total: 0 },
+  });
+  assert.deepEqual(fleetChartCounts([
+    { category: "Equipment", status: "Off road" },
+    { category: "Vehicles", status: "Operational" },
+  ]), {
+    equipment: 1, vehicles: 1, total: 2,
+    breakdown: { equipment: 1, vehicles: 0, total: 1 },
+  });
 });
 
 test("dashboard equipment totals handle an empty master", () => {

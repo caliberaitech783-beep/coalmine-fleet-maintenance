@@ -45,23 +45,18 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /fleetChartTicks\.map/);
   assert.match(source, /fleetRegionInsights\.map\(\(region\) => <section/);
   assert.match(source, /region\.sites\.map\(\(site\) => <button/);
-  assert.match(source, /count \/ fleetChartAxisMax/);
-  assert.match(source, /site\.offroad\[category\]/);
-  assert.match(source, /className="mine-fleet-site-bars"/);
-  assert.match(source, /className="mine-fleet-mode"/);
+  assert.match(source, /<FleetSiteBars site=\{site\} axisMax=\{fleetChartAxisMax\} breakdownOnly=\{fleetBreakdownOnly\}/);
+  assert.match(source, /className="mine-fleet-chart-toggle"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
-  assert.match(source, /aria-label="Fleet chart view"/);
-  assert.match(css, /\.mine-fleet-chart-total\s*\{[\s\S]*justify-self:\s*center;[\s\S]*border-radius:\s*999px;[\s\S]*linear-gradient\(135deg, #e53f86, #7138b7\)[\s\S]*color:\s*#fff;[\s\S]*font:\s*900 22px/);
-  assert.match(css, /\.mine-fleet-chart-total-trigger\s*\{[\s\S]*position:\s*absolute;[\s\S]*inset:\s*0;[\s\S]*background:\s*transparent;/);
+  assert.match(source, /<h2>Total Fleet<\/h2>/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
-test("each fleet site uses separate Caliber red equipment and purple vehicle bars with counts", () => {
-  assert.match(source, /className="mine-fleet-site-bars"/);
-  assert.match(source, /count\.toLocaleString\(\)/);
-  assert.match(source, /site\.offroad\[category\]/);
-  assert.match(css, /\.mine-fleet-site-bars > i\.equipment\s*\{\s*background:\s*linear-gradient\([^}]*var\(--brand-red\)/);
-  assert.match(css, /\.mine-fleet-site-bars > i\.vehicles\s*\{\s*background:\s*linear-gradient\([^}]*var\(--brand-purple\)/);
+test("each fleet site includes breakdowns in its equipment and vehicle bars", () => {
+  assert.match(source, /fleetChartCounts\(records, visibleBreakdowns\)/);
+  assert.match(source, /setFleetChartMode\(mode\)/);
+  assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background:\s*var\(--fleet-breakdown\)/);
+  assert.match(css, /\.mine-fleet-bar\.breakdown-only\s*\{\s*background:\s*var\(--fleet-breakdown\)/);
 });
 
 test("Total Fleet provides a persistent Caliber watermark option", () => {
@@ -97,8 +92,11 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mine-breakdown-trend-body\s*\{\s*grid-template-columns:\s*1fr/);
 });
 
-test("the chart uses a Total and Breakdown toggle without the left axis", () => {
-  assert.match(source, /aria-label="Fleet chart view"/);
+test("the region and site graph panel is titled only Total Fleet", () => {
+  assert.match(source, /<h2>Total Fleet<\/h2>/);
+  assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
   assert.doesNotMatch(source, /className="mine-fleet-chart-y"/);
-  assert.match(source, /fleetChartMode !== mode/);
+  assert.doesNotMatch(source, /fleet-muted/);
+  assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);
+  assert.doesNotMatch(source, /Region-wise site distribution with total fleet count/);
 });
