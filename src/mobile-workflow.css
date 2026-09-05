@@ -172,6 +172,12 @@
   width: 0;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .normal .scroll.mobile-workflow-table::-webkit-scrollbar:vertical {
+    width: 12px;
+  }
+}
+
 .mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar-button {
   display: none;
 }

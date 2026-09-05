@@ -83,15 +83,19 @@ jobs:
             test/branding.test.mjs \
             test/caliber-activity-loader.test.mjs \
             test/dashboard-*.test.mjs \
+            test/deployment-session-continuity.test.mjs \
+            test/desktop-*.test.mjs \
             test/fleet-registry-dashboard.test.mjs \
             test/header-*.test.mjs \
             test/hierarchy-master-ui.test.mjs \
             test/login-view-labels.test.mjs \
             test/master-filter-layout.test.mjs \
+            test/master-load-recovery.test.mjs \
             test/masters-dropdown.test.mjs \
             test/mobile-access.test.mjs \
             test/navigation-visibility.test.mjs \
             test/normal-header-responsive.test.mjs \
+            test/notification-popover.test.mjs \
             test/production-maintenance-header.test.mjs \
             test/region-master-ui.test.mjs \
             test/report-parameter-filter.test.mjs \

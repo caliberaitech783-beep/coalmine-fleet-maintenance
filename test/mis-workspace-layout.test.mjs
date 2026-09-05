@@ -46,11 +46,14 @@ test("workflow tables keep a single horizontal scrollbar that stays on screen", 
   );
 });
 
-test("only the bottom scrollbar is drawn on the workflow table", () => {
-  // The unqualified rule is what opts Chrome into custom scrollbars. Without it
-  // the :vertical override is ignored and the right-hand bar comes back, so all
-  // three rules have to travel together.
+test("workflow table scrollbars remain visible on desktop and compact on touch devices", () => {
+  // Touch layouts keep the compact vertical treatment, while fine-pointer
+  // desktops expose the vertical scrollbar so long tables are discoverable.
   assert.match(workflowStyles, /::-webkit-scrollbar\s*\{[^}]*width:\s*12px;\s*height:\s*12px/s);
   assert.match(workflowStyles, /::-webkit-scrollbar:vertical\s*\{[^}]*width:\s*0/s);
+  assert.match(
+    workflowStyles,
+    /@media \(hover:\s*hover\) and \(pointer:\s*fine\)\s*\{[\s\S]*?\.normal \.scroll\.mobile-workflow-table::-webkit-scrollbar:vertical\s*\{[^}]*width:\s*12px/s,
+  );
   assert.match(workflowStyles, /::-webkit-scrollbar:horizontal\s*\{[^}]*height:\s*12px/s);
 });

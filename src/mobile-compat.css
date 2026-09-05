@@ -45,6 +45,15 @@ body {
   background: #fff;
 }
 
+:root[data-theme="dark"] .modal:not(.director-timing-modal):not(.report-zip-modal) > header {
+  background: #241d27;
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] .modal:not(.director-timing-modal):not(.report-zip-modal) > header button {
+  color: #c5d0df;
+}
+
 /* Keep fixed and scrollable panels inside the visible iOS viewport as its bars or keyboard move. */
 .mine-dashboard {
   min-height: calc(100dvh - 66px);

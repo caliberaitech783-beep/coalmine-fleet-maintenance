@@ -73,6 +73,18 @@ const sessionStore=createSessionStore(pool);
 let databaseReady=false;
 let databaseError='Database initialization is pending.';
 
+async function revokeAuthorizationSessions(client,loginValues=[]){
+  const logins=[...new Set(loginValues.map(value=>String(value||'').trim().toLowerCase()).filter(Boolean))];
+  if(!logins.length)return;
+  await client.query('DELETE FROM auth_sessions WHERE lower(login_name)=ANY($1::text[])',[logins]);
+  await client.query(`DELETE FROM password_change_sessions AS pending
+    USING master_records AS users
+    WHERE pending.master_record_id=users.id
+      AND users.master_name='Users & employees'
+      AND (lower(trim(COALESCE(users.record_data->>'login','')))=ANY($1::text[])
+        OR lower(split_part(trim(COALESCE(users.record_data->>'employee','')),' ',1))=ANY($1::text[]))`,[logins]);
+}
+
 function maskedSecret(value){
   const text=String(value||'').trim();
   if(!text)return '';
@@ -309,6 +321,7 @@ async function migrate(){
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS assigned_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
+    CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
     CREATE TABLE IF NOT EXISTS audit_events (
       id BIGSERIAL PRIMARY KEY,
       event_type TEXT NOT NULL DEFAULT 'Activity',
@@ -462,7 +475,9 @@ async function migrate(){
     await client.query('BEGIN');
     const {rows}=await client.query("SELECT value FROM app_metadata WHERE key='ui_version' FOR UPDATE");
     if(rows[0]?.value!==currentAppVersion){
-      await client.query('DELETE FROM auth_sessions');
+      // A UI deployment is a cache/version boundary, not a security event.
+      // Keep active sessions valid; password changes still revoke only the
+      // affected user's sessions in their dedicated routes below.
       await client.query(`INSERT INTO app_metadata (key,value,updated_at) VALUES ('ui_version',$1,NOW())
         ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[currentAppVersion]);
     }
@@ -2404,6 +2419,8 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         ({rows}=await client.query(`INSERT INTO master_records (master_name,record_data)
           SELECT $1,value FROM jsonb_array_elements($2::jsonb) AS value
           RETURNING id,record_data`,[master,JSON.stringify(prepared)]));
+        const affectedLogins=[...new Set(prepared.flatMap(record=>userLoginCandidates(record)).filter(Boolean))];
+        await revokeAuthorizationSessions(client,affectedLogins);
         await client.query('COMMIT');
       }catch(error){
         await client.query('ROLLBACK').catch(()=>{});
@@ -2484,6 +2501,8 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
             if(username)byUsername.set(username,inserted.rows[0]);
           }
         }
+        const affectedLogins=[...new Set(prepared.map(record=>String(record.username||'').trim().toLowerCase()).filter(Boolean))];
+        await revokeAuthorizationSessions(client,affectedLogins);
         await client.query('COMMIT');
       }catch(error){
         await client.query('ROLLBACK');
@@ -2588,12 +2607,33 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
           'UPDATE master_records SET record_data=$1::jsonb WHERE master_name=$2 AND id=ANY($3::bigint[]) RETURNING id,record_data',
           [JSON.stringify(storedRecord),master,matchingIds]
         );
+        await revokeAuthorizationSessions(client,[currentUsername]);
         await client.query('COMMIT');
         const saved=updated.rows.find(row=>Number(row.id)===id)||updated.rows[0];
         req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:currentUsername||String(id),changedFields:auditChangedFields(previousRecord,storedRecord)};
         return res.json({id:saved.id,...saved.record_data});
       }catch(error){
         await client.query('ROLLBACK');
+        throw error;
+      }finally{client.release()}
+    }
+    if(master==='Users & employees'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const {rows}=await client.query(
+          'UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name=$3 RETURNING id,record_data',
+          [JSON.stringify(storedRecord),id,master]
+        );
+        if(!rows.length){await client.query('ROLLBACK');return res.status(404).json({error:'Master record not found.'})}
+        const affectedLogins=[...new Set([...userLoginCandidates(previousRecord),...userLoginCandidates(storedRecord)].filter(Boolean))];
+        await client.query('DELETE FROM password_change_sessions WHERE master_record_id=$1',[id]);
+        await revokeAuthorizationSessions(client,affectedLogins);
+        await client.query('COMMIT');
+        req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:String(storedRecord.login||storedRecord.employee||id),changedFields:auditChangedFields(previousRecord,storedRecord)};
+        return res.json({id:rows[0].id,...publicUserRecord(rows[0].record_data)});
+      }catch(error){
+        await client.query('ROLLBACK').catch(()=>{});
         throw error;
       }finally{client.release()}
     }
@@ -2624,6 +2664,22 @@ app.delete('/api/masters/:master/all',requireSuper,async(req,res,next)=>{
       }catch(error){await client.query('ROLLBACK');throw error}
       finally{client.release()}
     }
+    if(master==='Privilege'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const existing=await client.query("SELECT lower(record_data->>'username') AS login FROM master_records WHERE master_name=$1 FOR UPDATE",[master]);
+        const affectedLogins=[...new Set(existing.rows.map(row=>String(row.login||'').trim()).filter(Boolean))];
+        const result=await client.query('DELETE FROM master_records WHERE master_name=$1',[master]);
+        await revokeAuthorizationSessions(client,affectedLogins);
+        await client.query('COMMIT');
+        req.audit={eventType:'Master data',module:master,action:'Delete all records',targetType:master,targetReference:`${result.rowCount} records`,changedFields:[]};
+        return res.json({deleted:result.rowCount});
+      }catch(error){
+        await client.query('ROLLBACK').catch(()=>{});
+        throw error;
+      }finally{client.release()}
+    }
     const result=await pool.query('DELETE FROM master_records WHERE master_name=$1',[master]);
     req.audit={eventType:'Master data',module:master,action:'Delete all records',targetType:master,targetReference:`${result.rowCount} records`,changedFields:[]};
     res.json({deleted:result.rowCount});
@@ -2640,6 +2696,20 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     if(!deletedRecord)return res.status(404).json({error:'Master record not found.'});
     if(master==='Users & employees'){
       if(isTrueSuperAdmin(deletedRecord)&&!isTrueSuperAdmin(req.session.permissions))return res.status(403).json({error:'Only a Super Admin can delete Super Admin accounts.'});
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        const result=await client.query('DELETE FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
+        if(!result.rowCount){await client.query('ROLLBACK');return res.status(404).json({error:'Master record not found.'})}
+        const affectedLogins=[...new Set(userLoginCandidates(deletedRecord).filter(Boolean))];
+        await revokeAuthorizationSessions(client,affectedLogins);
+        await client.query('COMMIT');
+        req.audit={eventType:'Master data',module:master,action:'Delete record',targetType:master,targetReference:String(deletedRecord.login||deletedRecord.employee||id),changedFields:[]};
+        return res.status(204).end();
+      }catch(error){
+        await client.query('ROLLBACK').catch(()=>{});
+        throw error;
+      }finally{client.release()}
     }
     if(master==='Privilege'){
       const client=await pool.connect();
@@ -2664,6 +2734,7 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
           'DELETE FROM master_records WHERE master_name=$1 AND id=ANY($2::bigint[])',
           [master,matchingIds]
         );
+        await revokeAuthorizationSessions(client,[targetUsername]);
         await client.query('COMMIT');
         req.audit={eventType:'Master data',module:master,action:'Delete record',targetType:master,targetReference:targetUsername||String(id),changedFields:[]};
         return res.status(204).end();

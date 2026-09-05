@@ -17,7 +17,7 @@ test("all tabular masters place Actions beside Search", () => {
   assert.match(generic, /<ActionsTable toolbarTarget=\{actionsToolbarTarget\} toolbarPortal>/);
   assert.match(hierarchy, /className="master-search-actions"[\s\S]*className="master-actions-slot"/);
   assert.match(hierarchy, /<ActionsTable className="hierarchy-matrix" toolbarTarget=\{actionsToolbarTarget\} toolbarPortal>/);
-  assert.match(source, /<BreakdownTable rows=\{rows\} stickyHeader showAudio showMakeModel actionsBesideSearch \/>/);
+  assert.match(source, /<BreakdownTable rows=\{filteredRows\} stickyHeader showAudio showMakeModel actionsBesideSearch statusPanelId=/);
   assert.match(tableStyles, /\.master-actions-slot \.shared-table-actions-toolbar \{ position: static; width: auto;/);
 });
 

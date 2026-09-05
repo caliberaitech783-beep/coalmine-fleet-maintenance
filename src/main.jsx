@@ -41,6 +41,7 @@ import {navigationLabel} from "../navigation-visibility.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
+import {readApiJson} from "./api-response.mjs";
 import {
   LayoutDashboard,
   Truck,
@@ -166,9 +167,9 @@ const clearStoredSession = () => {
   sessionStorage.removeItem("nerveCenterSession");
   sessionStorage.removeItem("aiFeederGreeted");
 };
-// A deploy that changes the UI version clears every server session while the
-// browser still holds its old token. Any authenticated API call then answers
-// 401, so return to the sign-in screen instead of surfacing it as a save error.
+// An authenticated 401 means this specific token is no longer valid (for
+// example after a password change), so return to sign-in instead of surfacing
+// it as an unrelated save error. Ordinary UI deployments preserve sessions.
 if (typeof window !== "undefined" && typeof window.fetch === "function" && !window.__sessionExpiryFetch) {
   const nativeFetch = window.fetch.bind(window);
   window.__sessionExpiryFetch = true;
@@ -282,16 +283,32 @@ function AuthModeTabs({ mode, onModeChange }) {
     { id: "signin", label: "Sign in", detail: "Portal access", Icon: UserRound },
     { id: "reset", label: "Reset password", detail: "OTP recovery", Icon: LockKeyhole },
   ];
+  const selectFromKeyboard = (event, currentIndex) => {
+    const direction = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const nextIndex = event.key === "Home"
+      ? 0
+      : event.key === "End"
+        ? options.length - 1
+        : direction
+          ? (currentIndex + direction + options.length) % options.length
+          : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    onModeChange(options[nextIndex].id);
+    event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')?.[nextIndex]?.focus();
+  };
   return (
     <div className="login-auth-tabs" role="tablist" aria-label="Login options">
-      {options.map(({ id, label, detail, Icon }) => (
+      {options.map(({ id, label, detail, Icon }, index) => (
         <button
           key={id}
           type="button"
           role="tab"
           aria-selected={mode === id}
+          tabIndex={mode === id ? 0 : -1}
           className={mode === id ? "active" : ""}
           onClick={() => onModeChange(id)}
+          onKeyDown={(event) => selectFromKeyboard(event, index)}
         >
           <span className="login-auth-tab-icon" aria-hidden="true"><Icon /></span>
           <span className="login-auth-tab-copy">
@@ -358,8 +375,7 @@ function Login({ onLogin, theme, toggleTheme }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not sign in.");
+      const data = await readApiJson(response, "Could not sign in.");
       if (data.requiresPasswordChange) {
         setPasswordChange({ changeToken: data.changeToken, name: data.name });
         return;
@@ -380,8 +396,7 @@ function Login({ onLogin, theme, toggleTheme }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ changeToken: passwordChange.changeToken, password: newPassword, confirmation }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not change password.");
+      const data = await readApiJson(response, "Could not change password.");
       saveSession(data);
     } catch (changeError) {
       setError(changeError.message);
@@ -399,8 +414,7 @@ function Login({ onLogin, theme, toggleTheme }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not request an OTP.");
+      const data = await readApiJson(response, "Could not request an OTP.");
       setResetRequest({ resetToken: data.resetToken, message: data.message });
     } catch (resetError) {
       setError(resetError.message);
@@ -417,8 +431,7 @@ function Login({ onLogin, theme, toggleTheme }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resetToken: resetRequest.resetToken, otp: resetOtp, password: newPassword, confirmation }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Could not reset the password.");
+      const data = await readApiJson(response, "Could not reset the password.");
       setNotice(data.message);
       setLoginMode("signin");
       setResetRequest(null);
@@ -1283,7 +1296,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "" }) {
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [dateFilter, setDateFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
   const [openFilter, setOpenFilter] = useState(null);
@@ -1341,7 +1354,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
-    <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div></div><div id={statusPanelId || undefined} role={statusPanelId ? "tabpanel" : undefined} aria-labelledby={statusPanelLabelledBy || undefined} className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <ActionsTable className="breakdown-table-auto-fit" toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
@@ -2208,42 +2221,85 @@ function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
 function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort, onClearSort, onReset, resetLabel = "Reset report" }) {
   const [open, setOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
-  const triggerRef = useRef(null);
+  const [submenuSide, setSubmenuSide] = useState("right");
+  const triggerRef = useRef(null), popoverRef = useRef(null), dataTriggerRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
+  const close = ({restoreFocus = false} = {}) => {
+    setOpen(false);
+    setDataOpen(false);
+    if (restoreFocus) triggerRef.current?.focus();
+  };
   useEffect(() => {
     if (!open) return undefined;
     const closeMenu = (event) => {
-      if (!event.target.closest?.(".report-actions-menu, .report-actions-popover")) setOpen(false);
+      if (!event.target.closest?.(".report-actions-menu, .report-actions-popover")) close();
     };
     const placeMenu = () => {
       const bounds = triggerRef.current?.getBoundingClientRect();
       if (!bounds) return;
       const viewport = visibleViewportBounds();
       const below = bounds.bottom + 6;
+      const popoverLeft = Math.max(viewport.left + 12, Math.min(bounds.left, viewport.right - 244));
       setPosition({
         top: below + 250 > viewport.bottom - 12 ? Math.max(viewport.top + 12, bounds.top - 256) : below,
-        left: Math.max(viewport.left + 12, Math.min(bounds.left, viewport.right - 244)),
+        left: popoverLeft,
       });
+      setSubmenuSide(popoverLeft + 232 + 186 > viewport.right - 12 ? "left" : "right");
     };
     placeMenu();
+    const focusFrame = window.requestAnimationFrame(() => popoverRef.current?.querySelector('[role="menuitem"]')?.focus());
     document.addEventListener("pointerdown", closeMenu);
     const stopObservingViewport = observeVisibleViewport(placeMenu);
     window.addEventListener("scroll", placeMenu, true);
     return () => {
       document.removeEventListener("pointerdown", closeMenu);
+      window.cancelAnimationFrame(focusFrame);
       stopObservingViewport();
       window.removeEventListener("scroll", placeMenu, true);
     };
   }, [open]);
+  const handleMenuKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close({restoreFocus: true});
+      return;
+    }
+    if (event.key === "Tab") {
+      close();
+      return;
+    }
+    if (event.key === "ArrowLeft" && event.target.closest?.(".report-actions-submenu")) {
+      event.preventDefault();
+      setDataOpen(false);
+      dataTriggerRef.current?.focus();
+      return;
+    }
+    if (event.key === "ArrowRight" && event.target === dataTriggerRef.current) {
+      event.preventDefault();
+      setDataOpen(true);
+      window.requestAnimationFrame(() => popoverRef.current?.querySelector('.report-actions-submenu [role="menuitem"]')?.focus());
+      return;
+    }
+    const items = Array.from(event.currentTarget.querySelectorAll('[role="menuitem"]')).filter((item) => item.offsetParent !== null);
+    const currentIndex = items.indexOf(document.activeElement);
+    const nextIndex = event.key === "Home" ? 0
+      : event.key === "End" ? items.length - 1
+        : event.key === "ArrowDown" ? (currentIndex + 1 + items.length) % items.length
+          : event.key === "ArrowUp" ? (currentIndex - 1 + items.length) % items.length
+            : -1;
+    if (nextIndex < 0 || !items.length) return;
+    event.preventDefault();
+    items[nextIndex]?.focus();
+  };
   const run = (callback) => { setOpen(false); setDataOpen(false); callback(); };
   return <div className="report-actions-menu">
-    <button ref={triggerRef} type="button" className="report-actions-trigger" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-haspopup="menu"><span>Actions</span><ChevronDown /></button>
-    {open && createPortal(<div className="report-actions-popover" style={position} role="menu" aria-label="Report actions">
+    <button ref={triggerRef} type="button" className="report-actions-trigger" onClick={() => { if (open) close(); else setOpen(true); }} aria-expanded={open} aria-haspopup="menu"><span>Actions</span><ChevronDown /></button>
+    {open && createPortal(<div ref={popoverRef} className="report-actions-popover" style={position} role="menu" aria-label="Report actions" onKeyDown={handleMenuKeyDown}>
       <button type="button" role="menuitem" onClick={() => run(onColumns)}><Columns3 /><span>Columns</span></button>
       <button type="button" role="menuitem" onClick={() => run(onFilter)}><ListFilter /><span>Filter</span>{activeFilterCount > 0 && <b>{activeFilterCount}</b>}</button>
       <div className="report-actions-divider" />
-      <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={dataOpen} onClick={() => setDataOpen((current) => !current)}><ArrowUpDown /><span>Data</span><ChevronRight /></button>
-      {dataOpen && <div className="report-actions-submenu" role="menu" aria-label="Report data actions"><button type="button" role="menuitem" onClick={() => run(onSort)}><ArrowUpDown /><span>Sort</span></button><button type="button" role="menuitem" onClick={() => run(onClearSort)}><X /><span>Clear sort</span></button></div>}
+      <button ref={dataTriggerRef} type="button" role="menuitem" aria-haspopup="menu" aria-expanded={dataOpen} onClick={() => setDataOpen((current) => !current)}><ArrowUpDown /><span>Data</span><ChevronRight /></button>
+      {dataOpen && <div className={`report-actions-submenu open-${submenuSide}`} role="menu" aria-label="Report data actions"><button type="button" role="menuitem" onClick={() => run(onSort)}><ArrowUpDown /><span>Sort</span></button><button type="button" role="menuitem" onClick={() => run(onClearSort)}><X /><span>Clear sort</span></button></div>}
       <div className="report-actions-divider" />
       <button type="button" role="menuitem" onClick={() => run(onReset)}><RotateCcw /><span>{resetLabel}</span></button>
     </div>, document.body)}
@@ -3186,6 +3242,14 @@ function Equipment({
                 <tr
                   key={v.id || v.door || i}
                   onClick={() => setDetail(v)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return;
+                    event.preventDefault();
+                    setDetail(v);
+                  }}
+                  tabIndex={0}
+                  aria-haspopup="dialog"
+                  aria-label={`View details for ${v.equipmentName || v.door || "equipment"}`}
                   className="click"
                 >
                   <td>
@@ -5510,22 +5574,56 @@ function MasterLoader({ name }) {
     </section>
   );
 }
+function MasterLoadError({ name, error, retry }) {
+  return (
+    <section className="panel pagepanel master-loading master-load-error" role="alert">
+      <header><div><h1>{name}</h1><p>Live records could not be loaded.</p></div></header>
+      <div className="master-loader-content">
+        <AlertTriangle />
+        <strong>Unable to show reliable data</strong>
+        <p>{error || "Check the connection and try again."}</p>
+        <button type="button" className="primary" onClick={retry}><RotateCcw /> Retry</button>
+      </div>
+    </section>
+  );
+}
 function useMasterRecords(name, seed = []) {
   const [records, setRecords] = useState(seed),
-    [loaded, setLoaded] = useState(false);
+    [loaded, setLoaded] = useState(false),
+    [loadError, setLoadError] = useState(""),
+    [loadAttempt, setLoadAttempt] = useState(0);
   useEffect(() => {
+    let activeRequest = true;
+    const controller = new AbortController();
     const loadStartedAt = performance.now();
-    fetch("/api/masters", {headers: {Authorization: `Bearer ${authToken}`}})
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((data) => setRecords([...seed, ...(data[name] || [])]))
-      .catch(() => {})
-      .finally(() => {
+    setLoaded(false);
+    setLoadError("");
+    fetch("/api/masters", {signal: controller.signal, headers: {Authorization: "Bearer " + authToken}})
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || "Could not load " + name + ".");
+        if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Could not load " + name + ".");
+        return data;
+      })
+      .then((data) => {
+        if (!activeRequest) return;
+        setRecords([...seed, ...(data[name] || [])]);
         setLoaded(true);
+      })
+      .catch((error) => {
+        if (activeRequest && error.name !== "AbortError") setLoadError(error.message || "Could not load " + name + ".");
+      })
+      .finally(() => {
+        if (!activeRequest) return;
         window.dispatchEvent(new CustomEvent("menu-data-loaded", {
           detail: {name, seconds: (performance.now() - loadStartedAt) / 1000},
         }));
       });
-  }, [name]);
+    return () => {
+      activeRequest = false;
+      controller.abort();
+    };
+  }, [name, loadAttempt]);
   const add = async (incoming, { silent = false } = {}) => {
     const batches = batchMasterRecords(incoming);
     const saved = [];
@@ -5602,7 +5700,7 @@ function useMasterRecords(name, seed = []) {
     setRecords([]);
     alert(`${details.deleted ?? records.length} records deleted successfully.`);
   };
-  return [records, add, loaded, edit, remove, removeAll];
+  return [records, add, loaded, edit, remove, removeAll, loadError, () => setLoadAttempt((attempt) => attempt + 1)];
 }
 function MetaWhatsAppSetup() {
   const [employees] = useMasterRecords("Users & employees");
@@ -5930,11 +6028,35 @@ function WhatsAppAlertHistory() {
 }
 const OriginalBreakdown = Breakdown;
 Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
-  const [manualRecords, onAdd, loaded, , , onDeleteAll] = useMasterRecords("Breakdown master");
-  const [equipmentRecords] = useMasterRecords("Equipment master");
-  if (!loaded) return <MasterLoader name="Breakdown master" />;
+  const [manualRecords, onAdd, loaded, , , onDeleteAll, loadError, retryLoad] = useMasterRecords("Breakdown master");
+  const [equipmentRecords, , equipmentLoaded, , , , equipmentLoadError, retryEquipmentLoad] = useMasterRecords("Equipment master");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const statusTabRefs = useRef([]);
+  if (loadError || equipmentLoadError) return <MasterLoadError name="Breakdown master" error={loadError || equipmentLoadError} retry={() => { retryLoad(); retryEquipmentLoad(); }} />;
+  if (!loaded || !equipmentLoaded) return <MasterLoader name="Breakdown master" />;
   const rows = [...requests, ...manualRecords].map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
-  const count = (status) => rows.filter((record) => record.status === status).length;
+  const count = (status) => rows.filter((record) => String(record.status || "").toLowerCase() === status.toLowerCase()).length;
+  const statusTabs = [
+    ["all", "All requests", rows.length],
+    ["Open", "Open", count("Open")],
+    ["In progress", "In progress", count("In progress")],
+    ["Awaiting parts", "Awaiting parts", count("Awaiting parts")],
+    ["Closed", "Closed", count("Closed")],
+  ];
+  const filteredRows = statusFilter === "all"
+    ? rows
+    : rows.filter((record) => String(record.status || "").toLowerCase() === statusFilter.toLowerCase());
+  const selectStatusFromKeyboard = (event, currentIndex) => {
+    const direction = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const nextIndex = event.key === "Home" ? 0
+      : event.key === "End" ? statusTabs.length - 1
+        : direction ? (currentIndex + direction + statusTabs.length) % statusTabs.length
+          : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    setStatusFilter(statusTabs[nextIndex][0]);
+    statusTabRefs.current[nextIndex]?.focus();
+  };
   return (
     <section className="panel table pagepanel">
       <header>
@@ -5944,26 +6066,33 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
         </div>
         <MasterActions name="Breakdown master" records={rows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
-      <div className="tabs">
-        {[
-          `All requests ${rows.length}`,
-          `Open ${count("Open")}`,
-          `In progress ${count("In progress")}`,
-          `Awaiting parts ${count("Awaiting parts")}`,
-          `Closed ${count("Closed")}`,
-        ].map((label, index) => (
-          <button key={label} className={index === 0 ? "active" : ""}>
-            {label}
+      <div className="tabs" role="tablist" aria-label="Breakdown request status">
+        {statusTabs.map(([value, label, total], index) => (
+          <button
+            key={value}
+            ref={(element) => { statusTabRefs.current[index] = element; }}
+            id={`breakdown-status-tab-${index}`}
+            type="button"
+            role="tab"
+            aria-selected={statusFilter === value}
+            aria-controls="breakdown-status-panel"
+            tabIndex={statusFilter === value ? 0 : -1}
+            className={statusFilter === value ? "active" : ""}
+            onClick={() => setStatusFilter(value)}
+            onKeyDown={(event) => selectStatusFromKeyboard(event, index)}
+          >
+            {label} {total}
           </button>
         ))}
       </div>
-      <BreakdownTable rows={rows} stickyHeader showAudio showMakeModel actionsBesideSearch />
+      <BreakdownTable rows={filteredRows} stickyHeader showAudio showMakeModel actionsBesideSearch statusPanelId="breakdown-status-panel" statusPanelLabelledBy={`breakdown-status-tab-${statusTabs.findIndex(([value]) => value === statusFilter)}`} />
     </section>
   );
 };
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
-  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords("Equipment master", vehicles);
+  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad] = useMasterRecords("Equipment master", vehicles);
+  if (loadError) return <MasterLoadError name="Equipment master" error={loadError} retry={retryLoad} />;
   if (!loaded) return <MasterLoader name="Equipment master" />;
   const addEquipment = (incoming) =>
     onAdd(
@@ -5982,7 +6111,7 @@ Equipment = function EquipmentWithData(props) {
 };
 const OriginalGeneric = Generic;
 function PrivilegeMasterPage(props) {
-  const [users, , usersLoaded] = useMasterRecords("Users & employees");
+  const [users, , usersLoaded, , , , usersLoadError, retryUsersLoad] = useMasterRecords("Users & employees");
   const syncing = useRef(""),
     [failedSync, setFailedSync] = useState("");
   const userOptions = Array.from(
@@ -6020,6 +6149,7 @@ function PrivilegeMasterPage(props) {
       alert(error.message || "Could not load users into Privilege.");
     });
   }, [syncKey, failedSync]);
+  if (usersLoadError) return <MasterLoadError name="Privilege" error={usersLoadError} retry={retryUsersLoad} />;
   if (!usersLoaded) return <MasterLoader name="Privilege" />;
   if (missingUsers.length && failedSync !== syncKey) return <MasterLoader name="Privilege" />;
   return <MasterPage {...props} userOptions={userOptions} siteOptions={privilegeSiteOptions} />;
@@ -6210,11 +6340,11 @@ function RegionMasterPage({ records = [], requests = [], onAdd, onDeleteAll, got
   const [activeSite, setActiveSite] = useState("");
   const [query, setQuery] = useState("");
   const [equipmentRecords] = useMasterRecords("Equipment master", vehicles);
-  useEffect(() => {
-    const firstSite = activeRegion?.sitesList?.[0] || "";
-    if (!activeRegion?.sitesList?.includes(activeSite)) setActiveSite(firstSite);
-  }, [activeRegionCode, activeRegion?.sites, activeSite]);
   const visibleSites = (activeRegion?.sitesList || []).filter((site) => matchesSmartSearch(query, activeRegion?.name, activeRegion?.code, site));
+  useEffect(() => {
+    const nextSite = visibleSites.includes(activeSite) ? activeSite : visibleSites[0] || "";
+    if (nextSite !== activeSite) setActiveSite(nextSite);
+  }, [activeRegionCode, activeSite, visibleSites.join("|")]);
   const siteMetrics = (site) => {
     const siteRecords = equipmentRecords.filter((record) => recordBelongsToSite(record, site));
     const siteRequests = requests.filter((record) => recordBelongsToSite(record, site));
@@ -6313,13 +6443,14 @@ Generic = function GenericWithMasters(props) {
       name === "Region master"
         ? subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") }))
         : [],
-    [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(name, seed);
+    [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad] = useMasterRecords(name, seed);
   const masterSiteOptions = name === "Users & employees"
     ? [...new Set([
         ...privilegeSiteOptions,
         ...records.map((record) => displaySiteName(record.site)).filter(Boolean),
       ])]
     : [];
+  if (masterFields[name] && loadError) return <MasterLoadError name={name} error={loadError} retry={retryLoad} />;
   if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
   return masterFields[name] ? (
     name === "Privilege" ? (
@@ -6335,20 +6466,69 @@ Generic = function GenericWithMasters(props) {
 };
 const OriginalSubsidiaries = Subsidiaries;
 Subsidiaries = function SubsidiariesWithImport({ gotoEquipment, requests = [] } = {}) {
-  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll] = useMasterRecords(
+  const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad] = useMasterRecords(
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
+  if (loadError) return <MasterLoadError name="Region master" error={loadError} retry={retryLoad} />;
   if (!loaded) return <MasterLoader name="Region master" />;
   return <RegionMasterPage records={records} requests={requests} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
 function Modal({ title, close, children, className = "" }) {
+  const dialogRef = useRef(null);
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusableElements = () => Array.from(dialog.querySelectorAll(
+      'button:not(:disabled), [href], input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )).filter((element) => element.getAttribute("aria-hidden") !== "true");
+    const preferredFocus = dialog.querySelector(
+      '[autofocus], form input:not([type="hidden"]):not(:disabled), form select:not(:disabled), form textarea:not(:disabled)',
+    );
+    if (!dialog.contains(document.activeElement)) (preferredFocus || dialog).focus();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = focusableElements();
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (!dialog.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
   return (
     <div
       className="overlay"
       onPointerDown={(e) => e.target === e.currentTarget && close()}
     >
-      <div className={`modal ${className}`.trim()} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Dialog"}>
+      <div ref={dialogRef} tabIndex={-1} className={`modal ${className}`.trim()} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Dialog"}>
         <header>
           <h3>{title}</h3>
           <button type="button" onClick={close} aria-label="Close dialog">
@@ -6835,17 +7015,27 @@ function TicketPage({ session }) {
   const ticketExportColumns = [
     { label: "Ticket ID", value: (ticket) => ticket.reference }, { label: "User", value: (ticket) => ticket.creatorName }, { label: "Site", value: (ticket) => ticket.site }, { label: "Category", value: (ticket) => ticket.category }, { label: "Priority", value: (ticket) => ticket.priority || "Medium" }, { label: "Description", value: (ticket) => ticket.message || "Audio description" }, { label: "Status", value: (ticket) => ticket.status }, { label: "Resolution", value: (ticket) => ticket.resolutionMessage || "—" },
   ];
-  const load = async () => {
+  useEffect(() => {
+    let activeRequest = true;
+    const controller = new AbortController();
     setLoading(true);
-    try {
-      const response = await fetch(`/api/tickets${category ? `?category=${encodeURIComponent(category)}` : ""}`, {headers: {Authorization: `Bearer ${session.token}`}});
-      const result = await response.json().catch(() => ([]));
-      if (!response.ok) throw new Error(result.error || "Could not load tickets.");
-      setTickets(result);
-    } catch (error) { alert(error.message); }
-    finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, [category, session?.token]);
+    fetch(`/api/tickets${category ? `?category=${encodeURIComponent(category)}` : ""}`, {
+      signal: controller.signal,
+      headers: {Authorization: `Bearer ${session.token}`},
+    })
+      .then(async (response) => {
+        const result = await response.json().catch(() => ([]));
+        if (!response.ok) throw new Error(result.error || "Could not load tickets.");
+        return result;
+      })
+      .then((result) => { if (activeRequest) setTickets(result); })
+      .catch((error) => { if (activeRequest && error.name !== "AbortError") alert(error.message); })
+      .finally(() => { if (activeRequest) setLoading(false); });
+    return () => {
+      activeRequest = false;
+      controller.abort();
+    };
+  }, [category, session?.token]);
   return <section className="ticket-page">
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><div className="ticket-toolbar-controls"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
@@ -6977,18 +7167,47 @@ function AiFeeder({ requests = [], role = "" }) {
 }
 function NotificationBell({ session, onOpenTickets }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false);
+  const centerRef = useRef(null), triggerRef = useRef(null);
   // Loading reminders updates the badge; only a bell click opens the dropdown.
-  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}}).then((response) => response.ok ? response.json() : []).then((next) => setItems(next)).catch(() => {});
+  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}})
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Could not load notifications (HTTP ${response.status}).`);
+      return response.json();
+    })
+    .then((next) => { if (Array.isArray(next)) setItems(next); })
+    .catch((error) => console.warn("Notification refresh failed; retaining the last successful list.", error));
   useEffect(() => { load(); const timer = window.setInterval(load, 30000); return () => window.clearInterval(timer); }, [session?.token]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOutside = (event) => {
+      if (!centerRef.current?.contains(event.target)) setOpen(false);
+    };
+    const closeWithEscape = (event) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [open]);
   const unread = items.filter((item) => !item.isRead).length;
   const toggle = async () => {
     const next = !open; setOpen(next);
     if (next && unread) {
-      await fetch("/api/notifications/read", {method: "PATCH", headers: {Authorization: `Bearer ${session.token}`}}).catch(() => {});
-      setItems((current) => current.map((item) => ({...item, isRead: true})));
+      try {
+        const response = await fetch("/api/notifications/read", {method: "PATCH", headers: {Authorization: `Bearer ${session.token}`}});
+        if (!response.ok) throw new Error(`Could not mark notifications as read (HTTP ${response.status}).`);
+        setItems((current) => current.map((item) => ({...item, isRead: true})));
+      } catch (error) {
+        console.warn("Notifications remain unread because the update failed.", error);
+      }
     }
   };
-  return <div className="notification-center"><button type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => {setOpen(false); onOpenTickets?.(item);}}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div></div>}</div>;
+  return <div className="notification-center" ref={centerRef}><button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => {setOpen(false); onOpenTickets?.(item);}}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div></div>}</div>;
 }
 
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
@@ -7023,12 +7242,13 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
     let active=true;
-    fetch(`/api/requests?scope=dashboard&t=${Date.now()}`,{cache:"no-store",headers:{Authorization:`Bearer ${session?.token||authToken}`}})
+    const controller = new AbortController();
+    fetch(`/api/requests?scope=dashboard&t=${Date.now()}`,{cache:"no-store",signal:controller.signal,headers:{Authorization:`Bearer ${session?.token||authToken}`}})
       .then(async(response)=>{const body=await response.json().catch(()=>([]));if(!response.ok)throw new Error(body.error||"Could not load dashboard requests");return body})
       .then((rows)=>{if(active)setDashboardRequests(rows)})
-      .catch((error)=>console.error(error));
-    return()=>{active=false};
-  },[session?.token,requests.length]);
+      .catch((error)=>{if(error.name!=="AbortError")console.error(error)});
+    return()=>{active=false;controller.abort()};
+  },[session?.token,requests]);
   useEffect(() => {
     let active = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session?.token || authToken}`}})
@@ -7104,6 +7324,7 @@ function App() {
     });
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([LOGIN_LANDING_PAGE]);
+  const requestLoadSequence = useRef(0);
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
   useEffect(() => {
@@ -7169,10 +7390,8 @@ function App() {
         if (!response.ok) return;
         const data = await response.json();
         if (!stopped && data.version && data.version !== APP_VERSION) {
-          authToken = "";
-          currentEmployeeName = "";
-          localStorage.removeItem("nerveCenterSession");
-          sessionStorage.removeItem("nerveCenterSession");
+          // Deploying a new interface is not a logout event. Keep the valid
+          // stored session and reload only the application assets.
           window.location.replace(`/?updated=${encodeURIComponent(data.version)}`);
         }
       } catch (error) {
@@ -7232,8 +7451,9 @@ function App() {
     return () => clearTimeout(timer);
   }, [loadTime]);
   const loadRequests = async () => {
+    const loadSequence = ++requestLoadSequence.current;
     if (!session?.token) {
-      setRequests([]);
+      if (loadSequence === requestLoadSequence.current) setRequests([]);
       return [];
     }
     const response = await fetch(`/api/requests?t=${Date.now()}`, {
@@ -7242,12 +7462,13 @@ function App() {
     });
     if (!response.ok) throw new Error("Could not load requests");
     const data = await response.json();
-    setRequests(data);
+    if (loadSequence === requestLoadSequence.current) setRequests(data);
     return data;
   };
   useEffect(() => {
     let stopped = false;
     if (!session?.token) {
+      requestLoadSequence.current += 1;
       setRequests([]);
       return undefined;
     }
@@ -7262,6 +7483,7 @@ function App() {
     const timer = window.setInterval(refresh, 10000);
     return () => {
       stopped = true;
+      requestLoadSequence.current += 1;
       window.clearInterval(timer);
     };
   }, [session?.token]);
@@ -7281,6 +7503,7 @@ function App() {
       setSession(null);
     },
     addRequest = async (request) => {
+      requestLoadSequence.current += 1;
       setRequests((current) => [request, ...current.filter((row) => row.ref !== request.ref)]);
       const response = await fetch("/api/requests", {
         method: "POST",
@@ -7289,12 +7512,14 @@ function App() {
       });
       const saved = await response.json().catch(() => ({}));
       if (!response.ok) {
+        requestLoadSequence.current += 1;
         setRequests((current) => current.filter((row) => row.ref !== request.ref));
         const error = new Error(saved.error || "Could not save request");
         error.duplicate = saved.duplicate === true;
         error.existingReference = saved.existingReference || "";
         throw error;
       }
+      requestLoadSequence.current += 1;
       setRequests((current) => [saved, ...current.filter((row) => row.ref !== request.ref)]);
       try {
         await loadRequests();
@@ -7321,6 +7546,7 @@ function App() {
             : "Could not update request";
         throw new Error(saved.error || fallback);
       }
+      requestLoadSequence.current += 1;
       setRequests((current) => current.map((row) => row.ref === reference ? saved : row));
       return saved;
     },
@@ -7328,6 +7554,7 @@ function App() {
       const response = await fetch(`/api/requests/${encodeURIComponent(reference)}/daily-remarks`, {method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},body:JSON.stringify(payload)});
       const saved=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(saved.error||"Could not save the daily update");
+      requestLoadSequence.current += 1;
       setRequests((current)=>current.map((row)=>row.ref===reference?saved:row));
       return saved;
     },
@@ -7338,6 +7565,7 @@ function App() {
       const response = await fetch(`/api/requests/${encodeURIComponent(reference)}`, {method: "DELETE", headers: {Authorization: `Bearer ${authToken}`, "X-Audit-Reason": reason.trim()}});
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not delete request");
+      requestLoadSequence.current += 1;
       setRequests((current) => current.filter((row) => row.ref !== reference));
     };
   const completeLogin = (nextSession) => {

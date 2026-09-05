@@ -5,8 +5,8 @@ import test from "node:test";
 test("notification loading never opens the dropdown on login or polling", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const bell = source.slice(source.indexOf("function NotificationBell("), source.indexOf("function Normal("));
-  const loading = bell.slice(0, bell.indexOf("const unread"));
-  assert.match(loading, /\[open, setOpen\] = useState\(false\)/);
+  const loading = bell.slice(bell.indexOf("const load ="), bell.indexOf("useEffect(() => {\n    if (!open)"));
+  assert.match(bell, /\[open, setOpen\] = useState\(false\)/);
   assert.match(loading, /setItems\(next\)/);
   assert.match(loading, /window\.setInterval\(load, 30000\)/);
   assert.doesNotMatch(loading, /setOpen\(/);
