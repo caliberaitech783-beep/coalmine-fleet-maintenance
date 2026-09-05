@@ -145,12 +145,25 @@
 /* Give Maintenance's working table more of the viewport after its close-form
    action moved into the persistent top navigation. */
 .normal:not(.embedded-workspace) .maintenance-workspace > .welcome.workspace-hero {
-  gap: 12px;
-  padding-block: 18px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-block: 12px;
 }
 
 .normal:not(.embedded-workspace) .maintenance-workspace > section.panel {
   min-height: 390px;
+}
+
+@media (min-width: 1301px) {
+  .normal > header:has(.maintenance-close-nav) {
+    grid-template-columns: max-content minmax(0, 1fr) clamp(205px, 14vw, 245px) max-content;
+  }
+
+  .normal-header-nav:has(.maintenance-close-nav) button {
+    padding-inline: 8px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -218,6 +231,11 @@
 
   .normal:not(.embedded-workspace) .mobile-workspace > section.panel {
     min-height: 0;
+  }
+
+  .normal:not(.embedded-workspace) .maintenance-workspace > .welcome.workspace-hero {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .normal-header-nav:has(.maintenance-close-nav) {
