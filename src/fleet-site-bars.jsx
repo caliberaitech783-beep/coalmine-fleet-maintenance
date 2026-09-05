@@ -2,7 +2,7 @@ import React from "react";
 
 export default function FleetSiteBars({ site, axisMax, breakdownOnly = false }) {
   return <span className="mine-fleet-site-bars">
-    {[["equipment", "Equipment", "E"], ["vehicles", "Vehicles", "V"]].map(([key, label, abbreviation]) => {
+    {[["equipment", "Equipment"], ["vehicles", "Vehicles"]].map(([key, label]) => {
       const total = site[key];
       const breakdown = site.breakdown[key];
       const count = breakdownOnly ? breakdown : total;
@@ -14,7 +14,6 @@ export default function FleetSiteBars({ site, axisMax, breakdownOnly = false }) 
             {!breakdownOnly && <b className="mine-fleet-breakdown-count">{breakdown.toLocaleString()}</b>}
           </span>}
         </i>
-        <span className="mine-fleet-bar-category" aria-hidden="true">{abbreviation}</span>
       </span>;
     })}
   </span>;

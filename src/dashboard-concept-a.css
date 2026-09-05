@@ -863,7 +863,6 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-breakdown-count { position: absolute; bottom: max(0px, calc(50% - 8px)); left: 50%; min-width: 18px; padding: 1px 3px; transform: translateX(-50%); border-radius: 3px; background: var(--fleet-breakdown); color: #fff; font-weight: 800; line-height: 14px; text-align: center; }
 .mine-fleet-bar.equipment .small-segment .mine-fleet-breakdown-count { bottom: 0; left: auto; right: calc(100% + 2px); transform: none; }
 .mine-fleet-bar.vehicles .small-segment .mine-fleet-breakdown-count { bottom: 0; left: calc(100% + 2px); transform: none; }
-.mine-fleet-bar-category { position: absolute; top: calc(100% + 3px); left: 0; width: 100%; color: var(--mine-muted); font-weight: 800; line-height: 12px; text-align: center; }
 .mine-fleet-chart-regions footer { display: flex; align-items: center; justify-content: center; gap: 7px; border-top: 2px solid #315fd4; background: #315fd408; }
 .mine-fleet-chart-regions footer b { color: #315fd4; font: 900 14px Manrope; }
 .mine-fleet-chart-regions footer span { color: var(--mine-text); font-size: 11px; font-weight: 700; }
