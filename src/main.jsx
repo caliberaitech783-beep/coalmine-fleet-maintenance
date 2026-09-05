@@ -6924,7 +6924,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], onClose }) {
     <div className="ai-feeder-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
         <div>
-          <span className="ai-feeder-kicker"><Activity /> AI FEEDER</span>
+          <span className="ai-feeder-kicker"><Activity /> INFO PULSE</span>
           <h2 id="ai-feeder-title">{headline}</h2>
           <p>Your fleet at a glance. Review the highest-priority cases first.</p>
         </div>
@@ -6934,7 +6934,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], onClose }) {
             <Clock aria-hidden="true" />
             <b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
           </span>
-          <button type="button" onClick={onClose} aria-label="Close AI Feeder"><X /></button>
+          <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>
         </div>
       </header>
       <div className="ai-feeder-overview">
@@ -6966,7 +6966,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], onClose }) {
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Based on current request records</span><span>Closes at 00:00 · Reopen from AI Feeder</span></footer>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Based on current request records</span><span>Closes at 00:00 · Reopen from Info Pulse</span></footer>
     </div>
   </div>, document.body);
 }
@@ -6987,8 +6987,8 @@ function AiFeeder({ requests = [], role = "" }) {
   const alerts = useMemo(() => aiFeederAlerts(requests, { role, now }), [requests, role, now]);
   const summary = aiFeederSummary(alerts);
   return <>
-    <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="AI Feeder" aria-label={`AI Feeder, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
-      <Activity /><span>AI Feeder</span>{summary.total > 0 && <><b className="ai-feeder-trigger-count">{summary.critical || summary.total}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="Info Pulse" aria-label={`Info Pulse, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
+      <Activity /><span>INFO PULSE</span>{summary.total > 0 && <><b className="ai-feeder-trigger-count">{summary.critical || summary.total}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
     {open && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} onClose={() => setOpen(false)} />}
   </>;

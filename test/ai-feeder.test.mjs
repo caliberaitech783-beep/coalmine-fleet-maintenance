@@ -155,7 +155,7 @@ test("the AI feeder panel opens on login, counts down, and is reachable from the
   assert.match(mainSource, /window\.setInterval\(tick, 1000\)/);
   assert.match(mainSource, /if \(remaining === 0\) closeRef\.current\(\)/);
   assert.doesNotMatch(mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder(")), /setPaused|onMouseEnter|onMouseLeave/);
-  assert.match(mainSource, /AI Feeder<\/span>/);
+  assert.match(mainSource, /INFO PULSE<\/span>/);
   assert.match(mainSource, /className="ai-feeder-dot"/);
   // Both shells carry the header entry.
   assert.equal(mainSource.match(/<AiFeeder\b/g)?.length, 2);
