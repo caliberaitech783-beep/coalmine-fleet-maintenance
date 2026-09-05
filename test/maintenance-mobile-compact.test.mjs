@@ -7,12 +7,13 @@ test('maintenance table controls collapse by default with an accessible toggle',
   assert.match(source, /\[mobileControlsOpen, setMobileControlsOpen\] = useState\(false\)/);
   assert.match(source, /aria-expanded=\{mobileControlsOpen\} aria-controls=\{mobileControlsId\}/);
   assert.match(source, /id=\{mobileControlsId\} data-mobile-open=\{mobileControlsOpen\}/);
+  assert.equal((source.match(/aria-label="Table search and filters"/g) || []).length, 2);
 });
 
-test('compact layout and hiding are limited to mobile maintenance workspaces', () => {
+test('compact layout and hiding are limited to mobile operational workspaces', () => {
   const css = readFileSync(new URL('../src/maintenance-mobile-compact.css', import.meta.url),'utf8');
   assert.match(css, /@media \(max-width: 600px\)/);
-  assert.match(css, /\.maintenance-workspace \.table-search-toolbar\[data-mobile-open="false"\] \{ display: none !important;/);
+  assert.match(css, /\.mobile-workspace \.table-search-toolbar\[data-mobile-open="false"\] \{ display: none !important;/);
   assert.match(css, /\.maintenance-table-menu \{ display: none;/);
-  assert.match(css, /\.maintenance-workspace \.workspace-hero h1/);
+  assert.match(css, /\.mobile-workspace \.workspace-hero h1/);
 });
