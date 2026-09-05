@@ -24,7 +24,7 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(source,/showTripCard && workflowHeader\("tripCard", "Trip card image"\)/);
   assert.match(source,/<TripCardCell request=\{row\} \/>/);
   assert.match(source,/tab === "requests"[\s\S]*showReason showClosedBy showTurnaroundTime/);
-  assert.match(source,/showVerifiedBy=\{isMis\} showTripCard=\{isMis\}/);
+  assert.match(source,/showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
   assert.match(server,/app\.get\('\/api\/requests\/:reference\/trip-card'/);
   assert.match(server,/first_trip_card_image AS image/);
   assert.match(manager,/"Total requests", verifiedRequests\.length/);
