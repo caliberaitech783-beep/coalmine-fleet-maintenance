@@ -8,8 +8,8 @@
   color: inherit;
   padding: 8px 10px;
   border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -88,8 +88,8 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: 1.4px;
   color: #ffffffc7;
 }

@@ -156,6 +156,8 @@ test("the AI feeder panel opens on login, counts down, and is reachable from the
   assert.match(mainSource, /if \(remaining === 0\) closeRef\.current\(\)/);
   assert.doesNotMatch(mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder(")), /setPaused|onMouseEnter|onMouseLeave/);
   assert.match(mainSource, /INFO PULSE<\/span>/);
+  assert.match(styles, /\.ai-feeder-trigger\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*800;/s);
+  assert.match(styles, /\.ai-feeder-kicker\s*\{[^}]*font-size:\s*11px;[^}]*font-weight:\s*800;/s);
   assert.match(mainSource, /className="ai-feeder-dot"/);
   // Both shells carry the header entry.
   assert.equal(mainSource.match(/<AiFeeder\b/g)?.length, 2);
