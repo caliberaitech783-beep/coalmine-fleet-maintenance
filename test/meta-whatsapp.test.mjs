@@ -5,6 +5,7 @@ import {META_WORKFLOW_TEMPLATES,metaWhatsAppConfiguration,normalizeWhatsAppRecip
 test('Meta WhatsApp configuration remains disabled until token and phone id are present',()=>{
   assert.equal(metaWhatsAppConfiguration({}).configured,false);
   assert.equal(metaWhatsAppConfiguration({META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123'}).configured,true);
+  assert.equal(metaWhatsAppConfiguration({WHATSAPP_PROVIDER:'fast2sms',FAST2SMS_WHATSAPP_API_KEY:'provider-key',META_WHATSAPP_PHONE_NUMBER_ID:'123'}).configured,true);
 });
 
 test('every workflow event has a Meta template definition',()=>{
@@ -63,6 +64,18 @@ test('template submission creates missing utility templates and preserves existi
 test('Indian WhatsApp recipients are normalized for Cloud API delivery',()=>{
   assert.equal(normalizeWhatsAppRecipient('94204 76281'),'919420476281');
   assert.equal(normalizeWhatsAppRecipient('+91 94204 76281'),'919420476281');
+});
+
+test('Fast2SMS delivery uses the provider endpoint and removes forbidden whitespace from template parameters',async()=>{
+  let request;
+  const result=await sendMetaWhatsAppTemplate({to:'9420476281',templateKey:'consolidatedRequestReport',parameters:['Line one\nLine two\tready']},{
+    env:{WHATSAPP_PROVIDER:'fast2sms',FAST2SMS_WHATSAPP_API_KEY:'provider-key',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_GRAPH_VERSION:'v26.0'},
+    fetchImpl:async(url,options)=>{request={url,options};return {ok:true,json:async()=>({messages:[{id:'wamid.fast2sms'}]})}},
+  });
+  assert.equal(result.messageId,'wamid.fast2sms');
+  assert.equal(request.url,'https://www.fast2sms.com/dev/whatsapp/v26.0/123/messages');
+  assert.equal(request.options.headers.Authorization,'provider-key');
+  assert.equal(JSON.parse(request.options.body).template.components[0].parameters[0].text,'Line one Line two ready');
 });
 
 test('Meta phone registration uses the configured number and a six-digit PIN',async()=>{

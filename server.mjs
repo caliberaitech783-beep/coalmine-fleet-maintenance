@@ -108,6 +108,8 @@ async function metaWhatsAppRuntimeEnv(){
     const settings=await storedWhatsAppSettings();
     return {
       ...process.env,
+      WHATSAPP_PROVIDER:String(settings.provider||process.env.WHATSAPP_PROVIDER||'meta').trim(),
+      FAST2SMS_WHATSAPP_API_KEY:String(settings.providerApiKey||process.env.FAST2SMS_WHATSAPP_API_KEY||'').trim(),
       META_WHATSAPP_PHONE_NUMBER_ID:String(settings.phoneNumberId||process.env.META_WHATSAPP_PHONE_NUMBER_ID||'').trim(),
       META_WHATSAPP_ACCESS_TOKEN:String(settings.accessToken||process.env.META_WHATSAPP_ACCESS_TOKEN||'').trim(),
       META_WHATSAPP_BUSINESS_ACCOUNT_ID:String(settings.businessAccountId||process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||'').trim(),
@@ -149,11 +151,14 @@ async function publicWhatsAppSettings(){
   const settings=await storedWhatsAppSettings();
   const env=await metaWhatsAppRuntimeEnv();
   return {
+    provider:String(env.WHATSAPP_PROVIDER||'meta'),
     phoneNumberId:String(env.META_WHATSAPP_PHONE_NUMBER_ID||''),
     businessAccountId:String(env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||''),
     graphVersion:String(env.META_GRAPH_VERSION||'v25.0'),
     accessTokenConfigured:Boolean(env.META_WHATSAPP_ACCESS_TOKEN),
     accessTokenPreview:maskedSecret(env.META_WHATSAPP_ACCESS_TOKEN),
+    providerApiKeyConfigured:Boolean(env.FAST2SMS_WHATSAPP_API_KEY),
+    providerApiKeyPreview:maskedSecret(env.FAST2SMS_WHATSAPP_API_KEY),
     source:{
       phoneNumberId:settings.phoneNumberId?'database':(process.env.META_WHATSAPP_PHONE_NUMBER_ID?'environment':'missing'),
       accessToken:settings.accessToken?'database':(process.env.META_WHATSAPP_ACCESS_TOKEN?'environment':'missing'),
@@ -1070,14 +1075,19 @@ app.put('/api/whatsapp/settings',requireSuper,requireWhatsAppAdministrator,async
   try{
     const current=await storedWhatsAppSettings();
     const nextSettings={...current};
+    if(Object.prototype.hasOwnProperty.call(req.body||{},'provider'))nextSettings.provider=String(req.body.provider||'meta').trim().toLowerCase()==='fast2sms'?'fast2sms':'meta';
+    if(Object.prototype.hasOwnProperty.call(req.body||{},'providerApiKey'))nextSettings.providerApiKey=String(req.body.providerApiKey||'').trim();
     if(Object.prototype.hasOwnProperty.call(req.body||{},'phoneNumberId'))nextSettings.phoneNumberId=String(req.body.phoneNumberId||'').replace(/\D/g,'').trim();
     if(Object.prototype.hasOwnProperty.call(req.body||{},'accessToken'))nextSettings.accessToken=String(req.body.accessToken||'').trim();
     if(Object.prototype.hasOwnProperty.call(req.body||{},'businessAccountId'))nextSettings.businessAccountId=String(req.body.businessAccountId||'').replace(/\D/g,'').trim();
     if(Object.prototype.hasOwnProperty.call(req.body||{},'graphVersion'))nextSettings.graphVersion=String(req.body.graphVersion||'v25.0').trim()||'v25.0';
     if(!nextSettings.phoneNumberId)return res.status(400).json({error:'Meta WhatsApp phone number ID is required.'});
-    if(!nextSettings.accessToken)return res.status(400).json({error:'Meta WhatsApp access token is required.'});
+    if(nextSettings.provider==='fast2sms'&&!nextSettings.providerApiKey)return res.status(400).json({error:'Fast2SMS WhatsApp API key is required.'});
+    if(nextSettings.provider!=='fast2sms'&&!nextSettings.accessToken)return res.status(400).json({error:'Meta WhatsApp access token is required.'});
     const candidateEnv={
       ...process.env,
+      WHATSAPP_PROVIDER:nextSettings.provider||'meta',
+      FAST2SMS_WHATSAPP_API_KEY:nextSettings.providerApiKey||'',
       META_WHATSAPP_PHONE_NUMBER_ID:nextSettings.phoneNumberId,
       META_WHATSAPP_ACCESS_TOKEN:nextSettings.accessToken,
       META_WHATSAPP_BUSINESS_ACCOUNT_ID:nextSettings.businessAccountId||'',
@@ -1104,7 +1114,11 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
   if(!reportType||!targetName||!recipientPhone||!message)
     return res.status(400).json({error:'Report type, target, recipient phone, and message are required.'});
   try{
-    const result=await sendMetaWhatsAppText({to:recipientPhone,message},{env:await metaWhatsAppRuntimeEnv()});
+    const result=await sendMetaWhatsAppTemplate({
+      to:recipientPhone,
+      templateKey:'consolidatedRequestReport',
+      parameters:[message],
+    },{env:await metaWhatsAppRuntimeEnv()});
     const {rows}=await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)
       RETURNING id,report_type AS "reportType",target_name AS "targetName",report_level AS "reportLevel",
@@ -1622,7 +1636,11 @@ async function sendDirectorReportBundle({recipientPhone,recipientName='Director'
   let status='Sent',bundle=null;
   try{
     bundle=await publishDirectorReportFiles({baseUrl,slotKey:window.slotKey,now});
-    await sendMetaWhatsAppText({to:phone,message:bundle.message},{env:await metaWhatsAppRuntimeEnv()});
+    await sendMetaWhatsAppTemplate({
+      to:phone,
+      templateKey:'consolidatedRequestReport',
+      parameters:[bundle.message],
+    },{env:await metaWhatsAppRuntimeEnv()});
   }catch(error){
     status=`Failed - ${String(error?.message||'Director WhatsApp delivery error').slice(0,160)}`;
     console.error(`Director WhatsApp report failed for ${phone}:`,error.message);
@@ -1693,11 +1711,12 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
           scheduleLabel,
           eventRequest:event?.request||null,
         });
-        if(event){
-          const env=await metaWhatsAppRuntimeEnv();
-          try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
-          catch(templateError){await sendMetaWhatsAppText({to:phone,message:bundle.message},{env})}
-        }else await sendMetaWhatsAppText({to:phone,message:bundle.message},{env:await metaWhatsAppRuntimeEnv()});
+        const env=await metaWhatsAppRuntimeEnv();
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
+        catch(templateError){
+          if(event)await sendMetaWhatsAppText({to:phone,message:bundle.message},{env});
+          else throw templateError;
+        }
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;

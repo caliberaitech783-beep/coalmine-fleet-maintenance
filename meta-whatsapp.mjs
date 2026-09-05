@@ -1,4 +1,5 @@
 const clean=(value)=>String(value??'').trim();
+const providerName=(env=process.env)=>clean(env.WHATSAPP_PROVIDER||'meta').toLowerCase()==='fast2sms'?'fast2sms':'meta';
 const deliveryPaused=(env=process.env)=>['true','1','yes','on'].includes(clean(env.META_WHATSAPP_DELIVERY_PAUSED).toLowerCase());
 const assertDeliveryActive=(env)=>{
   if(deliveryPaused(env))throw new Error('WhatsApp delivery is temporarily paused pending hierarchy configuration.');
@@ -24,12 +25,14 @@ export const META_WORKFLOW_TEMPLATES={
 };
 
 export function metaWhatsAppConfiguration(env=process.env){
+  const provider=providerName(env);
   const accessToken=clean(env.META_WHATSAPP_ACCESS_TOKEN);
+  const providerApiKey=clean(env.FAST2SMS_WHATSAPP_API_KEY);
   const phoneNumberId=clean(env.META_WHATSAPP_PHONE_NUMBER_ID);
   const businessAccountId=clean(env.META_WHATSAPP_BUSINESS_ACCOUNT_ID);
   const graphVersion=clean(env.META_GRAPH_VERSION||'v25.0');
-  return {accessToken,phoneNumberId,businessAccountId,graphVersion,
-    configured:Boolean(accessToken&&phoneNumberId)};
+  return {provider,accessToken,providerApiKey,phoneNumberId,businessAccountId,graphVersion,
+    configured:Boolean(phoneNumberId&&(provider==='fast2sms'?providerApiKey:accessToken))};
 }
 
 export function normalizeWhatsAppRecipient(value){
@@ -40,15 +43,17 @@ export function normalizeWhatsAppRecipient(value){
 
 async function metaRequest(path,{method='GET',body,env=process.env,fetchImpl=fetch}={}){
   const config=metaWhatsAppConfiguration(env);
-  if(!config.configured)throw new Error('Meta WhatsApp Cloud API is not configured.');
-  const response=await fetchImpl(`https://graph.facebook.com/${config.graphVersion}/${path}`,{
+  if(!config.configured)throw new Error(`${config.provider==='fast2sms'?'Fast2SMS':'Meta'} WhatsApp API is not configured.`);
+  const baseUrl=config.provider==='fast2sms'?'https://www.fast2sms.com/dev/whatsapp':'https://graph.facebook.com';
+  const authorization=config.provider==='fast2sms'?config.providerApiKey:`Bearer ${config.accessToken}`;
+  const response=await fetchImpl(`${baseUrl}/${config.graphVersion}/${path}`,{
     method,
-    headers:{Authorization:`Bearer ${config.accessToken}`,'Content-Type':'application/json'},
+    headers:{Authorization:authorization,'Content-Type':'application/json'},
     ...(body?{body:JSON.stringify(body)}:{}),
   });
   const details=await response.json().catch(()=>({}));
-  if(!response.ok){
-    const message=clean(details?.error?.message)||`Meta WhatsApp request failed (${response.status}).`;
+  if(!response.ok||details?.status===false||details?.success===false){
+    const message=clean(details?.error?.message||details?.message)||`${config.provider==='fast2sms'?'Fast2SMS':'Meta'} WhatsApp request failed (${response.status}).`;
     const explanation=clean(details?.error?.error_user_msg||details?.error?.error_data?.details);
     const error=new Error(explanation?`${message}: ${explanation}`:message);
     error.status=response.status;
@@ -62,7 +67,7 @@ export async function metaWhatsAppStatus(options={}){
   const config=metaWhatsAppConfiguration(options.env);
   if(!config.configured)return {configured:false,connected:false};
   const details=await metaRequest(`${config.phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating`,options);
-  return {configured:true,connected:true,phoneNumberId:details.id,
+  return {configured:true,connected:true,provider:config.provider,phoneNumberId:details.id,
     displayPhoneNumber:details.display_phone_number||'',verifiedName:details.verified_name||'',
     qualityRating:details.quality_rating||''};
 }
@@ -106,8 +111,10 @@ export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center
   form.append('messaging_product','whatsapp');
   form.append('type','application/pdf');
   form.append('file',new Blob([documentBuffer],{type:'application/pdf'}),safeFilename);
-  const uploadResponse=await fetchImpl(`https://graph.facebook.com/${config.graphVersion}/${config.phoneNumberId}/media`,{
-    method:'POST',headers:{Authorization:`Bearer ${config.accessToken}`},body:form,
+  const baseUrl=config.provider==='fast2sms'?'https://www.fast2sms.com/dev/whatsapp':'https://graph.facebook.com';
+  const authorization=config.provider==='fast2sms'?config.providerApiKey:`Bearer ${config.accessToken}`;
+  const uploadResponse=await fetchImpl(`${baseUrl}/${config.graphVersion}/${config.phoneNumberId}/media`,{
+    method:'POST',headers:{Authorization:authorization},body:form,
   });
   const upload=await uploadResponse.json().catch(()=>({}));
   if(!uploadResponse.ok||!clean(upload.id)){
@@ -128,7 +135,7 @@ export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[]},{e
   if(!template)throw new Error(`Unknown Meta WhatsApp template: ${templateKey}`);
   if(!recipient||recipient.length<10||recipient.length>15)throw new Error('A valid WhatsApp recipient phone number is required.');
   if(parameters.length!==template.example.length)throw new Error(`Template ${template.name} requires ${template.example.length} parameters.`);
-  const bodyParameters=parameters.map((value)=>({type:'text',text:clean(value)}));
+  const bodyParameters=parameters.map((value)=>({type:'text',text:clean(value).replace(/\s+/g,' ')}));
   const components=[{type:'body',parameters:bodyParameters}];
   if(template.otpButton)components.push({type:'button',sub_type:'url',index:'0',parameters:bodyParameters});
   const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,body:{

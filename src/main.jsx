@@ -5780,7 +5780,7 @@ function useMasterRecords(name, seed = []) {
 }
 function MetaWhatsAppSetup() {
   const [employees] = useMasterRecords("Users & employees");
-  const [form, setForm] = useState({phoneNumberId:"", businessAccountId:"", graphVersion:"v25.0", accessToken:""});
+  const [form, setForm] = useState({provider:"meta", phoneNumberId:"", businessAccountId:"", graphVersion:"v25.0", accessToken:"", providerApiKey:""});
   const [settings, setSettings] = useState(null);
   const [connection, setConnection] = useState(null);
   const [working, setWorking] = useState(false);
@@ -5791,7 +5791,7 @@ function MetaWhatsAppSetup() {
     const saved = await settingsResponse.json().catch(() => ({}));
     if (!settingsResponse.ok) throw new Error(saved.error || "Unable to load Meta WhatsApp settings.");
     setSettings(saved);
-    setForm((current) => ({...current, phoneNumberId:saved.phoneNumberId || "", businessAccountId:saved.businessAccountId || "", graphVersion:saved.graphVersion || "v25.0", accessToken:""}));
+    setForm((current) => ({...current, provider:saved.provider || "meta", phoneNumberId:saved.phoneNumberId || "", businessAccountId:saved.businessAccountId || "", graphVersion:saved.graphVersion || "v25.0", accessToken:"", providerApiKey:""}));
     const statusResponse = await fetch("/api/whatsapp/status", {headers:{Authorization:`Bearer ${authToken}`}});
     const status = await statusResponse.json().catch(() => ({}));
     setConnection(statusResponse.ok ? status : {connected:false,error:status.error || "Meta connection is not ready."});
@@ -5814,8 +5814,9 @@ function MetaWhatsAppSetup() {
     setError("");
     setNotice("");
     try {
-      const payload = {phoneNumberId:form.phoneNumberId, businessAccountId:form.businessAccountId, graphVersion:form.graphVersion};
+      const payload = {provider:form.provider, phoneNumberId:form.phoneNumberId, businessAccountId:form.businessAccountId, graphVersion:form.graphVersion};
       if (form.accessToken.trim()) payload.accessToken = form.accessToken.trim();
+      if (form.providerApiKey.trim()) payload.providerApiKey = form.providerApiKey.trim();
       const response = await fetch("/api/whatsapp/settings", {
         method:"PUT",
         headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},
@@ -5836,7 +5837,7 @@ function MetaWhatsAppSetup() {
   };
   return <section className="panel pagepanel generic meta-whatsapp-setup">
     <header>
-      <div><h1>Meta API setup</h1><p>CMLL WhatsApp Business connection and recipient readiness</p></div>
+      <div><h1>WhatsApp API setup</h1><p>CMLL WhatsApp Business connection and recipient readiness</p></div>
       <span className={`meta-connection-state ${connection?.connected ? "connected" : "disconnected"}`}>
         {connection?.connected ? <CheckCircle2 /> : <AlertTriangle />}
         {connection?.connected ? "Connected" : "Not connected"}
@@ -5849,15 +5850,17 @@ function MetaWhatsAppSetup() {
       <div><span>Mobile missing</span><strong>{missingRecipients}</strong><small>Complete in Users & employees</small></div>
     </div>
     <form className="meta-whatsapp-form" onSubmit={saveSettings}>
-      <div className="meta-whatsapp-form-heading"><div><h2>Cloud API credentials</h2><p>Credentials are encrypted in transit and the access token is never returned to this page.</p></div><ShieldCheck /></div>
+      <div className="meta-whatsapp-form-heading"><div><h2>Provider credentials</h2><p>Credentials are encrypted in transit and secrets are never returned to this page.</p></div><ShieldCheck /></div>
       <div className="meta-whatsapp-fields">
+        <label><span>Delivery provider</span><select value={form.provider} onChange={updateField("provider")}><option value="fast2sms">Fast2SMS</option><option value="meta">Meta Cloud API</option></select></label>
         <label><span>Phone Number ID</span><input inputMode="numeric" required value={form.phoneNumberId} onChange={updateField("phoneNumberId")} placeholder="Meta phone number ID" /></label>
         <label><span>WhatsApp Business Account ID</span><input inputMode="numeric" value={form.businessAccountId} onChange={updateField("businessAccountId")} placeholder="Meta business account ID" /></label>
         <label><span>Graph API version</span><input required value={form.graphVersion} onChange={updateField("graphVersion")} placeholder="v25.0" /></label>
-        <label className="meta-token-field"><span>Permanent access token</span><input type="password" autoComplete="new-password" value={form.accessToken} onChange={updateField("accessToken")} placeholder={settings?.accessTokenConfigured ? `Configured: ${settings.accessTokenPreview}` : "Enter permanent system-user token"} /><small>{settings?.accessTokenConfigured ? "Leave blank to retain the configured token." : "A token is required for the first connection."}</small></label>
+        {form.provider === "fast2sms" ? <label className="meta-token-field"><span>Fast2SMS API authorization key</span><input type="password" autoComplete="new-password" value={form.providerApiKey} onChange={updateField("providerApiKey")} placeholder={settings?.providerApiKeyConfigured ? `Configured: ${settings.providerApiKeyPreview}` : "Enter Fast2SMS API key"} /><small>{settings?.providerApiKeyConfigured ? "Leave blank to retain the configured key." : "An API key is required for Fast2SMS delivery."}</small></label>
+          : <label className="meta-token-field"><span>Permanent Meta access token</span><input type="password" autoComplete="new-password" value={form.accessToken} onChange={updateField("accessToken")} placeholder={settings?.accessTokenConfigured ? `Configured: ${settings.accessTokenPreview}` : "Enter permanent system-user token"} /><small>{settings?.accessTokenConfigured ? "Leave blank to retain the configured token." : "A token is required for Meta delivery."}</small></label>}
       </div>
       {(notice || error || connection?.error) && <div className={`meta-whatsapp-feedback ${error || connection?.error ? "error" : "success"}`} role={error || connection?.error ? "alert" : "status"}>{error || notice || connection.error}</div>}
-      <footer><button type="submit" className="primary" disabled={working || !form.phoneNumberId.trim() || (!settings?.accessTokenConfigured && !form.accessToken.trim())}>{working ? <RefreshCw className="spin" /> : <Save />}{working ? "Connecting..." : "Save, verify and sync templates"}</button></footer>
+      <footer><button type="submit" className="primary" disabled={working || !form.phoneNumberId.trim() || (form.provider === "fast2sms" ? (!settings?.providerApiKeyConfigured && !form.providerApiKey.trim()) : (!settings?.accessTokenConfigured && !form.accessToken.trim()))}>{working ? <RefreshCw className="spin" /> : <Save />}{working ? "Connecting..." : "Save, verify and sync templates"}</button></footer>
     </form>
   </section>;
 }
