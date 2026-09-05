@@ -26,6 +26,12 @@ test("the workspace body claims the full width and starts right under the banner
   assert.match(workflowStyles, /\.mobile-workspace \.sectiontitle\s*\{[^}]*margin:\s*4px 0 8px/s);
 });
 
+test("Production and MIS use the same compact banner and enlarged table as Maintenance", () => {
+  assert.match(workflowStyles, /\.normal:not\(\.embedded-workspace\) \.mobile-workspace > \.welcome\.workspace-hero\s*\{[^}]*flex-direction:\s*row;[^}]*padding-block:\s*12px/s);
+  assert.match(workflowStyles, /\.normal:not\(\.embedded-workspace\) \.mobile-workspace > section\.panel\s*\{[^}]*min-height:\s*390px/s);
+  assert.doesNotMatch(workflowStyles, /\.normal:not\(\.embedded-workspace\) \.maintenance-workspace > (?:\.welcome\.workspace-hero|section\.panel)/);
+});
+
 test("workflow tables keep a single horizontal scrollbar that stays on screen", () => {
   assert.doesNotMatch(mainSource, /table-top-scroll/);
   assert.doesNotMatch(workflowStyles, /table-top-scroll/);

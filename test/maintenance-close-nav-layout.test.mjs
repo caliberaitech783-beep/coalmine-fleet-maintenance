@@ -12,10 +12,10 @@ test("Close request form is directly beside Idle Vehicles in the Maintenance wor
   assert.doesNotMatch(topHeader, /> Requests<\/button>/);
 });
 
-test("Requests remains in every operational workspace and Maintenance keeps its larger table", () => {
+test("Requests remains in every operational workspace and every role gets the larger table", () => {
   const start = source.indexOf('<div className="mobile-tabs" role="tablist">');
   const heroTabs = source.slice(start, source.indexOf('</div>\n      </div>', start));
   assert.match(heroTabs, />Requests<\/button>/);
-  assert.match(styles, /\.maintenance-workspace > \.welcome\.workspace-hero \{[\s\S]*?flex-direction: row;[\s\S]*?padding-block: 12px/);
-  assert.match(styles, /\.maintenance-workspace > section\.panel \{\s*min-height: 390px/);
+  assert.match(styles, /\.mobile-workspace > \.welcome\.workspace-hero \{[\s\S]*?flex-direction: row;[\s\S]*?padding-block: 12px/);
+  assert.match(styles, /\.mobile-workspace > section\.panel \{\s*min-height: 390px/);
 });
