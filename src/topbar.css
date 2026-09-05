@@ -282,10 +282,10 @@
   top: 0;
   z-index: 12;
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) clamp(220px, 19vw, 282px) max-content;
+  grid-template-columns: max-content minmax(0, 1fr) clamp(205px, 16vw, 250px) max-content;
   justify-content: start;
   align-items: center;
-  gap: clamp(12px, 1.6vw, 28px);
+  gap: clamp(10px, 1.15vw, 20px);
   width: 100%;
   height: auto;
   min-height: 76px;
@@ -314,6 +314,16 @@
 .normal-header-user { max-width: 126px; overflow: hidden; }
 .normal-header-user b,
 .normal-header-user small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (min-width: 1301px) {
+  .normal-header-nav { gap: 2px; }
+  .normal-header-nav button {
+    gap: 6px;
+    padding-inline: clamp(7px, .55vw, 11px);
+    font-size: clamp(12px, .82vw, 15px);
+  }
+  .normal-header-nav button svg { width: 19px; }
+}
 
 :root[data-theme="dark"] .top .header-clock-date,
 :root[data-theme="dark"] .top .header-clock svg {
