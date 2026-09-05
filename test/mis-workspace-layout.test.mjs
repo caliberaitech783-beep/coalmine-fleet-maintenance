@@ -21,7 +21,7 @@ test("the workspace tab strip sits inside the banner", () => {
 });
 
 test("the workspace body claims the full width and starts right under the banner", () => {
-  assert.match(mainSource, /\{\(embedded\|\|section==="profile"\)&&<div className="mobile-workspace">/);
+  assert.match(mainSource, /\{\(embedded\|\|section==="profile"\)&&<div className=\{`mobile-workspace\$\{isMaintenance \? " maintenance-workspace" : ""\}`\}>/);
   assert.match(workflowStyles, /\.normal > main:has\(\.mobile-workspace\)\s*\{[^}]*padding:\s*22px clamp\(/s);
   assert.match(workflowStyles, /\.mobile-workspace \.sectiontitle\s*\{[^}]*margin:\s*4px 0 8px/s);
 });
