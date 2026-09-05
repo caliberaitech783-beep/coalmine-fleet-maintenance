@@ -197,8 +197,6 @@
   background: #a9b3c5;
 }
 
-.mobile-request-cards { display: none; }
-
 @media (max-width: 600px) {
   .welcome.workspace-hero {
     padding: 20px;
@@ -222,62 +220,4 @@
     flex-direction: column;
     align-items: stretch;
   }
-
-  .mobile-workspace .mobile-request-cards {
-    display: grid;
-    gap: 10px;
-  }
-
-  .mobile-workspace .mobile-request-cards + table { display: none !important; }
-
-  .mobile-workspace .scroll.mobile-workflow-table,
-  .mobile-workspace .scroll.mobile-breakdown-table {
-    overflow: visible;
-    padding: 10px;
-    background: #f8f9fc;
-  }
-
-  .mobile-request-card {
-    overflow: hidden;
-    border: 1px solid #dce3ee;
-    border-radius: 12px;
-    background: #fff;
-    box-shadow: 0 4px 12px #14213d0d;
-  }
-
-  .mobile-request-card summary {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 14px;
-    cursor: pointer;
-    list-style: none;
-  }
-
-  .mobile-request-card summary::-webkit-details-marker { display: none; }
-  .mobile-request-card summary span,
-  .mobile-request-card summary b,
-  .mobile-request-card summary small { display: block; min-width: 0; }
-  .mobile-request-card summary b { overflow-wrap: anywhere; color: #13213d; font-size: 13px; }
-  .mobile-request-card summary small { margin-top: 4px; color: #687792; font-size: 11px; }
-  .mobile-request-card[open] summary { border-bottom: 1px solid #e4e9f1; background: #fbfcff; }
-
-  .mobile-request-card dl {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1px;
-    margin: 0;
-    background: #e6eaf1;
-  }
-
-  .mobile-request-card dl div { min-width: 0; padding: 11px 12px; background: #fff; }
-  .mobile-request-card dt { color: #7d899d; font-size: 9px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
-  .mobile-request-card dd { margin: 4px 0 0; overflow-wrap: anywhere; color: #263650; font-size: 11px; line-height: 1.4; }
-  .mobile-request-card-actions { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px; border-top: 1px solid #e4e9f1; }
-  .mobile-request-card-actions button { display: inline-flex; align-items: center; gap: 5px; min-height: 38px; border: 1px solid #dce3ee; border-radius: 8px; background: #fff; color: #2354d1; padding: 8px 11px; font-size: 10px; }
-  .mobile-request-card-actions button.primary { border-color: transparent; background: linear-gradient(135deg, #5b2e91, #ee3f58); color: #fff; }
-  .mobile-request-card-actions button.danger { color: #c43c48; }
-  .mobile-request-card-actions > span { border-radius: 999px; background: #eef2f7; color: #596981; padding: 7px 10px; font-size: 10px; font-weight: 800; }
-  .mobile-request-card-empty { margin: 0; padding: 26px 12px; text-align: center; color: #75839a; }
 }

@@ -1342,13 +1342,6 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [openFilter]);
   return (
     <><div className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title="Breakdown report" columns={filterColumns} rows={sortedRows} /></div></div><div className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
-      <div className="mobile-request-cards" aria-label="Request cards">
-        {sortedRows.length ? sortedRows.map((row) => <details className="mobile-request-card" key={row.ref}>
-          <summary><span><b>{row.ref}</b><small>{row.door || "No door number"}</small></span><Status>{row.status || "Open"}</Status></summary>
-          <dl><div><dt>Equipment group</dt><dd>{row.equipmentGroup || row.equipment || "—"}</dd></div><div><dt>Site</dt><dd>{row.site || "Not assigned"}</dd></div>{showMakeModel && <><div><dt>Make</dt><dd>{row.make || "—"}</dd></div><div><dt>Model</dt><dd>{row.model || "—"}</dd></div></>}{showReason && <div><dt>Reason</dt><dd>{row.complaint || "—"}</dd></div>}<div><dt>Started</dt><dd>{formatTwelveHourDateTime(row.start)}</dd></div>{showCreatedBy && <div><dt>Created by</dt><dd>{row.owner || row.requesterLogin || "—"}</dd></div>}{showClosedBy && <div><dt>Closed by</dt><dd>{row.closedBy || "—"}</dd></div>}{showBreakdownDays && <div><dt>Days of breakdown</dt><dd>{row.breakdownDays} {row.breakdownDays === 1 ? "day" : "days"}</dd></div>}</dl>
-          {showReadOnlyAction && <div className="mobile-request-card-actions"><span>Read only</span></div>}
-        </details>) : <p className="mobile-request-card-empty">No records available</p>}
-      </div>
       <ActionsTable className="breakdown-table-auto-fit" toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
@@ -6489,14 +6482,13 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     [...new Set(rows.map((row) => tableFilterText(column.value(row))))].sort((a, b) => sortCollator.compare(a, b)),
   ]));
   const workflowHeader = (key, label) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />;
-  const workflowActionButtons = (row, lockedIdeal) => <>
+  const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">
     {onEdit && !lockedIdeal && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
     {onDelete && !lockedIdeal && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
     {onClose && !lockedIdeal && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
     {onRemark && String(row.status).toLowerCase() !== "closed" && !lockedIdeal && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
     {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
-  </>;
-  const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">{workflowActionButtons(row, lockedIdeal)}</td>;
+  </td>;
   useEffect(() => {
     if (!openFilter) return undefined;
     const closeFilter = (event) => {
@@ -6507,16 +6499,6 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   }, [openFilter]);
   return (
     <><div className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title="Workflow report" columns={filterColumns} rows={sortedRows} /></div></div><div className="scroll mobile-workflow-table">
-      <div className="mobile-request-cards" aria-label="Request cards">
-        {sortedRows.length ? sortedRows.map((row) => {
-          const lockedIdeal = ["idle", "ideal"].includes(String(row.status || "").toLowerCase());
-          return <details className="mobile-request-card" key={row.ref}>
-            <summary><span><b>{row.ref}</b><small>{row.door || "No door number"}</small></span><Status>{row.status || "Open"}</Status></summary>
-            <dl><div><dt>Equipment group</dt><dd>{row.equipmentGroup || row.equipment || "—"}</dd></div><div><dt>Site</dt><dd>{row.site || "Not assigned"}</dd></div>{showMakeModel && <><div><dt>Make</dt><dd>{row.make || "—"}</dd></div><div><dt>Model</dt><dd>{row.model || "—"}</dd></div></>}{showReason && <div><dt>Reason</dt><dd>{row.complaint || "—"}</dd></div>}<div><dt>Started</dt><dd>{formatTwelveHourDateTime(row.start)}</dd></div>{showCreatedBy && <div><dt>Created by</dt><dd>{row.owner || row.requesterLogin || "—"}</dd></div>}{showClosedBy && <div><dt>Closed by</dt><dd>{row.closedBy || "—"}</dd></div>}{showVerifiedBy && <div><dt>Verified by</dt><dd>{row.verifiedBy || "—"}</dd></div>}{showVerifiedAt && <div><dt>Verified date & time</dt><dd>{formatTwelveHourDateTime(row.verifiedAt)}</dd></div>}{showTurnaroundTime && <div><dt>Turn around time</dt><dd>{row.hours || "—"}</dd></div>}</dl>
-            {showActions && <div className="mobile-request-card-actions">{workflowActionButtons(row, lockedIdeal)}</div>}
-          </details>;
-        }) : <p className="mobile-request-card-empty">No records available</p>}
-      </div>
       <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
