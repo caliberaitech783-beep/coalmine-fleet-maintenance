@@ -57,7 +57,7 @@ test("header user names are normalized and displayed in bold uppercase before th
   assert.equal(profileHeaderName("  Anoop   Paul  "), "ANOOP PAUL");
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /className="header-user-name">\{profileHeaderName/);
-  assert.match(source, /header-user-name[\s\S]*header-login-icon/);
+  assert.match(source, /header-user-name[\s\S]*<UserProfile/);
 });
 
 test("each Manager receives a role-specific dashboard", () => {

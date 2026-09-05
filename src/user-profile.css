@@ -1,0 +1,10 @@
+.user-profile { position: relative; flex: 0 0 auto; }
+.user-profile > button.header-login-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 7px; border: 1px solid #ffffff55; border-radius: 50%; color: white; background: #ffffff18; cursor: pointer; }
+.user-profile > button:focus-visible { outline: 2px solid white; outline-offset: 3px; }
+.user-profile-panel { position: absolute; right: 0; top: 100%; z-index: 1000; width: min(300px, calc(100vw - 32px)); padding: 20px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; color: #172b49; box-shadow: 0 12px 35px #14274533; text-align: left; white-space: normal; }
+.user-profile-panel dl { margin: 14px 0; }
+.user-profile-panel dl > div { margin: 10px 0; }
+.user-profile-panel dt { font-size: 12px; color: #52647b; }
+.user-profile-panel dd { margin: 3px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.user-profile-panel > button { color: #3158bc; background: #edf2ff; border: 1px solid #cad7ee; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+@media (max-width: 600px) { .user-profile-panel { position: fixed; top: 90px; right: 16px; max-height: calc(100dvh - 110px); overflow: auto; } }
