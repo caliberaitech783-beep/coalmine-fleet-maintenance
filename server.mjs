@@ -56,6 +56,7 @@ const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Ko
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
+const WHATSAPP_DELIVERY_PAUSED=true;
 const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
 const AUDIT_REASON_HEADER='x-audit-reason';
 const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
@@ -97,10 +98,11 @@ async function metaWhatsAppRuntimeEnv(){
       META_WHATSAPP_ACCESS_TOKEN:String(settings.accessToken||process.env.META_WHATSAPP_ACCESS_TOKEN||'').trim(),
       META_WHATSAPP_BUSINESS_ACCOUNT_ID:String(settings.businessAccountId||process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||'').trim(),
       META_GRAPH_VERSION:String(settings.graphVersion||process.env.META_GRAPH_VERSION||'v25.0').trim(),
+      META_WHATSAPP_DELIVERY_PAUSED:String(WHATSAPP_DELIVERY_PAUSED),
     };
   }catch(error){
     console.warn('Could not load stored WhatsApp settings; falling back to environment variables:',error.message);
-    return process.env;
+    return {...process.env,META_WHATSAPP_DELIVERY_PAUSED:String(WHATSAPP_DELIVERY_PAUSED)};
   }
 }
 

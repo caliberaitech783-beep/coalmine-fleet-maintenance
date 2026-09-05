@@ -1,4 +1,8 @@
 const clean=(value)=>String(value??'').trim();
+const deliveryPaused=(env=process.env)=>['true','1','yes','on'].includes(clean(env.META_WHATSAPP_DELIVERY_PAUSED).toLowerCase());
+const assertDeliveryActive=(env)=>{
+  if(deliveryPaused(env))throw new Error('WhatsApp delivery is temporarily paused pending hierarchy configuration.');
+};
 
 export const META_WORKFLOW_TEMPLATES={
   passwordResetOtp:{name:'nerve_password_reset_otp',category:'AUTHENTICATION',example:['123456'],otpButton:true,components:[
@@ -64,6 +68,7 @@ export async function metaWhatsAppStatus(options={}){
 }
 
 export async function sendMetaWhatsAppText({to,message},{env=process.env,fetchImpl=fetch}={}){
+  assertDeliveryActive(env);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
   const text=clean(message);
@@ -77,6 +82,7 @@ export async function sendMetaWhatsAppText({to,message},{env=process.env,fetchIm
 }
 
 export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center-report.pdf',caption=''},{env=process.env,fetchImpl=fetch}={}){
+  assertDeliveryActive(env);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
   const documentBuffer=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer||[]);
@@ -105,6 +111,7 @@ export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center
 }
 
 export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[]},{env=process.env,fetchImpl=fetch}={}){
+  assertDeliveryActive(env);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
   const template=META_WORKFLOW_TEMPLATES[templateKey];
