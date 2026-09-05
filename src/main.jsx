@@ -125,6 +125,7 @@ import "./brand-theme.css";
 import "./report-schedule-polish.css";
 import "./reports-workspace.css";
 import "./meta-whatsapp-setup.css";
+import "./mobile-compat.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -472,9 +473,9 @@ function Login({ onLogin, theme, toggleTheme }) {
           <h2>Create your password</h2>
           <p>Welcome, {passwordChange.name}. You must replace your temporary phone-number password before continuing.</p>
           <label className="login-label" htmlFor="new-password">New password</label>
-          <div className="login-input"><LockKeyhole /><input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Minimum 8 characters" /></div>
+          <div className="login-input"><LockKeyhole /><input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" autoCapitalize="none" autoCorrect="off" spellCheck="false" minLength="8" required placeholder="Minimum 8 characters" /></div>
           <label className="login-label" htmlFor="confirm-password">Confirm new password</label>
-          <div className="login-input"><LockKeyhole /><input id="confirm-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Re-enter new password" /></div>
+          <div className="login-input"><LockKeyhole /><input id="confirm-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" autoCapitalize="none" autoCorrect="off" spellCheck="false" minLength="8" required placeholder="Re-enter new password" /></div>
           <div className="login-feedback" aria-live="polite">{error && <p className="login-error" role="alert">{error}</p>}</div>
           <button type="submit" className="primary" disabled={working || newPassword.length < 8 || confirmation.length < 8}>{working ? "Updating password…" : "Change password and continue"}<ChevronRight /></button>
           <p className="login-help">This required step cannot be skipped.</p>
@@ -489,15 +490,15 @@ function Login({ onLogin, theme, toggleTheme }) {
           <p>{resetRequest ? "Enter the 6-digit OTP sent to your registered WhatsApp mobile number, then create a new password." : "Enter your user name. We will send a password-reset OTP to your registered mobile number."}</p>
           {!resetRequest ? <>
             <label className="login-label" htmlFor="reset-username">User name</label>
-            <div className="login-input"><User aria-hidden="true" /><input id="reset-username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Enter your user name" autoComplete="username" spellCheck="false" required autoFocus /></div>
+            <div className="login-input"><User aria-hidden="true" /><input id="reset-username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="Enter your user name" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck="false" required autoFocus /></div>
           </> : <>
             <div className="reset-otp-note"><MessageCircle /><span>{resetRequest.message}</span></div>
             <label className="login-label" htmlFor="reset-otp">6-digit OTP</label>
             <div className="login-input otp-input"><LockKeyhole aria-hidden="true" /><input id="reset-otp" value={resetOtp} onChange={(event) => setResetOtp(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" required autoFocus /></div>
             <label className="login-label" htmlFor="reset-new-password">New password</label>
-            <div className="login-input"><LockKeyhole aria-hidden="true" /><input id="reset-new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Minimum 8 characters" /></div>
+            <div className="login-input"><LockKeyhole aria-hidden="true" /><input id="reset-new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" autoCapitalize="none" autoCorrect="off" spellCheck="false" minLength="8" required placeholder="Minimum 8 characters" /></div>
             <label className="login-label" htmlFor="reset-confirm-password">Confirm new password</label>
-            <div className="login-input"><LockKeyhole aria-hidden="true" /><input id="reset-confirm-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" minLength="8" required placeholder="Re-enter new password" /></div>
+            <div className="login-input"><LockKeyhole aria-hidden="true" /><input id="reset-confirm-password" type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} autoComplete="new-password" autoCapitalize="none" autoCorrect="off" spellCheck="false" minLength="8" required placeholder="Re-enter new password" /></div>
           </>}
           <div className="login-feedback" aria-live="polite">{error && <p className="login-error" role="alert">{error}</p>}</div>
           <button type="submit" className="primary" disabled={working || (!resetRequest && !username.trim()) || (resetRequest && (resetOtp.length !== 6 || newPassword.length < 8 || confirmation.length < 8))}>
@@ -525,6 +526,8 @@ function Login({ onLogin, theme, toggleTheme }) {
               onChange={(event) => setUsername(event.target.value)}
               placeholder="Enter your user name"
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
               spellCheck="false"
               aria-invalid={Boolean(error)}
               required
@@ -536,11 +539,13 @@ function Login({ onLogin, theme, toggleTheme }) {
             <LockKeyhole aria-hidden="true" />
             <input id="login-password"
               type={showPassword ? "text" : "password"}
-              inputMode="tel"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="Enter your password"
               autoComplete="current-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
               aria-invalid={Boolean(error)}
               required
             />
@@ -4889,11 +4894,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         </div>
       </header>
       {directorTimingOpen && createPortal(
-        <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
-          <div className="modal director-timing-modal">
+        <div className="overlay" onPointerDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
+          <div className="modal director-timing-modal" role="dialog" aria-modal="true" aria-label="Report delivery schedules">
             <header>
               <div className="report-schedule-title"><span><CalendarDays /></span><div><h3>Report delivery schedules</h3><p>Choose recipients, timing and reports for each delivery slot</p></div></div>
-              <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X /></button>
+              <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X aria-hidden="true" /></button>
             </header>
             {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : <>
               <div className="report-schedule-toolbar">
@@ -4938,11 +4943,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         document.body,
       )}
       {reportZipOpen && createPortal(
-        <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && !reportZipDownloading && setReportZipOpen(false)}>
-          <div className="modal report-zip-modal">
+        <div className="overlay" onPointerDown={(event) => event.target === event.currentTarget && !reportZipDownloading && setReportZipOpen(false)}>
+          <div className="modal report-zip-modal" role="dialog" aria-modal="true" aria-label="Download reports as ZIP">
             <header>
               <div className="report-zip-title"><span><Download /></span><div><h3>Download reports as ZIP</h3><p>Choose reports and receive organised PDF and Excel files in one archive</p></div></div>
-              <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Close ZIP report selection"><X /></button>
+              <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Close ZIP report selection"><X aria-hidden="true" /></button>
             </header>
             <div className="report-zip-range">
               <div><CalendarDays /><span><b>Report period</b><small>Only records within this IST date and time range are included.</small></span></div>
@@ -6282,13 +6287,13 @@ function Modal({ title, close, children, className = "" }) {
   return (
     <div
       className="overlay"
-      onMouseDown={(e) => e.target === e.currentTarget && close()}
+      onPointerDown={(e) => e.target === e.currentTarget && close()}
     >
-      <div className={`modal ${className}`.trim()}>
+      <div className={`modal ${className}`.trim()} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Dialog"}>
         <header>
           <h3>{title}</h3>
-          <button onClick={close}>
-            <X />
+          <button type="button" onClick={close} aria-label="Close dialog">
+            <X aria-hidden="true" />
           </button>
         </header>
         {children}

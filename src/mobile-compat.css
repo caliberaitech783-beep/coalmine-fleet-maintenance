@@ -1,0 +1,106 @@
+/* Mobile browser compatibility, especially iOS Safari and in-app browsers. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 320px;
+}
+
+.app,
+.normal,
+.login {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+
+.login-visual {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+
+.overlay {
+  overscroll-behavior: contain;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+}
+
+.modal {
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal > header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fff;
+}
+
+@media (max-width: 900px) {
+  .login > main {
+    min-height: calc(100svh - 200px);
+    min-height: calc(100dvh - 200px);
+  }
+
+  /* iOS zooms the page when a focused form control is smaller than 16px. */
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  .normal:not(.embedded-workspace):has(.mobile-workspace) {
+    height: 100vh;
+    height: 100svh;
+    height: 100dvh;
+  }
+}
+
+@media (max-width: 560px) {
+  .login > main {
+    min-height: 100svh;
+    min-height: 100dvh;
+    padding:
+      max(28px, env(safe-area-inset-top))
+      max(22px, env(safe-area-inset-right))
+      max(36px, calc(env(safe-area-inset-bottom) + 20px))
+      max(22px, env(safe-area-inset-left));
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .login-theme-toggle,
+  .password-toggle,
+  .modal > header button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .loginbox .remember-me,
+  .login-auth-tabs button,
+  .form footer button,
+  .mobile-tabs button,
+  .normal-header-nav button,
+  .row-actions button {
+    min-height: 44px;
+  }
+
+  .loginbox .remember-me input {
+    width: 20px;
+    height: 20px;
+  }
+}
