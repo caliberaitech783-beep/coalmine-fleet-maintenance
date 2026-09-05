@@ -100,6 +100,17 @@ jobs:
               --restart true; then
               exit 0
             fi
+            # OneDeploy can finish successfully after the Azure CLI has already
+            # returned a non-zero polling result. Only accept that case when the
+            # slot itself proves that the exact commit is healthy and isolated.
+            for health_attempt in {1..12}; do
+              if response="$(curl --fail --silent --show-error --max-time 20 "${STAGING_URL}/api/health?deploy-recovery=${GITHUB_SHA}")" && \
+                HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$GITHUB_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false) process.exit(1)"; then
+                echo "Azure CLI reported a deployment error, but staging verified the exact commit: ${response}"
+                exit 0
+              fi
+              sleep 5
+            done
             if [ "$attempt" -eq 3 ]; then
               echo "Staging ZIP deployment failed after ${attempt} attempts"
               exit 1
