@@ -33,6 +33,7 @@ import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirector
 import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage} from './request-conflict.mjs';
 import {auditChangedFields,auditRouteDetails,auditSubmittedFields} from './audit-trail.mjs';
+import {duplicateUsername} from './user-username.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -2387,7 +2388,28 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
       });
     }catch(error){return res.status(400).json({error:error.message})}
     let rows;
-    if(master==='Equipment master'){
+    if(master==='Users & employees'){
+      const client=await pool.connect();
+      try{
+        await client.query('BEGIN');
+        await client.query('LOCK TABLE master_records IN SHARE ROW EXCLUSIVE MODE');
+        const existing=await client.query(
+          `SELECT record_data FROM master_records WHERE master_name='Users & employees'`
+        );
+        const conflict=duplicateUsername(existing.rows.map(row=>row.record_data),prepared);
+        if(conflict){
+          await client.query('ROLLBACK');
+          return res.status(409).json({error:'This username already exists.'});
+        }
+        ({rows}=await client.query(`INSERT INTO master_records (master_name,record_data)
+          SELECT $1,value FROM jsonb_array_elements($2::jsonb) AS value
+          RETURNING id,record_data`,[master,JSON.stringify(prepared)]));
+        await client.query('COMMIT');
+      }catch(error){
+        await client.query('ROLLBACK').catch(()=>{});
+        throw error;
+      }finally{client.release()}
+    }else if(master==='Equipment master'){
       const client=await pool.connect();
       try{
         await client.query('BEGIN');

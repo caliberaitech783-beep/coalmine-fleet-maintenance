@@ -2611,7 +2611,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : name === "Users & employees" && ["login", "employee"].includes(key) ? String(record[key] || "").toUpperCase() : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
   if (!fields) return null;
-  const saveManual = (e) => {
+  const saveManual = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget),
       record = Object.fromEntries(
@@ -2647,8 +2647,12 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
       const missing = missingViewSubmenu(record);
       if (missing) { alert(`Select at least one ${missing.tab} submenu for ${missing.view}.`); return; }
     }
-    onAdd([record]);
-    setMode(null);
+    try {
+      await onAdd([record]);
+      setMode(null);
+    } catch (error) {
+      alert(error?.message || "Could not add this record.");
+    }
   };
   const chooseFile = (file) => {
     if (!file) return;
