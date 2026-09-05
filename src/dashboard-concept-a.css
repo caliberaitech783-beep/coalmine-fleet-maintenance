@@ -640,6 +640,49 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-dashboard-feature-row .mine-fleet-chart-regions { min-width: 0; }
 .mine-dashboard-feature-row .mine-fleet-chart-regions > section { min-width: 250px; }
 .mine-dashboard-feature-row .mine-repair-type-bars { align-content: center; min-height: 205px; }
+.dashboard-fleet-data-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  align-self: stretch;
+  gap: 11px;
+  min-width: 0;
+  min-height: 76px;
+  margin: 10px;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, #315fd4 42%, var(--mine-line, #d9e3ec));
+  border-radius: 7px;
+  background: color-mix(in srgb, #315fd4 4%, var(--mine-panel, #fff));
+  color: var(--mine-text, var(--ink));
+}
+.dashboard-fleet-data-state > svg { width: 24px; height: 24px; color: #c55a52; }
+.dashboard-fleet-data-copy { display: grid; gap: 3px; min-width: 0; }
+.dashboard-fleet-data-copy strong { font: 800 11px/1.25 Manrope; }
+.dashboard-fleet-data-copy small { overflow-wrap: anywhere; color: var(--mine-muted, var(--muted)); font-size: 9px; line-height: 1.35; }
+.dashboard-fleet-data-state > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid #315fd455;
+  border-radius: 6px;
+  background: var(--mine-panel, #fff);
+  color: #315fd4;
+  font-size: 9px;
+  font-weight: 800;
+}
+.dashboard-fleet-data-state > button:hover,.dashboard-fleet-data-state > button:focus-visible { border-color: #315fd4; outline: 2px solid #315fd426; outline-offset: 1px; }
+.dashboard-fleet-data-state > button svg { width: 13px; height: 13px; }
+.dashboard-fleet-data-state.error { border-color: #dc6c6266; background: color-mix(in srgb, #dc6c62 5%, var(--mine-panel, #fff)); }
+.dashboard-fleet-chart-state,.dashboard-road-status-state { min-height: 205px; }
+.dashboard-road-status-state { flex: 1; }
+.dashboard-fleet-command-state { min-height: 270px; }
+.dashboard-fleet-performance-state { min-height: 319px; }
+.dashboard-request-scope-state { min-height: 205px; }
+.dashboard-request-lifecycle-state { min-height: 314px; }
+.dashboard-breakdown-trend-state { min-height: 319px; }
+.manager-fleet-data-state { min-height: 64px; margin: 0; }
 .mine-dashboard-feature-row > .mine-feature-road-availability {
   grid-column: span 1;
   align-self: stretch;
@@ -808,6 +851,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-chart-regions footer span { color: var(--mine-text); font-size: 11px; font-weight: 700; }
 .mine-fleet-chart-x { color: var(--mine-text); font-size: 8px; font-weight: 850; letter-spacing: .05em; text-align: center; text-transform: uppercase; }
 @media (max-width: 700px) {
+  .dashboard-fleet-data-state { grid-template-columns: auto minmax(0, 1fr); }
+  .dashboard-fleet-data-state > button { grid-column: 1 / -1; justify-self: start; }
   .mine-fleet-region-chart > header { grid-template-columns: 1fr; align-items: start; }
   .mine-fleet-chart-total { justify-self: start; }
   .mine-fleet-chart-tools { justify-self: start; }

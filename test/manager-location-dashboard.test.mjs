@@ -12,7 +12,8 @@ test("manager requests, equipment, and dashboard metrics are scoped to selected 
   assert.match(server,/managerScope=managerRecord\?managerReportScope\(managerRecord\):null/);
   assert.match(server,/equipmentSite=canonicalSiteName\(record\.currentLocation\|\|record\.site\|\|record\.location\|\|''\)/);
   assert.match(source,/function ManagerDashboard\(\{ managerRole, managerRoles = \[\], managerLocation/);
-  assert.match(source,/siteEquipment = managerLocation\?equipmentRecords\.filter/);
+  assert.match(source,/const siteEquipment = equipmentRecords;/);
+  assert.match(server,/scopeDashboardEquipmentRecords\(records,authorization\.session,authorization\.user,scope\)/);
   assert.match(source,/offRoadKeys = new Set\(openRequests/);
   assert.match(source,/onRoad:Math\.max\(0,siteEquipment\.length-offRoad-idle\)/);
   assert.match(source,/\["Idle", fleet\.idle/);

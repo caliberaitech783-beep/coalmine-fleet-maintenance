@@ -34,6 +34,7 @@ import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin
 import {activeRequestConflictMessage} from './request-conflict.mjs';
 import {auditChangedFields,auditRouteDetails,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
+import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -1300,6 +1301,21 @@ async function currentUserRecord(session,client=pool){
   return rows[0]?.record_data||{};
 }
 
+async function currentDashboardAuthorization(session,client=pool){
+  const [{rows:userRows},{rows:privilegeRows}]=await Promise.all([
+    client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+    client.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`),
+  ]);
+  const user=currentDashboardUserCandidate(userRows,session);
+  if(!user)return null;
+  const identifiers=new Set([
+    ...userLoginCandidates(user),
+    String(session?.login||'').trim().toLowerCase(),
+  ].filter(Boolean));
+  const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers)});
+  return {user,session:dashboardSessionFromProfile(profile)};
+}
+
 function ticketProjection(){
   return `reference,creator_login AS "creatorLogin",creator_name AS "creatorName",creator_role AS "creatorRole",site,category,priority,
     message,message_audio AS "messageAudio",attachment_data AS "attachmentData",attachment_name AS "attachmentName",
@@ -2337,6 +2353,33 @@ app.get('/api/reference/repair-types',requireSession,async(req,res,next)=>{
       ORDER BY created_at ASC
     `,['Repair type master']);
     res.json(rows.map((row)=>({id:row.id,repairType:String(row.repair_type||'').trim()})).filter((row)=>row.repairType));
+  }catch(error){next(error)}
+});
+
+app.get('/api/dashboard/equipment',(req,res,next)=>{
+  res.set('Cache-Control','private, no-store, no-cache, must-revalidate');
+  res.vary('Authorization');
+  next();
+},requireSession,async(req,res,next)=>{
+  try{
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization)
+      return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+    if(!canReadDashboardEquipment(authorization.session))
+      return res.status(403).json({error:'Your assigned role is not authorized to view dashboard fleet data.'});
+    const scope=dashboardEquipmentScope(authorization.session,authorization.user);
+    if(!dashboardEquipmentScopeIsUsable(scope))
+      return res.status(409).json({error:'No dashboard site or region is assigned to this account. Contact an administrator.'});
+    const {rows}=await pool.query(`SELECT id,record_data FROM master_records
+      WHERE master_name='Equipment master' ORDER BY created_at ASC`);
+    const records=rows.map(({id,record_data})=>({
+      id,
+      ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
+    }));
+    res.json({
+      records:scopeDashboardEquipmentRecords(records,authorization.session,authorization.user,scope),
+      scope,
+    });
   }catch(error){next(error)}
 });
 

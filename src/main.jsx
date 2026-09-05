@@ -36,7 +36,7 @@ import {
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
-import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, managerSiteSelection, sitesForManagerRegions} from "../region-scope.mjs";
+import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
@@ -792,13 +792,72 @@ function dashboardRecordDate(record = {}) {
   return "";
 }
 
+function useDashboardEquipment() {
+  const [records, setRecords] = useState([]);
+  const [scope, setScope] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  useEffect(() => {
+    let activeRequest = true;
+    const controller = new AbortController();
+    setLoaded(false);
+    setScope(null);
+    setLoadError("");
+    fetch("/api/dashboard/equipment", {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {Authorization: `Bearer ${authToken}`},
+    })
+      .then((response) => readApiJson(response, "Could not load fleet data."))
+      .then((data) => {
+        if (!Array.isArray(data.records)) throw new Error("Fleet data response was invalid. Please retry.");
+        if (!data.scope || typeof data.scope !== "object" || Array.isArray(data.scope)
+          || typeof data.scope.restrictToScope !== "boolean"
+          || (data.scope.allowedSites !== null && !Array.isArray(data.scope.allowedSites))
+          || (data.scope.allowedRegions !== null && !Array.isArray(data.scope.allowedRegions)))
+          throw new Error("Fleet scope response was invalid. Please retry.");
+        if (!activeRequest) return;
+        setRecords(data.records);
+        setScope(data.scope);
+        setLoaded(true);
+      })
+      .catch((error) => {
+        if (activeRequest && error.name !== "AbortError") setLoadError(error.message || "Could not load fleet data.");
+      });
+    return () => {
+      activeRequest = false;
+      controller.abort();
+    };
+  }, [loadAttempt]);
+  return {records, scope, loaded, loadError, retry: () => setLoadAttempt((attempt) => attempt + 1)};
+}
+
+function FleetDataState({ error = "", retry, className = "" }) {
+  const failed = Boolean(error);
+  return <div
+    className={`dashboard-fleet-data-state${failed ? " error" : " loading"}${className ? ` ${className}` : ""}`}
+    role={failed ? "alert" : "status"}
+    aria-live={failed ? "assertive" : "polite"}
+    aria-busy={!failed}
+  >
+    {failed ? <AlertTriangle /> : <CaliberActivityMark size="small" />}
+    <span className="dashboard-fleet-data-copy"><strong>{failed ? "Fleet data is unavailable" : "Loading fleet data"}</strong><small>{failed ? error : "Retrieving the latest equipment records…"}</small></span>
+    {failed && <button type="button" onClick={retry}><RotateCcw /> Retry</button>}
+  </div>;
+}
+
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", requests = [], gotoEquipment, onApproveIdeal, onCancelIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
-  const [equipmentRecords] = useMasterRecords("Equipment master");
-  const siteEquipment = managerLocation?equipmentRecords.filter((record) => recordBelongsToSite(record, managerLocation)):equipmentRecords;
-  const requestRows = requests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
+  const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
+  // The dedicated endpoint has already applied the manager's current server-side scope.
+  const siteEquipment = equipmentRecords;
+  const managerAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
+  const restrictManagerScope=equipmentScope?.restrictToScope===true;
+  const scopedRequests=equipmentLoaded?(managerAllowedSites?.length?requests.filter((request)=>managerAllowedSites.some((site)=>recordBelongsToSite(request,site))):restrictManagerScope?[]:requests):[];
+  const requestRows = scopedRequests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
   const openRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() !== "closed");
   const offRoadKeys = new Set(openRequests.map((request) => String(request.chassis || request.door || request.equipment || "").trim().toLowerCase()).filter(Boolean));
   const offRoad = Math.min(siteEquipment.length, offRoadKeys.size);
@@ -822,7 +881,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     : activeManagerRole === "Maintenance Manager"
       ? [
           ["Total equipment", fleet.total, "Equipment at the assigned location", "all"],
-          ["Received for maintenance", requests.length, "Total maintenance intake", ""],
+          ["Received for maintenance", scopedRequests.length, "Total maintenance intake", ""],
           ["Remaining", openRequests.length, "Still requiring action", ""],
           ["Completed", closedRequests.length, "Returned from maintenance", ""],
         ]
@@ -847,8 +906,9 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   return <section className="manager-dashboard">
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
-    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter}>
-      <span>{label}</span><strong>{Number(value || 0).toLocaleString()}</strong><small>{hint}</small>{activeManagerRole === "Production Manager" && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
+    {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
+    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && equipmentLoaded && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter||!equipmentLoaded} aria-busy={!equipmentLoaded}>
+      <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{activeManagerRole === "Production Manager"&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{activeManagerRole==="Maintenance Manager"&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
@@ -868,8 +928,8 @@ function useDashboardRepairTypes() {
   return records;
 }
 
-function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light", allowedSites = null, allowedRegions = null, restrictToScope = false }) {
-  const [equipmentRecords] = useMasterRecords("Equipment master");
+function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
+  const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
   const repairTypeRecords = useDashboardRepairTypes();
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [assetDrilldownRegion, setAssetDrilldownRegion] = useState("");
@@ -894,10 +954,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const todayKey = localDateKey(now);
   const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
   const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
-  const normalizedAllowedSites=Array.isArray(allowedSites)?allowedSites.filter(Boolean):null;
-  const normalizedAllowedRegions=Array.isArray(allowedRegions)?allowedRegions.filter((region)=>region&&region!=="All"):null;
+  const normalizedAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
+  const normalizedAllowedRegions=Array.isArray(equipmentScope?.allowedRegions)?equipmentScope.allowedRegions.filter((region)=>region&&region!=="All"):null;
+  const restrictToScope=equipmentScope?.restrictToScope===true;
   const scopedEquipment=normalizedAllowedSites?.length?equipmentRecords.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:equipmentRecords;
-  const scopedBreakdowns=normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests;
+  const scopedBreakdowns=equipmentLoaded?(normalizedAllowedSites?.length?requests.filter((record)=>normalizedAllowedSites.some((site)=>recordBelongsToSite(record,site))):restrictToScope?[]:requests):[];
   const availableRegions=subsidiaryData.filter((region)=>{
     if(normalizedAllowedRegions?.length&&!normalizedAllowedRegions.includes(region.code))return false;
     return !normalizedAllowedSites?.length||region.sites.some((site)=>normalizedAllowedSites.some((allowed)=>recordBelongsToSite({site:allowed},site)));
@@ -1147,8 +1208,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} aria-label="Total fleet by region and site graph">
-          <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{assetCounts.total.toLocaleString()} <span>Total Fleet</span><button type="button" className="mine-fleet-chart-total-trigger" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")} /></strong><div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div></header>
-          <div className="mine-fleet-chart-layout">
+          <header><div><h2>Total Fleet</h2></div><strong className="mine-fleet-chart-total">{equipmentLoaded?assetCounts.total.toLocaleString():"—"} <span>Total Fleet</span><button type="button" className="mine-fleet-chart-total-trigger" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")} disabled={!equipmentLoaded} /></strong><div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span></div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div></header>
+          {equipmentLoaded?<><div className="mine-fleet-chart-layout">
             <div className="mine-fleet-chart-y" aria-hidden="true"><b>Total fleet count</b>{fleetChartTicks.map((tick) => <span key={tick}>{tick.toLocaleString()}</span>)}</div>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
@@ -1160,19 +1221,19 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               </section>)}</div>
             </div>
           </div>
-          <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div>
+          <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
         <article className="mine-panel mine-repair-type-chart" aria-label="Maintenance type graph">
-          <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Maintenance Type</h2></div><strong>{repairTypeTotal.toLocaleString()} requests</strong></header>
-          <div className="mine-repair-type-bars">
+          <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Maintenance Type</h2></div><strong>{equipmentLoaded?repairTypeTotal.toLocaleString():"—"} requests</strong></header>
+          {equipmentLoaded?<div className="mine-repair-type-bars">
             {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
               <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
             </button>) : <div className="mine-empty">No repair types configured</div>}
-          </div>
+          </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-scope-state" />}
         </article>
         <article className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability">
-          <header><div><span className="mine-eyebrow">Fleet status</span><h2>Road Availability</h2></div><strong>{roadStatusTotal.toLocaleString()} <small>Total fleet</small></strong></header>
-          <div className="mine-road-availability-body">
+          <header><div><span className="mine-eyebrow">Fleet status</span><h2>Road Availability</h2></div><strong>{equipmentLoaded?roadStatusTotal.toLocaleString():"—"} <small>Total fleet</small></strong></header>
+          {equipmentLoaded?<div className="mine-road-availability-body">
             <button type="button" className="mine-road-availability-overview" onClick={() => openAssetDrilldown("road-availability")} aria-label="Drill down Road Availability by region and site">
               <span className="mine-road-availability-summary"><strong>{kpis.availability}%</strong><span>Fleet available</span><small>{kpis.onRoad.toLocaleString()} of {roadStatusTotal.toLocaleString()} assets are on road</small></span>
               <span className="mine-road-distribution" aria-label="Road availability distribution">
@@ -1185,7 +1246,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><b>Off road</b><small>{roadStatusShare(kpis.offRoad).toFixed(1)}% maintenance</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
               <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><b>Idle</b><small>{roadStatusShare(kpis.idle).toFixed(1)}% not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
             </div>
-          </div>
+          </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-road-status-state" />}
         </article>
       </section>
       <section className="mine-dashboard-grid mine-dashboard-core">
@@ -1197,10 +1258,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 <button type="button" className={fleetIntelligenceView === "combined" ? "active" : ""} aria-pressed={fleetIntelligenceView === "combined"} onClick={() => setFleetIntelligenceView("combined")}><Network />Combined</button>
                 <button type="button" className={fleetIntelligenceView === "split" ? "active" : ""} aria-pressed={fleetIntelligenceView === "split"} onClick={() => setFleetIntelligenceView("split")}><Columns3 />Split</button>
               </div>
-              <button type="button" className="mine-view-full-fleet" onClick={() => openAssetDrilldown("all")}>View full fleet <ChevronRight /></button>
+              <button type="button" className="mine-view-full-fleet" onClick={() => openAssetDrilldown("all")} disabled={!equipmentLoaded}>View full fleet <ChevronRight /></button>
             </div>
           </header>
-          <div className={`mine-fleet-command-body ${fleetIntelligenceView === "combined" ? "combined" : "split"}`}>
+          {equipmentLoaded?<div className={`mine-fleet-command-body ${fleetIntelligenceView === "combined" ? "combined" : "split"}`}>
             {fleetIntelligenceView === "combined" ? <section className="mine-fleet-combined" aria-label="Combined asset category and equipment group chart">
               <div className="mine-fleet-section-title"><span>Fleet composition</span><b>Combined view</b></div>
               <div className="mine-hierarchy-layout">
@@ -1229,7 +1290,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 {fleetGroupPieSlices.length ? <><div className="mine-pie-chart-wrap"><svg className="mine-pie-chart" viewBox="0 0 42 42" aria-label={`${fleetGroupInsights.length} equipment groups`}>{fleetGroupPieSlices.map((slice) => <circle key={slice.key} className="mine-pie-slice" cx="21" cy="21" r="15.9155" pathLength="100" fill="none" stroke={slice.color} strokeWidth="7" strokeDasharray={`${slice.percent} ${100 - slice.percent}`} strokeDashoffset={-slice.start} onClick={() => openAssetDrilldown(slice.key)} role="button" tabIndex="0" onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openAssetDrilldown(slice.key); }}><title>{slice.label}: {slice.total}</title></circle>)}</svg><span className="mine-pie-center"><b>{fleetGroupInsights.length}</b><small>Groups</small></span></div><div className="mine-pie-legend mine-group-pie-legend">{fleetGroupPieSlices.map((slice) => <button type="button" key={slice.key} onClick={() => openAssetDrilldown(slice.key)}><i style={{ background: slice.color }} /><span>{slice.label}</span><b>{slice.total.toLocaleString()}</b></button>)}</div></> : <p className="mine-empty">No equipment groups available</p>}
               </section>
             </>}
-          </div>
+          </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-command-state" />}
         </article>
         <article className="mine-panel mine-request-lifecycle" aria-label="Opened, closed, verified and idle request trend">
           <header>
@@ -1240,7 +1301,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
             </div>
           </header>
-          <div className="mine-request-lifecycle-summary">
+          {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
             {[{ key: "opened", label: "Opened", note: "New requests" }, { key: "closed", label: "Closed", note: "Maintenance completed" }, { key: "verified", label: "Verified", note: "MIS verified" }, { key: "idle", label: "Idle Vehicles", note: "Available, not working" }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{requestLifecycleRows[item.key].length.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
@@ -1253,7 +1314,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 <small>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small>
               </div>)}
             </div>
-          </div>
+          </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
         </article>
       </section>
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={`${assetDrilldownTitle} · ${assetDrilldownRows.length}`} close={() => { setAssetDrilldown(""); setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><div className="dashboard-asset-drilldown">
@@ -1278,20 +1339,20 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       <section className="mine-dashboard-lower-grid">
       <section className="mine-panel mine-breakdown-trend">
         <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend & forecast</h2><p>Recorded history and weekday-weighted upcoming estimates</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-view" role="group" aria-label="Breakdown trend view">{[["past", "Past"], ["both", "Both"], ["upcoming", "Upcoming"]].map(([value, label]) => <button type="button" key={value} className={breakdownTrendView === value ? "active" : ""} onClick={() => setBreakdownTrendView(value)}>{label}</button>)}</div><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
-        <div className="mine-breakdown-trend-body">
+        {equipmentLoaded?<div className="mine-breakdown-trend-body">
           <div className="mine-trend-summary"><article><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>Past {breakdownTrendDays} days</small></article><article><span>Forecast</span><strong>{breakdownForecastTotal.toLocaleString()}</strong><small>Next {breakdownTrendDays} days</small></article><article><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
           <section className="mine-trend-visual"><div className="mine-trend-legend"><span><i className="actual" />Actual</span><span><i className="forecast" />Forecast</span><b>Selected day: {new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${breakdownTrendAnchorKey}T12:00:00`))}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day actual and forecast breakdown chart`}>{breakdownTrend.map((day, index) => <div className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div></section>
-        </div>
+        </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-breakdown-trend-state" />}
       </section>
       <article className="mine-panel mine-fleet-performance" aria-label="Overall utilization and availability">
-        <header><div><span className="mine-eyebrow">Fleet efficiency</span><h2>Overall Fleet Performance</h2><p>Utilization and operational availability at a glance</p></div><strong><Gauge />{kpis.total.toLocaleString()} fleet</strong></header>
-        <div className="mine-fleet-performance-body">
+        <header><div><span className="mine-eyebrow">Fleet efficiency</span><h2>Overall Fleet Performance</h2><p>Utilization and operational availability at a glance</p></div><strong><Gauge />{equipmentLoaded?kpis.total.toLocaleString():"—"} fleet</strong></header>
+        {equipmentLoaded?<div className="mine-fleet-performance-body">
           <div className="mine-performance-gauges">{[
             { key: "onroad", label: "Overall Utilization", value: utilizationPercent, count: kpis.onRoad, note: "On road / total fleet", color: "#315fd4" },
             { key: "available", label: "Overall Availability", value: availabilityPercent, count: availableFleet, note: "On road + idle / total fleet", color: "#26956f" },
           ].map((gauge) => <button type="button" key={gauge.label} onClick={() => openAssetDrilldown(gauge.key)} style={{ "--gauge-angle": `${gauge.value * 2.7}deg`, "--gauge-color": gauge.color }}><span>{gauge.label}</span><div className="mine-radial-gauge"><strong>{gauge.value}%</strong><small>{gauge.count}/{kpis.total}</small></div><p>{gauge.note}</p><em>View details <ChevronRight /></em></button>)}</div>
           <div className="mine-performance-composition"><div><span>Fleet composition</span><b>{kpis.total.toLocaleString()} assets</b></div><div className="mine-performance-bar" aria-label={`${kpis.onRoad} utilized, ${kpis.idle} idle and ${Math.max(0, kpis.total - availableFleet)} unavailable`}><i className="utilized" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${kpis.total ? (kpis.idle / kpis.total) * 100 : 0}%` }} /><i className="unavailable" style={{ width: `${kpis.total ? (Math.max(0, kpis.total - availableFleet) / kpis.total) * 100 : 0}%` }} /></div><div className="mine-performance-legend"><span><i className="utilized" />Utilized <b>{kpis.onRoad}</b></span><span><i className="idle" />Idle <b>{kpis.idle}</b></span><span><i className="unavailable" />Unavailable <b>{Math.max(0, kpis.total - availableFleet)}</b></span></div></div>
-        </div>
+        </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-performance-state" />}
       </article>
       </section>
     </div>
@@ -7275,7 +7336,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder requests={requests} role={mobileRole} /><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} allowedSites={assignedLocation?[assignedLocation]:[]} restrictToScope />}
+      {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} />}
       {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
@@ -7337,14 +7398,12 @@ function App() {
   const adminPermissions = session?.permissions || {};
   const activeNavigationPermissions=navigationPermissionsForView(adminPermissions,responsiveMobile);
   const [profileLocation, setProfileLocation] = useState("");
-  const [profileManagerRegions,setProfileManagerRegions]=useState([]);
-  const [profileManagerSites,setProfileManagerSites]=useState([]);
   useEffect(() => {
     if (!session?.token) return undefined;
     let activeRequest = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session.token}`}})
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((profile) => { if (activeRequest) {setProfileLocation(String(profile.location || "").trim());setProfileManagerRegions(managerRegionSelection(profile.managerRegion));setProfileManagerSites(managerSiteSelection(profile.managerSites));} })
+      .then((profile) => { if (activeRequest) setProfileLocation(String(profile.location || "").trim()); })
       .catch(() => {});
     return () => { activeRequest = false; };
   }, [session?.token]);
@@ -7652,7 +7711,7 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} allowedSites={adminPermissions.adminLevel==="Manager"?(profileManagerSites.length?profileManagerSites:profileLocation?[profileLocation]:[]):null} allowedRegions={adminPermissions.adminLevel==="Manager"?profileManagerRegions:null} restrictToScope={adminPermissions.adminLevel==="Manager"} />
+            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} />
           ) : active === "Manager Profile" ? (
             <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} onCancelIdeal={async(row)=>{if(!window.confirm(`Cancel Idle status for ${row.ref}? The request will return to active maintenance and will not be closed.`))return;try{await updateRequest(row.ref,{},"idle-cancel")}catch(error){alert(error.message)}}} />
           ) : active === "Tickets" ? (
