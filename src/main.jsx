@@ -5787,7 +5787,7 @@ function useMasterRecords(name, seed = []) {
     const loadStartedAt = performance.now();
     setLoaded(false);
     setLoadError("");
-    fetch("/api/masters", {signal: controller.signal, headers: {Authorization: "Bearer " + authToken}})
+    fetch(`/api/masters?t=${Date.now()}`, {cache:"no-store", signal: controller.signal, headers: {Authorization: "Bearer " + authToken}})
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.error || "Could not load " + name + ".");
@@ -5855,14 +5855,27 @@ function useMasterRecords(name, seed = []) {
     }
   };
   const edit = async (id, record) => {
-    const response = await fetch(`/api/masters/${encodeURIComponent(name)}/${id}`, {
-      method: "PUT",
+    const update = () => fetch(`/api/masters/${encodeURIComponent(name)}/${id}`, {
+      method: "PUT", cache:"no-store",
       headers: {"Content-Type": "application/json", Authorization: `Bearer ${authToken}`},
       body: JSON.stringify(record),
     });
+    let response;
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        response = await update();
+        if (![408, 429, 502, 503, 504].includes(response.status)) break;
+      } catch (error) {
+        lastError = error;
+      }
+      if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+    }
+    if (!response) throw new Error(lastError?.message === "Failed to fetch" ? "The save connection was interrupted. Please try again." : lastError?.message || "Could not update this record.");
     const details = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(details.error || "Could not update this record.");
     setRecords((current) => current.map((item) => item.id === id ? details : item));
+    return details;
   };
   const remove = async (id, reason = "") => {
     const response = await fetch(`/api/masters/${encodeURIComponent(name)}/${id}`, {
@@ -6355,6 +6368,8 @@ const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).ma
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const [savingKey, setSavingKey] = useState("");
   const [editingRow, setEditingRow] = useState(null);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [query, setQuery] = useState("");
   const [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [visibleColumnGroups, setVisibleColumnGroups] = useState(() => hierarchyColumnViewOptions.map((option) => option.key));
@@ -6396,12 +6411,15 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       ...updates,
     };
     setSavingKey(row.rowKey);
+    setSaveError("");
     try {
       if (row.id) await onEdit(row.id, payload);
       else await onAdd([payload], {silent:true});
       return true;
     } catch (error) {
-      alert(error.message || "Could not save hierarchy setting.");
+      const message = error.message || "Could not save hierarchy setting.";
+      setSaveError(message);
+      if (!editingRow) alert(message);
       return false;
     } finally {
       setSavingKey("");
@@ -6417,7 +6435,10 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       reportAccess: values.getAll("reportAccess").join(" | "),
       siteAccess: values.getAll("siteAccess").join(" | "),
     });
-    if (saved) setEditingRow(null);
+    if (saved) {
+      setSaveMessage(`${editingRow.designation} settings saved successfully.`);
+      setEditingRow(null);
+    }
   };
   const toggleReport = (row, report, checked) => {
     const selected = new Set(splitPipeValues(row.reportAccess));
@@ -6451,6 +6472,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         </div>
         <div className="master-search-actions"><label className="region-search"><Search /><input data-smart-search type="search" placeholder="Search hierarchy" value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div>
       </div>
+      {saveMessage && <div className="hierarchy-save-message" role="status"><CheckCircle2 /><span>{saveMessage}</span><button type="button" aria-label="Dismiss save confirmation" onClick={() => setSaveMessage("")}><X /></button></div>}
       <div className="hierarchy-site-strip">
         <MapPin />
         <div><b>WCL and NCL site wise ticks</b><span>Select sites row-wise for report delivery and data scoping.</span></div>
@@ -6510,7 +6532,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                     <td className="hierarchy-col-section"><span className="hierarchy-section-pill">{row.section}</span></td>
                     <td className="hierarchy-col-designation">
                       <span><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</span>
-                      <button type="button" className="hierarchy-row-edit" title={`Edit all settings for ${row.designation}`} aria-label={`Edit all settings for ${row.designation}`} onClick={() => setEditingRow(row)} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /><span>Edit</span></button>
+                      <button type="button" className="hierarchy-row-edit" title={`Edit all settings for ${row.designation}`} aria-label={`Edit all settings for ${row.designation}`} onClick={() => {setSaveError("");setEditingRow(row);}} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /><span>Edit</span></button>
                     </td>
                     <td className="hierarchy-col-level"><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
                     <td className="hierarchy-col-schedule hierarchy-schedule">{row.schedule}</td>
@@ -6536,9 +6558,10 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         {visibleReportTitles.map((report) => <span key={report}><b>{hierarchyReportCodes.get(report)}</b>{report}</span>)}
       </div>}
     </section>
-    {editingRow && <Modal title={`Edit hierarchy · ${editingRow.designation}`} close={() => setEditingRow(null)} className="hierarchy-edit-modal">
+    {editingRow && <Modal title={`Edit hierarchy · ${editingRow.designation}`} close={() => {setSaveError("");setEditingRow(null);}} className="hierarchy-edit-modal">
       <form className="form master-form" onSubmit={saveHierarchyDetails}>
         <p className="hierarchy-edit-help">Update the schedule, reporting files, and site access for this hierarchy row in one place.</p>
+        {saveError && <div className="hierarchy-save-error" role="alert"><AlertTriangle /><span>{saveError}</span></div>}
         <div className="formgrid">
           <label>Designation<input value={editingRow.designation} readOnly aria-readonly="true" /></label>
           <label>Section *<input name="section" defaultValue={editingRow.section} required autoFocus /></label>
@@ -6561,7 +6584,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
             </section>)}
           </fieldset>
         </div>
-        <footer><button type="button" onClick={() => setEditingRow(null)}>Cancel</button><button className="primary" disabled={savingKey === editingRow.rowKey}><Pencil aria-hidden="true" /> {savingKey === editingRow.rowKey ? "Saving..." : "Save all changes"}</button></footer>
+        <footer><button type="button" onClick={() => {setSaveError("");setEditingRow(null);}}>Cancel</button><button className="primary" disabled={savingKey === editingRow.rowKey}><Pencil aria-hidden="true" /> {savingKey === editingRow.rowKey ? "Saving..." : "Save all changes"}</button></footer>
       </form>
     </Modal>}
   </>);
