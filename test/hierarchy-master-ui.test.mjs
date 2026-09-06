@@ -22,7 +22,10 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(hierarchySource, /className="hierarchy-row-edit"/);
   assert.match(hierarchySource, /Edit hierarchy ·/);
   assert.match(hierarchySource, /saveHierarchyDetails/);
-  assert.match(hierarchySource, /Report and site access continue to be controlled by the matrix ticks/);
+  assert.match(hierarchySource, /values\.getAll\("reportAccess"\)/);
+  assert.match(hierarchySource, /values\.getAll\("siteAccess"\)/);
+  assert.match(hierarchySource, /Reporting files/);
+  assert.match(hierarchySource, /Save all changes/);
   assert.match(source, /hierarchyColumnViewOptions/);
   assert.match(source, /group:"MIS Report", viewKey:"S"/);
   assert.match(source, /key:"W", label:"WCL and NCL site-wise controls"/);
@@ -45,4 +48,5 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(styles, /\.hierarchy-report-legend/);
   assert.match(styles, /\.hierarchy-row-edit/);
   assert.match(styles, /\.hierarchy-edit-modal/);
+  assert.match(styles, /\.hierarchy-access-grid/);
 });

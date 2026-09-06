@@ -6414,6 +6414,8 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       section: String(values.get("section") || "").trim(),
       level: String(values.get("level") || "").trim(),
       schedule: String(values.get("schedule") || "").trim(),
+      reportAccess: values.getAll("reportAccess").join(" | "),
+      siteAccess: values.getAll("siteAccess").join(" | "),
     });
     if (saved) setEditingRow(null);
   };
@@ -6508,7 +6510,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                     <td className="hierarchy-col-section"><span className="hierarchy-section-pill">{row.section}</span></td>
                     <td className="hierarchy-col-designation">
                       <span><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</span>
-                      <button type="button" className="hierarchy-row-edit" title={`Edit ${row.designation}`} aria-label={`Edit ${row.designation}`} onClick={() => setEditingRow(row)} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /></button>
+                      <button type="button" className="hierarchy-row-edit" title={`Edit all settings for ${row.designation}`} aria-label={`Edit all settings for ${row.designation}`} onClick={() => setEditingRow(row)} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /><span>Edit</span></button>
                     </td>
                     <td className="hierarchy-col-level"><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
                     <td className="hierarchy-col-schedule hierarchy-schedule">{row.schedule}</td>
@@ -6536,14 +6538,30 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     </section>
     {editingRow && <Modal title={`Edit hierarchy · ${editingRow.designation}`} close={() => setEditingRow(null)} className="hierarchy-edit-modal">
       <form className="form master-form" onSubmit={saveHierarchyDetails}>
-        <p className="hierarchy-edit-help">Update this designation's hierarchy details. Report and site access continue to be controlled by the matrix ticks.</p>
+        <p className="hierarchy-edit-help">Update the schedule, reporting files, and site access for this hierarchy row in one place.</p>
         <div className="formgrid">
           <label>Designation<input value={editingRow.designation} readOnly aria-readonly="true" /></label>
           <label>Section *<input name="section" defaultValue={editingRow.section} required autoFocus /></label>
           <label>Level *<select name="level" defaultValue={String(editingRow.level).replace(/^L/i, "")} required>{[1, 2, 3, 4].map((level) => <option key={level} value={level}>L{level}</option>)}</select></label>
           <label className="full">Delivery schedule *<textarea name="schedule" defaultValue={editingRow.schedule} rows="4" required /></label>
+          <fieldset className="hierarchy-access-editor full">
+            <legend>Reporting files</legend>
+            <p>Select every report this designation should receive.</p>
+            {hierarchyReportGroups.map((group) => <section key={group.group}>
+              <h4>{group.group}</h4>
+              <div className="hierarchy-access-grid">{group.reports.map((report) => <label key={report}><input type="checkbox" name="reportAccess" value={report} defaultChecked={splitPipeValues(editingRow.reportAccess).includes(report)} /><span><b>{hierarchyReportCodes.get(report)}</b>{report}</span></label>)}</div>
+            </section>)}
+          </fieldset>
+          <fieldset className="hierarchy-access-editor full">
+            <legend>Site access</legend>
+            <p>Select every location available to this designation.</p>
+            {hierarchySiteGroups.map((region) => <section key={region.code}>
+              <h4>{region.code} · {region.name}</h4>
+              <div className="hierarchy-access-grid sites">{region.sites.map((site) => <label key={site}><input type="checkbox" name="siteAccess" value={site} defaultChecked={splitPipeValues(editingRow.siteAccess).includes(site)} /><span>{site}</span></label>)}</div>
+            </section>)}
+          </fieldset>
         </div>
-        <footer><button type="button" onClick={() => setEditingRow(null)}>Cancel</button><button className="primary" disabled={savingKey === editingRow.rowKey}><Pencil aria-hidden="true" /> {savingKey === editingRow.rowKey ? "Saving..." : "Save changes"}</button></footer>
+        <footer><button type="button" onClick={() => setEditingRow(null)}>Cancel</button><button className="primary" disabled={savingKey === editingRow.rowKey}><Pencil aria-hidden="true" /> {savingKey === editingRow.rowKey ? "Saving..." : "Save all changes"}</button></footer>
       </form>
     </Modal>}
   </>);
