@@ -1001,7 +1001,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-road-site-bar i.offroad { background: #df6d64; }
 .mine-road-site-bar i.idle { background: #dda13d; }
 .dashboard-maintenance-availability-state { min-height: 180px; }
-.dashboard-breakdown-movement-modal .modal-card { width: min(1060px, calc(100vw - 28px)); }
+.modal.dashboard-breakdown-movement-modal { width: min(1480px, calc(100vw - 24px)); max-height: calc(100dvh - 20px); }
+.modal.dashboard-breakdown-movement-modal > header { position: sticky; top: 0; z-index: 4; background: var(--surface); }
 .dashboard-breakdown-movement-detail { display: grid; gap: 11px; }
 .dashboard-breakdown-period-controls {
   display: flex;
@@ -1022,42 +1023,15 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-breakdown-custom-days { display: inline-flex !important; align-items: end; gap: 5px !important; }
 .dashboard-breakdown-custom-days input { width: 76px; }
 .dashboard-breakdown-apply { color: #315fd4 !important; cursor: pointer; }
-.dashboard-breakdown-day-chart { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
-.dashboard-site-road-impact { display: grid; gap: 8px; padding: 10px; border: 1px solid #b9e0d0; border-left: 4px solid #26956f; border-radius: 6px; background: #edf9f4; color: #173d31; }
-.dashboard-site-road-impact-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.dashboard-site-road-impact-heading > span { display: inline-flex; align-items: center; gap: 6px; }
-.dashboard-site-road-impact-heading svg { width: 17px; height: 17px; }
-.dashboard-site-road-impact-heading strong { font: 900 22px/1 Manrope; }
-.dashboard-site-road-impact-heading > div { display: inline-flex; align-items: center; gap: 10px; }
-.dashboard-site-road-impact-heading button { display: inline-flex; align-items: center; gap: 3px; min-height: 30px; padding: 5px 8px; border: 1px solid #94cbb6; border-radius: 5px; background: #fff; color: #1e7356; font-weight: 850; cursor: pointer; }
-.dashboard-site-road-impact-heading button:hover,.dashboard-site-road-impact-heading button:focus-visible { outline: 2px solid #26956f33; outline-offset: 1px; }
-.dashboard-site-road-impact-heading button svg { width: 14px; height: 14px; }
-.dashboard-site-road-impact-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid #cfe6dc; border-radius: 5px; background: #fff; }
-.dashboard-site-road-impact-stats span { display: grid; gap: 2px; padding: 7px 9px; border-right: 1px solid #dce9e3; }
-.dashboard-site-road-impact-stats span:last-child { border-right: 0; }
-.dashboard-site-road-impact-stats small { color: #557267; font-weight: 750; }
-.dashboard-site-road-impact-stats b { font: 900 15px/1 Manrope; }
-.dashboard-site-road-impact-stats .onroad b { color: #238361; }
-.dashboard-site-road-impact-stats .offroad b { color: #c9554d; }
-.dashboard-site-road-impact-stats .idle b { color: #b67a1d; }
-.dashboard-site-road-impact > .mine-road-site-bar { height: 12px; background: #d7e5df; }
-.dashboard-site-road-impact p { margin: 0; color: #46645a; font-size: 8px; }
-.dashboard-breakdown-chart-legend { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 8px; color: var(--muted); font-weight: 750; }
-.dashboard-breakdown-chart-legend span { display: inline-flex; align-items: center; gap: 4px; }
-.dashboard-breakdown-chart-legend i { width: 8px; height: 8px; border-radius: 2px; }
-.dashboard-breakdown-chart-legend .incoming { background: #df6d64; }
-.dashboard-breakdown-chart-legend .outgoing { background: #26956f; }
-.dashboard-breakdown-chart-legend .balance { background: #7043ad; }
-.dashboard-breakdown-chart-days { display: flex; align-items: stretch; gap: 8px; min-height: 162px; overflow-x: auto; padding-top: 5px; }
-.dashboard-breakdown-chart-day { display: grid; grid-template-rows: 1fr auto; gap: 5px; min-width: 52px; flex: 1 0 52px; }
-.dashboard-breakdown-chart-day > div { display: flex; align-items: end; justify-content: center; gap: 3px; min-height: 130px; border-bottom: 1px solid var(--line); background: linear-gradient(to top, color-mix(in srgb, #315fd4 3%, transparent), transparent); }
-.dashboard-breakdown-chart-day i { display: block; width: 9px; min-height: 2px; border-radius: 3px 3px 0 0; }
-.dashboard-breakdown-chart-day i.incoming { background: #df6d64; }
-.dashboard-breakdown-chart-day i.outgoing { background: #26956f; }
-.dashboard-breakdown-chart-day i.balance { background: #7043ad; }
-.dashboard-breakdown-chart-day small { color: var(--muted); text-align: center; white-space: nowrap; }
-.dashboard-breakdown-day-table { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
-.dashboard-breakdown-day-table table { min-width: 620px; }
+.dashboard-breakdown-road-shortcut { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; border-color: #94cbb6 !important; background: #edf9f4 !important; color: #1e7356 !important; }
+.dashboard-breakdown-road-shortcut svg { width: 14px; height: 14px; }
+.dashboard-breakdown-road-shortcut:hover,.dashboard-breakdown-road-shortcut:focus-visible { outline: 2px solid #26956f33; outline-offset: 1px; }
+.dashboard-breakdown-day-table { min-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.dashboard-breakdown-day-table table { min-width: 780px; }
+.dashboard-breakdown-day-table th { position: sticky; top: 0; z-index: 1; padding: 13px 16px; font-size: 9px; }
+.dashboard-breakdown-day-table td { padding: 15px 16px; font-size: 12px; }
+.dashboard-breakdown-day-table td.percentage b { display: inline-flex; min-width: 52px; justify-content: center; padding: 5px 8px; border-radius: 5px; background: #f2ecfb; color: #6339a2; font-weight: 900; }
+.dashboard-breakdown-day-table td.percentage small { margin-top: 4px; color: var(--muted); font-size: 8px; }
 .mine-dashboard-grid { gap: 7px; }
 .mine-panel { border-radius: 6px; }
 .mine-panel > header {
@@ -1819,16 +1793,11 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-road-site-body { overflow: visible; }
   .dashboard-breakdown-period-controls { align-items: stretch; }
   .dashboard-breakdown-period-controls label { flex: 1 1 145px; }
-  .dashboard-site-road-impact-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .dashboard-site-road-impact-stats span:nth-child(2) { border-right: 0; }
-  .dashboard-site-road-impact-stats span:nth-child(-n+2) { border-bottom: 1px solid #dce9e3; }
   .mine-breakdown-type-mix > header { align-items: flex-start; flex-direction: column; }
   .mine-breakdown-type-mix > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-breakdown-type-mix article:nth-child(3n) { border-right: 1px solid var(--mine-line, var(--line)); }
   .mine-breakdown-type-mix article:nth-child(2n) { border-right: 0; }
   .mine-breakdown-type-mix article:nth-child(-n+4) { border-bottom: 1px solid var(--mine-line, var(--line)); }
-  .dashboard-site-road-impact-heading { align-items: flex-start; }
-  .dashboard-site-road-impact-heading > div { align-items: flex-end; flex-direction: column; }
   .mine-head-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

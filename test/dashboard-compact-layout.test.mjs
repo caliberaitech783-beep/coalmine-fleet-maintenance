@@ -31,17 +31,28 @@ test("site breakdown view reconciles one-line site totals and opens day-wise con
   assert.match(css, /\.mine-breakdown-site-head,[\s\S]*?\.mine-breakdown-site-row\s*\{[\s\S]*?grid-template-columns:/);
 });
 
+test("day-wise details use a larger table with fleet-impact BD percentage", () => {
+  const table = client.indexOf('className="dashboard-breakdown-day-table"');
+  assert.ok(table >= 0);
+  assert.match(client, /<th>BD %<\/th>/);
+  assert.match(client, /day\.balance \/ selectedBreakdownSiteRoad\.total/);
+  assert.match(client, /breakdownPercentage\.toFixed\(1\)/);
+  assert.doesNotMatch(client, /className="dashboard-breakdown-day-chart"/);
+  assert.doesNotMatch(client, /className="dashboard-site-road-impact"/);
+  assert.match(css, /\.modal\.dashboard-breakdown-movement-modal\s*\{[^}]*width:\s*min\(1480px/);
+  assert.match(css, /\.dashboard-breakdown-day-table\s*\{[^}]*min-height:\s*260px/);
+});
+
 test("each site links breakdown movement with its current road availability", () => {
   assert.match(client, /const roadAvailabilityBySiteName = new Map/);
   assert.match(client, /className="mine-breakdown-road-impact"/);
   assert.match(client, /road\.onRoad.*On ·.*road\.offRoad.*Off ·.*road\.idle.*Idle/);
-  assert.match(client, /className="dashboard-site-road-impact"/);
-  assert.match(client, /BD balance in the selected period/);
+  assert.match(client, /className="dashboard-breakdown-road-shortcut"/);
   assert.match(client, /Road availability <ChevronRight \/>/);
   assert.match(client, /openRoadAvailabilityForSite\(breakdownDetailSite\)/);
   assert.match(client, /roadFocusSite === site\.site/);
   assert.match(css, /\.mine-breakdown-road-impact\s*\{/);
-  assert.match(css, /\.dashboard-site-road-impact\s*\{/);
+  assert.match(css, /\.dashboard-breakdown-road-shortcut\s*\{/);
 });
 
 test("the maintenance summary defines all six BD types with intake percentages", () => {
