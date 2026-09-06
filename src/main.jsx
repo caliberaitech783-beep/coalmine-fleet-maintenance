@@ -6370,6 +6370,7 @@ const regionSites = (record = {}) => String(record.sites || "")
   .filter(Boolean);
 const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).map((item) => item.trim()).filter(Boolean);
 const hierarchyStandardTimes = ["06:00", "08:00", "10:00", "14:00", "18:00", "19:00", "22:00"];
+const hierarchyScheduleTimePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const hierarchyDayForWeekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const hierarchyDesignationOption = (row = {}) => reportDesignationOptions.find((option) => (
   option.label.toLowerCase() === String(row.designation || "").trim().toLowerCase()
@@ -6397,7 +6398,7 @@ const hierarchyTimeLabel = (value) => {
 };
 const hierarchyScheduleSummary = (row, days, times) => {
   const selectedDays = reportWeekDays.filter((day) => days.includes(day));
-  const selectedTimes = [...new Set(times.filter((time) => TIME_24H_PATTERN.test(time)))].sort();
+  const selectedTimes = [...new Set(times.filter((time) => hierarchyScheduleTimePattern.test(time)))].sort();
   const option = hierarchyDesignationOption(row);
   const hasEvents = option?.schedules?.some((schedule) => schedule.eventBased || schedule.cadence === "event");
   const scheduled = !selectedDays.length || !selectedTimes.length
@@ -6518,7 +6519,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const saveHierarchyDetails = async (event) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    const scheduleTimes = [...new Set(editingScheduleTimes.filter((time) => TIME_24H_PATTERN.test(time)))].sort();
+    const scheduleTimes = [...new Set(editingScheduleTimes.filter((time) => hierarchyScheduleTimePattern.test(time)))].sort();
     if (editingScheduleDays.length && !scheduleTimes.length) {
       setSaveError("Select at least one valid IST delivery time, or clear all scheduled days.");
       return;

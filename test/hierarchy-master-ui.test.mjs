@@ -35,6 +35,8 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(hierarchySource, /const allRows = \[\.\.\.defaultRows, \.\.\.customRows\]/);
   assert.match(hierarchySource, /Scheduled delivery days/);
   assert.match(hierarchySource, /hierarchyStandardTimes\.map/);
+  assert.match(source, /const hierarchyScheduleTimePattern = \/\^/);
+  assert.doesNotMatch(hierarchySource, /TIME_24H_PATTERN\.test/);
   assert.match(hierarchySource, /\+ Custom time/);
   assert.match(hierarchySource, /scheduleDays: reportWeekDays\.filter/);
   assert.match(hierarchySource, /scheduleTimes: scheduleTimes\.join/);
