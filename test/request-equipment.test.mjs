@@ -92,6 +92,40 @@ test("request rows inherit make and model from their Equipment Master record", (
   assert.deepEqual(requestWithEquipmentMasterDetails({ ref: "JOB-2", make: "Tata", model: "Signa" }, []), { ref: "JOB-2", make: "Tata", model: "Signa" });
 });
 
+test("request rows match Equipment Master identifiers despite spacing and punctuation", () => {
+  const enriched = requestWithEquipmentMasterDetails(
+    { ref: "REQ-D16", door: "D16-24964", make: "DOZCO", model: "SHANTUI DH24C3" },
+    [
+      { equipmentName: "D16 - 24964", make: "LIEBHERR", model: "PR-736" },
+      { equipmentName: "D24-Z0411", make: "LIUGONG", model: "LGCB160C" },
+    ],
+  );
+  assert.equal(enriched.make, "LIEBHERR");
+  assert.equal(enriched.model, "PR-736");
+});
+
+test("ambiguous Equipment Master references do not attach another asset's details", () => {
+  const request = { ref: "REQ-GROUP", equipment: "DOZERS", make: "Saved make", model: "Saved model" };
+  const enriched = requestWithEquipmentMasterDetails(request, [
+    { equipmentName: "DOZERS", door: "D16", make: "LIEBHERR", model: "PR-736" },
+    { equipmentName: "DOZERS", door: "D24", make: "LIUGONG", model: "LGCB160C" },
+  ]);
+  assert.equal(enriched.make, "Saved make");
+  assert.equal(enriched.model, "Saved model");
+});
+
+test("a unique door match wins when the request's equipment label is shared", () => {
+  const enriched = requestWithEquipmentMasterDetails(
+    { ref: "REQ-D16", door: "D16-24964", equipment: "DOZERS", make: "Old", model: "Old" },
+    [
+      { equipmentName: "DOZERS", door: "D16 - 24964", make: "LIEBHERR", model: "PR-736" },
+      { equipmentName: "DOZERS", door: "D24-Z0411", make: "LIUGONG", model: "LGCB160C" },
+    ],
+  );
+  assert.equal(enriched.make, "LIEBHERR");
+  assert.equal(enriched.model, "PR-736");
+});
+
 test("equipment option labels include context that distinguishes duplicate names", () => {
   assert.equal(
     requestEquipmentOptionLabel({

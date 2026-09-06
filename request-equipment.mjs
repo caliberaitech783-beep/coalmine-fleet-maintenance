@@ -2,6 +2,10 @@ function text(value) {
   return String(value ?? "").trim();
 }
 
+function equipmentReference(value) {
+  return text(value).toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
 export function findRequestEquipment(records = [], selectedId = "") {
   const id = text(selectedId);
   if (!id) return null;
@@ -38,15 +42,23 @@ export function requestEquipmentDetails(record = {}) {
 }
 
 export function requestWithEquipmentMasterDetails(request = {}, records = []) {
-  const requestKeys = [request.chassis, request.door, request.reg, request.equipment]
-    .map((value) => text(value).toLowerCase())
-    .filter(Boolean);
-  const equipment = records.find((record) => {
+  const recordReferences = records.map((record) => {
     const details = requestEquipmentDetails(record);
-    return [details.chassis, details.door, details.reg, details.equipment, record.manufacturerSerialNo]
-      .map((value) => text(value).toLowerCase())
-      .some((value) => value && requestKeys.includes(value));
+    return {
+      record,
+      keys: [details.chassis, details.door, details.reg, details.equipment, record.manufacturerSerialNo]
+        .map(equipmentReference)
+        .filter(Boolean),
+    };
   });
+  let equipment = null;
+  for (const requestKey of [request.chassis, request.door, request.reg, request.equipment].map(equipmentReference).filter(Boolean)) {
+    const matches = recordReferences.filter(({ keys }) => keys.includes(requestKey));
+    if (matches.length === 1) {
+      equipment = matches[0].record;
+      break;
+    }
+  }
   const details = requestEquipmentDetails(equipment || {});
   return {
     ...request,
