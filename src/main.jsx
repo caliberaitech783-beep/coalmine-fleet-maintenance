@@ -13,6 +13,7 @@ import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
+import { delayedReasonRequired } from "../delayed-reason.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
@@ -21,7 +22,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
-import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement } from "../dashboard-breakdown-movement.mjs";
+import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { aiFeederAlerts, aiFeederSummary } from "../ai-feeder.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
@@ -209,6 +210,7 @@ const masterNav = [
   ["Breakdown master", Wrench],
   ["Repair type master", Wrench],
   ["Region master", Building2],
+  ["Delayed Reason", Clock],
   ["Vehicle transfers", ArrowRightLeft],
   ["Hierarchy master", Network],
   ["OEM master", ShieldCheck],
@@ -850,7 +852,7 @@ function FleetDataState({ error = "", retry, className = "" }) {
   </div>;
 }
 
-function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", requests = [], gotoEquipment, onApproveIdeal, onCancelIdeal }) {
+function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], gotoEquipment, onApproveIdeal, onCancelIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
@@ -874,7 +876,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
   const closedRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() === "closed");
   const verifiedRequests = requestRows.filter((request) => Boolean(request.verifiedAt));
-  const cards = activeManagerRole === "Production Manager"
+  const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
+  const cards = productionManagerView
     ? [
         ["Total equipment", fleet.total, "Registered fleet", "all", totalTypes],
         ["On road", fleet.onRoad, "Available for production", "onroad", onRoadTypes],
@@ -894,14 +897,15 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
   const pendingVerification=closedRequests.filter((request)=>!request.verifiedAt);
-  const idealRows=activeManagerRole==="Maintenance Manager"?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").toLowerCase())):[];
+  const canApproveIdle=managerDesignationKey==="projectManager"||productionManagerView;
+  const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").toLowerCase())):[];
   const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
   const visibleActiveRows=activeManagerRole==="Maintenance Manager"?activeRows.filter((request)=>!["idle","ideal"].includes(String(request.status||"").toLowerCase())):activeRows;
   const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
   const detailRows=queueTab==="history"?historyRows:activeRows;
   const visibleDetailRows=queueTab==="ideal"?idealRows:activeManagerRole==="Maintenance Manager"&&queueTab==="active"?visibleActiveRows:detailRows;
   const title = activeManagerRole || "Manager";
-  const description = activeManagerRole === "Production Manager"
+  const description = productionManagerView
     ? `Live fleet availability for ${managerLocation || "the assigned sites"}.`
     : activeManagerRole === "Maintenance Manager"
       ? "Site equipment, maintenance intake, remaining workload, and completed equipment."
@@ -911,10 +915,10 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && equipmentLoaded && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter||!equipmentLoaded} aria-busy={!equipmentLoaded}>
-      <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{activeManagerRole === "Production Manager"&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
+      <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
-    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{activeManagerRole==="Maintenance Manager"&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
+    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} stableToolbar /></article>
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
@@ -924,6 +928,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [assetDrilldownSite, setAssetDrilldownSite] = useState("");
   const [assetDrilldownCategory, setAssetDrilldownCategory] = useState("");
   const [assetDrilldownGroup, setAssetDrilldownGroup] = useState("");
+  const [assetDrilldownMachine, setAssetDrilldownMachine] = useState("");
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
   const [dashboardDate, setDashboardDate] = useState("");
@@ -1032,6 +1037,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const equipmentCategoryLabel = (record = {}) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase())
     ? "Total vehicles"
     : ["equipment","equipments"].includes(String(record.category || "").trim().toLowerCase()) ? "Total equipment" : "Unclassified";
+  // One physical machine: door number first, then whatever identifier the record carries.
+  const equipmentMachineLabel = (record = {}) => String(record.door || record.registration || record.reg || record.manufacturerSerialNo || record.chassisNo || record.equipmentName || "Unidentified").trim() || "Unidentified";
   const summarizeEquipment = (records = [], valueOf = equipmentGroupLabel) => Object.entries(records.reduce((counts, record) => {
     const label = String(valueOf(record) || "Unclassified").trim() || "Unclassified";
     counts[label] = (counts[label] || 0) + 1;
@@ -1151,6 +1158,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("offroad-site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(13)) && liveEquipmentRoadStatus(record, visibleBreakdowns) === "offroad");
     if (key.startsWith("site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(5)));
     if (key.startsWith("group:")) return visibleEquipment.filter((record) => equipmentGroupLabel(record) === key.slice(6));
+    // Site is already known from the panel that opened this, so these keys carry it.
+    if (key.startsWith("site-repair:")) {
+      const [site, type] = key.slice(12).split("|");
+      return requestAssetRows(visibleBreakdowns.filter((record) => recordBelongsToSite(record, site)
+        && normalizedBreakdownType(record.category || record.repairType || record.type) === type));
+    }
+    if (key.startsWith("site-status:")) {
+      const [site, status] = key.slice(12).split("|");
+      const atSite = visibleEquipment.filter((record) => recordBelongsToSite(record, site));
+      return status === "all" ? atSite : atSite.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === status);
+    }
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
     if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
@@ -1199,14 +1217,31 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const assetSiteGroupRows = assetDrilldownGroup ? assetSiteCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
   const assetCategoryRows = assetDrilldownCategory ? assetDrilldownRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
   const assetGroupRows = assetDrilldownCategory && assetDrilldownGroup ? assetCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
+  const siteScopedDrilldown = assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("site-status:");
+  const siteScopedParts = siteScopedDrilldown ? assetDrilldown.slice(12).split("|") : [];
+  const siteScopedSite = siteScopedParts[0] || "";
+  const siteScopedFocus = siteScopedParts[1] || "";
+  const siteScopedFocusLabel = !siteScopedDrilldown ? ""
+    : assetDrilldown.startsWith("site-repair:") ? `${siteScopedFocus} requests`
+    : siteScopedFocus === "all" ? "All fleet"
+    : siteScopedFocus === "onroad" ? "On road"
+    : siteScopedFocus === "offroad" ? "Off road"
+    : siteScopedFocus === "idle" ? "Idle" : siteScopedFocus;
+  const siteScopedCategoryBreakdown = summarizeEquipment(assetDrilldownRows, equipmentCategoryLabel);
+  const siteScopedCategoryRows = assetDrilldownCategory ? assetDrilldownRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
+  const siteScopedGroupBreakdown = summarizeEquipment(siteScopedCategoryRows);
+  const siteScopedGroupRows = assetDrilldownGroup ? siteScopedCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
+  const siteScopedMachineBreakdown = summarizeEquipment(siteScopedGroupRows, equipmentMachineLabel);
+  const siteScopedMachineRows = assetDrilldownMachine ? siteScopedGroupRows.filter((record) => equipmentMachineLabel(record) === assetDrilldownMachine) : [];
   const assetCategoryBreakdown = summarizeEquipment(assetDrilldownRows, equipmentCategoryLabel);
   const assetGroupBreakdown = summarizeEquipment(assetCategoryRows);
-  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:");
+  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
-  const assetDrilldownTitle = assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
+  const assetDrilldownTitle = siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
+    setAssetDrilldownMachine("");
     setAssetDrilldownRegion("");
     setAssetDrilldownSite("");
     setAssetDrilldownCategory("");
@@ -1214,15 +1249,22 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   const selectAssetCategory = (category) => {
     setAssetDrilldownCategory(category);
+    setAssetDrilldownMachine("");
     setAssetDrilldownGroup("");
   };
   const selectAssetGroup = (group) => {
     setAssetDrilldownGroup(group);
+    setAssetDrilldownMachine("");
   };
   const openRoadAvailabilityForSite = (site) => {
     setRoadFocusSite(site);
     setBreakdownDetailSite("");
     setMaintenanceAvailabilityTab("road");
+  };
+  // Site is already chosen, so hand the drilldown a site-scoped key and close this modal.
+  const openSiteScopedDrilldown = (key) => {
+    setBreakdownDetailSite("");
+    openAssetDrilldown(key);
   };
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
@@ -1254,10 +1296,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-        <article className="mine-panel mine-maintenance-availability-panel" aria-label="Maintenance and road availability">
+        <article className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
-            <div><span className="mine-eyebrow">Fleet operations control</span><h2>Maintenance &amp; Road Availability</h2><p>Site-wise breakdown movement and live fleet status in one view.</p></div>
-            <div className="mine-maintenance-availability-tabs" role="tablist" aria-label="Maintenance and road availability views">
+            <div><span className="mine-eyebrow">Fleet operations control</span><h2>Tracking Vehicle Throughput</h2><p>Site-wise breakdown movement and live fleet status in one view.</p></div>
+            <div className="mine-maintenance-availability-tabs" role="tablist" aria-label="Tracking vehicle throughput views">
               <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "breakdown"} className={maintenanceAvailabilityTab === "breakdown" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("breakdown")}><Wrench />Site-wise BD Movement</button>
               <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "road"} className={maintenanceAvailabilityTab === "road" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("road")}><Gauge />Road Availability</button>
             </div>
@@ -1291,7 +1333,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
             <div className="mine-road-site-table" role="table" aria-label="Site-wise road availability">
               <div className="mine-road-site-head" role="row"><span>Site name</span><span>Total fleet</span><span>On road</span><span>Off road</span><span>Idle</span><span>Availability</span><span>Status distribution</span><span aria-hidden="true" /></div>
-              <div className="mine-road-site-body">{roadAvailabilityBySite.length ? roadAvailabilityBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site:${site.site}`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
+              <div className="mine-road-site-body">{roadAvailabilityBySite.length ? roadAvailabilityBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site-status:${site.site}|all`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
                 <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric total"><b>{site.total}</b></span><span className="metric onroad"><b>{site.onRoad}</b></span><span className="metric offroad"><b>{site.offRoad}</b></span><span className="metric idle"><b>{site.idle}</b></span><span className="availability"><b>{site.availability}%</b></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${site.total ? (site.onRoad / site.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${site.total ? (site.offRoad / site.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${site.total ? (site.idle / site.total) * 100 : 0}%` }} /></span><ChevronRight />
               </button>) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}</div>
             </div>
@@ -1380,7 +1422,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </div>
         <section className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of BD In`}>
           <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of BD In</span></header>
-          <div>{breakdownDetailTypeSummary.map((type) => <article key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
+          <div>{breakdownDetailTypeSummary.map((type) => <button type="button" key={type.label} onClick={() => openSiteScopedDrilldown(`site-repair:${breakdownDetailSite}|${type.label}`)} aria-label={`${type.label}: ${type.count} requests. Drill into equipment and vehicles.`}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></button>)}</div>
+        </section>
+        <section className="mine-breakdown-type-mix detail dashboard-breakdown-road-mix" aria-label={`${breakdownDetailSite} road status`}>
+          <header><div><b>Road Status</b><small>{breakdownDetailSite}</small></div><span>Drill into equipment and vehicles</span></header>
+          <div>{[{ key: "onroad", label: "On road", value: selectedBreakdownSiteRoad.onRoad }, { key: "offroad", label: "Off road", value: selectedBreakdownSiteRoad.offRoad }, { key: "idle", label: "Idle", value: selectedBreakdownSiteRoad.idle }].map((item) => <button type="button" key={item.key} onClick={() => openSiteScopedDrilldown(`site-status:${breakdownDetailSite}|${item.key}`)} aria-label={`${item.label}: ${item.value}. Drill into equipment and vehicles.`}><span><b>{item.label}</b><strong>{item.value}</strong></span><i aria-hidden="true"><b style={{ width: `${selectedBreakdownSiteRoad.total ? (item.value / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /></i><small>of {selectedBreakdownSiteRoad.total} fleet</small></button>)}</div>
         </section>
         <div className="dashboard-breakdown-day-table"><ActionsTable><thead><tr><th>Date</th><th>BD Open</th><th>BD In</th><th>BD Out</th><th>BD Balance</th><th>BD %</th></tr></thead><tbody>{breakdownDetailRows.length ? breakdownDetailRows.map((day) => {
           const breakdownPercentage = selectedBreakdownSiteRoad.total ? (day.balance / selectedBreakdownSiteRoad.total) * 100 : 0;
@@ -1394,6 +1440,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           {assetDrilldownSite && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${selectedRepairTypeRegion.code} repair sites`} onClick={() => { setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 3 · {assetDrilldownSite} fleet totals</span></h4><div className="dashboard-asset-summary">{repairTypeSiteCategoryBreakdown.length ? repairTypeSiteCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment or vehicles found for {assetDrilldownSite}</p>}</div></section>}
           {assetDrilldownCategory && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownSite} repair fleet totals`} onClick={() => { setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 4 · Select {assetDrilldownCategory === "Total vehicles" ? "vehicle" : "equipment"} type</span></h4><div className="dashboard-asset-groups">{repairTypeSiteGroupBreakdown.length ? repairTypeSiteGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No types found</p>}</div></section>}
           {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownCategory} repair types`} onClick={() => setAssetDrilldownGroup("")}><ChevronLeft /> Back</button><span>Step 5 · Request details for {assetDrilldownGroup}</span></h4><div className="dashboard-asset-list"><ActionsTable><thead><tr><th>Job reference</th><th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th><th>Status</th><th>Started</th></tr></thead><tbody>{repairTypeSiteGroupRows.length ? repairTypeSiteGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.requestReference}</b></td><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></tr>) : <tr><td colSpan="10">No matching requests for {assetDrilldownGroup}</td></tr>}</tbody></ActionsTable></div></section>}
+        </> : siteScopedDrilldown ? <>
+          <div className="dashboard-asset-scope"><MapPin /><b>{siteScopedSite}</b><span>{siteScopedFocusLabel}</span></div>
+          <section><h4>Step 1 · Select equipment or vehicle</h4><div className="dashboard-asset-summary">{siteScopedCategoryBreakdown.length ? siteScopedCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>Nothing recorded for this selection</p>}</div></section>
+          {assetDrilldownCategory && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to equipment and vehicle totals" onClick={() => { setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); setAssetDrilldownMachine(""); }}><ChevronLeft /> Back</button><span>Step 2 · Select {assetDrilldownCategory === "Total vehicles" ? "vehicle" : "equipment"} type</span></h4><div className="dashboard-asset-groups">{siteScopedGroupBreakdown.length ? siteScopedGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No types found</p>}</div></section>}
+          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to types" onClick={() => { setAssetDrilldownGroup(""); setAssetDrilldownMachine(""); }}><ChevronLeft /> Back</button><span>Step 3 · Select a machine in {assetDrilldownGroup}</span></h4><div className="dashboard-asset-groups">{siteScopedMachineBreakdown.length ? siteScopedMachineBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownMachine === label ? "active" : ""} onClick={() => setAssetDrilldownMachine(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No machines found</p>}</div></section>}
+          {assetDrilldownMachine && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to machines" onClick={() => { setAssetDrilldownMachine(""); }}><ChevronLeft /> Back</button><span>Step 4 · Full details for {assetDrilldownMachine}</span></h4><div className="dashboard-asset-list"><ActionsTable><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}</tr></thead><tbody>{siteScopedMachineRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}</tr>)}</tbody></ActionsTable></div></section>}
         </> : siteFirstAssetDrilldown ? <>
           <section><h4>Step 1 · Select region</h4><div className="dashboard-asset-summary">{assetDrilldownRegions.length ? assetDrilldownRegions.map((region) => <button type="button" key={region.code} className={assetDrilldownRegion === region.code ? "active" : ""} onClick={() => { setAssetDrilldownRegion(region.code); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{region.total.toLocaleString()}</b>{region.code}</button>) : <p>No regions available</p>}</div></section>
           {selectedAssetRegion && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to regions" onClick={() => { setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 2 · Select {selectedAssetRegion.code} site</span></h4><div className="dashboard-asset-summary">{assetDrilldownSites.length ? assetDrilldownSites.map((site) => <button type="button" key={site.name} className={assetDrilldownSite === site.name ? "active" : ""} onClick={() => { setAssetDrilldownSite(site.name); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{site.total.toLocaleString()}</b>{site.name}</button>) : <p>No sites available</p>}</div></section>}
@@ -1597,6 +1649,9 @@ const masterFields = {
   "Repair type master": [
     ["repairType", "Repair type"],
   ],
+  "Delayed Reason": [
+    ["delayedReason", "Delayed reason"],
+  ],
   "Users & employees": [
     ["login", "Login name"],
     ["employee", "Employee name"],
@@ -1654,7 +1709,7 @@ const mobileRoleAuthority = {
 };
 const accountRoleOptions = ["User", ...mobileUserRoleOptions];
 const userAuthorityOptions = ["Admin", "Manager"];
-const managerRoleOptions = ["Production Manager", "Maintenance Manager", "MIS Manager"];
+const managerRoleOptions = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 const persistedUserTypeOptions = ["Mobile User", "Super Admin"];
 const userPrivilegeFields = [
   ["userGroup", "User Group", "mobile-role-select"],
@@ -2665,7 +2720,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       <p>Select one or more operational teams this Non Admin supervises. Their dashboard will include every selected role.</p>
       <div>{managerRoleOptions.map((option) => <label key={option} className={managerRoles.includes(option) ? "selected" : ""}>
         <input type="checkbox" name="managerRole" value={option} checked={managerRoles.includes(option)} onChange={(event) => setManagerRoles((current) => event.target.checked ? [...new Set([...current, option])] : current.filter((role) => role !== option))} />
-      <span><b>{option}</b><small>{option === "Production Manager" ? "On-road, off-road, idle and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
+      <span><b>{option}</b><small>{option === "Project Manager" ? "Site-wide fleet status and Idle Make On Road approval" : option === "Production Manager" ? "On-road, off-road, idle and production fleet status" : option === "Maintenance Manager" ? "Maintenance intake, remaining work and completion" : "Pending verification and completed MIS checks"}</small></span>
       </label>)}</div>
     </fieldset>}
     {isDesktopUser && <fieldset className="account-role-field manager-region-field full">
@@ -5306,7 +5361,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const fields = masterFields[name],
     editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
-    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master",
+    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Delayed Reason",
     masterValue = (record, key) => {
       if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];
@@ -6913,6 +6968,9 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
   const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date), [ideal,setIdeal]=useState(false), [idleReason,setIdleReason]=useState(""), [status,setStatus]=useState(request.status === "Closed" ? "Closed" : "In progress");
+  const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
+  const [delayedReason, setDelayedReason] = useState("");
+  const [customDelayedReason, setCustomDelayedReason] = useState("");
   const [legacyOpeningMeterFile, setLegacyOpeningMeterFile] = useState(null);
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
   const openingMeterReadingMissing = !String(request.openingMeterReading || "").trim();
@@ -6920,6 +6978,9 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const openedAt=new Date(`${opened.date}T${opened.time}+05:30`),closingAt=new Date(`${closingDate}T${time}+05:30`),tatMilliseconds=Math.max(0,closingAt-openedAt);
   const tatDays=Math.floor(tatMilliseconds/86400000),tatHours=Math.floor((tatMilliseconds%86400000)/3600000),tatMinutes=Math.floor((tatMilliseconds%3600000)/60000);
   const turnaroundTime=`${tatDays}d ${tatHours}h ${tatMinutes}m`;
+  const delayedReasonNeeded=!ideal&&status==="Closed"&&delayedReasonRequired(request.expectedCompletionAt,closingAt);
+  const delayedReasonOptions=useMemo(()=>[...new Set(delayedReasonRecords.map((record)=>String(record.delayedReason||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[delayedReasonRecords]);
+  const selectedDelayedReason=delayedReason==="__custom__"?customDelayedReason.trim():delayedReason;
   return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={close}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
@@ -6929,7 +6990,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         openingMeterFile = await readMeterEvidence(legacyOpeningMeterFile).catch((error) => { alert(error.message); return ""; });
         if (!openingMeterFile) return;
       }
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
+      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
@@ -6938,6 +6999,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Category</span><b>{request.category || "Maintenance request"}</b></div>
         <div><span>Started</span><b>{request.start || "—"}</b></div>
+        <div><span>ETC</span><b>{request.expectedCompletionAt || "Not set"}</b></div>
         <div><span>Opening {meterType}</span><b>{request.openingMeterReading || "Not recorded"}</b><MeterFileCell request={request} stage="opening" /></div>
         <div><span>Closing {meterType}</span><b>{request.closingMeterReading || "Not recorded"}</b><MeterFileCell request={request} stage="closing" /></div>
         <div><span>Reason / complaint</span><b>{request.complaint || "—"}</b></div>
@@ -6950,7 +7012,8 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
         <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Idle</option>}</select></label>
-        <fieldset className="ideal-choice"><legend>Idle? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>{setIdeal(false);setIdleReason("")}} /> No</label>{ideal&&<><label>Idle reason *<select name="idleReason" required value={idleReason} onChange={(event)=>setIdleReason(event.target.value)}><option value="">Select idle reason</option><option>No driver</option><option>No work</option></select></label><small>The request will remain Idle until the Maintenance Manager approves Make on road.</small></>}</fieldset>
+        <fieldset className="ideal-choice"><legend>Idle? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>{setIdeal(false);setIdleReason("")}} /> No</label>{ideal&&<><label>Idle reason *<select name="idleReason" required value={idleReason} onChange={(event)=>setIdleReason(event.target.value)}><option value="">Select idle reason</option><option>No driver</option><option>No work</option></select></label><small>The request will remain Idle until the Project Manager or Production Manager approves Make on road.</small></>}</fieldset>
+        {delayedReasonNeeded&&<fieldset className="delayed-reason-field full"><legend>Delayed reason *</legend><p>This request is being closed at least 4 hours after ETC. Select the reason for the delay.</p><label>Reason<select name="delayedReason" required value={delayedReason} onChange={(event)=>{setDelayedReason(event.target.value);if(event.target.value!=="__custom__")setCustomDelayedReason("")}}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}<option value="__custom__">Add custom delayed reason</option></select></label>{delayedReason==="__custom__"&&<label>New delayed reason *<input name="customDelayedReason" required maxLength="160" value={customDelayedReason} onChange={(event)=>setCustomDelayedReason(event.target.value)} placeholder="Enter a new delayed reason" /></label>}</fieldset>}
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
@@ -7500,12 +7563,13 @@ function App() {
   const adminPermissions = session?.permissions || {};
   const activeNavigationPermissions=navigationPermissionsForView(adminPermissions,responsiveMobile);
   const [profileLocation, setProfileLocation] = useState("");
+  const [profileDesignationKey, setProfileDesignationKey] = useState("");
   useEffect(() => {
     if (!session?.token) return undefined;
     let activeRequest = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session.token}`}})
       .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((profile) => { if (activeRequest) setProfileLocation(String(profile.location || "").trim()); })
+      .then((profile) => { if (activeRequest) { setProfileLocation(String(profile.location || "").trim()); setProfileDesignationKey(String(profile.designationKey || "").trim()); } })
       .catch(() => {});
     return () => { activeRequest = false; };
   }, [session?.token]);
@@ -7813,7 +7877,7 @@ function App() {
           {active === "Dashboard" ? (
             <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} />
           ) : active === "Manager Profile" ? (
-            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} onCancelIdeal={async(row)=>{if(!window.confirm(`Cancel Idle status for ${row.ref}? The request will return to active maintenance and will not be closed.`))return;try{await updateRequest(row.ref,{},"idle-cancel")}catch(error){alert(error.message)}}} />
+            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} onCancelIdeal={async(row)=>{if(!window.confirm(`Cancel Idle status for ${row.ref}? The request will return to active maintenance and will not be closed.`))return;try{await updateRequest(row.ref,{},"idle-cancel")}catch(error){alert(error.message)}}} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (

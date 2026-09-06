@@ -36,6 +36,8 @@ import {auditChangedFields,auditRouteDetails,auditSubmittedFields} from './audit
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
+import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
+import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -199,6 +201,7 @@ async function migrate(){
       closed_by TEXT NOT NULL DEFAULT '',
       maintenance_work TEXT NOT NULL DEFAULT '',
       maintenance_audio TEXT NOT NULL DEFAULT '',
+      delayed_reason TEXT NOT NULL DEFAULT '',
       expected_completion_at TIMESTAMPTZ,
       verification_status TEXT NOT NULL DEFAULT 'Pending',
       verified_at TIMESTAMPTZ,
@@ -257,6 +260,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS maintenance_work TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS maintenance_audio TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS expected_completion_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
@@ -403,6 +408,16 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS whatsapp_alert_history_created_at_idx
       ON whatsapp_alert_history (created_at DESC);
+    CREATE TABLE IF NOT EXISTS whatsapp_workflow_dispatches (
+      id BIGSERIAL PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      request_reference TEXT NOT NULL,
+      recipient_login TEXT NOT NULL,
+      slot_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Sending',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(event_type,request_reference,recipient_login,slot_key)
+    );
     CREATE TABLE IF NOT EXISTS whatsapp_consolidated_report_runs (
       id BIGSERIAL PRIMARY KEY,
       slot_key TEXT NOT NULL,
@@ -502,6 +517,15 @@ async function migrate(){
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('repair_type_defaults_seeded','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
+    }
+    for(const delayedReason of DELAYED_REASON_DEFAULTS){
+      await client.query(`INSERT INTO master_records (master_name,record_data)
+        SELECT 'Delayed Reason',$1::jsonb
+        WHERE NOT EXISTS (
+          SELECT 1 FROM master_records
+          WHERE master_name='Delayed Reason'
+            AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
+        )`,[JSON.stringify({delayedReason}),delayedReason]);
     }
     const seededSuperAdmin={login:'superadamin',employee:'System Super Admin',mail:'',phone:'',userType:'Super Admin',userGroup:'',adminLevel:'Super Admin',passwordHash:hashPassword('admin'),mustChangePassword:false};
     await client.query(`INSERT INTO master_records (master_name,record_data)
@@ -1307,7 +1331,8 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
       LIMIT 1`,[login,name]);
     const record=rows[0]?.record_data||{};
     const location=String(record.site||record.location||record.currentLocation||'').trim();
-    res.json({location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||''});
+    const designation=flowDesignationForUser(record,resolveMobileAccess({user:record}));
+    res.json({location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
   }catch(error){next(error)}
 });
 
@@ -1350,20 +1375,23 @@ function ticketProjection(){
 function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
 const userManagesSite=(user,site)=>reportScopeIncludesSite(managerReportScope(user),site);
 
-async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate){
+async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
-  if(!logins.length)return;
+  if(!logins.length)return [];
   const {rows}=await client.query(`SELECT record_data FROM master_records
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
   const contacts=new Map();
   const usersByLogin=new Map();
   const requestTemplate=String(workflowTemplate?.templateKey||'').startsWith('request');
+  const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
   // A duplicate legacy Admin row must never opt the same Super Admin login
   // into immediate request traffic. Super Admin receives scheduled bundles.
   const superAdminLogins=new Set(rows.map(({record_data})=>record_data||{}).filter(isTrueSuperAdmin).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean));
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
+    if(workflowExcludedLogins.has(login))continue;
+    if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site))continue;
     if(requestTemplate&&superAdminLogins.has(login))continue;
     const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
     if(login&&!usersByLogin.has(login))usersByLogin.set(login,user);
@@ -1371,13 +1399,13 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   }
   const eligibleLogins=requestTemplate?logins.filter((login)=>!superAdminLogins.has(login)):logins;
   const missingPhone=eligibleLogins.filter((login)=>!contacts.has(login));
-  await Promise.all(missingPhone.map((login)=>{const user=usersByLogin.get(login)||{};return pool.query(`INSERT INTO whatsapp_alert_history
+  const missingResults=await Promise.all(missingPhone.map(async(login)=>{const user=usersByLogin.get(login)||{};const status='Skipped - phone number missing';await pool.query(`INSERT INTO whatsapp_alert_history
     (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
-    ['System notification',String(reference||''),'',String(user.employee||user.name||user.login||login),'','Skipped - phone number missing']);}));
-  await Promise.allSettled([...contacts.entries()].map(async([login,contact])=>{
+    ['System notification',String(reference||''),'',String(user.employee||user.name||user.login||login),'',status]);return {login,status};}));
+  const deliveryResults=await Promise.all([...contacts.entries()].map(async([login,contact])=>{
     let status='Sent';
-    const whatsappEnv=await metaWhatsAppRuntimeEnv();
     try{
+      const whatsappEnv=await metaWhatsAppRuntimeEnv();
       if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate},{env:whatsappEnv})}
       catch(templateError){console.warn(`WhatsApp template ${workflowTemplate.templateKey} unavailable; using text fallback:`,templateError.message);await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv})}
       else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv});
@@ -1386,15 +1414,17 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
     await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
       ['System notification',String(reference||''),'',contact.name,contact.phone,status]);
+    return {login,status};
   }));
+  return [...missingResults,...deliveryResults];
 }
 
-async function addTicketNotifications(client,recipients,reference,message,workflowTemplate,{whatsapp=true}={}){
+async function addTicketNotifications(client,recipients,reference,message,workflowTemplate,{whatsapp=true,whatsappRecipients=null,workflowType='',site=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   for(const login of logins){
     await client.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message) VALUES ($1,$2,$3)`,[login,reference,message]);
   }
-  if(whatsapp)await sendWhatsAppNotifications(client,logins,reference,message,workflowTemplate);
+  if(whatsapp)await sendWhatsAppNotifications(client,whatsappRecipients??logins,reference,message,workflowTemplate,{workflowType,site});
 }
 
 async function addTicketNotificationsBestEffort(client,recipients,reference,message,workflowTemplate,options){
@@ -1961,7 +1991,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "closedAt",
-  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
+  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
@@ -2020,6 +2050,49 @@ async function attachDailyRemarks(rows,client=pool){
   const grouped=new Map();
   for(const remark of remarks){const list=grouped.get(remark.requestReference)||[];list.push(remark);grouped.set(remark.requestReference,list)}
   return rows.map((row)=>({...row,dailyRemarks:grouped.get(row.ref)||[]}));
+}
+
+async function requestWorkflowWhatsAppLogins(client,{eventType,site}){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  return workflowWhatsAppRecipientLogins(rows,{eventType,site});
+}
+
+let workflowReminderRunning=false;
+async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
+  if(!databaseReady||workflowReminderRunning)return {skipped:true};
+  workflowReminderRunning=true;
+  let sent=0,failed=0,skipped=0;
+  try{
+    const {rows}=await pool.query(`SELECT reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",door_number AS door,
+      site,category,owner_name AS owner,idle_reason AS "idleReason",status,started_at AS "startedAtRaw",
+      expected_completion_at AS "expectedCompletionAtRaw",ideal_requested_at AS "idleAtRaw"
+      FROM maintenance_requests WHERE verified_at IS NULL AND (
+        (status NOT IN ('Closed','Idle','Ideal') AND started_at<=$1::timestamptz-INTERVAL '4 hours') OR
+        (status IN ('Idle','Ideal') AND ideal_requested_at IS NOT NULL AND ideal_requested_at<=$1::timestamptz-INTERVAL '1 hour')
+      )`,[now]);
+    for(const request of rows){
+      const idle=['Idle','Ideal'].includes(request.status);
+      const eventType=idle?'idle':'opened';
+      const eventTime=new Date(idle?request.idleAtRaw:request.startedAtRaw);
+      const slotKey=workflowReminderSlot(eventType,eventTime,now);
+      if(!slotKey)continue;
+      const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site});
+      const equipmentDetails=requestEquipmentNotificationDetails(request);
+      const workflowTemplate=idle
+        ? {templateKey:'requestIdle',parameters:[equipmentDetails,request.site,requestNotificationTime(eventTime),request.idleReason||'Not recorded',request.ref,'Project Manager or Production Manager must approve Make On Road',workflowRequestLink(request.ref,publicBaseUrl())]}
+        : {templateKey:'requestOpened',parameters:[request.ref,request.site,request.equipmentGroup||request.equipment||'Not available',request.door||'Not available',request.category||'Breakdown',request.owner||'Production User',requestNotificationTime(eventTime),request.expectedCompletionAtRaw?requestNotificationTime(request.expectedCompletionAtRaw):'Not set',workflowRequestLink(request.ref,publicBaseUrl())]};
+      for(const login of recipients){
+        const claim=await pool.query(`INSERT INTO whatsapp_workflow_dispatches (event_type,request_reference,recipient_login,slot_key)
+          VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[idle?'idle_repeat':'offroad_escalation',request.ref,login,slotKey]);
+        if(!claim.rows.length){skipped+=1;continue}
+        const results=await sendWhatsAppNotifications(pool,[login],request.ref,`${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}.`,workflowTemplate,{workflowType:eventType,site:request.site});
+        const status=results[0]?.status||'Skipped';
+        if(status==='Sent')sent+=1;else failed+=1;
+        await pool.query(`UPDATE whatsapp_workflow_dispatches SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]);
+      }
+    }
+    return {sent,failed,skipped};
+  }finally{workflowReminderRunning=false}
 }
 
 app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
@@ -2149,11 +2222,13 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     await sendRequestEventReports('opened',rows[0]);
     try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+    const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'opened',site:rows[0].site});
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
     const openedAt=requestNotificationTime(startedAt);
     const openedBy=req.session.name||'Production User';
     await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened for ${equipmentDetails}. Breakdown: ${rows[0].category}. Date & time: ${openedAt}. Location: ${rows[0].site}. User: ${openedBy}.`,
-      {templateKey:'requestOpened',parameters:[rows[0].ref,equipmentDetails,rows[0].category,openedAt,rows[0].site,openedBy]},{whatsapp:true});
+      {templateKey:'requestOpened',parameters:[rows[0].ref,rows[0].site,rows[0].equipmentGroup||rows[0].equipment||'Not available',rows[0].door||'Not available',rows[0].category,openedBy,openedAt,rows[0].expectedCompletionAt||'Not set',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
+      {whatsapp:true,whatsappRecipients,workflowType:'opened',site:rows[0].site});
     }catch(error){console.error(`Request ${rows[0].ref} saved, but opening notification recipients could not be resolved.`,error.message)}
     res.status(201).json(rows[0]);
   }catch(error){next(error)}
@@ -2194,6 +2269,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const status=String(req.body?.status||'Closed').trim();
     const ideal=req.body?.ideal===true||String(req.body?.ideal||'').toLowerCase()==='true';
     const idleReason=String(req.body?.idleReason||'').trim();
+    const delayedReason=String(req.body?.delayedReason||'').trim().slice(0,160);
     const meterType=String(req.body?.meterType||'').trim().toUpperCase();
     const openingMeterReading=String(req.body?.openingMeterReading||'').trim();
     const openingMeterFile=String(req.body?.openingMeterFile||'');
@@ -2207,8 +2283,10 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
     if(!ideal&&status==='Closed'&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt)return res.json(existingRows[0]);
-    const {rows:meterRows}=await pool.query(`SELECT meter_type,opening_meter_reading,opening_meter_file FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
+    const {rows:meterRows}=await pool.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!meterRows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
+    const delayedClosure=!ideal&&status==='Closed'&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
+    if(delayedClosure&&!delayedReason)return res.status(400).json({error:'Select a delayed reason because this request is being closed at least 4 hours after ETC.'});
     if(openingMeterReading&&!validMeterReading(openingMeterReading))return res.status(400).json({error:`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`});
     if(openingMeterReading||openingMeterFile){
@@ -2221,33 +2299,46 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
         WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference]);
     }
     const {rows}=ideal
-      ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status='Idle',idle_reason=$3,
+      ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status='Idle',idle_reason=$3,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
           WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
           [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference])
       : status==='Closed'
-        ? await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,status='Closed'
-            WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
-            [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,reference])
-        : await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,status=$3
+        ? await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,delayed_reason=$5,status='Closed'
+            WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+            [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,delayedClosure?delayedReason:'',reference])
+        : await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status=$3
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference]);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
+    if(delayedClosure){
+      await pool.query(`INSERT INTO master_records (master_name,record_data)
+        SELECT 'Delayed Reason',$1::jsonb
+        WHERE NOT EXISTS (
+          SELECT 1 FROM master_records
+          WHERE master_name='Delayed Reason'
+            AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
+        )`,[JSON.stringify({delayedReason}),delayedReason]);
+    }
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
-      const recipients=[];
-      for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;const profile=resolveMobileAccess({user});if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,rows[0].site))recipients.push(login)}
-      await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Review it and approve Make on road.`,
-        {templateKey:'requestIdle',parameters:[rows[0].ref,req.session.name||'Maintenance User',rows[0].idleReason]},{whatsapp:false});
+      const whatsappRecipients=workflowWhatsAppRecipientLogins(userRows,{eventType:'idle',site:rows[0].site});
+      const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+      const idleAt=requestNotificationTime(new Date());
+      await addTicketNotificationsBestEffort(pool,whatsappRecipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Project Manager or Production Manager approval is required to Make On Road.`,
+        {templateKey:'requestIdle',parameters:[equipmentDetails,rows[0].site,idleAt,rows[0].idleReason,rows[0].ref,'Project Manager or Production Manager must approve Make On Road',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
+        {whatsapp:true,whatsappRecipients,workflowType:'idle',site:rows[0].site});
     }else if(status==='Closed'){
       await sendRequestEventReports('closed',rows[0]);
       try{
         const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+        const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'closed',site:rows[0].site});
         const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
         const closedAtLabel=requestNotificationTime(closedAt);
         const closedBy=req.session.name||'Maintenance User';
         await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed for ${equipmentDetails}. Breakdown: ${rows[0].category}. Closing date & time: ${closedAtLabel}. Maintenance work: ${rows[0].maintenanceWork}. Closed by: ${closedBy}.`,
-          {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].category,closedAtLabel,rows[0].maintenanceWork,closedBy]},{whatsapp:false});
+          {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].site,closedBy,closedAtLabel,rows[0].hours||'Not available',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
+          {whatsapp:true,whatsappRecipients,workflowType:'closed',site:rows[0].site});
       }catch(error){
         console.error(`Request ${rows[0].ref} was closed, but its notification recipients could not be resolved.`,error);
       }
@@ -2258,21 +2349,26 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
 
 app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,next)=>{
   try{
-    if(req.session.role!=='super'||req.session.permissions?.adminLevel!=='Manager'||!managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).includes('Maintenance Manager'))
-      return res.status(403).json({error:'Only the assigned Maintenance Manager can approve an Idle request.'});
     const manager=await currentUserRecord(req.session);
+    const designation=flowDesignationForUser(manager,{permissions:req.session.permissions,assignedRole:req.session.assignedRole});
+    const managerRoles=managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole);
+    const canApproveIdle=req.session.role==='super'&&(designation?.key==='projectManager'||(req.session.permissions?.adminLevel==='Manager'&&managerRoles.includes('Production Manager')));
+    if(!canApproveIdle)return res.status(403).json({error:'Only the assigned Project Manager or Production Manager can approve an Idle request.'});
     const reference=String(req.params.reference||'').trim();
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
       ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'Maintenance Manager',reference]);
+      RETURNING ${requestProjection}`,[req.session.name||'Project / Production Manager',reference]);
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your approval.'});
     await sendRequestEventReports('closed',rows[0]);
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+    const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'closed',site:rows[0].site});
     const approvedAt=requestNotificationTime(new Date());
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Maintenance Manager'}. It is now awaiting MIS verification.`,
-      {templateKey:'requestOnRoad',parameters:[rows[0].ref,approvedAt,req.session.name||'Maintenance Manager']},{whatsapp:false});
+    const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Project / Production Manager'}. It is now awaiting MIS verification.`,
+      {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].site,req.session.name||'Project / Production Manager',approvedAt,rows[0].hours||'Not available',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
+      {whatsapp:true,whatsappRecipients,workflowType:'closed',site:rows[0].site});
     res.json(rows[0]);
   }catch(error){next(error)}
 });
@@ -2339,8 +2435,14 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     void (async()=>{
       try{
         const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+        const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'verified',site:rows[0].site});
+        const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+        const verifiedAt=requestNotificationTime(new Date());
+        const verifiedBy=req.session.name||'MIS User';
+        const closingMeter=`${rows[0].meterType||'KMR/HMR'} ${rows[0].closingMeterReading||closingMeterReading}`;
         await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`,
-          {templateKey:'requestVerified',parameters:[rows[0].ref,req.session.name||'MIS User',firstTripDone?'Completed':'Pending']},{whatsapp:false});
+          {templateKey:'requestVerified',parameters:[rows[0].ref,equipmentDetails,rows[0].site,verifiedBy,verifiedAt,closingMeter,workflowRequestLink(rows[0].ref,publicBaseUrl())]},
+          {whatsapp:true,whatsappRecipients,workflowType:'verified',site:rows[0].site});
       }catch(error){
         console.error(`Request ${rows[0].ref} was verified, but its notification recipients could not be resolved.`,error);
       }
@@ -2430,7 +2532,8 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const superCanView=(master)=>req.session.role==='super'&&(accessAllows(req.session.permissions?.masterAccess,master)||accessAllows(req.session.permissions?.mobileMasterAccess,master));
     const canViewEquipment=superCanView('Equipment master')||req.session.permissions?.viewEquipment===true;
     const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
-    if(!canViewEquipment&&!canViewRepairTypes)
+    const canViewDelayedReasons=superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true;
+    if(!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
     const managerScope=managerRecord?managerReportScope(managerRecord):null;
@@ -2442,7 +2545,8 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
-        if(row.master_name!=='Equipment master'&&row.master_name!=='Repair type master')continue;
+        if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
+        if(!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
       if(managerRecord&&row.master_name==='Equipment master'){
@@ -2867,6 +2971,9 @@ async function initializeDatabase(){
       void sendScheduledHierarchyReportBundles()
         .then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result))
         .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
+      void sendScheduledWorkflowWhatsAppReminders()
+        .then(result=>console.log('Scheduled workflow WhatsApp reminder check completed.',result))
+        .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
       void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
       void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
         if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
@@ -2917,6 +3024,12 @@ if(scheduledJobsEnabled){
       .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
   },60*1000);
   hierarchyWhatsAppTimer.unref?.();
+  const workflowReminderTimer=setInterval(()=>{
+    void sendScheduledWorkflowWhatsAppReminders()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled workflow WhatsApp reminder check completed.',result)})
+      .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
+  },60*1000);
+  workflowReminderTimer.unref?.();
   const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
   adminLockAuditTimer.unref?.();
 }

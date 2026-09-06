@@ -2,14 +2,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-test("Idle requests require a reason and assigned-site Maintenance Manager approval before MIS",()=>{
+test("Idle requests require a reason and assigned-site Project or Production Manager approval before MIS",()=>{
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const client=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   assert.match(server,/ideal_requested_at TIMESTAMPTZ/);
   assert.match(server,/idle_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(server,/status='Idle',idle_reason=\$3/);
   assert.match(server,/\['No driver','No work'\]\.includes\(idleReason\)/);
-  assert.match(server,/managerRoleSelection\([\s\S]*\.includes\('Maintenance Manager'\)/);
+  assert.match(server,/designation\?\.key==='projectManager'/);
+  assert.match(server,/managerRoles\.includes\('Production Manager'\)/);
+  assert.match(server,/Only the assigned Project Manager or Production Manager can approve/);
   assert.match(server,/userManagesSite\(manager,eligible\.rows\[0\]\.site\)/);
   assert.match(server,/status='Closed',closed_at=NOW\(\)/);
   assert.match(server,/awaiting MIS verification/);
@@ -18,10 +20,9 @@ test("Idle requests require a reason and assigned-site Maintenance Manager appro
   assert.match(server,/The request has returned to active maintenance/);
   assert.match(server,/status NOT IN \('Closed','Idle','Ideal'\)/);
   assert.match(client,/Idle approvals \(\{idealRows\.length\}\)/);
+  assert.match(client,/managerDesignationKey==="projectManager"\|\|productionManagerView/);
   assert.match(client,/Make on road/);
-  assert.match(client,/Cancel idle/);
-  assert.match(client,/The request will return to active maintenance and will not be closed/);
-  assert.match(client,/"idle-cancel"/);
+  assert.match(client,/Project Manager or Production Manager approves Make on road/);
   assert.match(client,/name="idealChoice"/);
   assert.match(client,/status: ideal \? "Idle"/);
   assert.match(client,/Idle reason \*/);

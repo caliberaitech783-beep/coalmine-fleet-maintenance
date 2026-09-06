@@ -36,6 +36,38 @@
   line-height: 1.35;
 }
 
+.delayed-reason-field {
+  border: 1px solid #efb7b2;
+  border-left: 4px solid #d94f48;
+  border-radius: 7px;
+  padding: 13px 14px;
+  margin: 0;
+  background: #fff8f7;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.delayed-reason-field legend {
+  padding: 0 5px;
+  color: #a8342f;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.delayed-reason-field > p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #7d4a47;
+  font-size: 11px;
+}
+
+@media (max-width: 600px) {
+  .delayed-reason-field {
+    grid-template-columns: 1fr;
+  }
+}
+
 .status.idle,
 .status.ideal {
   background: #fff2e5;

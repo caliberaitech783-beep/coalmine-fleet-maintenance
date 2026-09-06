@@ -6,7 +6,9 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 
 test("operational dashboard graphs open category, group, lifecycle, and full-detail drilldowns", () => {
   assert.match(source, /setBreakdownDetailSite\(site\.site\)/);
-  assert.match(source, /openAssetDrilldown\(`site:\$\{site\.site\}`\)/);
+  // A road row already names its site, so it opens the site-scoped chain that
+  // starts at Equipment vs Vehicle instead of asking for region and site again.
+  assert.match(source, /openAssetDrilldown\(`site-status:\$\{site\.site\}\|all`\)/);
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /key: `group:\$\{group\.label\}`/);

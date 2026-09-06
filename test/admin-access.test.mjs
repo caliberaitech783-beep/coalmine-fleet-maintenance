@@ -22,11 +22,11 @@ test("manager authority is retained in the admin session permissions", () => {
 });
 
 test("a non-admin can manage multiple operational teams", () => {
-  const roles = "Production Manager | Maintenance Manager | MIS Manager";
+  const roles = "Project Manager | Production Manager | Maintenance Manager | MIS Manager";
   const permissions = adminAccessPermissions({adminLevel: "Manager", managerRole: roles});
-  assert.deepEqual(managerRoleSelection(roles), ["Production Manager", "Maintenance Manager", "MIS Manager"]);
-  assert.deepEqual(permissions.managerRoles, ["Production Manager", "Maintenance Manager", "MIS Manager"]);
-  assert.equal(permissions.managerRole, "Production Manager");
+  assert.deepEqual(managerRoleSelection(roles), ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]);
+  assert.deepEqual(permissions.managerRoles, ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]);
+  assert.equal(permissions.managerRole, "Project Manager");
 });
 
 test("desktop and mobile menu selections remain independent per user",()=>{

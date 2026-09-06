@@ -22,7 +22,7 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /roleSection === "team"[\s\S]*mobileUserRoleOptions\.map[\s\S]*type="radio" name="userGroup"/);
   assert.match(source, /const userAuthorityOptions = \["Admin", "Manager"\]/);
   assert.match(source, /type="radio" name="adminLevel"/);
-  assert.match(source, /const managerRoleOptions = \["Production Manager", "Maintenance Manager", "MIS Manager"\]/);
+  assert.match(source, /const managerRoleOptions = \["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"\]/);
   assert.match(source, /managerRoleOptions\.map[\s\S]*type="checkbox" name="managerRole"/);
   assert.match(source, /Consolidated WhatsApp report regions[\s\S]*MANAGER_REGION_OPTIONS\.map[\s\S]*name="managerRegion"/);
   assert.match(source, /Included sites[\s\S]*name="managerSites"/);

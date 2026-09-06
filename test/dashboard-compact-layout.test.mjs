@@ -5,13 +5,13 @@ import test from "node:test";
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("Total Fleet leads a single combined maintenance and road availability panel", () => {
+test("Total Fleet leads the Tracking Vehicle Throughput panel", () => {
   const featureRow = client.indexOf('className="mine-dashboard-feature-row"');
   const totalFleet = client.indexOf('mine-panel mine-fleet-region-chart', featureRow);
   const combinedPanel = client.indexOf('className="mine-panel mine-maintenance-availability-panel"', featureRow);
   const intelligence = client.indexOf('className="mine-dashboard-grid mine-dashboard-core"', featureRow);
   assert.ok(featureRow >= 0 && totalFleet > featureRow && combinedPanel > totalFleet && intelligence > combinedPanel);
-  assert.match(client, /<h2>Maintenance &amp; Road Availability<\/h2>/);
+  assert.match(client, /<h2>Tracking Vehicle Throughput<\/h2>/);
   assert.match(client, /maintenanceAvailabilityTab/);
   assert.match(client, /Site-wise BD Movement/);
   assert.match(client, /Road Availability/);

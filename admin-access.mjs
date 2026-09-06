@@ -4,6 +4,7 @@ export const ADMIN_MASTER_OPTIONS = [
   "Breakdown master",
   "Repair type master",
   "Region master",
+  "Delayed Reason",
   "Vehicle transfers",
   "Hierarchy master",
   "OEM master",
@@ -45,7 +46,7 @@ export function accessAllows(selection, name) {
   return selection == null || selection.includes(name);
 }
 
-export const MANAGER_ROLE_OPTIONS = ["Production Manager", "Maintenance Manager", "MIS Manager"];
+export const MANAGER_ROLE_OPTIONS = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 
 export function normalizeAdminLevel(value = "") {
   const level = String(value || "").trim().toLowerCase().replace(/\s+/g, " ");

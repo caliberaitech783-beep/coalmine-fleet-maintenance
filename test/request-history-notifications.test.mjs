@@ -28,7 +28,7 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/rows=\{visibleRows\} showMakeModel showReason showClosedBy showTurnaroundTime/);
   assert.match(source,/showClosedBy showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
   assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
-  assert.match(source,/showReason=\{activeManagerRole === "Production Manager"\} showClosedBy=\{queueTab==="history"\}/);
+  assert.match(source,/showReason=\{productionManagerView\} showClosedBy=\{queueTab==="history"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);
   assert.match(server,/profile\.permissions\.adminLevel==='Manager'&&userManagesSite\(user,site\)/);

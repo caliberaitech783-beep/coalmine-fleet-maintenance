@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { userMasterRole } from "../src/user-master-role.mjs";
 
 test("User Master displays each saved department manager role", () => {
-  for (const managerRole of ["Production Manager", "Maintenance Manager", "MIS Manager"]) {
+  for (const managerRole of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) {
     const record = Object.freeze({userType:"Super Admin",adminLevel:"Manager",managerRole});
     assert.equal(userMasterRole(record), managerRole);
     assert.equal(record.userType, "Super Admin");

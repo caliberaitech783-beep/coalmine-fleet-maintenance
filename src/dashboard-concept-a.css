@@ -862,19 +862,19 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-breakdown-type-mix > header small,
 .mine-breakdown-type-mix > header > span { color: var(--mine-muted, var(--muted)); font-weight: 700; }
 .mine-breakdown-type-mix > div { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
-.mine-breakdown-type-mix article { --type-color: #315fd4; display: grid; gap: 5px; min-width: 0; padding: 8px 9px; border-right: 1px solid var(--mine-line, var(--line)); }
-.mine-breakdown-type-mix article:last-child { border-right: 0; }
-.mine-breakdown-type-mix article:nth-child(2) { --type-color: #df6d64; }
-.mine-breakdown-type-mix article:nth-child(3) { --type-color: #26956f; }
-.mine-breakdown-type-mix article:nth-child(4) { --type-color: #7043ad; }
-.mine-breakdown-type-mix article:nth-child(5) { --type-color: #d4922e; }
-.mine-breakdown-type-mix article:nth-child(6) { --type-color: #248b9f; }
-.mine-breakdown-type-mix article > span { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; min-width: 0; }
-.mine-breakdown-type-mix article > span b { overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-.mine-breakdown-type-mix article > span strong { flex: 0 0 auto; color: var(--type-color); font: 900 13px/1 Manrope; }
-.mine-breakdown-type-mix article > i { display: block; height: 5px; overflow: hidden; border-radius: 3px; background: var(--mine-line, var(--line)); }
-.mine-breakdown-type-mix article > i > b { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: var(--type-color); }
-.mine-breakdown-type-mix article > small { color: var(--mine-muted, var(--muted)); }
+.mine-breakdown-type-mix :is(article, button) { --type-color: #315fd4; display: grid; gap: 5px; min-width: 0; padding: 8px 9px; border-right: 1px solid var(--mine-line, var(--line)); }
+.mine-breakdown-type-mix :is(article, button):last-child { border-right: 0; }
+.mine-breakdown-type-mix :is(article, button):nth-child(2) { --type-color: #df6d64; }
+.mine-breakdown-type-mix :is(article, button):nth-child(3) { --type-color: #26956f; }
+.mine-breakdown-type-mix :is(article, button):nth-child(4) { --type-color: #7043ad; }
+.mine-breakdown-type-mix :is(article, button):nth-child(5) { --type-color: #d4922e; }
+.mine-breakdown-type-mix :is(article, button):nth-child(6) { --type-color: #248b9f; }
+.mine-breakdown-type-mix :is(article, button) > span { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; min-width: 0; }
+.mine-breakdown-type-mix :is(article, button) > span b { overflow: hidden; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.mine-breakdown-type-mix :is(article, button) > span strong { flex: 0 0 auto; color: var(--type-color); font: 900 13px/1 Manrope; }
+.mine-breakdown-type-mix :is(article, button) > i { display: block; height: 5px; overflow: hidden; border-radius: 3px; background: var(--mine-line, var(--line)); }
+.mine-breakdown-type-mix :is(article, button) > i > b { display: block; min-width: 2px; height: 100%; border-radius: inherit; background: var(--type-color); }
+.mine-breakdown-type-mix :is(article, button) > small { color: var(--mine-muted, var(--muted)); }
 .mine-breakdown-site-table,
 .mine-road-site-table { overflow: hidden; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); }
 .mine-breakdown-site-head,
@@ -1785,8 +1785,8 @@ button.mine-primary-kpi-card:focus-visible,
   .mine-maintenance-availability-tabs { width: 100%; }
   .mine-site-road-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-breakdown-type-mix > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .mine-breakdown-type-mix article:nth-child(3n) { border-right: 0; }
-  .mine-breakdown-type-mix article:nth-child(-n+3) { border-bottom: 1px solid var(--mine-line, var(--line)); }
+  .mine-breakdown-type-mix :is(article, button):nth-child(3n) { border-right: 0; }
+  .mine-breakdown-type-mix :is(article, button):nth-child(-n+3) { border-bottom: 1px solid var(--mine-line, var(--line)); }
   .mine-counter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .mine-dashboard-core { grid-template-columns: 1fr; }
   .mine-fleet-command-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1819,9 +1819,9 @@ button.mine-primary-kpi-card:focus-visible,
   .dashboard-breakdown-period-controls label { flex: 1 1 145px; }
   .mine-breakdown-type-mix > header { align-items: flex-start; flex-direction: column; }
   .mine-breakdown-type-mix > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .mine-breakdown-type-mix article:nth-child(3n) { border-right: 1px solid var(--mine-line, var(--line)); }
-  .mine-breakdown-type-mix article:nth-child(2n) { border-right: 0; }
-  .mine-breakdown-type-mix article:nth-child(-n+4) { border-bottom: 1px solid var(--mine-line, var(--line)); }
+  .mine-breakdown-type-mix :is(article, button):nth-child(3n) { border-right: 1px solid var(--mine-line, var(--line)); }
+  .mine-breakdown-type-mix :is(article, button):nth-child(2n) { border-right: 0; }
+  .mine-breakdown-type-mix :is(article, button):nth-child(-n+4) { border-bottom: 1px solid var(--mine-line, var(--line)); }
   .mine-head-actions {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1906,7 +1906,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-maintenance-availability-tabs button { min-height: 40px; }
 .mine-breakdown-movement-kpis strong { font-size: 24px !important; }
 .mine-breakdown-type-mix > header { min-height: 38px; }
-.mine-breakdown-type-mix article > span strong { font-size: 15px !important; }
+.mine-breakdown-type-mix :is(article, button) > span strong { font-size: 15px !important; }
 .mine-breakdown-site-head,
 .mine-road-site-head { min-height: 38px; }
 .mine-breakdown-site-row,
@@ -1918,3 +1918,18 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-site-road-summary strong { font-size: 23px !important; }
 .mine-site-road-gauge b { font-size: 15px !important; }
 .mine-site-road-gauge small { font-size: 8px !important; }
+
+/* Type-mix and road-status cards act as drilldown triggers in the detail modal. */
+.mine-breakdown-type-mix :is(article, button) { border-top: 0; border-bottom: 0; border-left: 0; background: transparent; color: inherit; font: inherit; text-align: left; }
+.mine-breakdown-type-mix button { cursor: pointer; transition: background .18s; }
+.mine-breakdown-type-mix button:hover,
+.mine-breakdown-type-mix button:focus-visible { outline: 0; background: var(--type-color, #315fd4); background: color-mix(in srgb, var(--type-color, #315fd4) 8%, transparent); }
+.dashboard-breakdown-road-mix > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dashboard-breakdown-road-mix button:nth-child(1) { --type-color: #26956f; }
+.dashboard-breakdown-road-mix button:nth-child(2) { --type-color: #df6d64; }
+.dashboard-breakdown-road-mix button:nth-child(3) { --type-color: #d4922e; }
+/* The site is fixed for this drilldown, so state it once instead of a step. */
+.dashboard-asset-scope { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; padding: 8px 11px; border: 1px solid var(--mine-line, var(--line)); border-radius: 7px; background: var(--mine-sunk, #f4f7fb); }
+.dashboard-asset-scope svg { width: 15px; color: #315fd4; }
+.dashboard-asset-scope b { font: 850 13px Manrope; }
+.dashboard-asset-scope span { color: var(--mine-muted, var(--muted)); font-size: 11px; font-weight: 700; }

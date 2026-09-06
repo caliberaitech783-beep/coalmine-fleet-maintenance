@@ -9,19 +9,23 @@ test('Meta WhatsApp configuration remains disabled until token and phone id are 
 });
 
 test('every workflow event has a Meta template definition',()=>{
-  assert.deepEqual(Object.keys(META_WORKFLOW_TEMPLATES),['passwordResetOtp','consolidatedRequestReport','consolidatedTicketReport','ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestIdle','requestClosed','requestOnRoad','requestVerified']);
-  assert.ok(Object.values(META_WORKFLOW_TEMPLATES).every(({name,body,components,example})=>name.startsWith('nerve_')&&(body||components?.length)&&example.length));
+  assert.deepEqual(Object.keys(META_WORKFLOW_TEMPLATES),['passwordResetOtp','consolidatedRequestReport','consolidatedTicketReport','ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestClosed','requestVerified','requestIdle']);
+  assert.ok(Object.values(META_WORKFLOW_TEMPLATES).every(({name,body,components,example})=>/^(nerve|bdms)_/.test(name)&&(body||components?.length)&&example.length));
   assert.equal(META_WORKFLOW_TEMPLATES.passwordResetOtp.category,'AUTHENTICATION');
   assert.equal(META_WORKFLOW_TEMPLATES.passwordResetOtp.components.at(-1).buttons[0].otp_type,'COPY_CODE');
 });
 
 test('request lifecycle templates include complete operational details',()=>{
-  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.name,'nerve_request_opened_details');
-  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.example.length,6);
-  assert.match(META_WORKFLOW_TEMPLATES.requestOpened.body,/Equipment \/ Vehicle Details:[\s\S]*Type of Breakdown:[\s\S]*Date & Time:[\s\S]*Location:[\s\S]*User:/);
-  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.name,'nerve_request_closed_details');
-  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.example.length,6);
-  assert.match(META_WORKFLOW_TEMPLATES.requestClosed.body,/Equipment \/ Vehicle Details:[\s\S]*Type of Breakdown:[\s\S]*Closing Date & Time:[\s\S]*Maintenance Work Details:[\s\S]*Closed By:/);
+  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.name,'bdms_offroad_request_opened_v1');
+  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.example.length,9);
+  assert.match(META_WORKFLOW_TEMPLATES.requestOpened.body,/Off Road Alert[\s\S]*Equipment:[\s\S]*Door No\.[\s\S]*Breakdown type:[\s\S]*ETC:[\s\S]*Open request:/);
+  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.name,'bdms_onroad_request_closed_v1');
+  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.example.length,7);
+  assert.match(META_WORKFLOW_TEMPLATES.requestClosed.body,/On Road Update[\s\S]*closed by[\s\S]*Total downtime:[\s\S]*Open request:/);
+  assert.equal(META_WORKFLOW_TEMPLATES.requestVerified.name,'bdms_mis_verification_completed_v1');
+  assert.equal(META_WORKFLOW_TEMPLATES.requestIdle.name,'bdms_vehicle_idle_v1');
+  assert.match(META_WORKFLOW_TEMPLATES.requestIdle.body,/Approval action:/);
+  assert.match(META_WORKFLOW_TEMPLATES.requestIdle.example[5],/Project Manager or Production Manager/);
 });
 
 test('Cloud API template delivery uses approved template parameters',async()=>{
@@ -53,11 +57,11 @@ test('template submission creates missing utility templates and preserves existi
     env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_BUSINESS_ACCOUNT_ID:'456'},
     fetchImpl:async(url,options={})=>{requests.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>({data:[{id:'old',name:'nerve_ticket_created',status:'APPROVED',category:'UTILITY',language:'en_US'}]})};return {ok:true,json:async()=>({id:`new-${requests.length}`,status:'PENDING'})}},
   });
-  assert.equal(results.length,12);
+  assert.equal(results.length,11);
   assert.equal(results.find((result)=>result.name==='nerve_ticket_created').existing,true);
-  assert.equal(requests.filter((request)=>request.options.method==='POST').length,11);
+  assert.equal(requests.filter((request)=>request.options.method==='POST').length,10);
   const submissions=requests.filter((request)=>request.options.method==='POST').map((request)=>JSON.parse(request.options.body));
-  assert.equal(submissions.filter((submission)=>submission.category==='UTILITY').length,10);
+  assert.equal(submissions.filter((submission)=>submission.category==='UTILITY').length,9);
   assert.equal(submissions.filter((submission)=>submission.category==='AUTHENTICATION').length,1);
 });
 

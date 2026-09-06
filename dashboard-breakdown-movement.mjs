@@ -2,7 +2,7 @@ const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1
 
 export const BREAKDOWN_TYPE_LABELS = ["Breakdown", "Accidental", "Preventive", "Aggregate Repair", "Super Structure", "WGM"];
 
-const normalizedBreakdownType = (value) => {
+export const normalizedBreakdownType = (value) => {
   const normalized = String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   if (["breakdown", "bd"].includes(normalized)) return "Breakdown";
   if (["accidental", "accident"].includes(normalized)) return "Accidental";
