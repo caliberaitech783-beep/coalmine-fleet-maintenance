@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
-import {defaultHierarchyReportScheduleSettings,flowDesignationForUser,GENERAL_REPORT_TITLES,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation} from '../hierarchy-report-flow.mjs';
+import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,GENERAL_REPORT_TITLES,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation} from '../hierarchy-report-flow.mjs';
 
 test('Super Admin receives only the configurable consolidated schedule even when designated Director',()=>{
   const designation=flowDesignationForUser({adminLevel:' SUPER  ADMIN ',designation:'Director'});
@@ -120,10 +120,32 @@ test('saved schedules migrate legacy report names to the renamed catalogue',()=>
   ]);
 });
 
+test('hierarchy weekday and time selections drive scheduled report delivery',()=>{
+  const settings=applyHierarchyDeliveryRule(defaultHierarchyReportScheduleSettings(),'director',{
+    scheduleDays:'Monday | Wednesday',
+    scheduleTimes:'10:00 | 19:00',
+    reportAccess:`${DIRECTOR_REPORT_TITLES[0]} | ${DIRECTOR_REPORT_TITLES[13]}`,
+  });
+  const monday=reportsDueForDesignation('director',new Date('2026-09-07T04:35:00Z'),20,settings);
+  assert.equal(monday.length,1);
+  assert.deepEqual(monday[0].reports,[DIRECTOR_REPORT_TITLES[0],DIRECTOR_REPORT_TITLES[13]]);
+  assert.equal(reportsDueForDesignation('director',new Date('2026-09-08T04:35:00Z'),20,settings).length,0);
+});
+
+test('clearing hierarchy weekdays disables scheduled bundles without restoring defaults',()=>{
+  const settings=applyHierarchyDeliveryRule(defaultHierarchyReportScheduleSettings(),'director',{
+    scheduleDays:'',scheduleTimes:'19:00',reportAccess:DIRECTOR_REPORT_TITLES.join(' | '),
+  });
+  assert.equal(settings.designations.director.managedByHierarchy,true);
+  assert.equal(reportsDueForDesignation('director',new Date('2026-09-07T13:35:00Z'),20,settings).length,0);
+});
+
 test('hierarchy report scheduler is wired into the server',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(server,/flowDesignationForUser/);
   assert.match(server,/reportsDueForDesignation/);
+  assert.match(server,/applyHierarchyDeliveryRule/);
+  assert.match(server,/effectiveScheduleSettings/);
   assert.match(server,/sendScheduledHierarchyReportBundles/);
   assert.match(server,/storedHierarchyReportScheduleSettings/);
   assert.match(server,/designationSettings\?\.recipientLogins\?\.includes\(login\)/);

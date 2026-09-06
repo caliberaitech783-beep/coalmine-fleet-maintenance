@@ -28,6 +28,8 @@ const GENERAL_REPORT_DESIGNATIONS=new Set(['director','projectManager','producti
 const GENERAL_REPORT_SCHEDULE_KEY='general-daily-19';
 const TIME_PATTERN=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const ALLOWED_REPORTS=new Set(DIRECTOR_REPORT_TITLES);
+export const HIERARCHY_WEEK_DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const WEEKDAY_NUMBER=new Map(HIERARCHY_WEEK_DAYS.map((day,index)=>[day.toLowerCase(),(index+1)%7]));
 
 export const HIERARCHY_REPORT_DESIGNATIONS={
   superAdmin:{label:'Super Admin',level:1,schedules:[
@@ -135,13 +137,42 @@ export function normalizeHierarchyReportScheduleSettings(value={}){
   return {designations:Object.fromEntries(Object.keys(HIERARCHY_REPORT_DESIGNATIONS).map((key)=>{
     const current=supplied[key];
     if(!current||typeof current!=='object')return [key,defaults.designations[key]];
+    const managedByHierarchy=current.managedByHierarchy===true;
+    const schedules=(Array.isArray(current.schedules)?current.schedules:[]).slice(0,20).map(configuredSchedule);
     return [key,{
       enabled:current.enabled!==false,
       allRecipients:current.allRecipients!==false,
       recipientLogins:[...new Set((Array.isArray(current.recipientLogins)?current.recipientLogins:[]).map((login)=>clean(login).toLowerCase()).filter(Boolean))].slice(0,500),
-      schedules:withGeneralReportSchedule(key,(Array.isArray(current.schedules)?current.schedules:[]).slice(0,20).map(configuredSchedule)),
+      managedByHierarchy,
+      schedules:managedByHierarchy?schedules:withGeneralReportSchedule(key,schedules),
     }];
   }))};
+}
+
+function hierarchyList(value){
+  return [...new Set(String(value??'').split(/\s*\|\s*/).map(clean).filter(Boolean))];
+}
+
+export function applyHierarchyDeliveryRule(settings,designationKey,rule={}){
+  const normalized=normalizeHierarchyReportScheduleSettings(settings||{});
+  if(!Object.prototype.hasOwnProperty.call(rule,'scheduleDays')&&!Object.prototype.hasOwnProperty.call(rule,'scheduleTimes'))return normalized;
+  const designation=normalized.designations[designationKey];
+  if(!designation)return normalized;
+  const weekdays=[...new Set(hierarchyList(rule.scheduleDays).map((day)=>WEEKDAY_NUMBER.get(day.toLowerCase())).filter((day)=>day!=null))];
+  const times=hierarchyList(rule.scheduleTimes).filter((time)=>TIME_PATTERN.test(time)).slice(0,6);
+  const reports=hierarchyList(rule.reportAccess).map(canonicalReportTitle).filter((title)=>ALLOWED_REPORTS.has(title));
+  const eventSchedules=designation.schedules.filter((schedule)=>schedule.cadence==='event');
+  let scheduled=[];
+  if(weekdays.length&&times.length&&reports.length){
+    scheduled=weekdays.length===7
+      ? [configuredSchedule({key:'hierarchy-daily',cadence:'daily',times,reports})]
+      : weekdays.map((weekday)=>configuredSchedule({key:`hierarchy-weekday-${weekday}`,cadence:'weekly',weekday,times,reports}));
+  }
+  return {designations:{...normalized.designations,[designationKey]:{
+    ...designation,
+    managedByHierarchy:true,
+    schedules:[...eventSchedules,...scheduled],
+  }}};
 }
 
 export function hierarchyScheduleLabel(schedule={}){

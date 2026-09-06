@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {defaultHierarchyReportScheduleSettings,reportsForHierarchyEvent,reportsDueForDesignation,flowDesignationForUser} from '../hierarchy-report-flow.mjs';
+import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,reportsForHierarchyEvent,reportsDueForDesignation,flowDesignationForUser} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
@@ -53,7 +53,7 @@ function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
     }},
     storedHierarchyReportScheduleSettings:async()=>settings,
     requestStakeholderLogins:async()=>['production'],
-    resolveMobileAccess:()=>({assignedRole:'Production User'}),flowDesignationForUser,reportsForHierarchyEvent,reportsDueForDesignation,
+    resolveMobileAccess:()=>({assignedRole:'Production User'}),applyHierarchyDeliveryRule,flowDesignationForUser,reportsForHierarchyEvent,reportsDueForDesignation,
     hierarchyRuleForDesignation:()=>({siteAccess:'Sasti OB',reportAccess:DIRECTOR_REPORT_TITLES.join('|')}),
     splitHierarchyValues:value=>value.split('|'),
     sourceDataForSites:data=>({...data,requests:siteAllowed?data.requests:[]}),

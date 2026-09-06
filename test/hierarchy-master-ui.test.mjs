@@ -10,7 +10,7 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(source, /function HierarchyMasterPage\(/);
   assert.match(source, /<HierarchyMasterPage records=\{records\}/);
   assert.match(hierarchySource, /Hierarchy Key Whatsapp Flow/);
-  assert.match(hierarchySource, /Designation-wise WhatsApp report matrix/);
+  assert.match(hierarchySource, /Manage designation, level, location, reports, weekdays and WhatsApp delivery times/);
   assert.match(hierarchySource, /visibleReportGroups\.map/);
   assert.match(hierarchySource, /visibleReportTitles\.map/);
   assert.match(hierarchySource, /WCL and NCL site wise ticks/);
@@ -29,6 +29,16 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(hierarchySource, /hasOwnProperty\.call\(stored, "reportAccess"\)/);
   assert.match(hierarchySource, /Reporting files/);
   assert.match(hierarchySource, /Save all changes/);
+  assert.match(hierarchySource, /Report delivery schedule/);
+  assert.match(hierarchySource, /Hierarchy &amp; report delivery/);
+  assert.match(hierarchySource, /const customRows = records\.filter/);
+  assert.match(hierarchySource, /const allRows = \[\.\.\.defaultRows, \.\.\.customRows\]/);
+  assert.match(hierarchySource, /Scheduled delivery days/);
+  assert.match(hierarchySource, /hierarchyStandardTimes\.map/);
+  assert.match(hierarchySource, /\+ Custom time/);
+  assert.match(hierarchySource, /scheduleDays: reportWeekDays\.filter/);
+  assert.match(hierarchySource, /scheduleTimes: scheduleTimes\.join/);
+  assert.match(source, /inOut: IN_OUT_REPORT_TITLE/);
   assert.match(hierarchySource, /settings saved successfully/);
   assert.match(hierarchySource, /className="hierarchy-save-error"/);
   assert.match(source, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
@@ -58,4 +68,7 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(styles, /\.hierarchy-access-grid/);
   assert.match(styles, /\.hierarchy-save-message/);
   assert.match(styles, /\.hierarchy-save-error/);
+  assert.match(styles, /\.hierarchy-weekday-selector/);
+  assert.match(styles, /\.hierarchy-time-selector/);
+  assert.match(styles, /\.hierarchy-schedule-preview/);
 });

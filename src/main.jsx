@@ -1674,6 +1674,8 @@ const masterFields = {
     ["designation", "Designation"],
     ["level", "User level (L1 / L2 / L3 / L4)"],
     ["schedule", "Schedule"],
+    ["scheduleDays", "Scheduled days (separate with |)"],
+    ["scheduleTimes", "IST times (HH:MM, separate with |)"],
     ["reportAccess", "Report ticks (separate with |)"],
     ["siteAccess", "Site ticks (separate with |)"],
   ],
@@ -1770,6 +1772,7 @@ const hierarchyReports = {
   maintenanceToMis: "Event close Report - Maint. Closing to MIS Verif.",
   idlePm: "Idle with PM verif.",
   firstTrip: "On Road with first trip veri.",
+  inOut: IN_OUT_REPORT_TITLE,
 };
 const hierarchyLegacyReportTitles = new Map([
   ["Location wise Open BD report with Category (Prod)", hierarchyReports.openedBd],
@@ -1790,6 +1793,7 @@ const hierarchyReportGroups = [
     hierarchyReports.vehicleTransfer,
     hierarchyReports.locationWise,
     hierarchyReports.recentBreakdown,
+    hierarchyReports.inOut,
   ]},
   {group:"Production Report", viewKey:"P", className:"production", reports:[
     hierarchyReports.openedBd,
@@ -1822,6 +1826,7 @@ const hierarchyReportCodes = new Map([
   hierarchyReports.maintenanceToMis,
   hierarchyReports.idlePm,
   hierarchyReports.firstTrip,
+  hierarchyReports.inOut,
 ].map((report, index) => [report, `R${index + 1}`]));
 const hierarchyDefaults = [
   {section:"Management", designation:"Director's", level:"1", schedule:"Daily 7 PM; weekly fleet Sat 7 PM", reportAccess:hierarchyReportTitles.join(" | ")},
@@ -6364,12 +6369,50 @@ const regionSites = (record = {}) => String(record.sites || "")
   .map((site) => site.trim())
   .filter(Boolean);
 const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).map((item) => item.trim()).filter(Boolean);
+const hierarchyStandardTimes = ["06:00", "08:00", "10:00", "14:00", "18:00", "19:00", "22:00"];
+const hierarchyDayForWeekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const hierarchyDesignationOption = (row = {}) => reportDesignationOptions.find((option) => (
+  option.label.toLowerCase() === String(row.designation || "").trim().toLowerCase()
+));
+const hierarchyDeliveryDefaults = (row = {}) => {
+  if (Object.prototype.hasOwnProperty.call(row, "scheduleDays") || Object.prototype.hasOwnProperty.call(row, "scheduleTimes")) {
+    return {days: splitPipeValues(row.scheduleDays), times: splitPipeValues(row.scheduleTimes)};
+  }
+  const option = hierarchyDesignationOption(row);
+  const schedules = option ? defaultHierarchyReportScheduleSettings().designations[option.key]?.schedules || [] : [];
+  const scheduled = schedules.filter((schedule) => schedule.cadence !== "event");
+  const days = new Set();
+  scheduled.forEach((schedule) => {
+    if (schedule.cadence === "weekly") days.add(hierarchyDayForWeekday[schedule.weekday]);
+    else reportWeekDays.forEach((day) => days.add(day));
+  });
+  const times = [...new Set(scheduled.flatMap((schedule) => schedule.times || []))].sort();
+  return {days: reportWeekDays.filter((day) => days.has(day)), times};
+};
+const hierarchyTimeLabel = (value) => {
+  const [hourValue, minute = "00"] = String(value || "").split(":");
+  const hour = Number(hourValue);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return value;
+  return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
+};
+const hierarchyScheduleSummary = (row, days, times) => {
+  const selectedDays = reportWeekDays.filter((day) => days.includes(day));
+  const selectedTimes = [...new Set(times.filter((time) => TIME_24H_PATTERN.test(time)))].sort();
+  const option = hierarchyDesignationOption(row);
+  const hasEvents = option?.schedules?.some((schedule) => schedule.eventBased || schedule.cadence === "event");
+  const scheduled = !selectedDays.length || !selectedTimes.length
+    ? "Scheduled delivery off"
+    : `${selectedDays.length === 7 ? "Daily" : selectedDays.map((day) => day.slice(0, 3)).join(", ")} at ${selectedTimes.map(hierarchyTimeLabel).join(" & ")}`;
+  return hasEvents ? `Every event; ${scheduled}` : scheduled;
+};
 
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const [savingKey, setSavingKey] = useState("");
   const [editingRow, setEditingRow] = useState(null);
   const [editingReports, setEditingReports] = useState([]);
   const [editingSites, setEditingSites] = useState([]);
+  const [editingScheduleDays, setEditingScheduleDays] = useState([]);
+  const [editingScheduleTimes, setEditingScheduleTimes] = useState([]);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [query, setQuery] = useState("");
@@ -6377,7 +6420,8 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const [visibleColumnGroups, setVisibleColumnGroups] = useState(() => hierarchyColumnViewOptions.map((option) => option.key));
   const [visibleRowGroups, setVisibleRowGroups] = useState(() => hierarchyRowViewOptions.map((option) => option.key));
   const byDesignation = new Map(records.map((record) => [String(record.designation || "").trim().toLowerCase(), record]));
-  const allRows = hierarchyDefaults.map((row, index) => {
+  const defaultDesignationKeys = new Set(hierarchyDefaults.map((row) => row.designation.toLowerCase()));
+  const defaultRows = hierarchyDefaults.map((row, index) => {
     const stored = byDesignation.get(row.designation.toLowerCase()) || {};
     return {
       ...row,
@@ -6387,6 +6431,20 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       siteAccess: Object.prototype.hasOwnProperty.call(stored, "siteAccess") ? stored.siteAccess : hierarchySiteTitles.join(" | "),
     };
   });
+  const customRows = records.filter((record) => {
+    const designation = String(record.designation || "").trim().toLowerCase();
+    return designation && !defaultDesignationKeys.has(designation);
+  }).map((record, index) => ({
+    section: record.section || "Other",
+    designation: record.designation,
+    level: record.level || "4",
+    schedule: record.schedule || "Scheduled delivery off",
+    ...record,
+    rowKey: record.id || `custom-${index}`,
+    reportAccess: normalizeHierarchyReportAccess(record.reportAccess || ""),
+    siteAccess: Object.prototype.hasOwnProperty.call(record, "siteAccess") ? record.siteAccess : hierarchySiteTitles.join(" | "),
+  }));
+  const allRows = [...defaultRows, ...customRows];
   const visibleColumnKeys = new Set(visibleColumnGroups);
   const visibleRowKeys = new Set(visibleRowGroups);
   const showIdentityColumns = visibleColumnKeys.has("A");
@@ -6406,9 +6464,12 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     checked ? [...new Set([...selected, value])] : selected.filter((item) => item !== value)
   ));
   const openHierarchyEditor = (row) => {
+    const delivery = hierarchyDeliveryDefaults(row);
     setSaveError("");
     setEditingReports(splitPipeValues(row.reportAccess));
     setEditingSites(splitPipeValues(row.siteAccess));
+    setEditingScheduleDays(delivery.days);
+    setEditingScheduleTimes(delivery.times);
     setEditingRow(row);
   };
   const closeHierarchyEditor = () => {
@@ -6416,6 +6477,16 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     setEditingRow(null);
     setEditingReports([]);
     setEditingSites([]);
+    setEditingScheduleDays([]);
+    setEditingScheduleTimes([]);
+  };
+  const updateCustomScheduleTime = (previousTime, nextTime) => setEditingScheduleTimes((times) => (
+    [...new Set(times.map((time) => time === previousTime ? nextTime : time))]
+  ));
+  const addCustomScheduleTime = () => {
+    const candidates = ["09:00", "12:00", "15:00", "17:00", "20:00", "21:00"];
+    const next = candidates.find((time) => !editingScheduleTimes.includes(time));
+    if (next) setEditingScheduleTimes((times) => [...times, next]);
   };
   const saveRow = async (row, updates) => {
     const payload = {
@@ -6423,6 +6494,8 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       designation: row.designation,
       level: row.level,
       schedule: row.schedule,
+      scheduleDays: row.scheduleDays || "",
+      scheduleTimes: row.scheduleTimes || "",
       reportAccess: row.reportAccess || "",
       siteAccess: row.siteAccess || "",
       ...updates,
@@ -6445,10 +6518,17 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const saveHierarchyDetails = async (event) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
+    const scheduleTimes = [...new Set(editingScheduleTimes.filter((time) => TIME_24H_PATTERN.test(time)))].sort();
+    if (editingScheduleDays.length && !scheduleTimes.length) {
+      setSaveError("Select at least one valid IST delivery time, or clear all scheduled days.");
+      return;
+    }
     const saved = await saveRow(editingRow, {
       section: String(values.get("section") || "").trim(),
       level: String(values.get("level") || "").trim(),
-      schedule: String(values.get("schedule") || "").trim(),
+      schedule: hierarchyScheduleSummary(editingRow, editingScheduleDays, scheduleTimes),
+      scheduleDays: reportWeekDays.filter((day) => editingScheduleDays.includes(day)).join(" | "),
+      scheduleTimes: scheduleTimes.join(" | "),
       reportAccess: editingReports.join(" | "),
       siteAccess: editingSites.join(" | "),
     });
@@ -6473,8 +6553,8 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     <section className="hierarchy-master-page panel pagepanel">
       <header>
         <div>
-          <h1>Hierarchy master</h1>
-          <p>Designation-wise WhatsApp report matrix with report and site tick controls</p>
+          <h1>Hierarchy &amp; report delivery</h1>
+          <p>Manage designation, level, location, reports, weekdays and WhatsApp delivery times</p>
         </div>
         <MasterActions name="Hierarchy master" records={allRows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
@@ -6583,7 +6663,27 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
           <label>Designation<input value={editingRow.designation} readOnly aria-readonly="true" /></label>
           <label>Section *<input name="section" defaultValue={editingRow.section} required autoFocus /></label>
           <label>Level *<select name="level" defaultValue={String(editingRow.level).replace(/^L/i, "")} required>{[1, 2, 3, 4].map((level) => <option key={level} value={level}>L{level}</option>)}</select></label>
-          <label className="full">Delivery schedule *<textarea name="schedule" defaultValue={editingRow.schedule} rows="4" required /></label>
+          <fieldset className="hierarchy-delivery-editor full">
+            <legend>Report delivery schedule</legend>
+            <div className="hierarchy-delivery-heading">
+              <div><CalendarDays /><span><b>Weekdays</b><small>India Standard Time</small></span></div>
+              <div><button type="button" onClick={() => setEditingScheduleDays([...reportWeekDays])}>All days</button><button type="button" onClick={() => setEditingScheduleDays([])}>Clear</button></div>
+            </div>
+            <div className="hierarchy-weekday-selector" role="group" aria-label="Scheduled delivery days">
+              {reportWeekDays.map((day) => <label key={day} className={editingScheduleDays.includes(day) ? "active" : ""}><input type="checkbox" checked={editingScheduleDays.includes(day)} onChange={(event) => toggleDraftValue(setEditingScheduleDays, day, event.target.checked)} /><span><b>{day.slice(0, 3)}</b><small>{day}</small></span></label>)}
+            </div>
+            <div className="hierarchy-delivery-heading time-heading">
+              <div><Clock /><span><b>Delivery times</b><small>Up to 6 time slots</small></span></div>
+              <button type="button" onClick={addCustomScheduleTime} disabled={editingScheduleTimes.length >= 6}>+ Custom time</button>
+            </div>
+            <div className="hierarchy-time-selector" role="group" aria-label="Scheduled delivery times">
+              {hierarchyStandardTimes.map((time) => <label key={time} className={editingScheduleTimes.includes(time) ? "active" : ""}><input type="checkbox" checked={editingScheduleTimes.includes(time)} disabled={!editingScheduleTimes.includes(time) && editingScheduleTimes.length >= 6} onChange={(event) => toggleDraftValue(setEditingScheduleTimes, time, event.target.checked)} /><span>{hierarchyTimeLabel(time)}</span></label>)}
+            </div>
+            {!!editingScheduleTimes.filter((time) => !hierarchyStandardTimes.includes(time)).length && <div className="hierarchy-custom-times">
+              {editingScheduleTimes.filter((time) => !hierarchyStandardTimes.includes(time)).map((time) => <label key={time}><input type="checkbox" checked onChange={() => setEditingScheduleTimes((times) => times.filter((item) => item !== time))} aria-label={`Use custom time ${time}`} /><input type="time" value={time} onChange={(event) => updateCustomScheduleTime(time, event.target.value)} /></label>)}
+            </div>}
+            <output className="hierarchy-schedule-preview"><b>Schedule</b><span>{hierarchyScheduleSummary(editingRow, editingScheduleDays, editingScheduleTimes)}</span></output>
+          </fieldset>
           <fieldset className="hierarchy-access-editor full">
             <legend>Reporting files</legend>
             <p>Select every report this designation should receive.</p>
