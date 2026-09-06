@@ -4,7 +4,6 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
-const fleetSiteBars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
 
 test("fleet intelligence connects category and group drilldowns without a region-site subpanel", () => {
   assert.match(source, /className="mine-panel mine-fleet-command"/);
@@ -49,7 +48,7 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /<FleetSiteBars site=\{site\} axisMax=\{fleetChartAxisMax\} showBreakdown=\{showFleetBreakdowns\}/);
   assert.match(source, /className="mine-fleet-chart-toggle"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
-  assert.match(source, /<h2>Total Fleet with Health<\/h2>/);
+  assert.match(source, /<h2>Total Fleet<\/h2>/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
@@ -57,10 +56,8 @@ test("each fleet site includes breakdowns in its equipment and vehicle bars", ()
   assert.match(source, /fleetChartCounts\(records, visibleBreakdowns\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background:\s*var\(--fleet-breakdown\)/);
-  assert.match(css, /--fleet-equipment: var\(--brand-purple\)/);
-  assert.match(css, /--fleet-vehicles: #007d3f/);
-  assert.match(css, /--fleet-breakdown: var\(--brand-red\)/);
-  assert.match(fleetSiteBars, /mine-fleet-health-badge/);
+  assert.match(css, /--fleet-equipment: var\(--brand-red\)/);
+  assert.match(css, /--fleet-vehicles: var\(--brand-purple\)/);
 });
 
 test("Total Fleet provides a persistent Caliber watermark option", () => {
@@ -96,9 +93,9 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mine-breakdown-trend-body\s*\{\s*grid-template-columns:\s*1fr/);
 });
 
-test("the region and site graph panel is titled Total Fleet with Health", () => {
-  assert.match(source, /<h2>Total Fleet with Health<\/h2>/);
-  assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet with Health" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
+test("the region and site graph panel is titled only Total Fleet", () => {
+  assert.match(source, /<h2>Total Fleet<\/h2>/);
+  assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
   assert.doesNotMatch(source, /className="mine-fleet-chart-y"/);
   assert.doesNotMatch(source, /fleet-muted/);
   assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);

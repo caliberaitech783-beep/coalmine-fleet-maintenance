@@ -1,13 +1,7 @@
 import React from "react";
 
 export default function FleetSiteBars({ site, axisMax, showBreakdown = false }) {
-  const total = site.equipment + site.vehicles;
-  const breakdown = site.breakdown.equipment + site.breakdown.vehicles;
-  const availablePercent = total ? Math.max(0, Math.round(((total - breakdown) / total) * 100)) : 0;
-  const healthClass = !total ? "empty" : availablePercent < 60 ? "critical" : availablePercent < 85 ? "watch" : "healthy";
-
   return <span className="mine-fleet-site-bars">
-    {showBreakdown && <span className={`mine-fleet-health-badge ${healthClass}`}>{total ? `${availablePercent}% available` : "No fleet"}</span>}
     {[["equipment", "Equipment"], ["vehicles", "Vehicles"]].map(([key, label]) => {
       const total = site[key];
       const breakdown = site.breakdown[key];
