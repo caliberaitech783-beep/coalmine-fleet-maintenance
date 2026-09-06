@@ -46,6 +46,11 @@ export function accessAllows(selection, name) {
   return selection == null || selection.includes(name);
 }
 
+export function masterAccessAllows(permissions = {}, name, selectionKey = "masterAccess") {
+  if (name === "Delayed Reason" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
+  return accessAllows(permissions[selectionKey], name);
+}
+
 export const MANAGER_ROLE_OPTIONS = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 
 export function normalizeAdminLevel(value = "") {

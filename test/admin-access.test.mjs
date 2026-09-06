@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions, managerRoleSelection, navigationPermissionsForView} from "../admin-access.mjs";
+import {ADMIN_MASTER_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, adminAccessPermissions, managerRoleSelection, masterAccessAllows, navigationPermissionsForView} from "../admin-access.mjs";
 
 test("legacy administrators retain full access when allowlists are absent", () => {
   const permissions = adminAccessPermissions({userType: "Super Admin"});
@@ -52,4 +52,18 @@ test("new administrators receive only explicitly selected masters and tabs", () 
   assert.deepEqual(permissions.tabAccess, ["Audit Trail"]);
   assert.equal(accessAllows(permissions.masterAccess, "OEM master"), false);
   assert.equal(ADMIN_MASTER_OPTIONS.includes("Privilege"), false);
+});
+
+test("existing administrators can open the newly introduced Delayed Reason master", () => {
+  const legacyAdmin = adminAccessPermissions({
+    adminLevel: "Admin",
+    masterAccess: "Users & employees | Region master",
+  });
+  const manager = adminAccessPermissions({
+    adminLevel: "Manager",
+    masterAccess: "Region master",
+  });
+  assert.equal(masterAccessAllows(legacyAdmin, "Delayed Reason"), true);
+  assert.equal(masterAccessAllows(manager, "Delayed Reason"), false);
+  assert.equal(masterAccessAllows({...manager, masterAccess:["Delayed Reason"]}, "Delayed Reason"), true);
 });

@@ -12,7 +12,7 @@ import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
-import {accessAllows,managerRoleSelection} from './admin-access.mjs';
+import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
 import {TICKET_CATEGORIES,managerUserRole,ticketReference,validTicketMediaDataUrl} from './ticket-workflow.mjs';
@@ -910,7 +910,7 @@ async function requireSuper(req,res,next){
     if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
     if(session.role!=='super')return res.status(403).json({error:'Only a Super User can perform this action.'});
     const requestedMaster=req.params?.master?decodeURIComponent(req.params.master):'';
-    if(requestedMaster&&!accessAllows(session.permissions?.masterAccess,requestedMaster)&&!accessAllows(session.permissions?.mobileMasterAccess,requestedMaster))
+    if(requestedMaster&&!masterAccessAllows(session.permissions,requestedMaster)&&!masterAccessAllows(session.permissions,requestedMaster,'mobileMasterAccess'))
       return res.status(403).json({error:'You do not have access to this master.'});
     if(req.path.startsWith('/api/whatsapp')&&!accessAllows(session.permissions?.tabAccess,'WhatsApp Integration')&&!accessAllows(session.permissions?.mobileTabAccess,'WhatsApp Integration'))
       return res.status(403).json({error:'You do not have access to WhatsApp Integration.'});
@@ -2529,7 +2529,7 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
 
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
-    const superCanView=(master)=>req.session.role==='super'&&(accessAllows(req.session.permissions?.masterAccess,master)||accessAllows(req.session.permissions?.mobileMasterAccess,master));
+    const superCanView=(master)=>req.session.role==='super'&&(masterAccessAllows(req.session.permissions,master)||masterAccessAllows(req.session.permissions,master,'mobileMasterAccess'));
     const canViewEquipment=superCanView('Equipment master')||req.session.permissions?.viewEquipment===true;
     const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
     const canViewDelayedReasons=superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true;
@@ -2541,7 +2541,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
       if(req.session.role==='super'){
-        if(!accessAllows(req.session.permissions?.masterAccess,row.master_name)&&!accessAllows(req.session.permissions?.mobileMasterAccess,row.master_name))continue;
+        if(!masterAccessAllows(req.session.permissions,row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name,'mobileMasterAccess'))continue;
       }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;

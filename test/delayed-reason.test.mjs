@@ -42,6 +42,8 @@ test('Delayed Reason master, close form, and server validation are connected',()
   assert.match(access,/"Region master",\s*"Delayed Reason",\s*"Vehicle transfers"/);
   assert.match(client,/\["Region master", Building2\],\s*\["Delayed Reason", Clock\],\s*\["Vehicle transfers", ArrowRightLeft\]/);
   assert.match(client,/useMasterRecords\("Delayed Reason"\)/);
+  assert.match(client,/masterAccessAllows\(viewPermissions, name\)/);
+  assert.match(server,/masterAccessAllows\(session\.permissions,requestedMaster\)/);
   assert.match(client,/Add custom delayed reason/);
   assert.match(client,/delayedReasonRequired\(request\.expectedCompletionAt,closingAt\)/);
   assert.match(server,/delayed_reason TEXT NOT NULL DEFAULT ''/);
