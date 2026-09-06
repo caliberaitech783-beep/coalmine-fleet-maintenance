@@ -795,8 +795,9 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-maintenance-availability-head p { margin: 0; color: var(--mine-muted); }
 .mine-maintenance-availability-tabs {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(170px, 1fr));
-  flex: 0 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(680px, 48%);
+  flex: 0 1 680px;
   padding: 3px;
   border: 1px solid var(--mine-line);
   border-radius: 6px;
@@ -824,7 +825,7 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-maintenance-availability-tabs button:focus-visible { outline: 2px solid #315fd44d; outline-offset: 2px; }
 .mine-breakdown-movement-view,
-.mine-site-road-view { display: grid; gap: 10px; padding: 11px 13px 13px; border-top: 1px solid var(--mine-line); }
+.mine-site-road-view { display: grid; gap: 8px; padding: 10px 11px 11px; border-top: 1px solid var(--mine-line); }
 .mine-breakdown-movement-kpis,
 .dashboard-breakdown-detail-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
 .mine-breakdown-movement-kpis > div,
@@ -879,10 +880,10 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-breakdown-site-head,
 .mine-breakdown-site-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.2fr) repeat(4, minmax(68px, .48fr)) minmax(230px, 1.55fr) 24px;
+  grid-template-columns: minmax(210px, 1.1fr) repeat(4, minmax(90px, .55fr)) minmax(480px, 2.1fr) 28px;
   align-items: center;
   gap: 8px;
-  min-width: 930px;
+  min-width: 1180px;
 }
 .mine-breakdown-site-head,
 .mine-road-site-head {
@@ -936,11 +937,11 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-breakdown-flow-bars i.open { background: #315fd4; }
 .mine-breakdown-flow-bars i.incoming { background: #df6d64; }
 .mine-breakdown-flow-bars i.outgoing { background: #26956f; }
-.mine-breakdown-road-impact { display: grid; grid-template-columns: minmax(0, 1fr) minmax(88px, .8fr); align-items: center; gap: 8px; min-width: 0; }
+.mine-breakdown-road-impact { display: grid; grid-template-columns: minmax(160px, .9fr) minmax(180px, 1.1fr) auto; align-items: center; gap: 10px; min-width: 0; }
 .mine-breakdown-road-impact > span:first-child { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
 .mine-breakdown-road-impact > span:first-child b { flex: 0 0 auto; color: #238361; font: 900 12px/1 Manrope; }
 .mine-breakdown-road-impact > span:first-child small { overflow: hidden; color: var(--mine-muted); font-size: 7px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
-.mine-breakdown-road-impact > em { grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; color: #315fd4; font-size: 7px; font-style: normal; font-weight: 850; }
+.mine-breakdown-road-impact > em { display: inline-flex; align-items: center; justify-content: flex-start; gap: 2px; color: #315fd4; font-size: 7px; font-style: normal; font-weight: 850; white-space: nowrap; }
 .mine-breakdown-road-impact > em svg { width: 12px; height: 12px; }
 .mine-site-road-summary { display: grid; grid-template-columns: 1.3fr repeat(3, minmax(0, 1fr)); gap: 7px; }
 .mine-site-road-summary button {
@@ -995,7 +996,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-road-site-row > .metric.offroad b { color: #c9554d; }
 .mine-road-site-row > .metric.idle b { color: #b67a1d; }
 .mine-road-site-row.focused { position: relative; background: color-mix(in srgb, #315fd4 9%, var(--mine-panel)); box-shadow: inset 4px 0 #315fd4; }
-.mine-road-site-bar { display: flex; height: 10px; overflow: hidden; border-radius: 3px; background: var(--mine-line); }
+.mine-road-site-bar { display: flex; height: 12px; overflow: hidden; border-radius: 3px; background: var(--mine-line); }
 .mine-road-site-bar i { display: block; height: 100%; }
 .mine-road-site-bar i.onroad { background: #26956f; }
 .mine-road-site-bar i.offroad { background: #df6d64; }
@@ -1895,3 +1896,25 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-dashboard :is(p, label, small, em, span, b) { font-size: 11px !important; }
 .mine-dashboard :is(button, input, select, th) { font-size: 11px !important; }
 .mine-dashboard td { font-size: 12px !important; }
+
+/* The combined maintenance panel is intentionally two pixels larger than the
+   surrounding dashboard so its operational figures remain easy to scan. */
+.mine-maintenance-availability-panel h2 { font-size: 17px !important; }
+.mine-maintenance-availability-panel :is(p, label, small, em, span, b) { font-size: 13px !important; }
+.mine-maintenance-availability-panel :is(button, input, select, th) { font-size: 13px !important; }
+.mine-maintenance-availability-head { min-height: 78px !important; padding: 9px 12px !important; }
+.mine-maintenance-availability-tabs button { min-height: 40px; }
+.mine-breakdown-movement-kpis strong { font-size: 24px !important; }
+.mine-breakdown-type-mix > header { min-height: 38px; }
+.mine-breakdown-type-mix article > span strong { font-size: 15px !important; }
+.mine-breakdown-site-head,
+.mine-road-site-head { min-height: 38px; }
+.mine-breakdown-site-row,
+.mine-road-site-row { min-height: 56px; }
+.mine-breakdown-site-row > .metric b,
+.mine-road-site-row > .metric b,
+.mine-road-site-row > .availability b,
+.mine-breakdown-road-impact > span:first-child b { font-size: 14px !important; }
+.mine-site-road-summary strong { font-size: 23px !important; }
+.mine-site-road-gauge b { font-size: 15px !important; }
+.mine-site-road-gauge small { font-size: 8px !important; }

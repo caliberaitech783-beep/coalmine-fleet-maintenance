@@ -73,6 +73,21 @@ test("Road Availability provides site-wise on-road, off-road and idle status", (
   assert.match(css, /\.mine-site-road-summary \.idle \{ --summary-color: #513c17;/);
 });
 
+test("Maintenance and Road Availability typography is two pixels larger", () => {
+  assert.match(css, /\.mine-maintenance-availability-panel h2\s*\{\s*font-size:\s*17px !important/);
+  assert.match(css, /\.mine-maintenance-availability-panel :is\(p, label, small, em, span, b\)\s*\{\s*font-size:\s*13px !important/);
+  assert.match(css, /\.mine-maintenance-availability-panel :is\(button, input, select, th\)\s*\{\s*font-size:\s*13px !important/);
+  assert.match(css, /\.mine-breakdown-movement-kpis strong\s*\{\s*font-size:\s*24px !important/);
+  assert.match(css, /\.mine-breakdown-site-row,[\s\S]*?\.mine-road-site-row\s*\{\s*min-height:\s*56px/);
+});
+
+test("Maintenance and Road Availability uses its available width without empty layout pockets", () => {
+  assert.match(css, /\.mine-maintenance-availability-tabs\s*\{[^}]*width:\s*min\(680px, 48%\)/);
+  assert.match(css, /\.mine-breakdown-site-row\s*\{[^}]*grid-template-columns:[^;}]*minmax\(480px, 2\.1fr\)/);
+  assert.match(css, /\.mine-breakdown-road-impact\s*\{[^}]*grid-template-columns:\s*minmax\(160px, \.9fr\) minmax\(180px, 1\.1fr\) auto/);
+  assert.match(css, /\.mine-breakdown-road-impact > em\s*\{[^}]*white-space:\s*nowrap/);
+});
+
 test("equipment intelligence and request lifecycle share a responsive row", () => {
   assert.match(css, /\.mine-dashboard-core\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
   assert.match(css, /@media \(max-width: 1100px\)[\s\S]*?\.mine-dashboard-core\s*\{\s*grid-template-columns:\s*1fr/);
