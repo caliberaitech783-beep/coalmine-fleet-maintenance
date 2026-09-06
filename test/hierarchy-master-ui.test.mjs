@@ -22,8 +22,11 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(hierarchySource, /className="hierarchy-row-edit"/);
   assert.match(hierarchySource, /Edit hierarchy ·/);
   assert.match(hierarchySource, /saveHierarchyDetails/);
-  assert.match(hierarchySource, /values\.getAll\("reportAccess"\)/);
-  assert.match(hierarchySource, /values\.getAll\("siteAccess"\)/);
+  assert.match(hierarchySource, /reportAccess: editingReports\.join\(" \| "\)/);
+  assert.match(hierarchySource, /siteAccess: editingSites\.join\(" \| "\)/);
+  assert.match(hierarchySource, /checked=\{editingReports\.includes\(report\)\}/);
+  assert.match(hierarchySource, /checked=\{editingSites\.includes\(site\)\}/);
+  assert.match(hierarchySource, /hasOwnProperty\.call\(stored, "reportAccess"\)/);
   assert.match(hierarchySource, /Reporting files/);
   assert.match(hierarchySource, /Save all changes/);
   assert.match(hierarchySource, /settings saved successfully/);

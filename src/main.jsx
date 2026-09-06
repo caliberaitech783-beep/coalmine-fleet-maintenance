@@ -6368,6 +6368,8 @@ const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).ma
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const [savingKey, setSavingKey] = useState("");
   const [editingRow, setEditingRow] = useState(null);
+  const [editingReports, setEditingReports] = useState([]);
+  const [editingSites, setEditingSites] = useState([]);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [query, setQuery] = useState("");
@@ -6381,7 +6383,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       ...row,
       ...stored,
       rowKey: stored.id || `default-${index}`,
-      reportAccess: normalizeHierarchyReportAccess(stored.reportAccess || row.reportAccess || ""),
+      reportAccess: normalizeHierarchyReportAccess(Object.prototype.hasOwnProperty.call(stored, "reportAccess") ? stored.reportAccess : row.reportAccess || ""),
       siteAccess: Object.prototype.hasOwnProperty.call(stored, "siteAccess") ? stored.siteAccess : hierarchySiteTitles.join(" | "),
     };
   });
@@ -6400,6 +6402,21 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const toggleViewOption = (setter, key) => setter((selected) => (
     selected.includes(key) ? selected.filter((item) => item !== key) : [...selected, key]
   ));
+  const toggleDraftValue = (setter, value, checked) => setter((selected) => (
+    checked ? [...new Set([...selected, value])] : selected.filter((item) => item !== value)
+  ));
+  const openHierarchyEditor = (row) => {
+    setSaveError("");
+    setEditingReports(splitPipeValues(row.reportAccess));
+    setEditingSites(splitPipeValues(row.siteAccess));
+    setEditingRow(row);
+  };
+  const closeHierarchyEditor = () => {
+    setSaveError("");
+    setEditingRow(null);
+    setEditingReports([]);
+    setEditingSites([]);
+  };
   const saveRow = async (row, updates) => {
     const payload = {
       section: row.section,
@@ -6432,12 +6449,12 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       section: String(values.get("section") || "").trim(),
       level: String(values.get("level") || "").trim(),
       schedule: String(values.get("schedule") || "").trim(),
-      reportAccess: values.getAll("reportAccess").join(" | "),
-      siteAccess: values.getAll("siteAccess").join(" | "),
+      reportAccess: editingReports.join(" | "),
+      siteAccess: editingSites.join(" | "),
     });
     if (saved) {
       setSaveMessage(`${editingRow.designation} settings saved successfully.`);
-      setEditingRow(null);
+      closeHierarchyEditor();
     }
   };
   const toggleReport = (row, report, checked) => {
@@ -6532,7 +6549,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                     <td className="hierarchy-col-section"><span className="hierarchy-section-pill">{row.section}</span></td>
                     <td className="hierarchy-col-designation">
                       <span><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</span>
-                      <button type="button" className="hierarchy-row-edit" title={`Edit all settings for ${row.designation}`} aria-label={`Edit all settings for ${row.designation}`} onClick={() => {setSaveError("");setEditingRow(row);}} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /><span>Edit</span></button>
+                      <button type="button" className="hierarchy-row-edit" title={`Edit all settings for ${row.designation}`} aria-label={`Edit all settings for ${row.designation}`} onClick={() => openHierarchyEditor(row)} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /><span>Edit</span></button>
                     </td>
                     <td className="hierarchy-col-level"><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
                     <td className="hierarchy-col-schedule hierarchy-schedule">{row.schedule}</td>
@@ -6558,7 +6575,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         {visibleReportTitles.map((report) => <span key={report}><b>{hierarchyReportCodes.get(report)}</b>{report}</span>)}
       </div>}
     </section>
-    {editingRow && <Modal title={`Edit hierarchy · ${editingRow.designation}`} close={() => {setSaveError("");setEditingRow(null);}} className="hierarchy-edit-modal">
+    {editingRow && <Modal title={`Edit hierarchy · ${editingRow.designation}`} close={closeHierarchyEditor} className="hierarchy-edit-modal">
       <form className="form master-form" onSubmit={saveHierarchyDetails}>
         <p className="hierarchy-edit-help">Update the schedule, reporting files, and site access for this hierarchy row in one place.</p>
         {saveError && <div className="hierarchy-save-error" role="alert"><AlertTriangle /><span>{saveError}</span></div>}
@@ -6572,7 +6589,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
             <p>Select every report this designation should receive.</p>
             {hierarchyReportGroups.map((group) => <section key={group.group}>
               <h4>{group.group}</h4>
-              <div className="hierarchy-access-grid">{group.reports.map((report) => <label key={report}><input type="checkbox" name="reportAccess" value={report} defaultChecked={splitPipeValues(editingRow.reportAccess).includes(report)} /><span><b>{hierarchyReportCodes.get(report)}</b>{report}</span></label>)}</div>
+              <div className="hierarchy-access-grid">{group.reports.map((report) => <label key={report}><input type="checkbox" name="reportAccess" value={report} checked={editingReports.includes(report)} onChange={(event) => toggleDraftValue(setEditingReports, report, event.target.checked)} /><span><b>{hierarchyReportCodes.get(report)}</b>{report}</span></label>)}</div>
             </section>)}
           </fieldset>
           <fieldset className="hierarchy-access-editor full">
@@ -6580,11 +6597,11 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
             <p>Select every location available to this designation.</p>
             {hierarchySiteGroups.map((region) => <section key={region.code}>
               <h4>{region.code} · {region.name}</h4>
-              <div className="hierarchy-access-grid sites">{region.sites.map((site) => <label key={site}><input type="checkbox" name="siteAccess" value={site} defaultChecked={splitPipeValues(editingRow.siteAccess).includes(site)} /><span>{site}</span></label>)}</div>
+              <div className="hierarchy-access-grid sites">{region.sites.map((site) => <label key={site}><input type="checkbox" name="siteAccess" value={site} checked={editingSites.includes(site)} onChange={(event) => toggleDraftValue(setEditingSites, site, event.target.checked)} /><span>{site}</span></label>)}</div>
             </section>)}
           </fieldset>
         </div>
-        <footer><button type="button" onClick={() => {setSaveError("");setEditingRow(null);}}>Cancel</button><button className="primary" disabled={savingKey === editingRow.rowKey}><Pencil aria-hidden="true" /> {savingKey === editingRow.rowKey ? "Saving..." : "Save all changes"}</button></footer>
+        <footer><button type="button" onClick={closeHierarchyEditor}>Cancel</button><button className="primary" disabled={savingKey === editingRow.rowKey}><Pencil aria-hidden="true" /> {savingKey === editingRow.rowKey ? "Saving..." : "Save all changes"}</button></footer>
       </form>
     </Modal>}
   </>);
