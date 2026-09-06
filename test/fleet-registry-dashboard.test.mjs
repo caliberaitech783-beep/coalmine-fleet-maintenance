@@ -55,9 +55,15 @@ test("total fleet renders a region-grouped site count graph", () => {
 test("each fleet site includes breakdowns in its equipment and vehicle bars", () => {
   assert.match(source, /fleetChartCounts\(records, visibleBreakdowns\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
-  assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background:\s*var\(--fleet-breakdown\)/);
+  assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*repeating-linear-gradient\(135deg, var\(--fleet-breakdown\)/);
+  assert.match(css, /\.mine-fleet-breakdown-count\s*\{[^}]*color:\s*#fff[^}]*font-weight:\s*900/);
   assert.match(css, /--fleet-equipment: var\(--brand-red\)/);
   assert.match(css, /--fleet-vehicles: var\(--brand-purple\)/);
+});
+
+test("Total Fleet uses the approved taller card and wider site bars", () => {
+  assert.match(css, /\.mine-dashboard-feature-row \.mine-fleet-chart-layout\s*\{[^}]*min-height:\s*281px;[^}]*height:\s*326px/);
+  assert.match(css, /\.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(34px, 2\.2vw, 42px\)/);
 });
 
 test("Total Fleet provides a persistent Caliber watermark option", () => {
