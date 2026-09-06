@@ -6354,6 +6354,7 @@ const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).ma
 
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const [savingKey, setSavingKey] = useState("");
+  const [editingRow, setEditingRow] = useState(null);
   const [query, setQuery] = useState("");
   const [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [visibleColumnGroups, setVisibleColumnGroups] = useState(() => hierarchyColumnViewOptions.map((option) => option.key));
@@ -6398,11 +6399,23 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     try {
       if (row.id) await onEdit(row.id, payload);
       else await onAdd([payload], {silent:true});
+      return true;
     } catch (error) {
       alert(error.message || "Could not save hierarchy setting.");
+      return false;
     } finally {
       setSavingKey("");
     }
+  };
+  const saveHierarchyDetails = async (event) => {
+    event.preventDefault();
+    const values = new FormData(event.currentTarget);
+    const saved = await saveRow(editingRow, {
+      section: String(values.get("section") || "").trim(),
+      level: String(values.get("level") || "").trim(),
+      schedule: String(values.get("schedule") || "").trim(),
+    });
+    if (saved) setEditingRow(null);
   };
   const toggleReport = (row, report, checked) => {
     const selected = new Set(splitPipeValues(row.reportAccess));
@@ -6416,7 +6429,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     else selected.delete(site);
     saveRow(row, {siteAccess:[...selected].join(" | ")});
   };
-  return (
+  return (<>
     <section className="hierarchy-master-page panel pagepanel">
       <header>
         <div>
@@ -6493,7 +6506,10 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                 <tr key={row.rowKey} className={row.section === "Management" ? "management" : ""}>
                   {showIdentityColumns && <>
                     <td className="hierarchy-col-section"><span className="hierarchy-section-pill">{row.section}</span></td>
-                    <td className="hierarchy-col-designation"><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</td>
+                    <td className="hierarchy-col-designation">
+                      <span><b>{row.designation}</b>{savingKey === row.rowKey && <small>Saving...</small>}</span>
+                      <button type="button" className="hierarchy-row-edit" title={`Edit ${row.designation}`} aria-label={`Edit ${row.designation}`} onClick={() => setEditingRow(row)} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /></button>
+                    </td>
                     <td className="hierarchy-col-level"><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
                     <td className="hierarchy-col-schedule hierarchy-schedule">{row.schedule}</td>
                   </>}
@@ -6518,7 +6534,19 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
         {visibleReportTitles.map((report) => <span key={report}><b>{hierarchyReportCodes.get(report)}</b>{report}</span>)}
       </div>}
     </section>
-  );
+    {editingRow && <Modal title={`Edit hierarchy · ${editingRow.designation}`} close={() => setEditingRow(null)} className="hierarchy-edit-modal">
+      <form className="form master-form" onSubmit={saveHierarchyDetails}>
+        <p className="hierarchy-edit-help">Update this designation's hierarchy details. Report and site access continue to be controlled by the matrix ticks.</p>
+        <div className="formgrid">
+          <label>Designation<input value={editingRow.designation} readOnly aria-readonly="true" /></label>
+          <label>Section *<input name="section" defaultValue={editingRow.section} required autoFocus /></label>
+          <label>Level *<select name="level" defaultValue={String(editingRow.level).replace(/^L/i, "")} required>{[1, 2, 3, 4].map((level) => <option key={level} value={level}>L{level}</option>)}</select></label>
+          <label className="full">Delivery schedule *<textarea name="schedule" defaultValue={editingRow.schedule} rows="4" required /></label>
+        </div>
+        <footer><button type="button" onClick={() => setEditingRow(null)}>Cancel</button><button className="primary" disabled={savingKey === editingRow.rowKey}><Pencil aria-hidden="true" /> {savingKey === editingRow.rowKey ? "Saving..." : "Save changes"}</button></footer>
+      </form>
+    </Modal>}
+  </>);
 }
 
 function RegionMasterPage({ records = [], requests = [], onAdd, onDeleteAll, gotoEquipment }) {
