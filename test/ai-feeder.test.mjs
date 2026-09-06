@@ -10,6 +10,7 @@ import {
   alertTypesForRole,
   parseIstTimestamp,
 } from "../ai-feeder.mjs";
+import {infoPulseRequestScope,isInfoPulseDirector,scopeInfoPulseRequests} from "../info-pulse-scope.mjs";
 
 const NOW = Date.parse("2026-09-02T12:00:00+05:30");
 const ist = (value) => value;
@@ -143,12 +144,47 @@ test("the feed is capped so one bad day cannot flood the panel", () => {
   assert.equal(aiFeederAlerts(requests, { role: "Admin", now: NOW }).length, AI_FEEDER_THRESHOLDS.maxAlerts);
 });
 
+test("Info Pulse request scope follows operational, manager, admin, and Director access", () => {
+  const requests = [
+    {ref:"REQ-S",site:"Sasti OB"},
+    {ref:"REQ-M",site:"Majri OB"},
+    {ref:"REQ-J",site:"Jayant OB"},
+  ];
+  const operationalScope=infoPulseRequestScope({role:"normal",assignedRole:"Maintenance User"},{site:"Majri OB"});
+  assert.equal(operationalScope.label,"Majri OB");
+  assert.deepEqual(scopeInfoPulseRequests(requests,operationalScope).map(({ref})=>ref),["REQ-M"]);
+
+  const managerScope=infoPulseRequestScope({role:"super",permissions:{adminLevel:"Manager"}},{managerSites:"Sasti OB | Majri OB"});
+  assert.equal(managerScope.label,"2 assigned locations");
+  assert.deepEqual(scopeInfoPulseRequests(requests,managerScope).map(({ref})=>ref),["REQ-S","REQ-M"]);
+
+  const adminScope=infoPulseRequestScope({role:"super",permissions:{adminLevel:"Admin"}},{});
+  assert.equal(adminScope.label,"All regions");
+  assert.equal(scopeInfoPulseRequests(requests,adminScope).length,3);
+
+  const directorSession={role:"super",name:"Mohit Chadda",permissions:{adminLevel:"Manager"}};
+  assert.equal(isInfoPulseDirector(directorSession,{}),true);
+  assert.equal(infoPulseRequestScope(directorSession,{managerSites:"Sasti OB"}).label,"All regions");
+});
+
+test("Info Pulse fails closed when an operational user has no assigned location", () => {
+  const scope=infoPulseRequestScope({role:"normal",assignedRole:"Production User"},{});
+  assert.equal(scope.label,"No location assigned");
+  assert.deepEqual(scopeInfoPulseRequests([{ref:"REQ-1",site:"Sasti OB"}],scope),[]);
+});
+
 test("the AI feeder panel opens on login, counts down, and is reachable from the header", () => {
   const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("../src/ai-feeder.css", import.meta.url), "utf8");
+  const serverSource = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 
   assert.match(mainSource, /function AiFeederPanel\(/);
   assert.match(mainSource, /function AiFeeder\(/);
+  assert.match(mainSource, /fetch\(`\/api\/info-pulse\?t=\$\{Date\.now\(\)\}`/);
+  assert.match(mainSource, /Scope: \{scope\?\.label/);
+  assert.match(serverSource, /app\.get\('\/api\/info-pulse',requireSession/);
+  assert.match(serverSource, /currentDashboardAuthorization\(req\.session\)[\s\S]*infoPulseRequestScope\(authorization\.session,authorization\.user\)/);
+  assert.match(serverSource, /scopeInfoPulseRequests\(rows,scope\)/);
   // Auto-opens once per sign in, not on every re-render or refresh.
   assert.match(mainSource, /sessionStorage\.getItem\("aiFeederGreeted"\)/);
   assert.match(mainSource, /AI_FEEDER_AUTO_CLOSE_SECONDS = 59/);
@@ -161,6 +197,7 @@ test("the AI feeder panel opens on login, counts down, and is reachable from the
   assert.match(mainSource, /className="ai-feeder-dot"/);
   // Both shells carry the header entry.
   assert.equal(mainSource.match(/<AiFeeder\b/g)?.length, 2);
+  assert.equal(mainSource.match(/<AiFeeder[^>]*session=\{session\}/g)?.length, 2);
   assert.match(styles, /@keyframes ai-feeder-blink/);
   // The countdown is a clock-style chip whose fill drains as the seconds run out.
   assert.match(mainSource, /className="ai-feeder-countdown-fill"/);

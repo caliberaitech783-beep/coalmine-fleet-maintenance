@@ -35,6 +35,7 @@ import {activeRequestConflictMessage} from './request-conflict.mjs';
 import {auditChangedFields,auditRouteDetails,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
+import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -2020,6 +2021,22 @@ async function attachDailyRemarks(rows,client=pool){
   for(const remark of remarks){const list=grouped.get(remark.requestReference)||[];list.push(remark);grouped.set(remark.requestReference,list)}
   return rows.map((row)=>({...row,dailyRemarks:grouped.get(row.ref)||[]}));
 }
+
+app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
+  try{
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization)
+      return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+    const operationalRole=authorization.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(authorization.session.assignedRole);
+    if(authorization.session.role!=='super'&&!operationalRole&&authorization.session.permissions?.readRequests!==true)
+      return res.status(403).json({error:'Your assigned role is not authorized to view Info Pulse.'});
+    const scope=infoPulseRequestScope(authorization.session,authorization.user);
+    const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`);
+    const visibleRows=scopeInfoPulseRequests(rows,scope);
+    res.set('Cache-Control','no-store');
+    res.json({requests:await attachDailyRemarks(visibleRows),scope});
+  }catch(error){next(error)}
+});
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{

@@ -7186,7 +7186,7 @@ function TicketPage({ session }) {
 
 const AI_FEEDER_AUTO_CLOSE_SECONDS = 59;
 const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
-function AiFeederPanel({ alerts = [], summary, requests = [], onClose }) {
+function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) {
   const [seconds, setSeconds] = useState(AI_FEEDER_AUTO_CLOSE_SECONDS);
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
@@ -7235,9 +7235,9 @@ function AiFeederPanel({ alerts = [], summary, requests = [], onClose }) {
     <div className="ai-feeder-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
         <div>
-          <span className="ai-feeder-kicker"><Activity /> INFO PULSE</span>
+          <div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity /> INFO PULSE</span><span className="ai-feeder-scope" title={scope?.sites?.join(", ") || scope?.label}><MapPin /> {scope?.label || "Assigned location"}</span></div>
           <h2 id="ai-feeder-title">{headline}</h2>
-          <p>Your fleet at a glance. Review the highest-priority cases first.</p>
+          <p>{scope?.kind === "all" ? "All regions at a glance." : "Your permitted locations at a glance."} Review the highest-priority cases first.</p>
         </div>
         <div className="ai-feeder-actions">
           <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Closes in ${seconds} seconds`} title={`Closes automatically in ${seconds} seconds`}>
@@ -7277,13 +7277,38 @@ function AiFeederPanel({ alerts = [], summary, requests = [], onClose }) {
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Based on current request records</span><span>Closes at 00:00 · Reopen from Info Pulse</span></footer>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>Closes at 00:00 · Reopen from Info Pulse</span></footer>
     </div>
   </div>, document.body);
 }
-function AiFeeder({ requests = [], role = "" }) {
+function AiFeeder({ role = "", session }) {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [requests, setRequests] = useState([]);
+  const [scope, setScope] = useState({kind: "location", label: "Assigned location", sites: []});
+  useEffect(() => {
+    if (!session?.token) { setRequests([]); return undefined; }
+    let active = true;
+    const load = () => fetch(`/api/info-pulse?t=${Date.now()}`, {
+      cache: "no-store",
+      headers: {Authorization: `Bearer ${session.token}`},
+    })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || "Could not load Info Pulse");
+        return body;
+      })
+      .then((body) => {
+        if (!active) return;
+        setRequests(Array.isArray(body.requests) ? body.requests : []);
+        if (body.scope?.label) setScope(body.scope);
+      })
+      .catch((error) => { if (active) console.warn("Info Pulse refresh failed; retaining the last permitted feed.", error); });
+    setRequests([]);
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [session?.token]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
@@ -7301,7 +7326,7 @@ function AiFeeder({ requests = [], role = "" }) {
     <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="Info Pulse" aria-label={`Info Pulse, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
       <Activity /><span>INFO PULSE</span>{summary.total > 0 && <><b className="ai-feeder-trigger-count">{summary.critical || summary.total}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {open && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} onClose={() => setOpen(false)} />}
+    {open && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} scope={scope} onClose={() => setOpen(false)} />}
   </>;
 }
 function NotificationBell({ session, onOpenTickets }) {
@@ -7411,7 +7436,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)).filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder requests={requests} role={mobileRole} /><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} />}
       {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
@@ -7777,7 +7802,7 @@ function App() {
           <HeaderClock />
           <div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            <AiFeeder requests={requests} role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} />
+            <AiFeeder role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} session={session} />
             <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <Search />
             </button>

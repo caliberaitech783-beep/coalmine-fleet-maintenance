@@ -98,6 +98,36 @@
   width: 14px;
 }
 
+.ai-feeder-heading-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-feeder-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 300px;
+  padding: 4px 8px;
+  border: 1px solid #ffffff3d;
+  border-radius: 999px;
+  background: #ffffff17;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-feeder-scope svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
 .ai-feeder-panel h2 {
   margin: 8px 0 4px;
   font: 800 21px Manrope, sans-serif;
