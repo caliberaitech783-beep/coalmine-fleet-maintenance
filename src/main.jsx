@@ -21,6 +21,7 @@ import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
+import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement } from "../dashboard-breakdown-movement.mjs";
 import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { aiFeederAlerts, aiFeederSummary } from "../ai-feeder.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
@@ -916,23 +917,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":activeManagerRole === "Production Manager" ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={activeManagerRole === "Production Manager"} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
   </section>;
 }
-const dashboardRepairTypeDefaults = ["Breakdown", "Accidental", "Preventive", "Aggregate Repair", "Super Structure", "WGM"];
-
-function useDashboardRepairTypes() {
-  const fallback = dashboardRepairTypeDefaults.map((repairType, index) => ({ id: `fallback-${index}`, repairType }));
-  const [records, setRecords] = useState(fallback);
-  useEffect(() => {
-    fetch("/api/reference/repair-types", {headers: {Authorization: `Bearer ${authToken}`}})
-      .then((response) => response.ok ? response.json() : Promise.reject())
-      .then((data) => { if (Array.isArray(data) && data.length) setRecords(data); })
-      .catch(() => {});
-  }, []);
-  return records;
-}
-
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
   const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
-  const repairTypeRecords = useDashboardRepairTypes();
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [assetDrilldownRegion, setAssetDrilldownRegion] = useState("");
   const [assetDrilldownSite, setAssetDrilldownSite] = useState("");
@@ -951,6 +937,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [requestTrendDays, setRequestTrendDays] = useState(7);
   const [requestTrendFrom, setRequestTrendFrom] = useState("");
   const [requestTrendTo, setRequestTrendTo] = useState("");
+  const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
+  const [breakdownDetailSite, setBreakdownDetailSite] = useState("");
+  const [breakdownDetailDays, setBreakdownDetailDays] = useState(5);
+  const [breakdownDetailFrom, setBreakdownDetailFrom] = useState("");
+  const [breakdownDetailTo, setBreakdownDetailTo] = useState("");
+  const [breakdownCustomDays, setBreakdownCustomDays] = useState(7);
+  const [roadFocusSite, setRoadFocusSite] = useState("");
   useEffect(() => localStorage.setItem("nerveCenterFleetWatermark", String(showFleetWatermark)), [showFleetWatermark]);
   useEffect(() => localStorage.setItem("nerveCenterFleetIntelligenceView", fleetIntelligenceView), [fleetIntelligenceView]);
   const now = new Date();
@@ -996,22 +989,44 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownForecastTotal = forecastTrendDays.reduce((total, day) => total + day.count, 0);
   const breakdownTrendAverage = breakdownTrendDays ? (breakdownTrendTotal / breakdownTrendDays).toFixed(1) : "0.0";
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
+  const breakdownSummaryEndKey = dashboardDate || todayKey;
+  const breakdownSummaryStartDate = new Date(`${breakdownSummaryEndKey}T12:00:00`);
+  breakdownSummaryStartDate.setDate(breakdownSummaryStartDate.getDate() - 4);
+  const breakdownSummaryStartKey = localDateKey(breakdownSummaryStartDate);
+  const breakdownSiteSummary = trendAvailableSites.map((site) => {
+    const siteRequests = locationBreakdowns.filter((record) => recordBelongsToSite(record, site));
+    return { site, ...breakdownMovementForRange(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey) };
+  });
+  const breakdownMovementTotals = breakdownSiteSummary.reduce((totals, site) => ({
+    open: totals.open + site.open,
+    incoming: totals.incoming + site.incoming,
+    outgoing: totals.outgoing + site.outgoing,
+    balance: totals.balance + site.balance,
+  }), { open: 0, incoming: 0, outgoing: 0, balance: 0 });
+  const breakdownTypeSummary = breakdownTypeShare(locationBreakdowns, breakdownSummaryStartKey, breakdownSummaryEndKey);
+  const roadAvailabilityBySite = trendAvailableSites.map((site) => {
+    const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
+    return { site, ...liveEquipmentMetrics(records, visibleBreakdowns) };
+  });
+  const roadAvailabilityBySiteName = new Map(roadAvailabilityBySite.map((site) => [site.site, site]));
+  const selectedBreakdownSiteRequests = breakdownDetailSite
+    ? locationBreakdowns.filter((record) => recordBelongsToSite(record, breakdownDetailSite))
+    : [];
+  const validBreakdownDetailRange = breakdownDetailFrom && breakdownDetailTo && breakdownDetailFrom <= breakdownDetailTo;
+  const breakdownDetailEndKey = validBreakdownDetailRange ? breakdownDetailTo : dashboardDate || todayKey;
+  const breakdownDetailStartDate = new Date(`${breakdownDetailEndKey}T12:00:00`);
+  breakdownDetailStartDate.setDate(breakdownDetailStartDate.getDate() - (Math.max(1, breakdownDetailDays) - 1));
+  const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
+  const breakdownDetailRows = dailyBreakdownMovement(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
+  const breakdownDetailTotals = breakdownMovementForRange(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
+  const breakdownDetailTypeSummary = breakdownTypeShare(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
+  const breakdownDetailMaximum = Math.max(1, ...breakdownDetailRows.flatMap((row) => [row.incoming, row.outgoing, row.balance]));
+  const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
   const roadStatusTotal = kpis.onRoad + kpis.offRoad + kpis.idle;
   const roadStatusShare = (value) => roadStatusTotal ? (value / roadStatusTotal) * 100 : 0;
   const utilizationPercent = kpis.total ? Math.round((kpis.onRoad / kpis.total) * 100) : 0;
   const availableFleet = kpis.onRoad + kpis.idle;
   const availabilityPercent = kpis.total ? Math.round((availableFleet / kpis.total) * 100) : 0;
-  const repairTypeBreakdown = [...new Map(
-    [...repairTypeRecords.map((record) => record.repairType), ...visibleBreakdowns.map((record) => record.category)]
-      .map((repairType) => String(repairType || "").trim())
-      .filter(Boolean)
-      .map((label) => [label.toLowerCase(), label]),
-  ).values()].map((label) => ({
-    label,
-    value: visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === label.toLowerCase()).length,
-  }));
-  const maxRepairTypeCount = Math.max(1, ...repairTypeBreakdown.map((item) => item.value));
-  const repairTypeTotal = repairTypeBreakdown.reduce((total, item) => total + item.value, 0);
   const openCaseRequests = activeOpenCases(visibleBreakdowns);
   const assetCounts = fleetAssetCounts(visibleEquipment);
   const equipmentGroupLabel = (record = {}) => String(record.group || record.equipmentGroup || record.itemName || record.category || "Unclassified").trim() || "Unclassified";
@@ -1205,6 +1220,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const selectAssetGroup = (group) => {
     setAssetDrilldownGroup(group);
   };
+  const openRoadAvailabilityForSite = (site) => {
+    setRoadFocusSite(site);
+    setBreakdownDetailSite("");
+    setMaintenanceAvailabilityTab("road");
+  };
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
@@ -1235,30 +1255,48 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-        <article className="mine-panel mine-repair-type-chart" aria-label="Maintenance type graph">
-          <header><div><span className="mine-eyebrow">Maintenance analysis</span><h2>Maintenance Type</h2></div><strong>{equipmentLoaded?repairTypeTotal.toLocaleString():"—"} requests</strong></header>
-          {equipmentLoaded?<div className="mine-repair-type-bars">
-            {repairTypeBreakdown.length ? repairTypeBreakdown.map(({ label, value }) => <button type="button" key={label} onClick={() => openAssetDrilldown(`repair:${label}`)} aria-label={`${label}: ${value} breakdown requests`}>
-              <span>{label}</span><i><b style={{ width: `${(value / maxRepairTypeCount) * 100}%` }} /></i><strong>{value.toLocaleString()}</strong>
-            </button>) : <div className="mine-empty">No repair types configured</div>}
-          </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-scope-state" />}
-        </article>
-        <article className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability">
-          <header><div><span className="mine-eyebrow">Fleet status</span><h2>Road Availability</h2></div><strong>{equipmentLoaded?roadStatusTotal.toLocaleString():"—"} <small>Total fleet</small></strong></header>
-          {equipmentLoaded?<div className="mine-road-availability-body">
-            <button type="button" className="mine-road-availability-overview" onClick={() => openAssetDrilldown("road-availability")} aria-label="Drill down Road Availability by region and site">
-              <span className="mine-road-availability-summary"><strong>{kpis.availability}%</strong><span>Fleet available</span><small>{kpis.onRoad.toLocaleString()} of {roadStatusTotal.toLocaleString()} assets are on road</small></span>
-              <span className="mine-road-distribution" aria-label="Road availability distribution">
-                <span><i className="onroad" style={{ width: `${roadStatusShare(kpis.onRoad)}%` }} /><i className="offroad" style={{ width: `${roadStatusShare(kpis.offRoad)}%` }} /><i className="idle" style={{ width: `${roadStatusShare(kpis.idle)}%` }} /></span>
-                <span><b>0%</b><b>Fleet status distribution</b><b>100%</b></span>
-              </span>
-            </button>
-            <div className="mine-road-status-values">
-              <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><b>On road</b><small>{roadStatusShare(kpis.onRoad).toFixed(1)}% available</small></span><strong>{kpis.onRoad.toLocaleString()}</strong></button>
-              <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><b>Off road</b><small>{roadStatusShare(kpis.offRoad).toFixed(1)}% maintenance</small></span><strong>{kpis.offRoad.toLocaleString()}</strong></button>
-              <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><b>Idle</b><small>{roadStatusShare(kpis.idle).toFixed(1)}% not working</small></span><strong>{kpis.idle.toLocaleString()}</strong></button>
+        <article className="mine-panel mine-maintenance-availability-panel" aria-label="Maintenance and road availability">
+          <header className="mine-maintenance-availability-head">
+            <div><span className="mine-eyebrow">Fleet operations control</span><h2>Maintenance &amp; Road Availability</h2><p>Site-wise breakdown movement and live fleet status in one view.</p></div>
+            <div className="mine-maintenance-availability-tabs" role="tablist" aria-label="Maintenance and road availability views">
+              <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "breakdown"} className={maintenanceAvailabilityTab === "breakdown" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("breakdown")}><Wrench />Site-wise BD Movement</button>
+              <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "road"} className={maintenanceAvailabilityTab === "road" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("road")}><Gauge />Road Availability</button>
             </div>
-          </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-road-status-state" />}
+          </header>
+          {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
+            <div className="mine-breakdown-movement-kpis">
+              {[{ label: "BD Open", value: breakdownMovementTotals.open, className: "open" }, { label: "BD In", value: breakdownMovementTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{breakdownSummaryStartKey} to {breakdownSummaryEndKey}</small></div>)}
+            </div>
+            <section className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
+              <header><div><b>BD Type Mix</b><small>All six maintenance types</small></div><span>Percentage share of BD In</span></header>
+              <div>{breakdownTypeSummary.map((type) => <article key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
+            </section>
+            <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
+              <div className="mine-breakdown-site-head" role="row"><span>Site name</span><span>BD Open</span><span>BD In</span><span>BD Out</span><span>BD Balance</span><span>Road availability impact</span><span aria-hidden="true" /></div>
+              <div className="mine-breakdown-site-body">
+                {breakdownSiteSummary.length ? breakdownSiteSummary.map((site) => {
+                  const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
+                  return <button type="button" role="row" key={site.site} className="mine-breakdown-site-row" onClick={() => { setBreakdownDetailSite(site.site); setBreakdownDetailDays(5); setBreakdownDetailFrom(""); setBreakdownDetailTo(""); }} aria-label={`${site.site}: ${site.open} open, ${site.incoming} in, ${site.outgoing} out, ${site.balance} balance; ${road.availability}% road availability with ${road.onRoad} on road, ${road.offRoad} off road and ${road.idle} idle. Open linked day-wise details.`}>
+                    <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric open"><b>{site.open}</b></span><span className="metric incoming"><b>+{site.incoming}</b></span><span className="metric outgoing"><b>-{site.outgoing}</b></span><span className="metric balance"><b>{site.balance}</b></span>
+                    <span className="mine-breakdown-road-impact"><span><b>{road.availability}%</b><small>{road.onRoad} On · {road.offRoad} Off · {road.idle} Idle</small></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${road.total ? (road.onRoad / road.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${road.total ? (road.offRoad / road.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${road.total ? (road.idle / road.total) * 100 : 0}%` }} /></span><em>Road availability <ChevronRight /></em></span><ChevronRight />
+                  </button>;
+                }) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}
+              </div>
+            </div>
+          </div> : <div className="mine-site-road-view">
+            <div className="mine-site-road-summary">
+              <button type="button" className="availability" onClick={() => openAssetDrilldown("road-availability")}><span className="mine-site-road-gauge" style={{ "--availability": `${roadStatusShare(kpis.onRoad) * 3.6}deg` }}><b>{kpis.availability}%</b><small>Available</small></span><span><strong>{roadStatusTotal.toLocaleString()}</strong><small>Total fleet</small></span></button>
+              <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><small>On road</small><strong>{kpis.onRoad.toLocaleString()}</strong></span></button>
+              <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><small>Off road</small><strong>{kpis.offRoad.toLocaleString()}</strong></span></button>
+              <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><small>Idle</small><strong>{kpis.idle.toLocaleString()}</strong></span></button>
+            </div>
+            <div className="mine-road-site-table" role="table" aria-label="Site-wise road availability">
+              <div className="mine-road-site-head" role="row"><span>Site name</span><span>Total fleet</span><span>On road</span><span>Off road</span><span>Idle</span><span>Availability</span><span>Status distribution</span><span aria-hidden="true" /></div>
+              <div className="mine-road-site-body">{roadAvailabilityBySite.length ? roadAvailabilityBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site:${site.site}`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
+                <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric total"><b>{site.total}</b></span><span className="metric onroad"><b>{site.onRoad}</b></span><span className="metric offroad"><b>{site.offRoad}</b></span><span className="metric idle"><b>{site.idle}</b></span><span className="availability"><b>{site.availability}%</b></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${site.total ? (site.onRoad / site.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${site.total ? (site.offRoad / site.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${site.total ? (site.idle / site.total) * 100 : 0}%` }} /></span><ChevronRight />
+              </button>) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}</div>
+            </div>
+          </div> : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-maintenance-availability-state" />}
         </article>
       </section>
       <section className="mine-dashboard-grid mine-dashboard-core">
@@ -1329,6 +1367,35 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
         </article>
       </section>
+      {breakdownDetailSite && <Modal className="dashboard-breakdown-movement-modal" title={`${breakdownDetailSite} · Day-wise BD Movement`} close={() => setBreakdownDetailSite("")}><div className="dashboard-breakdown-movement-detail">
+        <div className="dashboard-breakdown-period-controls">
+          <div className="mine-trend-period" role="group" aria-label="Breakdown movement day range">{[2, 5, 10].map((days) => <button type="button" key={days} className={!validBreakdownDetailRange && breakdownDetailDays === days ? "active" : ""} onClick={() => { setBreakdownDetailDays(days); setBreakdownDetailFrom(""); setBreakdownDetailTo(""); }}>{days} Days</button>)}</div>
+          <label><span>From date</span><input type="date" aria-label="Breakdown movement from date" value={breakdownDetailFrom} max={breakdownDetailTo || breakdownDetailEndKey} onChange={(event) => setBreakdownDetailFrom(event.target.value)} /></label>
+          <label><span>To date</span><input type="date" aria-label="Breakdown movement to date" value={breakdownDetailTo} min={breakdownDetailFrom || undefined} max={todayKey} onChange={(event) => setBreakdownDetailTo(event.target.value)} /></label>
+          <label className="dashboard-breakdown-custom-days"><span>Custom days</span><input type="number" aria-label="Custom breakdown movement days" min="1" max="31" value={breakdownCustomDays} onChange={(event) => setBreakdownCustomDays(Math.max(1, Math.min(31, Number(event.target.value) || 1)))} /></label>
+          <button type="button" className="dashboard-breakdown-apply" onClick={() => { setBreakdownDetailDays(breakdownCustomDays); setBreakdownDetailFrom(""); setBreakdownDetailTo(""); }}>Apply custom</button>
+        </div>
+        <div className="dashboard-breakdown-detail-kpis">
+          {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }].map((item) => <div className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{breakdownDetailStartKey} to {breakdownDetailEndKey}</small></div>)}
+        </div>
+        <section className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of BD In`}>
+          <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of BD In</span></header>
+          <div>{breakdownDetailTypeSummary.map((type) => <article key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
+        </section>
+        <section className="dashboard-site-road-impact" aria-label={`${breakdownDetailSite} current road availability`}>
+          <div className="dashboard-site-road-impact-heading"><span><Gauge /><b>Current road availability</b></span><div><strong>{selectedBreakdownSiteRoad.availability}%</strong><button type="button" onClick={() => openRoadAvailabilityForSite(breakdownDetailSite)}>Road availability <ChevronRight /></button></div></div>
+          <div className="dashboard-site-road-impact-stats"><span className="total"><small>Total fleet</small><b>{selectedBreakdownSiteRoad.total}</b></span><span className="onroad"><small>On road</small><b>{selectedBreakdownSiteRoad.onRoad}</b></span><span className="offroad"><small>Off road</small><b>{selectedBreakdownSiteRoad.offRoad}</b></span><span className="idle"><small>Idle</small><b>{selectedBreakdownSiteRoad.idle}</b></span></div>
+          <div className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${selectedBreakdownSiteRoad.total ? (selectedBreakdownSiteRoad.onRoad / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${selectedBreakdownSiteRoad.total ? (selectedBreakdownSiteRoad.offRoad / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${selectedBreakdownSiteRoad.total ? (selectedBreakdownSiteRoad.idle / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /></div>
+          <p><b>{breakdownDetailTotals.balance}</b> BD balance in the selected period; <b>{selectedBreakdownSiteRoad.offRoad}</b> units are currently off road.</p>
+        </section>
+        <section className="dashboard-breakdown-day-chart" aria-label={`${breakdownDetailSite} day-wise breakdown movement chart`}>
+          <div className="dashboard-breakdown-chart-legend"><span><i className="incoming" />BD In</span><span><i className="outgoing" />BD Out</span><span><i className="balance" />Balance</span></div>
+          <div className="dashboard-breakdown-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, breakdownDetailRows.length)}, minmax(38px, 1fr))`, minWidth: `${Math.max(100, breakdownDetailRows.length * 46)}px` }}>
+            {breakdownDetailRows.map((day) => <div className="dashboard-breakdown-chart-day" key={day.date}><span><i className="incoming" style={{ height: `${day.incoming ? Math.max(8, (day.incoming / breakdownDetailMaximum) * 100) : 2}%` }}><b>{day.incoming || ""}</b></i><i className="outgoing" style={{ height: `${day.outgoing ? Math.max(8, (day.outgoing / breakdownDetailMaximum) * 100) : 2}%` }}><b>{day.outgoing || ""}</b></i><i className="balance" style={{ height: `${day.balance ? Math.max(8, (day.balance / breakdownDetailMaximum) * 100) : 2}%` }}><b>{day.balance || ""}</b></i></span><small>{new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`))}</small></div>)}
+          </div>
+        </section>
+        <div className="dashboard-breakdown-day-table"><ActionsTable><thead><tr><th>Date</th><th>BD Open</th><th>BD In</th><th>BD Out</th><th>BD Balance</th></tr></thead><tbody>{breakdownDetailRows.length ? breakdownDetailRows.map((day) => <tr key={day.date}><td><b>{new Intl.DateTimeFormat(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${day.date}T12:00:00`))}</b></td><td>{day.open}</td><td className="incoming">+{day.incoming}</td><td className="outgoing">-{day.outgoing}</td><td className="balance">{day.balance}</td></tr>) : <tr><td colSpan="5">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
+      </div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={`${assetDrilldownTitle} · ${assetDrilldownRows.length}`} close={() => { setAssetDrilldown(""); setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><div className="dashboard-asset-drilldown">
         {repairTypeSiteDrilldown ? <>
           <section><h4>Step 1 · Select region</h4><div className="dashboard-asset-summary">{repairTypeRegionBreakdown.length ? repairTypeRegionBreakdown.map((region) => <button type="button" key={region.code} className={assetDrilldownRegion === region.code ? "active" : ""} onClick={() => { setAssetDrilldownRegion(region.code); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{region.count.toLocaleString()}</b>{region.code}</button>) : <p>No regions available</p>}</div></section>

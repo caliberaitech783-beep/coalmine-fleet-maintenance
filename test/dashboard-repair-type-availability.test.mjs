@@ -12,10 +12,9 @@ test("every authenticated dashboard can read repair types without master managem
   assert.doesNotMatch(server, /app\.get\('\/api\/reference\/repair-types',requirePermission/);
 });
 
-test("maintenance type never renders blank while reference data loads or is unavailable", () => {
-  assert.match(client, /const dashboardRepairTypeDefaults = \["Breakdown", "Accidental", "Preventive", "Aggregate Repair", "Super Structure", "WGM"\]/);
-  assert.match(client, /function useDashboardRepairTypes\(\)/);
-  assert.match(client, /fetch\("\/api\/reference\/repair-types"/);
-  assert.match(client, /const \[records, setRecords\] = useState\(fallback\)/);
-  assert.match(client, /\.\.\.visibleBreakdowns\.map\(\(record\) => record\.category\)/);
+test("site breakdown movement includes every request category in the selected scope", () => {
+  assert.match(client, /const locationBreakdowns = selectedRegion \? scopedBreakdowns\.filter/);
+  assert.match(client, /const siteRequests = locationBreakdowns\.filter/);
+  assert.match(client, /breakdownMovementForRange\(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey\)/);
+  assert.doesNotMatch(client, /locationBreakdowns\.filter\(.*category/);
 });

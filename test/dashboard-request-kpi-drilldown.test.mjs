@@ -5,7 +5,8 @@ import test from "node:test";
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
 test("operational dashboard graphs open category, group, lifecycle, and full-detail drilldowns", () => {
-  assert.match(source, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
+  assert.match(source, /setBreakdownDetailSite\(site\.site\)/);
+  assert.match(source, /openAssetDrilldown\(`site:\$\{site\.site\}`\)/);
   assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /key: `group:\$\{group\.label\}`/);

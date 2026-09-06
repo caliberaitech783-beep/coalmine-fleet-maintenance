@@ -5,36 +5,61 @@ import test from "node:test";
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 const client = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("repair types render as a responsive graph instead of KPI cards", () => {
-  assert.match(client, /className="mine-panel mine-repair-type-chart"/);
-  assert.match(client, /<h2>Maintenance Type<\/h2>/);
-  assert.doesNotMatch(client, /Breakdown requests by configured repair type/);
-  assert.match(client, /value \/ maxRepairTypeCount/);
-  assert.match(client, /openAssetDrilldown\(`repair:\$\{label\}`\)/);
-  assert.doesNotMatch(client, /<section className="mine-counter-grid"/);
-  assert.match(css, /\.mine-repair-type-bars button\s*\{[\s\S]*grid-template-columns:\s*minmax\(110px, \.55fr\) minmax\(160px, 2fr\) 48px/);
-  assert.match(css, /@media \(max-width: 500px\)[\s\S]*\.mine-repair-type-bars button\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\) auto/);
-});
-
-test("Total Fleet leads the dashboard and Maintenance Type shares a row with Road Availability", () => {
+test("Total Fleet leads a single combined maintenance and road availability panel", () => {
   const featureRow = client.indexOf('className="mine-dashboard-feature-row"');
   const totalFleet = client.indexOf('mine-panel mine-fleet-region-chart', featureRow);
-  const repairType = client.indexOf('className="mine-panel mine-repair-type-chart"', featureRow);
-  const roadAvailability = client.indexOf('className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"', repairType);
+  const combinedPanel = client.indexOf('className="mine-panel mine-maintenance-availability-panel"', featureRow);
   const intelligence = client.indexOf('className="mine-dashboard-grid mine-dashboard-core"', featureRow);
-  assert.ok(featureRow >= 0 && totalFleet > featureRow && repairType > totalFleet && roadAvailability > repairType && intelligence > roadAvailability);
-  assert.match(css, /\.mine-dashboard-feature-row\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
-  assert.match(client, /className="mine-road-availability-summary"/);
-  assert.match(client, /className="mine-road-distribution"/);
-  assert.match(client, /roadStatusShare\(kpis\.onRoad\)\.toFixed\(1\)/);
+  assert.ok(featureRow >= 0 && totalFleet > featureRow && combinedPanel > totalFleet && intelligence > combinedPanel);
+  assert.match(client, /<h2>Maintenance &amp; Road Availability<\/h2>/);
+  assert.match(client, /maintenanceAvailabilityTab/);
+  assert.match(client, /Site-wise BD Movement/);
+  assert.match(client, /Road Availability/);
+  assert.match(css, /\.mine-maintenance-availability-panel\s*\{[\s\S]*?grid-column:\s*1 \/ -1/);
+  assert.doesNotMatch(client, /className="mine-panel mine-repair-type-chart"/);
+  assert.doesNotMatch(client, /className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"/);
 });
 
-test("Road Availability status tiles keep readable contrast in both themes", () => {
-  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values button\.onroad \{ background: #edf9f4;[^}]*color: #173d31;/);
-  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values button\.offroad \{ background: #fff2f1;[^}]*color: #572b28;/);
-  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values button\.idle \{ background: #fff8e8;[^}]*color: #513c17;/);
-  assert.match(css, /\.mine-feature-road-availability \.mine-road-status-values small \{ color: currentColor;/);
-  assert.doesNotMatch(css, /\.mine-dashboard-night \.mine-feature-road-availability \.mine-road-status-values button \{ background: #203338; \}/);
+test("site breakdown view reconciles one-line site totals and opens day-wise controls", () => {
+  assert.match(client, /breakdownMovementForRange/);
+  assert.match(client, /dailyBreakdownMovement/);
+  assert.match(client, /<span>Site name<\/span><span>BD Open<\/span><span>BD In<\/span><span>BD Out<\/span><span>BD Balance<\/span><span>Road availability impact<\/span>/);
+  assert.match(client, /\[2, 5, 10\]\.map/);
+  assert.match(client, /aria-label="Breakdown movement from date"/);
+  assert.match(client, /aria-label="Breakdown movement to date"/);
+  assert.match(client, /aria-label="Custom breakdown movement days"/);
+  assert.match(css, /\.mine-breakdown-site-head,[\s\S]*?\.mine-breakdown-site-row\s*\{[\s\S]*?grid-template-columns:/);
+});
+
+test("each site links breakdown movement with its current road availability", () => {
+  assert.match(client, /const roadAvailabilityBySiteName = new Map/);
+  assert.match(client, /className="mine-breakdown-road-impact"/);
+  assert.match(client, /road\.onRoad.*On ·.*road\.offRoad.*Off ·.*road\.idle.*Idle/);
+  assert.match(client, /className="dashboard-site-road-impact"/);
+  assert.match(client, /BD balance in the selected period/);
+  assert.match(client, /Road availability <ChevronRight \/>/);
+  assert.match(client, /openRoadAvailabilityForSite\(breakdownDetailSite\)/);
+  assert.match(client, /roadFocusSite === site\.site/);
+  assert.match(css, /\.mine-breakdown-road-impact\s*\{/);
+  assert.match(css, /\.dashboard-site-road-impact\s*\{/);
+});
+
+test("the maintenance summary defines all six BD types with intake percentages", () => {
+  assert.match(client, /breakdownTypeShare\(locationBreakdowns, breakdownSummaryStartKey, breakdownSummaryEndKey\)/);
+  assert.match(client, /BD Type Mix/);
+  assert.match(client, /Percentage share of BD In/);
+  assert.match(client, /breakdownDetailTypeSummary\.map/);
+  assert.match(css, /\.mine-breakdown-type-mix > div\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6/);
+});
+
+test("Road Availability provides site-wise on-road, off-road and idle status", () => {
+  assert.match(client, /roadAvailabilityBySite\.length/);
+  assert.match(client, /<span>Total fleet<\/span><span>On road<\/span><span>Off road<\/span><span>Idle<\/span><span>Availability<\/span>/);
+  assert.match(client, /className="mine-road-site-bar"/);
+  assert.match(css, /\.mine-road-site-row\s*\{[\s\S]*?grid-template-columns:/);
+  assert.match(css, /\.mine-site-road-summary \.onroad \{ --summary-color: #173d31;/);
+  assert.match(css, /\.mine-site-road-summary \.offroad \{ --summary-color: #572b28;/);
+  assert.match(css, /\.mine-site-road-summary \.idle \{ --summary-color: #513c17;/);
 });
 
 test("equipment intelligence and request lifecycle share a responsive row", () => {

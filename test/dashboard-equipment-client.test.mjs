@@ -20,7 +20,7 @@ test("dashboards load fleet records through the dedicated read-only endpoint",()
   assert.match(hook,/setLoadAttempt\(\(attempt\) => attempt \+ 1\)/);
   assert.doesNotMatch(hook,/\/api\/masters/);
 
-  const manager=source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("const dashboardRepairTypeDefaults"));
+  const manager=source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard({"));
   const dashboard=source.slice(source.indexOf("function Dashboard({"),source.indexOf("function BreakdownTable"));
   assert.match(manager,/useDashboardEquipment\(\)/);
   assert.match(dashboard,/useDashboardEquipment\(\)/);
@@ -40,16 +40,17 @@ test("fleet panels distinguish loading and failure from a confirmed empty fleet"
   assert.match(state,/Loading fleet data/);
   assert.match(state,/onClick=\{retry\}/);
   assert.match(dashboard,/equipmentLoaded \? \(mode === "total" \? assetCounts.total[\s\S]*?toLocaleString\(\) : "—"/);
-  assert.match(dashboard,/equipmentLoaded\?roadStatusTotal\.toLocaleString\(\):"—"/);
+  assert.match(dashboard,/equipmentLoaded \? maintenanceAvailabilityTab === "breakdown"/);
   assert.match(dashboard,/equipmentLoaded\?kpis\.total\.toLocaleString\(\):"—"/);
   assert.ok((dashboard.match(/<FleetDataState /g)||[]).length>=4);
   assert.match(styles,/\.dashboard-fleet-data-state\s*\{/);
   assert.match(styles,/\.dashboard-fleet-chart-state,.dashboard-road-status-state\s*\{\s*min-height:\s*205px/);
+  assert.match(styles,/\.dashboard-maintenance-availability-state\s*\{\s*min-height:\s*180px/);
   assert.match(styles,/\.dashboard-fleet-performance-state\s*\{\s*min-height:\s*319px/);
 });
 
 test("fleet records and scope are applied atomically without profile-based double filtering",()=>{
-  const manager=source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("const dashboardRepairTypeDefaults"));
+  const manager=source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard({"));
   const dashboard=source.slice(source.indexOf("function Dashboard({"),source.indexOf("function BreakdownTable"));
   assert.match(manager,/const siteEquipment = equipmentRecords;/);
   assert.match(manager,/const scopedRequests=equipmentLoaded\?/);
@@ -76,7 +77,7 @@ test("a failed profile request cannot turn an otherwise valid fleet response int
   assert.doesNotMatch(normal,/allowedSites=\{|allowedRegions=\{|restrictToScope/);
   assert.match(dashboard,/const scopedBreakdowns=equipmentLoaded\?/);
   assert.match(dashboard,/restrictToScope\?\[\]:requests\):\[\];/);
-  assert.match(dashboard,/equipmentLoaded\?<div className="mine-repair-type-bars"/);
+  assert.match(dashboard,/equipmentLoaded \? maintenanceAvailabilityTab === "breakdown"/);
   assert.match(dashboard,/equipmentLoaded\?<><div className="mine-request-lifecycle-summary"/);
   assert.match(dashboard,/equipmentLoaded\?<div className="mine-breakdown-trend-body"/);
 });
