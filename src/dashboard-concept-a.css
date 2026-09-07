@@ -1035,6 +1035,10 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-breakdown-day-table td.percentage small { margin-top: 4px; color: var(--muted); font-size: 8px; }
 .mine-dashboard-grid { gap: 7px; }
 .mine-panel { border-radius: 6px; }
+.mine-dashboard [data-dashboard-list][tabindex="0"],
+.dashboard-breakdown-movement-modal [data-dashboard-list][tabindex="0"] { cursor: pointer; }
+.mine-dashboard [data-dashboard-list]:focus-visible,
+.dashboard-breakdown-movement-modal [data-dashboard-list]:focus-visible { outline: 2px solid var(--brand-purple, #522e90); outline-offset: -3px; }
 .mine-panel > header {
   min-height: 45px;
   padding: 8px 11px;

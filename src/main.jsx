@@ -4,6 +4,7 @@ import UserProfile from "./user-profile.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
+import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
@@ -1151,6 +1152,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key === "equipment") return visibleEquipment.filter((record) => ["equipment","equipments"].includes(String(record.category || "").trim().toLowerCase()));
     if (key === "vehicle") return visibleEquipment.filter((record) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase()));
     if (key === "available") return visibleEquipment.filter((record) => ["onroad", "idle"].includes(liveEquipmentRoadStatus(record, visibleBreakdowns)));
+    if (key === "unavailable") return visibleEquipment.filter((record) => !["onroad", "idle"].includes(liveEquipmentRoadStatus(record, visibleBreakdowns)));
     if (["onroad","offroad","idle","unknown"].includes(key)) return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === key);
     if (key.startsWith("region:")) {
       const region = availableRegions.find((item) => item.code === key.slice(7));
@@ -1162,7 +1164,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     // Site is already known from the panel that opened this, so these keys carry it.
     if (key.startsWith("site-repair:")) {
       const [site, type] = key.slice(12).split("|");
-      return requestAssetRows(visibleBreakdowns.filter((record) => recordBelongsToSite(record, site)
+      return requestAssetRows(movementRequestRows(locationBreakdowns, breakdownDetailStartKey, breakdownDetailEndKey, "incoming").filter((record) => recordBelongsToSite(record, site)
         && normalizedBreakdownType(record.category || record.repairType || record.type) === type));
     }
     if (key.startsWith("site-status:")) {
@@ -1173,8 +1175,18 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
     if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
+    if (key.startsWith("movement:")) {
+      const [metric, start, end, site, type] = key.slice(9).split("|");
+      const records = site ? locationBreakdowns.filter((record) => recordBelongsToSite(record, site)) : locationBreakdowns;
+      return requestAssetRows(movementRequestRows(records, start, end, metric, type));
+    }
+    if (key.startsWith("trend:")) {
+      const [, kind, date] = key.split(":");
+      return requestAssetRows(kind === "forecast" ? forecastBasisRows(trendRequests, breakdownTrendAnchorKey, dashboardRecordDate) : recordedTrendRows(trendRequests, actualTrendDays, dashboardRecordDate, kind === "actual" ? date : ""));
+    }
     if (key.startsWith("event:")) {
       const [, event, date] = key.split(":");
+      if (event === "all") return requestAssetRows(allLifecycleRequestRows(requestLifecycleRows, requestEventDate, date));
       const rows = requestLifecycleRows[event] || [];
       return requestAssetRows(date ? rows.filter((record) => requestEventDate(record, event) === date) : rows);
     }
@@ -1195,12 +1207,19 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     : siteScopedFocus === "onroad" ? "On road"
     : siteScopedFocus === "offroad" ? "Off road"
     : siteScopedFocus === "idle" ? "Idle" : siteScopedFocus;
-  const initialDrilldownSite = siteScopedSite || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13) : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
+  const movementDrilldownParts = assetDrilldown.startsWith("movement:") ? assetDrilldown.slice(9).split("|") : [];
+  const initialDrilldownSite = siteScopedSite || movementDrilldownParts[3] || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13) : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
   const initialDrilldownRegion = assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
-  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:");
+  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
-  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
-  const assetDrilldownTitle = siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
+  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
+  const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
+  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1]} to ${movementDrilldownParts[2]}` : "";
+  const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
+    ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${breakdownTrendAnchorKey}`
+      : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? assetDrilldown.split(":")[2] : `${actualTrendDays[0]?.date} to ${breakdownTrendAnchorKey}`}`
+    : "";
+  const assetDrilldownTitle = movementDrilldownTitle || trendDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
   };
@@ -1214,6 +1233,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     setBreakdownDetailSite("");
     openAssetDrilldown(key);
   };
+  const movementKey = (metric = "all", site = "", type = "", start = breakdownSummaryStartKey, end = breakdownSummaryEndKey) => `movement:${metric}|${start}|${end}|${site}|${type}`;
+  const listAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded);
+  const trendPointAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded, "button", { selector: "i, b, small", backgroundKey: "trend:all" });
+  const cardAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, `${label}. Open full list`, equipmentLoaded, "group");
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}`}>
       <header className="mine-dashboard-head">
@@ -1221,7 +1244,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
-        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
+        <article {...cardAction("all", "Total Fleet")} className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
           <header>
             <div className="mine-fleet-chart-heading">
               <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")}><h2>Total Fleet</h2></button>
@@ -1229,22 +1252,22 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : openBreakdownCaseCount).toLocaleString() : "—"}</b></button>)}
               </div>
             </div>
-            <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
+            <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span {...listAction("equipment", "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction("vehicle", "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction("offroad", "Breakdown fleet records")}><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
           {equipmentLoaded?<><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} />)}</div>
               <div className="mine-fleet-chart-regions">{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
-                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={() => openAssetDrilldown(`${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`)} aria-label={showFleetBreakdowns ? `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)` : `${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`}>
+                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={(event) => openAssetDrilldown(event.detail === 0 || event.target.closest(".mine-fleet-bar, small") ? `${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}` : "all")} aria-label={showFleetBreakdowns ? `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)` : `${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`}>
                   <FleetSiteBars site={site} axisMax={fleetChartAxisMax} showBreakdown={showFleetBreakdowns} /><small>{site.name}</small>
                 </button>)}</div>
-                <footer><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
+                <footer {...listAction(`region:${region.code}`, `All ${region.code} fleet records`)}><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
               </section>)}</div>
             </div>
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-        <article className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
+        <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
             <div><span className="mine-eyebrow">Fleet operations control</span><h2>Tracking Vehicle Throughput</h2><p>Site-wise breakdown movement and live fleet status in one view.</p></div>
             <div className="mine-maintenance-availability-tabs" role="tablist" aria-label="Tracking vehicle throughput views">
@@ -1254,11 +1277,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </header>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
-              {[{ label: "BD Open", value: breakdownMovementTotals.open, className: "open" }, { label: "BD In", value: breakdownMovementTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong></div>)}
+              {[{ label: "BD Open", value: breakdownMovementTotals.open, className: "open" }, { label: "BD In", value: breakdownMovementTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong></div>)}
             </div>
-            <section className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
+            <section {...cardAction(movementKey("incoming"), "All BD In types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
               <header><div><b>BD Type Mix</b><small>All six maintenance types</small></div><span>Percentage share of BD In</span></header>
-              <div>{breakdownTypeSummary.map((type) => <article key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
+              <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("incoming", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
               <div className="mine-breakdown-site-head" role="row"><span>Site name</span><span>BD Open</span><span>BD In</span><span>BD Out</span><span>BD Balance</span><span>Availability count impact</span><span aria-hidden="true" /></div>
@@ -1289,7 +1312,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </article>
       </section>
       <section className="mine-dashboard-grid mine-dashboard-core">
-        <article className="mine-panel mine-fleet-command">
+        <article {...cardAction("all", "Total Equipment Intelligence")} className="mine-panel mine-fleet-command">
           <header className="mine-fleet-command-head">
             <div><h2>Total Equipment Intelligence</h2></div>
             <div className="mine-fleet-command-actions">
@@ -1331,7 +1354,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </>}
           </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-command-state" />}
         </article>
-        <article className="mine-panel mine-request-lifecycle" aria-label="Opened, closed, verified and idle request trend">
+        <article {...cardAction("event:all", "Request Lifecycle")} className="mine-panel mine-request-lifecycle" aria-label="Opened, closed, verified and idle request trend">
           <header>
             <div><span className="mine-eyebrow">Workflow throughput</span><h2>Request Lifecycle</h2><p>{requestLifecycleRangeLabel}</p></div>
             <div className="mine-request-lifecycle-controls">
@@ -1348,9 +1371,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-request-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, requestLifecycleTrend.length)}, minmax(28px, 1fr))`, minWidth: `${Math.max(100, requestLifecycleTrend.length * 34)}px` }}>
               {requestLifecycleTrend.map((day, index) => <div className="mine-request-chart-day" key={day.date}>
                 <span>
-                  {(["opened", "closed", "verified", "idle"]).map((event) => <button type="button" key={event} className={event} disabled={!day[event]} style={{ height: `${day[event] ? Math.max(7, (day[event] / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${day.date}: ${day[event]} ${event} requests`} title={`${day.date}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
+                  {(["opened", "closed", "verified", "idle"]).map((event) => <button type="button" key={event} className={event} style={{ height: `${day[event] ? Math.max(7, (day[event] / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${day.date}: ${day[event]} ${event} requests`} title={`${day.date}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
                 </span>
-                <small>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small>
+                <small {...listAction(`event:all:${day.date}`, `All lifecycle requests on ${day.date}`)}>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small>
               </div>)}
             </div>
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
@@ -1366,13 +1389,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <button type="button" className="dashboard-breakdown-road-shortcut" onClick={() => openRoadAvailabilityForSite(breakdownDetailSite)}><Gauge />Availability count <ChevronRight /></button>
         </div>
         <div className="dashboard-breakdown-detail-kpis">
-          {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }].map((item) => <div className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{breakdownDetailStartKey} to {breakdownDetailEndKey}</small></div>)}
+          {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{breakdownDetailStartKey} to {breakdownDetailEndKey}</small></div>)}
         </div>
-        <section className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of BD In`}>
+        <section {...cardAction(movementKey("incoming", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} BD In types`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of BD In`}>
           <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of BD In</span></header>
           <div>{breakdownDetailTypeSummary.map((type) => <button type="button" key={type.label} onClick={() => openSiteScopedDrilldown(`site-repair:${breakdownDetailSite}|${type.label}`)} aria-label={`${type.label}: ${type.count} requests. Drill into equipment and vehicles.`}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></button>)}</div>
         </section>
-        <section className="mine-breakdown-type-mix detail dashboard-breakdown-road-mix" aria-label={`${breakdownDetailSite} road status`}>
+        <section {...cardAction(`site-status:${breakdownDetailSite}|all`, `${breakdownDetailSite} fleet`)} className="mine-breakdown-type-mix detail dashboard-breakdown-road-mix" aria-label={`${breakdownDetailSite} road status`}>
           <header><div><b>Road Status</b><small>{breakdownDetailSite}</small></div><span>Drill into equipment and vehicles</span></header>
           <div>{[{ key: "onroad", label: "On road", value: selectedBreakdownSiteRoad.onRoad }, { key: "offroad", label: "Off road", value: selectedBreakdownSiteRoad.offRoad }, { key: "idle", label: "Idle", value: selectedBreakdownSiteRoad.idle }].map((item) => <button type="button" key={item.key} onClick={() => openSiteScopedDrilldown(`site-status:${breakdownDetailSite}|${item.key}`)} aria-label={`${item.label}: ${item.value}. Drill into equipment and vehicles.`}><span><b>{item.label}</b><strong>{item.value}</strong></span><i aria-hidden="true"><b style={{ width: `${selectedBreakdownSiteRoad.total ? (item.value / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /></i><small>of {selectedBreakdownSiteRoad.total} fleet</small></button>)}</div>
         </section>
@@ -1385,21 +1408,21 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} />
       </Modal>}
       <section className="mine-dashboard-lower-grid">
-      <section className="mine-panel mine-breakdown-trend">
-        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded history and weekday-weighted upcoming estimates</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-view" role="group" aria-label="Breakdown trend view">{[["past", "Past"], ["both", "Both"], ["upcoming", "Upcoming"]].map(([value, label]) => <button type="button" key={value} className={breakdownTrendView === value ? "active" : ""} onClick={() => setBreakdownTrendView(value)}>{label}</button>)}</div><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
+      <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">
+        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded history and weekday-weighted upcoming estimates</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-view" role="group" aria-label="Breakdown trend view">{[["past", "Past"], ["both", "Both"], ["upcoming", "Upcoming"]].map(([value, label]) => <button type="button" key={value} className={breakdownTrendView === value ? "active" : ""} onClick={() => setBreakdownTrendView(value)}>{label}</button>)}</div><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button></div></header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
-          <div className="mine-trend-summary"><article><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>Past {breakdownTrendDays} days</small></article><article><span>Forecast</span><strong>{breakdownForecastTotal.toLocaleString()}</strong><small>Next {breakdownTrendDays} days</small></article><article><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
-          <section className="mine-trend-visual"><div className="mine-trend-legend"><span><i className="actual" />Actual</span><span><i className="forecast" />Forecast</span><b>Selected day: {new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${breakdownTrendAnchorKey}T12:00:00`))}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day actual and forecast breakdown chart`}>{breakdownTrend.map((day, index) => <div className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div></section>
+          <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>Past {breakdownTrendDays} days</small></article><article {...listAction("trend:forecast", "Recorded requests supporting the forecast")}><span>Forecast</span><strong>{breakdownForecastTotal.toLocaleString()}</strong><small>Next {breakdownTrendDays} days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
+          <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><span {...listAction("trend:forecast", "Forecast basis records")}><i className="forecast" />Forecast</span><b>Selected day: {new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${breakdownTrendAnchorKey}T12:00:00`))}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day actual and forecast breakdown chart`}>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div></section>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-breakdown-trend-state" />}
       </section>
-      <article className="mine-panel mine-fleet-performance" aria-label="Overall utilization and availability">
+      <article {...cardAction("all", "Overall Fleet Performance")} className="mine-panel mine-fleet-performance" aria-label="Overall utilization and availability">
         <header><div><span className="mine-eyebrow">Fleet efficiency</span><h2>Overall Fleet Performance</h2><p>Utilization and operational availability at a glance</p></div><strong><Gauge />{equipmentLoaded?kpis.total.toLocaleString():"—"} fleet</strong></header>
         {equipmentLoaded?<div className="mine-fleet-performance-body">
           <div className="mine-performance-gauges">{[
             { key: "onroad", label: "Overall Utilization", value: utilizationPercent, count: kpis.onRoad, note: "On road / total fleet", color: "#315fd4" },
             { key: "available", label: "Overall Availability", value: availabilityPercent, count: availableFleet, note: "On road + idle / total fleet", color: "#26956f" },
           ].map((gauge) => <button type="button" key={gauge.label} onClick={() => openAssetDrilldown(gauge.key)} style={{ "--gauge-angle": `${gauge.value * 2.7}deg`, "--gauge-color": gauge.color }}><span>{gauge.label}</span><div className="mine-radial-gauge"><strong>{gauge.value}%</strong><small>{gauge.count}/{kpis.total}</small></div><p>{gauge.note}</p><em>View details <ChevronRight /></em></button>)}</div>
-          <div className="mine-performance-composition"><div><span>Fleet composition</span><b>{kpis.total.toLocaleString()} assets</b></div><div className="mine-performance-bar" aria-label={`${kpis.onRoad} utilized, ${kpis.idle} idle and ${Math.max(0, kpis.total - availableFleet)} unavailable`}><i className="utilized" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${kpis.total ? (kpis.idle / kpis.total) * 100 : 0}%` }} /><i className="unavailable" style={{ width: `${kpis.total ? (Math.max(0, kpis.total - availableFleet) / kpis.total) * 100 : 0}%` }} /></div><div className="mine-performance-legend"><span><i className="utilized" />Utilized <b>{kpis.onRoad}</b></span><span><i className="idle" />Idle <b>{kpis.idle}</b></span><span><i className="unavailable" />Unavailable <b>{Math.max(0, kpis.total - availableFleet)}</b></span></div></div>
+          <div className="mine-performance-composition"><div><span>Fleet composition</span><b>{kpis.total.toLocaleString()} assets</b></div><div className="mine-performance-bar" aria-label={`${kpis.onRoad} utilized, ${kpis.idle} idle and ${Math.max(0, kpis.total - availableFleet)} unavailable`}><i {...listAction("onroad", "Utilized fleet records")} className="utilized" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /><i {...listAction("idle", "Idle fleet records")} className="idle" style={{ width: `${kpis.total ? (kpis.idle / kpis.total) * 100 : 0}%` }} /><i {...listAction("unavailable", "Unavailable fleet records")} className="unavailable" style={{ width: `${kpis.total ? (Math.max(0, kpis.total - availableFleet) / kpis.total) * 100 : 0}%` }} /></div><div className="mine-performance-legend"><span {...listAction("onroad", "Utilized fleet records")}><i className="utilized" />Utilized <b>{kpis.onRoad}</b></span><span {...listAction("idle", "Idle fleet records")}><i className="idle" />Idle <b>{kpis.idle}</b></span><span {...listAction("unavailable", "Unavailable fleet records")}><i className="unavailable" />Unavailable <b>{Math.max(0, kpis.total - availableFleet)}</b></span></div></div>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-performance-state" />}
       </article>
       </section>
