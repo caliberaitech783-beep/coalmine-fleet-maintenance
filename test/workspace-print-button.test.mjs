@@ -8,6 +8,6 @@ test("operational workspace tables expose the export print action beside the Act
   assert.match(source, /function PrintButton\(\{ title, columns = \[\], rows = \[\], className = "secondary" \}\) \{/);
   assert.match(source, /className=\{`\$\{className\} print-table-trigger`\} onClick=\{\(\) => printTableReport\(\{ title, columns, rows \}\)\}><Printer \/><span>Print<\/span><\/button>/);
   assert.match(source, /const printReport = \(\) => \{ printTableReport\(\{ title, columns, rows \}\); setOpen\(false\); \};/);
-  assert.match(source, /ref=\{setActionsToolbarTarget\} \/>\}<PrintButton title="Breakdown report" columns=\{filterColumns\} rows=\{sortedRows\} \/><TableParameterFilter/);
-  assert.match(source, /<div className="workflow-actions-slot" ref=\{setActionsToolbarTarget\} \/><PrintButton title="Workflow report" columns=\{filterColumns\} rows=\{sortedRows\} \/><TableParameterFilter/);
+  assert.match(source, /ref=\{setActionsToolbarTarget\} \/>\}<PrintButton title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} \/><TableParameterFilter/);
+  assert.match(source, /<div className="workflow-actions-slot" ref=\{setActionsToolbarTarget\} \/><PrintButton title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} \/><TableParameterFilter/);
 });

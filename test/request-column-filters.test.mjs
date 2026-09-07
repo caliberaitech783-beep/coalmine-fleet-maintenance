@@ -13,10 +13,10 @@ test("production, maintenance, and MIS request tables use header filter popovers
   assert.match(workflowTable, /workflowHeader\("dailyRemarks", "Daily remarks"\)/);
   assert.match(workflowTable, /showMakeModel && <>\{workflowHeader\("make", "Make"\)\}\{workflowHeader\("model", "Model"\)\}<\/>/);
   assert.match(workflowTable, /showMakeModel && <><td>\{row\.make \|\| "—"\}<\/td><td>\{row\.model \|\| "—"\}<\/td><\/>/);
-  assert.match(source, /isProduction && tab === "requests"[\s\S]*<BreakdownTable rows=\{activeRequests\} showReadOnlyAction showMakeModel/);
-  assert.match(source, /isMaintenance && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{activeRequests\} showMakeModel/);
+  assert.match(source, /isProduction && tab === "requests"[\s\S]*<BreakdownTable rows=\{activeRequests\} exportTitle=\{workspaceReportTitles\.requests\} showReadOnlyAction showMakeModel/);
+  assert.match(source, /isMaintenance && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{activeRequests\} exportTitle=\{workspaceReportTitles\.requests\} showMakeModel/);
   assert.match(source, /isMaintenance && tab === "close"[\s\S]*showMakeModel/);
-  assert.match(source, /isMis && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} showMakeModel/);
-  assert.match(source, /tab === "idle"[\s\S]*<MobileWorkflowTable rows=\{idleRows\} showMakeModel/);
-  assert.match(source, /tab === "history"[\s\S]*<BreakdownTable rows=\{historyRows\}[\s\S]*<MobileWorkflowTable rows=\{historyRows\}/);
+  assert.match(source, /isMis && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} exportTitle=\{workspaceReportTitles\.requests\} showMakeModel/);
+  assert.match(source, /tab === "idle"[\s\S]*<MobileWorkflowTable rows=\{idleRows\} exportTitle=\{workspaceReportTitles\.idle\} showMakeModel/);
+  assert.match(source, /tab === "history"[\s\S]*<BreakdownTable rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\}[\s\S]*<MobileWorkflowTable rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\}/);
 });
