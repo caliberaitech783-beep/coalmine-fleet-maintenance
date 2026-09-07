@@ -55,7 +55,8 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
   const id = useId();
   const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);
-  const visibleLevel = invalidParent < 0 ? openedLevel : Math.min(openedLevel, invalidParent);
+  const selectedLevel = levels.slice(0, -1).reduce((depth, name, index) => view.selection[name] ? index + 1 : depth, 0);
+  const visibleLevel = view.selection.region ? Math.max(selectedLevel, invalidParent < 0 ? openedLevel : Math.min(openedLevel, invalidParent)) : 0;
   const choose = (name, value) => {
     setFilters(changeDrilldownFilter(view.selection, name, value));
     setOpenedLevel(Math.min(levels.indexOf(name) + 1, levels.length - 1));
@@ -76,9 +77,9 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
           {view.regions.map((region, index) => <button key={region.code} type="button" role="tab" id={`${id}-${region.code}`} aria-selected={view.selection.region === region.code} aria-controls={`${id}-records`} tabIndex={view.selection.region === region.code ? 0 : -1}
             onClick={() => choose("region", region.code)} onKeyDown={(event) => moveBetweenTabs(event, index, view.regions.map((item) => ({ value: item.code })), (next) => choose("region", next), '[role="tab"]')}><span>{region.code}</span><b>{region.rows.length.toLocaleString()}</b></button>)}
         </div>
-        <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!activeFilterCount && !visibleLevel}><RotateCcw size={14} />Reset selection</button>
+        <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!activeFilterCount && visibleLevel <= selectedLevel}><RotateCcw size={14} />Reset selection</button>
       </div>
-      {visibleLevel === 0 && <p className="dashboard-record-hierarchy-hint">Select a region above to explore its sites.</p>}
+      {visibleLevel === 0 && <p className="dashboard-record-hierarchy-hint">No regions available in your current scope.</p>}
       <div className="dashboard-record-hierarchy">
         {fields.slice(0, visibleLevel).map(([name, label, allLabel], index) => (index === 0 || view.options[fields[index - 1][0]].length > 0) && <FilterTabRow key={`${name}-${levels.slice(0, index + 1).map((parent) => view.selection[parent]).join("|")}`} name={name} label={label} allLabel={allLabel} options={view.options[name]} value={view.selection[name]} choose={choose} resultsId={`${id}-records`} />)}
       </div>
