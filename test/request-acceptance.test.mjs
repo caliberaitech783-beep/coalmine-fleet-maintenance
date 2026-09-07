@@ -15,6 +15,7 @@ test("unaccepted requests are highlighted one hour after production timing", () 
 
 test("Maintenance acceptance is server timed and shared by every request view", () => {
   const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const workflowCss = readFileSync(new URL("../src/mobile-workflow.css", import.meta.url), "utf8");
   const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
   const editForm = client.slice(client.indexOf("function RequestEditForm"), client.indexOf("function CloseRequestForm"));
   assert.match(client, /request\.acceptanceRequired \? "Production timing" : "Timing"/);
@@ -25,6 +26,8 @@ test("Maintenance acceptance is server timed and shared by every request view", 
   assert.doesNotMatch(editForm, /name="(?:equipment|door|chassis|site)"/);
   assert.match(client, /!row\.acceptanceRequired \|\| row\.acceptedAt/);
   assert.equal(client.match(/className=\{requestAwaitingAcceptance\(/g)?.length, 2);
+  assert.match(workflowCss, /\.request-awaiting-acceptance > td \{\s*background: #f8caca !important;/);
+  assert.match(workflowCss, /\.request-awaiting-acceptance > td:first-child \{\s*box-shadow: inset 4px 0 #d92f45;/);
   assert.match(server, /ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ/);
   assert.match(server, /ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE/);
   assert.match(server, /started_at,acceptance_required,status/);
