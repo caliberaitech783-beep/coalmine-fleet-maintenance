@@ -975,6 +975,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const locationBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
   const visibleBreakdowns = (dashboardDate ? locationBreakdowns.filter((record) => dashboardRecordDate(record) === dashboardDate) : locationBreakdowns)
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
+  const openBreakdownCaseCount = visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() !== "closed").length;
   const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
@@ -1220,7 +1221,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-heading">
               <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")}><h2>Total Fleet</h2></button>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : fleetRegionInsights.reduce((sum, region) => sum + region.breakdown.total, 0)).toLocaleString() : "—"}</b></button>)}
+                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : openBreakdownCaseCount).toLocaleString() : "—"}</b></button>)}
               </div>
             </div>
             <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span><i className="equipment" />Equipment</span><span><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>

@@ -19,6 +19,9 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /fleetRegionInsights\.map/);
   assert.match(source, /region\.sites\.map/);
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
+  assert.match(source, /const openBreakdownCaseCount = visibleBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"\)\.length;/);
+  assert.match(source, /mode === "total" \? assetCounts\.total : openBreakdownCaseCount/);
+  assert.doesNotMatch(source, /region\.breakdown\.total/);
   assert.match(source, /key\.startsWith\("site:"\)/);
   assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-pie-chart\s*\{/);
