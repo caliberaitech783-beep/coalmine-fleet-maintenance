@@ -14,6 +14,13 @@ const base = [...ids, col('equipmentGroup', 'Equipment group'), col('model', 'Mo
 const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
 const ref = col('ref', 'Job Reference No');
 const closed = col('closedAt', 'Ticket Closed');
+function assetReferences(equipment) {
+  const references = new Map();
+  for (const asset of equipment) for (const value of new Set([asset.chassisNo,asset.manufacturerSerialNo,asset.door,asset.equipmentName,asset.reg].map(value=>clean(value).toLowerCase()).filter(Boolean))) {
+    references.set(value,references.has(value) && references.get(value)!==asset ? null : asset);
+  }
+  return references;
+}
 
 // Merge overlapping incidents for each asset before totaling downtime.
 export function availabilityRows(equipment, requests, from, to, now = new Date()) {
@@ -21,10 +28,7 @@ export function availabilityRows(equipment, requests, from, to, now = new Date()
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
   const productive = 22 * Math.round((end - start) / 86400000);
   const key = value => clean(value).toLowerCase();
-  const references = new Map();
-  for (const asset of equipment) for (const value of new Set([asset.chassisNo, asset.manufacturerSerialNo, asset.door, asset.equipmentName, asset.reg].map(key).filter(Boolean))) {
-    references.set(value, references.has(value) && references.get(value) !== asset ? null : asset);
-  }
+  const references = assetReferences(equipment);
   const intervals = new Map();
   for (const request of requests) {
     const asset = [request.chassis, request.door, request.equipment, request.reg].map(value => references.get(key(value))).find(Boolean);
@@ -51,6 +55,11 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
   const report = (category, title, description, columns, rows, dateValue = r => r.start) => ({category,title,description,columns,rows,dateValue,emptyMessage:'No matching records for this report'});
   const open = requests.filter(r => ['open','in progress'].includes(status(r)) && !r.closedAt);
   const finished = requests.filter(r => r.closedAt);
+  const references = assetReferences(equipmentRecords);
+  transferRecords = transferRecords.map(row => {
+    const asset = [row.chassisNo,row.manufacturerSerialNo,row.door,row.equipment,row.equipmentName].map(value=>references.get(clean(value).toLowerCase())).find(Boolean);
+    return {...row,door:row.door || asset?.door,chassisNo:row.chassisNo || row.manufacturerSerialNo || asset?.chassisNo || asset?.manufacturerSerialNo,model:row.model || row.modelNo || asset?.model};
+  });
   return [
     report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Request opening to maintenance closure.', [...base,col('start','Rep. Started'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(r.start,r.closedAt)),site,ref], finished, r => r.closedAt),
     report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open and in-progress off-road requests.', [...base,col('start','Rep. Started'),col('days','BD Days',r => Number.isFinite(indiaDateTimeEpoch(r.start)) ? Math.max(0,(now.getTime()-indiaDateTimeEpoch(r.start))/86400000).toFixed(2) : 'Not recorded'),site,ref],open),

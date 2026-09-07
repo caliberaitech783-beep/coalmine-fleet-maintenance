@@ -2541,6 +2541,27 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+app.get('/api/reports/master-data',requireSession,async(req,res,next)=>{
+  try{
+    res.set('Cache-Control','private, no-store');
+    res.vary('Authorization');
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+    const {session,user}=authorization;
+    const allowed=session.role==='normal'
+      ? ['Production User','Maintenance User','MIS User'].includes(session.assignedRole)
+      : session.role==='super'&&(accessAllows(session.permissions?.tabAccess,'Reports')||accessAllows(session.permissions?.mobileTabAccess,'Reports'));
+    if(!allowed)return res.status(403).json({error:'Your assigned role is not authorized to view reports.'});
+    const scope=dashboardEquipmentScope(session,user);
+    if(!dashboardEquipmentScopeIsUsable(scope))return res.status(409).json({error:'No report site is assigned to this account. Contact an administrator.'});
+    const {rows}=await pool.query(`SELECT id,master_name,record_data FROM master_records WHERE master_name IN ('Equipment master','Vehicle transfers') ORDER BY created_at ASC`);
+    const equipment=rows.filter(row=>row.master_name==='Equipment master').map(row=>({id:row.id,...row.record_data}));
+    const transfers=rows.filter(row=>row.master_name==='Vehicle transfers').map(row=>({id:row.id,...row.record_data}));
+    const transferRecords=transfers.filter(row=>!scope.restrictToScope||[row.source,row.destination].some(site=>reportScopeIncludesSite({sites:scope.allowedSites},site)));
+    res.json({equipmentRecords:scopeDashboardEquipmentRecords(equipment,session,user,scope),transferRecords});
+  }catch(error){next(error)}
+});
+
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
     const superCanView=(master)=>req.session.role==='super'&&(masterAccessAllows(req.session.permissions,master)||masterAccessAllows(req.session.permissions,master,'mobileMasterAccess'));

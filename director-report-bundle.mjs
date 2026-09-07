@@ -129,6 +129,8 @@ function enrichRequests(requests=[],equipmentRecords=[]){
       reportDoor:request.door||equipment.door||'',
       reportMake:request.make||equipment.make||'',
       reportModel:request.model||equipment.model||'',
+      chassis:request.chassis||equipment.chassisNo||equipment.manufacturerSerialNo||'',
+      equipmentGroup:request.equipmentGroup||equipment.group||'',
       reportSite:request.site||equipment.currentLocation||equipment.location||'',
     };
   });

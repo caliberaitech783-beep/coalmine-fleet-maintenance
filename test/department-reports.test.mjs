@@ -56,3 +56,13 @@ test('acceptance capture is additive, atomic and preserves first transition; rep
   assert.match(source,/status<>'In progress' AND \$3='In progress' THEN COALESCE\(in_progress_at,NOW\(\)\)/);
   assert.match(source,/requests:await attachDailyRemarks\(requestRows\)/);
 });
+test('report master reads use current authorization and site scope without granting master writes',()=>{
+  const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const route=server.slice(server.indexOf("app.get('/api/reports/master-data'"),server.indexOf("app.get('/api/masters'"));
+  assert.match(route,/requireSession/);
+  assert.match(route,/currentDashboardAuthorization\(req.session\)/);
+  assert.match(route,/dashboardEquipmentScopeIsUsable\(scope\)/);
+  assert.match(route,/scopeDashboardEquipmentRecords\(equipment,session,user,scope\)/);
+  assert.match(route,/\[row.source,row.destination\]/);
+  assert.doesNotMatch(route,/UPDATE |INSERT INTO |DELETE FROM /);
+});

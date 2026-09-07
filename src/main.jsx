@@ -4822,8 +4822,19 @@ function ReportSection({ title, description, category = "general", icon: ReportI
   );
 }
 function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
-  const [equipmentRecords] = useMasterRecords("Equipment master");
-  const [transferRecords] = useMasterRecords("Vehicle transfers");
+  const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],loading:true,error:""});
+  const {equipmentRecords,transferRecords} = reportMasterData;
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/reports/master-data",{signal:controller.signal,cache:"no-store",headers:{Authorization:`Bearer ${session?.token || authToken}`}})
+      .then(async response => {
+        const data = await response.json();
+        if(!response.ok) throw new Error(data.error || "Could not load report master data.");
+        if(!Array.isArray(data.equipmentRecords)||!Array.isArray(data.transferRecords)) throw new Error("Invalid report master data response.");
+        if(!controller.signal.aborted) setReportMasterData({...data,loading:false,error:""});
+      }).catch(error => {if(!controller.signal.aborted) setReportMasterData({equipmentRecords:[],transferRecords:[],loading:false,error:error.message});});
+    return () => controller.abort();
+  },[session?.token]);
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
   const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
   const [reportScheduleSettings, setReportScheduleSettings] = useState(defaultHierarchyReportScheduleSettings);
@@ -4870,6 +4881,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportMake: request.make || equipment?.make || "",
       reportModel: request.model || equipment?.model || "",
       chassis: request.chassis || equipment?.chassisNo || equipment?.manufacturerSerialNo || "",
+      equipmentGroup: request.equipmentGroup || equipment?.group || "",
       reportSite: request.site || equipment?.currentLocation || equipment?.location || "",
     };
   }), [requests, equipmentByReference]);
@@ -5176,7 +5188,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                     {schedule.cadence === "interval" && <label><span>Repeat every</span><div className="report-interval-input"><input type="number" min="2" max="31" value={schedule.intervalDays} onChange={(event) => updateReportSchedule(schedule.key, { intervalDays: Number(event.target.value) })} /><small>days</small></div></label>}
                     {schedule.cadence !== "event" && <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>}
                   </div>
-                  {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <details className="report-assignment-picker report-assignment-readonly" open><summary>Assigned reports <b>{schedule.reports.length}</b></summary><div>{schedule.reports.length ? schedule.reports.map((title) => <label key={title}><input type="checkbox" checked readOnly tabIndex={-1} /><span>{title}</span></label>) : <p className="report-assignment-empty">No reports are assigned to this schedule.</p>}</div></details>}
+                  {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.filter((report,index,all) => all.findIndex(item => item.title === report.title) === index).map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <details className="report-assignment-picker report-assignment-readonly" open><summary>Assigned reports <b>{schedule.reports.length}</b></summary><div>{schedule.reports.length ? schedule.reports.map((title) => <label key={title}><input type="checkbox" checked readOnly tabIndex={-1} /><span>{title}</span></label>) : <p className="report-assignment-empty">No reports are assigned to this schedule.</p>}</div></details>}
                 </article>)}
                 <button type="button" className="report-add-schedule" onClick={addReportSchedule}><Plus /> Add schedule</button>
               </div>
@@ -5266,6 +5278,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       </div> : <div className="reports-section reports-empty-definition">
         <div className="reports-section-heading"><div><h2>{activeCategory.label}</h2><p>No reports are assigned to this profile in this category.</p></div></div>
       </div>}
+      {reportMasterData.loading && <p role="status">Loading report master data…</p>}
+      {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
       {selectedReport?.title === "Availability Report" && <div className="report-zip-range">
         <label>From date<input type="date" value={availabilityFrom} max={availabilityTo} onChange={event => setAvailabilityFrom(event.target.value)} /></label>
         <label>To date<input type="date" value={availabilityTo} min={availabilityFrom} max={indiaDateTimeInputValue(new Date()).slice(0,10)} onChange={event => setAvailabilityTo(event.target.value)} /></label>
