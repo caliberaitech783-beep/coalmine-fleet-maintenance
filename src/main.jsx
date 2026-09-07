@@ -7353,21 +7353,23 @@ function TicketPage({ session }) {
   </section>;
 }
 
-const AI_FEEDER_AUTO_CLOSE_SECONDS = 59;
+const AI_FEEDER_CLOSE_DELAY_SECONDS = 60;
 const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
 function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) {
-  const [seconds, setSeconds] = useState(AI_FEEDER_AUTO_CLOSE_SECONDS);
+  const [seconds, setSeconds] = useState(AI_FEEDER_CLOSE_DELAY_SECONDS);
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
+  const canCloseRef = useRef(false);
   closeRef.current = onClose;
+  canCloseRef.current = seconds === 0;
   useEffect(() => {
-    const deadline = Date.now() + AI_FEEDER_AUTO_CLOSE_SECONDS * 1000;
+    const deadline = Date.now() + AI_FEEDER_CLOSE_DELAY_SECONDS * 1000;
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setSeconds(remaining);
-      if (remaining === 0) closeRef.current();
+      if (remaining === 0) window.clearInterval(timer);
     };
     const timer = window.setInterval(tick, 1000);
     document.addEventListener("visibilitychange", tick);
@@ -7379,7 +7381,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
     document.body.style.overflow = "hidden";
     panelRef.current?.focus();
     const closeOnEscape = (event) => {
-      if (event.key === "Escape") closeRef.current();
+      if (event.key === "Escape" && canCloseRef.current) closeRef.current();
       if (event.key === "Tab") {
         const buttons = panelRef.current?.querySelectorAll("button:not(:disabled), [href], [tabindex='0']");
         if (!buttons?.length) return;
@@ -7409,12 +7411,12 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
           <p>{scope?.kind === "all" ? "All regions at a glance." : "Your permitted locations at a glance."} Review the highest-priority cases first.</p>
         </div>
         <div className="ai-feeder-actions">
-          <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Closes in ${seconds} seconds`} title={`Closes automatically in ${seconds} seconds`}>
-            <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_AUTO_CLOSE_SECONDS * 100}%`}} aria-hidden="true" />
+          <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Close available in ${seconds} seconds`} title={`Close available in ${seconds} seconds`}>
+            <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_CLOSE_DELAY_SECONDS * 100}%`}} aria-hidden="true" />
             <Clock aria-hidden="true" />
             <b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
           </span>
-          <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>
+          {seconds === 0 && <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
       <div className="ai-feeder-overview">
@@ -7446,7 +7448,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>Closes at 00:00 · Reopen from Info Pulse</span></footer>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{seconds === 0 ? "Close is now available" : "Close available at 00:00"} · Reopen from Info Pulse</span></footer>
     </div>
   </div>, document.body);
 }
