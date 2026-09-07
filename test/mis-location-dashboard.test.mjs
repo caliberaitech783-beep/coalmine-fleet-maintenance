@@ -37,3 +37,13 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(source,/showTurnaroundTime \? "Turn around time \(TAT\)" : "Downtime"/);
   assert.match(source,/isMis[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} showMakeModel showTurnaroundTime/);
 });
+
+test("MIS tables show Started, Closed by, Verified by, then Verified date & time", () => {
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(source, /startedFirst = false, onEdit, onDelete, onClose, onVerify, onRemark \}\) \{/);
+  assert.match(source, /\.\.\.\(startedFirst \? \[startedColumn, \.\.\.closedByColumns, \.\.\.verifiedColumns\] : \[\.\.\.verifiedColumns, \.\.\.closedByColumns, startedColumn\]\),/);
+  assert.match(source, /\{startedFirst \? <>\{startedHeader\(\)\}\{closedByHeader\(\)\}\{verifiedHeaders\(\)\}<\/> : <>\{verifiedHeaders\(\)\} \{closedByHeader\(\)\}\{startedHeader\(\)\}<\/>\}/);
+  assert.match(source, /\{startedFirst \? <>\{startedCell\(row\)\}\{closedByCell\(row\)\}\{verifiedCells\(row\)\}<\/> : <>\{verifiedCells\(row\)\}\{closedByCell\(row\)\}\{startedCell\(row\)\}<\/>\}/);
+  assert.match(source, /showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify=\{setVerifying\}/);
+  assert.match(source, /showTurnaroundTime=\{isMis\} startedFirst=\{isMis\} \/>/);
+});

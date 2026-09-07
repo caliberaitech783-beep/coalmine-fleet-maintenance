@@ -42,6 +42,6 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
 
 test("maintenance closed history shows closing time beside started time",()=>{
   assert.match(source,/showClosedBy showClosedAt=\{isMaintenance\} showVerifiedBy=\{isMis\}/);
-  assert.match(source,/workflowHeader\("start", "Started"\)\}\{showClosedAt && workflowHeader\("closedAt", "Closing time"\)\}/);
-  assert.match(source,/<td>\{formatTwelveHourDateTime\(row\.start\)\}<\/td>\s*\{showClosedAt && <td>\{formatTwelveHourDateTime\(row\.closedAt\)\}<\/td>\}/);
+  assert.match(source,/\{startedHeader\(\)\}<\/>\}\{showClosedAt && workflowHeader\("closedAt", "Closing time"\)\}/);
+  assert.match(source,/\{startedCell\(row\)\}<\/>\}\s*\{showClosedAt && <td>\{formatTwelveHourDateTime\(row\.closedAt\)\}<\/td>\}/);
 });

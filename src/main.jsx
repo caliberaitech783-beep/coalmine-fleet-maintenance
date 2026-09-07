@@ -6969,7 +6969,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, showTripCard = false, showMeterData = false, showMakeModel = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, showTripCard = false, showMeterData = false, showMakeModel = false, startedFirst = false, onEdit, onDelete, onClose, onVerify, onRemark }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
@@ -6981,6 +6981,12 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+  const verifiedColumns = [
+    ...(showVerifiedBy ? [{key: "verifiedBy", label: "Verified by", value: (row) => row.verifiedBy}] : []),
+    ...(showVerifiedAt ? [{key: "verifiedAt", label: "Verified date & time", value: (row) => formatTwelveHourDateTime(row.verifiedAt)}] : []),
+  ];
+  const closedByColumns = showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : [];
+  const startedColumn = {key: "start", label: "Started", value: (row) => formatTwelveHourDateTime(row.start)};
   const filterColumns = [
     ...(showAcceptedTime ? [{key: "acceptedTime", label: "Accepted time", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
     {key: "ref", label: "Job reference", value: (row) => row.ref},
@@ -6992,10 +6998,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
     ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
-    ...(showVerifiedBy ? [{key: "verifiedBy", label: "Verified by", value: (row) => row.verifiedBy}] : []),
-    ...(showVerifiedAt ? [{key: "verifiedAt", label: "Verified date & time", value: (row) => formatTwelveHourDateTime(row.verifiedAt)}] : []),
-    ...(showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : []),
-    {key: "start", label: "Started", value: (row) => formatTwelveHourDateTime(row.start)},
+    ...(startedFirst ? [startedColumn, ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn]),
     ...(showClosedAt ? [{key: "closedAt", label: "Closing time", value: (row) => formatTwelveHourDateTime(row.closedAt)}] : []),
     ...(showTurnaroundTime ? [{key: "hours", label: "Turn around time (TAT)", value: (row) => row.hours}] : []),
     {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysFromStart(row.start, now)},
@@ -7023,6 +7026,12 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     [...new Set(rows.map((row) => tableFilterText(column.value(row))))].sort((a, b) => sortCollator.compare(a, b)),
   ]));
   const workflowHeader = (key, label) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />;
+  const startedHeader = () => workflowHeader("start", "Started");
+  const closedByHeader = () => showClosedBy && workflowHeader("closedBy", "Closed by");
+  const verifiedHeaders = () => <>{showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showVerifiedAt && workflowHeader("verifiedAt", "Verified date & time")}</>;
+  const startedCell = (row) => <td>{formatTwelveHourDateTime(row.start)}</td>;
+  const closedByCell = (row) => showClosedBy && <td>{row.closedBy || "—"}</td>;
+  const verifiedCells = (row) => <>{showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}{showVerifiedAt && <td>{formatTwelveHourDateTime(row.verifiedAt)}</td>}</>;
   const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">
     {onEdit && !lockedIdeal && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
     {onDelete && !lockedIdeal && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
@@ -7045,7 +7054,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
           {showActions && actionsFirst && <th>Actions</th>}
           {showAcceptedTime && workflowHeader("acceptedTime", "Accepted time")}
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
-          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showVerifiedAt && workflowHeader("verifiedAt", "Verified date & time")} {showClosedBy && workflowHeader("closedBy", "Closed by")}{workflowHeader("start", "Started")}{showClosedAt && workflowHeader("closedAt", "Closing time")}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", "Closing time")}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
@@ -7063,10 +7072,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               <td>{row.idleReason || "—"}</td>
               {showReason && <td className="request-reason-cell"><div className="request-reason-text">{String(row.complaint || "").trim() || "—"}</div></td>}
               {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}
-              {showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}
-              {showVerifiedAt && <td>{formatTwelveHourDateTime(row.verifiedAt)}</td>}
-              {showClosedBy && <td>{row.closedBy || "—"}</td>}
-              <td>{formatTwelveHourDateTime(row.start)}</td>
+              {startedFirst ? <>{startedCell(row)}{closedByCell(row)}{verifiedCells(row)}</> : <>{verifiedCells(row)}{closedByCell(row)}{startedCell(row)}</>}
               {showClosedAt && <td>{formatTwelveHourDateTime(row.closedAt)}</td>}
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
@@ -7846,9 +7852,9 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showAcceptedTime showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onClose={setClosing} /></section></>}
-      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
+      {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">MIS verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showMakeModel showReason={isMaintenance || isMis} showClosedBy showClosedAt={isMaintenance} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
+      {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showMakeModel showReason={isMaintenance || isMis} showClosedBy showClosedAt={isMaintenance} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} />}</section></>}
       {tab === "idle" && <><h3 className="sectiontitle">Idle vehicles</h3><section className="panel"><MobileWorkflowTable rows={idleRows} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
