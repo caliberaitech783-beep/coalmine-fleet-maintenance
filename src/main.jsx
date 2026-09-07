@@ -1514,7 +1514,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <MapPin /> {r.site}
                 </td>
-                {showReason && <td>{r.complaint || "—"}</td>}
+                {showReason && <td className="request-reason-cell"><div className="request-reason-text">{String(r.complaint || "").trim() || "—"}</div></td>}
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 {showClosedBy && <td>{r.closedBy || "—"}</td>}
                 {showAudio && <td>{r.chassis || "—"}</td>}
@@ -7060,7 +7060,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               <td><MapPin /> {row.site || "Not assigned"}</td>
               <td><Status>{row.status || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
-              {showReason && <td>{row.complaint || "—"}</td>}
+              {showReason && <td className="request-reason-cell"><div className="request-reason-text">{String(row.complaint || "").trim() || "—"}</div></td>}
               {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}
               {showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}
               {showVerifiedAt && <td>{formatTwelveHourDateTime(row.verifiedAt)}</td>}
