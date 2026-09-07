@@ -19,6 +19,7 @@ import { delayedReasonRequired } from "../delayed-reason.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
+import { buildDepartmentReports } from "../department-reports.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
@@ -4634,9 +4635,9 @@ function Generic({ name, requests = [] }) {
 
 const reportCategoryTabs = [
   {id: "general", label: "General Report", description: "Common road status, fleet location, transfer, and recent breakdown reports.", icon: FileBarChart},
-  {id: "production", label: "Production report", description: "Production opening and Production-to-MIS verification reports.", icon: Gauge},
-  {id: "maintenance", label: "Maintenance report", description: "Maintenance closing, idle, TAT, and verification reports.", icon: Wrench},
-  {id: "mis", label: "MIS Report", description: "MIS verification and first-trip audit reports.", icon: ShieldCheck},
+  {id: "production", label: "Production report", description: "Submitted requests, maintenance acceptance, and no-remark cases.", icon: Gauge},
+  {id: "maintenance", label: "Maintenance report", description: "Repair turnaround, open off-road cases, and availability. Oracle utilization pending.", icon: Wrench},
+  {id: "mis", label: "MIS Report", description: "Verification, first-trip mismatch, transfers, fleet, and daily in/out reports.", icon: ShieldCheck},
 ];
 const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const reportDesignationOptions = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
@@ -4838,6 +4839,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [reportZipFrom, setReportZipFrom] = useState(() => indiaDateTimeInputValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [reportZipTo, setReportZipTo] = useState(() => indiaDateTimeInputValue(new Date(Date.now() + 60 * 1000)));
   const reportGeneratedAt = useMemo(() => indiaDateTimeInputValue(new Date()), []);
+  const [availabilityFrom, setAvailabilityFrom] = useState(() => `${indiaDateTimeInputValue(new Date()).slice(0,7)}-01`);
+  const [availabilityTo, setAvailabilityTo] = useState(() => indiaDateTimeInputValue(new Date()).slice(0,10));
   const allowedReportCategoryIds = reportCategoryIdsForUser(permissions, session);
   const departmentReportCategoryTabs = reportCategoryTabs.filter((category) => allowedReportCategoryIds.includes(category.id));
 
@@ -4865,6 +4868,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportDoor: request.door || equipment?.door || "",
       reportMake: request.make || equipment?.make || "",
       reportModel: request.model || equipment?.model || "",
+      chassis: request.chassis || equipment?.chassisNo || equipment?.manufacturerSerialNo || "",
       reportSite: request.site || equipment?.currentLocation || equipment?.location || "",
     };
   }), [requests, equipmentByReference]);
@@ -4945,7 +4949,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "driver", label: "Driver", value: (record) => record.driver},
     {key: "chassis", label: "Chassis no.", value: (record) => record.chassisNo || record.manufacturerSerialNo},
   ];
-  const reportGroups = [
+  const legacyReportGroups = [
     {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, dateValue: (row) => row.start, emptyMessage: "No open breakdown cases available"},
     {category: "maintenance", title: "Location wise closing BD", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, dateValue: (row) => row.closedAt, emptyMessage: "No closed maintenance cases available"},
     {category: "mis", title: "MIS Verification Report", description: "Requests verified by MIS, including maintenance close and MIS verification timestamps.", rows: misVerificationRows, columns: misColumns, dateValue: (row) => row.verifiedAt, emptyMessage: "No MIS verification records available"},
@@ -4987,6 +4991,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "firstTrip", label: "First trip verification", value: (request) => firstTripTimestamp(request), render: (request) => formatTimestamp(firstTripTimestamp(request))},
       {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
     ], dateValue: (row) => firstTripTimestamp(row) || row.verifiedAt, emptyMessage: "No idle first-trip verification records available"},
+  ];
+  const reportGroups = [
+    ...legacyReportGroups.filter((report) => report.category === "general"),
+    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: availabilityFrom, to: availabilityTo }),
   ];
   const accessibleReportGroups = reportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
   const availableReportCategories = departmentReportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
@@ -5089,7 +5097,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       if (!validReportDateRange(reportZipFrom, reportZipTo)) throw new Error("Select a valid From and To date/time range.");
       const selectedReports = accessibleReportGroups.filter((report) => selectedZipReports.includes(report.title));
       const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
-        const filteredRows = reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo);
+        const filteredRows = report.title === "Availability Report"
+          ? buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,from:reportZipFrom.slice(0,10),to:reportZipTo.slice(0,10)}).find(item => item.title === report.title).rows
+          : reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo);
         const exportRows = filteredRows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
         const pdfResponse = await fetch("/api/exports/pdf", {
           method: "POST",
@@ -5254,6 +5264,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         ))}
       </div> : <div className="reports-section reports-empty-definition">
         <div className="reports-section-heading"><div><h2>{activeCategory.label}</h2><p>No reports are assigned to this profile in this category.</p></div></div>
+      </div>}
+      {selectedReport?.title === "Availability Report" && <div className="report-zip-range">
+        <label>From date<input type="date" value={availabilityFrom} max={availabilityTo} onChange={event => setAvailabilityFrom(event.target.value)} /></label>
+        <label>To date<input type="date" value={availabilityTo} min={availabilityFrom} max={indiaDateTimeInputValue(new Date()).slice(0,10)} onChange={event => setAvailabilityTo(event.target.value)} /></label>
       </div>}
       {selectedReport && (
         <ReportSection

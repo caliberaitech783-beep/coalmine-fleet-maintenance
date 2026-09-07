@@ -285,6 +285,8 @@ async function migrate(){
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_reading TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_file TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_file_name TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS in_progress_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS in_progress_by TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS maintenance_requests_requester_login_idx
       ON maintenance_requests (requester_login, created_at DESC);
     CREATE TABLE IF NOT EXISTS maintenance_daily_remarks (
@@ -1580,7 +1582,7 @@ async function directorReportSourceData(){
     pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Vehicle transfers' ORDER BY created_at ASC`),
   ]);
   return {
-    requests:requestRows,
+    requests:await attachDailyRemarks(requestRows),
     equipmentRecords:equipmentRows.map(({id,record_data})=>({id,...record_data})),
     transferRecords:transferRows.map(({id,record_data})=>({id,...record_data})),
   };
@@ -1985,17 +1987,19 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 });
 
 const requestProjection=`reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
+  to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
+  to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
-  to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "closedAt",
+  to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
   closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
-  to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "firstTripAt",
+  to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
   meter_type AS "meterType", opening_meter_reading AS "openingMeterReading",
   (opening_meter_file <> '') AS "openingMeterFileUploaded", opening_meter_file_name AS "openingMeterFileName",
@@ -2308,9 +2312,11 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
         ? await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,delayed_reason=$5,status='Closed'
             WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
             [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,delayedClosure?delayedReason:'',reference])
-        : await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status=$3
+        : await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status=$3,
+            in_progress_at=CASE WHEN status<>'In progress' AND $3='In progress' THEN COALESCE(in_progress_at,NOW()) ELSE in_progress_at END,
+            in_progress_by=CASE WHEN status<>'In progress' AND $3='In progress' AND in_progress_at IS NULL THEN $5 ELSE in_progress_by END
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
-            [maintenanceWork,maintenanceAudio,status,reference]);
+            [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User']);
     if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
     if(delayedClosure){
       await pool.query(`INSERT INTO master_records (master_name,record_data)
@@ -2383,9 +2389,10 @@ app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,ne
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your decision or is outside your assigned sites.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
-      ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by=''
+      ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by='',
+      in_progress_at=COALESCE(in_progress_at,NOW()),in_progress_by=CASE WHEN in_progress_at IS NULL THEN $2 ELSE in_progress_by END
       WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[reference]);
+      RETURNING ${requestProjection}`,[reference,req.session.name||req.session.login||'Maintenance Manager']);
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your decision.'});
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Idle status for request ${rows[0].ref} was cancelled by ${req.session.name||'Maintenance Manager'}. The request has returned to active maintenance.`,null,{whatsapp:false});

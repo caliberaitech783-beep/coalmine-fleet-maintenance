@@ -1,0 +1,68 @@
+import {indiaDateTimeEpoch} from './report-date-range.mjs';
+import {elapsedLabel} from './report-metrics.mjs';
+import {IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, buildInOutReportRows} from './in-out-report.mjs';
+
+export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Minutes Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending'];
+const clean = value => String(value ?? '').trim();
+const status = row => clean(row.status).toLowerCase();
+const verified = row => Boolean(row.verifiedAt || row.verifiedBy);
+const firstTrip = row => row.firstTripAt || (row.firstTripDate ? `${row.firstTripDate} ${row.firstTripTime || '00:00:00'}` : '');
+const col = (key, label, value = row => row[key]) => ({key, label, value});
+const duration = (a, b) => Number.isFinite(indiaDateTimeEpoch(a)) && indiaDateTimeEpoch(b) >= indiaDateTimeEpoch(a) ? elapsedLabel(a, b) : 'Not recorded';
+const ids = [col('door', 'Door no.', r => r.reportDoor || r.door), col('chassis', 'Chassis No', r => r.chassis || r.chassisNo || r.manufacturerSerialNo)];
+const base = [...ids, col('equipmentGroup', 'Equipment group'), col('model', 'Model', r => r.reportModel || r.model), col('complaint', 'Reason/Complaint'), col('category', 'Repair category')];
+const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
+const ref = col('ref', 'Job Reference No');
+const closed = col('closedAt', 'Ticket Closed');
+
+// Merge overlapping incidents for each asset before totaling downtime.
+export function availabilityRows(equipment, requests, from, to, now = new Date()) {
+  const start = indiaDateTimeEpoch(from), end = indiaDateTimeEpoch(to) + 86400000;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  const productive = 22 * Math.round((end - start) / 86400000);
+  const key = value => clean(value).toLowerCase();
+  const references = new Map();
+  for (const asset of equipment) for (const value of new Set([asset.chassisNo, asset.manufacturerSerialNo, asset.door, asset.equipmentName, asset.reg].map(key).filter(Boolean))) {
+    references.set(value, references.has(value) && references.get(value) !== asset ? null : asset);
+  }
+  const intervals = new Map();
+  for (const request of requests) {
+    const asset = [request.chassis, request.door, request.equipment, request.reg].map(value => references.get(key(value))).find(Boolean);
+    if (!asset) continue;
+    const opened = indiaDateTimeEpoch(request.start);
+    const finished = request.closedAt ? indiaDateTimeEpoch(request.closedAt) : now.getTime();
+    const a = Math.max(start, opened), b = Math.min(end, finished, now.getTime());
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) continue;
+    const list = intervals.get(asset) || []; list.push([a,b]); intervals.set(asset,list);
+  }
+  return equipment.map(asset => {
+    const list = (intervals.get(asset) || []).sort((a,b) => a[0]-b[0]);
+    let hours = 0, previous;
+    for (const interval of list) {
+      if (previous && interval[0] <= previous[1]) previous[1] = Math.max(previous[1], interval[1]);
+      else { if (previous) hours += (previous[1]-previous[0])/3600000; previous = [...interval]; }
+    }
+    if (previous) hours += (previous[1]-previous[0])/3600000;
+    return {...asset, productive, breakdown: hours, available: productive-hours, percentage: (productive-hours)/productive*100};
+  });
+}
+
+export function buildDepartmentReports({requests = [], equipmentRecords = [], transferRecords = [], from, to, now = new Date()} = {}) {
+  const report = (category, title, description, columns, rows, dateValue = r => r.start) => ({category,title,description,columns,rows,dateValue,emptyMessage:'No matching records for this report'});
+  const open = requests.filter(r => ['open','in progress'].includes(status(r)) && !r.closedAt);
+  const finished = requests.filter(r => r.closedAt);
+  return [
+    report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Request opening to maintenance closure.', [...base,col('start','Rep. Started'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(r.start,r.closedAt)),site,ref], finished, r => r.closedAt),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open and in-progress off-road requests.', [...base,col('start','Rep. Started'),col('days','BD Days',r => Number.isFinite(indiaDateTimeEpoch(r.start)) ? Math.max(0,(now.getTime()-indiaDateTimeEpoch(r.start))/86400000).toFixed(2) : 'Not recorded'),site,ref],open),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[2], '22 productive hours per selected day. Downtime is clipped to the period; overlapping incidents are counted once. Negative availability flags downtime exceeding planned hours.', [...ids,col('equipmentGroup','Equipment group',r => r.group || r.equipmentGroup),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => `${r.percentage.toFixed(2)}%`)], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
+    report('mis', DEPARTMENT_REPORT_TITLES[3], 'First trip more than 30 minutes after maintenance closure.', [...base,closed,col('firstTrip','First Trip Made',firstTrip),col('difference','Difference',r => duration(r.closedAt,firstTrip(r))),col('verifiedBy','MIS user'),col('driverName','Driver Name'),site,ref],finished.filter(r => indiaDateTimeEpoch(firstTrip(r))-indiaDateTimeEpoch(r.closedAt)>1800000), firstTrip),
+    report('mis', DEPARTMENT_REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification.', [...base,closed,site,ref],finished.filter(r => !verified(r)),r => r.closedAt),
+    report('mis', DEPARTMENT_REPORT_TITLES[5], 'Maintenance closure to MIS verification.', [...base,closed,col('verifiedAt','MIS verified at'),col('difference','Difference',r => duration(r.closedAt,r.verifiedAt)),col('verifiedBy','MIS user'),site,ref],finished.filter(r => r.verifiedAt),r => r.verifiedAt),
+    report('mis', DEPARTMENT_REPORT_TITLES[6], 'Transfer history. Chassis number appears once.', [...ids,col('equipment','Equipment / vehicle',r => r.equipment || r.equipmentName),col('model','Model',r => r.model || r.modelNo),col('source','From location'),col('destination','To location'),col('transferNo','Transfer no.'),col('transferDate','Transfer date')],transferRecords,r => r.transferDate),
+    report('mis', DEPARTMENT_REPORT_TITLES[7], 'Current equipment and vehicle master records.', [...ids,col('equipmentName','Equipment / vehicle'),col('model','Model'),col('make','Make'),col('itemSpecification','Item specification name'),site],equipmentRecords,() => now.toISOString()),
+    report('mis', DEPARTMENT_REPORT_TITLES[8], IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_COLUMNS,buildInOutReportRows(requests,{today:now}),r => r.date),
+    report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...base,col('status','Status'),ref],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[10], 'Creation to first In progress transition. Historical acceptance times are not inferred.', [...base,col('status','Status'),col('acceptedAt','Maintenance Acceptance Date & Time',r => r.inProgressAt || 'Not recorded'),col('difference','Difference',r => duration(r.createdAt || r.start,r.inProgressAt)),col('acceptedBy','Maintenance User Name',r => r.inProgressBy || 'Not recorded'),site,ref],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[11], 'Open requests with no daily remark ever. No elapsed time is shown.', [...base,col('status','Status'),col('remark','Daily Remark',() => 'No Remark'),ref],requests.filter(r => status(r)==='open' && !r.closedAt && Array.isArray(r.dailyRemarks) && !r.dailyRemarks.some(x => clean(typeof x === 'string' ? x : x.remark)))),
+  ];
+}
