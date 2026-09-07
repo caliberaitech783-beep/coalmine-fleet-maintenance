@@ -30,7 +30,7 @@ test("MIS actions and Production read-only actions are first for every request",
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
   assert.match(source, /function MobileWorkflowTable\(\{ rows = \[\], showActions = false, actionsFirst = true/);
-  assert.match(source, /isProduction && tab === "requests"[^\n]*<BreakdownTable rows=\{activeRequests\} showReadOnlyAction/);
+  assert.match(source, /isProduction && tab === "requests"[^\n]*<BreakdownTable rows=\{activeRequests\} exportTitle=\{workspaceReportTitles.requests\} showReadOnlyAction/);
   assert.match(source, /showReadOnlyAction \? \[\["requestAction", "Actions"\]\][^\n]*\["ref", "Job reference"\]/);
   assert.match(source, /showReadOnlyAction && <td className="row-actions"><span>Read only<\/span><\/td>}\s*<td>/);
 });

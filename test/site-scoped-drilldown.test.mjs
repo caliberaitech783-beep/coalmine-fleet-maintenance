@@ -39,7 +39,10 @@ test("site-scoped charts open the shared list with their site selected", async (
   assert.doesNotMatch(scoped[0], /setMaintenanceAvailabilityTab/);
 
   // Request-shaped rows so the details table shows job columns.
-  assert.match(source, /requestAssetDrilldown = assetDrilldown === "open-cases" \|\| assetDrilldown\.startsWith\("site-repair:"\)/);
+  const requestDrilldown = source.match(/const requestAssetDrilldown = ([^;]+);/);
+  assert.ok(requestDrilldown, "expected request drilldown classification");
+  assert.match(requestDrilldown[1], /assetDrilldown === "open-cases"/);
+  assert.match(requestDrilldown[1], /\|\| assetDrilldown\.startsWith\("site-repair:"\)/);
 });
 
 test("both maintenance type and road status open the site-scoped drilldown", async () => {

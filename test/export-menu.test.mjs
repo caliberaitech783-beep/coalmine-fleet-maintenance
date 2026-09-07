@@ -22,8 +22,8 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/fetch\("\/api\/exports\/pdf"/);
   assert.match(source,/<ExportMenu title=\{name\} columns=\{exportColumns\} rows=\{records\}/);
   assert.match(source,/<ExportMenu title=\{title\} columns=\{visibleColumns\} rows=\{rows\}/);
-  assert.match(source,/<ExportMenu title="Breakdown report" columns=\{filterColumns\} rows=\{sortedRows\}/);
-  assert.match(source,/<ExportMenu title="Workflow report" columns=\{filterColumns\} rows=\{sortedRows\}/);
+  assert.match(source,/<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\}/);
+  assert.match(source,/function MobileWorkflowTable\([^\n]*exportTitle = "Workflow report"/);
   assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);
   assert.match(server,/app\.post\('\/api\/exports\/pdf',requireSession/);
   assert.match(server,/buildTableExportPdf\(\{title,columns,rows\}\)/);
