@@ -195,6 +195,8 @@ async function migrate(){
       category TEXT NOT NULL DEFAULT 'Maintenance request',
       complaint TEXT NOT NULL,
       started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      accepted_at TIMESTAMPTZ,
+      accepted_by TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'Open',
       owner_name TEXT NOT NULL DEFAULT 'Normal User',
       closed_at TIMESTAMPTZ,
@@ -264,6 +266,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS expected_completion_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS accepted_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'Pending';
     ALTER TABLE maintenance_requests
@@ -1987,6 +1991,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 const requestProjection=`reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
+  to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "acceptedAt", accepted_by AS "acceptedBy",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
@@ -2251,10 +2256,10 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     if(!openingMeterFile&&!meterRows[0].opening_meter_file)return res.status(400).json({error:`Upload an opening ${normalizedMeterType} evidence file.`});
     const startedAt=parseIndiaRequestDateTime(start);
     const {rows}=await pool.query(`UPDATE maintenance_requests SET equipment_name=$1,door_number=$2,registration_number=$3,chassis_number=$4,
-      site=$5,category=$6,complaint=$7,started_at=$8,expected_completion_at=($9::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$10,
+      site=$5,category=$6,complaint=$7,started_at=$8,accepted_at=COALESCE(accepted_at,NOW()),accepted_by=CASE WHEN accepted_at IS NULL THEN $14 ELSE accepted_by END,expected_completion_at=($9::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$10,
       opening_meter_reading=$11,opening_meter_file=CASE WHEN $12<>'' THEN $12 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $12<>'' THEN $13 ELSE opening_meter_file_name END
-      WHERE reference=$14 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),reference]);
+      WHERE reference=$15 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
     if(!rows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
     res.json(rows[0]);
   }catch(error){next(error)}

@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { delayedReasonRequired } from "../delayed-reason.mjs";
+import { requestAwaitingAcceptance } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
@@ -1471,7 +1472,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         <tbody>
           {sortedRows.length ? (
             sortedRows.map((r) => (
-              <tr key={r.ref}>
+              <tr key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
                 {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
                 <td>
                   <b>{r.ref}</b>
@@ -6989,7 +6990,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
           {sortedRows.length ? sortedRows.map((row) => {
             const days = calculateBreakdownDaysFromStart(row.start, now);
             const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
-            return <tr key={row.ref}>
+            return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               <td><b>{row.ref}</b></td>
               <td>{row.equipmentGroup || row.equipment || "—"}</td>
@@ -7024,6 +7025,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
 function RequestEditForm({ request, equipmentRecords = [], close, onSave, repairTypeRecords = [], repairTypesLoaded = false }) {
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
+  const acceptanceTime = request.acceptedAt || indiaDateTimeInputValue(new Date()).replace("T", " ");
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
   return <Modal title={`Edit request ${request.ref}`} close={close}>
@@ -7059,13 +7061,14 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
         <label>Chassis number *<input name="chassis" required defaultValue={request.chassis || ""} /></label>
         <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
-        <label>Timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        <label>Production timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        <label>Acceptance timing<input value={formatTwelveHourDateTime(acceptanceTime)} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "Automatically recorded when the vehicle is accepted."}</small></label>
         <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required defaultValue={String(request.expectedCompletionAt || "").replace(" ", "T")} /></label>
         <label>Opening {meterType} reading *<input name="openingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required defaultValue={request.openingMeterReading || ""} placeholder={`Enter opening ${meterType}`} /><small>{meterType === "KMR" ? "KMR is used for Vehicle-category assets." : "HMR is used for Equipment-category assets."}</small></label>
         <label>Opening {meterType} file *<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required={!request.openingMeterFileUploaded} onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save changes <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Accept vehicle <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
