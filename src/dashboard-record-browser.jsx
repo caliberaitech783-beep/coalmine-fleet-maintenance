@@ -53,19 +53,18 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const view = drilldownView(rows, regions, filters);
   const id = useId();
-  const levels = ["region", "site", "category", "group", "machine"];
+  const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);
   const visibleLevel = invalidParent < 0 ? openedLevel : Math.min(openedLevel, invalidParent);
   const choose = (name, value) => {
     setFilters(changeDrilldownFilter(view.selection, name, value));
-    setOpenedLevel(Math.min(levels.indexOf(name) + 1, 4));
+    setOpenedLevel(Math.min(levels.indexOf(name) + 1, levels.length - 1));
   };
-  const activeFilterCount = ["site", "category", "group", "machine"].filter((name) => view.selection[name]).length;
+  const activeFilterCount = ["site", "category", "group"].filter((name) => view.selection[name]).length;
   const fields = [
     ["site", "Site", "All sites"],
     ["category", "Equipment / Vehicle", "All equipment & vehicles"],
     ["group", "Type", "All types"],
-    ["machine", "Machine", "All machines"],
   ];
   const tableKey = JSON.stringify(view.selection);
   const columnCount = 8 + (requestRecords ? 4 : 0) + (lifecycleRecords ? 2 : 0);
