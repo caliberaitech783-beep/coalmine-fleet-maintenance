@@ -1087,7 +1087,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-chart-legend i.vehicles { background: var(--fleet-vehicles); }
 .mine-fleet-chart-legend i.breakdown {
   border: 1px solid color-mix(in srgb, var(--fleet-breakdown) 72%, transparent);
-  background: repeating-linear-gradient(135deg, var(--fleet-breakdown) 0 2px, transparent 2px 5px);
+  background: var(--fleet-breakdown);
 }
 .mine-fleet-watermark-toggle { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 4px 7px; border: 1px solid var(--mine-line); border-radius: 5px; background: var(--mine-panel); color: var(--mine-muted); font: 800 8px Manrope; cursor: pointer; }
 .mine-fleet-watermark-toggle:hover,.mine-fleet-watermark-toggle:focus-visible,.mine-fleet-watermark-toggle[aria-pressed="true"] { border-color: var(--brand-purple); color: var(--brand-purple); outline: 0; }
@@ -1121,7 +1121,7 @@ button.mine-primary-kpi-card:focus-visible,
   overflow: visible;
   border-top: 2px solid var(--fleet-breakdown);
   border-radius: 0 0 4px 4px;
-  background: repeating-linear-gradient(135deg, var(--fleet-breakdown) 0 3px, transparent 3px 8px);
+  background: var(--fleet-breakdown);
 }
 .mine-fleet-breakdown-count {
   position: absolute;

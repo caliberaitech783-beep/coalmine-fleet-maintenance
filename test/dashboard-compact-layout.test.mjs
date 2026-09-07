@@ -14,7 +14,7 @@ test("Total Fleet leads the Tracking Vehicle Throughput panel", () => {
   assert.match(client, /<h2>Tracking Vehicle Throughput<\/h2>/);
   assert.match(client, /maintenanceAvailabilityTab/);
   assert.match(client, /Site-wise BD Movement/);
-  assert.match(client, /Road Availability/);
+  assert.match(client, /Availability Count/);
   assert.match(css, /\.mine-maintenance-availability-panel\s*\{[\s\S]*?grid-column:\s*1 \/ -1/);
   assert.doesNotMatch(client, /className="mine-panel mine-repair-type-chart"/);
   assert.doesNotMatch(client, /className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"/);
@@ -23,7 +23,7 @@ test("Total Fleet leads the Tracking Vehicle Throughput panel", () => {
 test("site breakdown view reconciles one-line site totals and opens day-wise controls", () => {
   assert.match(client, /breakdownMovementForRange/);
   assert.match(client, /dailyBreakdownMovement/);
-  assert.match(client, /<span>Site name<\/span><span>BD Open<\/span><span>BD In<\/span><span>BD Out<\/span><span>BD Balance<\/span><span>Road availability impact<\/span>/);
+  assert.match(client, /<span>Site name<\/span><span>BD Open<\/span><span>BD In<\/span><span>BD Out<\/span><span>BD Balance<\/span><span>Availability count impact<\/span>/);
   assert.match(client, /\[2, 5, 10\]\.map/);
   assert.match(client, /aria-label="Breakdown movement from date"/);
   assert.match(client, /aria-label="Breakdown movement to date"/);
@@ -43,12 +43,12 @@ test("day-wise details use a larger table with fleet-impact BD percentage", () =
   assert.match(css, /\.dashboard-breakdown-day-table\s*\{[^}]*min-height:\s*260px/);
 });
 
-test("each site links breakdown movement with its current road availability", () => {
+test("each site links breakdown movement with its current availability count", () => {
   assert.match(client, /const roadAvailabilityBySiteName = new Map/);
   assert.match(client, /className="mine-breakdown-road-impact"/);
   assert.match(client, /road\.onRoad.*On ·.*road\.offRoad.*Off ·.*road\.idle.*Idle/);
   assert.match(client, /className="dashboard-breakdown-road-shortcut"/);
-  assert.match(client, /Road availability <ChevronRight \/>/);
+  assert.match(client, /Availability count <ChevronRight \/>/);
   assert.match(client, /openRoadAvailabilityForSite\(breakdownDetailSite\)/);
   assert.match(client, /roadFocusSite === site\.site/);
   assert.match(css, /\.mine-breakdown-road-impact\s*\{/);
@@ -63,7 +63,7 @@ test("the maintenance summary defines all six BD types with intake percentages",
   assert.match(css, /\.mine-breakdown-type-mix > div\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6/);
 });
 
-test("Road Availability provides site-wise on-road, off-road and idle status", () => {
+test("Availability Count provides site-wise on-road, off-road and idle status", () => {
   assert.match(client, /roadAvailabilityBySite\.length/);
   assert.match(client, /<span>Total fleet<\/span><span>On road<\/span><span>Off road<\/span><span>Idle<\/span><span>Availability<\/span>/);
   assert.match(client, /className="mine-road-site-bar"/);
@@ -73,7 +73,7 @@ test("Road Availability provides site-wise on-road, off-road and idle status", (
   assert.match(css, /\.mine-site-road-summary \.idle \{ --summary-color: #513c17;/);
 });
 
-test("Maintenance and Road Availability typography is two pixels larger", () => {
+test("Maintenance and Availability Count typography is two pixels larger", () => {
   assert.match(css, /\.mine-maintenance-availability-panel h2\s*\{\s*font-size:\s*17px !important/);
   assert.match(css, /\.mine-maintenance-availability-panel :is\(p, label, small, em, span, b\)\s*\{\s*font-size:\s*13px !important/);
   assert.match(css, /\.mine-maintenance-availability-panel :is\(button, input, select, th\)\s*\{\s*font-size:\s*13px !important/);
@@ -81,7 +81,7 @@ test("Maintenance and Road Availability typography is two pixels larger", () => 
   assert.match(css, /\.mine-breakdown-site-row,[\s\S]*?\.mine-road-site-row\s*\{\s*min-height:\s*56px/);
 });
 
-test("Maintenance and Road Availability uses its available width without empty layout pockets", () => {
+test("Maintenance and Availability Count uses its available width without empty layout pockets", () => {
   assert.match(css, /\.mine-maintenance-availability-tabs\s*\{[^}]*width:\s*min\(680px, 48%\)/);
   assert.match(css, /\.mine-breakdown-site-row\s*\{[^}]*grid-template-columns:[^;}]*minmax\(480px, 2\.1fr\)/);
   assert.match(css, /\.mine-breakdown-road-impact\s*\{[^}]*grid-template-columns:\s*minmax\(160px, \.9fr\) minmax\(180px, 1\.1fr\) auto/);

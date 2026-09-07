@@ -55,7 +55,8 @@ test("total fleet renders a region-grouped site count graph", () => {
 test("each fleet site includes breakdowns in its equipment and vehicle bars", () => {
   assert.match(source, /fleetChartCounts\(records, visibleBreakdowns\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
-  assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*repeating-linear-gradient\(135deg, var\(--fleet-breakdown\)/);
+  assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
+  assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-breakdown-count\s*\{[^}]*color:\s*#fff[^}]*font-weight:\s*900/);
   assert.match(css, /--fleet-equipment: var\(--brand-red\)/);
   assert.match(css, /--fleet-vehicles: var\(--brand-purple\)/);
