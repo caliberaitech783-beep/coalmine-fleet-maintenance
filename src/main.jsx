@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { delayedReasonRequired } from "../delayed-reason.mjs";
+import { requestAwaitingAcceptance } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
@@ -985,7 +986,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return counts;
   }, {});
   const breakdownTrendAnchorKey = breakdownTrendAnchor || dashboardDate || todayKey;
-  const breakdownTrend = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: breakdownTrendView });
+  const breakdownTrend = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "past" });
   const maxBreakdownTrend = Math.max(1, ...breakdownTrend.map((day) => day.count));
   const actualTrendDays = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "past" });
   const forecastTrendDays = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "upcoming" });
@@ -1380,7 +1381,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       <section className="mine-dashboard-lower-grid">
       <section className="mine-panel mine-breakdown-trend">
-        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend & forecast</h2><p>Recorded history and weekday-weighted upcoming estimates</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-view" role="group" aria-label="Breakdown trend view">{[["past", "Past"], ["both", "Both"], ["upcoming", "Upcoming"]].map(([value, label]) => <button type="button" key={value} className={breakdownTrendView === value ? "active" : ""} onClick={() => setBreakdownTrendView(value)}>{label}</button>)}</div><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
+        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded history and weekday-weighted upcoming estimates</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-view" role="group" aria-label="Breakdown trend view">{[["past", "Past"], ["both", "Both"], ["upcoming", "Upcoming"]].map(([value, label]) => <button type="button" key={value} className={breakdownTrendView === value ? "active" : ""} onClick={() => setBreakdownTrendView(value)}>{label}</button>)}</div><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
           <div className="mine-trend-summary"><article><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>Past {breakdownTrendDays} days</small></article><article><span>Forecast</span><strong>{breakdownForecastTotal.toLocaleString()}</strong><small>Next {breakdownTrendDays} days</small></article><article><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
           <section className="mine-trend-visual"><div className="mine-trend-legend"><span><i className="actual" />Actual</span><span><i className="forecast" />Forecast</span><b>Selected day: {new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${breakdownTrendAnchorKey}T12:00:00`))}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day actual and forecast breakdown chart`}>{breakdownTrend.map((day, index) => <div className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count ? Math.max(8, (day.count / maxBreakdownTrend) * 100) : 2}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div></section>
@@ -1472,7 +1473,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         <tbody>
           {sortedRows.length ? (
             sortedRows.map((r) => (
-              <tr key={r.ref}>
+              <tr key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
                 {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
                 <td>
                   <b>{r.ref}</b>
@@ -7003,7 +7004,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
           {sortedRows.length ? sortedRows.map((row) => {
             const days = calculateBreakdownDaysFromStart(row.start, now);
             const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
-            return <tr key={row.ref}>
+            return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               <td><b>{row.ref}</b></td>
               <td>{row.equipmentGroup || row.equipment || "—"}</td>
@@ -7038,6 +7039,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
 function RequestEditForm({ request, equipmentRecords = [], close, onSave, repairTypeRecords = [], repairTypesLoaded = false }) {
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
+  const acceptanceTime = request.acceptedAt || indiaDateTimeInputValue(new Date()).replace("T", " ");
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
   return <Modal title={`Edit request ${request.ref}`} close={close}>
@@ -7047,10 +7049,10 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
       if (!request.openingMeterFileUploaded && !openingMeterFile) return alert(`Upload an opening ${meterType} evidence file.`);
       const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
       if (openingMeterFile && !openingMeterEvidence) return;
-      onSave({ref: request.ref, equipment: form.get("equipment"), door: form.get("door"), reg: request.reg || "", chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), start: `${form.get("date")} · ${form.get("time")}`, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
     }}>
       <div className="formgrid">
-        <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>
+        <label>Equipment group<input value={request.equipmentGroup || request.equipment || ""} readOnly aria-readonly="true" /></label>
         <label>
           Type of breakdown *
           <select name="category" required defaultValue={request.category || ""} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
@@ -7069,17 +7071,18 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
               ))}
           </select>
         </label>
-        <label>Door number *<input name="door" required defaultValue={request.door || ""} /></label>
-        <label>Chassis number *<input name="chassis" required defaultValue={request.chassis || ""} /></label>
-        <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
+        <label>Door number<input value={request.door || ""} readOnly aria-readonly="true" /></label>
+        <label>Chassis number<input value={request.chassis || ""} readOnly aria-readonly="true" /></label>
+        <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
-        <label>Timing (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        {request.acceptanceRequired && <label>Acceptance timing<input value={formatTwelveHourDateTime(acceptanceTime)} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "Automatically recorded when the vehicle is accepted."}</small></label>}
         <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required defaultValue={String(request.expectedCompletionAt || "").replace(" ", "T")} /></label>
         <label>Opening {meterType} reading *<input name="openingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required defaultValue={request.openingMeterReading || ""} placeholder={`Enter opening ${meterType}`} /><small>{meterType === "KMR" ? "KMR is used for Vehicle-category assets." : "HMR is used for Equipment-category assets."}</small></label>
         <label>Opening {meterType} file *<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required={!request.openingMeterFileUploaded} onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save changes <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">{request.acceptanceRequired ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -7367,21 +7370,23 @@ function TicketPage({ session }) {
   </section>;
 }
 
-const AI_FEEDER_AUTO_CLOSE_SECONDS = 59;
+const AI_FEEDER_CLOSE_DELAY_SECONDS = 60;
 const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
 function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) {
-  const [seconds, setSeconds] = useState(AI_FEEDER_AUTO_CLOSE_SECONDS);
+  const [seconds, setSeconds] = useState(AI_FEEDER_CLOSE_DELAY_SECONDS);
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
+  const canCloseRef = useRef(false);
   closeRef.current = onClose;
+  canCloseRef.current = seconds === 0;
   useEffect(() => {
-    const deadline = Date.now() + AI_FEEDER_AUTO_CLOSE_SECONDS * 1000;
+    const deadline = Date.now() + AI_FEEDER_CLOSE_DELAY_SECONDS * 1000;
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setSeconds(remaining);
-      if (remaining === 0) closeRef.current();
+      if (remaining === 0) window.clearInterval(timer);
     };
     const timer = window.setInterval(tick, 1000);
     document.addEventListener("visibilitychange", tick);
@@ -7393,7 +7398,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
     document.body.style.overflow = "hidden";
     panelRef.current?.focus();
     const closeOnEscape = (event) => {
-      if (event.key === "Escape") closeRef.current();
+      if (event.key === "Escape" && canCloseRef.current) closeRef.current();
       if (event.key === "Tab") {
         const buttons = panelRef.current?.querySelectorAll("button:not(:disabled), [href], [tabindex='0']");
         if (!buttons?.length) return;
@@ -7423,12 +7428,12 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
           <p>{scope?.kind === "all" ? "All regions at a glance." : "Your permitted locations at a glance."} Review the highest-priority cases first.</p>
         </div>
         <div className="ai-feeder-actions">
-          <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Closes in ${seconds} seconds`} title={`Closes automatically in ${seconds} seconds`}>
-            <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_AUTO_CLOSE_SECONDS * 100}%`}} aria-hidden="true" />
+          <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Close available in ${seconds} seconds`} title={`Close available in ${seconds} seconds`}>
+            <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_CLOSE_DELAY_SECONDS * 100}%`}} aria-hidden="true" />
             <Clock aria-hidden="true" />
             <b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
           </span>
-          <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>
+          {seconds === 0 && <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
       <div className="ai-feeder-overview">
@@ -7460,7 +7465,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>Closes at 00:00 · Reopen from Info Pulse</span></footer>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{seconds === 0 ? "Close is now available" : "Close available at 00:00"} · Reopen from Info Pulse</span></footer>
     </div>
   </div>, document.body);
 }
@@ -7637,7 +7642,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">Your active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">Active maintenance requests</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onClose={setClosing} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">Close request form</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">Closed requests awaiting verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">MIS verification</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">Closed request history</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} showMakeModel showReason={isMaintenance || isMis} showClosedBy showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} />}</section></>}
