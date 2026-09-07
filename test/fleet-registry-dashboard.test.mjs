@@ -21,7 +21,7 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /const openBreakdownCaseCount = visibleBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"\)\.length;/);
   assert.match(source, /mode === "total" \? assetCounts\.total : openBreakdownCaseCount/);
-  assert.doesNotMatch(source, /region\.breakdown\.total/);
+  assert.match(source, /showFleetBreakdowns \? region\.breakdown\.total : region\.total/);
   assert.match(source, /const siteRequests = visibleBreakdowns\.filter\(\(request\) => recordBelongsToSite\(request, site\)\);/);
   assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, siteRequests\)/);
   assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, regionRequests\)/);
@@ -61,12 +61,14 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
-test("each fleet site includes breakdowns in its equipment and vehicle bars", () => {
+test("each fleet site switches to separate breakdown-only counts in the approved green", () => {
   assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, siteRequests\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
-  assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
+  assert.match(css, /\.mine-fleet-bar\.breakdown,[^{]+\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);
-  assert.match(css, /\.mine-fleet-breakdown-count\s*\{[^}]*color:\s*#fff[^}]*font-weight:\s*900/);
+  const bars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
+  assert.match(bars, /const count = showBreakdown \? site\.breakdown\[key\] : site\[key\]/);
+  assert.doesNotMatch(bars, /breakdownShare|mine-fleet-breakdown-segment/);
   assert.match(css, /--fleet-equipment: var\(--brand-red\)/);
   assert.match(css, /--fleet-vehicles: var\(--brand-purple\)/);
 });
@@ -111,7 +113,7 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
 
 test("the region and site graph panel is titled only Total Fleet", () => {
   assert.match(source, /<h2>Total Fleet<\/h2>/);
-  assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\("all"\)\}/);
+  assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\(fleetChartAllKey\)\}/);
   assert.doesNotMatch(source, /className="mine-fleet-chart-y"/);
   assert.doesNotMatch(source, /fleet-muted/);
   assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);

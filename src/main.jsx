@@ -4,6 +4,7 @@ import UserProfile from "./user-profile.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
+import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
@@ -1087,7 +1088,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       return { ...region, sites, ...fleetAssetCounts(records), breakdown: fleetBreakdownCaseCounts(records, regionRequests) };
     });
   const showFleetBreakdowns = fleetChartMode === "breakdown";
-  const fleetChartScale = dashboardCountScale(fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])));
+  const fleetChartAllKey = showFleetBreakdowns ? "fleet-breakdown:all" : "all";
+  const fleetChartScale = dashboardCountScale(fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => showFleetBreakdowns ? [site.breakdown.equipment, site.breakdown.vehicles] : [site.equipment, site.vehicles])));
   const fleetChartAxisMax = fleetChartScale.maximum;
   const fleetChartTicks = fleetChartScale.ticks;
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
@@ -1153,6 +1155,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     };
   });
   const rowsForAssetDrilldown = (key = "") => {
+    if (key.startsWith("fleet-breakdown:") || key.startsWith("offroad-site:")) {
+      const region = key.startsWith("fleet-breakdown:region:") ? availableRegions.find((item) => item.code === key.slice(23)) : null;
+      const selectedRequests = fleetBreakdownRequests(visibleEquipment, visibleBreakdowns, {
+        site: key.startsWith("offroad-site:") ? key.slice(13) : "",
+        sites: key.startsWith("fleet-breakdown:region:") ? region?.sites || [] : undefined,
+        category: key === "fleet-breakdown:equipment" ? "Equipment" : key === "fleet-breakdown:vehicles" ? "Vehicles" : "",
+      });
+      return requestAssetRows(selectedRequests).map((row, index) => ({ ...row, category: fleetBreakdownCategory(visibleEquipment, selectedRequests[index]) }));
+    }
     if (!key || key === "all" || key === "road-availability") return visibleEquipment;
     if (key === "equipment") return visibleEquipment.filter((record) => ["equipment","equipments"].includes(String(record.category || "").trim().toLowerCase()));
     if (key === "vehicle") return visibleEquipment.filter((record) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase()));
@@ -1163,7 +1174,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const region = availableRegions.find((item) => item.code === key.slice(7));
       return region ? visibleEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))) : [];
     }
-    if (key.startsWith("offroad-site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(13)) && liveEquipmentRoadStatus(record, visibleBreakdowns) === "offroad");
     if (key.startsWith("site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(5)));
     if (key.startsWith("group:")) return visibleEquipment.filter((record) => equipmentGroupLabel(record) === key.slice(6));
     // Site is already known from the panel that opened this, so these keys carry it.
@@ -1214,8 +1224,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     : siteScopedFocus === "idle" ? "Idle" : siteScopedFocus;
   const movementDrilldownParts = assetDrilldown.startsWith("movement:") ? assetDrilldown.slice(9).split("|") : [];
   const initialDrilldownSite = siteScopedSite || movementDrilldownParts[3] || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13) : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
-  const initialDrilldownRegion = assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
-  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
+  const initialDrilldownRegion = assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) : assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
+  const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
+  const requestAssetDrilldown = fleetBreakdownDrilldown || assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
@@ -1224,7 +1235,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${breakdownTrendAnchorKey}`
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? assetDrilldown.split(":")[2] : `${actualTrendDays[0]?.date} to ${breakdownTrendAnchorKey}`}`
     : "";
-  const assetDrilldownTitle = movementDrilldownTitle || trendDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
+  const fleetBreakdownDrilldownTitle = fleetBreakdownDrilldown ? `${assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13) + " · " : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) + " · " : assetDrilldown === "fleet-breakdown:equipment" ? "Equipment · " : assetDrilldown === "fleet-breakdown:vehicles" ? "Vehicles · " : ""}Breakdown requests` : "";
+  const assetDrilldownTitle = fleetBreakdownDrilldownTitle || movementDrilldownTitle || trendDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
   };
@@ -1249,23 +1261,23 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
-        <article {...cardAction("all", "Total Fleet")} className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
+        <article {...cardAction(fleetChartAllKey, showFleetBreakdowns ? "Breakdown fleet" : "Total Fleet")} className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showFleetBreakdowns ? "Breakdown fleet" : "Total fleet"} by region and site graph`}>
           <header>
             <div className="mine-fleet-chart-heading">
-              <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown("all")}><h2>Total Fleet</h2></button>
+              <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown(fleetChartAllKey)}><h2>Total Fleet</h2></button>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
                 {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : openBreakdownCaseCount).toLocaleString() : "—"}</b></button>)}
               </div>
             </div>
-            <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span {...listAction("equipment", "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction("vehicle", "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction("offroad", "Breakdown fleet records")}><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
+            <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
-          {equipmentLoaded?<><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
+          {equipmentLoaded?<><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Breakdown counts by region and site" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-regions" style={{ minWidth: `${fleetRegionInsights.reduce((count, region) => count + Math.max(1, region.sites.length), 0) * 108}px` }}><div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} style={{ bottom: `${tick / fleetChartAxisMax * 100}%` }} />)}</div>{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
-                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={(event) => openAssetDrilldown(event.detail === 0 || event.target.closest(".mine-fleet-bar, small") ? `${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}` : "all")} aria-label={showFleetBreakdowns ? `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)` : `${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`}>
+                <div className="mine-fleet-chart-sites">{region.sites.map((site) => <button type="button" key={site.name} onClick={(event) => openAssetDrilldown(event.detail === 0 || event.target.closest(".mine-fleet-bar, small") ? `${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}` : fleetChartAllKey)} aria-label={showFleetBreakdowns ? `${site.name}: ${site.breakdown.equipment} equipment breakdowns and ${site.breakdown.vehicles} vehicle breakdowns` : `${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`}>
                   <FleetSiteBars site={site} axisMax={fleetChartAxisMax} showBreakdown={showFleetBreakdowns} /><small>{site.name}</small>
                 </button>)}</div>
-                <footer {...listAction(`region:${region.code}`, `All ${region.code} fleet records`)}><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
+                <footer {...listAction(showFleetBreakdowns ? `fleet-breakdown:region:${region.code}` : `region:${region.code}`, `All ${region.code} ${showFleetBreakdowns ? "breakdown requests" : "fleet records"}`)}><b>{region.code}</b><span>{(showFleetBreakdowns ? region.breakdown.total : region.total).toLocaleString()} {showFleetBreakdowns ? "breakdowns" : "fleet"}</span></footer>
               </section>)}</div>
             </div>
           </div>
