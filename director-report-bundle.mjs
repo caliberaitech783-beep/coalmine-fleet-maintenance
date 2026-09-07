@@ -1,6 +1,8 @@
 import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows} from './in-out-report.mjs';
+import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
+import {indiaDateTimeInputValue} from './report-date-range.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
 export const DIRECTOR_REPORT_TITLES=[
@@ -18,6 +20,7 @@ export const DIRECTOR_REPORT_TITLES=[
   'Idle with PM verif.',
   'On Road with first trip veri.',
   IN_OUT_REPORT_TITLE,
+  ...DEPARTMENT_REPORT_TITLES.filter(title=>title!=='Vehicle Transfer Report'),
 ];
 
 export const LEGACY_REPORT_TITLE_ALIASES=new Map([
@@ -126,6 +129,8 @@ function enrichRequests(requests=[],equipmentRecords=[]){
       reportDoor:request.door||equipment.door||'',
       reportMake:request.make||equipment.make||'',
       reportModel:request.model||equipment.model||'',
+      chassis:request.chassis||equipment.chassisNo||equipment.manufacturerSerialNo||'',
+      equipmentGroup:request.equipmentGroup||equipment.group||'',
       reportSite:request.site||equipment.currentLocation||equipment.location||'',
     };
   });
@@ -202,6 +207,9 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     table(DIRECTOR_REPORT_TITLES[11],'Maintenance','Idle cases with maintenance idle time and verification timestamp.',[...misColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'idleTime',label:'Idle to PM verification time',value:(request)=>elapsedLabel(request.closedAt||request.start,request.verifiedAt)}],idleRequestRows),
     table(DIRECTOR_REPORT_TITLES[12],'MIS','Comparison of MIS verification against first-trip confirmation for idle cases.',[...misColumns,{key:'firstTripDone',label:'First trip done',value:(request)=>request.firstTripDone?'Yes':'No'},{key:'firstTrip',label:'First trip verification',value:firstTripTimestamp},{key:'misToFirstTrip',label:'MIS to first trip',value:(request)=>elapsedLabel(request.verifiedAt,firstTripTimestamp(request))}],idleRequestRows.filter((row)=>row.verifiedAt||firstTripTimestamp(row))),
     table(DIRECTOR_REPORT_TITLES[13],'General',IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_COLUMNS,inOutRows),
+    ...buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,now,from:`${indiaDateTimeInputValue(now).slice(0,7)}-01`,to:indiaDateTimeInputValue(now).slice(0,10)})
+      .filter(report=>report.title!=='Vehicle Transfer Report')
+      .map(report=>table(report.title,report.category==='mis'?'MIS':report.category==='maintenance'?'Maintenance':'Production',report.description,report.columns,report.rows)),
   ];
 }
 

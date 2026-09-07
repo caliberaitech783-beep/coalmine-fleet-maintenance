@@ -103,7 +103,7 @@ test('label helpers format vehicle lists, location counts, net movement and dura
 });
 
 test('In and Out report ships in the director bundle and the General Report tab',()=>{
-  assert.equal(DIRECTOR_REPORT_TITLES.at(-1),IN_OUT_REPORT_TITLE);
+  assert.equal(DIRECTOR_REPORT_TITLES[13],IN_OUT_REPORT_TITLE);
   const tables=buildDirectorReportTables({requests,now:new Date('2026-09-03T05:00:00Z')});
   const inOut=tables.find((table)=>table.title===IN_OUT_REPORT_TITLE);
   assert.equal(inOut.department,'General');
