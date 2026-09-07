@@ -19,7 +19,7 @@ test("equipment and vehicle totals open a name list on every dashboard", () => {
   assert.match(client, /<Modal className="dashboard-asset-modal"/);
   assert.match(client, /<DashboardRecordBrowser key=\{assetDrilldown\} rows=\{assetDrilldownRows\}/);
   assert.match(client, /const assetDrilldownRegions = availableRegions\.map/);
-  assert.match(client, /<h2>Breakdown trend & forecast<\/h2>/);
+  assert.match(client, /<h2>Breakdown trend<\/h2>/);
   assert.match(client, /aria-label="Breakdown trend site"/);
   assert.match(client, /\[7, 14, 30\]\.map/);
   assert.doesNotMatch(client, /<BreakdownTable rows=\{visibleBreakdowns\} showMakeModel showDateFilter rowLimit=\{5\}/);
