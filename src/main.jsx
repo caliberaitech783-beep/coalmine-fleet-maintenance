@@ -1254,7 +1254,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </header>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
-              {[{ label: "BD Open", value: breakdownMovementTotals.open, className: "open" }, { label: "BD In", value: breakdownMovementTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{breakdownSummaryStartKey} to {breakdownSummaryEndKey}</small></div>)}
+              {[{ label: "BD Open", value: breakdownMovementTotals.open, className: "open" }, { label: "BD In", value: breakdownMovementTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong></div>)}
             </div>
             <section className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
               <header><div><b>BD Type Mix</b><small>All six maintenance types</small></div><span>Percentage share of BD In</span></header>
