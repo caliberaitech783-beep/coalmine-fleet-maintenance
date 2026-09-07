@@ -2063,7 +2063,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
   closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
-  to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "verifiedAt",
+  to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
@@ -2511,7 +2511,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
         const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
         const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'verified',site:rows[0].site});
         const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
-        const verifiedAt=requestNotificationTime(new Date());
+        const verifiedAt=requestNotificationTime(`${rows[0].verifiedAt.replace(' ','T')}+05:30`);
         const verifiedBy=req.session.name||'MIS User';
         const closingMeter=`${rows[0].meterType||'KMR/HMR'} ${rows[0].closingMeterReading||closingMeterReading}`;
         await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was verified by ${req.session.name||'MIS User'}${firstTripDone?' and its first trip was completed':' with its first trip still pending'}.`,

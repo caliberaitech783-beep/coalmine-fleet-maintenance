@@ -23,7 +23,7 @@ test("request lists retain job, equipment, site and lifecycle details", () => {
   assert.match(browser, /requestRecords && <th>Job reference<\/th>/);
   assert.match(browser, /<th>Repair category<\/th><th>Status<\/th><th>Started<\/th>/);
   assert.match(browser, /<Status>\{record\.requestStatus\}<\/Status>/);
-  assert.match(browser, /lifecycleRecords && <><th>Closed<\/th><th>Verified<\/th>/);
+  assert.match(browser, /lifecycleRecords && <><th>Closed<\/th><th>MIS verified at<\/th><th>First trip time<\/th>/);
 });
 
 test("repair and event chart context stays applied before the list filters", () => {

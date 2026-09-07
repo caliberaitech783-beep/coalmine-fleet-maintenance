@@ -53,6 +53,7 @@ import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
+import VerificationTimeField from "./verification-time-field.jsx";
 import {
   LayoutDashboard,
   Truck,
@@ -790,11 +791,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     </aside>
   );
 }
-function formatTwelveHourDateTime(value) {
+function formatTwelveHourDateTime(value, includeSeconds = false) {
   const match=String(value||"").match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
   if(!match)return value||"—";
   const hour=Number(match[2]);
-  return `${match[1]} ${hour%12||12}:${match[3]} ${hour>=12?"PM":"AM"}`;
+  return `${match[1]} ${hour%12||12}:${match[3]}${includeSeconds ? `:${match[4] || "00"}` : ""} ${hour>=12?"PM":"AM"}`;
 }
 
 function dashboardRecordDate(record = {}) {
@@ -1152,6 +1153,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       requestStart: request.start || "—",
       requestClosed: request.closedAt || "—",
       requestVerified: request.verifiedAt || "—",
+      requestFirstTrip: firstTripTimestamp(request) || "—",
     };
   });
   const rowsForAssetDrilldown = (key = "") => {
@@ -4846,6 +4848,7 @@ function reportCategoryIdsForUser(permissions = {}, session = {}) {
     .map((category) => category.id);
 }
 function firstTripTimestamp(request) {
+  if (String(request.firstTripAt || "").trim()) return String(request.firstTripAt).trim();
   const date = String(request.firstTripDate || "").trim();
   const time = String(request.firstTripTime || "").trim();
   return date ? [date, time].filter(Boolean).join(" ") : "";
@@ -5024,6 +5027,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     ...closureColumns,
     {key: "verifiedBy", label: "MIS user", value: (request) => request.verifiedBy},
     {key: "verifiedAt", label: "MIS verified at", value: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt)},
+    {key: "firstTripAt", label: "First trip time", value: firstTripTimestamp, render: (request) => formatTimestamp(firstTripTimestamp(request))},
   ];
   const fleetColumns = [
     {key: "equipment", label: "Equipment / vehicle", value: (record) => record.reportEquipment, render: (record) => <b>{record.reportEquipment || "—"}</b>},
@@ -5084,7 +5088,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {category: "mis", title: "On Road with first trip veri.", description: "Comparison of MIS verification against first-trip confirmation for idle cases.", rows: idleRequestRows.filter((row) => row.verifiedAt || firstTripTimestamp(row)), columns: [
       ...misColumns,
       {key: "firstTripDone", label: "First trip done", value: (request) => request.firstTripDone ? "Yes" : "No"},
-      {key: "firstTrip", label: "First trip verification", value: (request) => firstTripTimestamp(request), render: (request) => formatTimestamp(firstTripTimestamp(request))},
       {key: "misToFirstTrip", label: "MIS to first trip", value: (request) => elapsedLabel(request.verifiedAt, firstTripTimestamp(request)), sortValue: (request) => elapsedMilliseconds(request.verifiedAt, firstTripTimestamp(request)), render: (request) => <strong>{elapsedLabel(request.verifiedAt, firstTripTimestamp(request))}</strong>},
     ], dateValue: (row) => firstTripTimestamp(row) || row.verifiedAt, emptyMessage: "No idle first-trip verification records available"},
   ];
@@ -7036,7 +7039,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   }, []);
   const verifiedColumns = [
     ...(showVerifiedBy ? [{key: "verifiedBy", label: "Verified by", value: (row) => row.verifiedBy}] : []),
-    ...(showVerifiedAt ? [{key: "verifiedAt", label: "Verified date & time", value: (row) => formatTwelveHourDateTime(row.verifiedAt)}] : []),
+    ...(showVerifiedAt ? [
+      {key: "verifiedAt", label: "Verified date & time", value: (row) => formatTwelveHourDateTime(row.verifiedAt, true)},
+      {key: "firstTripAt", label: "First trip time", value: (row) => formatTwelveHourDateTime(firstTripTimestamp(row), true)},
+    ] : []),
   ];
   const closedByColumns = showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : [];
   const startedColumn = {key: "start", label: startedLabel, value: (row) => formatTwelveHourDateTime(row.start)};
@@ -7081,10 +7087,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   const workflowHeader = (key, label) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />;
   const startedHeader = () => workflowHeader("start", startedLabel);
   const closedByHeader = () => showClosedBy && workflowHeader("closedBy", "Closed by");
-  const verifiedHeaders = () => <>{showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showVerifiedAt && workflowHeader("verifiedAt", "Verified date & time")}</>;
+  const verifiedHeaders = () => <>{showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showVerifiedAt && <>{workflowHeader("verifiedAt", "Verified date & time")}{workflowHeader("firstTripAt", "First trip time")}</>}</>;
   const startedCell = (row) => <td>{formatTwelveHourDateTime(row.start)}</td>;
   const closedByCell = (row) => showClosedBy && <td>{row.closedBy || "—"}</td>;
-  const verifiedCells = (row) => <>{showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}{showVerifiedAt && <td>{formatTwelveHourDateTime(row.verifiedAt)}</td>}</>;
+  const verifiedCells = (row) => <>{showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}{showVerifiedAt && <><td>{formatTwelveHourDateTime(row.verifiedAt, true)}</td><td>{formatTwelveHourDateTime(firstTripTimestamp(row), true)}</td></>}</>;
   const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">
     {onEdit && !lockedIdeal && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
     {onDelete && !lockedIdeal && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
@@ -7302,6 +7308,7 @@ function VerifyRequestForm({ request, close, onSave }) {
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
         <div><span>Opening {request.meterType || "KMR/HMR"}</span><b>{request.openingMeterReading || "—"}</b><MeterFileCell request={request} stage="opening" /></div>
       </div>
+      <div className="formgrid"><VerificationTimeField /></div>
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       <div className="formgrid">
         {firstTripDone && <>
@@ -7651,7 +7658,8 @@ function NotificationRequestEntry({ reference, request = {} }) {
       <NotificationEntryField label="Accepted" value={request.acceptedAt ? `${formatTwelveHourDateTime(request.acceptedAt)}${request.acceptedBy ? ` · ${request.acceptedBy}` : ""}` : "—"} />
       <NotificationEntryField label="Expected completion" value={formatTwelveHourDateTime(request.expectedCompletionAt)} />
       <NotificationEntryField label="Closed" value={request.closedAt ? `${formatTwelveHourDateTime(request.closedAt)}${request.closedBy ? ` · ${request.closedBy}` : ""}` : "—"} />
-      <NotificationEntryField label="MIS verification" value={request.verifiedAt ? `${formatTwelveHourDateTime(request.verifiedAt)}${request.verifiedBy ? ` · ${request.verifiedBy}` : ""}` : request.verificationStatus} />
+      <NotificationEntryField label="First trip time" value={formatTwelveHourDateTime(firstTripTimestamp(request), true)} />
+      <NotificationEntryField label="MIS verification" value={request.verifiedAt ? `${formatTwelveHourDateTime(request.verifiedAt, true)}${request.verifiedBy ? ` · ${request.verifiedBy}` : ""}` : request.verificationStatus} />
       <NotificationEntryField label="Downtime" value={request.hours} />
       <NotificationEntryField label="Reason / complaint" value={request.complaint} wide />
       <NotificationEntryField label="Idle reason" value={request.idleReason} wide />
