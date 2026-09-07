@@ -1445,7 +1445,38 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", exportTitle = "Breakdown report" }) {
+const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "complaint", "start", "status", "dailyRemarks", "ref", "createdBy"];
+function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal } = {}) {
+  switch (key) {
+    case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
+    case "ref": return <td><b>{r.ref}</b></td>;
+    case "equipment": return <td>{r.equipmentGroup || r.equipment || "—"}</td>;
+    case "door": return <td>{r.door}</td>;
+    case "make": return <td>{r.make || "—"}</td>;
+    case "model": return <td>{r.model || "—"}</td>;
+    case "site": return <td><MapPin /> {r.site}</td>;
+    case "complaint": return <td className="request-reason-cell"><div className="request-reason-text">{String(r.complaint || "").trim() || "—"}</div></td>;
+    case "createdBy": return <td>{r.owner || r.requesterLogin || "—"}</td>;
+    case "closedBy": return <td>{r.closedBy || "—"}</td>;
+    case "chassis": return <td>{r.chassis || "—"}</td>;
+    case "breakdownDays": return <td><b>{r.breakdownDays} {r.breakdownDays === 1 ? "day" : "days"}</b></td>;
+    case "category": return <td>{r.category}</td>;
+    case "start": return <td>{formatTwelveHourDateTime(r.start)}</td>;
+    case "hours": return <td>{r.hours}</td>;
+    case "status": return <td><Status>{r.status}</Status></td>;
+    case "idleReason": return <td>{r.idleReason || "—"}</td>;
+    case "dailyRemarks": return <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>;
+    case "audio": return <td><div className="request-audio-list">
+      {r.complaintAudio && <label><span>Complaint</span><audio controls preload="none" src={r.complaintAudio}>Complaint audio</audio></label>}
+      {r.maintenanceAudio && <label><span>Maintenance</span><audio controls preload="none" src={r.maintenanceAudio}>Maintenance audio</audio></label>}
+      {!r.complaintAudio && !r.maintenanceAudio && "—"}
+    </div></td>;
+    case "owner": return <td>{r.owner}</td>;
+    case "idealAction": return (onApproveIdeal || onCancelIdeal) ? <td><div className="idle-approval-actions">{onApproveIdeal && <button type="button" className="primary compact" onClick={() => onApproveIdeal(r)}><CheckCircle2 /> Make on road</button>}{onCancelIdeal && <button type="button" className="compact" onClick={() => onCancelIdeal(r)}><X /> Cancel</button>}</div></td> : null;
+    default: return null;
+  }
+}
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", exportTitle = "Breakdown report", columnOrder = null }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
@@ -1465,6 +1496,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal || onCancelIdeal ? [["idealAction", "Action"]] : []),
     ],
+    orderedColumns = columnOrder ? [...columns.filter(([key]) => key === "requestAction"), ...columnOrder.map((orderKey) => columns.find(([key]) => key === orderKey)).filter(Boolean)] : columns,
     dateFilteredRows = showDateFilter && dateFilter ? rows.filter((row) => dashboardRecordDate(row) === dateFilter) : rows,
     sourceRows = rowLimit > 0 && !dateFilter ? dateFilteredRows.slice(0, rowLimit) : dateFilteredRows,
     displayRows = showBreakdownDays
@@ -1473,7 +1505,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
           breakdownDays: calculateBreakdownDaysFromStart(row.start, breakdownNow),
         }))
       : sourceRows,
-    filterColumns = columns.filter(([key]) => !["idealAction", "requestAction"].includes(key)).map(([key, label]) => ({
+    filterColumns = orderedColumns.filter(([key]) => !["idealAction", "requestAction"].includes(key)).map(([key, label]) => ({
       key,
       label,
       value: (row) => {
@@ -1509,7 +1541,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       <ActionsTable className="breakdown-table-auto-fit" printTitle={stableToolbar ? "Manager dashboard requests" : ""} toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
-            {columns.map(([key, label]) => (
+            {orderedColumns.map(([key, label]) => (
               key === "idealAction" ? <SortableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} /> : <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />
             ))}
           </tr>
@@ -1518,6 +1550,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
           {sortedRows.length ? (
             sortedRows.map((r) => (
               <tr key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
+                {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction, onApproveIdeal, onCancelIdeal })}</React.Fragment>) : <>
                 {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
                 <td>
                   <b>{r.ref}</b>
@@ -1552,6 +1585,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 </div></td>}
                 <td>{r.owner}</td>
                 {(onApproveIdeal||onCancelIdeal)&&<td><div className="idle-approval-actions">{onApproveIdeal&&<button type="button" className="primary compact" onClick={()=>onApproveIdeal(r)}><CheckCircle2 /> Make on road</button>}{onCancelIdeal&&<button type="button" className="secondary danger compact" onClick={()=>onCancelIdeal(r)}><X /> Cancel idle</button>}</div></td>}
+                </>}
               </tr>
             ))
           ) : (
@@ -7875,7 +7909,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
       </div>
       </div>
-      {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
+      {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} /></section></>}
