@@ -173,7 +173,7 @@ test("Info Pulse fails closed when an operational user has no assigned location"
   assert.deepEqual(scopeInfoPulseRequests([{ref:"REQ-1",site:"Sasti OB"}],scope),[]);
 });
 
-test("the Info Pulse panel stays open for one minute before dismissal is available", () => {
+test("Info Pulse locks only its automatic post-login display", () => {
   const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("../src/ai-feeder.css", import.meta.url), "utf8");
   const serverSource = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
@@ -188,10 +188,14 @@ test("the Info Pulse panel stays open for one minute before dismissal is availab
   // Auto-opens once per sign in, not on every re-render or refresh.
   assert.match(mainSource, /sessionStorage\.getItem\("aiFeederGreeted"\)/);
   assert.match(mainSource, /AI_FEEDER_CLOSE_DELAY_SECONDS = 60/);
+  assert.match(mainSource, /lockForLogin \? AI_FEEDER_CLOSE_DELAY_SECONDS : 0/);
   assert.match(mainSource, /window\.setInterval\(tick, 1000\)/);
   assert.doesNotMatch(mainSource, /if \(remaining === 0\) closeRef\.current\(\)/);
-  assert.match(mainSource, /seconds === 0 && <button type="button" onClick=\{onClose\} aria-label="Close Info Pulse"/);
+  assert.match(mainSource, /canClose && <button type="button" onClick=\{onClose\} aria-label="Close Info Pulse"/);
   assert.match(mainSource, /event\.key === "Escape" && canCloseRef\.current/);
+  assert.match(mainSource, /setOpenMode\("login"\)/);
+  assert.match(mainSource, /onClick=\{\(\) => setOpenMode\("manual"\)\}/);
+  assert.match(mainSource, /lockForLogin=\{openMode === "login"\}/);
   assert.doesNotMatch(mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder(")), /setPaused|onMouseEnter|onMouseLeave/);
   assert.match(mainSource, /INFO PULSE<\/span>/);
   assert.match(styles, /\.ai-feeder-trigger\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*800;/s);

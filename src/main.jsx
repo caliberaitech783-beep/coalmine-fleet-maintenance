@@ -7421,16 +7421,18 @@ function TicketPage({ session }) {
 
 const AI_FEEDER_CLOSE_DELAY_SECONDS = 60;
 const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
-function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) {
-  const [seconds, setSeconds] = useState(AI_FEEDER_CLOSE_DELAY_SECONDS);
+function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogin = false, onClose }) {
+  const [seconds, setSeconds] = useState(lockForLogin ? AI_FEEDER_CLOSE_DELAY_SECONDS : 0);
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
   const canCloseRef = useRef(false);
   closeRef.current = onClose;
-  canCloseRef.current = seconds === 0;
+  const canClose = !lockForLogin || seconds === 0;
+  canCloseRef.current = canClose;
   useEffect(() => {
+    if (!lockForLogin) return undefined;
     const deadline = Date.now() + AI_FEEDER_CLOSE_DELAY_SECONDS * 1000;
     const tick = () => {
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
@@ -7440,7 +7442,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
     const timer = window.setInterval(tick, 1000);
     document.addEventListener("visibilitychange", tick);
     return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
-  }, []);
+  }, [lockForLogin]);
   useEffect(() => {
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
@@ -7477,12 +7479,12 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
           <p>{scope?.kind === "all" ? "All regions at a glance." : "Your permitted locations at a glance."} Review the highest-priority cases first.</p>
         </div>
         <div className="ai-feeder-actions">
-          <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Close available in ${seconds} seconds`} title={`Close available in ${seconds} seconds`}>
+          {lockForLogin && <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Close available in ${seconds} seconds`} title={`Close available in ${seconds} seconds`}>
             <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_CLOSE_DELAY_SECONDS * 100}%`}} aria-hidden="true" />
             <Clock aria-hidden="true" />
             <b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
-          </span>
-          {seconds === 0 && <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>}
+          </span>}
+          {canClose && <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
       <div className="ai-feeder-overview">
@@ -7514,12 +7516,12 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, onClose }) 
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{seconds === 0 ? "Close is now available" : "Close available at 00:00"} · Reopen from Info Pulse</span></footer>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{lockForLogin && seconds > 0 ? "Close available at 00:00" : "Close anytime"} · Reopen from Info Pulse</span></footer>
     </div>
   </div>, document.body);
 }
 function AiFeeder({ role = "", session }) {
-  const [open, setOpen] = useState(false);
+  const [openMode, setOpenMode] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [requests, setRequests] = useState([]);
   const [scope, setScope] = useState({kind: "location", label: "Assigned location", sites: []});
@@ -7555,15 +7557,15 @@ function AiFeeder({ role = "", session }) {
     try { greeted = sessionStorage.getItem("aiFeederGreeted") || ""; } catch { greeted = "yes"; }
     if (greeted === "yes") return;
     try { sessionStorage.setItem("aiFeederGreeted", "yes"); } catch { greeted = "yes"; }
-    setOpen(true);
+    setOpenMode("login");
   }, []);
   const alerts = useMemo(() => aiFeederAlerts(requests, { role, now }), [requests, role, now]);
   const summary = aiFeederSummary(alerts);
   return <>
-    <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="Info Pulse" aria-label={`Info Pulse, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode("manual")} title="Info Pulse" aria-label={`Info Pulse, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
       <Activity /><span>INFO PULSE</span>{summary.total > 0 && <><b className="ai-feeder-trigger-count">{summary.critical || summary.total}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {open && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} scope={scope} onClose={() => setOpen(false)} />}
+    {openMode && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} scope={scope} lockForLogin={openMode === "login"} onClose={() => setOpenMode("")} />}
   </>;
 }
 
