@@ -1375,7 +1375,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         }) : <tr><td colSpan="6">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
       </div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={assetDrilldownTitle} close={() => setAssetDrilldown("")}>
-        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} />
+        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} />
       </Modal>}
       <section className="mine-dashboard-lower-grid">
       <section className="mine-panel mine-breakdown-trend">
@@ -2419,7 +2419,7 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
   </div>;
 }
 function ActionsTable(props) {
-  return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} />;
+  return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false }) {
   const [columnFilters, setColumnFilters] = useState({});

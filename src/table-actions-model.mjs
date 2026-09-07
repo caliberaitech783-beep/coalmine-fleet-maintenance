@@ -60,3 +60,10 @@ export function selectTableRows(rows, columns, filters, sort) {
   const column = columns.find((item) => item.key === sort.key);
   return column ? [...filtered].sort((a, b) => collator.compare(column.value(a), column.value(b)) * (sort.direction === "desc" ? -1 : 1)) : filtered;
 }
+
+export function tableExportModel(rows, columns, visibleKeys, filters = {}, sort = { key: "", direction: "asc" }) {
+  return {
+    columns: visibleKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean),
+    rows: selectTableRows(rows, columns, filters, sort),
+  };
+}

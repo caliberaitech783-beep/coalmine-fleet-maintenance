@@ -89,7 +89,7 @@ test("the list is unconditional and tabs support keyboard navigation", () => {
   assert.match(component, /role="tablist" aria-label="Chart records by region"/);
   assert.match(component, /role="tabpanel"/);
   assert.match(component, /event\.key === "ArrowRight"/);
-  assert.match(component, /<ActionsTable key=\{tableKey\}>/);
+  assert.match(component, /<ActionsTable key=\{tableKey\} exportTitle=/);
   assert.match(component, /view\.rows\.length \? view\.rows\.map/);
   assert.match(component, /\["site", "Site", "All sites"\]/);
   assert.doesNotMatch(component, /Step [1-5]/);

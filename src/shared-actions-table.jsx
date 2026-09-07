@@ -1,15 +1,15 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { tableElements, tableModel, projectTableRow, selectTableRows } from "./table-actions-model.mjs";
+import { tableElements, tableModel, projectTableRow, selectTableRows, tableExportModel } from "./table-actions-model.mjs";
 import "./table-actions.css";
 
-export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
+export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, exportTitle = "", toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
   const { sections, columns } = tableModel(children);
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget, toolbarPortal, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, exportTitle, toolbarTarget, toolbarPortal, tableProps }} />;
 }
 
-function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, toolbarTarget, toolbarPortal, tableProps }) {
+function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, exportTitle, toolbarTarget, toolbarPortal, tableProps }) {
   const [visible, setVisible] = useState(columns.map((column) => column.key));
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "", direction: "asc" });
@@ -36,6 +36,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
     setDialog("");
   };
   const localFilters = Object.fromEntries(columns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]]));
+  const exportData = ExportMenu && exportTitle ? tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = columns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = columns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
@@ -43,6 +44,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} />
+      {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} />}
       {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
       {dialog === "sort" && <SortDialog columns={columns} sort={sort.key ? sort : externalSort || sort} onApply={applySort} onClose={() => setDialog("")} />}
       <FilterDialog columns={filterColumns} rows={[...dataRows, ...filterRows]} filters={effectiveFilters} onFilterChange={updateFilter} onClearFilters={clearFilters} open={dialog === "filter"} onOpenChange={(open) => setDialog(open ? "filter" : "")} hideTrigger dialogMode />
