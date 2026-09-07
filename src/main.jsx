@@ -1110,6 +1110,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     verified: locationBreakdowns.filter((record) => requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
     idle: locationBreakdowns.filter((record) => ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
   };
+  const requestLifecycleAvailability = {
+    maintenance: Math.max(0, requestLifecycleRows.opened.length - requestLifecycleRows.closed.length),
+    mis: Math.max(0, requestLifecycleRows.closed.length - requestLifecycleRows.verified.length),
+  };
   const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
     date,
     opened: requestLifecycleRows.opened.filter((record) => requestEventDate(record, "opened") === date).length,
@@ -1336,7 +1340,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
-            {[{ key: "opened", label: "Opened", note: "New requests" }, { key: "closed", label: "Closed", note: "Maintenance completed" }, { key: "verified", label: "Verified", note: "MIS verified" }, { key: "idle", label: "Idle Vehicles", note: "Available, not working" }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{requestLifecycleRows[item.key].length.toLocaleString()}</strong></button>)}
+            {[{ key: "opened", label: "Opened", note: "New requests", value: requestLifecycleRows.opened.length }, { key: "closed", label: "Closed", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Available in Maintenance", note: "Opened - Closed", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Available in MIS", note: "Closed - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
             <div className="mine-request-chart-grid" aria-hidden="true"><i /><i /><i /><i /></div>

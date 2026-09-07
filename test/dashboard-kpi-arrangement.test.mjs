@@ -24,3 +24,11 @@ test("request lifecycle counts each workflow timestamp separately", () => {
   assert.match(client, /lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
   assert.match(css, /\.mine-request-lifecycle-chart/);
 });
+
+test("request lifecycle shows maintenance and MIS availability cards", () => {
+  assert.match(client, /maintenance: Math\.max\(0, requestLifecycleRows\.opened\.length - requestLifecycleRows\.closed\.length\)/);
+  assert.match(client, /mis: Math\.max\(0, requestLifecycleRows\.closed\.length - requestLifecycleRows\.verified\.length\)/);
+  assert.match(client, /label: "Available in Maintenance", note: "Opened - Closed"/);
+  assert.match(client, /label: "Available in MIS", note: "Closed - Verified"/);
+  assert.match(css, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
+});
