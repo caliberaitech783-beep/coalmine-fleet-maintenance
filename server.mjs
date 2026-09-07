@@ -2245,10 +2245,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
-    const {equipment='',door,reg='',chassis='',site='Not assigned',category='Maintenance request',complaint,start,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
+    const {category='Maintenance request',complaint,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     const normalizedOpeningMeterReading=String(openingMeterReading).trim();
-    if(!reference||!door||!complaint||!String(chassis).trim())return res.status(400).json({error:'Door number, chassis number and complaint are required.'});
+    if(!reference||!complaint)return res.status(400).json({error:'The complaint is required.'});
     if(!String(expectedCompletionAt||'').trim())return res.status(400).json({error:'Enter the expected time for completion.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     if(!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
@@ -2256,12 +2256,11 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     const {rows:meterRows}=await pool.query(`SELECT opening_meter_file FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!meterRows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
     if(!openingMeterFile&&!meterRows[0].opening_meter_file)return res.status(400).json({error:`Upload an opening ${normalizedMeterType} evidence file.`});
-    const startedAt=parseIndiaRequestDateTime(start);
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET equipment_name=$1,door_number=$2,registration_number=$3,chassis_number=$4,
-      site=$5,category=$6,complaint=$7,started_at=$8,accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $14 ELSE accepted_by END,expected_completion_at=($9::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$10,
-      opening_meter_reading=$11,opening_meter_file=CASE WHEN $12<>'' THEN $12 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $12<>'' THEN $13 ELSE opening_meter_file_name END
-      WHERE reference=$15 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[equipment,door,reg,chassis,site,category,complaint,startedAt,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
+    const {rows}=await pool.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
+      accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=($3::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$4,
+      opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END
+      WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
+      RETURNING ${requestProjection}`,[category,complaint,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
     if(!rows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
     res.json(rows[0]);
   }catch(error){next(error)}

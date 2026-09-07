@@ -7035,10 +7035,10 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
       if (!request.openingMeterFileUploaded && !openingMeterFile) return alert(`Upload an opening ${meterType} evidence file.`);
       const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
       if (openingMeterFile && !openingMeterEvidence) return;
-      onSave({ref: request.ref, equipment: form.get("equipment"), door: form.get("door"), reg: request.reg || "", chassis: form.get("chassis"), site: form.get("site"), category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), start: `${form.get("date")} · ${form.get("time")}`, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
     }}>
       <div className="formgrid">
-        <label>Equipment group<input name="equipment" defaultValue={request.equipment || ""} /></label>
+        <label>Equipment group<input value={request.equipmentGroup || request.equipment || ""} readOnly aria-readonly="true" /></label>
         <label>
           Type of breakdown *
           <select name="category" required defaultValue={request.category || ""} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
@@ -7057,9 +7057,9 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
               ))}
           </select>
         </label>
-        <label>Door number *<input name="door" required defaultValue={request.door || ""} /></label>
-        <label>Chassis number *<input name="chassis" required defaultValue={request.chassis || ""} /></label>
-        <label>Site location<input name="site" defaultValue={request.site || "Not assigned"} /></label>
+        <label>Door number<input value={request.door || ""} readOnly aria-readonly="true" /></label>
+        <label>Chassis number<input value={request.chassis || ""} readOnly aria-readonly="true" /></label>
+        <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         {request.acceptanceRequired && <label>Acceptance timing<input value={formatTwelveHourDateTime(acceptanceTime)} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "Automatically recorded when the vehicle is accepted."}</small></label>}

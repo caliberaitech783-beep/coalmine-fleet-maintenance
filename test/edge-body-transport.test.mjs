@@ -43,5 +43,6 @@ test('the request edit form sends only the fields the edit route reads',()=>{
   const start=ui.indexOf('function RequestEditForm(');
   const form=ui.slice(start,ui.indexOf('\nfunction ',start+1));
   assert.ok(!form.includes('onSave({...request'),'the edit payload must not spread the whole request row (complaint audio and other large fields)');
-  assert.match(form,/onSave\(\{ref: request\.ref, equipment:/);
+  assert.match(form,/onSave\(\{ref: request\.ref, category:/);
+  assert.doesNotMatch(form,/form\.get\("(?:equipment|door|chassis|site|date|time)"\)/);
 });

@@ -49,7 +49,7 @@ test("request edit captures opening KMR/HMR evidence but leaves closing evidence
   assert.match(server, /opening_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /closing_meter_reading TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.get\('\/api\/requests\/:reference\/meter-file'/);
-  assert.match(server, /opening_meter_reading=\$11/);
+  assert.match(server, /opening_meter_reading=\$5/);
   assert.match(server, /closing_meter_reading=\$6 WHERE reference=\$7/);
 });
 
@@ -69,5 +69,5 @@ test("request edit validates opening evidence and does not modify closing eviden
   assert.match(editRoute, /validMeterReading\(normalizedOpeningMeterReading\)/);
   assert.doesNotMatch(editRoute, /normalizedClosingMeterReading|closing_meter_reading=|closing_meter_file=/);
   assert.match(editRoute, /if\(!openingMeterFile&&!meterRows\[0\]\.opening_meter_file\)/);
-  assert.match(editRoute, /opening_meter_file=CASE WHEN \$12<>'' THEN \$12 ELSE opening_meter_file END/);
+  assert.match(editRoute, /opening_meter_file=CASE WHEN \$6<>'' THEN \$6 ELSE opening_meter_file END/);
 });

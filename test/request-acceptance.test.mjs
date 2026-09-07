@@ -16,14 +16,20 @@ test("unaccepted requests are highlighted one hour after production timing", () 
 test("Maintenance acceptance is server timed and shared by every request view", () => {
   const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
+  const editForm = client.slice(client.indexOf("function RequestEditForm"), client.indexOf("function CloseRequestForm"));
   assert.match(client, /request\.acceptanceRequired \? "Production timing" : "Timing"/);
   assert.match(client, /request\.acceptanceRequired && <label>Acceptance timing/);
   assert.match(client, /request\.acceptanceRequired \? "Accept vehicle" : "Save changes"/);
+  assert.match(client, /value=\{request\.equipmentGroup \|\| request\.equipment \|\| ""\} readOnly/);
+  for (const field of ["door", "chassis", "site"]) assert.match(client, new RegExp(`value=\\{request\\.${field}[^>]+readOnly`));
+  assert.doesNotMatch(editForm, /name="(?:equipment|door|chassis|site)"/);
   assert.match(client, /!row\.acceptanceRequired \|\| row\.acceptedAt/);
   assert.equal(client.match(/className=\{requestAwaitingAcceptance\(/g)?.length, 2);
   assert.match(server, /ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ/);
   assert.match(server, /ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE/);
   assert.match(server, /started_at,acceptance_required,status/);
   assert.match(server, /accepted_at=CASE WHEN acceptance_required THEN COALESCE\(accepted_at,NOW\(\)\) ELSE accepted_at END/);
+  const editRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference'"), server.indexOf("app.patch('/api/requests/:reference/close'"));
+  assert.doesNotMatch(editRoute, /equipment_name=|door_number=|registration_number=|chassis_number=|site=|started_at=/);
   assert.match(server, /AS "acceptedAt"/);
 });
