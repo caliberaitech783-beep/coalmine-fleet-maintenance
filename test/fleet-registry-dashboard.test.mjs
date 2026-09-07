@@ -25,7 +25,7 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /key\.startsWith\("site:"\)/);
   assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-pie-chart\s*\{/);
-  assert.match(css, /\.mine-request-lifecycle-summary button b \{ display: block; overflow: hidden; font-size: 7\.5px; line-height: 1\.15; white-space: nowrap; text-overflow: ellipsis; \}/);
+  assert.match(css, /\.mine-request-lifecycle-summary button b \{ display: block; overflow: hidden; font-size: 7\.5px; line-height: 1\.15; \}/);
   assert.match(css, /\.mine-request-lifecycle-summary button strong \{ justify-self: end; font: 900 15px\/1 Manrope; white-space: nowrap; \}/);
   assert.match(css, /\.mine-pie-slice\s*\{[\s\S]*cursor:\s*pointer/);
   assert.doesNotMatch(source, /className="mine-fleet-geography"/);
