@@ -27,8 +27,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/rows=\{activeRequests\} showMakeModel showReason showCreatedBy showComplaintAudio/);
   assert.match(source,/rows=\{activeRequests\.filter\(\(row\) => !row\.verifiedAt[\s\S]*showCreatedBy showComplaintAudio showMeterData showActions/);
   assert.match(source,/rows=\{visibleRows\} showMakeModel showReason showClosedBy showTurnaroundTime/);
-  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
-  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showClosedAt=\{isMaintenance\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
+  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
+  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
   assert.match(source,/showReason=\{productionManagerView\} showClosedBy=\{queueTab==="history"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);
@@ -41,7 +41,13 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
 });
 
 test("maintenance closed history shows closing time beside started time",()=>{
-  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance\} showVerifiedBy=\{isMis\}/);
+  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\}/);
   assert.match(source,/\{startedHeader\(\)\}<\/>\}\{showClosedAt && workflowHeader\("closedAt", "Closing time"\)\}/);
   assert.match(source,/\{startedCell\(row\)\}<\/>\}\s*\{showClosedAt && <td>\{formatTwelveHourDateTime\(row\.closedAt\)\}<\/td>\}/);
+});
+
+test("MIS closed history labels production and maintenance timestamps", () => {
+  assert.match(source,/startedLabel=\{isMis \? "Production date and time" : "Started"\}/);
+  assert.match(source,/showClosedAt=\{isMaintenance \|\| isMis\}/);
+  assert.match(source,/const startedHeader = \(\) => workflowHeader\("start", startedLabel\)/);
 });
