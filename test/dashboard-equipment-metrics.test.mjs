@@ -38,7 +38,7 @@ test("fleet chart breakdowns are a subset of each category total, counting asset
   });
 });
 
-test("fleet chart handles empty, healthy and entirely broken-down categories", () => {
+test("fleet chart counts only assets with active breakdown requests", () => {
   assert.deepEqual(fleetChartCounts(), {
     equipment: 0, vehicles: 0, total: 0,
     breakdown: { equipment: 0, vehicles: 0, total: 0 },
@@ -48,8 +48,15 @@ test("fleet chart handles empty, healthy and entirely broken-down categories", (
     { category: "Vehicles", status: "Operational" },
   ]), {
     equipment: 1, vehicles: 1, total: 2,
-    breakdown: { equipment: 1, vehicles: 0, total: 1 },
+    breakdown: { equipment: 0, vehicles: 0, total: 0 },
   });
+  assert.deepEqual(fleetChartCounts([
+    { category: "Equipment", door: "E1", status: "Operational" },
+    { category: "Vehicles", door: "V1", status: "Operational" },
+  ], [
+    { door: "E1", status: "Open" },
+    { door: "V1", status: "Closed" },
+  ]).breakdown, { equipment: 1, vehicles: 0, total: 1 });
 });
 
 test("dashboard equipment totals handle an empty master", () => {

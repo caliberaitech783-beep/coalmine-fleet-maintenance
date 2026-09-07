@@ -78,8 +78,12 @@ export function liveEquipmentMetrics(records = [], requests = []) {
 }
 
 export function fleetChartCounts(records = [], requests = []) {
+  const activeBreakdownRecords = records.filter((record) => requests.some((request) => {
+    const status = normalize(request.status);
+    return status !== "closed" && !["idle", "ideal"].includes(status) && requestMatchesEquipment(request, record);
+  }));
   return {
     ...fleetAssetCounts(records),
-    breakdown: fleetAssetCounts(records.filter((record) => liveEquipmentRoadStatus(record, requests) === "offroad")),
+    breakdown: fleetAssetCounts(activeBreakdownRecords),
   };
 }
