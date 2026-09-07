@@ -7564,9 +7564,114 @@ function AiFeeder({ role = "", session }) {
     {open && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} scope={scope} onClose={() => setOpen(false)} />}
   </>;
 }
-function NotificationBell({ session, onOpenTickets }) {
-  const [items, setItems] = useState([]), [open, setOpen] = useState(false);
-  const centerRef = useRef(null), triggerRef = useRef(null);
+
+function NotificationEntryField({ label, value, wide = false }) {
+  const displayed = value === true ? "Yes" : value === false ? "No" : String(value ?? "").trim() || "—";
+  return <div className={wide ? "wide" : ""}><dt>{label}</dt><dd>{displayed}</dd></div>;
+}
+
+function NotificationRequestEntry({ reference, request = {} }) {
+  const meterType = request.meterType || "KMR/HMR";
+  return <div className="notification-entry-record">
+    <div className="notification-entry-hero">
+      <div><span>Maintenance request</span><h2>{reference}</h2><p>{request.equipmentGroup || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
+      <Status>{request.status || "Open"}</Status>
+    </div>
+    <dl className="notification-entry-fields">
+      <NotificationEntryField label="Equipment group" value={request.equipmentGroup || request.equipment} />
+      <NotificationEntryField label="Door number" value={request.door} />
+      <NotificationEntryField label="Chassis number" value={request.chassis} />
+      <NotificationEntryField label="Site location" value={request.site} />
+      <NotificationEntryField label="Breakdown type" value={request.category} />
+      <NotificationEntryField label="Current responsibility" value={request.owner || request.requesterLogin} />
+      <NotificationEntryField label="Started" value={formatTwelveHourDateTime(request.start)} />
+      <NotificationEntryField label="Accepted" value={request.acceptedAt ? `${formatTwelveHourDateTime(request.acceptedAt)}${request.acceptedBy ? ` · ${request.acceptedBy}` : ""}` : "—"} />
+      <NotificationEntryField label="Expected completion" value={formatTwelveHourDateTime(request.expectedCompletionAt)} />
+      <NotificationEntryField label="Closed" value={request.closedAt ? `${formatTwelveHourDateTime(request.closedAt)}${request.closedBy ? ` · ${request.closedBy}` : ""}` : "—"} />
+      <NotificationEntryField label="MIS verification" value={request.verifiedAt ? `${formatTwelveHourDateTime(request.verifiedAt)}${request.verifiedBy ? ` · ${request.verifiedBy}` : ""}` : request.verificationStatus} />
+      <NotificationEntryField label="Downtime" value={request.hours} />
+      <NotificationEntryField label="Reason / complaint" value={request.complaint} wide />
+      <NotificationEntryField label="Idle reason" value={request.idleReason} wide />
+      <NotificationEntryField label="Maintenance work" value={request.maintenanceWork} wide />
+      <NotificationEntryField label="Delay reason" value={request.delayedReason} wide />
+    </dl>
+    <section className="notification-entry-section" aria-label="Meter evidence">
+      <h3>Meter readings and evidence</h3>
+      <div className="notification-entry-evidence">
+        <article><span>Opening {meterType}</span><b>{request.openingMeterReading || "Not recorded"}</b><small>{request.openingMeterFileUploaded ? "Evidence uploaded" : "No evidence file uploaded"}</small></article>
+        <article><span>Closing {meterType}</span><b>{request.closingMeterReading || "Not recorded"}</b><small>{request.closingMeterFileUploaded ? "Evidence uploaded" : "No evidence file uploaded"}</small></article>
+      </div>
+    </section>
+    {(request.complaintAudio || request.maintenanceAudio) && <section className="notification-entry-section" aria-label="Request audio">
+      <h3>Audio</h3>
+      <div className="notification-entry-audio">
+        {request.complaintAudio && <label><span>Complaint</span><audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio></label>}
+        {request.maintenanceAudio && <label><span>Maintenance update</span><audio controls preload="none" src={request.maintenanceAudio}>Maintenance audio</audio></label>}
+      </div>
+    </section>}
+    <section className="notification-entry-section" aria-label="Daily maintenance updates">
+      <h3>Daily maintenance updates</h3>
+      <div className="notification-entry-remarks"><MaintenanceRemarks remarks={request.dailyRemarks} /></div>
+    </section>
+  </div>;
+}
+
+function NotificationTicketEntry({ reference, ticket = {} }) {
+  const hasResolution = ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData;
+  return <div className="notification-entry-record">
+    <div className="notification-entry-hero">
+      <div><span>CRM ticket</span><h2>{reference}</h2><p>{ticket.category || "General"} · {ticket.site || "Site not recorded"}</p></div>
+      <Status>{ticket.status || "Open"}</Status>
+    </div>
+    <dl className="notification-entry-fields">
+      <NotificationEntryField label="Created by" value={ticket.creatorName || ticket.creatorLogin} />
+      <NotificationEntryField label="User role" value={ticket.creatorRole} />
+      <NotificationEntryField label="Site location" value={ticket.site} />
+      <NotificationEntryField label="Category" value={ticket.category} />
+      <NotificationEntryField label="Priority" value={ticket.priority || "Medium"} />
+      <NotificationEntryField label="Created" value={formatTwelveHourDateTime(ticket.createdAt)} />
+      <NotificationEntryField label="Description" value={ticket.message || "Audio description"} wide />
+      <NotificationEntryField label="Resolution" value={ticket.resolutionMessage} wide />
+      <NotificationEntryField label="Resolved by" value={ticket.resolvedBy} />
+      <NotificationEntryField label="Resolved" value={formatTwelveHourDateTime(ticket.resolvedAt)} />
+    </dl>
+    {(ticket.messageAudio || ticket.attachmentData) && <section className="notification-entry-section" aria-label="Ticket evidence">
+      <h3>Ticket evidence</h3>
+      <div className="notification-entry-evidence">
+        {ticket.messageAudio && <article><span>Recorded description</span><audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio></article>}
+        {ticket.attachmentData && <article><span>Attachment</span><TicketAttachment ticket={ticket} /></article>}
+      </div>
+    </section>}
+    {hasResolution && <section className="notification-entry-section" aria-label="Resolution evidence">
+      <h3>Resolution evidence</h3>
+      <div className="notification-entry-evidence">
+        {ticket.resolutionAudio && <article><span>Recorded resolution</span><audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio></article>}
+        {ticket.resolutionAttachmentData && <article><span>Resolution attachment</span><TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" /></article>}
+      </div>
+    </section>}
+  </div>;
+}
+
+function NotificationEntryDialog({ state, onClose }) {
+  if (!state) return null;
+  const target = state.target;
+  const title = state.phase === "loading"
+    ? "Opening notification entry"
+    : state.phase === "error"
+      ? "Notification entry unavailable"
+      : `${target.kind === "ticket" ? "Ticket" : "Request"} · ${target.reference}`;
+  return createPortal(<Modal title={title} close={onClose} className="notification-entry-modal">
+    {state.phase === "loading" && <div className="notification-entry-state loading" role="status" aria-live="polite" aria-busy="true"><Clock /><div><b>Loading the exact entry…</b><p>Checking your current access and retrieving the latest record.</p></div></div>}
+    {state.phase === "error" && <div className="notification-entry-state error" role="alert"><AlertTriangle /><div><b>Entry unavailable</b><p>This entry is no longer available or is outside your assigned access.</p><button type="button" onClick={onClose}>Close</button></div></div>}
+    {state.phase === "ready" && target?.kind === "request" && <NotificationRequestEntry reference={target.reference} request={target.record} />}
+    {state.phase === "ready" && target?.kind === "ticket" && <NotificationTicketEntry reference={target.reference} ticket={target.record} />}
+  </Modal>, document.body);
+}
+
+function NotificationBell({ session, onOpenEntry }) {
+  const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
+  const centerRef = useRef(null), triggerRef = useRef(null), entryControllerRef = useRef(null), entrySequenceRef = useRef(0), onOpenEntryRef = useRef(onOpenEntry);
+  onOpenEntryRef.current = onOpenEntry;
   // Loading reminders updates the badge; only a bell click opens the dropdown.
   const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}})
     .then(async (response) => {
@@ -7606,7 +7711,54 @@ function NotificationBell({ session, onOpenTickets }) {
       }
     }
   };
-  return <div className="notification-center" ref={centerRef}><button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => {setOpen(false); onOpenTickets?.(item);}}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div></div>}</div>;
+  const closeEntry = () => {
+    entrySequenceRef.current += 1;
+    entryControllerRef.current?.abort();
+    entryControllerRef.current = null;
+    setEntryState(null);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  };
+  const openEntry = async (item) => {
+    setOpen(false);
+    entryControllerRef.current?.abort();
+    const sequence = ++entrySequenceRef.current;
+    const controller = new AbortController();
+    entryControllerRef.current = controller;
+    const notificationId = String(item?.id ?? "").trim();
+    setEntryState({phase: "loading"});
+    if (!notificationId) {
+      if (sequence === entrySequenceRef.current) setEntryState({phase: "error"});
+      return;
+    }
+    try {
+      const response = await fetch(`/api/notifications/${encodeURIComponent(notificationId)}/target`, {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {Authorization: `Bearer ${session.token}`},
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error("Notification entry unavailable");
+      const kind = body?.kind;
+      const reference = String(body?.reference ?? "").trim();
+      const record = body?.record;
+      if (!(["request", "ticket"].includes(kind) && reference && record && typeof record === "object" && !Array.isArray(record))) throw new Error("Invalid notification entry");
+      if (sequence !== entrySequenceRef.current) return;
+      const target = {kind, reference, record};
+      entryControllerRef.current = null;
+      setEntryState({phase: "ready", target});
+      try { onOpenEntryRef.current?.(target); } catch (error) { console.warn("The entry opened, but its broad navigation callback failed.", error); }
+    } catch (error) {
+      if (error.name === "AbortError" || sequence !== entrySequenceRef.current) return;
+      entryControllerRef.current = null;
+      setEntryState({phase: "error"});
+    }
+  };
+  useEffect(() => () => {
+    entrySequenceRef.current += 1;
+    entryControllerRef.current?.abort();
+  }, []);
+  return <><div className="notification-center" ref={centerRef}><button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div></div>}</div><NotificationEntryDialog state={entryState} onClose={closeEntry} /></>;
 }
 
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
@@ -7671,7 +7823,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)).filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="idle");
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenTickets={(item) => {const ticket=String(item?.ticketReference||"").startsWith("TIC/")&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} />}
       {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
@@ -8042,7 +8194,7 @@ function App() {
             <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <Search />
             </button>
-            <NotificationBell session={session} onOpenTickets={(item) => selectMenu(String(item?.ticketReference || "").startsWith("TIC/") ? "Tickets" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
+            <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "ticket" ? "Tickets" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
           </div>
         </div>
         <div className="body">

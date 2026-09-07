@@ -1984,6 +1984,65 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+app.get('/api/notifications/:id/target',requireSession,async(req,res,next)=>{
+  res.set('Cache-Control','private, no-store, no-cache, must-revalidate');
+  res.vary('Authorization');
+  const unavailable=()=>res.status(404).json({error:'Notification target is not available.'});
+  try{
+    const rawId=String(req.params.id||'').trim();
+    if(!/^[1-9]\d*$/.test(rawId))return unavailable();
+    let notificationId;
+    try{notificationId=BigInt(rawId)}catch{return unavailable()}
+    if(notificationId>9223372036854775807n)return unavailable();
+
+    const login=String(req.session.login||'').trim().toLowerCase();
+    const {rows:notifications}=await pool.query(`SELECT ticket_reference AS reference
+      FROM crm_notifications WHERE id=$1 AND recipient_login=$2 LIMIT 1`,[notificationId.toString(),login]);
+    const reference=String(notifications[0]?.reference||'').trim();
+    if(!reference)return unavailable();
+
+    const [ticketResult,requestResult]=await Promise.all([
+      pool.query(`SELECT ${ticketProjection()} FROM crm_tickets WHERE reference=$1`,[reference]),
+      pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),
+    ]);
+    if(ticketResult.rows.length&&requestResult.rows.length)return unavailable();
+
+    if(ticketResult.rows.length){
+      const ticket=ticketResult.rows[0];
+      let visible=req.session.role==='super'&&req.session.permissions?.adminLevel!=='Manager';
+      if(req.session.role!=='super')visible=String(ticket.creatorLogin||'').trim().toLowerCase()===login;
+      else if(req.session.permissions?.adminLevel==='Manager'){
+        const manager=await currentUserRecord(req.session);
+        const creatorRoles=managerRoleSelection(req.session.permissions?.managerRoles?.length
+          ?req.session.permissions.managerRoles:req.session.permissions?.managerRole).map(managerUserRole);
+        visible=creatorRoles.includes(ticket.creatorRole)&&userManagesSite(manager,ticket.site);
+      }
+      if(!visible)return unavailable();
+      return res.json({kind:'ticket',reference,record:ticket});
+    }
+
+    if(requestResult.rows.length){
+      const authorization=await currentDashboardAuthorization(req.session);
+      if(!authorization)return unavailable();
+      const operationalRole=authorization.session.role==='normal'
+        &&['Production User','Maintenance User','MIS User'].includes(authorization.session.assignedRole);
+      if(authorization.session.role!=='super'&&!operationalRole&&authorization.session.permissions?.readRequests!==true)
+        return unavailable();
+      const scope=infoPulseRequestScope(authorization.session,authorization.user);
+      const ownsProductionRequest=authorization.session.role==='normal'
+        &&authorization.session.assignedRole==='Production User'
+        &&String(requestResult.rows[0]?.requesterLogin||'').trim().toLowerCase()===login;
+      const visibleRows=ownsProductionRequest?requestResult.rows:scopeInfoPulseRequests(requestResult.rows,scope);
+      if(visibleRows.length!==1)return unavailable();
+      const [record]=await attachDailyRemarks(visibleRows);
+      if(!record)return unavailable();
+      return res.json({kind:'request',reference,record});
+    }
+
+    return unavailable();
+  }catch(error){next(error)}
+});
+
 app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
   try{
     const login=String(req.session.login||'').trim().toLowerCase();

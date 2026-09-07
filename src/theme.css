@@ -423,3 +423,13 @@ textarea {
 :root[data-theme="dark"] .audit-outcome.failed{background:#482729;color:#ffb1b1}
 :root[data-theme="dark"] .audit-device-badge.computer{background:#203a63;color:#a9c8ff}
 :root[data-theme="dark"] .audit-device-badge.mobile{background:#183f38;color:#99e1cb}
+
+:root[data-theme="dark"] .notification-entry-hero{background:linear-gradient(135deg,#142136,#111d30);border-color:#2c415e}
+:root[data-theme="dark"] .notification-entry-hero span{color:#9bb7ff}
+:root[data-theme="dark"] .notification-entry-fields{background:#2c415e;border-color:#2c415e}
+:root[data-theme="dark"] .notification-entry-fields>div,
+:root[data-theme="dark"] .notification-entry-section{background:#111d30;border-color:#2c415e}
+:root[data-theme="dark"] .notification-entry-evidence article,
+:root[data-theme="dark"] .notification-entry-audio label{background:#17253a;border-color:#34435a}
+:root[data-theme="dark"] .notification-entry-state button{background:#17253a;border-color:#36516f;color:#dce7f7}
+:root[data-theme="dark"] .notification-entry-state button:hover{background:#223e64;color:#fff}
