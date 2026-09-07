@@ -87,7 +87,7 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={view.selection.region ? `${id}-${view.selection.region}` : undefined}>
       <div className="dashboard-record-summary"><h4>{view.selection.region || "Fleet"} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
       <div className="dashboard-asset-list">
-        <ActionsTable key={tableKey} exportTitle={`${title} · ${view.selection.region || "Fleet"}`}>
+        <ActionsTable key={tableKey} exportTitle={`${title} · ${view.selection.region || "Fleet"}`} printTitle={`${title} · ${view.selection.region || "Fleet"}`}>
           <thead><tr>{requestRecords && <th>Job reference</th>}<th>Machine / Door no.</th><th>Equipment category</th><th>Equipment group</th><th>Model</th><th>{requestRecords ? "Request site" : "Current location"}</th><th>Serial / chassis no.</th>{requestRecords && <><th>Repair category</th><th>Status</th><th>Started</th></>}{lifecycleRecords && <><th>Closed</th><th>Verified</th></>}</tr></thead>
           <tbody>{view.rows.length ? view.rows.map((record, index) => <tr key={record.id || `${record.equipmentName}-${index}`}>
             {requestRecords && <td><b>{record.requestReference}</b></td>}<td>{equipmentMachineLabel(record)}</td><td>{categoryName(equipmentCategoryLabel(record))}</td><td>{equipmentGroupLabel(record)}</td><td>{record.model || "—"}</td><td>{record.requestSite || record.currentLocation || record.location || record.site || "—"}</td><td>{record.manufacturerSerialNo || record.chassisNo || "—"}</td>
