@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
+const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
+
 test("request lifecycle has reason/status columns, closed history, and stakeholder notifications",()=>{
-  const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const mobileStyles=fs.readFileSync(new URL("../src/mobile-workflow.css",import.meta.url),"utf8");
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const access=fs.readFileSync(new URL("../mobile-access.mjs",import.meta.url),"utf8");
@@ -26,8 +27,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/rows=\{activeRequests\} showMakeModel showReason showCreatedBy showComplaintAudio/);
   assert.match(source,/rows=\{activeRequests\.filter\(\(row\) => !row\.verifiedAt[\s\S]*showCreatedBy showComplaintAudio showMeterData showActions/);
   assert.match(source,/rows=\{visibleRows\} showMakeModel showReason showClosedBy showTurnaroundTime/);
-  assert.match(source,/showClosedBy showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
-  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
+  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
+  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showClosedAt=\{isMaintenance\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
   assert.match(source,/showReason=\{productionManagerView\} showClosedBy=\{queueTab==="history"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);
@@ -37,4 +38,10 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(server,/Date & time: \$\{openedAt\}/);
   assert.match(server,/const closedAtLabel=requestNotificationTime\(closedAt\)/);
   assert.match(server,/Closing date & time: \$\{closedAtLabel\}/);
+});
+
+test("maintenance closed history shows closing time beside started time",()=>{
+  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance\} showVerifiedBy=\{isMis\}/);
+  assert.match(source,/workflowHeader\("start", "Started"\)\}\{showClosedAt && workflowHeader\("closedAt", "Closing time"\)\}/);
+  assert.match(source,/<td>\{formatTwelveHourDateTime\(row\.start\)\}<\/td>\s*\{showClosedAt && <td>\{formatTwelveHourDateTime\(row\.closedAt\)\}<\/td>\}/);
 });
