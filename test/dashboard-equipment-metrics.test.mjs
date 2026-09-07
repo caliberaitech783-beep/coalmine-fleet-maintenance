@@ -4,6 +4,7 @@ import {
   equipmentMetrics,
   equipmentRoadStatus,
   fleetAssetCounts,
+  fleetBreakdownCaseCounts,
   fleetChartCounts,
   liveEquipmentMetrics,
 } from "../dashboard-equipment-metrics.mjs";
@@ -131,4 +132,22 @@ test("live dashboard availability overlays requests on imported equipment withou
     unknown: 0,
     availability: 25,
   });
+});
+
+test("fleet breakdown case counts count open requests, not matched assets", () => {
+  const records = [
+    { category: "Equipment", door: "E1", equipmentName: "Dumper" },
+    { category: "Equipment", door: "E2", equipmentName: "Dumper" },
+    { category: "Vehicle", door: "V1", reg: "MH31AB1234" },
+  ];
+  const requests = [
+    { door: "E1", status: "Open" },
+    { door: "E1", status: "Work in progress" },
+    { equipment: "Dumper", status: "Open" },
+    { door: "V1", status: "Idle" },
+    { door: "V1", status: "Closed" },
+    { reg: "MH31ZZ9999", status: "Open" },
+  ];
+  assert.deepEqual(fleetBreakdownCaseCounts(records, requests), { equipment: 3, vehicles: 2, total: 5 });
+  assert.deepEqual(fleetBreakdownCaseCounts(), { equipment: 0, vehicles: 0, total: 0 });
 });

@@ -22,6 +22,10 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /const openBreakdownCaseCount = visibleBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"\)\.length;/);
   assert.match(source, /mode === "total" \? assetCounts\.total : openBreakdownCaseCount/);
   assert.doesNotMatch(source, /region\.breakdown\.total/);
+  assert.match(source, /const siteRequests = visibleBreakdowns\.filter\(\(request\) => recordBelongsToSite\(request, site\)\);/);
+  assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, siteRequests\)/);
+  assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, regionRequests\)/);
+  assert.doesNotMatch(source, /fleetChartCounts\(/);
   assert.match(source, /key\.startsWith\("site:"\)/);
   assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-pie-chart\s*\{/);
@@ -58,7 +62,7 @@ test("total fleet renders a region-grouped site count graph", () => {
 });
 
 test("each fleet site includes breakdowns in its equipment and vehicle bars", () => {
-  assert.match(source, /fleetChartCounts\(records, visibleBreakdowns\)/);
+  assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, siteRequests\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);

@@ -24,7 +24,7 @@ import { buildDepartmentReports } from "../department-reports.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetBreakdownCaseCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
@@ -1076,10 +1076,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         .filter((site) => dashboardSite === "all" || site === dashboardSite)
         .map((site) => {
           const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
-          return { name: site, ...fleetChartCounts(records, visibleBreakdowns) };
+          const siteRequests = visibleBreakdowns.filter((request) => recordBelongsToSite(request, site));
+          return { name: site, ...fleetAssetCounts(records), breakdown: fleetBreakdownCaseCounts(records, siteRequests) };
         });
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
-      return { ...region, sites, ...fleetChartCounts(records, visibleBreakdowns) };
+      const regionRequests = visibleBreakdowns.filter((request) => sites.some((site) => recordBelongsToSite(request, site.name)));
+      return { ...region, sites, ...fleetAssetCounts(records), breakdown: fleetBreakdownCaseCounts(records, regionRequests) };
     });
   const showFleetBreakdowns = fleetChartMode === "breakdown";
   const maxFleetSiteTotal = Math.max(1, ...fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])));
