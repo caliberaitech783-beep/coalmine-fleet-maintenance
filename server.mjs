@@ -2314,6 +2314,7 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     if(!reference||!complaint)return res.status(400).json({error:'The complaint is required.'});
     if(!String(expectedCompletionAt||'').trim())return res.status(400).json({error:'Enter the expected time for completion.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
+    // Maintenance edit permits omitted KMR data; supplied readings and HMR still require validation.
     if((normalizedMeterType!=='KMR'||normalizedOpeningMeterReading)&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
     const {rows:meterRows}=await pool.query(`SELECT opening_meter_file FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
