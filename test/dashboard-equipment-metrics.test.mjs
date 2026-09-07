@@ -59,6 +59,16 @@ test("fleet chart counts only assets with active breakdown requests", () => {
   ]).breakdown, { equipment: 1, vehicles: 0, total: 1 });
 });
 
+test("fleet chart does not match one request to every asset sharing a group value", () => {
+  const records = [
+    { category: "Vehicles", equipment: "SCANIA TIPPERS", equipmentName: "S1 - MH01", door: "S1" },
+    { category: "Vehicles", equipment: "SCANIA TIPPERS", equipmentName: "S2 - MH02", door: "S2" },
+  ];
+  assert.deepEqual(fleetChartCounts(records, [
+    { equipment: "SCANIA TIPPERS", door: "S1", status: "Open" },
+  ]).breakdown, { equipment: 0, vehicles: 1, total: 1 });
+});
+
 test("dashboard equipment totals handle an empty master", () => {
   assert.deepEqual(equipmentMetrics([]), {
     total: 0,

@@ -53,6 +53,22 @@ function requestMatchesEquipment(request = {}, equipment = {}) {
   return identityValues(request).some((value) => equipmentValues.has(value));
 }
 
+const strongIdentityValues = (record = {}) => [
+  record.manufacturerSerialNo,
+  record.chassisNo,
+  record.chassis,
+  record.door,
+  record.reg,
+  record.registration,
+].map(normalize).filter(Boolean);
+
+function requestMatchesFleetAsset(request = {}, equipment = {}) {
+  const equipmentValues = new Set(strongIdentityValues(equipment));
+  if (strongIdentityValues(request).some((value) => equipmentValues.has(value))) return true;
+  const requestedName = normalize(request.equipmentName || request.equipment);
+  return Boolean(requestedName && requestedName === normalize(equipment.equipmentName));
+}
+
 export function liveEquipmentRoadStatus(record = {}, requests = []) {
   const matchingRequests = requests.filter((request) =>
     normalize(request.status) !== "closed" && requestMatchesEquipment(request, record));
@@ -80,7 +96,7 @@ export function liveEquipmentMetrics(records = [], requests = []) {
 export function fleetChartCounts(records = [], requests = []) {
   const activeBreakdownRecords = records.filter((record) => requests.some((request) => {
     const status = normalize(request.status);
-    return status !== "closed" && !["idle", "ideal"].includes(status) && requestMatchesEquipment(request, record);
+    return status !== "closed" && !["idle", "ideal"].includes(status) && requestMatchesFleetAsset(request, record);
   }));
   return {
     ...fleetAssetCounts(records),
