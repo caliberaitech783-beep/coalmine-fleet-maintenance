@@ -103,3 +103,14 @@ export function fleetChartCounts(records = [], requests = []) {
     breakdown: fleetAssetCounts(activeBreakdownRecords),
   };
 }
+
+export function fleetBreakdownCaseCounts(records = [], requests = []) {
+  const openCases = requests.filter((request) => normalize(request.status) !== "closed");
+  const isVehicleCase = (request) => {
+    const asset = records.find((record) => requestMatchesFleetAsset(request, record));
+    if (asset) return isVehicleRecord(asset);
+    return Boolean(normalize(request.reg || request.registration));
+  };
+  const vehicles = openCases.filter(isVehicleCase).length;
+  return { equipment: openCases.length - vehicles, vehicles, total: openCases.length };
+}
