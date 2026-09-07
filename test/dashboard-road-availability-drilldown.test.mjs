@@ -12,10 +12,8 @@ test("road availability KPIs open live-state equipment drilldowns", () => {
   assert.doesNotMatch(source, /className="mine-primary-kpi-grid"/);
   assert.match(source, /rowsForAssetDrilldown = \(key = ""\)/);
   assert.match(source, /liveEquipmentRoadStatus\(record, visibleBreakdowns\) === key/);
-  assert.match(source, /\["all", "equipment", "vehicle", "road-availability", "available", "onroad", "offroad", "idle", "unknown"\]\.includes\(assetDrilldown\)/);
-  assert.match(source, /assetDrilldownRows\.filter\(\(record\) => recordBelongsToSite\(record, site\.name\)\)/);
-  assert.match(source, /assetDrilldownSite \? assetDrilldownRows\.filter/);
-  assert.match(source, /Step 1 · Select region[\s\S]*Step 2 · Select \{selectedAssetRegion\.code\} site[\s\S]*Step 3 · \{assetDrilldownSite\} fleet totals/);
+  assert.match(source, /const assetDrilldownRows = rowsForAssetDrilldown\(assetDrilldown\)/);
+  assert.match(source, /rows=\{assetDrilldownRows\} regions=\{assetDrilldownRegions\}/);
   assert.match(source, /active === "Breakdown master"[\s\S]*<Equipment initialFilter=\{breakdownFleetFilter\} pageTitle="Breakdown master" statusRequests=\{requests\} allowedLocations=\{breakdownFleetSites\}/);
   assert.match(source, /const roadStatusFor = \(record\) => Array\.isArray\(statusRequests\)[\s\S]*liveEquipmentRoadStatus\(record, statusRequests\)/);
   assert.match(source, /roadStatusFor\(v\) === road/);

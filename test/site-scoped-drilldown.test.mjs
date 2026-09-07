@@ -15,7 +15,7 @@ test("the breakdown type normaliser is shared so drilldown keys match the type m
   assert.equal(normalizedBreakdownType("something else"), "");
 });
 
-test("site-scoped drilldown starts at equipment vs vehicle and runs to machine details", async () => {
+test("site-scoped charts open the shared list with their site selected", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
 
   // Both key shapes carry the site, so no region or site step is needed.
@@ -25,17 +25,10 @@ test("site-scoped drilldown starts at equipment vs vehicle and runs to machine d
   // "all" keeps every machine at the site; anything else filters by road status.
   assert.match(source, /status === "all" \? atSite : atSite\.filter/);
 
-  // The four steps, in order.
-  assert.match(source, /Step 1 · Select equipment or vehicle/);
-  assert.match(source, /Step 2 · Select \{assetDrilldownCategory === "Total vehicles" \? "vehicle" : "equipment"\} type/);
-  assert.match(source, /Step 3 · Select a machine in \{assetDrilldownGroup\}/);
-  assert.match(source, /Step 4 · Full details for \{assetDrilldownMachine\}/);
-
-  // The machine step needs its own state, cleared whenever a parent step changes.
-  assert.match(source, /\[assetDrilldownMachine, setAssetDrilldownMachine\] = useState\(""\)/);
-  const opener = source.match(/const openAssetDrilldown = \(key\) => \{[\s\S]*?\};/);
-  assert.ok(opener, "expected openAssetDrilldown");
-  assert.match(opener[0], /setAssetDrilldownMachine\(""\)/);
+  // Site-specific charts preserve their selection in the shared list filters.
+  assert.match(source, /const initialDrilldownSite = siteScopedSite/);
+  assert.match(source, /initialRegion=\{initialDrilldownRegion\} initialSite=\{initialDrilldownSite\}/);
+  assert.match(source, /<DashboardRecordBrowser key=\{assetDrilldown\}/);
 
   // The site-scoped opener must only close the modal and open the drilldown.
   const scoped = source.match(/const openSiteScopedDrilldown = \(key\) => \{[\s\S]*?\};/);

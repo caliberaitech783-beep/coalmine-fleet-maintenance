@@ -21,6 +21,6 @@ test("request lifecycle counts each workflow timestamp separately", () => {
   assert.match(client, /requestLifecycleRows\.closed/);
   assert.match(client, /requestLifecycleRows\.verified/);
   assert.match(client, /requestLifecycleRows\.idle/);
-  assert.match(client, /repairTypeSiteDrilldown = assetDrilldown\.startsWith\("repair:"\) \|\| assetDrilldown\.startsWith\("event:"\)/);
+  assert.match(client, /lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
   assert.match(css, /\.mine-request-lifecycle-chart/);
 });

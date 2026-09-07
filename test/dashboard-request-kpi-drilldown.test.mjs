@@ -3,46 +3,32 @@ import fs from "node:fs";
 import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+const browser = fs.readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8");
 
-test("operational dashboard graphs open category, group, lifecycle, and full-detail drilldowns", () => {
+test("operational dashboard graphs share the region list browser", () => {
   assert.match(source, /setBreakdownDetailSite\(site\.site\)/);
-  // A road row already names its site, so it opens the site-scoped chain that
-  // starts at Equipment vs Vehicle instead of asking for region and site again.
   assert.match(source, /openAssetDrilldown\(`site-status:\$\{site\.site\}\|all`\)/);
-  assert.doesNotMatch(source, /className="mine-panel mine-open-cases"/);
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /key: `group:\$\{group\.label\}`/);
   assert.match(source, /openAssetDrilldown\(`event:\$\{item\.key\}`\)/);
   assert.match(source, /openAssetDrilldown\(`event:\$\{event\}:\$\{day\.date\}`\)/);
-  assert.match(source, /Step 1 · Select equipment category/);
-  assert.match(source, /Step 2 · Select equipment group/);
-  assert.match(source, /Step 3 · Full details for/);
+  assert.match(source, /<DashboardRecordBrowser key=\{assetDrilldown\} rows=\{assetDrilldownRows\}/);
+  assert.doesNotMatch(source, /Step [1-5] · (Select|Full details|Request details)/);
 });
 
-test("request KPI drilldowns merge job fields with Equipment Master details", () => {
-  assert.match(source, /const requestAssetRows = \(requestRows = \[\]\)/);
+test("request lists retain job, equipment, site and lifecycle details", () => {
   assert.match(source, /const equipment = equipmentForRequest\(request\)/);
   assert.match(source, /requestReference: request\.ref \|\| request\.reference/);
-  assert.match(source, /requestAssetDrilldown && <th>Job reference<\/th>/);
-  assert.match(source, /<th>Repair category<\/th><th>Status<\/th><th>Started<\/th>/);
-  assert.match(source, /<Status>\{record\.requestStatus\}<\/Status>/);
+  assert.match(source, /requestSite: request\.site \|\| request\.location/);
+  assert.match(browser, /requestRecords && <th>Job reference<\/th>/);
+  assert.match(browser, /<th>Repair category<\/th><th>Status<\/th><th>Started<\/th>/);
+  assert.match(browser, /<Status>\{record\.requestStatus\}<\/Status>/);
+  assert.match(browser, /lifecycleRecords && <><th>Closed<\/th><th>Verified<\/th>/);
 });
 
-test("repair type graph drills down by region, site, fleet category, and type before request details", () => {
-  assert.match(source, /const repairTypeSiteDrilldown = assetDrilldown\.startsWith\("repair:"\)/);
-  assert.match(source, /const repairTypeRegionBreakdown = availableRegions/);
-  assert.match(source, /const selectedRepairTypeRegion = repairTypeRegionBreakdown\.find/);
-  assert.match(source, /Step 1 · Select region/);
-  assert.match(source, /setAssetDrilldownRegion\(region\.code\)/);
-  assert.match(source, /Step 2 · Select \{selectedRepairTypeRegion\.code\} site/);
-  assert.match(source, /const repairTypeSiteBreakdown = \(selectedRepairTypeRegion\?\.sites \|\| \[\]\)\.map/);
-  assert.match(source, /assetDrilldownRows\.filter\(\(record\) => recordBelongsToSite\(record, site\)\)/);
-  assert.match(source, /setAssetDrilldownSite\(site\)/);
-  assert.match(source, /const repairTypeSiteCategoryBreakdown = summarizeEquipment\(repairTypeSiteRows, equipmentCategoryLabel\)/);
-  assert.match(source, /Step 3 · \{assetDrilldownSite\} fleet totals/);
-  assert.match(source, /const repairTypeSiteGroupBreakdown = summarizeEquipment\(repairTypeSiteCategoryRows\)/);
-  assert.match(source, /Step 4 · Select \{assetDrilldownCategory === "Total vehicles" \? "vehicle" : "equipment"\} type/);
-  assert.match(source, /Step 5 · Request details for \{assetDrilldownGroup\}/);
-  assert.match(source, /repairTypeSiteGroupRows\.map/);
-  assert.match(source, /aria-label="Back to repair regions"/);
+test("repair and event chart context stays applied before the list filters", () => {
+  assert.match(source, /key\.startsWith\("repair:"\)\) return requestAssetRows\(visibleBreakdowns\.filter/);
+  assert.match(source, /const rows = requestLifecycleRows\[event\] \|\| \[\]/);
+  assert.match(source, /date \? rows\.filter\(\(record\) => requestEventDate\(record, event\) === date\) : rows/);
+  assert.match(source, /requestRecords=\{requestAssetDrilldown\} lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
 });

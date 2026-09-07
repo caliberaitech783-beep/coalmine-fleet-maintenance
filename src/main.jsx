@@ -3,6 +3,8 @@ import SharedActionsTable from "./shared-actions-table.jsx";
 import UserProfile from "./user-profile.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
+import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
+import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
@@ -131,6 +133,7 @@ import "./reports-workspace.css";
 import "./meta-whatsapp-setup.css";
 import "./mobile-compat.css";
 import "./maintenance-mobile-compact.css";
+import "./dashboard-record-browser.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -924,11 +927,6 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
   const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
   const [assetDrilldown, setAssetDrilldown] = useState("");
-  const [assetDrilldownRegion, setAssetDrilldownRegion] = useState("");
-  const [assetDrilldownSite, setAssetDrilldownSite] = useState("");
-  const [assetDrilldownCategory, setAssetDrilldownCategory] = useState("");
-  const [assetDrilldownGroup, setAssetDrilldownGroup] = useState("");
-  const [assetDrilldownMachine, setAssetDrilldownMachine] = useState("");
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
   const [dashboardDate, setDashboardDate] = useState("");
@@ -1033,12 +1031,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const availabilityPercent = kpis.total ? Math.round((availableFleet / kpis.total) * 100) : 0;
   const openCaseRequests = activeOpenCases(visibleBreakdowns);
   const assetCounts = fleetAssetCounts(visibleEquipment);
-  const equipmentGroupLabel = (record = {}) => String(record.group || record.equipmentGroup || record.itemName || record.category || "Unclassified").trim() || "Unclassified";
-  const equipmentCategoryLabel = (record = {}) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase())
-    ? "Total vehicles"
-    : ["equipment","equipments"].includes(String(record.category || "").trim().toLowerCase()) ? "Total equipment" : "Unclassified";
-  // One physical machine: door number first, then whatever identifier the record carries.
-  const equipmentMachineLabel = (record = {}) => String(record.door || record.registration || record.reg || record.manufacturerSerialNo || record.chassisNo || record.equipmentName || "Unidentified").trim() || "Unidentified";
   const summarizeEquipment = (records = [], valueOf = equipmentGroupLabel) => Object.entries(records.reduce((counts, record) => {
     const label = String(valueOf(record) || "Unclassified").trim() || "Unclassified";
     counts[label] = (counts[label] || 0) + 1;
@@ -1131,12 +1123,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       ...(equipment || {}),
       id: `${request.ref || request.reference || request.id || "request"}-${index}`,
       equipmentName: equipment?.equipmentName || request.equipment || request.door || "Unclassified equipment",
+      door: equipment?.door || request.door || "",
       category: equipment?.category || request.equipmentCategory || "Unclassified",
       group: equipment?.group || equipment?.equipmentGroup || request.equipmentGroup || request.equipment || "Unclassified",
       make: equipment?.make || request.make || "",
       model: equipment?.model || request.model || "",
       currentLocation: equipment?.currentLocation || equipment?.location || request.site || "",
       manufacturerSerialNo: equipment?.manufacturerSerialNo || equipment?.chassisNo || request.chassis || "",
+      requestSite: request.site || request.location || equipment?.currentLocation || equipment?.location || "",
       requestReference: request.ref || request.reference || "—",
       requestStatus: request.status || "—",
       repairCategory: request.category || "—",
@@ -1180,43 +1174,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return [];
   };
   const assetDrilldownRows = rowsForAssetDrilldown(assetDrilldown);
-  const siteFirstAssetDrilldown = ["all", "equipment", "vehicle", "road-availability", "available", "onroad", "offroad", "idle", "unknown"].includes(assetDrilldown);
-  const repairTypeSiteDrilldown = assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("event:");
-  const repairTypeRegionBreakdown = availableRegions
-    .filter((region) => !selectedRegion || region.code === selectedRegion.code)
-    .map((region) => {
-      const sites = region.sites
-        .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)))
-        .filter((site) => dashboardSite === "all" || site === dashboardSite);
-      return { ...region, sites, count: assetDrilldownRows.filter((record) => sites.some((site) => recordBelongsToSite(record, site))).length };
-    });
-  const selectedRepairTypeRegion = repairTypeRegionBreakdown.find((region) => region.code === assetDrilldownRegion);
-  const repairTypeSiteBreakdown = (selectedRepairTypeRegion?.sites || []).map((site) => ({
-    site,
-    count: assetDrilldownRows.filter((record) => recordBelongsToSite(record, site)).length,
+  const assetDrilldownRegions = availableRegions.map((region) => ({
+    ...region,
+    sites: region.sites.filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))),
   }));
-  const repairTypeSiteRows = assetDrilldownSite ? assetDrilldownRows.filter((record) => recordBelongsToSite(record, assetDrilldownSite)) : [];
-  const repairTypeSiteCategoryBreakdown = summarizeEquipment(repairTypeSiteRows, equipmentCategoryLabel);
-  const repairTypeSiteCategoryRows = assetDrilldownCategory ? repairTypeSiteRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
-  const repairTypeSiteGroupBreakdown = summarizeEquipment(repairTypeSiteCategoryRows);
-  const repairTypeSiteGroupRows = assetDrilldownGroup ? repairTypeSiteCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
-  const assetDrilldownRegions = fleetRegionInsights.map((region) => {
-    const sites = region.sites.map((site) => {
-      const records = assetDrilldownRows.filter((record) => recordBelongsToSite(record, site.name));
-      return { ...site, ...fleetAssetCounts(records) };
-    });
-    const records = assetDrilldownRows.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
-    return { ...region, sites, ...fleetAssetCounts(records) };
-  });
-  const selectedAssetRegion = assetDrilldownRegions.find((region) => region.code === assetDrilldownRegion);
-  const assetDrilldownSites = selectedAssetRegion?.sites || [];
-  const assetSiteRows = assetDrilldownSite ? assetDrilldownRows.filter((record) => recordBelongsToSite(record, assetDrilldownSite)) : [];
-  const assetSiteCategoryBreakdown = summarizeEquipment(assetSiteRows, equipmentCategoryLabel);
-  const assetSiteCategoryRows = assetDrilldownCategory ? assetSiteRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
-  const assetSiteGroupBreakdown = summarizeEquipment(assetSiteCategoryRows);
-  const assetSiteGroupRows = assetDrilldownGroup ? assetSiteCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
-  const assetCategoryRows = assetDrilldownCategory ? assetDrilldownRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
-  const assetGroupRows = assetDrilldownCategory && assetDrilldownGroup ? assetCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
   const siteScopedDrilldown = assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("site-status:");
   const siteScopedParts = siteScopedDrilldown ? assetDrilldown.slice(12).split("|") : [];
   const siteScopedSite = siteScopedParts[0] || "";
@@ -1227,34 +1188,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     : siteScopedFocus === "onroad" ? "On road"
     : siteScopedFocus === "offroad" ? "Off road"
     : siteScopedFocus === "idle" ? "Idle" : siteScopedFocus;
-  const siteScopedCategoryBreakdown = summarizeEquipment(assetDrilldownRows, equipmentCategoryLabel);
-  const siteScopedCategoryRows = assetDrilldownCategory ? assetDrilldownRows.filter((record) => equipmentCategoryLabel(record) === assetDrilldownCategory) : [];
-  const siteScopedGroupBreakdown = summarizeEquipment(siteScopedCategoryRows);
-  const siteScopedGroupRows = assetDrilldownGroup ? siteScopedCategoryRows.filter((record) => equipmentGroupLabel(record) === assetDrilldownGroup) : [];
-  const siteScopedMachineBreakdown = summarizeEquipment(siteScopedGroupRows, equipmentMachineLabel);
-  const siteScopedMachineRows = assetDrilldownMachine ? siteScopedGroupRows.filter((record) => equipmentMachineLabel(record) === assetDrilldownMachine) : [];
-  const assetCategoryBreakdown = summarizeEquipment(assetDrilldownRows, equipmentCategoryLabel);
-  const assetGroupBreakdown = summarizeEquipment(assetCategoryRows);
+  const initialDrilldownSite = siteScopedSite || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13) : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
+  const initialDrilldownRegion = assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
   const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const assetDrilldownTitle = siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Road Availability" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles";
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
-    setAssetDrilldownMachine("");
-    setAssetDrilldownRegion("");
-    setAssetDrilldownSite("");
-    setAssetDrilldownCategory("");
-    setAssetDrilldownGroup("");
-  };
-  const selectAssetCategory = (category) => {
-    setAssetDrilldownCategory(category);
-    setAssetDrilldownMachine("");
-    setAssetDrilldownGroup("");
-  };
-  const selectAssetGroup = (group) => {
-    setAssetDrilldownGroup(group);
-    setAssetDrilldownMachine("");
   };
   const openRoadAvailabilityForSite = (site) => {
     setRoadFocusSite(site);
@@ -1433,31 +1374,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           return <tr key={day.date}><td><b>{new Intl.DateTimeFormat(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${day.date}T12:00:00`))}</b></td><td>{day.open}</td><td className="incoming">+{day.incoming}</td><td className="outgoing">-{day.outgoing}</td><td className="balance">{day.balance}</td><td className="percentage"><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></td></tr>;
         }) : <tr><td colSpan="6">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
       </div></Modal>}
-      {assetDrilldown && <Modal className="dashboard-asset-modal" title={`${assetDrilldownTitle} · ${assetDrilldownRows.length}`} close={() => { setAssetDrilldown(""); setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><div className="dashboard-asset-drilldown">
-        {repairTypeSiteDrilldown ? <>
-          <section><h4>Step 1 · Select region</h4><div className="dashboard-asset-summary">{repairTypeRegionBreakdown.length ? repairTypeRegionBreakdown.map((region) => <button type="button" key={region.code} className={assetDrilldownRegion === region.code ? "active" : ""} onClick={() => { setAssetDrilldownRegion(region.code); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{region.count.toLocaleString()}</b>{region.code}</button>) : <p>No regions available</p>}</div></section>
-          {selectedRepairTypeRegion && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to repair regions" onClick={() => { setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 2 · Select {selectedRepairTypeRegion.code} site</span></h4><div className="dashboard-asset-summary">{repairTypeSiteBreakdown.length ? repairTypeSiteBreakdown.map(({ site, count }) => <button type="button" key={site} className={assetDrilldownSite === site ? "active" : ""} onClick={() => { setAssetDrilldownSite(site); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{count.toLocaleString()}</b>{site}</button>) : <p>No sites available</p>}</div></section>}
-          {assetDrilldownSite && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${selectedRepairTypeRegion.code} repair sites`} onClick={() => { setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 3 · {assetDrilldownSite} fleet totals</span></h4><div className="dashboard-asset-summary">{repairTypeSiteCategoryBreakdown.length ? repairTypeSiteCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment or vehicles found for {assetDrilldownSite}</p>}</div></section>}
-          {assetDrilldownCategory && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownSite} repair fleet totals`} onClick={() => { setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 4 · Select {assetDrilldownCategory === "Total vehicles" ? "vehicle" : "equipment"} type</span></h4><div className="dashboard-asset-groups">{repairTypeSiteGroupBreakdown.length ? repairTypeSiteGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No types found</p>}</div></section>}
-          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownCategory} repair types`} onClick={() => setAssetDrilldownGroup("")}><ChevronLeft /> Back</button><span>Step 5 · Request details for {assetDrilldownGroup}</span></h4><div className="dashboard-asset-list"><ActionsTable><thead><tr><th>Job reference</th><th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th><th>Status</th><th>Started</th></tr></thead><tbody>{repairTypeSiteGroupRows.length ? repairTypeSiteGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.requestReference}</b></td><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></tr>) : <tr><td colSpan="10">No matching requests for {assetDrilldownGroup}</td></tr>}</tbody></ActionsTable></div></section>}
-        </> : siteScopedDrilldown ? <>
-          <div className="dashboard-asset-scope"><MapPin /><b>{siteScopedSite}</b><span>{siteScopedFocusLabel}</span></div>
-          <section><h4>Step 1 · Select equipment or vehicle</h4><div className="dashboard-asset-summary">{siteScopedCategoryBreakdown.length ? siteScopedCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>Nothing recorded for this selection</p>}</div></section>
-          {assetDrilldownCategory && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to equipment and vehicle totals" onClick={() => { setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); setAssetDrilldownMachine(""); }}><ChevronLeft /> Back</button><span>Step 2 · Select {assetDrilldownCategory === "Total vehicles" ? "vehicle" : "equipment"} type</span></h4><div className="dashboard-asset-groups">{siteScopedGroupBreakdown.length ? siteScopedGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No types found</p>}</div></section>}
-          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to types" onClick={() => { setAssetDrilldownGroup(""); setAssetDrilldownMachine(""); }}><ChevronLeft /> Back</button><span>Step 3 · Select a machine in {assetDrilldownGroup}</span></h4><div className="dashboard-asset-groups">{siteScopedMachineBreakdown.length ? siteScopedMachineBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownMachine === label ? "active" : ""} onClick={() => setAssetDrilldownMachine(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No machines found</p>}</div></section>}
-          {assetDrilldownMachine && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to machines" onClick={() => { setAssetDrilldownMachine(""); }}><ChevronLeft /> Back</button><span>Step 4 · Full details for {assetDrilldownMachine}</span></h4><div className="dashboard-asset-list"><ActionsTable><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}</tr></thead><tbody>{siteScopedMachineRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}</tr>)}</tbody></ActionsTable></div></section>}
-        </> : siteFirstAssetDrilldown ? <>
-          <section><h4>Step 1 · Select region</h4><div className="dashboard-asset-summary">{assetDrilldownRegions.length ? assetDrilldownRegions.map((region) => <button type="button" key={region.code} className={assetDrilldownRegion === region.code ? "active" : ""} onClick={() => { setAssetDrilldownRegion(region.code); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{region.total.toLocaleString()}</b>{region.code}</button>) : <p>No regions available</p>}</div></section>
-          {selectedAssetRegion && <section><h4><button type="button" className="dashboard-asset-back" aria-label="Back to regions" onClick={() => { setAssetDrilldownRegion(""); setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 2 · Select {selectedAssetRegion.code} site</span></h4><div className="dashboard-asset-summary">{assetDrilldownSites.length ? assetDrilldownSites.map((site) => <button type="button" key={site.name} className={assetDrilldownSite === site.name ? "active" : ""} onClick={() => { setAssetDrilldownSite(site.name); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><b>{site.total.toLocaleString()}</b>{site.name}</button>) : <p>No sites available</p>}</div></section>}
-          {assetDrilldownSite && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${selectedAssetRegion.code} sites`} onClick={() => { setAssetDrilldownSite(""); setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 3 · {assetDrilldownSite} fleet totals</span></h4><div className="dashboard-asset-summary">{assetSiteCategoryBreakdown.length ? assetSiteCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No equipment or vehicles found for {assetDrilldownSite}</p>}</div></section>}
-          {assetDrilldownCategory && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownSite} fleet totals`} onClick={() => { setAssetDrilldownCategory(""); setAssetDrilldownGroup(""); }}><ChevronLeft /> Back</button><span>Step 4 · Select {assetDrilldownCategory === "Total vehicles" ? "vehicle" : "equipment"} type</span></h4><div className="dashboard-asset-groups">{assetSiteGroupBreakdown.length ? assetSiteGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No types found</p>}</div></section>}
-          {assetDrilldownGroup && <section><h4><button type="button" className="dashboard-asset-back" aria-label={`Back to ${assetDrilldownCategory} types`} onClick={() => setAssetDrilldownGroup("")}><ChevronLeft /> Back</button><span>Step 5 · Full details for {assetDrilldownGroup}</span></h4><div className="dashboard-asset-list"><ActionsTable><thead><tr><th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th></tr></thead><tbody>{assetSiteGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}><td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td></tr>)}</tbody></ActionsTable></div></section>}
-        </> : <>
-          <section><h4>Step 1 · Select equipment category</h4><div className="dashboard-asset-summary">{assetCategoryBreakdown.length ? assetCategoryBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownCategory === label ? "active" : ""} onClick={() => selectAssetCategory(label)}><b>{value.toLocaleString()}</b>{label}</button>) : <p>No matching equipment records found</p>}</div></section>
-          {assetDrilldownCategory && <section><h4>Step 2 · Select equipment group</h4><div className="dashboard-asset-groups">{assetGroupBreakdown.length ? assetGroupBreakdown.map(([label, value]) => <button type="button" key={label} className={assetDrilldownGroup === label ? "active" : ""} onClick={() => selectAssetGroup(label)}><span>{label}</span><b>{value.toLocaleString()}</b></button>) : <p>No equipment group found</p>}</div></section>}
-          {assetDrilldownCategory && assetDrilldownGroup && <section><h4>Step 3 · Full details for {assetDrilldownGroup}</h4><div className="dashboard-asset-list"><ActionsTable><thead><tr>{requestAssetDrilldown && <th>Job reference</th>}<th>Equipment name</th><th>Equipment category</th><th>Equipment group</th><th>Make</th><th>Model</th><th>Current location</th><th>Serial / chassis no.</th>{requestAssetDrilldown && <><th>Repair category</th><th>Status</th><th>Started</th></>}{assetDrilldown.startsWith("event:") && <><th>Closed</th><th>Verified</th></>}</tr></thead><tbody>{assetGroupRows.map((record,index)=><tr key={record.id||`${record.equipmentName}-${index}`}>{requestAssetDrilldown && <td><b>{record.requestReference}</b></td>}<td><b>{record.equipmentName||record.door||"—"}</b></td><td>{equipmentCategoryLabel(record)}</td><td>{equipmentGroupLabel(record)}</td><td>{record.make||"—"}</td><td>{record.model||"—"}</td><td>{record.currentLocation||record.location||"—"}</td><td>{record.manufacturerSerialNo||record.chassisNo||"—"}</td>{requestAssetDrilldown && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatTwelveHourDateTime(record.requestStart)}</td></>}{assetDrilldown.startsWith("event:") && <><td>{formatTwelveHourDateTime(record.requestClosed)}</td><td>{formatTwelveHourDateTime(record.requestVerified)}</td></>}</tr>)}</tbody></ActionsTable></div></section>}
-        </>}
-      </div></Modal>}
+      {assetDrilldown && <Modal className="dashboard-asset-modal" title={assetDrilldownTitle} close={() => setAssetDrilldown("")}>
+        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} />
+      </Modal>}
       <section className="mine-dashboard-lower-grid">
       <section className="mine-panel mine-breakdown-trend">
         <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend & forecast</h2><p>Recorded history and weekday-weighted upcoming estimates</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><div className="mine-trend-view" role="group" aria-label="Breakdown trend view">{[["past", "Past"], ["both", "Both"], ["upcoming", "Upcoming"]].map(([value, label]) => <button type="button" key={value} className={breakdownTrendView === value ? "active" : ""} onClick={() => setBreakdownTrendView(value)}>{label}</button>)}</div><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => goto("Breakdown master")}>View all <ChevronRight /></button></div></header>
