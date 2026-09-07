@@ -1270,7 +1270,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-request-lifecycle-summary button:hover,.mine-request-lifecycle-summary button:focus-visible { transform: translateY(-1px); outline: 0; }
 .mine-request-lifecycle-summary button > i { width: 6px; height: 26px; border-radius: 4px; }
 .mine-request-lifecycle-summary button > span { display: flex; min-width: 0; flex-direction: column; gap: 1px; overflow: hidden; }
-.mine-request-lifecycle-summary button b { display: block; overflow: hidden; font-size: 7.5px; line-height: 1.15; overflow-wrap: anywhere; }
+.mine-request-lifecycle-summary button b { display: block; overflow: hidden; font-size: 7.5px; line-height: 1.15; white-space: nowrap; text-overflow: ellipsis; }
 .mine-request-lifecycle-summary button small { overflow: hidden; color: var(--mine-muted); font-size: 6.5px; text-overflow: ellipsis; white-space: nowrap; }
 .mine-request-lifecycle-summary button strong { justify-self: end; font: 900 15px/1 Manrope; white-space: nowrap; }
 .mine-request-lifecycle-summary .opened > i { background: #315fd4; }
