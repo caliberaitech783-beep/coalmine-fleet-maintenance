@@ -8,9 +8,9 @@ export function normalizeSearchText(value) {
   return searchableParts(value)
     .join(" ")
     .normalize("NFKD")
-    .replace(/\p{Diacritic}/gu, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
     .trim()
     .replace(/\s+/g, " ");
 }

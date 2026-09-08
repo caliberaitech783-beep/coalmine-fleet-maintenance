@@ -1,0 +1,20 @@
+.equipment-combobox { position: relative; min-width: 0; }
+.equipment-combobox > label { display: block; }
+.equipment-combobox-control { position: relative; }
+.equipment-combobox-control input { width: 100%; padding-right: 38px !important; text-overflow: ellipsis; }
+.equipment-combobox-control > svg { position: absolute; right: 13px; top: calc(50% + 4px); transform: translateY(-50%); width: 17px; height: 17px; pointer-events: none; color: #65758e; }
+.equipment-combobox-hint { display: block; margin-top: 6px; color: #65758e; font-size: 12px; line-height: 1.5; font-weight: 400; }
+.equipment-combobox-menu { position: absolute; z-index: 30; top: 100%; left: 0; right: 0; margin-top: 5px; border: 1px solid #c9d6ed; border-radius: 10px; background: #fff; box-shadow: 0 12px 30px #162b4826; overflow: hidden; }
+.equipment-combobox-count { padding: 9px 12px; background: #f1f5fc; color: #496181; font-size: 12px; }
+.equipment-combobox-menu ul { list-style: none; margin: 0; padding: 4px; max-height: min(280px, 35dvh); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
+.equipment-combobox-menu li { padding: 12px 10px; border-radius: 6px; cursor: pointer; color: #19385a; overflow-wrap: anywhere; }
+.equipment-combobox-menu li + li { border-top: 1px solid #edf1f7; }
+.equipment-combobox-menu li:hover, .equipment-combobox-menu li[data-active="true"] { background: #eaf1ff; }
+.equipment-combobox-menu li[aria-selected="true"] { background: #eaf1ff; box-shadow: inset 3px 0 #3168d9; }
+.equipment-combobox-menu strong { display: block; font-size: 13px; line-height: 1.5; }
+.equipment-combobox-menu small { display: block; margin-top: 3px; color: #65758e; font-size: 12px; font-weight: 400; line-height: 1.5; }
+.equipment-combobox-empty { margin: 0; padding: 14px; color: #65758e; font-size: 13px; line-height: 1.5; }
+[data-theme="dark"] .equipment-combobox-menu { background: #182740; border-color: #405474; }
+[data-theme="dark"] .equipment-combobox-menu li { color: #e1ebfa; }
+[data-theme="dark"] .equipment-combobox-count, [data-theme="dark"] .equipment-combobox-menu li:hover, [data-theme="dark"] .equipment-combobox-menu li[data-active="true"], [data-theme="dark"] .equipment-combobox-menu li[aria-selected="true"] { background: #263c60; color: #e1ebfa; }
+[data-theme="dark"] .equipment-combobox-hint, [data-theme="dark"] .equipment-combobox-menu small, [data-theme="dark"] .equipment-combobox-empty { color: #acbbd1; }

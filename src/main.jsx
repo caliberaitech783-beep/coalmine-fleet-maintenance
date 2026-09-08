@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
+import EquipmentCombobox from "./equipment-combobox.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
@@ -40,7 +41,6 @@ import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
   requestEquipmentDetails,
-  requestEquipmentOptionLabel,
   requestEquipmentGroupOptions,
   requestEquipmentMeterType,
   requestEquipmentRecordsForGroup,
@@ -3595,204 +3595,12 @@ const speechLanguages = [
   ["hi-IN", "Hindi"],
   ["en-IN", "English"],
 ];
-function SpeechComplaint() {
-  const [text, setText] = useState(""),
-    [lang, setLang] = useState("hi-IN"),
-    [listening, setListening] = useState(false),
-    [working, setWorking] = useState(false),
-    [note, setNote] = useState("");
-  const recognition = useRef(null);
-  const start = () => {
-    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Speech) {
-      setNote("Voice input is not supported here. Please use Chrome or Edge.");
-      return;
-    }
-    const r = new Speech();
-    recognition.current = r;
-    r.lang = lang;
-    r.interimResults = true;
-    r.continuous = false;
-    let final = "";
-    r.onstart = () => {
-      setListening(true);
-      setNote("Listening… speak naturally in your selected language.");
-    };
-    r.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
-      }
-      setNote(interim || "Converting speech…");
-    };
-    r.onerror = (e) => {
-      setListening(false);
-      setNote(
-        e.error === "not-allowed"
-          ? "Microphone permission is required."
-          : "Could not hear clearly. Please try again.",
-      );
-    };
-    r.onend = async () => {
-      setListening(false);
-      if (!final) return;
-      setWorking(true);
-      setNote("Converting to simple English…");
-      try {
-        const source = lang.split("-")[0];
-        if (source === "en") {
-          setText(final.trim());
-          setNote("Voice converted to text.");
-        } else {
-          const res = await fetch(
-            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(final)}&langpair=${source}|en`,
-          );
-          const data = await res.json();
-          const english = data?.responseData?.translatedText;
-          if (!english) throw new Error();
-          setText(english.replace(/&#39;/g, "'").trim());
-          setNote("Translated into simple English.");
-        }
-      } catch {
-        setText(final.trim());
-        setNote(
-          "Speech was transcribed, but English translation is unavailable. You can edit the text.",
-        );
-      } finally {
-        setWorking(false);
-      }
-    };
-    r.start();
-  };
-  const stop = () => recognition.current?.stop();
-  return (
-    <label className="full speechfield">
-      <span>Reason / complaint *</span>
-      <div className="speechtools">
-        <select
-          aria-label="Spoken language"
-          value={lang}
-          onChange={(e) => setLang(e.target.value)}
-        >
-          {speechLanguages.map(([code, name]) => (
-            <option key={code} value={code}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className={listening ? "recording" : ""}
-          onClick={listening ? stop : start}
-          disabled={working}
-        >
-          {listening ? <Square /> : <Mic />}
-          {listening
-            ? "Stop recording"
-            : working
-              ? "Translating…"
-              : "Speak complaint"}
-        </button>
-      </div>
-      <textarea
-        name="complaint"
-        required
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Type here, or select your language and speak. Simple English text will appear here."
-      />
-      <small className={listening ? "voice-note live" : "voice-note"}>
-        {note ||
-          "Your microphone is used only while recording. You can edit the result before submitting."}
-      </small>
-    </label>
-  );
-}
-const speechCorrections = {
-  tamani: "kamani",
-  kamni: "kamani",
-  tutt: "toot",
-  bake: "brake",
-  brek: "brake",
-  hydrolic: "hydraulic",
-  hydralic: "hydraulic",
-  haidrolik: "hydraulic",
-  stering: "steering",
-  radiater: "radiator",
-  alternetor: "alternator",
-  transmision: "transmission",
-  diferential: "differential",
-  coolent: "coolant",
-  puncure: "puncture",
-};
-const speechComponents = {
-  "leaf spring": ["leaf spring", "kamani"],
-  brake: ["brake"],
-  engine: ["engine"],
-  "hydraulic pipe": ["hydraulic pipe"],
-  "hydraulic hose": ["hydraulic hose"],
-  "hydraulic pump": ["hydraulic pump"],
-  steering: ["steering"],
-  tyre: ["tyre", "tire"],
-  battery: ["battery"],
-  gearbox: ["gearbox", "gear box"],
-  clutch: ["clutch"],
-  radiator: ["radiator"],
-  alternator: ["alternator"],
-  "starter motor": ["starter motor"],
-  differential: ["differential"],
-  "propeller shaft": ["propeller shaft"],
-  axle: ["axle"],
-};
-const speechFaults = {
-  broken: ["broken", "toot", "tut"],
-  notWorking: ["not working"],
-  leaking: ["leaking", "leak", "leakage"],
-  overheating: ["overheating", "overheat"],
-  punctured: ["punctured", "puncture"],
-  notStarting: ["not starting", "won't start"],
-  discharged: ["battery down", "down battery", "discharged"],
-  lowPressure: ["low pressure", "pressure low"],
-};
-function normalizeComplaint(value) {
-  let text = String(value || "")
-    .trim()
-    .replace(/\b([a-z]{1,3})-(?:\1-)+([a-z]+)\b/gi, "$2")
-    .replace(/\b(uh+|um+|erm+|hmm+)\b[\s,]*/gi, "")
-    .replace(/\b([a-z]+)(?:[\s,]+\1\b)+/gi, "$1");
-  for (const [wrong, right] of Object.entries(speechCorrections))
-    text = text.replace(new RegExp("\\b" + wrong + "\\b", "gi"), right);
-  const lower = text.toLowerCase(),
-    component = Object.entries(speechComponents).find(([, aliases]) =>
-      aliases.some((a) => lower.includes(a)),
-    )?.[0],
-    fault = Object.entries(speechFaults).find(([, aliases]) =>
-      aliases.some((a) => lower.includes(a)),
-    )?.[0];
-  if (component && fault) {
-    if (fault === "broken") text = `The ${component} is broken.`;
-    if (fault === "notWorking") text = `The ${component} is not working.`;
-    if (fault === "leaking") text = `The ${component} is leaking.`;
-    if (fault === "overheating") text = `The ${component} is overheating.`;
-    if (fault === "punctured") text = `The ${component} is punctured.`;
-    if (fault === "notStarting") text = `The ${component} is not starting.`;
-    if (fault === "discharged") text = `The ${component} is discharged.`;
-    if (fault === "lowPressure") text = `The ${component} pressure is low.`;
-  }
-  text = text
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  if (text && !/[.!?]$/.test(text)) text += ".";
-  return text ? text[0].toUpperCase() + text.slice(1) : "";
-}
 function EnhancedSpeechComplaint({
   label = "Reason / complaint *",
   name = "complaint",
   audioName = "complaintAudio",
   buttonLabel = "Speak complaint",
-  placeholder = "Type here, or select your language and speak. Clear English text will appear here.",
+  placeholder = "Type here, or select Hindi / English and speak in that language.",
   required = true,
 }) {
   const [text, setText] = useState(""),
@@ -3802,6 +3610,8 @@ function EnhancedSpeechComplaint({
     [note, setNote] = useState(""),
     [audioData, setAudioData] = useState("");
   const recognition = useRef(null),
+    starting = useRef(false),
+    mounted = useRef(true),
     audioOnlyMode = useRef(false),
     silenceTimer = useRef(null),
     maxTimer = useRef(null),
@@ -3829,20 +3639,36 @@ function EnhancedSpeechComplaint({
     if (recognition.current) recognition.current.stop();
     else if (audioOnlyMode.current) finishAudioOnly();
   };
-  useEffect(() => () => {
-    clearTimers();
-    recognition.current?.abort?.();
-    mediaStream.current?.getTracks().forEach((track) => track.stop());
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearTimers();
+      if (recognition.current) {
+        recognition.current.onend = null;
+        recognition.current.onerror = null;
+        recognition.current.abort?.();
+      }
+      stopAudio();
+    };
   }, []);
   const start = async () => {
+    if (starting.current || listening) return;
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setNote("Audio recording is not supported here. Please use current Chrome or Edge.");
       return;
     }
+    starting.current = true;
+    setWorking(true);
+    const languageName = speechLanguages.find(([code]) => code === lang)?.[1] || "selected language";
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       mediaStream.current = stream;
       audioChunks.current = [];
       const preferredType = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((type) => window.MediaRecorder.isTypeSupported?.(type));
@@ -3866,13 +3692,17 @@ function EnhancedSpeechComplaint({
           return;
         }
         const reader = new FileReader();
-        reader.onload = () => setAudioData(String(reader.result || ""));
+        reader.onload = () => { if (mounted.current) setAudioData(String(reader.result || "")); };
         reader.readAsDataURL(blob);
       };
       mediaRecorder.start();
     } catch {
+      stream?.getTracks().forEach((track) => track.stop());
       setNote("Microphone permission is required to save the audio clip.");
       return;
+    } finally {
+      starting.current = false;
+      setWorking(false);
     }
     if (!Speech) {
       audioOnlyMode.current = true;
@@ -3883,6 +3713,7 @@ function EnhancedSpeechComplaint({
     }
     const r = new Speech();
     recognition.current = r;
+    setListening(true);
     r.lang = lang;
     r.interimResults = true;
     r.continuous = true;
@@ -3894,7 +3725,7 @@ function EnhancedSpeechComplaint({
     r.onstart = () => {
       audioOnlyMode.current = false;
       setListening(true);
-      setNote("Listening… pause up to 5 seconds while speaking.");
+      setNote(`Listening in ${languageName}… pause up to 5 seconds while speaking.`);
       resetSilence();
       maxTimer.current = setTimeout(stop, 45000);
     };
@@ -3919,7 +3750,7 @@ function EnhancedSpeechComplaint({
             : "Audio saved, but speech transcription was unavailable.",
       );
     };
-    r.onend = async () => {
+    r.onend = () => {
       recognition.current = null;
       audioOnlyMode.current = false;
       if (recognitionFailed) return;
@@ -3927,28 +3758,9 @@ function EnhancedSpeechComplaint({
       stopAudio();
       setListening(false);
       if (!final.trim()) return;
-      setWorking(true);
-      try {
-        const source = lang.split("-")[0];
-        let result = final.trim();
-        if (source !== "en") {
-          setNote("Translating into clear English…");
-          const res = await fetch(
-            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(result)}&langpair=${source}|en`,
-          );
-          const data = await res.json();
-          result = data?.responseData?.translatedText || result;
-        }
-        setText(normalizeComplaint(result.replace(/&#39;/g, "'")));
-        setNote(
-          "Complaint converted to clear English. You can edit it before submitting.",
-        );
-      } catch {
-        setText(normalizeComplaint(final));
-        setNote("Speech transcribed. You can edit it before submitting.");
-      } finally {
-        setWorking(false);
-      }
+      // Keep every recognized detail and the selected language, including negations.
+      setText(final.trim());
+      setNote(`Transcribed in ${languageName}. Review and edit the text before submitting.`);
     };
     try {
       r.start();
@@ -3967,6 +3779,7 @@ function EnhancedSpeechComplaint({
         <select
           aria-label="Spoken language"
           value={lang}
+          disabled={listening || working}
           onChange={(e) => setLang(e.target.value)}
         >
           {speechLanguages.map(([code, name]) => (
@@ -3991,6 +3804,7 @@ function EnhancedSpeechComplaint({
       </div>
       <textarea
         name={name}
+        lang={lang}
         required={required}
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -4000,12 +3814,12 @@ function EnhancedSpeechComplaint({
       {audioData && <audio className="request-audio-preview" controls src={audioData}>Recorded complaint</audio>}
       <small className={listening ? "voice-note live" : "voice-note"}>
         {note ||
-          "Choose Hindi or English. Your recording and transcript will be saved with this request."}
+          "Choose Hindi or English and speak in that language. The text stays in your selected language; your audio is also saved."}
       </small>
     </label>
   );
 }
-SpeechComplaint = EnhancedSpeechComplaint;
+const SpeechComplaint = EnhancedSpeechComplaint;
 function readMeterEvidence(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error("Select a KMR/HMR evidence file."));
@@ -4021,28 +3835,17 @@ function readMeterEvidence(file) {
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
-    [door, setDoor] = useState(""),
-    [equipmentSearch, setEquipmentSearch] = useState(""),
-    [equipmentSearchActive, setEquipmentSearchActive] = useState(false),
     [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [openedAt] = useState(() => new Date());
   const pad = (n) => String(n).padStart(2, "0");
   const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
     systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
     locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
-    v = findRequestEquipment(locationEquipmentRecords, equipmentId),
     equipmentGroups = requestEquipmentGroupOptions(locationEquipmentRecords),
     groupRecords = requestEquipmentRecordsForGroup(locationEquipmentRecords, equipmentGroup),
-    searchableRecords = equipmentSearchActive || equipmentSearch.trim() ? locationEquipmentRecords : groupRecords,
-    equipmentVehicleRecords = searchableRecords.reduce((unique, record) => {
-      const label = requestEquipmentOptionLabel(record);
-      if (record.id != null && label && !unique.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
-        unique.push({ record, label });
-      }
-      return unique;
-    }, []),
-    visibleEquipmentVehicleRecords = equipmentVehicleRecords.filter(({ record, label }) => String(record.id) === equipmentId || matchesSmartSearch(equipmentSearch, label, record)),
+    v = findRequestEquipment(groupRecords, equipmentId),
     equipmentDetails = requestEquipmentDetails(v || {}),
+    door = equipmentDetails.door,
     currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
   const [requestTime, setRequestTime] = useState(systemTime);
   const [requestDate, setRequestDate] = useState(systemDate);
@@ -4139,6 +3942,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const submit = async (e) => {
     e.preventDefault();
     if (submitting || checkingConflict) return;
+    if (!v) {
+      alert("Select an equipment or vehicle from the selected equipment group.");
+      return;
+    }
     if (duplicateConflict) {
       alert(duplicateConflict.message || "This door number already has an active maintenance request.");
       return;
@@ -4203,12 +4010,9 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               onChange={(event) => {
                 const selectedGroup = event.target.value,
                   matches = requestEquipmentRecordsForGroup(locationEquipmentRecords, selectedGroup),
-                  onlyRecord = matches.length === 1 ? matches[0] : null,
-                  details = requestEquipmentDetails(onlyRecord || {});
+                  onlyRecord = matches.length === 1 ? matches[0] : null;
                 setEquipmentGroup(selectedGroup);
-                setEquipmentSearch("");
                 setEquipmentId(onlyRecord?.id != null ? String(onlyRecord.id) : "");
-                setDoor(details.door);
               }}
             >
               <option value="" disabled>
@@ -4250,54 +4054,15 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                 ))}
             </select>
           </label>
-          <label>
-            Equipment / vehicle *
-            {equipmentLoaded && locationEquipmentRecords.length ? (
-              <>
-                <input
-                  className="equipment-request-search"
-                  data-smart-search
-                  type="search"
-                  value={equipmentSearch}
-                  onChange={(event) => setEquipmentSearch(event.target.value)}
-                  onFocus={() => setEquipmentSearchActive(true)}
-                  onClick={() => setEquipmentSearchActive(true)}
-                  placeholder="Search equipment / vehicle"
-                  aria-label="Search equipment or vehicle"
-                />
-                <select
-                  aria-label="Equipment or vehicle"
-                  value={equipmentId}
-                  required
-                  onChange={(event) => {
-                    const selectedId = event.target.value,
-                      selected = findRequestEquipment(locationEquipmentRecords, selectedId),
-                      details = requestEquipmentDetails(selected || {});
-                    setEquipmentId(selectedId);
-                    if (details.group) setEquipmentGroup(details.group);
-                    setDoor(details.door);
-                  }}
-                >
-                  <option value="" disabled>Select equipment or vehicle</option>
-                  {visibleEquipmentVehicleRecords.map(({ record, label }) => (
-                    <option key={String(record.id)} value={String(record.id)}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <input type="hidden" name="door" value={door} />
-              </>
-            ) : (
-              <input
-                name="door"
-                required
-                value={door}
-                onChange={(e) => setDoor(e.target.value)}
-                readOnly={Boolean(v?.door)}
-                placeholder={v?.door ? "Auto-filled from equipment" : "Select equipment group first"}
-              />
-            )}
-          </label>
+          <div>
+            <EquipmentCombobox key={`${assignedLocation}|${equipmentGroup}`} records={groupRecords}
+              group={equipmentGroup} value={equipmentId} loading={!equipmentLoaded}
+              disabled={!equipmentLoaded || !equipmentGroup}
+              onSelect={(selected) => {
+                setEquipmentId(selected?.id != null ? String(selected.id) : "");
+              }} />
+            <input type="hidden" name="door" value={v ? equipmentDetails.door : ""} />
+          </div>
           <label>
             Date *<input name="date" type="date" value={requestDate} readOnly aria-readonly="true" />
           </label>
