@@ -19,6 +19,14 @@
   box-shadow: inset 4px 0 #d92f45;
 }
 
+.request-accepted-late > td {
+  background: #f8caca !important;
+}
+
+.request-accepted-late > td:first-child {
+  box-shadow: inset 4px 0 #d92f45;
+}
+
 .normal .table .mobile-breakdown-table th,
 .normal .table .mobile-breakdown-table td {
   display: table-cell;

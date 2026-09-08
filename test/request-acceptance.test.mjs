@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { REQUEST_ACCEPTANCE_DELAY_MS, requestAwaitingAcceptance } from "../request-acceptance.mjs";
+import { REQUEST_ACCEPTANCE_DELAY_MS, requestAcceptedLate, requestAwaitingAcceptance } from "../request-acceptance.mjs";
 
 test("unaccepted requests are highlighted one hour after production timing", () => {
   const start = "2026-09-07 10:00";
@@ -35,4 +35,21 @@ test("Maintenance acceptance is server timed and shared by every request view", 
   const editRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference'"), server.indexOf("app.patch('/api/requests/:reference/close'"));
   assert.doesNotMatch(editRoute, /equipment_name=|door_number=|registration_number=|chassis_number=|site=|started_at=/);
   assert.match(server, /AS "acceptedAt"/);
+});
+
+test("requests accepted more than one hour after production timing are highlighted red in close form and closed history", () => {
+  const start = "2026-09-07 10:00";
+  assert.equal(requestAcceptedLate({ start, acceptedAt: "2026-09-07 11:00" }), false);
+  assert.equal(requestAcceptedLate({ start, acceptedAt: "2026-09-07 11:01" }), true);
+  assert.equal(requestAcceptedLate({ start, acceptedAt: "2026-09-08 09:59", status: "Closed" }), true);
+  assert.equal(requestAcceptedLate({ start }), false);
+  assert.equal(requestAcceptedLate({}), false);
+  const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const workflowCss = readFileSync(new URL("../src/mobile-workflow.css", import.meta.url), "utf8");
+  assert.match(client, /highlightLateAcceptance && requestAcceptedLate\(row\) \? "request-accepted-late"/);
+  assert.match(client, /exportTitle=\{workspaceReportTitles\.close\} showAcceptedTime highlightLateAcceptance/);
+  assert.match(client, /rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\} highlightLateAcceptance/);
+  assert.equal(client.match(/highlightLateAcceptance(?=[\s}])/g)?.length, 4);
+  assert.match(workflowCss, /\.request-accepted-late > td \{\s*background: #f8caca !important;/);
+  assert.match(workflowCss, /\.request-accepted-late > td:first-child \{\s*box-shadow: inset 4px 0 #d92f45;/);
 });
