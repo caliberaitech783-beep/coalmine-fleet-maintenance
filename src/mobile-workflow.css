@@ -6,6 +6,11 @@
 .mobile-tabs button.red-flag-tab{display:inline-flex;align-items:center;gap:5px;color:#ac2035}
 .mobile-tabs button.red-flag-tab.active{background:#c9253d;color:#fff}
 .arrival-not-reached{display:inline-flex;border-radius:12px;padding:4px 8px;background:#c9253d;color:#fff;font-size:10px;font-weight:800;white-space:nowrap}
+.workflow-table .row-actions button.mis-red-flag,.mis-red-flag-form button.mis-red-flag-submit{color:#fff;background:#c9253d;border:1px solid #c9253d;font-weight:800}
+.workflow-table .row-actions button.mis-red-flag:hover,.mis-red-flag-form button.mis-red-flag-submit:hover{background:#a91830;border-color:#a91830}
+.mis-red-flag-form textarea{min-height:140px;resize:vertical;white-space:pre-wrap}
+.mis-red-flag-form p{line-height:1.5}
+.mis-red-flag-error{padding:12px;border:1px solid #df7785;border-radius:8px;background:#fff0f2;color:#a91830}
 
 .breakdown-table-auto-fit > tbody > tr > td,
 .workflow-table > tbody > tr > td {

@@ -200,6 +200,9 @@ async function migrate(){
       acceptance_required BOOLEAN NOT NULL DEFAULT FALSE,
       arrival_flagged_at TIMESTAMPTZ,
       arrival_flagged_by TEXT NOT NULL DEFAULT '',
+      mis_flagged_at TIMESTAMPTZ,
+      mis_flagged_by TEXT NOT NULL DEFAULT '',
+      mis_flag_remark TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'Open',
       owner_name TEXT NOT NULL DEFAULT 'Normal User',
       closed_at TIMESTAMPTZ,
@@ -274,6 +277,9 @@ async function migrate(){
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS arrival_flagged_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS arrival_flagged_by TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS mis_flagged_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS mis_flagged_by TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS mis_flag_remark TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'Pending';
     ALTER TABLE maintenance_requests
@@ -2063,6 +2069,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
   to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy",
+  to_char(mis_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "misFlaggedAt", mis_flagged_by AS "misFlaggedBy", mis_flag_remark AS "misFlagRemark",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
@@ -2501,6 +2508,31 @@ app.delete('/api/requests/:reference',requireSession,requirePermission('deleteRe
     const result=await pool.query(`DELETE FROM maintenance_requests WHERE reference=$1 AND verified_at IS NULL AND status NOT IN ('Idle','Ideal')`,[reference]);
     if(!result.rowCount)return res.status(409).json({error:'Verified or Idle requests cannot be deleted, or the request no longer exists.'});
     res.status(204).end();
+  }catch(error){next(error)}
+});
+
+app.patch('/api/requests/:reference/mis-flag',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const remark=typeof req.body?.remark==='string'?req.body.remark.trim():'';
+    if(!remark||remark.length>2000)return res.status(400).json({error:'Enter a remark describing the issue (1 to 2,000 characters).'});
+    const misUser=await currentUserRecord(req.session);
+    const misSite=canonicalSiteName(misUser.site||misUser.location||misUser.currentLocation);
+    if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can raise a red flag.'});
+    const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const existing=existingRows[0];
+    if(!existing)return res.status(404).json({error:'This request no longer exists.'});
+    if(canonicalSiteName(existing.site)!==misSite)return res.status(403).json({error:'This request belongs to a different location.'});
+    if(existing.misFlaggedAt)return res.status(409).json({error:'An MIS red flag has already been saved for this request. Its original remark is retained in the MIS Red Flag Report.'});
+    if(existing.status!=='Closed'||existing.verifiedAt)return res.status(409).json({error:'Only closed requests awaiting MIS verification can be red flagged.'});
+    const {rows}=await pool.query(`UPDATE maintenance_requests
+      SET mis_flagged_at=NOW(),mis_flagged_by=$1,mis_flag_remark=$2
+      WHERE reference=$3 AND status='Closed' AND verified_at IS NULL AND mis_flagged_at IS NULL
+        AND site=$4
+      RETURNING ${requestProjection}`,[req.session.name||req.session.login||'MIS User',remark,reference,existing.site]);
+    if(!rows.length)return res.status(409).json({error:'This request was already flagged, verified, or changed. Refresh to see its latest details.'});
+    req.audit={eventType:'Workflow',module:'Maintenance Requests',action:'Raise MIS red flag',targetType:'Maintenance request',targetReference:reference,reason:remark,changedFields:[{field:'misFlaggedAt',before:'',after:rows[0].misFlaggedAt},{field:'misFlaggedBy',before:'',after:rows[0].misFlaggedBy},{field:'misFlagRemark',before:'',after:rows[0].misFlagRemark}]};
+    res.json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
 });
 
