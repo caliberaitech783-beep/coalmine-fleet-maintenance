@@ -18,10 +18,10 @@ test("dark generic modal headers retain a dark surface and readable close contro
   assert.doesNotMatch(compatibilityStyles, /:root\[data-theme="dark"\] \.modal > header/);
 });
 
-test("fine-pointer desktop workflow tables expose their vertical scrollbar", () => {
-  assert.match(
+test("desktop workflow tables leave vertical scrolling to the page", () => {
+  assert.doesNotMatch(
     workflowStyles,
-    /@media \(hover:\s*hover\) and \(pointer:\s*fine\)\s*\{[\s\S]*?\.normal \.scroll\.mobile-workflow-table::-webkit-scrollbar:vertical\s*\{[^}]*width:\s*12px/s,
+    /\.normal \.scroll\.mobile-workflow-table::-webkit-scrollbar:vertical\s*\{[^}]*width:\s*12px/s,
   );
 });
 
