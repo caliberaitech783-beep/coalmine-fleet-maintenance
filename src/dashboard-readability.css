@@ -1,0 +1,185 @@
+/* Shared by every role. Loaded last to replace the old 11px dashboard caps.
+   Reflow cards and wrap labels; never scale down or clip the page to make it fit. */
+:is(.mine-dashboard, .manager-dashboard) {
+  --dash-copy: clamp(15px, .35vw + 10px, 17px);
+  --dash-label: clamp(18px, .4vw + 12px, 21px);
+  --dash-value: clamp(32px, 1.1vw + 18px, 44px);
+  font-size: var(--dash-copy);
+  line-height: 1.45;
+  min-width: 0;
+}
+.mine-dashboard h1,
+.manager-dashboard .manager-dashboard-head h1 { font-size: clamp(26px, 1.3vw + 12px, 36px) !important; line-height: 1.2; }
+.mine-dashboard h2,
+.manager-dashboard .manager-detail-panel > header h2 { font-size: clamp(21px, .6vw + 13px, 26px) !important; line-height: 1.25; }
+.mine-dashboard :is(p, label, small, em, span, b),
+.mine-dashboard :is(button, input, select, th, td),
+.manager-dashboard :is(button, input, select, th, td) { font-size: var(--dash-copy) !important; }
+.mine-dashboard :is(p, label, small, em),
+.manager-dashboard :is(p, label, small, em) { line-height: 1.4; }
+.mine-dashboard :is(input, select),
+.manager-dashboard :is(input, select) { min-height: 42px; }
+.mine-dashboard .mine-head-actions { gap: 12px; }
+.mine-dashboard .mine-head-actions label { min-width: 0; }
+.mine-dashboard .mine-head-actions :is(input, select) { height: auto; min-width: 150px; padding: 10px 12px; }
+.mine-dashboard .mine-dashboard-head { flex-wrap: wrap; gap: 18px; padding: 18px 20px; }
+.mine-dashboard .mine-dashboard-head > div:first-child { min-width: 0; flex: 1 1 340px; }
+.mine-dashboard .mine-eyebrow,
+.manager-dashboard .manager-dashboard-head > div > span { font-size: 14px !important; letter-spacing: .09em; }
+.mine-dashboard .mine-panel > header { gap: 14px; padding: 14px 16px; }
+.mine-dashboard .mine-maintenance-availability-head { min-height: 0 !important; padding: 16px !important; }
+.mine-dashboard .mine-maintenance-availability-tabs { flex-shrink: 1; min-width: 0; }
+.mine-dashboard .mine-maintenance-availability-tabs button { min-height: 48px; padding: 10px; white-space: normal; line-height: 1.3; }
+
+/* Fill KPI cards with readable labels and a clearly stronger number hierarchy. */
+.mine-dashboard .mine-breakdown-movement-kpis { gap: 12px; }
+.mine-dashboard .mine-breakdown-movement-kpis > div { align-items: center; min-height: 84px; padding: 14px 16px; gap: 8px 12px; }
+.mine-dashboard .mine-breakdown-movement-kpis span { align-self: center; font-size: var(--dash-label) !important; color: var(--mine-text); line-height: 1.3; overflow-wrap: anywhere; }
+.mine-dashboard .mine-breakdown-movement-kpis strong,
+.mine-dashboard .mine-site-road-summary strong,
+.manager-dashboard .manager-kpi-grid strong { font-size: var(--dash-value) !important; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.mine-dashboard .mine-site-road-summary { gap: 12px; }
+.mine-dashboard .mine-site-road-summary > button { min-width: 0; min-height: 104px; padding: 14px; gap: 12px; }
+.mine-dashboard .mine-site-road-summary small { font-size: var(--dash-label) !important; }
+.mine-dashboard .mine-site-road-gauge { flex: 0 0 90px; width: 90px; height: 90px; }
+.mine-dashboard .mine-site-road-gauge b { font-size: 22px !important; }
+.mine-dashboard .mine-site-road-gauge small { font-size: 12px !important; }
+.mine-dashboard .mine-breakdown-type-mix > header { flex-wrap: wrap; padding: 10px 12px; }
+.mine-dashboard .mine-breakdown-type-mix > header > div { flex-wrap: wrap; }
+.mine-dashboard .mine-breakdown-type-mix :is(article, button) { padding: 12px; gap: 9px; }
+.mine-dashboard .mine-breakdown-type-mix :is(article, button) > span { flex-wrap: wrap; row-gap: 6px; }
+.mine-dashboard .mine-breakdown-type-mix :is(article, button) > span b { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.mine-dashboard .mine-breakdown-type-mix :is(article, button) > span strong { font-size: 22px !important; line-height: 1.2; }
+
+/* Keep wide data within its own scroll area, not outside the dashboard. */
+.mine-dashboard :is(.mine-breakdown-site-table, .mine-road-site-table) { overflow: auto; max-width: 100%; }
+.mine-dashboard :is(.mine-breakdown-site-body, .mine-road-site-body) { overflow: visible; max-height: none; }
+.mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) { min-height: 70px; padding-block: 12px; }
+.mine-dashboard :is(.mine-breakdown-site-head, .mine-road-site-head) { min-height: 52px; }
+.mine-dashboard :is(.mine-breakdown-site-head, .mine-breakdown-site-row) { grid-template-columns: minmax(150px, 1.1fr) repeat(4, minmax(75px, .55fr)) minmax(280px, 2.1fr) 24px; min-width: 850px; }
+.mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) > .site b { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) .metric b,
+.mine-dashboard .mine-road-site-row > .availability b,
+.mine-dashboard .mine-breakdown-road-impact > span:first-child b { font-size: 22px !important; }
+.mine-dashboard .mine-breakdown-road-impact { min-width: 0; grid-template-columns: minmax(0, 1fr) auto; }
+.mine-dashboard .mine-breakdown-road-impact > span:first-child { flex-wrap: wrap; }
+.mine-dashboard .mine-breakdown-road-impact > span:first-child small { white-space: normal; overflow: visible; text-overflow: clip; }
+.mine-dashboard .mine-breakdown-road-impact > .mine-road-site-bar { grid-column: 1 / -1; grid-row: 2; }
+.mine-dashboard .mine-breakdown-road-impact > em { white-space: normal; }
+
+/* A chart needs space for the larger labels, not a taller empty plotting area. */
+.mine-dashboard-feature-row .mine-fleet-chart-layout { height: 300px; min-height: 270px; }
+.mine-dashboard .mine-fleet-chart-regions > section { grid-template-rows: minmax(0, 1fr) 46px; }
+.mine-dashboard .mine-fleet-chart-sites button { grid-template-rows: minmax(0, 1fr) 52px; }
+.mine-dashboard .mine-fleet-chart-sites small { font-size: 15px !important; line-height: 1.3; padding: 0 6px; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.mine-dashboard .mine-fleet-chart-grid { bottom: 116px; }
+.mine-dashboard .mine-fleet-bar-count { font-size: 18px !important; white-space: nowrap; }
+.mine-dashboard .mine-fleet-breakdown-count { font-size: 14px !important; line-height: 1.2; }
+.mine-dashboard .mine-fleet-chart-regions footer { flex-wrap: wrap; gap: 4px 10px; padding: 4px; }
+.mine-dashboard .mine-fleet-chart-regions footer b { font-size: 19px !important; }
+.mine-dashboard .mine-fleet-chart-toggle button { min-height: 44px; padding: 10px 14px; }
+.mine-dashboard .mine-fleet-chart-toggle button b { font-size: 20px !important; }
+.mine-dashboard .mine-fleet-chart-tools { flex-wrap: wrap; justify-content: flex-end; }
+.mine-dashboard .mine-fleet-chart-legend { flex-wrap: wrap; }
+.mine-dashboard .mine-fleet-chart-x { padding: 8px 4px; font-size: 13px !important; }
+
+/* The lower cards use the same readable hierarchy without changing their order. */
+.mine-dashboard .mine-fleet-command-head,
+.mine-dashboard .mine-fleet-command-actions,
+.mine-dashboard .mine-fleet-section-title,
+.mine-dashboard .mine-request-lifecycle-controls,
+.mine-dashboard .mine-trend-controls { flex-wrap: wrap; }
+.mine-dashboard .mine-fleet-category-card { min-height: 78px; padding: 12px; }
+.mine-dashboard .mine-fleet-category-card > strong,
+.mine-dashboard .mine-request-lifecycle-summary strong,
+.mine-dashboard .mine-trend-summary strong { font-size: 30px !important; }
+.mine-dashboard .mine-fleet-category-card > span:nth-child(2) b,
+.mine-dashboard .mine-fleet-group-name b { white-space: normal; overflow: visible; text-overflow: clip; }
+.mine-dashboard .mine-fleet-group-list > button { min-height: 62px; }
+.mine-dashboard .mine-fleet-group-list > button > strong { font-size: 22px !important; }
+.mine-dashboard .mine-fleet-site-grid button strong,
+.mine-dashboard .mine-fleet-region-head > span:nth-child(2) strong,
+.mine-dashboard .mine-repair-type-bars button > strong { font-size: 22px !important; }
+.mine-dashboard .mine-fleet-performance > header strong,
+.mine-dashboard .mine-repair-type-chart > header > strong { font-size: var(--dash-copy) !important; flex-shrink: 0; }
+.mine-dashboard .mine-hierarchy-layout { grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); }
+.mine-dashboard .mine-hierarchy-groups { max-height: 300px; grid-template-columns: minmax(0, 1fr); }
+.mine-dashboard :is(.mine-hierarchy-categories, .mine-hierarchy-groups) button { min-height: 64px; padding: 10px; }
+.mine-dashboard :is(.mine-hierarchy-categories, .mine-hierarchy-groups) b { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.mine-dashboard :is(.mine-hierarchy-categories, .mine-hierarchy-groups) strong { font-size: 22px !important; }
+.mine-dashboard .mine-pie-center b { font-size: 30px !important; }
+.mine-dashboard .mine-request-lifecycle-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mine-dashboard .mine-request-lifecycle-summary button { grid-template-columns: 6px minmax(0, 1fr); min-height: 112px; padding: 10px; gap: 8px; }
+.mine-dashboard .mine-request-lifecycle-summary button :is(span, b, small) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.35; }
+.mine-dashboard .mine-request-lifecycle-summary button strong { grid-column: 2; justify-self: start; }
+.mine-dashboard :is(.mine-request-lifecycle-controls, .mine-trend-controls) label { height: auto; min-height: 44px; }
+.mine-dashboard .mine-trend-period { grid-template-columns: repeat(3, 44px); }
+.mine-dashboard :is(.mine-trend-period, .mine-trend-view) button,
+.mine-dashboard .mine-trend-view-all { height: auto; min-height: 42px; }
+.mine-dashboard .mine-request-chart-days { grid-template-columns: none !important; grid-auto-columns: minmax(120px, 1fr); grid-auto-flow: column; width: max-content; min-width: 100% !important; padding-top: 30px; }
+.mine-dashboard .mine-request-chart-day > span { gap: 5px; }
+.mine-dashboard .mine-request-chart-day button { width: 24px; }
+.mine-dashboard .mine-request-chart-day button b { top: -24px; line-height: 1.3; }
+.mine-dashboard .mine-trend-day { min-width: 60px; flex: 1 0 60px; grid-template-rows: 22px minmax(95px, 1fr) 24px; }
+.mine-dashboard .mine-trend-chart-days { width: max-content; min-width: 100%; }
+.mine-dashboard .mine-trend-chart-grid { top: 25px; bottom: 27px; }
+.mine-dashboard .mine-breakdown-trend-body { grid-template-columns: minmax(165px, .3fr) minmax(0, 1fr); }
+.mine-dashboard .mine-performance-gauges { gap: 14px; }
+.mine-dashboard .mine-radial-gauge { width: 130px; height: 130px; }
+.mine-dashboard .mine-radial-gauge strong { font-size: 30px !important; }
+.mine-dashboard .mine-radial-gauge small { font-size: 13px !important; }
+.mine-dashboard .mine-performance-legend { gap: 10px; }
+.mine-dashboard .mine-performance-legend span { grid-template-columns: auto minmax(0, 1fr); }
+.mine-dashboard .mine-performance-legend b { grid-column: 2; }
+
+/* The manager's role dashboard is separate from the shared fleet dashboard. */
+.manager-dashboard .manager-dashboard-head { gap: 18px; flex-wrap: wrap; }
+.manager-dashboard .manager-dashboard-head p,
+.manager-dashboard .manager-dashboard-badge,
+.manager-dashboard .manager-detail-panel > header p { font-size: var(--dash-copy); }
+.manager-dashboard .manager-kpi-grid { gap: 16px; }
+.manager-dashboard .manager-kpi-grid > button { min-width: 0; padding: 20px; min-height: 140px; }
+.manager-dashboard .manager-kpi-grid > button > span { font-size: var(--dash-label); font-weight: 700; line-height: 1.3; }
+.manager-dashboard .manager-kpi-grid > button > small { font-size: 14px; line-height: 1.4; }
+.manager-dashboard .manager-kpi-tooltip { max-width: min(320px, 80vw); white-space: normal; }
+.manager-dashboard .manager-kpi-tooltip :is(b, i) { font-size: 14px; }
+.manager-dashboard :is(.manager-role-tabs, .manager-queue-tabs) { flex-wrap: wrap; }
+.manager-dashboard :is(.manager-role-tabs, .manager-queue-tabs) button { min-height: 44px; padding: 10px 14px; }
+.manager-dashboard .manager-detail-panel > header { flex-wrap: wrap; gap: 12px; }
+.manager-dashboard :is(th, td) { padding-block: 12px; }
+
+@media (max-width: 1500px) {
+  .mine-dashboard .mine-breakdown-type-mix > div { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mine-dashboard .mine-breakdown-type-mix :is(article, button):nth-child(3n) { border-right: 0; }
+  .mine-dashboard .mine-breakdown-type-mix :is(article, button):nth-child(-n+3) { border-bottom: 1px solid var(--mine-line); }
+  .mine-dashboard .mine-site-road-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1200px) {
+  .mine-dashboard .mine-maintenance-availability-head { align-items: stretch; flex-direction: column; }
+  .mine-dashboard .mine-maintenance-availability-tabs { width: 100%; flex-basis: auto; }
+  .mine-dashboard .mine-dashboard-core,
+  .mine-dashboard .mine-dashboard-lower-grid { grid-template-columns: minmax(0, 1fr); }
+  .mine-dashboard .mine-breakdown-movement-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  :is(.mine-dashboard, .manager-dashboard) { --dash-copy: 15px; --dash-label: 18px; --dash-value: 32px; }
+  .mine-dashboard .mine-head-actions :is(input, select) { min-width: 0; font-size: 16px !important; }
+  .mine-dashboard .mine-dashboard-head { padding: 14px; }
+  .mine-dashboard .mine-maintenance-availability-head { padding: 12px !important; }
+  .mine-dashboard .mine-breakdown-movement-kpis { gap: 8px; }
+  .mine-dashboard .mine-breakdown-movement-kpis > div { grid-template-columns: minmax(0, 1fr); min-height: 106px; padding: 12px; }
+  .mine-dashboard .mine-breakdown-movement-kpis strong { grid-column: 1; grid-row: 2; }
+  .mine-dashboard .mine-breakdown-type-mix > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mine-dashboard .mine-breakdown-type-mix :is(article, button):nth-child(3n) { border-right: 1px solid var(--mine-line); }
+  .mine-dashboard .mine-breakdown-type-mix :is(article, button):nth-child(2n) { border-right: 0; }
+  .mine-dashboard .mine-breakdown-type-mix :is(article, button):nth-child(-n+4) { border-bottom: 1px solid var(--mine-line); }
+  .mine-dashboard-feature-row .mine-fleet-chart-layout { height: 280px; min-height: 260px; }
+  .mine-dashboard .mine-hierarchy-layout,
+  .mine-dashboard .mine-breakdown-trend-body { grid-template-columns: minmax(0, 1fr); }
+  .mine-dashboard .mine-fleet-command-actions { gap: 10px; }
+  .mine-dashboard .mine-request-lifecycle-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mine-dashboard .mine-performance-gauges { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 500px) {
+  .mine-dashboard .mine-site-road-summary { grid-template-columns: minmax(0, 1fr); }
+}

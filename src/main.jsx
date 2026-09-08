@@ -143,6 +143,7 @@ import "./mobile-compat.css";
 import "./maintenance-mobile-compact.css";
 import "./dashboard-record-browser.css";
 import "./manager-scroll.css";
+import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
