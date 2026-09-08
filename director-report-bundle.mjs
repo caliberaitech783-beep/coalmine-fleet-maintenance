@@ -212,7 +212,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     table(DIRECTOR_REPORT_TITLES[13],'General',IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_COLUMNS,inOutRows),
     ...buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,now,from:`${indiaDateTimeInputValue(now).slice(0,7)}-01`,to:indiaDateTimeInputValue(now).slice(0,10)})
       .filter(report=>report.title!=='Vehicle Transfer Report')
-      .map(report=>table(report.title,report.category==='mis'?'MIS':report.category==='maintenance'?'Maintenance':'Production',report.description,report.columns,report.rows)),
+      .map(report=>table(report.title,report.category==='general'?'General':report.category==='mis'?'MIS':report.category==='maintenance'?'Maintenance':'Production',report.description,report.columns,report.rows)),
   ];
 }
 

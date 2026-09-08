@@ -5,7 +5,7 @@ import {acceptanceTime, maintenanceDelay, pendingRemark, availabilityPercentage}
 import {visibleInMisRequests} from './src/mis-history.mjs';
 import {IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, buildInOutReportRows} from './in-out-report.mjs';
 
-export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report'];
+export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report'];
 const clean = value => String(value ?? '').trim();
 const status = row => clean(row.status).toLowerCase();
 const verified = row => Boolean(row.verifiedAt || row.verifiedBy);
@@ -17,6 +17,20 @@ const base = [...ids, col('equipmentGroup', 'Equipment group', equipmentGroupVal
 const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
 const ref = col('ref', 'Job Reference No');
 const closed = col('closedAt', 'Ticket Closed');
+function summaryTat(row) {
+  const hours = (start, end) => {
+    const difference = indiaDateTimeEpoch(end) - indiaDateTimeEpoch(start);
+    return Number.isFinite(difference) && difference >= 0 ? difference / 3600000 : null;
+  };
+  const actualTrip = row.firstTripAt || (row.firstTripDate && row.firstTripTime ? `${row.firstTripDate} ${row.firstTripTime}` : '');
+  const production = hours(row.start || row.createdAt, row.closedAt);
+  const maintenance = hours(acceptanceTime(row), row.closedAt);
+  const mis = hours(row.closedAt, actualTrip);
+  // The approved overall formula intentionally sums overlapping workflow intervals.
+  const overall = [production, maintenance, mis].every(value => value !== null) ? production + maintenance + mis : null;
+  return {production, maintenance, mis, overall};
+}
+const summaryHours = (row, key) => summaryTat(row)[key]?.toFixed(2) ?? 'Not recorded';
 function assetReferences(equipment) {
   const references = new Map();
   for (const asset of equipment) for (const value of new Set([asset.chassisNo,asset.manufacturerSerialNo,asset.door,asset.equipmentName,asset.reg].map(value=>clean(value).toLowerCase()).filter(Boolean))) {
@@ -92,5 +106,13 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
       col('closedAt','Maintenance Closing Time'),col('closedBy','Closed by'),
       col('verifiedAt','MIS verified at'),col('verifiedBy','Verified by'),col('firstTripAt','First trip time',firstTrip),
     ],requests.filter(r => r.misFlaggedAt),r => r.misFlaggedAt),
+    report('general', DEPARTMENT_REPORT_TITLES[14], 'MIS-verified requests only. All TAT values are in hours. Production TAT = request closed minus production submission; Maintenance TAT = request closed minus maintenance acceptance; MIS TAT = actual first trip minus request closed. Overall TAT is the sum of these three intervals, including their overlap. Date filters use production submission.', [
+      col('submittedAt','Production Request Submission Date & Time',r => r.start || r.createdAt),
+      col('overallTat','Overall TAT (Hrs)',r => summaryHours(r,'overall')),
+      ...base,
+      col('productionTat','Production TAT (Hrs)',r => summaryHours(r,'production')),
+      col('maintenanceTat','Maintenance TAT (Hrs)',r => summaryHours(r,'maintenance')),
+      col('misTat','MIS TAT (Hrs)',r => summaryHours(r,'mis')),
+    ],requests.filter(r => r.verifiedAt),r => r.start || r.createdAt),
   ];
 }
