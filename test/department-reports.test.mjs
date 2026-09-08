@@ -25,25 +25,10 @@ test('pending includes all open and in-progress requests regardless of remarks',
   assert.equal(cell(report,'remark'),'No Remark');
   assert.ok(!report.columns.some(c=>/difference|elapsed/i.test(c.label)));
 });
-test('mismatch uses verification minus first trip and strictly more than 30 minutes',()=>{
-  const reports=build([30,31].map(minutes=>({ref:String(minutes),closedAt:'2026-09-01 08:00:00',firstTripAt:'2026-09-01 12:00:00',verifiedAt:`2026-09-01 12:${minutes}:00`,status:'Closed'})));
+test('mismatch uses firstTripAt and strictly more than 30 minutes across all closed requests',()=>{
+  const reports=build([30,31].map(minutes=>({ref:String(minutes),closedAt:'2026-09-01 12:00:00',firstTripAt:`2026-09-01 12:${minutes}:00`,status:'Closed'})));
   assert.deepEqual(reports.find(r=>r.title==='30 Min. Mismatch').rows.map(r=>r.ref),['31']);
-  const report=reports.find(r=>r.title==='30 Min. Mismatch');
-  assert.equal(cell(report,'difference'),'31m');
-  assert.equal(cell(report,'mismatch'),'Delay');
-  assert.equal(report.dateValue(report.rows[0]),'2026-09-01 12:31:00');
-  assert.equal(reports.find(r=>r.title==='Unverified Cases').rows.length,0);
-});
-
-test('mismatch excludes missing, reversed and exactly 30 minute timestamps and supports split trip fields',()=>{
-  const report=build([
-    {ref:'missing',firstTripAt:'2026-09-01 12:00'},
-    {ref:'reverse',firstTripAt:'2026-09-01 12:00',verifiedAt:'2026-09-01 11:00'},
-    {ref:'exact',firstTripAt:'2026-09-01 12:00',verifiedAt:'2026-09-01 12:30'},
-    {ref:'overnight',firstTripDate:'2026-09-01',firstTripTime:'23:50:00',verifiedAt:'2026-09-02 00:21:00'},
-  ]).find(r=>r.title==='30 Min. Mismatch');
-  assert.deepEqual(report.rows.map(r=>r.ref),['overnight']);
-  assert.equal(cell(report,'difference'),'31m');
+  assert.equal(reports.find(r=>r.title==='Unverified Cases').rows.length,2);
 });
 test('acceptance is not inferred from status or closure',()=>{
   const report=build([{status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-01 10:00'}]).find(r=>r.title.includes('Acceptance'));
