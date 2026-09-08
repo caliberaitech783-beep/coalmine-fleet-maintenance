@@ -26,7 +26,8 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.equal(summary.department,'General');
   assert.equal(summary.rows.length,1);
   assert.match(summary.pdfTitle,/Jayant OB/);
-  assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='misTat')],'2.00');
+  assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='returnToWorkTat')],'2h 0s');
+  assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='verificationLag')],'Not recorded');
   assert.equal(tables.find((table)=>table.title==='Vehicle Arrival Red Flag Report').department,'Maintenance');
   assert.equal(tables.find((table)=>table.title==='MIS Red Flag Report').department,'MIS');
   assert.equal(tables.find((table)=>table.title==='In and Out Report').department,'General');

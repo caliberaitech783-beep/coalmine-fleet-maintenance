@@ -6,6 +6,7 @@ import {existsSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
+import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -2157,8 +2158,8 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(mis_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "misFlaggedAt", mis_flagged_by AS "misFlaggedBy", mis_flag_remark AS "misFlagRemark",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
-  to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
-  ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
+  to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealRequestedAt",
+  ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
   closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
@@ -2315,6 +2316,57 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+const requestTimelineProjection=`id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
+async function recordRequestTimeline(client,req,reference,before,{events,sources={},reason='',requireCorrectionReason=[]}={}){
+  const {rows}=await client.query(`SELECT ${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+  const after=rows[0];
+  if(!after)throw Object.assign(new Error('Request changed before its timeline could be recorded.'),{status:409});
+  const changes=buildRequestTimelineChanges(before,after,{events,sources,reason,requireCorrectionReason,now:after.timelineRecordedAt,actorLogin:req.session.login,actorName:req.session.name}).map(change=>({...change,requestId:String(after.timelineRequestId)}));
+  if(!changes.length)return;
+  await client.query(`INSERT INTO audit_events (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,occurred_at)
+    VALUES ('Workflow timeline','Success',$1,$2,$3,'Maintenance Requests','Record workflow timestamps','Maintenance request',$4,$5,$6::jsonb,$7)`,
+    [String(req.session.login||''),String(req.session.name||''),String(req.session.permissions?.adminLevel||req.session.assignedRole||req.session.role||''),reference,String(reason||'').trim(),JSON.stringify(changes),after.timelineRecordedAt]);
+}
+
+async function withRequestTimelineTransaction(req,reference,write){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT site,status,${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
+    if(!rows.length)throw Object.assign(new Error('This request no longer exists.'),{status:409});
+    const result=await write(client,rows[0]);
+    if(result.timelineEvents)await recordRequestTimeline(client,req,reference,rows[0],{events:result.timelineEvents,sources:result.timelineSources,reason:result.timelineReason,requireCorrectionReason:result.timelineRequireReason});
+    await client.query('COMMIT');
+    return result;
+  }catch(error){await client.query('ROLLBACK');throw error}
+  finally{client.release()}
+}
+
+app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>{
+  try{
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+    const {session,user}=authorization;
+    const operational=session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(session.assignedRole);
+    if(session.role!=='super'&&!operational&&session.permissions?.readRequests!==true)return res.status(403).json({error:'Your assigned role cannot view request timelines.'});
+    const reference=String(req.params.reference||'').trim();
+    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const request=rows[0];
+    if(!request)return res.status(404).json({error:'Request not found.'});
+    if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+    if(session.role==='normal'){
+      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+      if(session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==String(user.login||req.session.login||'').trim().toLowerCase())return res.status(403).json({error:'Only your own request timelines are available.'});
+    }
+    const {rows:records}=await pool.query(`SELECT changed_fields FROM audit_events WHERE event_type='Workflow timeline' AND action='Record workflow timestamps' AND outcome='Success' AND target_type='Maintenance request' AND target_reference=$1 AND changed_fields @> $2::jsonb ORDER BY occurred_at ASC,id ASC`,[reference,JSON.stringify([{requestId:String(request.timelineRequestId)}])]);
+    const history=records.flatMap(row=>Array.isArray(row.changed_fields)?row.changed_fields:[]).filter(item=>item?.requestId===String(request.timelineRequestId)&&REQUEST_TIMELINE_FIELDS.includes(item?.event)).map(item=>({event:item.event,oldValue:parseRequestTimelineTimestamp(item.oldValue)?.toISOString()??null,newValue:parseRequestTimelineTimestamp(item.newValue)?.toISOString()??null,source:['system','user'].includes(item.source)?item.source:'unknown',recordedAt:parseRequestTimelineTimestamp(item.recordedAt)?.toISOString()??null,actorLogin:String(item.actorLogin||''),actorName:String(item.actorName||''),reason:String(item.reason||''),correction:item.correction===true}));
+    res.set('Cache-Control','no-store');
+    const {timelineRequestId,timelineRecordedAt,...visibleRequest}=request;
+    res.json({reference,request:visibleRequest,events:requestTimelineEvents(request,history),history,durations:requestTimelineDurations(request)});
+  }catch(error){next(error)}
+});
+
 const arrivalDelaySql=`((acceptance_required=TRUE AND accepted_at IS NULL AND started_at<=NOW()-INTERVAL '1 hour')
   OR (accepted_at IS NOT NULL AND accepted_at>started_at+INTERVAL '1 hour'))`;
 const arrivalFlagReadySql=`(NOT ${arrivalDelaySql} OR (arrival_flagged_at IS NOT NULL AND length(btrim(arrival_flag_remark,E' \\t\\n\\r'))>0))`;
@@ -2332,7 +2384,7 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     await client.query('BEGIN');
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
-    const {rows}=await client.query(`SELECT site,${arrivalFlagReadySql} AS arrival_flag_ready
+    const {rows}=await client.query(`SELECT site,${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
       FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL FOR UPDATE`,[reference]);
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
@@ -2341,7 +2393,8 @@ async function withMaintenanceArrivalGuard(req,reference,write){
       if(!assignedSite||assignedSite!==canonicalSiteName(rows[0].site))throw Object.assign(new Error('This vehicle is outside your assigned maintenance location.'),{status:403});
     }
     if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
-    const result=await write(client);
+    const result=await write(client,rows[0]);
+    if(result.timelineEvents)await recordRequestTimeline(client,req,reference,rows[0],{events:result.timelineEvents,sources:result.timelineSources,reason:result.timelineReason,requireCorrectionReason:result.timelineRequireReason});
     await client.query('COMMIT');
     return result;
   }catch(error){await client.query('ROLLBACK');throw error}
@@ -2471,15 +2524,20 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       const assignedSite=canonicalSiteName(requester.site||requester.location||requester.currentLocation);
       if(!assignedSite||assignedSite!==canonicalSiteName(site))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});
     }
-    const startedAt=parseIndiaRequestDateTime(start);
+    const startedAt=String(start||'').trim()?parseRequestTimelineTimestamp(start):new Date();
+    validateRequestTimelineChange({}, {start:startedAt||String(start)}, {userEntered:['start']});
     const superior=String(requester.superior||'').trim().slice(0,200);
     const storedDriverName=String(driverName).trim().slice(0,200);
     const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
-    const {rows}=await createRequestWithVehicleLock({door,chassis},client=>client.query(`INSERT INTO maintenance_requests
+    const {rows}=await createRequestWithVehicleLock({door,chassis},async(client)=>{
+    const result=await client.query(`INSERT INTO maintenance_requests
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,acceptance_required,status,owner_name,requester_login,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']));
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']);
+    await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
+    return result;
+    });
     await sendRequestEventReports('opened',rows[0]);
     try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
@@ -2495,7 +2553,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
   }catch(error){
     if(error.duplicate)return res.status(409).json({duplicate:true,existingReference:error.existingReference,error:error.message});
     if(error.code==='23505'&&error.constraint==='maintenance_requests_reference_key')return res.status(409).json({code:'REQUEST_REFERENCE_CONFLICT',error:'This request reference already exists. Refresh the request form and try again.'});
-    next(error);
+    maintenanceWriteFailure(error,res,next);
   }
 });
 
@@ -2511,14 +2569,18 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     // Opening meter data is optional; validate it only when supplied.
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
-    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
+    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
+    const accepting=before.acceptanceRequired&&!before.acceptedAt;
+    validateRequestTimelineChange(before,{expectedCompletionAt:expectedAt||expectedCompletionAt,...(accepting?{acceptedAt:before.timelineRecordedAt}:{})},{now:before.timelineRecordedAt,userEntered:['expectedCompletionAt']});
+    buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
-      accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=($3::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$4,
+      accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
     if(!result.rows.length)throw arrivalRedFlagError();
-    return result;
+    return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });
     res.json(rows[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
@@ -2539,7 +2601,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const openingMeterReading=String(req.body?.openingMeterReading||'').trim();
     const openingMeterFile=String(req.body?.openingMeterFile||'');
     const openingMeterFileName=String(req.body?.openingMeterFileName||'').trim().slice(0,255);
-    const closedAt=requestDateTimeValue(closingDate,closingTime);
+    const closedAt=parseRequestTimelineTimestamp(`${closingDate}T${closingTime}`);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
@@ -2553,7 +2615,11 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       if(!assignedSite||assignedSite!==canonicalSiteName(existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
     if(!ideal&&status==='Closed'&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt)return res.json(existingRows[0]);
-    const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
+    const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    if(!ideal&&status==='Closed'){
+      validateRequestTimelineChange(before,{closedAt},{now:before.timelineRecordedAt,userEntered:['closedAt']});
+      buildRequestTimelineChanges(before,{...before,closedAt},{events:['closedAt'],reason:req.body?.correctionReason,requireCorrectionReason:['closedAt']});
+    }
     const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
     if(!meterRows.length)throw arrivalRedFlagError();
     const delayedClosure=!ideal&&status==='Closed'&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
@@ -2593,7 +2659,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
         )`,[JSON.stringify({delayedReason}),delayedReason]);
     }
-    return {rows,delayedClosure};
+    const timelineEvents=ideal?['idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
+    return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:!ideal&&status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:!ideal&&status==='Closed'?['closedAt']:[]};
     });
     if(ideal){
       try{
@@ -2635,9 +2702,15 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
     const reference=String(req.params.reference||'').trim();
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
+    const {rows}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
+    if(!['Idle','Ideal'].includes(before.status)||before.verifiedAt||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
+    validateRequestTimelineChange(before,{closedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt});
+    const result=await client.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
       ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
       RETURNING ${requestProjection}`,[req.session.name||'Project / Production Manager',reference,eligible.rows[0].site]);
+    if(!result.rows.length)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
+    return {...result,timelineEvents:['closedAt','idealApprovedAt'],timelineSources:{closedAt:'system',idealApprovedAt:'system'}};
+    });
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your approval.'});
     await sendRequestEventReports('closed',rows[0]);
     try{
@@ -2652,7 +2725,7 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
       console.error(`Request ${rows[0].ref} was approved on road, but its notification recipients could not be resolved.`,error);
     }
     res.json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,next)=>{
@@ -2663,11 +2736,16 @@ app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,ne
     const reference=String(req.params.reference||'').trim();
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your decision or is outside your assigned sites.'});
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
+    const {rows}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
+    if(!['Idle','Ideal'].includes(before.status)||before.verifiedAt||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your decision.'),{status:409});
+    const result=await client.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
       ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by='',
       in_progress_at=COALESCE(in_progress_at,NOW()),in_progress_by=CASE WHEN in_progress_at IS NULL THEN $2 ELSE in_progress_by END
       WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
       RETURNING ${requestProjection}`,[reference,req.session.name||req.session.login||'Maintenance Manager',eligible.rows[0].site]);
+    if(!result.rows.length)throw Object.assign(new Error('This Idle request is no longer awaiting your decision.'),{status:409});
+    return {...result,timelineEvents:['closedAt','idealRequestedAt','idealApprovedAt','inProgressAt'],timelineSources:{closedAt:'system',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:'Idle status cancelled by Maintenance Manager.'};
+    });
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your decision.'});
     try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
@@ -2676,7 +2754,7 @@ app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,ne
       console.error(`Request ${rows[0].ref} Idle status was cancelled, but its notification recipients could not be resolved.`,error);
     }
     res.json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.delete('/api/requests/:reference',requireSession,requirePermission('deleteRequests',{role:'Maintenance User'}),async(req,res,next)=>{
@@ -2717,7 +2795,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
   try{
     const reference=String(req.params.reference||'').trim();
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
-    const firstTripAt=firstTripDone?requestDateTimeValue(req.body?.firstTripDate,req.body?.firstTripTime):null;
+    const firstTripAt=firstTripDone?parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`):null;
     const firstTripCardImage=String(req.body?.firstTripCardImage||'');
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
@@ -2734,9 +2812,18 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     // Mobile browsers can retry a slow image upload after the first request has
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
+    const {rows,idempotent}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
+    if(before.site!==existing.site||before.status!=='Closed')throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
+    if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
+    validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
+    buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
+    const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
       first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
       RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site]);
+    if(!result.rows.length)throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
+    return {...result,timelineEvents:['firstTripAt','verifiedAt'],timelineSources:{firstTripAt:'user',verifiedAt:'system'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['firstTripAt']};
+    });
+    if(idempotent)return res.json(rows[0]);
     if(!rows.length){
       const {rows:retryRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
       if(retryRows[0]?.verifiedAt&&canonicalSiteName(retryRows[0].site)===canonicalSiteName(misSite))return res.json(retryRows[0]);
@@ -2759,7 +2846,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
         console.error(`Request ${rows[0].ref} was verified, but its notification recipients could not be resolved.`,error);
       }
     })();
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.get('/api/requests/:reference/trip-card',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{

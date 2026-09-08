@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
+import * as timeline from '../request-timeline.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const authSource=server.slice(server.indexOf('async function requireSession('),server.indexOf('async function requireSuper('));
@@ -33,7 +34,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
         assert.match(sql,/accepted_at IS NOT NULL AND accepted_at>started_at\+INTERVAL '1 hour'/);
         assert.match(sql,/accepted_at IS NULL AND started_at<=NOW\(\)-INTERVAL '1 hour'/);
         assert.match(sql,/arrival_flagged_at IS NOT NULL AND length\(btrim\(arrival_flag_remark,E'[^']*'\)\)>0/);
-        return {rows:active(saved)?[{site:saved.site,arrival_flag_ready:!needsFlag(saved)}]:[]};
+        return {rows:active(saved)?[{...saved,expectedCompletionAt:saved.expected_completion_at,timelineRecordedAt:new Date(now),arrival_flag_ready:!needsFlag(saved)}]:[]};
       }
       if(sql.startsWith('SELECT * FROM maintenance_requests'))return {rows:saved?[structuredClone(saved)]:[]};
       if(sql.startsWith('SELECT meter_type'))return {rows:active(saved)&&!needsFlag(saved)?[structuredClone(saved)]:[]};
@@ -60,6 +61,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
   };
   const register=(_path,...handlers)=>{chain=handlers;};
   const context={
+    ...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
     readSession:async req=>req.testSession,currentUserRecord:async()=>user,
     canonicalSiteName:value=>String(value||'').trim().toLowerCase(),requestProjection:'*',

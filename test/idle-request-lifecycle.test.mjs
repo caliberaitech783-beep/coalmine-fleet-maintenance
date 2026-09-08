@@ -8,11 +8,13 @@ import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {arrivalRedFlagRequired} from '../request-acceptance.mjs';
 import {requestDateTimeValue,requestMayBeChanged,requestMayBeVerified,validMeterReading,validTripCardImageDataUrl} from '../request-workflow.mjs';
+import * as timeline from '../request-timeline.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const slice=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end));
 const auth=slice('async function requireSession(','async function requireSuper(');
 const bestEffort=slice('async function addTicketNotificationsBestEffort(','let consolidatedReportRunning=');
+const timelineTransaction=slice('async function withRequestTimelineTransaction(',"app.get('/api/requests/:reference/timeline'");
 const routes={
   approve:slice("app.patch('/api/requests/:reference/ideal-onroad',","app.patch('/api/requests/:reference/idle-cancel',"),
   cancel:slice("app.patch('/api/requests/:reference/idle-cancel',","app.delete('/api/requests/:reference',"),
@@ -33,16 +35,21 @@ const pending=Object.freeze({
 // Execute the real route/auth/notification functions against an isolated in-memory
 // query adapter. SQL guards are asserted separately; no server or database boots.
 function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure='',beforeUpdate}={}){
-  let saved=structuredClone(row),chain,mutations=0;
+  let saved=structuredClone(row),snapshot,chain,mutations=0;
   const queries=[],logs=[],notifications=[];
   const eligible=value=>value&&!value.verifiedAt&&(kind==='verify'?value.status==='Closed':['Idle','Ideal'].includes(value.status));
   const context={
+    ...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{patch(_path,...handlers){chain=handlers;}},readSession:async req=>req.testSession,
     currentUserRecord:async()=>user,flowDesignationForUser,managerRoleSelection,canonicalSiteName,
     userManagesSite:(manager,site)=>reportScopeIncludesSite(managerReportScope(manager),site),
     requestProjection:'*',requestDateTimeValue,validTripCardImageDataUrl,validMeterReading,
     pool:{async query(sql,values){
       queries.push({sql,values});
+      if(sql==='BEGIN'){snapshot=structuredClone(saved);return {rows:[]};}
+      if(sql==='COMMIT')return {rows:[]};
+      if(sql==='ROLLBACK'){saved=snapshot;return {rows:[]};}
+      if(sql.startsWith('SELECT site,status,'))return {rows:saved?[{...saved,timelineRecordedAt:new Date(now)}]:[]};
       if(sql.startsWith('SELECT site FROM maintenance_requests'))return {rows:eligible(saved)?[{site:saved.site}]:[]};
       if(sql.startsWith('SELECT * FROM maintenance_requests'))return {rows:saved?[structuredClone(saved)]:[]};
       assert.ok(sql.startsWith('UPDATE maintenance_requests'),`Unexpected query: ${sql}`);
@@ -65,7 +72,8 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
     sendRequestEventReports:async()=>{},requestNotificationTime:()=>now,requestEquipmentNotificationDetails:()=>'',
     workflowRequestLink:()=>'',publicBaseUrl:()=>'',console:{error:(...args)=>logs.push(args)},
   };
-  runInNewContext(`${auth}\n${bestEffort}\n${routes[kind]}`,context);
+  context.pool.connect=async()=>({query:context.pool.query,release(){}});
+  runInNewContext(`${auth}\n${bestEffort}\n${timelineTransaction}\n${routes[kind]}`,context);
   return {
     get saved(){return saved;},get mutations(){return mutations;},queries,logs,notifications,
     async call({session=kind==='verify'?misSession:maintenanceManager,body={}}={}){

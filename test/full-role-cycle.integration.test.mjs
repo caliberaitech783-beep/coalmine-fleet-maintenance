@@ -77,6 +77,14 @@ test('real database role cycles, queues, red flags, reports and permission bound
   const change=(row,extra={})=>({category:row.category,complaint:row.complaint,expectedCompletionAt:india(3600000).slice(0,16),meterType:'HMR',...extra});
   const closeBody=(extra={})=>{const [closingDate,closingTime]=india().split('T');return {closingDate,closingTime,maintenanceWork:'Audit repair completed',...extra}};
   const verification=()=>({firstTripDone:false,firstTripCardImage:image,closingMeterReading:'200'});
+  async function awaitManualTimestampAfter(row,field){
+    // Form inputs carry whole seconds; production capture retains PostgreSQL
+    // milliseconds. An instant fixture action in the same second would be
+    // earlier than the capture, so wait only for the next valid input second.
+    const clock=new Date(`${row[field].replace(' ','T')}+05:30`).getTime()+1000;
+    const remaining=Math.max(0,clock-Date.now()+5);
+    if(remaining)await new Promise(resolve=>setTimeout(resolve,remaining));
+  }
   const rows=role=>call(role,'GET','/api/requests');
   const contains=(list,ref)=>list.some(r=>r.ref===ref);
   async function assertClosedQueues(row){
@@ -100,6 +108,7 @@ test('real database role cycles, queues, red flags, reports and permission bound
     assert.equal(updated.dailyRemarks.length,1);assert.equal(updated.dailyRemarks[0].remark,'Inspection revised');
     const waiting=await call('maintenance','PATCH',`/api/requests/${row.ref}/close`,closeBody({status:'Awaiting parts'}));
     assert.equal(waiting.status,'Awaiting parts');
+    await awaitManualTimestampAfter(accepted,'acceptedAt');
     const closed=await call('maintenance','PATCH',`/api/requests/${row.ref}/close`,closeBody({status:'Closed'}));
     await assertClosedQueues(closed);
     await call('production','PATCH',`/api/requests/${row.ref}/verify`,verification(),403);
@@ -129,6 +138,7 @@ test('real database role cycles, queues, red flags, reports and permission bound
     assert.equal(approved.status,'Closed');assert.ok(approved.idealApprovedAt);assert.ok(approved.closedAt);
     await assertClosedQueues(approved);
     await call(role,'PATCH',`/api/requests/${row.ref}/ideal-onroad`,{},409);
+    await awaitManualTimestampAfter(approved,'closedAt');
     const [firstTripDate,firstTripTime]=india().split('T');
     const verified=await call('mis','PATCH',`/api/requests/${row.ref}/verify`,{...verification(),firstTripDone:true,firstTripDate,firstTripTime});
     assert.equal(verified.firstTripDone,true);assert.ok(verified.firstTripAt);

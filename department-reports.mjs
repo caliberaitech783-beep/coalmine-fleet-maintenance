@@ -4,6 +4,7 @@ import {elapsedLabel} from './report-metrics.mjs';
 import {acceptanceTime, maintenanceDelay, pendingRemark, availabilityPercentage} from './report-refinements.mjs';
 import {visibleInMisRequests} from './src/mis-history.mjs';
 import {IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, buildInOutReportRows} from './in-out-report.mjs';
+import {parseRequestTimelineTimestamp,requestTimelineDurations,formatTimelineDuration,requestTimelineEvents} from './request-timeline.mjs';
 
 export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report'];
 const clean = value => String(value ?? '').trim();
@@ -17,20 +18,26 @@ const base = [...ids, col('equipmentGroup', 'Equipment group', equipmentGroupVal
 const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
 const ref = col('ref', 'Job Reference No');
 const closed = col('closedAt', 'Ticket Closed');
-function summaryTat(row) {
-  const hours = (start, end) => {
-    const difference = indiaDateTimeEpoch(end) - indiaDateTimeEpoch(start);
-    return Number.isFinite(difference) && difference >= 0 ? difference / 3600000 : null;
-  };
-  const actualTrip = row.firstTripAt || (row.firstTripDate && row.firstTripTime ? `${row.firstTripDate} ${row.firstTripTime}` : '');
-  const production = hours(row.start || row.createdAt, row.closedAt);
-  const maintenance = hours(acceptanceTime(row), row.closedAt);
-  const mis = hours(row.closedAt, actualTrip);
-  // The approved overall formula intentionally sums overlapping workflow intervals.
-  const overall = [production, maintenance, mis].every(value => value !== null) ? production + maintenance + mis : null;
-  return {production, maintenance, mis, overall};
+const summaryTimingRow = row => ({...row,firstTripAt:row.firstTripAt || (row.firstTripDate && row.firstTripTime ? `${row.firstTripDate} ${row.firstTripTime}` : '')});
+const summaryDuration = (row,key) => formatTimelineDuration(requestTimelineDurations(summaryTimingRow(row))[key]);
+function summaryClosure(row) {
+  const event=requestTimelineEvents(summaryTimingRow(row)).find(event=>event.event==='closedAt');
+  const manager=event.label==='Manager on-road closure';
+  return `${event.eventAt ? event.label : 'Closure time not recorded'} | ${clean(manager ? row.idealApprovedBy || row.closedBy : row.closedBy) || 'Actor not recorded'}`;
 }
-const summaryHours = (row, key) => summaryTat(row)[key]?.toFixed(2) ?? 'Not recorded';
+function summaryTimingNotes(row) {
+  const timing=summaryTimingRow(row);
+  const stages=[['start','submission'],['acceptedAt','acceptance'],['closedAt','closure'],['firstTripAt','first trip'],['verifiedAt','verification']];
+  const notes=[];
+  for(const [key,label] of stages){
+    if(!clean(timing[key]))notes.push(`Missing ${label}`);
+    else if(!parseRequestTimelineTimestamp(timing[key]))notes.push(`Invalid ${label} timestamp`);
+  }
+  const known=stages.map(([key,label])=>({label,at:parseRequestTimelineTimestamp(timing[key])?.getTime()})).filter(event=>event.at!=null);
+  for(let index=1;index<known.length;index++)if(known[index].at<known[index-1].at)notes.push(`Out of order: ${known[index].label} before ${known[index-1].label}`);
+  if(!notes.length)notes.push('In sequence');
+  return `${notes.join('; ')}. Event source not supplied.`;
+}
 function assetReferences(equipment) {
   const references = new Map();
   for (const asset of equipment) for (const value of new Set([asset.chassisNo,asset.manufacturerSerialNo,asset.door,asset.equipmentName,asset.reg].map(value=>clean(value).toLowerCase()).filter(Boolean))) {
@@ -106,17 +113,22 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
       col('closedAt','Maintenance Closing Time'),col('closedBy','Closed by'),
       col('verifiedAt','MIS verified at'),col('verifiedBy','Verified by'),col('firstTripAt','First trip time',firstTrip),
     ],requests.filter(r => r.misFlaggedAt),r => r.misFlaggedAt),
-    report('general', DEPARTMENT_REPORT_TITLES[14], 'MIS-verified requests only. All TAT values are in hours. Production TAT = request closed minus production submission; Maintenance TAT = request closed minus maintenance acceptance; MIS TAT = actual first trip minus request closed. Overall TAT is the sum of these three intervals, including their overlap. Date filters use production submission.', [
-      col('submittedAt','Production Request Submission Date & Time',r => r.start || r.createdAt),
-      col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not recorded'),
-      col('closedAt','Maintenance Repair Closed Date & Time',r => r.closedAt || 'Not recorded'),
-      col('firstTripAt','MIS First Trip Date & Time',r => r.firstTripAt || (r.firstTripDate && r.firstTripTime ? `${r.firstTripDate} ${r.firstTripTime}` : 'Not recorded')),
-      col('verifiedAt','MIS Verified Date & Time',r => r.verifiedAt || 'Not recorded'),
-      col('overallTat','Overall TAT (Hrs)',r => summaryHours(r,'overall')),
-      ...base,
-      col('productionTat','Production TAT (Hrs)',r => summaryHours(r,'production')),
-      col('maintenanceTat','Maintenance TAT (Hrs)',r => summaryHours(r,'maintenance')),
-      col('misTat','MIS TAT (Hrs)',r => summaryHours(r,'mis')),
+    report('general', DEPARTMENT_REPORT_TITLES[14], 'MIS-verified requests only. Exact durations: waiting = submission to acceptance; maintenance = acceptance to request closure; return to work = closure to actual first trip. These stages do not overlap; overall = submission to first trip. Repair/closure elapsed and first-trip-to-verification lag are separate measures, not additional stages. For Idle cases, manager on-road approval is request closure, not a separately recorded repair completion; the acceptance-to-closure interval includes the Idle approval wait. Missing or reversed timestamps are not treated as zero. Date filters continue to use production submission.', [
+      ref,
+      col('submittedAt','Production submission',r => r.start || 'Not recorded'),
+      col('acceptedAt','Maintenance acceptance',r => acceptanceTime(r) || 'Not recorded'),
+      col('closedAt','Request closure / on-road approval',r => r.closedAt || 'Not recorded'),
+      col('firstTripAt','Actual first trip',r => summaryTimingRow(r).firstTripAt || 'Not recorded'),
+      col('verifiedAt','MIS verified at',r => r.verifiedAt || 'Not recorded'),
+      col('closureEvent','Closure type / recorded by',summaryClosure),
+      ...base,site,
+      col('waitingTat','Waiting: submission to acceptance',r => summaryDuration(r,'waiting')),
+      col('maintenanceTat','Maintenance: acceptance to closure',r => summaryDuration(r,'maintenance')),
+      col('returnToWorkTat','Return to work: closure to first trip',r => summaryDuration(r,'returnToWork')),
+      col('overallTat','Overall: submission to first trip',r => summaryDuration(r,'overall')),
+      col('repairElapsed','Repair / closure elapsed: submission to closure',r => summaryDuration(r,'repairElapsed')),
+      col('verificationLag','Verification lag: first trip to verified',r => summaryDuration(r,'verificationLag')),
+      col('timingNotes','Timing checks / source',summaryTimingNotes),
     ],requests.filter(r => r.verifiedAt),r => r.start || r.createdAt),
   ];
 }

@@ -35,7 +35,9 @@ test("Maintenance User edits ETC instead of entering it in the close form", () =
   assert.match(editForm, /name="expectedCompletionAt" type="datetime-local" required/);
   assert.match(editForm, /expectedCompletionAt: form\.get\("expectedCompletionAt"\)/);
   assert.doesNotMatch(closeForm, /name="expectedCompletionAt"/);
-  assert.match(server, /expected_completion_at=\(\$3::timestamp AT TIME ZONE 'Asia\/Kolkata'\)/);
+  assert.match(server, /requestExpectedCompletionValue\(before\.expectedCompletionAt,expectedCompletionAt\)/);
+  assert.match(server, /expected_completion_at=\$3::timestamptz/);
+  assert.match(server, /requireCorrectionReason:\['expectedCompletionAt'\]/);
 });
 
 test("workspaces, masters, tables, and forms use the expanded readable layout", () => {

@@ -59,6 +59,7 @@ import {profileHeaderDesignation, profileHeaderName} from "./profile-designation
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
+import RequestTimelineButton from "./request-timeline.jsx";
 import {
   LayoutDashboard,
   Truck,
@@ -1505,7 +1506,7 @@ const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "break
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal } = {}) {
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
-    case "ref": return <td><b>{r.ref}</b></td>;
+    case "ref": return <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} /></td>;
     case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
     case "door": return <td>{r.door}</td>;
     case "make": return <td>{r.make || "—"}</td>;
@@ -1609,7 +1610,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction, onApproveIdeal, onCancelIdeal })}</React.Fragment>) : <>
                 {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
                 <td>
-                  <b>{r.ref}</b>
+                  <RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} />
                 </td>
                 <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
                 <td>{r.door}</td>
@@ -5220,7 +5221,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           category={selectedReport.category}
           icon={activeCategory.icon}
           rows={selectedReportRows}
-          columns={selectedReport.columns}
+          columns={selectedReport.columns.map(column => column.key === "ref" ? {...column, render: row => <RequestTimelineButton reference={row.ref} token={session?.token || authToken} Dialog={Modal} />} : column)}
           emptyMessage={selectedReport.emptyMessage}
           rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
           rowClassName={selectedReport.rowClassName}
@@ -6931,7 +6932,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   const closedByColumns = showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : [];
   const startedColumn = {key: "start", label: startedLabel, value: (row) => formatTwelveHourDateTime(row.start)};
   const filterColumns = [
-    ...(showAcceptedTime ? [{key: "acceptedTime", label: "Accepted time", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
+    ...(showAcceptedTime ? [{key: "acceptedTime", label: "Arrival wait", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
     {key: "ref", label: "Job reference", value: (row) => row.ref},
     {key: "equipmentGroup", label: "Equipment group", value: (row) => normalizeEquipmentGroup(row.equipmentGroup) || row.equipment},
     {key: "door", label: "Door no.", value: (row) => row.door},
@@ -7013,7 +7014,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
       <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
-          {showAcceptedTime && workflowHeader("acceptedTime", "Accepted time")}
+          {showAcceptedTime && workflowHeader("acceptedTime", "Arrival wait")}
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
@@ -7025,7 +7026,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
-              <td><b>{row.ref}</b></td>
+              <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} /></td>
               <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
@@ -7058,7 +7059,11 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
 function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, repairTypeRecords = [], repairTypesLoaded = false }) {
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
-  const acceptanceTime = request.acceptedAt || indiaDateTimeInputValue(new Date()).replace("T", " ");
+  const acceptanceTime = request.acceptedAt;
+  const initialEtc = String(request.expectedCompletionAt || "").replace(" ", "T").slice(0,16);
+  const [expectedCompletionAt,setExpectedCompletionAt] = useState(initialEtc);
+  const [formError,setFormError] = useState("");
+  const etcChanged = Boolean(initialEtc && expectedCompletionAt.slice(0,16) !== initialEtc);
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
@@ -7070,12 +7075,15 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       if (submitLock.current) return;
       if (arrivalRedFlagRequired(request)) { onRequireArrivalFlag?.(request); return; }
       const form = new FormData(event.currentTarget);
+      const correctionReason = String(form.get("correctionReason") || "").trim();
+      if (etcChanged && !correctionReason) return setFormError("Explain why the expected completion time is being changed.");
+      setFormError("");
       submitLock.current = true;
       setSubmitting(true);
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
-        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
-      } catch (error) { alert(error?.message || "Could not save this request. Please try again."); }
+        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="formgrid">
@@ -7103,18 +7111,21 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
-        {request.acceptanceRequired && <label>Acceptance timing<input value={formatTwelveHourDateTime(acceptanceTime)} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "Automatically recorded when the vehicle is accepted."}</small></label>}
-        <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required defaultValue={String(request.expectedCompletionAt || "").replace(" ", "T")} /></label>
+        {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
+        <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required value={expectedCompletionAt} onChange={event => setExpectedCompletionAt(event.target.value)} /><small>Planned time entered by Maintenance—not the actual completion time.</small></label>
+        {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {formatTwelveHourDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
         <label>Opening {meterType} reading (optional)<input name="openingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" defaultValue={request.openingMeterReading || ""} placeholder={`Enter opening ${meterType}`} /><small>{meterType === "KMR" ? "KMR is used for Vehicle-category assets." : "HMR is used for Equipment-category assets."}</small></label>
         <label>Opening {meterType} file (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
       <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : request.acceptanceRequired && !request.acceptedAt ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
 
 function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
+  const [formError,setFormError] = useState("");
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
   const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date),
@@ -7142,16 +7153,17 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
       event.preventDefault();
       if (submitLock.current) return;
       if (ideal && !["No driver", "No work"].includes(idleReason)) {
-        alert("Choose an Idle reason: No driver or No work.");
+        setFormError("Choose an Idle reason: No driver or No work.");
         return;
       }
       const form = new FormData(event.currentTarget);
+      setFormError("");
       submitLock.current = true;
       setSubmitting(true);
       try {
         const openingMeterFile = legacyOpeningMeterFile ? await readMeterEvidence(legacyOpeningMeterFile) : "";
-        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
-      } catch (error) { alert(error?.message || "Could not save the maintenance update. Please try again."); }
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
+      } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="details request-linked-details">
@@ -7172,6 +7184,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         {openingMeterFileMissing && <label>Opening {meterType} file <small>Optional</small><input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setLegacyOpeningMeterFile(event.target.files?.[0] || null)} /><small>{legacyOpeningMeterFile ? `${legacyOpeningMeterFile.name} · ${(legacyOpeningMeterFile.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small></label>}
         <label>Closing date *<input name="closingDate" type="date" required value={closingDate} readOnly aria-readonly="true" /></label>
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {request.closedAt}. The original and replacement will be retained.</small></label>}
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
         <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{request.status === "Awaiting parts" && <option value="Awaiting parts">Awaiting parts</option>}{ideal&&<option>Idle</option>}</select></label>
         <fieldset className="ideal-choice full">
@@ -7207,12 +7220,14 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
           placeholder="Describe the work completed, or select Hindi / English and speak in that language."
         />
       </div>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
       <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
 
 function VerifyRequestForm({ request, close, onSave }) {
+  const [formError,setFormError] = useState("");
   const today = requestStartParts("");
   const [firstTripDone, setFirstTripDone] = useState(false);
   const [tripCardFile, setTripCardFile] = useState(null);
@@ -7232,17 +7247,18 @@ function VerifyRequestForm({ request, close, onSave }) {
       event.preventDefault();
       if (submitLock.current) return;
       const form = new FormData(event.currentTarget);
-      if (!tripCardFile) return alert("Upload the first-trip card image.");
+      if (!tripCardFile) return setFormError("Upload the first-trip card image.");
       if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
-        return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
+        return setFormError("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
+      setFormError("");
       submitLock.current = true;
       setSubmitting(true);
       try {
         const firstTripCardImage = await fileAsDataUrl(tripCardFile);
-        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim()});
+        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim()});
       } catch (error) {
-        alert(error?.message || "Could not verify this request. Please try again.");
+        setFormError(error?.message || "Could not verify this request. Please try again.");
       } finally {
         submitLock.current = false;
         setSubmitting(false);
@@ -7261,10 +7277,11 @@ function VerifyRequestForm({ request, close, onSave }) {
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       <div className="formgrid">
         {firstTripDone && <>
-          <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
+          <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /><small>Enter the actual trip date. It must not be earlier than closure or in the future.</small></label>
           <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
         </>}
         <label>Closing {request.meterType || "KMR/HMR"} reading *<input name="closingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required placeholder={`Enter closing ${request.meterType || "KMR/HMR"}`} /></label>
+        {request.firstTripAt && <label className="full">Reason for correcting the recorded first-trip time *<textarea name="correctionReason" required maxLength={500} /><small>This unverified entry already has a first-trip time: {request.firstTripAt}. Any replacement or removal will retain the original value.</small></label>}
         <label className="full">First trip card image *
           <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
             const file = event.target.files?.[0] || null;
@@ -7276,6 +7293,7 @@ function VerifyRequestForm({ request, close, onSave }) {
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
       </div>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
       <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
@@ -7671,6 +7689,7 @@ function NotificationRequestEntry({ reference, request = {} }) {
       <div><span>Maintenance request</span><h2>{reference}</h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
       <Status>{request.status || "Open"}</Status>
     </div>
+    <RequestTimelineButton reference={reference} token={authToken} Dialog={Modal} label="View time breakdown and correction history" />
     <dl className="notification-entry-fields">
       <NotificationEntryField label="Equipment group" value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment} />
       <NotificationEntryField label="Door number" value={request.door} />

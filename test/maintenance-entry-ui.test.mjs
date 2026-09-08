@@ -260,7 +260,9 @@ for (const reason of ['No driver', 'No work']) test(`Idle reason ${reason} stays
   tree = app.render();
   await app.submit(tree);
   assert.equal(app.saved.length, 0);
-  assert.match(app.alerts[0], /Choose an Idle reason/);
+  tree = app.render();
+  assert.match(textContent(all(tree, node => node.props.role === 'alert')[0]), /Choose an Idle reason/);
+  assert.deepEqual(app.alerts, [], 'validation must remain in the form instead of opening a native alert');
   field(tree, 'idleReason').props.onChange({ target: { value: reason } });
   tree = app.render();
   assert.equal(field(tree, 'idleReason').props.value, reason);

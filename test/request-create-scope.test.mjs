@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {canonicalSiteName} from '../site-location.mjs';
 import {parseIndiaRequestDateTime} from '../request-time.mjs';
 import {validRequestAudioDataUrl} from '../request-workflow.mjs';
+import * as timeline from '../request-timeline.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const auth=source.slice(source.indexOf('async function requireSession('),source.indexOf('async function requireSuper('));
@@ -16,6 +17,7 @@ async function create({user={site:'Sasti OB'},session=production,body={}}={}){
   let handlers;
   const calls=[];
   const context={
+    ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},readSession:async req=>req.testSession,
     currentUserRecord:async()=>user,canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,
     activeRequestConflict:async payload=>{calls.push({kind:'conflict',payload});return null;},requestProjection:'*',
