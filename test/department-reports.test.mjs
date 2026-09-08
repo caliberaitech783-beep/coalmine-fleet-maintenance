@@ -30,6 +30,20 @@ test('mismatch uses firstTripAt and strictly more than 30 minutes across all clo
   assert.deepEqual(reports.find(r=>r.title==='30 Min. Mismatch').rows.map(r=>r.ref),['31']);
   assert.equal(reports.find(r=>r.title==='Unverified Cases').rows.length,2);
 });
+test('mismatch flag uses verification minus trip without changing Difference or report membership',()=>{
+  const requests=[
+    {ref:'delay',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00',verifiedAt:'2026-09-01 11:31'},
+    {ref:'exact',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00',verifiedAt:'2026-09-01 11:30'},
+    {ref:'missing',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00'},
+    {ref:'reverse',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00',verifiedAt:'2026-09-01 10:30'},
+    {ref:'excluded',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 10:20',verifiedAt:'2026-09-01 12:00'},
+  ];
+  const report=build(requests).find(r=>r.title==='30 Min. Mismatch');
+  assert.deepEqual(report.rows.map(r=>r.ref),['delay','exact','missing','reverse']);
+  assert.equal(cell(report,'difference'),'1h 0m');
+  assert.deepEqual(report.rows.map(r=>cell(report,'mismatch',r)),['Delay','','','']);
+});
+
 test('acceptance is not inferred from status or closure',()=>{
   const report=build([{status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-01 10:00'}]).find(r=>r.title.includes('Acceptance'));
   assert.equal(cell(report,'acceptedAt'),'Not accepted');
