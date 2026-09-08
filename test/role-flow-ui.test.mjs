@@ -12,12 +12,13 @@ import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const codes = {};
-for (const [name, next] of [["Normal", "App"], ["ManagerDashboard", "Dashboard"], ["RequestEditForm", "CloseRequestForm"], ["CloseRequestForm", "VerifyRequestForm"], ["VerifyRequestForm", "TicketCreateForm"]]) {
+for (const [name, next] of [["Normal", "App"], ["ManagerDashboard", "Dashboard"], ["ManagerIdleConfirmation", "ManagerDashboard"], ["RequestEditForm", "CloseRequestForm"], ["CloseRequestForm", "VerifyRequestForm"], ["VerifyRequestForm", "TicketCreateForm"]]) {
   const text = source.slice(source.indexOf(`function ${name}(`), source.indexOf(`function ${next}(`));
   codes[name] = (await transformWithOxc(text, `${name}.jsx`, {jsx: {runtime: "classic"}})).code;
 }
 const Null = () => null;
 const BreakdownTable = () => null, MobileWorkflowTable = () => null, DailyRemarkForm = () => null;
+const ManagerIdleConfirmation = () => null;
 const all = (tree, predicate) => {
   const result = [];
   const visit = node => {
@@ -54,7 +55,7 @@ function harness(name, extra = {}) {
     visibleInProductionHistory, visibleInMaintenanceHistory, visibleInMisRequests, visibleInMisHistory,
     recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus,
     requestWithEquipmentMasterDetails: row => row, equipmentGroupLabel: row => row.group,
-    BreakdownTable, MobileWorkflowTable, DailyRemarkForm, RequestEditForm: Null, CloseRequestForm: Null, VerifyRequestForm: Null,
+    BreakdownTable, MobileWorkflowTable, DailyRemarkForm, ManagerIdleConfirmation, RequestEditForm: Null, CloseRequestForm: Null, VerifyRequestForm: Null,
     RequestRedFlagForm: Null, MaintenanceForm: Null, preventTableAutoScroll: () => {},
     arrivalRedFlagRequired: () => false, MIS_VERIFICATION_MENU: "MIS verification", PRODUCTION_REQUEST_COLUMNS: [],
     Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null,
@@ -64,7 +65,7 @@ function harness(name, extra = {}) {
     readMeterEvidence: async file => file.evidence, alert: () => {}, URL: {createObjectURL: () => "fixture:trip-card", revokeObjectURL() {}},
     FileReader: class { readAsDataURL() { this.result = "data:image/png;base64,dGVzdA=="; this.onload(); } },
     FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? ""; } },
-    ...Object.fromEntries(["Wrench", "Plus", "ShieldCheck", "X", "ChevronRight", "Flag"].map(name => [name, Null])),
+    ...Object.fromEntries(["Wrench", "Plus", "ShieldCheck", "CheckCircle2", "X", "ChevronRight", "Flag"].map(name => [name, Null])),
     ...extra,
   };
   const component = new Function(...Object.keys(scope), `${codes[name]}; return ${name};`)(...Object.values(scope));
@@ -154,12 +155,109 @@ for (const role of ["Project Manager", "Production Manager", "Maintenance Manage
   button(tree, "Idle approvals (1)").props.onClick();
   tree = app.render(props);
   assert.deepEqual(table(tree).props.rows, [idle]);
-  assert.equal(table(tree).props.onApproveIdeal, onApproveIdeal);
-  assert.equal(table(tree).props.onCancelIdeal, onCancelIdeal);
+  for (const [callback, action, confirm] of [["onApproveIdeal", "approve", onApproveIdeal], ["onCancelIdeal", "cancel", onCancelIdeal]]) {
+    table(tree).props[callback](idle);
+    tree = app.render(props);
+    const dialog = all(tree, node => node.type === ManagerIdleConfirmation)[0];
+    assert.equal(dialog.props.request, idle);
+    assert.equal(dialog.props.action, action);
+    assert.equal(dialog.props.onConfirm, confirm);
+    dialog.props.close();
+    tree = app.render(props);
+    assert.equal(all(tree, node => node.type === ManagerIdleConfirmation).length, 0);
+  }
   button(tree, "Closed history").props.onClick();
   tree = app.render({...props, requests: [verified]});
   assert.deepEqual(table(tree).props.rows, [verified]);
   assert.equal(table(tree).props.onCancelIdeal, null);
+});
+
+for (const action of ["approve", "cancel"]) test(`manager ${action}: explicit confirmation preserves identity, cancel makes no API call, pending save is guarded`, async () => {
+  let resolveSave, calls = 0, dismissals = 0;
+  const app = harness("ManagerIdleConfirmation");
+  const props = {request: idle, action, close() {dismissals++;}, onConfirm(row) {
+    assert.equal(row, idle); calls++; return new Promise(resolve => {resolveSave = resolve;});
+  }};
+  let tree = app.render(props);
+  assert.match(text(tree), new RegExp(idle.ref));
+  assert.match(text(tree), /V1/);
+  assert.match(text(tree), /Sasti OB/);
+  assert.match(text(tree), action === "approve" ? /close the request.*MIS verification/ : /active maintenance.*not be closed/);
+  button(tree, "Cancel").props.onClick();
+  assert.equal(dismissals, 1);
+  assert.equal(calls, 0);
+  const submit = form(tree).props.onSubmit;
+  const pending = submit({preventDefault() {}});
+  await submit({preventDefault() {}});
+  tree = app.render(props);
+  tree.props.close();
+  button(tree, "Cancel").props.onClick();
+  assert.equal(dismissals, 1);
+  assert.equal(calls, 1);
+  assert.equal(button(tree, "Cancel").props.disabled, true);
+  assert.equal(button(tree, "Saving…").props.disabled, true);
+  resolveSave(); await pending;
+  assert.equal(dismissals, 2);
+});
+
+for (const action of ["approve", "cancel"]) test(`manager ${action}: failed confirmation remains open with an inline error and can be retried`, async () => {
+  let calls = 0, dismissals = 0;
+  const app = harness("ManagerIdleConfirmation");
+  const props = {request: idle, action, close() {dismissals++;}, async onConfirm() {
+    if (++calls === 1) throw new Error("This request is no longer Idle.");
+  }};
+  let tree = app.render(props);
+  await form(tree).props.onSubmit({preventDefault() {}});
+  tree = app.render(props);
+  assert.equal(dismissals, 0);
+  assert.equal(button(tree, "Cancel").props.disabled, false);
+  assert.equal(text(all(tree, node => node.props.role === "alert")[0]), "This request is no longer Idle.");
+  await form(tree).props.onSubmit({preventDefault() {}});
+  assert.equal(calls, 2);
+  assert.equal(dismissals, 1);
+});
+
+for (const role of ["Production User", "Maintenance User"]) test(`${role}: successful creation from Closed history selects Requests and announces the saved reference nonblockingly`, async () => {
+  let resolveSave;
+  const MaintenanceForm = () => null;
+  const saved = {...opened, ref: "REQ-SERVER-SAVED"};
+  const app = harness("Normal", {MaintenanceForm, useMasterRecords: () => [equipment, null, true, null, null, null, "", () => {}]});
+  const props = {...normalProps(role, verified), onCreate: () => new Promise(resolve => {resolveSave = resolve;})};
+  let tree = app.render(props);
+  button(tree, "Closed history").props.onClick();
+  tree = app.render(props);
+  button(tree, "Create request").props.onClick();
+  tree = app.render(props);
+  const dialog = all(tree, node => node.type === MaintenanceForm)[0];
+  const pending = dialog.props.onSubmit({...opened, ref: "REQ-CLIENT-PENDING"});
+  tree = app.render(props);
+  assert.deepEqual(table(tree).props.rows, [verified]);
+  assert.equal(all(tree, node => node.props.role === "status").length, 0);
+  resolveSave(saved); await pending;
+  dialog.props.close();
+  tree = app.render({...props, requests: [saved, verified]});
+  assert.deepEqual(table(tree).props.rows, [saved]);
+  assert.equal(button(tree, "Requests").props.className, "active");
+  const notice = all(tree, node => node.props.role === "status")[0];
+  assert.match(text(notice), /REQ-SERVER-SAVED.*saved successfully/);
+  assert.equal(all(tree, node => node.type === MaintenanceForm).length, 0);
+  all(notice, node => node.props["aria-label"] === "Dismiss request confirmation")[0].props.onClick();
+  assert.equal(all(app.render({...props, requests: [saved, verified]}), node => node.props.role === "status").length, 0);
+});
+
+test("failed creation does not announce success or leave Closed history", async () => {
+  const MaintenanceForm = () => null;
+  const app = harness("Normal", {MaintenanceForm, useMasterRecords: () => [equipment, null, true, null, null, null, "", () => {}]});
+  const props = {...normalProps("Production User", verified), onCreate: async () => {throw new Error("Request could not be saved.");}};
+  let tree = app.render(props);
+  button(tree, "Closed history").props.onClick(); tree = app.render(props);
+  button(tree, "Create request").props.onClick(); tree = app.render(props);
+  await assert.rejects(all(tree, node => node.type === MaintenanceForm)[0].props.onSubmit(opened), /could not be saved/);
+  tree = app.render(props);
+  assert.equal(button(tree, "Closed history").props.className, "active");
+  assert.deepEqual(table(tree).props.rows, [verified]);
+  assert.equal(all(tree, node => node.type === MaintenanceForm).length, 1);
+  assert.equal(all(tree, node => node.props.role === "status").length, 0);
 });
 
 test("admin embedded maintenance has a working daily-update callback", () => {

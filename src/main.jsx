@@ -887,8 +887,38 @@ function FleetDataState({ error = "", retry, className = "" }) {
   </div>;
 }
 
+function ManagerIdleConfirmation({ request, action, close, onConfirm }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const submitLock = useRef(false);
+  const approving = action === "approve";
+  const closeDialog = () => { if (!submitLock.current) close(); };
+  return <Modal title={approving ? "Confirm make on road" : "Confirm cancel idle"} close={closeDialog}>
+    <form className="form" onSubmit={async (event) => {
+      event.preventDefault();
+      if (submitLock.current) return;
+      submitLock.current = true;
+      setSubmitting(true);
+      setError("");
+      try { await onConfirm(request); close(); }
+      catch (failure) { setError(failure?.message || "Could not update this request. Please try again."); }
+      finally { submitLock.current = false; setSubmitting(false); }
+    }}>
+      <div className="details request-linked-details">
+        <div><span>Job reference</span><b>{request.ref}</b></div>
+        <div><span>Door number</span><b>{request.door || "—"}</b></div>
+        <div><span>Site location</span><b>{request.site || "—"}</b></div>
+      </div>
+      <p>{approving ? "This will close the request, make the vehicle on road and forward it to MIS verification. Confirm only after the vehicle is ready to return to service; this dialog cannot undo the approval after it is saved." : "This will cancel Idle status and return the request to active maintenance. The request will not be closed or forwarded to MIS verification."}</p>
+      {error && <p role="alert">{error}</p>}
+      <footer><button type="button" disabled={submitting} onClick={closeDialog}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : approving ? "Confirm make on road" : "Confirm cancel idle"}</button></footer>
+    </form>
+  </Modal>;
+}
+
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], gotoEquipment, onApproveIdeal, onCancelIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
+  const [idleConfirmation, setIdleConfirmation] = useState(null);
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
   const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
@@ -949,7 +979,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
       <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={queueTab==="ideal"&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
+    {idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
@@ -3997,9 +4028,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     try {
       await submitMaintenanceRequest(onSubmit, request);
       close();
-      alert(
-        "Maintenance request submitted successfully. It is now visible to the Super User.",
-      );
     } catch (error) {
       if (error?.duplicate) {
         const conflict = {...error, message: error.message || activeRequestConflictMessage(error, request.door)};
@@ -7767,6 +7795,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
   const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardRequests,setDashboardRequests]=useState(requests);
+  const [createdRequestRef, setCreatedRequestRef] = useState("");
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
@@ -7859,6 +7888,13 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     else if (arrivalFlagNextAction === "remark") setRemarking(saved);
   };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
+  const createRequest = async (request) => {
+    const saved = await onCreate(request);
+    setCreatedRequestRef(saved?.ref || request.ref);
+    setTab("requests");
+    setSection("profile");
+    return saved;
+  };
   const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):requests;
   const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
   const activeRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()!=="closed");
@@ -7883,6 +7919,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
       </div>
       </div>
+      {createdRequestRef && <div className="hierarchy-save-message" role="status"><CheckCircle2 /><span>Request <b>{createdRequestRef}</b> saved successfully. It is shown in Requests.</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
@@ -7892,7 +7929,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {tab === "idle" && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
-    {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
+    {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
@@ -8123,6 +8160,7 @@ function App() {
         // The POST succeeded; keep the saved row visible if a refresh is transiently unavailable.
         console.warn("Request saved, but the list refresh failed.", error);
       }
+      return saved;
     },
     updateRequest = async (reference, payload, action = "edit") => {
       const endpoint = action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
@@ -8249,7 +8287,7 @@ function App() {
           {active === "Dashboard" ? (
             <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} />
           ) : active === "Manager Profile" ? (
-            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} onCancelIdeal={async(row)=>{if(!window.confirm(`Cancel Idle status for ${row.ref}? The request will return to active maintenance and will not be closed.`))return;try{await updateRequest(row.ref,{},"idle-cancel")}catch(error){alert(error.message)}}} />
+            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (

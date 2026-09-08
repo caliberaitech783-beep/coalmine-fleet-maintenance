@@ -6,6 +6,7 @@ import { transformWithOxc } from 'vite';
 import * as equipment from '../request-equipment.mjs';
 import { recordsForSite } from '../site-location.mjs';
 import { indiaWorkflowDateTimeParts } from '../src/workflow-clock.mjs';
+import { submitMaintenanceRequest } from '../request-submit.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const formStart = source.indexOf('function MaintenanceForm(');
@@ -96,6 +97,35 @@ test('changing equipment group clears the old vehicle, hidden door and fetched d
   assert.equal(combo().props.value, '');
   assert.equal(door(), '');
   assert.equal(all(tree, node => node.props.value === 'CH-300').length, 0);
+});
+
+test('successful creation closes only after save and never opens a blocking success alert', async () => {
+  const EquipmentCombobox = () => null;
+  const alerts = [];
+  let resolveSave, closes = 0;
+  const app = harness(formCode, 'MaintenanceForm', {
+    ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
+    Clock: Null, MapPin: Null, ChevronRight: Null, CheckCircle2: Null, RefreshCw: Null, AlertTriangle: Null,
+    TIME_24H_PATTERN: '.*', alert: message => alerts.push(message), submitMaintenanceRequest,
+    FormData: class { constructor(values) {this.values = values;} get(key) {return this.values[key] ?? '';} },
+  });
+  const props = {equipmentRecords: records, equipmentLoaded: true, assignedLocation: 'Sasti OB', close() {closes++;}, onSubmit: () => new Promise(resolve => {resolveSave = resolve;})};
+  let tree = app.render(props);
+  all(tree, node => node.props.name === 'equipmentGroup')[0].props.onChange({target: {value: 'EXCAVATOR'}});
+  tree = app.render(props);
+  byType(tree, EquipmentCombobox).props.onSelect(records[0]);
+  tree = app.render(props);
+  const event = {preventDefault() {}, currentTarget: {door: 'EX-17', category: 'Breakdown', complaint: 'QA repair', date: '2026-09-09', time: '10:00:00'}};
+  const pending = byType(tree, 'form').props.onSubmit(event);
+  assert.equal(closes, 0);
+  assert.deepEqual(alerts, []);
+  resolveSave({ref: 'REQ-SAVED'}); await pending;
+  assert.equal(closes, 1);
+  assert.deepEqual(alerts, []);
+  tree = app.render({...props, onSubmit: async () => {throw new Error('Save failed.');}});
+  await byType(tree, 'form').props.onSubmit(event);
+  assert.equal(closes, 1, 'failure keeps the form open');
+  assert.deepEqual(alerts, ['Save failed.']);
 });
 
 function speechHarness({ supported = true, permission } = {}) {
