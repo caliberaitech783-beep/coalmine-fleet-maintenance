@@ -11,6 +11,16 @@ test('pending delay uses acceptance, and No Update begins strictly after 24 hour
   assert.equal(pendingRemark({acceptedAt:'2026-09-08 10:00:00',dailyRemarks:[{remark:'Working'}]},now),'Working');
   assert.notEqual(maintenanceDelay({acceptedAt:'2026-09-08 10:00:00'},now),'Not accepted');
 });
+test('pending remarks use the freshest update regardless of API ordering or acceptance age',()=>{
+  const recent={remark:'Part received; fitting now',createdAt:'2026-09-08 11:00:00'};
+  const old={remark:'Waiting for part',createdAt:'2026-09-06 10:00:00'};
+  for(const dailyRemarks of [[recent,old],[old,recent]]) {
+    assert.equal(pendingRemark({acceptedAt:'2026-09-05 08:00',dailyRemarks},now),recent.remark);
+  }
+  assert.equal(pendingRemark({acceptedAt:'2026-09-05 08:00',dailyRemarks:[old]},now),'No Update');
+  assert.equal(pendingRemark({acceptedAt:'2026-09-05 08:00',dailyRemarks:[{remark:'Exactly one day',createdAt:'2026-09-07 12:00'}]},now),'Exactly one day');
+});
+
 test('ten day filter is strictly older than production submission, not acceptance',()=>{
   assert.equal(olderThanTenDays({start:'2026-08-29 12:00:00'},now),false);
   assert.equal(olderThanTenDays({start:'2026-08-29 11:59:59',acceptedAt:'2026-09-08 11:00:00'},now),true);

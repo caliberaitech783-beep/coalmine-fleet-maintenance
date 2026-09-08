@@ -53,9 +53,10 @@ test('pending includes all open and in-progress requests regardless of remarks',
     {ref:'old',status:'Open',dailyRemarks:[{remark:'Old remark',createdAt:'2025-01-01'}]},
     {ref:'closed',status:'Closed',dailyRemarks:[]},
     {ref:'progress',status:'In progress',dailyRemarks:[]},
+    {ref:'parts',status:'Awaiting parts',dailyRemarks:[]},
     {ref:'unknown',status:'Open'},
   ]).find(r=>r.title==='Maintenance Status Pending');
-  assert.deepEqual(report.rows.map(r=>r.ref),['yes','old','progress','unknown']);
+  assert.deepEqual(report.rows.map(r=>r.ref),['yes','old','progress','parts','unknown']);
   assert.equal(cell(report,'remark'),'No Remark');
   assert.ok(!report.columns.some(c=>/difference|elapsed/i.test(c.label)));
 });

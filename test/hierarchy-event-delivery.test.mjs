@@ -6,6 +6,9 @@ import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {defaultWhatsAppReportSettings,whatsappPurposeEnabled} from '../whatsapp-report-settings.mjs';
 import {reportTemplateFallback} from '../whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from '../whatsapp-template-catalog.mjs';
+import {hierarchyRecipientReportScope} from '../hierarchy-report-scope.mjs';
+import {reportScopeIncludesSite} from '../region-scope.mjs';
+import {resolveMobileAccess} from '../mobile-access.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const request={ref:'REQ/123',site:'Sasti OB',requesterLogin:'production',status:'Open'};
@@ -43,7 +46,7 @@ function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
   settings.designations.productionSupervisor.allRecipients=false;
   settings.designations.productionSupervisor.recipientLogins=selected?['production']:[];
   const sent=[],published=[],history=[],claims=new Set();
-  const users=[{login:'production',phone:'919999999999'},{login:'other-site',phone:'918888888888'}];
+  const users=[{login:'production',phone:'919999999999',site:siteAllowed?'Sasti OB':'Majri OB',userType:'Mobile User',userGroup:'Production User'},{login:'other-site',phone:'918888888888',site:'Majri OB',userType:'Mobile User',userGroup:'Production User'}];
   const dependencies={databaseReady:true,storedWhatsAppReportSettings:async()=>defaultWhatsAppReportSettings(),whatsappPurposeEnabled,reportTemplateFallback,hierarchyReportMessagePurpose,
     pool:{query:async(sql,args=[])=>{
       if(sql.includes("master_name='Users & employees'"))return {rows:users.map(record_data=>({record_data}))};
@@ -56,7 +59,7 @@ function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
     }},
     storedHierarchyReportScheduleSettings:async()=>settings,
     requestStakeholderLogins:async()=>['production'],
-    resolveMobileAccess:()=>({assignedRole:'Production User'}),applyHierarchyDeliveryRule,flowDesignationForUser,reportsForHierarchyEvent,reportsDueForDesignation,
+    resolveMobileAccess,applyHierarchyDeliveryRule,flowDesignationForUser,reportsForHierarchyEvent,reportsDueForDesignation,hierarchyRecipientReportScope,reportScopeIncludesSite,
     hierarchyRuleForDesignation:()=>({siteAccess:'Sasti OB',reportAccess:DIRECTOR_REPORT_TITLES.join('|')}),
     splitHierarchyValues:value=>value.split('|'),
     sourceDataForSites:data=>({...data,requests:siteAllowed?data.requests:[]}),

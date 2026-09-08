@@ -14,9 +14,10 @@ import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
+import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
+import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import { userMasterRole } from "./user-master-role.mjs";
-import { visibleInOperationalUserRequests } from "./operational-user-request-visibility.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
@@ -621,6 +622,14 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
+  const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
+  useEffect(() => {
+    // Match the navigation's CSS breakpoint, not the role-permission breakpoint.
+    const query = window.matchMedia("(max-width: 1250px)");
+    const update = () => setCollapsedNavigation(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 900px)");
     const update = () => setResponsiveMobile(query.matches);
@@ -665,8 +674,9 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
+  const navigationHidden = collapsedNavigation && !open;
   return (
-    <aside className={open ? "open" : ""}>
+    <aside id="admin-primary-navigation" className={open ? "open" : ""} aria-label="Primary navigation" aria-hidden={navigationHidden ? true : undefined} inert={navigationHidden ? true : undefined}>
       <CaliberBrand className="logo" />
       <nav>
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
@@ -820,11 +830,18 @@ function useDashboardEquipment() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadedFleetScope = useRef({token: authToken, loaded: false});
+  useEffect(() => watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document}), []);
   useEffect(() => {
     let activeRequest = true;
     const controller = new AbortController();
-    setLoaded(false);
-    setScope(null);
+    const sameScope = loadedFleetScope.current.token === authToken;
+    if (!sameScope) {
+      loadedFleetScope.current = {token: authToken, loaded: false};
+      setRecords([]);
+      setScope(null);
+    }
+    setLoaded(sameScope && loadedFleetScope.current.loaded);
     setLoadError("");
     fetch("/api/dashboard/equipment", {
       cache: "no-store",
@@ -840,6 +857,7 @@ function useDashboardEquipment() {
           || (data.scope.allowedRegions !== null && !Array.isArray(data.scope.allowedRegions)))
           throw new Error("Fleet scope response was invalid. Please retry.");
         if (!activeRequest) return;
+        loadedFleetScope.current.loaded = true;
         setRecords(data.records);
         setScope(data.scope);
         setLoaded(true);
@@ -851,7 +869,7 @@ function useDashboardEquipment() {
       activeRequest = false;
       controller.abort();
     };
-  }, [loadAttempt]);
+  }, [loadAttempt, authToken]);
   return {records, scope, loaded, loadError, retry: () => setLoadAttempt((attempt) => attempt + 1)};
 }
 
@@ -880,19 +898,15 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const restrictManagerScope=equipmentScope?.restrictToScope===true;
   const scopedRequests=equipmentLoaded?(managerAllowedSites?.length?requests.filter((request)=>managerAllowedSites.some((site)=>recordBelongsToSite(request,site))):restrictManagerScope?[]:requests):[];
   const requestRows = scopedRequests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
-  const openRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() !== "closed");
-  const offRoadKeys = new Set(openRequests.map((request) => String(request.chassis || request.door || request.equipment || "").trim().toLowerCase()).filter(Boolean));
-  const offRoad = Math.min(siteEquipment.length, offRoadKeys.size);
-  const idleEquipment=siteEquipment.filter((record)=>equipmentRoadStatus(record)==="idle"&&!offRoadKeys.has(String(record.chassisNo||record.manufacturerSerialNo||record.door||record.equipmentName||"").trim().toLowerCase()));
-  const idle=Math.min(Math.max(0,siteEquipment.length-offRoad),idleEquipment.length);
-  const fleet = {total:siteEquipment.length,offRoad,idle,onRoad:Math.max(0,siteEquipment.length-offRoad-idle)};
+  const openRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
+  const fleet = liveEquipmentMetrics(siteEquipment, requestRows);
   const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
   const totalTypes=typeSummary(siteEquipment,equipmentGroupLabel);
-  const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
-  const idleTypes=typeSummary(idleEquipment,equipmentGroupLabel);
-  const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
-  const closedRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() === "closed");
-  const verifiedRequests = requestRows.filter((request) => Boolean(request.verifiedAt));
+  const offRoadTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="offroad"),equipmentGroupLabel);
+  const idleTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="idle"),equipmentGroupLabel);
+  const onRoadTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="onroad"),equipmentGroupLabel);
+  const closedRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() === "closed");
+  const verifiedRequests = closedRequests.filter(visibleInMisHistory);
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
   const cards = productionManagerView
     ? [
@@ -913,9 +927,9 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
           ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", ""],
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
-  const pendingVerification=closedRequests.filter((request)=>!request.verifiedAt);
+  const pendingVerification=closedRequests.filter(visibleInMisRequests);
   const canApproveIdle=true; // Every manager profile can approve within its assigned site scope.
-  const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").toLowerCase())):[];
+  const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").trim().toLowerCase())):[];
   const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
   const visibleActiveRows=activeManagerRole==="Maintenance Manager"?activeRows.filter((request)=>!["idle","ideal"].includes(String(request.status||"").toLowerCase())):activeRows;
   const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
@@ -935,7 +949,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
       <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} stableToolbar /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} onCancelIdeal={queueTab==="ideal"?onCancelIdeal:null} stableToolbar /></article>
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
@@ -3142,7 +3156,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                     </select>
                     </>
                   ) : (
-                    <>{label} *
+                    <>{label}{key === fields[0][0] ? " *" : ""}
                     <input
                       className={name === "Users & employees" && ["login", "employee"].includes(key) ? "uppercase-user-field" : ""}
                       name={key}
@@ -3843,10 +3857,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     [equipmentId, setEquipmentId] = useState(""),
     [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [openedAt] = useState(() => new Date());
-  const pad = (n) => String(n).padStart(2, "0");
-  const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
-    systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
-    locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
+  const {date: systemDate, time: systemTime} = indiaWorkflowDateTimeParts(openedAt);
+  const locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
     equipmentGroups = requestEquipmentGroupOptions(locationEquipmentRecords),
     groupRecords = requestEquipmentRecordsForGroup(locationEquipmentRecords, equipmentGroup),
     v = findRequestEquipment(groupRecords, equipmentId),
@@ -3878,11 +3890,11 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         const response = await fetch(`/api/oracle/driver?${query}`, {headers: {Authorization: `Bearer ${authToken}`}});
         const result = await response.json().catch(() => ({}));
         if (cancelled) return;
-        if (!response.ok) setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
+        if (!response.ok) setDriverLookup({status: "temporary", name: "", source: "Lookup unavailable"});
         else if (result.found) setDriverLookup({status: "found", name: result.driverName || "", source: result.source || "Oracle logbook"});
-        else setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
+        else setDriverLookup({status: "temporary", name: "", source: "Not found"});
       } catch {
-        if (!cancelled) setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
+        if (!cancelled) setDriverLookup({status: "temporary", name: "", source: "Lookup unavailable"});
       }
     }, 350);
     return () => { cancelled = true; window.clearTimeout(timer); };
@@ -3974,7 +3986,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         reg: equipmentDetails.reg,
         chassis: equipmentDetails.chassis,
         driverName: driverLookup.name,
-        driverNameSource: driverLookup.status === "found" ? `Oracle - ${driverLookup.source}` : driverLookup.source || "Demo",
+        driverNameSource: driverLookup.name.trim() ? (driverLookup.status === "found" ? `Oracle - ${driverLookup.source}` : "Manual") : "",
         meterType,
       };
     if (!request.chassis) {
@@ -4113,12 +4125,12 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               name="driverName"
               value={driverLookup.name}
               readOnly={driverLookup.status === "found" || driverLookup.status === "loading" || driverLookup.status === "idle"}
-              onChange={(event) => setDriverLookup({status: "temporary", name: event.target.value, source: event.target.value.trim() === "Demo Driver" ? "Demo" : "Manual"})}
+              onChange={(event) => setDriverLookup({status: "temporary", name: event.target.value, source: "Manual"})}
               aria-busy={driverLookup.status === "loading"}
-              placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : "Select equipment to fetch driver"}
+              placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : driverLookup.status === "temporary" ? "Enter driver name if known (optional)" : "Select equipment to fetch driver"}
             />
             {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
-            {driverLookup.status === "temporary" && <small>Temporary name — enter the driver manually if known. Oracle is checked every two minutes; when the actual driver is available it automatically replaces and removes this temporary name.</small>}
+            {driverLookup.status === "temporary" && <small>{driverLookup.source === "Lookup unavailable" ? "Driver lookup is temporarily unavailable." : driverLookup.source === "Not found" ? "No driver was found for this vehicle and time." : "Manually entered driver."} Enter the actual name if known, or leave it blank. Oracle will retry the lookup automatically.</small>}
           </label>
           <SpeechComplaint />
         </div>
@@ -5522,7 +5534,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
               ) : type === "site-select" ? (
                 <label key={key}>{label} *<select name={key} required defaultValue={privilegeSelectionValue(editing[key])}><option value="" disabled>Select site</option>{privilegeSelectionValue(editing[key]) && !siteOptions.includes(privilegeSelectionValue(editing[key])) && <option value={privilegeSelectionValue(editing[key])}>{privilegeSelectionValue(editing[key])}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
               ) : (
-              <label key={key}>{label} *
+              <label key={key}>{label}{type !== "checkbox" && (type === "user-select" || key === "level" || key === fields[0][0] || (name === "Users & employees" && ["site", "userType"].includes(key))) ? " *" : ""}
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">
                     <input type="checkbox" name={key} defaultChecked={isCheckedValue(editing[key])} />
@@ -5621,22 +5633,31 @@ function useMasterRecords(name, seed = []) {
     [loaded, setLoaded] = useState(false),
     [loadError, setLoadError] = useState(""),
     [loadAttempt, setLoadAttempt] = useState(0);
+  const loadedMasterScope = useRef({name, token: authToken, loaded: false});
+  useEffect(() => watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document}), []);
   useEffect(() => {
     let activeRequest = true;
     const controller = new AbortController();
     const loadStartedAt = performance.now();
-    setLoaded(false);
+    const sameScope = loadedMasterScope.current.name === name && loadedMasterScope.current.token === authToken;
+    if (!sameScope) {
+      loadedMasterScope.current = {name, token: authToken, loaded: false};
+      setRecords(seed);
+    }
+    setLoaded(sameScope && loadedMasterScope.current.loaded);
     setLoadError("");
     fetch(`/api/masters?t=${Date.now()}`, {cache:"no-store", signal: controller.signal, headers: {Authorization: "Bearer " + authToken}})
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.error || "Could not load " + name + ".");
         if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Could not load " + name + ".");
+        if (data[name] != null && !Array.isArray(data[name])) throw new Error("Could not load " + name + ".");
         return data;
       })
       .then((data) => {
         if (!activeRequest) return;
         setRecords([...seed, ...(data[name] || [])]);
+        loadedMasterScope.current.loaded = true;
         setLoaded(true);
       })
       .catch((error) => {
@@ -5652,7 +5673,7 @@ function useMasterRecords(name, seed = []) {
       activeRequest = false;
       controller.abort();
     };
-  }, [name, loadAttempt]);
+  }, [name, loadAttempt, authToken]);
   const add = async (incoming, { silent = false } = {}) => {
     const batches = batchMasterRecords(incoming);
     const saved = [];
@@ -6077,7 +6098,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
   const [equipmentRecords, , equipmentLoaded, , , , equipmentLoadError, retryEquipmentLoad] = useMasterRecords("Equipment master");
   const [statusFilter, setStatusFilter] = useState("all");
   const statusTabRefs = useRef([]);
-  if (loadError || equipmentLoadError) return <MasterLoadError name="Breakdown master" error={loadError || equipmentLoadError} retry={() => { retryLoad(); retryEquipmentLoad(); }} />;
+  if ((loadError && !loaded) || (equipmentLoadError && !equipmentLoaded)) return <MasterLoadError name="Breakdown master" error={loadError || equipmentLoadError} retry={() => { retryLoad(); retryEquipmentLoad(); }} />;
   if (!loaded || !equipmentLoaded) return <MasterLoader name="Breakdown master" />;
   const rows = [...requests, ...manualRecords].map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
   const count = (status) => rows.filter((record) => String(record.status || "").toLowerCase() === status.toLowerCase()).length;
@@ -6137,7 +6158,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
   const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad] = useMasterRecords("Equipment master", vehicles);
-  if (loadError) return <MasterLoadError name="Equipment master" error={loadError} retry={retryLoad} />;
+  if (loadError && !loaded) return <MasterLoadError name="Equipment master" error={loadError} retry={retryLoad} />;
   if (!loaded) return <MasterLoader name="Equipment master" />;
   const addEquipment = (incoming) =>
     onAdd(
@@ -6194,7 +6215,7 @@ function PrivilegeMasterPage(props) {
       alert(error.message || "Could not load users into Privilege.");
     });
   }, [syncKey, failedSync]);
-  if (usersLoadError) return <MasterLoadError name="Privilege" error={usersLoadError} retry={retryUsersLoad} />;
+  if (usersLoadError && !usersLoaded) return <MasterLoadError name="Privilege" error={usersLoadError} retry={retryUsersLoad} />;
   if (!usersLoaded) return <MasterLoader name="Privilege" />;
   if (missingUsers.length && failedSync !== syncKey) return <MasterLoader name="Privilege" />;
   return <MasterPage {...props} userOptions={userOptions} siteOptions={privilegeSiteOptions} />;
@@ -6664,7 +6685,7 @@ Generic = function GenericWithMasters(props) {
         ...records.map((record) => displaySiteName(record.site)).filter(Boolean),
       ])]
     : [];
-  if (masterFields[name] && loadError) return <MasterLoadError name={name} error={loadError} retry={retryLoad} />;
+  if (masterFields[name] && loadError && !loaded) return <MasterLoadError name={name} error={loadError} retry={retryLoad} />;
   if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
   return masterFields[name] ? (
     name === "Privilege" ? (
@@ -6684,7 +6705,7 @@ Subsidiaries = function SubsidiariesWithImport({ gotoEquipment, requests = [] } 
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
-  if (loadError) return <MasterLoadError name="Region master" error={loadError} retry={retryLoad} />;
+  if (loadError && !loaded) return <MasterLoadError name="Region master" error={loadError} retry={retryLoad} />;
   if (!loaded) return <MasterLoader name="Region master" />;
   return <RegionMasterPage records={records} requests={requests} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
@@ -6756,14 +6777,7 @@ function Modal({ title, close, children, className = "" }) {
   );
 }
 function requestStartParts(start) {
-  const match = String(start || "").match(/^(\d{4}-\d{2}-\d{2})\s*(?:·|Â·|\s)\s*((?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)/);
-  if (match) return {date: match[1], time: match[2].length === 5 ? `${match[2]}:00` : match[2]};
-  const now = new Date();
-  const pad = (value) => String(value).padStart(2, "0");
-  return {
-    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
-    time: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
-  };
+  return indiaWorkflowDateTimeParts(start || new Date());
 }
 
 function MaintenanceRemarks({ remarks = [] }) {
@@ -6772,7 +6786,7 @@ function MaintenanceRemarks({ remarks = [] }) {
 
 function DailyRemarkForm({ request, close, onSave }) {
   const previous=[...(request.dailyRemarks||[])].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
-  const today=new Intl.DateTimeFormat("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date());
+  const today=new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date());
   const todayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   const todayRemark=previous.filter((item)=>String(item.createdAt||"").slice(0,10)===todayKey).at(-1);
   const history=todayRemark?previous.filter((item)=>item!==todayRemark):previous;
@@ -7017,15 +7031,23 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   const [time, setTime] = useState(parts.time);
   const acceptanceTime = request.acceptedAt || indiaDateTimeInputValue(new Date()).replace("T", " ");
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const closeDialog = () => { if (!submitLock.current) close(); };
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
-  return <Modal title={`Edit request ${request.ref}`} close={close}>
+  return <Modal title={`Edit request ${request.ref}`} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
+      if (submitLock.current) return;
       if (arrivalRedFlagRequired(request)) { onRequireArrivalFlag?.(request); return; }
       const form = new FormData(event.currentTarget);
-      const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
-      if (openingMeterFile && !openingMeterEvidence) return;
-      onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      submitLock.current = true;
+      setSubmitting(true);
+      try {
+        const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
+        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      } catch (error) { alert(error?.message || "Could not save this request. Please try again."); }
+      finally { submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="formgrid">
         <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
@@ -7058,7 +7080,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Opening {meterType} file (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">{request.acceptanceRequired ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : request.acceptanceRequired && !request.acceptedAt ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -7069,11 +7091,14 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date),
     [ideal,setIdeal]=useState(() => ["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase())),
     [idleReason,setIdleReason]=useState(() => String(request.idleReason || "").trim()),
-    [status,setStatus]=useState(request.status === "Closed" ? "Closed" : "In progress");
+    [status,setStatus]=useState(["Closed", "Awaiting parts"].includes(request.status) ? request.status : "In progress");
   const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
   const [delayedReason, setDelayedReason] = useState("");
   const [customDelayedReason, setCustomDelayedReason] = useState("");
   const [legacyOpeningMeterFile, setLegacyOpeningMeterFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const closeDialog = () => { if (!submitLock.current) close(); };
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
   const openingMeterReadingMissing = !String(request.openingMeterReading || "").trim();
   const openingMeterFileMissing = !request.openingMeterFileUploaded;
@@ -7083,20 +7108,22 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const delayedReasonNeeded=!ideal&&status==="Closed"&&delayedReasonRequired(request.expectedCompletionAt,closingAt);
   const delayedReasonOptions=useMemo(()=>[...new Set(delayedReasonRecords.map((record)=>String(record.delayedReason||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[delayedReasonRecords]);
   const selectedDelayedReason=delayedReason==="__custom__"?customDelayedReason.trim():delayedReason;
-  return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={close}>
+  return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
+      if (submitLock.current) return;
       if (ideal && !["No driver", "No work"].includes(idleReason)) {
         alert("Choose an Idle reason: No driver or No work.");
         return;
       }
       const form = new FormData(event.currentTarget);
-      let openingMeterFile = "";
-      if (legacyOpeningMeterFile) {
-        openingMeterFile = await readMeterEvidence(legacyOpeningMeterFile).catch((error) => { alert(error.message); return ""; });
-        if (!openingMeterFile) return;
-      }
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
+      submitLock.current = true;
+      setSubmitting(true);
+      try {
+        const openingMeterFile = legacyOpeningMeterFile ? await readMeterEvidence(legacyOpeningMeterFile) : "";
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
+      } catch (error) { alert(error?.message || "Could not save the maintenance update. Please try again."); }
+      finally { submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
@@ -7117,7 +7144,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <label>Closing date *<input name="closingDate" type="date" required value={closingDate} readOnly aria-readonly="true" /></label>
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
-        <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Idle</option>}</select></label>
+        <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{request.status === "Awaiting parts" && <option value="Awaiting parts">Awaiting parts</option>}{ideal&&<option>Idle</option>}</select></label>
         <fieldset className="ideal-choice full">
           <legend>Idle? <small>Optional</small></legend>
           <div className="idle-options">
@@ -7151,7 +7178,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
           placeholder="Describe the work completed, or select Hindi / English and speak in that language."
         />
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save maintenance update <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -7163,6 +7190,7 @@ function VerifyRequestForm({ request, close, onSave }) {
   const [tripCardPreview, setTripCardPreview] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
+  const closeDialog = () => { if (!submitLock.current) close(); };
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
   const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -7170,7 +7198,7 @@ function VerifyRequestForm({ request, close, onSave }) {
     reader.onerror = () => reject(new Error("Could not read the trip-card image."));
     reader.readAsDataURL(file);
   });
-  return <Modal title={`Verify closed request ${request.ref}`} close={close}>
+  return <Modal title={`Verify closed request ${request.ref}`} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (submitLock.current) return;
@@ -7219,7 +7247,7 @@ function VerifyRequestForm({ request, close, onSave }) {
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
       </div>
-      <footer><button type="button" onClick={close} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -7391,15 +7419,21 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
   canCloseRef.current = canClose;
   useEffect(() => {
     if (!lockForLogin) return undefined;
+    let finished = false;
     const deadline = Date.now() + AI_FEEDER_CLOSE_DELAY_SECONDS * 1000;
     const tick = () => {
+      if (finished) return;
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setSeconds(remaining);
-      if (remaining === 0) window.clearInterval(timer);
+      if (remaining === 0) {
+        finished = true;
+        window.clearInterval(timer);
+        closeRef.current();
+      }
     };
     const timer = window.setInterval(tick, 1000);
     document.addEventListener("visibilitychange", tick);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
+    return () => { finished = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
   }, [lockForLogin]);
   useEffect(() => {
     const previousFocus = document.activeElement;
@@ -7474,7 +7508,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{lockForLogin && seconds > 0 ? "Close available at 00:00" : "Close anytime"} · Reopen from Info Pulse</span></footer>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{lockForLogin && seconds > 0 ? "Closes automatically at 00:00" : "Close anytime"} · Reopen from Info Pulse</span></footer>
     </div>
   </div>, document.body);
 }
@@ -7762,8 +7796,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     else if(showRequestsMenu&&canSeeRequestMenu("Closed history"))setTab("history");
     else if(showTicketsMenu)setTab("tickets");
   },[responsiveMobile,showRequestsMenu,showTicketsMenu,visibleRequestMenus?.join("|"),mobileRole]);
-  const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
-  const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
+  const [equipmentRecords, , equipmentLoaded, , , , , refreshEquipmentRecords] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
+  const [repairTypeRecords, , repairTypesLoaded, , , , , refreshRepairTypes] = useMasterRecords("Repair type master");
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
     let active=true;
@@ -7784,7 +7818,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       .catch(() => {});
     return () => { active = false; };
   }, [session?.token, session?.login, session?.name, show]);
-  const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
+  const dateLabel = new Intl.DateTimeFormat(undefined, {timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
   const openArrivalFlag = (row, nextAction = null) => { setArrivalFlagNextAction(nextAction); setArrivalFlagging(row); };
   const openMaintenanceAction = (row, action) => {
     const current = requests.find((item) => item.ref === row.ref) || row;
@@ -7826,12 +7860,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):requests;
-  const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)).filter(visibleInOperationalUserRequests);
-  const activeRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
-  const closedRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="closed");
-  const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt).filter(visibleInMisRequests) : activeRequests;
-  const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)).filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
-  const idleRows=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="idle");
+  const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
+  const activeRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()!=="closed");
+  const closedRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed");
+  const visibleRows = isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests;
+  const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
+  const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
@@ -7842,7 +7876,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
-        {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
+        {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => {refreshEquipmentRecords();refreshRepairTypes();setShow(true);}}><Plus /> Create request</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU)&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>MIS verification</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
@@ -8185,7 +8219,7 @@ function App() {
       />
       <main className="content">
         <div className="top">
-          <button className="menubtn" onClick={() => setMenu(!menu)}>
+          <button type="button" className="menubtn" aria-label={menu ? "Close navigation menu" : "Open navigation menu"} aria-expanded={menu} aria-controls="admin-primary-navigation" onClick={() => setMenu(!menu)}>
             <Menu />
           </button>
           <div className="crumb">
@@ -8240,12 +8274,13 @@ function App() {
               ) : active === "Audit Trail" ? (
                 <AuditTrailPage session={session} />
               ) : operationalSession ? (
-            <Normal
-              embedded
+              <Normal
+                  embedded
               requests={requests}
               onCreate={addRequest}
               onUpdateRequest={updateRequest}
-              onDeleteRequest={deleteRequest}
+                  onDeleteRequest={deleteRequest}
+                  onAddDailyRemark={addDailyRemark}
               session={operationalSession}
               logout={logout}
               theme={theme}

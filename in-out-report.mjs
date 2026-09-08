@@ -1,4 +1,5 @@
 import {elapsedMilliseconds} from './report-metrics.mjs';
+import {indiaDateTimeEpoch} from './report-date-range.mjs';
 
 export const IN_OUT_REPORT_TITLE='In and Out Report';
 export const IN_OUT_REPORT_DESCRIPTION='Day-wise register of vehicles that came in for breakdown (opened), went out after maintenance (closed), were MIS verified or marked idle, with the balance still in workshop at day end.';
@@ -16,7 +17,8 @@ export function indiaDateKey(value=new Date()){
 }
 
 export function eventDateKey(value){
-  return clean(value).match(/^(\d{4}-\d{2}-\d{2})/)?.[1]||'';
+  const timestamp=indiaDateTimeEpoch(value);
+  return Number.isFinite(timestamp)?indiaDateKey(new Date(timestamp)):'';
 }
 
 export function isIdleRequest(record={}){
@@ -27,7 +29,8 @@ export function requestEventDateKey(record={},event){
   if(event==='opened')return eventDateKey(record.start)||eventDateKey(record.startedAt)||eventDateKey(record.createdAt);
   if(event==='closed')return eventDateKey(record.closedAt);
   if(event==='verified')return eventDateKey(record.verifiedAt);
-  return eventDateKey(record.closedAt)||eventDateKey(record.start);
+  if(event==='idle')return eventDateKey(record.idealRequestedAt)||(isIdleRequest(record)?eventDateKey(record.closedAt)||requestEventDateKey(record,'opened'):'');
+  return '';
 }
 
 export function inOutWeekday(dateKey){
@@ -88,7 +91,7 @@ export function minutesLabel(minutes){
 }
 
 function leftDateKey(record){
-  return eventDateKey(record.closedAt)||(isIdleRequest(record)?requestEventDateKey(record,'opened'):'');
+  return requestEventDateKey(record,'idle')||eventDateKey(record.closedAt);
 }
 
 export function buildInOutReportRows(requests=[],{today=new Date(),maxDays=IN_OUT_REPORT_MAX_DAYS}={}){
@@ -98,7 +101,7 @@ export function buildInOutReportRows(requests=[],{today=new Date(),maxDays=IN_OU
     opened:requestEventDateKey(record,'opened'),
     closed:isIdleRequest(record)?'':requestEventDateKey(record,'closed'),
     verified:requestEventDateKey(record,'verified'),
-    idle:isIdleRequest(record)?requestEventDateKey(record,'idle'):'',
+    idle:requestEventDateKey(record,'idle'),
     left:leftDateKey(record),
   }));
   const eventKeys=events.flatMap((event)=>[event.opened,event.closed,event.verified,event.idle]).filter(Boolean).filter((key)=>key<=todayKey);
@@ -113,7 +116,9 @@ export function buildInOutReportRows(requests=[],{today=new Date(),maxDays=IN_OU
     const verified=events.filter((event)=>event.verified===date);
     const idle=events.filter((event)=>event.idle===date);
     const pendingClose=events.filter((event)=>event.opened&&event.opened<=date&&!(event.left&&event.left<=date)).length;
-    const pendingVerification=events.filter((event)=>event.left&&event.left<=date&&!(event.verified&&event.verified<=date)).length;
+    // Idle awaits a manager's on-road approval, not MIS. It enters the MIS
+    // queue only when the manager closes it, just like a normal repair.
+    const pendingVerification=events.filter((event)=>event.closed&&event.closed<=date&&!(event.verified&&event.verified<=date)).length;
     const tatMinutes=closed.map((event)=>elapsedMilliseconds(event.record.start,event.record.closedAt)).filter((value)=>value!==null).map((value)=>value/60000);
     const tatMinutesTotal=tatMinutes.reduce((total,value)=>total+value,0);
     const averageTatMinutes=tatMinutes.length?tatMinutesTotal/tatMinutes.length:null;

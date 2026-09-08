@@ -22,6 +22,7 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
+import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
@@ -565,10 +566,9 @@ async function migrate(){
             AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
         )`,[JSON.stringify({delayedReason}),delayedReason]);
     }
-    const seededSuperAdmin={login:'superadamin',employee:'System Super Admin',mail:'',phone:'',userType:'Super Admin',userGroup:'',adminLevel:'Super Admin',passwordHash:hashPassword('admin'),mustChangePassword:false};
-    await client.query(`INSERT INTO master_records (master_name,record_data)
-      SELECT 'Users & employees',$1::jsonb
-      WHERE NOT EXISTS (SELECT 1 FROM master_records WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))='superadamin')`,[JSON.stringify(seededSuperAdmin)]);
+    // Privileged accounts must be provisioned explicitly by an authorized
+    // administrator, never recreated with a known password during startup.
+    // Existing accounts and credentials are not changed by this policy.
     // One-time rewrite of stored user site names ("sasti ob", "Sasti ob") to
     // the single display form ("Sasti OB"). Only known sites are rewritten;
     // unrecognised values are kept exactly as entered so no data is lost.
@@ -661,10 +661,17 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
     if(!requestedColumns.length||requestedColumns.length>24)return res.status(400).json({error:'Select between 1 and 24 report columns.'});
     if(requestedRows.length>5000)return res.status(413).json({error:'This report has too many rows to export at once. Apply a filter and try again.'});
     const columns=requestedColumns.map((column,index)=>({label:String(column?.label||`Column ${index+1}`).replace(/\s+/g,' ').trim().slice(0,100)||`Column ${index+1}`}));
-    const rows=requestedRows.map((row)=>{
-      if(!Array.isArray(row))return columns.map(()=> '—');
-      return columns.map((_,index)=>String(row[index]??'').replace(/\s+/g,' ').trim().slice(0,600));
-    });
+    const rows=[];
+    let reportCharacters=0;
+    for(const row of requestedRows){
+      const cells=columns.map((_,index)=>Array.isArray(row)?String(row[index]??'').replace(/\s+/g,' ').trim():'—');
+      // Preserve complete remarks (up to 2,000 characters) and longer work
+      // descriptions. Oversized exports fail visibly instead of losing text.
+      if(cells.some((cell)=>cell.length>10000))return res.status(413).json({error:'A report field exceeds the 10,000-character PDF limit. Export as Excel to preserve the complete text.'});
+      reportCharacters+=cells.reduce((total,cell)=>total+cell.length,0);
+      if(reportCharacters>1000000)return res.status(413).json({error:'This PDF report contains too much text. Apply a filter or export as Excel to preserve all details.'});
+      rows.push(cells);
+    }
     const highlights=(Array.isArray(req.body?.highlights)?req.body.highlights:[]).map(Number).filter((index)=>Number.isInteger(index)&&index>=0&&index<rows.length);
     const pdf=await buildTableExportPdf({title,columns,rows,highlights});
     res.set('Cache-Control','no-store');
@@ -1808,7 +1815,9 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
       const effectiveScheduleSettings=hierarchyRule?applyHierarchyDeliveryRule(scheduleSettings,designation.key,hierarchyRule):scheduleSettings;
       const dueGroups=event?reportsForHierarchyEvent(designation.key,event,effectiveScheduleSettings):reportsDueForDesignation(designation.key,now,20,effectiveScheduleSettings);
       if(!dueGroups.length)continue;
-      if(event&&hierarchyRule?.siteAccess&&!sourceDataForSites({requests:[event.request],equipmentRecords:[],transferRecords:[]},hierarchyRule.siteAccess).requests.length){skipped++;continue}
+      const recipientScope=hierarchyRecipientReportScope(user,profile,hierarchyRule?.siteAccess);
+      if(Array.isArray(recipientScope.sites)&&!recipientScope.sites.length){skipped++;continue}
+      if(event&&!reportScopeIncludesSite(recipientScope,event.request.site)){skipped++;continue}
       const allowedReports=hierarchyRule?new Set(splitHierarchyValues(hierarchyRule.reportAccess)):null;
       const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))].filter((title)=>!allowedReports||allowedReports.has(title));
       if(!reportTitles.length){skipped++;continue}
@@ -1832,7 +1841,7 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
           slotKey,
           now,
           reportTitles,
-          siteAccess:hierarchyRule?.siteAccess||'',
+          siteAccess:recipientScope.sites===null?'':recipientScope.sites.join(' | '),
           heading:`${designation.label} ${event?'Event':'Consolidated'} Report`,
           scheduleLabel,
           eventRequest:event?.request||null,
@@ -2362,6 +2371,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       }
       return {eligible,updatedToday};
     });
+    try{
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
     const recipients=[String(eligible.rows[0].requester_login||'').trim().toLowerCase()];
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
@@ -2369,8 +2379,11 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&userManagesSite(user,eligible.rows[0].site))recipients.push(login);
     }
-    await addTicketNotifications(pool,recipients,reference,`${authorName} ${updatedToday?'updated today’s':'added a'} daily maintenance update for ${reference}.`,
+    await addTicketNotificationsBestEffort(pool,recipients,reference,`${authorName} ${updatedToday?'updated today’s':'added a'} daily maintenance update for ${reference}.`,
       {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:true});
+    }catch(error){
+      console.error(`Request ${reference} daily update was saved, but its notification recipients could not be resolved.`,error);
+    }
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     res.status(updatedToday?200:201).json((await attachDailyRemarks(rows))[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
@@ -2403,17 +2416,36 @@ app.patch('/api/requests/:reference/arrival-flag',requireSession,requireArrivalF
   }catch(error){next(error)}
 });
 
-async function activeRequestConflict({door='',chassis=''}={}){
+async function activeRequestConflict({door='',chassis=''}={},client=pool){
   const normalizedDoor=String(door||'').trim();
   const normalizedChassis=String(chassis||'').trim();
   if(!normalizedDoor&&!normalizedChassis)return null;
-  const {rows}=await pool.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status
+  const {rows}=await client.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status
     FROM maintenance_requests
     WHERE status<>'Closed' AND (
       ($1<>'' AND lower(trim(door_number))=lower(trim($1))) OR
       ($2<>'' AND lower(trim(chassis_number))=lower(trim($2)))
     ) ORDER BY created_at DESC LIMIT 1`,[normalizedDoor,normalizedChassis]);
   return rows[0]||null;
+}
+
+async function createRequestWithVehicleLock({door='',chassis=''},write){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    // Match the existing case-insensitive door OR chassis conflict policy.
+    // Stable ordering prevents overlapping vehicle identities from deadlocking.
+    const keys=[['door',door],['chassis',chassis]]
+      .map(([field,value])=>[field,String(value||'').trim().toLowerCase()])
+      .filter(([,value])=>value).map(([field,value])=>`bdms-request:${field}:${value}`).sort();
+    for(const key of keys)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
+    const duplicate=await activeRequestConflict({door,chassis},client);
+    if(duplicate)throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,existingReference:duplicate.ref});
+    const result=await write(client);
+    await client.query('COMMIT');
+    return result;
+  }catch(error){await client.query('ROLLBACK');throw error}
+  finally{client.release()}
 }
 
 app.get('/api/requests/conflict',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
@@ -2434,18 +2466,20 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-    const duplicate=await activeRequestConflict({door,chassis});
-    if(duplicate)return res.status(409).json({duplicate:true,existingReference:duplicate.ref,error:activeRequestConflictMessage(duplicate,door)});
-    const startedAt=parseIndiaRequestDateTime(start);
     const requester=await currentUserRecord(req.session);
+    if(req.session.role==='normal'){
+      const assignedSite=canonicalSiteName(requester.site||requester.location||requester.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(site))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});
+    }
+    const startedAt=parseIndiaRequestDateTime(start);
     const superior=String(requester.superior||'').trim().slice(0,200);
-    const storedDriverName=String(driverName).trim().slice(0,200)||'Demo Driver';
-    const storedDriverSource=String(driverNameSource).trim().slice(0,200)||(storedDriverName==='Demo Driver'?'Demo':'Manual');
-    const {rows}=await pool.query(`INSERT INTO maintenance_requests
+    const storedDriverName=String(driverName).trim().slice(0,200);
+    const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
+    const {rows}=await createRequestWithVehicleLock({door,chassis},client=>client.query(`INSERT INTO maintenance_requests
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,acceptance_required,status,owner_name,requester_login,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']));
     await sendRequestEventReports('opened',rows[0]);
     try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
@@ -2458,7 +2492,11 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       {whatsapp:true,whatsappRecipients,workflowType:'opened',site:rows[0].site});
     }catch(error){console.error(`Request ${rows[0].ref} saved, but opening notification recipients could not be resolved.`,error.message)}
     res.status(201).json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){
+    if(error.duplicate)return res.status(409).json({duplicate:true,existingReference:error.existingReference,error:error.message});
+    if(error.code==='23505'&&error.constraint==='maintenance_requests_reference_key')return res.status(409).json({code:'REQUEST_REFERENCE_CONFLICT',error:'This request reference already exists. Refresh the request form and try again.'});
+    next(error);
+  }
 });
 
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
@@ -2558,6 +2596,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     return {rows,delayedClosure};
     });
     if(ideal){
+      try{
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
       const whatsappRecipients=workflowWhatsAppRecipientLogins(userRows,{eventType:'idle',site:rows[0].site,settings:await storedWhatsAppReportSettings()});
       const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
@@ -2565,6 +2604,9 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       await addTicketNotificationsBestEffort(pool,whatsappRecipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Project Manager or Production Manager approval is required to Make On Road.`,
         {templateKey:'requestIdle',parameters:[equipmentDetails,rows[0].site,idleAt,rows[0].idleReason,rows[0].ref,'Project Manager or Production Manager must approve Make On Road',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
         {whatsapp:true,whatsappRecipients,workflowType:'idle',site:rows[0].site});
+      }catch(error){
+        console.error(`Request ${rows[0].ref} was marked Idle, but its notification recipients could not be resolved.`,error);
+      }
     }else if(status==='Closed'){
       await sendRequestEventReports('closed',rows[0]);
       try{
@@ -2594,17 +2636,21 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
-      ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'Project / Production Manager',reference]);
+      ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
+      RETURNING ${requestProjection}`,[req.session.name||'Project / Production Manager',reference,eligible.rows[0].site]);
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your approval.'});
     await sendRequestEventReports('closed',rows[0]);
+    try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'closed',site:rows[0].site});
     const approvedAt=requestNotificationTime(new Date());
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Project / Production Manager'}. It is now awaiting MIS verification.`,
+    await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Project / Production Manager'}. It is now awaiting MIS verification.`,
       {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].site,req.session.name||'Project / Production Manager',approvedAt,rows[0].hours||'Not available',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
       {whatsapp:true,whatsappRecipients,workflowType:'closed',site:rows[0].site});
+    }catch(error){
+      console.error(`Request ${rows[0].ref} was approved on road, but its notification recipients could not be resolved.`,error);
+    }
     res.json(rows[0]);
   }catch(error){next(error)}
 });
@@ -2620,11 +2666,15 @@ app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,ne
     const {rows}=await pool.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
       ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by='',
       in_progress_at=COALESCE(in_progress_at,NOW()),in_progress_by=CASE WHEN in_progress_at IS NULL THEN $2 ELSE in_progress_by END
-      WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[reference,req.session.name||req.session.login||'Maintenance Manager']);
+      WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
+      RETURNING ${requestProjection}`,[reference,req.session.name||req.session.login||'Maintenance Manager',eligible.rows[0].site]);
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your decision.'});
+    try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Idle status for request ${rows[0].ref} was cancelled by ${req.session.name||'Maintenance Manager'}. The request has returned to active maintenance.`,null,{whatsapp:false});
+    }catch(error){
+      console.error(`Request ${rows[0].ref} Idle status was cancelled, but its notification recipients could not be resolved.`,error);
+    }
     res.json(rows[0]);
   }catch(error){next(error)}
 });
@@ -2685,8 +2735,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
     const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site]);
     if(!rows.length){
       const {rows:retryRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
       if(retryRows[0]?.verifiedAt&&canonicalSiteName(retryRows[0].site)===canonicalSiteName(misSite))return res.json(retryRows[0]);

@@ -25,3 +25,11 @@ test("current snapshot reports can explicitly retain undated rows", () => {
   assert.deepEqual(reportRowsWithinRange(rows, (row) => row.at, "2026-09-02T08:00", "2026-09-02T18:00"), []);
   assert.deepEqual(reportRowsWithinRange(rows, (row) => row.at, "2026-09-02T08:00", "2026-09-02T18:00", { includeUndated: true }), rows);
 });
+
+test('date-only report ranges include the full final day in IST',()=>{
+  const rows=[{at:'2026-09-02 23:59:59.999'},{at:'2026-09-03 00:00:00'},{at:'2026-09-02T18:29:59Z'}];
+  assert.deepEqual(reportRowsWithinRange(rows,row=>row.at,'2026-09-02','2026-09-02'),[rows[0],rows[2]]);
+  assert.equal(indiaDateTimeEpoch('2026-09-02 · 23:15:00'),Date.parse('2026-09-02T23:15:00+05:30'));
+  const date=new Date('2026-09-02T23:15:00+05:30');
+  assert.equal(indiaDateTimeEpoch(date),date.getTime());
+});

@@ -5,6 +5,7 @@ import React from 'react';
 import { transformWithOxc } from 'vite';
 import * as equipment from '../request-equipment.mjs';
 import { recordsForSite } from '../site-location.mjs';
+import { indiaWorkflowDateTimeParts } from '../src/workflow-clock.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const formStart = source.indexOf('function MaintenanceForm(');
@@ -35,7 +36,7 @@ function harness(code, name, extra = {}) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = { React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, ...extra };
+  const scope = { React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, ...extra };
   const component = new Function(...Object.keys(scope), `${code}; return ${name};`)(...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
 }

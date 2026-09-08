@@ -14,8 +14,9 @@ test("manager requests, equipment, and dashboard metrics are scoped to selected 
   assert.match(source,/function ManagerDashboard\(\{ managerRole, managerRoles = \[\], managerLocation/);
   assert.match(source,/const siteEquipment = equipmentRecords;/);
   assert.match(server,/scopeDashboardEquipmentRecords\(records,authorization\.session,authorization\.user,scope\)/);
-  assert.match(source,/offRoadKeys = new Set\(openRequests/);
-  assert.match(source,/onRoad:Math\.max\(0,siteEquipment\.length-offRoad-idle\)/);
+  assert.match(source,/const fleet = liveEquipmentMetrics\(siteEquipment, requestRows\)/);
+  assert.match(source,/siteEquipment\.filter\(\(record\)=>liveEquipmentRoadStatus\(record,requestRows\)==="idle"\)/);
+  assert.doesNotMatch(source,/offRoadKeys = new Set\(openRequests/);
   assert.match(source,/\["Idle", fleet\.idle/);
   assert.doesNotMatch(source.slice(source.indexOf("function ManagerDashboard"),source.indexOf("function Dashboard")),/Active breakdowns/);
   assert.match(source,/<BreakdownTable rows=\{visibleDetailRows\}[\s\S]*stableToolbar/);

@@ -6,6 +6,7 @@ import {runInNewContext} from 'node:vm';
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const authSource=server.slice(server.indexOf('async function requireSession('),server.indexOf('async function requireSuper('));
 const guardSource=server.slice(server.indexOf('const arrivalDelaySql='),server.indexOf("app.post('/api/requests/:reference/daily-remarks'"));
+const notificationSource=server.slice(server.indexOf('async function addTicketNotificationsBestEffort('),server.indexOf('let consolidatedReportRunning='));
 const routes={
   edit:server.slice(server.indexOf("app.patch('/api/requests/:reference',"),server.indexOf("app.patch('/api/requests/:reference/close',")),
   close:server.slice(server.indexOf("app.patch('/api/requests/:reference/close',"),server.indexOf("app.patch('/api/requests/:reference/ideal-onroad',")),
@@ -18,9 +19,9 @@ const allowed={role:'normal',assignedRole:'Maintenance User',name:'Maintenance i
 const active=row=>row&&!['Closed','Idle','Ideal'].includes(row.status)&&!row.verifiedAt;
 const needsFlag=row=>((row.acceptanceRequired&&!row.acceptedAt&&Date.parse(row.start)<=now-3600000)||(row.acceptedAt&&Date.parse(row.acceptedAt)-Date.parse(row.start)>3600000))&&!(row.arrivalFlaggedAt&&row.arrivalFlagRemark.trim());
 
-function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false}={}){
+function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,notificationFailure=''}={}){
   let saved=structuredClone(row),snapshot,chain,inTransaction=false,released=false,committed=false;
-  const queries=[];
+  const queries=[],logs=[];
   const client={
     async query(sql,values){
       queries.push({sql,values,inTransaction});
@@ -38,7 +39,10 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false}=
       if(sql.startsWith('SELECT meter_type'))return {rows:active(saved)&&!needsFlag(saved)?[structuredClone(saved)]:[]};
       if(sql.startsWith('SELECT reference,site,requester_login'))return {rows:active(saved)&&!needsFlag(saved)?[structuredClone(saved)]:[]};
       if(sql.startsWith('SELECT id FROM maintenance_daily_remarks'))return {rows:[]};
-      if(sql.startsWith('SELECT record_data'))return {rows:[]};
+      if(sql.startsWith('SELECT record_data')){
+        if(notificationFailure==='recipients')throw new Error('Notification recipient lookup unavailable');
+        return {rows:[]};
+      }
       if(sql.startsWith('UPDATE maintenance_requests')){
         assert.ok(inTransaction,'every maintenance write is inside its request lock transaction');
         assert.match(sql,/AND \(NOT \(\(acceptance_required=TRUE/,'mutation repeats the authoritative SQL guard');
@@ -61,13 +65,14 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false}=
     canonicalSiteName:value=>String(value||'').trim().toLowerCase(),requestProjection:'*',
     validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
     requestDateTimeValue:()=>new Date(now),delayedReasonRequired:()=>false,REQUEST_CLOSE_STATUSES:['Closed','In progress','Open'],
-    attachDailyRemarks:async rows=>rows,addTicketNotifications:async()=>{},addTicketNotificationsBestEffort:async()=>{},
+    attachDailyRemarks:async rows=>rows,addTicketNotifications:async()=>{if(notificationFailure==='storage')throw new Error('Notification storage unavailable');},
+    workflowWhatsAppRecipientLogins:()=>[],storedWhatsAppReportSettings:async()=>{if(notificationFailure==='settings')throw new Error('Notification settings unavailable');return {};},
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],
-    requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',workflowRequestLink:()=>'',publicBaseUrl:()=>'',console,
+    requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',workflowRequestLink:()=>'',publicBaseUrl:()=>'',console:{error:(...args)=>logs.push(args)},
   };
-  runInNewContext(`${authSource}\n${guardSource}\n${routes[kind]}`,context);
+  runInNewContext(`${authSource}\n${guardSource}\n${notificationSource}\n${routes[kind]}`,context);
   return {
-    queries,get saved(){return saved;},get released(){return released;},get committed(){return committed;},
+    queries,logs,get saved(){return saved;},get released(){return released;},get committed(){return committed;},
     async call({session=allowed,body={}}={}){
       const defaults=kind==='edit'?{complaint:'Repair',expectedCompletionAt:'2026-09-08T20:00',meterType:'HMR'}:kind==='daily'?{remark:'Work update',delayReason:'Parts unavailable'}:{closingDate:'2026-09-08',closingTime:'18:30:00',maintenanceWork:'Repair work',status:'In progress'};
       const req={params:{reference:'REQ-GATE'},body:{...defaults,...body},testSession:session};
@@ -144,4 +149,33 @@ test('already closed history is returned without a new arrival flag requirement 
   assert.equal(result.status,200);
   assert.equal(result.body.status,'Closed');
   assert.equal(app.queries.filter(({sql})=>sql.startsWith('UPDATE ')||sql.startsWith('INSERT ')||sql==='BEGIN').length,0);
+});
+
+test('marking a vehicle Idle cannot bypass the mandatory delayed-arrival reason',async()=>{
+  for(const row of [waiting,acceptedLate]){
+    const app=harness('close',{row});
+    const result=await app.call({body:{ideal:true,status:'Idle',idleReason:'No driver'}});
+    assert.equal(result.status,409);
+    assert.equal(result.body.code,'ARRIVAL_RED_FLAG_REQUIRED');
+    assert.equal(app.saved.status,'Open');
+    assert.ok(!app.committed);
+  }
+  const app=harness('close',{row:{...acceptedLate,arrivalFlaggedAt:'2026-09-08T12:30:00Z',arrivalFlagRemark:'Vehicle recovery delayed'}});
+  const result=await app.call({body:{ideal:true,status:'Idle',idleReason:'No work'}});
+  assert.equal(result.status,200);
+  assert.equal(result.body.status,'Idle');
+  assert.ok(app.committed);
+});
+
+test('saved daily updates and Idle decisions survive notification recipient, settings and storage failures',async()=>{
+  for(const kind of ['daily','close'])for(const notificationFailure of ['recipients','storage',...(kind==='close'?['settings']:[])]){
+    const app=harness(kind,{row:{...acceptedLate,arrivalFlaggedAt:'2026-09-08T12:30:00Z',arrivalFlagRemark:'Vehicle recovery delayed'},notificationFailure});
+    const response=await app.call({body:kind==='close'?{ideal:true,status:'Idle',idleReason:'No driver'}:{}});
+    assert.equal(response.status,kind==='daily'?201:200,`${kind}/${notificationFailure}`);
+    assert.ok(app.committed);
+    assert.ok(app.released);
+    assert.ok(app.logs.length,'notification failure is recorded without undoing saved work');
+    assert.equal(app.queries.filter(({sql})=>sql==='ROLLBACK').length,0);
+    if(kind==='close')assert.equal(response.body.status,'Idle');
+  }
 });
