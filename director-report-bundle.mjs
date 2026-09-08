@@ -2,6 +2,7 @@ import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows} from './in-out-report.mjs';
 import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
+import {reportTime12} from './report-time-format.mjs';
 import {reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
 
@@ -260,6 +261,7 @@ function excelCellReference(columnIndex,rowIndex){
 }
 
 export function buildXlsxWorkbookBuffer(title,columns=[],rows=[]){
+  rows=rows.map(row=>row.map(reportTime12));
   const headings=columns.map((column)=>column.label||column.key||'Column');
   const worksheetRows=[headings,...rows];
   const sheetData=worksheetRows.map((row,rowIndex)=>`<row r="${rowIndex+1}">${row.map((value,columnIndex)=>`<c r="${excelCellReference(columnIndex,rowIndex)}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`).join('')}</row>`).join('');

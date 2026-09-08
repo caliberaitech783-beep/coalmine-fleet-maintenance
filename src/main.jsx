@@ -24,6 +24,7 @@ import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
 import { buildDepartmentReports } from "../department-reports.mjs";
+import { reportTime12 } from "../report-time-format.mjs";
 import { olderThanTenDays, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
@@ -2130,7 +2131,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
   );
 }
 function exportCellText(value) {
-  return tableFilterText(value).replace(/\s+/g, " ").trim() || "—";
+  return reportTime12(tableFilterText(value).replace(/\s+/g, " ").trim()) || "—";
 }
 function exportFileName(title, extension) {
   const safeTitle = String(title || "nerve-center-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "nerve-center-report";
@@ -2594,7 +2595,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
         <tbody>
           {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" ? "report-complaint-cell" : undefined}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
             </tr>
           )) : <tr><td colSpan={displayedColumns.length} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
