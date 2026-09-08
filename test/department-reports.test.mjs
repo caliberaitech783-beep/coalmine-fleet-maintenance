@@ -22,7 +22,10 @@ test('general summary uses only verified requests and the approved overlapping T
   const report=build([row,{...row,ref:'unverified',verifiedAt:''}]).find(r=>r.title==='Summary Report');
   assert.equal(report.category,'general');
   assert.deepEqual(report.rows.map(r=>r.ref),['verified']);
-  assert.deepEqual(report.columns.map(c=>c.key),['submittedAt','overallTat','door','chassis','equipmentGroup','model','complaint','category','productionTat','maintenanceTat','misTat']);
+  assert.deepEqual(report.columns.map(c=>c.key),['submittedAt','acceptedAt','closedAt','firstTripAt','verifiedAt','overallTat','door','chassis','equipmentGroup','model','complaint','category','productionTat','maintenanceTat','misTat']);
+  for(const key of ['acceptedAt','closedAt','firstTripAt','verifiedAt']) assert.equal(cell(report,key),row[key]);
+  assert.equal(cell(report,'acceptedAt',{...row,acceptedAt:''}),'Not recorded');
+  assert.equal(cell(report,'firstTripAt',{...row,firstTripAt:'',firstTripDate:'2026-09-01',firstTripTime:'12:30:00'}),'2026-09-01 12:30:00');
   assert.equal(cell(report,'submittedAt'),row.start);
   assert.equal(report.dateValue(row),row.start);
   assert.equal(cell(report,'productionTat'),'4.00');

@@ -108,6 +108,10 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
     ],requests.filter(r => r.misFlaggedAt),r => r.misFlaggedAt),
     report('general', DEPARTMENT_REPORT_TITLES[14], 'MIS-verified requests only. All TAT values are in hours. Production TAT = request closed minus production submission; Maintenance TAT = request closed minus maintenance acceptance; MIS TAT = actual first trip minus request closed. Overall TAT is the sum of these three intervals, including their overlap. Date filters use production submission.', [
       col('submittedAt','Production Request Submission Date & Time',r => r.start || r.createdAt),
+      col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not recorded'),
+      col('closedAt','Maintenance Repair Closed Date & Time',r => r.closedAt || 'Not recorded'),
+      col('firstTripAt','MIS First Trip Date & Time',r => r.firstTripAt || (r.firstTripDate && r.firstTripTime ? `${r.firstTripDate} ${r.firstTripTime}` : 'Not recorded')),
+      col('verifiedAt','MIS Verified Date & Time',r => r.verifiedAt || 'Not recorded'),
       col('overallTat','Overall TAT (Hrs)',r => summaryHours(r,'overall')),
       ...base,
       col('productionTat','Production TAT (Hrs)',r => summaryHours(r,'production')),
