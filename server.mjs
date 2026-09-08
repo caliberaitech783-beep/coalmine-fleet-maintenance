@@ -635,7 +635,7 @@ app.get('/api/app-version',(_req,res)=>{
 
 app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
   try{
-    const title=String(req.body?.title||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,120)||'Nerve Center report';
+    const title=String(req.body?.title||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,2000)||'Nerve Center report';
     const requestedColumns=Array.isArray(req.body?.columns)?req.body.columns:[];
     const requestedRows=Array.isArray(req.body?.rows)?req.body.rows:[];
     if(!requestedColumns.length||requestedColumns.length>24)return res.status(400).json({error:'Select between 1 and 24 report columns.'});
@@ -1636,7 +1636,7 @@ async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),report
   const files=[];
   const shortReportCode=()=>randomUUID().replace(/-/g,'').slice(0,10);
   for(const table of tables){
-    const pdf=await buildTableExportPdf({title:table.title,columns:table.columns.map((column)=>({label:column.label})),rows:table.rows});
+    const pdf=await buildTableExportPdf({title:table.pdfTitle||table.title,columns:table.columns.map((column)=>({label:column.label})),rows:table.rows});
     const xlsx=buildXlsxWorkbookBuffer(table.title,table.columns,table.rows);
     const pdfId=randomUUID(),xlsxId=randomUUID();
     const pdfCode=shortReportCode(),xlsxCode=shortReportCode();

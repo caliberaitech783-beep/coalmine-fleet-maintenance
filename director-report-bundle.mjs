@@ -2,6 +2,7 @@ import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows} from './in-out-report.mjs';
 import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
+import {reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
@@ -137,7 +138,7 @@ function enrichRequests(requests=[],equipmentRecords=[]){
 }
 
 function table(title,department,description,columns,rows){
-  return {title,department,description,columns,rows:rows.map((row)=>columns.map((column)=>cell(typeof column.value==='function'?column.value(row):row[column.key])))};
+  return {title,pdfTitle:reportPdfHeading(title,rows),department,description,columns,rows:rows.map((row)=>columns.map((column)=>cell(typeof column.value==='function'?column.value(row):row[column.key])))};
 }
 
 export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[],now=new Date()}={}){

@@ -21,9 +21,10 @@ import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { delayedReasonRequired } from "../delayed-reason.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
-import { indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
+import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
 import { buildDepartmentReports } from "../department-reports.mjs";
+import { olderThanTenDays, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
@@ -2332,7 +2333,7 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
       const response = await fetch("/api/exports/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ title, columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows] }),
+        body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows] }),
       });
       if (!response.ok) {
         const details = await response.json().catch(() => ({}));
@@ -2591,7 +2592,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
         <tbody>
           {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-              {displayedColumns.map((column) => <td key={column.key}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" ? "report-complaint-cell" : undefined}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
             </tr>
           )) : <tr><td colSpan={displayedColumns.length} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
@@ -4942,6 +4943,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [reportZipTo, setReportZipTo] = useState(() => indiaDateTimeInputValue(new Date(Date.now() + 60 * 1000)));
   const reportGeneratedAt = useMemo(() => indiaDateTimeInputValue(new Date()), []);
   const [availabilityFrom, setAvailabilityFrom] = useState(() => `${indiaDateTimeInputValue(new Date()).slice(0,7)}-01`);
+  const [reportFrom, setReportFrom] = useState("");
+  const [reportTo, setReportTo] = useState("");
+  const [offRoadAge, setOffRoadAge] = useState("all");
+  const [reportNow, setReportNow] = useState(() => new Date());
+  useEffect(() => { const timer = window.setInterval(() => setReportNow(new Date()), 60000); return () => window.clearInterval(timer); }, []);
   const [availabilityTo, setAvailabilityTo] = useState(() => indiaDateTimeInputValue(new Date()).slice(0,10));
   const allowedReportCategoryIds = reportCategoryIdsForUser(permissions, session);
   const departmentReportCategoryTabs = reportCategoryTabs.filter((category) => allowedReportCategoryIds.includes(category.id));
@@ -5097,12 +5103,19 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   ];
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
-    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: availabilityFrom, to: availabilityTo }),
+    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow }),
   ];
   const accessibleReportGroups = reportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
   const availableReportCategories = departmentReportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
   const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
   const selectedReport = activeReports.find((report) => report.title === selectedReportByCategory[activeCategory.id]) || activeReports[0] || null;
+  const invalidReportRange = Boolean(reportFrom && reportTo && !validReportDateRange(reportFrom, reportTo));
+  const selectedReportRows = invalidReportRange ? [] : (selectedReport?.rows || []).filter(row => {
+    if (selectedReport.title === "Open Off road Cases" && offRoadAge === "ten" && !olderThanTenDays(row, reportNow)) return false;
+    if (selectedReport.title === "Availability Report" || (!reportFrom && !reportTo)) return true;
+    const timestamp = indiaDateTimeEpoch(selectedReport.dateValue?.(row));
+    return Number.isFinite(timestamp) && (!reportFrom || timestamp >= indiaDateTimeEpoch(reportFrom)) && (!reportTo || timestamp <= indiaDateTimeEpoch(reportTo));
+  });
   const selectReportTab = (report) => {
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
   };
@@ -5201,13 +5214,13 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       const selectedReports = accessibleReportGroups.filter((report) => selectedZipReports.includes(report.title));
       const generatedFiles = await Promise.all(selectedReports.map(async (report) => {
         const filteredRows = report.title === "Availability Report"
-          ? buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,from:reportZipFrom.slice(0,10),to:reportZipTo.slice(0,10)}).find(item => item.title === report.title).rows
+          ? buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,from:reportZipFrom,to:reportZipTo}).find(item => item.title === report.title).rows
           : reportRowsWithinRange(report.rows, report.dateValue, reportZipFrom, reportZipTo);
         const exportRows = filteredRows.map((row) => report.columns.map((column) => exportCellText(column.value?.(row))));
         const pdfResponse = await fetch("/api/exports/pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
-          body: JSON.stringify({ title: report.title, columns: report.columns.map((column) => ({ label: column.label })), rows: exportRows }),
+          body: JSON.stringify({ title: reportPdfHeading(report.title, filteredRows), columns: report.columns.map((column) => ({ label: column.label })), rows: exportRows }),
         });
         if (!pdfResponse.ok) {
           const details = await pdfResponse.json().catch(() => ({}));
@@ -5370,9 +5383,15 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       </div>}
       {reportMasterData.loading && <p role="status">Loading report master data…</p>}
       {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
-      {selectedReport?.title === "Availability Report" && <div className="report-zip-range">
-        <label>From date<input type="date" value={availabilityFrom} max={availabilityTo} onChange={event => setAvailabilityFrom(event.target.value)} /></label>
-        <label>To date<input type="date" value={availabilityTo} min={availabilityFrom} max={indiaDateTimeInputValue(new Date()).slice(0,10)} onChange={event => setAvailabilityTo(event.target.value)} /></label>
+      {selectedReport && <div className="report-zip-range">
+        <label>From date & time<input type="datetime-local" value={reportFrom} max={reportTo || undefined} onChange={event => setReportFrom(event.target.value)} /></label>
+        <label>To date & time<input type="datetime-local" value={reportTo} min={reportFrom || undefined} onChange={event => setReportTo(event.target.value)} /></label>
+        <button type="button" className="secondary" onClick={() => {setReportFrom("");setReportTo("");}}>Clear dates</button>
+        {invalidReportRange && <span role="alert">From must be before To.</span>}
+      </div>}
+      {selectedReport?.title === "Open Off road Cases" && <div className="mobile-tabs" aria-label="Off-road age filter">
+        <button type="button" className={offRoadAge === "all" ? "active" : ""} onClick={() => setOffRoadAge("all")}>All</button>
+        <button type="button" className={offRoadAge === "ten" ? "active" : ""} onClick={() => setOffRoadAge("ten")}>10 days</button>
       </div>}
       {selectedReport && (
         <ReportSection
@@ -5381,7 +5400,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           description={selectedReport.description}
           category={selectedReport.category}
           icon={activeCategory.icon}
-          rows={selectedReport.rows}
+          rows={selectedReportRows}
           columns={selectedReport.columns}
           emptyMessage={selectedReport.emptyMessage}
           rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}

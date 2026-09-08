@@ -19,10 +19,13 @@ function columnWidths(columns,width){
 
 function drawReportHeading(doc,title,count){
   const left=doc.page.margins.left,width=doc.page.width-doc.page.margins.left-doc.page.margins.right,y=doc.y;
-  doc.roundedRect(left,y,width,50,6).fill(COLORS.navy);
-  doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(16).text(clean(title),left+13,y+12,{width:width-26,lineBreak:false});
-  doc.fillColor('#dce8ff').font('Helvetica').fontSize(8.5).text(`${count.toLocaleString('en-IN')} record${count===1?'':'s'} exported`,left+13,y+32,{width:width-26,lineBreak:false});
-  doc.y=y+61;
+  doc.font('Helvetica-Bold').fontSize(16);
+  const titleHeight=doc.heightOfString(clean(title),{width:width-26});
+  const headingHeight=Math.max(50,titleHeight+34);
+  doc.roundedRect(left,y,width,headingHeight,6).fill(COLORS.navy);
+  doc.fillColor(COLORS.white).text(clean(title),left+13,y+10,{width:width-26});
+  doc.fillColor('#dce8ff').font('Helvetica').fontSize(8.5).text(`${count.toLocaleString('en-IN')} record${count===1?'':'s'} exported`,left+13,y+titleHeight+18,{width:width-26,lineBreak:false});
+  doc.y=y+headingHeight+11;
 }
 
 function drawColumnHeader(doc,columns,widths){

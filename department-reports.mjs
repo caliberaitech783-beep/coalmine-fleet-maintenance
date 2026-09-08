@@ -1,8 +1,10 @@
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
 import {elapsedLabel} from './report-metrics.mjs';
+import {acceptanceTime, maintenanceDelay, pendingRemark, availabilityPercentage} from './report-refinements.mjs';
+import {visibleInMisRequests} from './src/mis-history.mjs';
 import {IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, buildInOutReportRows} from './in-out-report.mjs';
 
-export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Minutes Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending'];
+export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending'];
 const clean = value => String(value ?? '').trim();
 const status = row => clean(row.status).toLowerCase();
 const verified = row => Boolean(row.verifiedAt || row.verifiedBy);
@@ -24,9 +26,9 @@ function assetReferences(equipment) {
 
 // Merge overlapping incidents for each asset before totaling downtime.
 export function availabilityRows(equipment, requests, from, to, now = new Date()) {
-  const start = indiaDateTimeEpoch(from), end = indiaDateTimeEpoch(to) + 86400000;
+  const start = indiaDateTimeEpoch(from), end = indiaDateTimeEpoch(to) + (/^\d{4}-\d{2}-\d{2}$/.test(to) ? 86400000 : 0);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
-  const productive = 22 * Math.round((end - start) / 86400000);
+  const productive = 22 * ((end - start) / 86400000);
   const key = value => clean(value).toLowerCase();
   const references = assetReferences(equipment);
   const intervals = new Map();
@@ -61,17 +63,17 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
     return {...row,door:row.door || asset?.door,chassisNo:row.chassisNo || row.manufacturerSerialNo || asset?.chassisNo || asset?.manufacturerSerialNo,model:row.model || row.modelNo || asset?.model};
   });
   return [
-    report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Request opening to maintenance closure.', [...base,col('start','Rep. Started'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(r.start,r.closedAt)),site,ref], finished, r => r.closedAt),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Request opening to maintenance closure.', [...base,col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(r.start,r.closedAt)),site,ref], finished, r => r.closedAt),
     report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open and in-progress off-road requests.', [...base,col('start','Rep. Started'),col('days','BD Days',r => Number.isFinite(indiaDateTimeEpoch(r.start)) ? Math.max(0,(now.getTime()-indiaDateTimeEpoch(r.start))/86400000).toFixed(2) : 'Not recorded'),site,ref],open),
-    report('maintenance', DEPARTMENT_REPORT_TITLES[2], '22 productive hours per selected day. Downtime is clipped to the period; overlapping incidents are counted once. Negative availability flags downtime exceeding planned hours.', [...ids,col('equipmentGroup','Equipment group',r => r.group || r.equipmentGroup),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => `${r.percentage.toFixed(2)}%`)], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[2], '22 productive hours per selected day. Downtime is clipped to the period; overlapping incidents are counted once. Negative availability flags downtime exceeding planned hours.', [...ids,col('equipmentGroup','Equipment group',r => r.group || r.equipmentGroup),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => availabilityPercentage(r.percentage))], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
     report('mis', DEPARTMENT_REPORT_TITLES[3], 'First trip more than 30 minutes after maintenance closure.', [...base,closed,col('firstTrip','First Trip Made',firstTrip),col('difference','Difference',r => duration(r.closedAt,firstTrip(r))),col('verifiedBy','MIS user'),col('driverName','Driver Name'),site,ref],finished.filter(r => indiaDateTimeEpoch(firstTrip(r))-indiaDateTimeEpoch(r.closedAt)>1800000), firstTrip),
-    report('mis', DEPARTMENT_REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification.', [...base,closed,site,ref],finished.filter(r => !verified(r)),r => r.closedAt),
+    report('mis', DEPARTMENT_REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification.', [...base,closed,site,ref],requests.filter(r => status(r)==='closed' && !r.verifiedAt).filter(visibleInMisRequests),r => r.closedAt),
     report('mis', DEPARTMENT_REPORT_TITLES[5], 'Maintenance closure to MIS verification.', [...base,closed,col('verifiedAt','MIS verified at'),col('firstTripAt','First trip time',firstTrip),col('difference','Difference',r => duration(r.closedAt,r.verifiedAt)),col('verifiedBy','MIS user'),site,ref],finished.filter(r => r.verifiedAt),r => r.verifiedAt),
     report('mis', DEPARTMENT_REPORT_TITLES[6], 'Transfer history. Chassis number appears once.', [...ids,col('equipment','Equipment / vehicle',r => r.equipment || r.equipmentName),col('model','Model',r => r.model || r.modelNo),col('source','From location'),col('destination','To location'),col('transferNo','Transfer no.'),col('transferDate','Transfer date')],transferRecords,r => r.transferDate),
     report('mis', DEPARTMENT_REPORT_TITLES[7], 'Current equipment and vehicle master records.', [...ids,col('equipmentName','Equipment / vehicle'),col('model','Model'),col('make','Make'),col('itemSpecification','Item specification name'),site],equipmentRecords,() => now.toISOString()),
     report('mis', DEPARTMENT_REPORT_TITLES[8], IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_COLUMNS,buildInOutReportRows(requests,{today:now}),r => r.date),
-    report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...base,col('status','Status'),ref],requests),
-    report('production', DEPARTMENT_REPORT_TITLES[10], 'Creation to first In progress transition. Historical acceptance times are not inferred.', [...base,col('status','Status'),col('acceptedAt','Maintenance Acceptance Date & Time',r => r.inProgressAt || 'Not recorded'),col('difference','Difference',r => duration(r.createdAt || r.start,r.inProgressAt)),col('acceptedBy','Maintenance User Name',r => r.inProgressBy || 'Not recorded'),site,ref],requests),
-    report('production', DEPARTMENT_REPORT_TITLES[11], 'Open requests with no daily remark ever. No elapsed time is shown.', [...base,col('status','Status'),col('remark','Daily Remark',() => 'No Remark'),ref],requests.filter(r => status(r)==='open' && !r.closedAt && Array.isArray(r.dailyRemarks) && !r.dailyRemarks.some(x => clean(typeof x === 'string' ? x : x.remark)))),
+    report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...base,col('status','Status'),ref,site],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...base,col('status','Status'),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),site,ref],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...base,col('status','Status'),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),ref],open),
   ];
 }

@@ -13,7 +13,7 @@ test('Excel structure supplies 12 live reports, excluding pending Oracle utiliza
   assert.equal(reports.filter(r=>r.category==='production').length,3);
   assert.equal(reports.find(r=>r.title==='Vehicle Transfer Report').columns.filter(c=>/chassis/i.test(c.label)).length,1);
 });
-test('pending means Open and no remark ever, no duration column, and missing remark data is not treated as empty',()=>{
+test('pending includes all open and in-progress requests regardless of remarks',()=>{
   const report=build([
     {ref:'yes',status:'Open',dailyRemarks:[]},
     {ref:'old',status:'Open',dailyRemarks:[{remark:'Old remark',createdAt:'2025-01-01'}]},
@@ -21,18 +21,18 @@ test('pending means Open and no remark ever, no duration column, and missing rem
     {ref:'progress',status:'In progress',dailyRemarks:[]},
     {ref:'unknown',status:'Open'},
   ]).find(r=>r.title==='Maintenance Status Pending');
-  assert.deepEqual(report.rows.map(r=>r.ref),['yes']);
+  assert.deepEqual(report.rows.map(r=>r.ref),['yes','old','progress','unknown']);
   assert.equal(cell(report,'remark'),'No Remark');
   assert.ok(!report.columns.some(c=>/difference|elapsed/i.test(c.label)));
 });
 test('mismatch uses firstTripAt and strictly more than 30 minutes across all closed requests',()=>{
   const reports=build([30,31].map(minutes=>({ref:String(minutes),closedAt:'2026-09-01 12:00:00',firstTripAt:`2026-09-01 12:${minutes}:00`,status:'Closed'})));
-  assert.deepEqual(reports.find(r=>r.title==='30 Minutes Mismatch').rows.map(r=>r.ref),['31']);
+  assert.deepEqual(reports.find(r=>r.title==='30 Min. Mismatch').rows.map(r=>r.ref),['31']);
   assert.equal(reports.find(r=>r.title==='Unverified Cases').rows.length,2);
 });
 test('acceptance is not inferred from status or closure',()=>{
   const report=build([{status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-01 10:00'}]).find(r=>r.title.includes('Acceptance'));
-  assert.equal(cell(report,'acceptedAt'),'Not recorded');
+  assert.equal(cell(report,'acceptedAt'),'Not accepted');
   assert.equal(cell(report,'difference'),'Not recorded');
 });
 test('availability clips intervals to selected inclusive days and merges overlaps',()=>{
