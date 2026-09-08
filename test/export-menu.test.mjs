@@ -26,7 +26,7 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/function MobileWorkflowTable\([^\n]*exportTitle = "Workflow report"/);
   assert.match(source,/<ExportMenu title="CRM tickets report" columns=\{ticketExportColumns\} rows=\{tickets\}/);
   assert.match(server,/app\.post\('\/api\/exports\/pdf',requireSession/);
-  assert.match(server,/buildTableExportPdf\(\{title,columns,rows\}\)/);
+  assert.match(server,/buildTableExportPdf\(\{title,columns,rows,highlights\}\)/);
   assert.match(styles,/\.table-search-toolbar>\.table-parameter-filter,\.report-table-filter-toolbar>\.table-parameter-filter\{margin-left:auto\}/);
   assert.match(styles,/\.toolbar>\.table-parameter-filter\{min-width:0;padding:0;border:0;border-radius:0;margin-left:auto\}/);
 });

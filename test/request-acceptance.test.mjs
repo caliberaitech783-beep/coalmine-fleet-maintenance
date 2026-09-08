@@ -49,7 +49,29 @@ test("requests accepted more than one hour after production timing are highlight
   assert.match(client, /highlightLateAcceptance && requestAcceptedLate\(row\) \? "request-accepted-late"/);
   assert.match(client, /exportTitle=\{workspaceReportTitles\.close\} showAcceptedTime highlightLateAcceptance/);
   assert.match(client, /rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\} highlightLateAcceptance/);
-  assert.equal(client.match(/highlightLateAcceptance(?=[\s}])/g)?.length, 4);
+  assert.equal(client.match(/highlightLateAcceptance(?=[\s}])/g)?.length, 5);
   assert.match(workflowCss, /\.request-accepted-late > td \{\s*background: #f8caca !important;/);
   assert.match(workflowCss, /\.request-accepted-late > td:first-child \{\s*box-shadow: inset 4px 0 #d92f45;/);
+});
+
+test("late acceptance red rows are carried into print, PDF and Excel exports", () => {
+  const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
+  const pdfSource = readFileSync(new URL("../table-export-pdf.mjs", import.meta.url), "utf8");
+  assert.match(client, /const lateAcceptanceHighlight = highlightLateAcceptance \? requestAcceptedLate : undefined;/);
+  assert.match(client, /<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} highlightRow=\{lateAcceptanceHighlight\} \/>/);
+  assert.match(client, /<PrintButton title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} highlightRow=\{lateAcceptanceHighlight\} \/>/);
+  assert.match(client, /const highlightedRows = new Set\(rows\.flatMap\(\(row, index\) => highlightRow\?\.\(row\) \? \[index\] : \[\]\)\);/);
+  assert.match(client, /<tr\$\{highlightRow\?\.\(rows\[index\]\) \? ' class="highlight-row"' : ""\}>/);
+  assert.match(client, /tr\.highlight-row td\{background:#f8caca\}/);
+  assert.match(client, /print-color-adjust:exact/);
+  assert.match(client, /buildXlsxWorkbook\(title, columns, exportRows, highlightedRows\)/);
+  assert.match(client, /highlightedRows\.has\(rowIndex - 1\) \? ' s="1"' : ""/);
+  assert.match(client, /<fgColor rgb="FFF8CACA"\/>/);
+  assert.match(client, /xl\/styles\.xml/);
+  assert.match(client, /rows: exportRows, highlights: \[\.\.\.highlightedRows\]/);
+  assert.match(server, /const highlights=\(Array\.isArray\(req\.body\?\.highlights\)\?req\.body\.highlights:\[\]\)/);
+  assert.match(server, /buildTableExportPdf\(\{title,columns,rows,highlights\}\)/);
+  assert.match(pdfSource, /highlight:'#f8caca'/);
+  assert.match(pdfSource, /highlighted\.has\(rowIndex\)\?COLORS\.highlight:/);
 });

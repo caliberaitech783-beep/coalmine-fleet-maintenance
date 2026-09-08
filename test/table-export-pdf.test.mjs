@@ -14,3 +14,10 @@ test('table exports produce a complete downloadable PDF',async()=>{
   assert.match(source,/size:'A3',layout:'landscape'/);
   assert.doesNotMatch(source,/join\('   \|   '\)/);
 });
+
+test('highlighted rows are filled red in the exported PDF',async()=>{
+  const plain=await buildTableExportPdf({title:'Closed history',columns:[{label:'Job reference'}],rows:[['REQ-1'],['REQ-2']]});
+  const highlighted=await buildTableExportPdf({title:'Closed history',columns:[{label:'Job reference'}],rows:[['REQ-1'],['REQ-2']],highlights:[1]});
+  assert.doesNotMatch(plain.toString('latin1'),/0\.97\d* 0\.79\d* 0\.79\d* scn/);
+  assert.match(highlighted.toString('latin1'),/0\.97\d* 0\.79\d* 0\.79\d* scn/);
+});

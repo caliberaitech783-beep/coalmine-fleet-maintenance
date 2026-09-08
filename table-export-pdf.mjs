@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
 
-const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff'};
+const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff',highlight:'#f8caca'};
 const clean=(value,fallback='—')=>String(value??'').replace(/\s+/g,' ').trim()||fallback;
 
 function collect(doc){
@@ -52,7 +52,8 @@ function footer(doc){
   }
 }
 
-export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[]}={}){
+export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[],highlights=[]}={}){
+  const highlighted=new Set(highlights);
   const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info:{Title:clean(title),Author:'Nerve Center'}}),result=collect(doc);
   const width=doc.page.width-doc.page.margins.left-doc.page.margins.right,widths=columnWidths(columns,width),bottom=doc.page.height-doc.page.margins.bottom-22;
   let y=drawTablePage(doc,title,rows.length,columns,widths);
@@ -66,7 +67,7 @@ export async function buildTableExportPdf({title='Nerve Center report',columns=[
     }
     let x=doc.page.margins.left;
     columns.forEach((_,columnIndex)=>{
-      doc.rect(x,y,widths[columnIndex],height).fill(rowIndex%2===0?COLORS.white:COLORS.soft);
+      doc.rect(x,y,widths[columnIndex],height).fill(highlighted.has(rowIndex)?COLORS.highlight:rowIndex%2===0?COLORS.white:COLORS.soft);
       doc.fillColor(COLORS.navy).font('Helvetica').fontSize(6.6).text(clean(row[columnIndex]),x+4,y+4,{width:widths[columnIndex]-8,height:height-8,lineGap:1});
       doc.strokeColor(COLORS.line).lineWidth(.45).rect(x,y,widths[columnIndex],height).stroke();
       x+=widths[columnIndex];

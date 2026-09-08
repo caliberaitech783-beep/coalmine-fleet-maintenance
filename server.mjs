@@ -635,7 +635,8 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
       if(!Array.isArray(row))return columns.map(()=> '—');
       return columns.map((_,index)=>String(row[index]??'').replace(/\s+/g,' ').trim().slice(0,600));
     });
-    const pdf=await buildTableExportPdf({title,columns,rows});
+    const highlights=(Array.isArray(req.body?.highlights)?req.body.highlights:[]).map(Number).filter((index)=>Number.isInteger(index)&&index>=0&&index<rows.length);
+    const pdf=await buildTableExportPdf({title,columns,rows,highlights});
     res.set('Cache-Control','no-store');
     res.type('application/pdf');
     res.attachment(reportFilename('Report',title,new Date().toISOString().slice(0,10)));
