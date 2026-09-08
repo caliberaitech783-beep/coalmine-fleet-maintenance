@@ -41,6 +41,7 @@ test('mismatch flag uses verification minus trip without changing Difference or 
   const report=build(requests).find(r=>r.title==='30 Min. Mismatch');
   assert.deepEqual(report.rows.map(r=>r.ref),['delay','exact','missing','reverse']);
   assert.equal(cell(report,'difference'),'1h 0m');
+  assert.equal(report.columns.find(column=>column.key==='closedAt').label,'Request Closed');
   assert.deepEqual(report.rows.map(r=>cell(report,'mismatch',r)),['Delay','','','']);
 });
 
