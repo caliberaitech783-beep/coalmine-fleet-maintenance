@@ -7295,17 +7295,30 @@ function readTicketAttachment(file) {
 }
 
 function TicketCreateForm({ session, close, onCreated }) {
-  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false);
+  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const submitLock = useRef(false), formScope = useRef(0);
+  useEffect(() => {
+    formScope.current += 1;
+    submitLock.current = false;
+    setSaving(false);
+    setError("");
+    return () => { formScope.current += 1; };
+  }, [session.token]);
+  const dismiss = () => { if (!submitLock.current) close(); };
   const submit = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (submitLock.current) return;
     const form = new FormData(event.currentTarget);
     const message = String(form.get("message") || "").trim();
     const messageAudio = String(form.get("messageAudio") || "");
-    if (!message && !messageAudio) return alert("Write a message or record an audio message.");
+    if (!message && !messageAudio) return setError("Write a message or record an audio message.");
+    const scope = formScope.current;
+    submitLock.current = true;
     setSaving(true);
+    setError("");
     try {
       const attachmentData = await readTicketAttachment(attachment);
+      if (scope !== formScope.current) return;
       const response = await fetch("/api/tickets", {
         method: "POST",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
@@ -7313,19 +7326,21 @@ function TicketCreateForm({ session, close, onCreated }) {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not create the ticket.");
+      if (scope !== formScope.current) return;
       onCreated(result);
       close();
-    } catch (error) { alert(error.message); }
-    finally { setSaving(false); }
+    } catch (error) { if (scope === formScope.current) setError(error.message || "Could not create the ticket."); }
+    finally { if (scope === formScope.current) { submitLock.current = false; setSaving(false); } }
   };
-  return <Modal title="Create support ticket" close={close}>
+  return <Modal title="Create support ticket" close={dismiss}>
     <form className="form ticket-form" onSubmit={submit}>
       <div className="formgrid">
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
         <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue, or select Hindi / English and speak in that language." required={false} />
         <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
+      {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
+      <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
     </form>
   </Modal>;
 }
@@ -7353,17 +7368,30 @@ function TicketAttachment({ ticket }) {
 }
 
 function TicketResolutionForm({ ticket, session, close, onResolved }) {
-  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false);
+  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const submitLock = useRef(false), formScope = useRef(0);
+  useEffect(() => {
+    formScope.current += 1;
+    submitLock.current = false;
+    setSaving(false);
+    setError("");
+    return () => { formScope.current += 1; };
+  }, [session.token, ticket.reference]);
+  const dismiss = () => { if (!submitLock.current) close(); };
   const submit = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (submitLock.current) return;
     const form = new FormData(event.currentTarget);
     const resolutionMessage = String(form.get("resolutionMessage") || "").trim();
     const resolutionAudio = String(form.get("resolutionAudio") || "");
-    if (!resolutionMessage && !resolutionAudio) return alert("Write a resolution message or record resolution audio.");
+    if (!resolutionMessage && !resolutionAudio) return setError("Write a resolution message or record resolution audio.");
+    const scope = formScope.current;
+    submitLock.current = true;
     setSaving(true);
+    setError("");
     try {
       const resolutionAttachmentData = await readTicketAttachment(attachment);
+      if (scope !== formScope.current) return;
       const response = await fetch("/api/tickets/resolve", {
         method: "PATCH",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
@@ -7371,16 +7399,18 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not resolve the ticket.");
+      if (scope !== formScope.current) return;
       onResolved(result);
       close();
-    } catch (error) { alert(error.message); }
-    finally { setSaving(false); }
+    } catch (error) { if (scope === formScope.current) setError(error.message || "Could not resolve the ticket."); }
+    finally { if (scope === formScope.current) { submitLock.current = false; setSaving(false); } }
   };
-  return <Modal title={`Resolve ${ticket.reference}`} close={close}>
+  return <Modal title={`Resolve ${ticket.reference}`} close={dismiss}>
     <form className="form ticket-resolution-form" onSubmit={submit}>
       <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain the resolution, or select Hindi / English and speak in that language." required={false} />
       <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
+      {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
+      <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
     </form>
   </Modal>;
 }
@@ -7398,39 +7428,78 @@ function AdminLockManagement({session}){
 }
 
 function TicketPage({ session }) {
-  const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  const [ticketState, setTicketState] = useState(null), [refreshing, setRefreshing] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null), [refreshCount, setRefreshCount] = useState(0);
+  const requestSequence = useRef(0), activeLoad = useRef(null), currentScope = useRef(null);
+  currentScope.current = {token: session?.token, category};
+  const sameAccount = ticketState?.token === session?.token;
+  const sameScope = sameAccount && ticketState?.category === category;
+  const tickets = sameScope ? ticketState.records : [];
+  const error = sameScope ? ticketState.error : "";
+  const loading = refreshing || !sameScope;
+  const refresh = () => setRefreshCount((current) => current + 1);
   const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const canCreate = Boolean(session?.token);
   const ticketExportColumns = [
     { label: "Ticket ID", value: (ticket) => ticket.reference }, { label: "User", value: (ticket) => ticket.creatorName }, { label: "Site", value: (ticket) => ticket.site }, { label: "Category", value: (ticket) => ticket.category }, { label: "Priority", value: (ticket) => ticket.priority || "Medium" }, { label: "Description", value: (ticket) => ticket.message || "Audio description" }, { label: "Status", value: (ticket) => ticket.status }, { label: "Resolution", value: (ticket) => ticket.resolutionMessage || "—" },
   ];
+  useEffect(() => watchVisibleMasterRefresh(() => setRefreshCount((current) => current + 1), {win: window, doc: document}), []);
+  useEffect(() => { setCreating(false); setResolving(null); }, [session?.token]);
   useEffect(() => {
     let activeRequest = true;
     const controller = new AbortController();
-    setLoading(true);
+    const sequence = ++requestSequence.current;
+    activeLoad.current = controller;
+    setRefreshing(true);
+    setTicketState((current) => current?.token === session?.token && current?.category === category
+      ? {...current, error: ""}
+      : {token: session?.token, category, records: [], error: ""});
     fetch(`/api/tickets${category ? `?category=${encodeURIComponent(category)}` : ""}`, {
       signal: controller.signal,
+      cache: "no-store",
       headers: {Authorization: `Bearer ${session.token}`},
     })
       .then(async (response) => {
-        const result = await response.json().catch(() => ([]));
-        if (!response.ok) throw new Error(result.error || "Could not load tickets.");
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error || "Could not load tickets.");
+        if (!Array.isArray(result)) throw new Error("Could not load tickets. Please retry.");
         return result;
       })
-      .then((result) => { if (activeRequest) setTickets(result); })
-      .catch((error) => { if (activeRequest && error.name !== "AbortError") alert(error.message); })
-      .finally(() => { if (activeRequest) setLoading(false); });
+      .then((result) => { if (activeRequest && sequence === requestSequence.current) setTicketState({token: session?.token, category, records: result, error: ""}); })
+      .catch((error) => {
+        if (activeRequest && error.name !== "AbortError" && sequence === requestSequence.current) {
+          setTicketState((current) => ({...current, error: error.message || "Could not load tickets."}));
+        }
+      })
+      .finally(() => { if (activeRequest && sequence === requestSequence.current) setRefreshing(false); });
     return () => {
       activeRequest = false;
       controller.abort();
     };
-  }, [category, session?.token]);
+  }, [category, session?.token, refreshCount]);
+  const applySavedTicket = (ticket) => {
+    if (currentScope.current.token !== session?.token || currentScope.current.category !== category) return;
+    // A GET begun before this save must not undo its newer result.
+    requestSequence.current += 1;
+    activeLoad.current?.abort();
+    setTicketState((current) => {
+      const records = current?.token === session?.token && current?.category === category ? current.records : [];
+      const next = category && ticket.category !== category
+        ? records.filter((row) => row.reference !== ticket.reference)
+        : records.some((row) => row.reference === ticket.reference)
+          ? records.map((row) => row.reference === ticket.reference ? ticket : row)
+          : [ticket, ...records];
+      return {token: session?.token, category, records: next, error: ""};
+    });
+    setRefreshing(false);
+    refresh();
+  };
   return <section className="ticket-page">
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><div className="ticket-toolbar-controls"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
+    {error && <div className="hierarchy-save-error" role="alert"><span>{error}{tickets.length > 0 ? " Showing previously loaded tickets." : ""}</span><button type="button" onClick={refresh} disabled={loading}>Retry</button></div>}
     <div className="ticket-table-wrap"><ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
-    {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}
-    {resolving && <TicketResolutionForm ticket={resolving} session={session} close={() => setResolving(null)} onResolved={(result) => setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket))} />}
+    {sameAccount && canCreate && creating && <TicketCreateForm key={session.token} session={session} close={() => setCreating(false)} onCreated={applySavedTicket} />}
+    {sameAccount && resolving && <TicketResolutionForm key={`${session.token}:${resolving.reference}`} ticket={resolving} session={session} close={() => setResolving(null)} onResolved={applySavedTicket} />}
   </section>;
 }
 
