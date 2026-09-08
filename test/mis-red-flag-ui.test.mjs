@@ -6,7 +6,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {transformWithOxc} from 'vite';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-const componentSource=source.slice(source.indexOf('function MisRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('));
+const componentSource=source.slice(source.indexOf('function RequestRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('))+'\n'+source.slice(source.indexOf('function Normal('),source.indexOf('function App('));
 const {code:compiled}=await transformWithOxc(componentSource,'mis-red-flag-components.jsx',{jsx:{runtime:'classic'},target:'es2022'});
 const Null=()=>null;
 const ExportMenu=()=>null, PrintButton=()=>null;
@@ -42,10 +42,13 @@ function harness(){
     formatTwelveHourDateTime:value=>value||'—',firstTripTimestamp:row=>row.firstTripAt,
     matchesSmartSearch:()=>true,tableRowMatchesFilters:()=>true,tableFilterText:value=>String(value||''),
     sortCollator:new Intl.Collator(),useSortableRows:rows=>[rows,{},()=>{}],
-    calculateBreakdownDaysFromStart:()=>1,requestAwaitingAcceptance:()=>false,requestAcceptedLate:()=>false,elapsedLabel:()=>'',
+    calculateBreakdownDaysFromStart:()=>1,requestAwaitingAcceptance:row=>row.acceptanceRequired===true&&!row.acceptedAt,requestAcceptedLate:()=>false,elapsedLabel:()=>'',
+    window:{matchMedia:()=>({matches:false})},useMasterRecords:()=>[[],null,true],vehicles:[],MIS_VERIFICATION_MENU:'MIS verification',
+    recordsForSite:rows=>rows,requestWithEquipmentMasterDetails:row=>row,visibleInOperationalUserRequests:()=>true,
+    visibleInMisRequests:()=>true,visibleInMisHistory:()=>true,visibleInProductionHistory:()=>true,visibleInMaintenanceHistory:()=>true,preventTableAutoScroll:()=>{},
   };
-  for(const icon of ['Flag','Menu','Search','ListFilter','MapPin','Pencil','Trash2','CheckCircle2','MessageCircle','ShieldCheck'])scope[icon]=Null;
-  const components=new Function(...Object.keys(scope),`${compiled};return {MisRedFlagForm,MobileWorkflowTable};`)(...Object.values(scope));
+  for(const icon of ['Flag','Menu','Search','ListFilter','MapPin','Pencil','Trash2','CheckCircle2','MessageCircle','ShieldCheck','Wrench','Plus'])scope[icon]=Null;
+  const components=new Function(...Object.keys(scope),`${compiled};return {RequestRedFlagForm,MobileWorkflowTable,Normal};`)(...Object.values(scope));
   return {render(name,props){cursor=0;return components[name](props);}};
 }
 
@@ -73,7 +76,7 @@ test('verified rows retain a saved red flag view with immutable remark',async()=
   assert.equal(text(button).trim(),'View red flag');
   button.props.onClick();
   assert.equal(selected,flagged);
-  const view=harness().render('MisRedFlagForm',{request:selected,close:()=>{},onSave:()=>{saves++;}});
+  const view=harness().render('RequestRedFlagForm',{request:selected,close:()=>{},onSave:()=>{saves++;}});
   assert.equal(find(view,'textarea').props.value,flagged.misFlagRemark);
   assert.equal(find(view,'textarea').props.readOnly,true);
   assert.equal(children(view,node=>node.type==='button'&&node.props.type==='submit').length,0);
@@ -101,21 +104,21 @@ test('MIS form rejects whitespace, trims saves and prevents concurrent submissio
   const payloads=[];
   let complete;
   const props={request,close:()=>{},onSave:payload=>{payloads.push(payload);return new Promise(resolve=>{complete=resolve;});}};
-  let tree=app.render('MisRedFlagForm',props);
+  let tree=app.render('RequestRedFlagForm',props);
   find(tree,'textarea').props.onChange({target:{value:'   '}});
-  tree=app.render('MisRedFlagForm',props);
+  tree=app.render('RequestRedFlagForm',props);
   await find(tree,'form').props.onSubmit({preventDefault(){}});
-  tree=app.render('MisRedFlagForm',props);
+  tree=app.render('RequestRedFlagForm',props);
   assert.equal(payloads.length,0);
   assert.ok(children(tree,node=>node.props.role==='alert').length);
   find(tree,'textarea').props.onChange({target:{value:'  Wrong meter reading  '}});
-  tree=app.render('MisRedFlagForm',props);
+  tree=app.render('RequestRedFlagForm',props);
   const submit=find(tree,'form').props.onSubmit;
   const pending=submit({preventDefault(){}});
   await submit({preventDefault(){}});
   assert.equal(payloads.length,1);
   assert.deepEqual(payloads[0],{remark:'Wrong meter reading'});
-  tree=app.render('MisRedFlagForm',props);
+  tree=app.render('RequestRedFlagForm',props);
   assert.equal(find(tree,'textarea').props.disabled,true);
   complete();
   await pending;
@@ -125,15 +128,64 @@ test('MIS form preserves entered remark on a server error and allows retry',asyn
   const app=harness();
   let closed=0,attempts=0;
   const props={request,close:()=>{closed++;},onSave:async()=>{attempts++;throw new Error('Connection interrupted');}};
-  let tree=app.render('MisRedFlagForm',props);
+  let tree=app.render('RequestRedFlagForm',props);
   find(tree,'textarea').props.onChange({target:{value:'Keep this inspection remark'}});
-  tree=app.render('MisRedFlagForm',props);
+  tree=app.render('RequestRedFlagForm',props);
   await find(tree,'form').props.onSubmit({preventDefault(){}});
-  tree=app.render('MisRedFlagForm',props);
+  tree=app.render('RequestRedFlagForm',props);
   assert.equal(find(tree,'textarea').props.value,'Keep this inspection remark');
   assert.equal(find(tree,'textarea').props.disabled,false);
   assert.equal(text(children(tree,node=>node.props.role==='alert')[0]),'Connection interrupted');
   await find(tree,'form').props.onSubmit({preventDefault(){}});
   assert.equal(attempts,2);
   assert.equal(closed,0);
+});
+
+test('maintenance red flag opens a required remark form and saved flags show their original reason',async()=>{
+  const arrival={...request,status:'Open',acceptanceRequired:true};
+  let selected;
+  const tree=harness().render('MobileWorkflowTable',{rows:[arrival],showActions:true,onFlagArrival:row=>{selected=row;},onEdit:()=>{}});
+  const buttons=children(children(tree,node=>node.type==='tr'&&node.key===arrival.ref)[0],node=>node.type==='button');
+  assert.deepEqual(buttons.map(button=>text(button).trim()),['Red flag','Edit']);
+  buttons[0].props.onClick();
+  assert.equal(selected,arrival);
+  const app=harness(),payloads=[];
+  const props={flagKind:'arrival',request:selected,close:()=>{},onSave:payload=>payloads.push(payload)};
+  let form=app.render('RequestRedFlagForm',props);
+  assert.equal(find(form,'textarea').props.required,true);
+  await find(form,'form').props.onSubmit({preventDefault(){}});
+  assert.equal(payloads.length,0);
+  find(form,'textarea').props.onChange({target:{value:'  Waiting for recovery vehicle  '}});
+  form=app.render('RequestRedFlagForm',props);
+  await find(form,'form').props.onSubmit({preventDefault(){}});
+  assert.deepEqual(payloads,[{remark:'Waiting for recovery vehicle'}]);
+  assert.ok(text(form).includes('Vehicle Arrival Red Flag Report'));
+  for(const remark of ['Waiting for recovery vehicle','']){
+    const saved={...arrival,arrivalFlaggedAt:'2026-09-08 11:00:00',arrivalFlaggedBy:'Maintenance inspector',arrivalFlagRemark:remark};
+    const view=harness().render('RequestRedFlagForm',{...props,request:saved});
+    assert.equal(find(view,'textarea').props.value,remark||'No remark recorded');
+    assert.equal(find(view,'textarea').props.readOnly,true);
+    assert.equal(children(view,node=>node.type==='button'&&node.props.type==='submit').length,0);
+  }
+});
+
+test('workspaces open their remark dialog and no longer offer red flag report tabs',async()=>{
+  for(const role of ['Maintenance User','MIS User']){
+    const app=harness(),saves=[];
+    const row={...request,status:role==='MIS User'?'Closed':'Open',acceptanceRequired:true};
+    const props={embedded:true,requests:[row],session:{assignedRole:role,location:'Sasti OB',permissions:{verifyRequests:true,editRequests:true}},onUpdateRequest:async(...args)=>saves.push(args)};
+    let tree=app.render('Normal',props);
+    const tabs=children(tree,node=>node.props.role==='tablist')[0];
+    assert.ok(tabs);
+    assert.equal(text(tabs).includes('Red Flag Report'),false);
+    const table=children(tree,node=>node.type?.name==='MobileWorkflowTable')[0];
+    assert.ok(table);
+    (role==='MIS User'?table.props.onMisFlag:table.props.onFlagArrival)(row);
+    tree=app.render('Normal',props);
+    const dialog=children(tree,node=>node.type?.name==='RequestRedFlagForm')[0];
+    assert.equal(dialog.props.request,row);
+    assert.equal(dialog.props.flagKind||'mis',role==='MIS User'?'mis':'arrival');
+    await dialog.props.onSave({remark:'Record this reason'});
+    assert.deepEqual(saves,[[row.ref,{remark:'Record this reason'},role==='MIS User'?'mis-flag':'arrival-flag']]);
+  }
 });

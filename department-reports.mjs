@@ -4,7 +4,7 @@ import {acceptanceTime, maintenanceDelay, pendingRemark, availabilityPercentage}
 import {visibleInMisRequests} from './src/mis-history.mjs';
 import {IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, buildInOutReportRows} from './in-out-report.mjs';
 
-export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending'];
+export const DEPARTMENT_REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'Time Taken for MIS Verification', 'Vehicle Transfer Report', 'Total Fleet', 'In and Out', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report'];
 const clean = value => String(value ?? '').trim();
 const status = row => clean(row.status).toLowerCase();
 const verified = row => Boolean(row.verifiedAt || row.verifiedBy);
@@ -75,5 +75,21 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
     report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...base,col('status','Status'),ref,site],requests),
     report('production', DEPARTMENT_REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...base,col('status','Status'),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),site,ref],requests),
     report('production', DEPARTMENT_REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...base,col('status','Status'),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),ref],open),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[12], 'Vehicle arrival delays reported by maintenance, including the reason for each red flag.', [
+      ref,...base,site,col('status','Request status'),col('start','Production date and time'),
+      col('arrivalFlaggedAt','Red flag raised'),col('arrivalFlaggedBy','Flagged by'),
+      col('arrivalFlagRemark','Red flag reason',r => clean(r.arrivalFlagRemark) || 'No remark recorded'),
+      col('flagWaitingTime','Waiting when flagged',r => duration(r.start,r.arrivalFlaggedAt)),
+      col('acceptedAt','Vehicle received',r => r.acceptedAt || 'Not reached'),
+      col('arrivalDelay','Arrival delay',r => duration(r.start,r.acceptedAt || now.toISOString())),
+      col('acceptedBy','Received by',r => r.acceptedBy || 'Pending'),
+    ],requests.filter(r => r.arrivalFlaggedAt),r => r.arrivalFlaggedAt),
+    report('mis', DEPARTMENT_REPORT_TITLES[13], 'Issues raised during MIS verification, with remarks and the latest verification status.', [
+      ref,...base,site,col('misFlaggedAt','MIS red flag raised'),col('misFlaggedBy','Flagged by'),
+      col('misFlagRemark','MIS remark',r => clean(r.misFlagRemark) || 'No remark recorded'),
+      col('verificationStatus','Verification status',r => r.verifiedAt ? 'Verified' : 'Awaiting verification'),
+      col('closedAt','Maintenance Closing Time'),col('closedBy','Closed by'),
+      col('verifiedAt','MIS verified at'),col('verifiedBy','Verified by'),col('firstTripAt','First trip time',firstTrip),
+    ],requests.filter(r => r.misFlaggedAt),r => r.misFlaggedAt),
   ];
 }

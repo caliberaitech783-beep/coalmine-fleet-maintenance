@@ -7003,13 +7003,18 @@ function DailyRemarkForm({ request, close, onSave }) {
   </div></Modal>;
 }
 
-function MisRedFlagForm({ request, close, onSave }) {
-  const [remark, setRemark] = useState(request.misFlagRemark || "");
+function RequestRedFlagForm({ request, close, onSave, flagKind = "mis" }) {
+  const isArrival = flagKind === "arrival";
+  const savedRemark = (isArrival ? request.arrivalFlagRemark : request.misFlagRemark) || "";
+  const flaggedAt = isArrival ? request.arrivalFlaggedAt : request.misFlaggedAt;
+  const flaggedBy = isArrival ? request.arrivalFlaggedBy : request.misFlaggedBy;
+  const reportName = isArrival ? "Vehicle Arrival Red Flag Report" : "MIS Red Flag Report";
+  const [remark, setRemark] = useState(savedRemark);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const submitLock = useRef(false);
-  const saved = Boolean(request.misFlaggedAt);
-  return <Modal title={`MIS red flag · ${request.ref}`} close={close}>
+  const saved = Boolean(flaggedAt);
+  return <Modal title={`${isArrival ? "Vehicle arrival" : "MIS"} red flag · ${request.ref}`} close={close}>
     <form className="form mis-red-flag-form" onSubmit={async (event) => {
       event.preventDefault();
       if (saved || submitLock.current) return;
@@ -7027,8 +7032,8 @@ function MisRedFlagForm({ request, close, onSave }) {
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
       </div>
-      {saved ? <p>Flagged by <b>{request.misFlaggedBy || "MIS User"}</b> on {formatTwelveHourDateTime(request.misFlaggedAt, true)}.</p> : <p>Describe what is wrong with this entry. Your remark will be saved in the MIS Red Flag Report.</p>}
-      <label>Remark *<textarea name="remark" required maxLength={2000} value={saved ? request.misFlagRemark || "" : remark} readOnly={saved} disabled={saving} onChange={(event) => setRemark(event.target.value)} placeholder="Describe the incorrect details or issue found during verification" rows={5} /></label>
+      {saved ? <p>Flagged by <b>{flaggedBy || (isArrival ? "Maintenance User" : "MIS User")}</b> on {formatTwelveHourDateTime(flaggedAt, true)}.</p> : <p>{isArrival ? "Describe why the vehicle has not reached maintenance." : "Describe what is wrong with this entry."} Your remark will be saved in Reports → {reportName}.</p>}
+      <label>{saved ? "Remark" : "Remark *"}<textarea name="remark" required={!saved} maxLength={2000} value={saved ? savedRemark || "No remark recorded" : remark} readOnly={saved} disabled={saving} onChange={(event) => setRemark(event.target.value)} placeholder={isArrival ? "Enter the reason for the vehicle arrival delay" : "Describe the incorrect details or issue found during verification"} rows={5} /></label>
       {error && <p className="mis-red-flag-error" role="alert">{error}</p>}
       <footer><button type="button" onClick={close}>{saved ? "Close" : "Cancel"}</button>{!saved && <button type="submit" className="primary mis-red-flag-submit" disabled={saving}>{saving ? "Saving…" : "Raise red flag"} <Flag /></button>}</footer>
     </form>
@@ -7163,7 +7168,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   const verifiedCells = (row) => <>{showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}{showVerifiedAt && <><td>{formatTwelveHourDateTime(row.verifiedAt, true)}</td><td>{formatTwelveHourDateTime(firstTripTimestamp(row), true)}</td></>}</>;
   const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">
     {onFlagArrival && requestAwaitingAcceptance(row, now) && !row.arrivalFlaggedAt && <button type="button" className="arrival-red-flag" onClick={() => onFlagArrival(row)} title="Record that this vehicle has not reached maintenance"><Flag /> Red flag</button>}
-    {onFlagArrival && row.arrivalFlaggedAt && <span className="arrival-flagged" title={`Flagged ${formatTwelveHourDateTime(row.arrivalFlaggedAt)} by ${row.arrivalFlaggedBy || "Maintenance User"}`}><Flag /> Flagged</span>}
+    {onFlagArrival && row.arrivalFlaggedAt && <button type="button" className="arrival-flagged" onClick={() => onFlagArrival(row)} title={`Flagged ${formatTwelveHourDateTime(row.arrivalFlaggedAt)} by ${row.arrivalFlaggedBy || "Maintenance User"}`}><Flag /> View red flag</button>}
     {onEdit && !lockedIdeal && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
     {onDelete && !lockedIdeal && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
     {onClose && !lockedIdeal && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
@@ -7912,6 +7917,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
+  const [arrivalFlagging, setArrivalFlagging] = useState(null);
   const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardRequests,setDashboardRequests]=useState(requests);
   const permissions = session?.permissions || {};
@@ -7931,13 +7937,11 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     history: isProduction ? "Closed Production Requests" : isMaintenance ? "Closed Maintenance Requests" : "Closed MIS Requests",
     idle: "Idle Vehicles",
     close: "Maintenance Close Request Form",
-    redFlags: "Vehicle Arrival Red Flag Report",
-    misRedFlags: "MIS Red Flag Report",
   };
   const canCreate = isProduction || isMaintenance;
   const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets");
   useEffect(()=>{
-    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"||tab==="redFlags"?canSeeRequestMenu("View requests"):tab==="misRedFlags"?isMis&&(canSeeRequestMenu("View requests")||canSeeRequestMenu(MIS_VERIFICATION_MENU)):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
+    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
     if(allowed)return;
     if(showRequestsMenu&&canSeeRequestMenu("View requests"))setTab("requests");
     else if(showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU))setTab("verify");
@@ -7972,11 +7976,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
   const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); };
   const saveMisFlag = async (payload) => { await onUpdateRequest(misFlagging.ref, payload, "mis-flag"); setMisFlagging(null); };
-  const flagArrival = async (row) => {
-    if (!window.confirm(`Red flag ${row.door || row.ref} as not yet received by maintenance?`)) return;
-    try { await onUpdateRequest(row.ref, {}, "arrival-flag"); }
-    catch (error) { alert(error.message); }
-  };
+  const saveArrivalFlag = async (payload) => { await onUpdateRequest(arrivalFlagging.ref, payload, "arrival-flag"); setArrivalFlagging(null); };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):requests;
   const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)).filter(visibleInOperationalUserRequests);
@@ -7985,34 +7985,28 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt).filter(visibleInMisRequests) : activeRequests;
   const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)).filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="idle");
-  const redFlagRows=requestRows.filter((row)=>Boolean(row.arrivalFlaggedAt));
-  const misRedFlagRows=requestRows.filter((row)=>Boolean(row.misFlaggedAt));
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} />}
-      {!embedded&&section==="reports"&&<ReportsPage requests={dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
+      {!embedded&&section==="reports"&&<ReportsPage requests={isMaintenance || isMis ? requests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
-        {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("View requests")&&<button className={tab === "redFlags" ? "active red-flag-tab" : "red-flag-tab"} onClick={() => setTab("redFlags")}><Flag /> Red Flag Report{redFlagRows.length ? ` (${redFlagRows.length})` : ""}</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU)&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>MIS verification</button>}
-        {showRequestsMenu&&isMis&&(canSeeRequestMenu("View requests")||canSeeRequestMenu(MIS_VERIFICATION_MENU))&&<button className={tab === "misRedFlags" ? "active red-flag-tab" : "red-flag-tab"} onClick={() => setTab("misRedFlags")}><Flag /> MIS Red Flag Report{misRedFlagRows.length ? ` (${misRedFlagRows.length})` : ""}</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
       </div>
       </div>
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests ? flagArrival : null} onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "redFlags" && <><h3 className="sectiontitle">{workspaceReportTitles.redFlags}</h3><section className="panel"><MobileWorkflowTable rows={redFlagRows} exportTitle={workspaceReportTitles.redFlags} showArrivalFlagData highlightLateAcceptance showMakeModel showReason showCreatedBy /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests ? setArrivalFlagging : null} onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onClose={setClosing} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
-      {isMis && tab === "misRedFlags" && <><h3 className="sectiontitle">{workspaceReportTitles.misRedFlags}</h3><section className="panel"><MobileWorkflowTable rows={misRedFlagRows} exportTitle={workspaceReportTitles.misRedFlags} showMisFlagData showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance Closing Time" showVerifiedBy showVerifiedAt showMeterData showActions onMisFlag={setMisFlagging} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason={isMaintenance || isMis} showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}
       {tab === "idle" && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
@@ -8022,7 +8016,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     {editing && <RequestEditForm request={editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} close={() => setVerifying(null)} onSave={verifyRequest} />}
-    {misFlagging && <MisRedFlagForm request={requests.find((row) => row.ref === misFlagging.ref) || misFlagging} close={() => setMisFlagging(null)} onSave={saveMisFlag} />}
+    {misFlagging && <RequestRedFlagForm request={requests.find((row) => row.ref === misFlagging.ref) || misFlagging} close={() => setMisFlagging(null)} onSave={saveMisFlag} />}
+    {arrivalFlagging && <RequestRedFlagForm flagKind="arrival" request={requests.find((row) => row.ref === arrivalFlagging.ref) || arrivalFlagging} close={() => setArrivalFlagging(null)} onSave={saveArrivalFlag} />}
   </div>;
 }
 function App() {

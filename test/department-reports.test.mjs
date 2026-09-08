@@ -5,11 +5,11 @@ import {availabilityRows,buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from '
 const now = new Date('2026-09-07T12:00:00+05:30');
 const build = requests => buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-07'});
 const cell = (report,key,row=report.rows[0]) => report.columns.find(c=>c.key===key).value(row);
-test('Excel structure supplies 12 live reports, excluding pending Oracle utilization',()=>{
+test('department reports include the two red flag reports alongside existing reports',()=>{
   const reports=build([]);
   assert.deepEqual(reports.map(r=>r.title),DEPARTMENT_REPORT_TITLES);
-  assert.equal(reports.filter(r=>r.category==='maintenance').length,3);
-  assert.equal(reports.filter(r=>r.category==='mis').length,6);
+  assert.equal(reports.filter(r=>r.category==='maintenance').length,4);
+  assert.equal(reports.filter(r=>r.category==='mis').length,7);
   assert.equal(reports.filter(r=>r.category==='production').length,3);
   assert.equal(reports.find(r=>r.title==='Vehicle Transfer Report').columns.filter(c=>/chassis/i.test(c.label)).length,1);
 });
@@ -65,4 +65,28 @@ test('report master reads use current authorization and site scope without grant
   assert.match(route,/scopeDashboardEquipmentRecords\(equipment,session,user,scope\)/);
   assert.match(route,/\[row.source,row.destination\]/);
   assert.doesNotMatch(route,/UPDATE |INSERT INTO |DELETE FROM /);
+});
+
+test('arrival reports measure delay through receipt, keep remarks and filter by flag date',()=>{
+  const pending=Object.freeze({ref:'pending',start:'2026-09-07 08:00',arrivalFlaggedAt:'2026-09-07 10:00',arrivalFlaggedBy:'Maintenance inspector',arrivalFlagRemark:'Waiting for recovery'});
+  const received=Object.freeze({...pending,ref:'received',acceptedAt:'2026-09-07 11:00',acceptedBy:'Receiver'});
+  const report=build([pending,received,{ref:'not-flagged'}]).find(r=>r.title==='Vehicle Arrival Red Flag Report');
+  assert.equal(report.category,'maintenance');
+  assert.deepEqual(report.rows,[pending,received]);
+  assert.equal(cell(report,'arrivalDelay',pending),'4h 0m');
+  assert.equal(cell(report,'arrivalDelay',received),'3h 0m');
+  assert.equal(cell(report,'flagWaitingTime',pending),'2h 0m');
+  assert.equal(cell(report,'arrivalFlagRemark',pending),'Waiting for recovery');
+  assert.equal(cell(report,'acceptedAt',pending),'Not reached');
+  assert.equal(report.dateValue(pending),pending.arrivalFlaggedAt);
+});
+
+test('MIS report retains saved concerns after verification with the same reason and flag date',()=>{
+  const flagged=Object.freeze({ref:'mis-flag',misFlaggedAt:'2026-09-07 10:00',misFlaggedBy:'MIS inspector',misFlagRemark:'Incorrect reading',verifiedAt:'2026-09-07 11:00'});
+  const report=build([flagged,{ref:'not-flagged'}]).find(r=>r.title==='MIS Red Flag Report');
+  assert.equal(report.category,'mis');
+  assert.deepEqual(report.rows,[flagged]);
+  assert.equal(cell(report,'misFlagRemark'),'Incorrect reading');
+  assert.equal(cell(report,'verificationStatus'),'Verified');
+  assert.equal(report.dateValue(flagged),flagged.misFlaggedAt);
 });

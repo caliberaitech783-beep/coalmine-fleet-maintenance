@@ -21,7 +21,9 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
     equipmentRecords:[{equipmentName:'EX-1',door:'D1',category:'Equipment',status:'On road',currentLocation:'Sasti OB',make:'Komatsu'}],
     transferRecords:[{transferNo:'VT-1',equipment:'TR-1',source:'Sasti OB',destination:'Jayant OB',transferDate:'2026-09-01'}],
   });
-  assert.equal(tables.length,25);
+  assert.equal(tables.length,27);
+  assert.equal(tables.find((table)=>table.title==='Vehicle Arrival Red Flag Report').department,'Maintenance');
+  assert.equal(tables.find((table)=>table.title==='MIS Red Flag Report').department,'MIS');
   assert.equal(tables.find((table)=>table.title==='In and Out Report').department,'General');
   assert.ok(tables.some((table)=>table.department==='General'));
   assert.ok(tables.some((table)=>table.department==='Production'));

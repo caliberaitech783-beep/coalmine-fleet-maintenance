@@ -200,6 +200,7 @@ async function migrate(){
       acceptance_required BOOLEAN NOT NULL DEFAULT FALSE,
       arrival_flagged_at TIMESTAMPTZ,
       arrival_flagged_by TEXT NOT NULL DEFAULT '',
+      arrival_flag_remark TEXT NOT NULL DEFAULT '',
       mis_flagged_at TIMESTAMPTZ,
       mis_flagged_by TEXT NOT NULL DEFAULT '',
       mis_flag_remark TEXT NOT NULL DEFAULT '',
@@ -277,6 +278,7 @@ async function migrate(){
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS arrival_flagged_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS arrival_flagged_by TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS arrival_flag_remark TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS mis_flagged_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS mis_flagged_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS mis_flag_remark TEXT NOT NULL DEFAULT '';
@@ -2068,7 +2070,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
-  to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy",
+  to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy", arrival_flag_remark AS "arrivalFlagRemark",
   to_char(mis_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "misFlaggedAt", mis_flagged_by AS "misFlaggedBy", mis_flag_remark AS "misFlagRemark",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
@@ -2263,6 +2265,8 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
 app.patch('/api/requests/:reference/arrival-flag',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
+    const remark=typeof req.body?.remark==='string'?req.body.remark.trim():'';
+    if(!remark||remark.length>2000)return res.status(400).json({error:'Enter a remark explaining why the vehicle has not reached maintenance (1 to 2,000 characters).'});
     const {rows:currentRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     const current=currentRows[0];
     if(!current)return res.status(404).json({error:'This maintenance request no longer exists.'});
@@ -2274,13 +2278,13 @@ app.patch('/api/requests/:reference/arrival-flag',requireSession,requirePermissi
     }
     if(current.arrivalFlaggedAt)return res.json((await attachDailyRemarks(currentRows))[0]);
     const {rows}=await pool.query(`UPDATE maintenance_requests
-      SET arrival_flagged_at=NOW(),arrival_flagged_by=$1
-      WHERE reference=$2 AND acceptance_required=TRUE AND accepted_at IS NULL
+      SET arrival_flagged_at=NOW(),arrival_flagged_by=$1,arrival_flag_remark=$2
+      WHERE reference=$3 AND acceptance_required=TRUE AND accepted_at IS NULL
         AND status NOT IN ('Closed','Idle','Ideal') AND started_at<=NOW()-INTERVAL '1 hour'
-        AND arrival_flagged_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'Maintenance User',reference]);
+        AND arrival_flagged_at IS NULL AND site=$4
+      RETURNING ${requestProjection}`,[req.session.name||'Maintenance User',remark,reference,current.site]);
     if(!rows.length)return res.status(409).json({error:'The red flag is available only after the vehicle has remained unreceived for one hour.'});
-    req.audit={eventType:'Workflow',module:'Maintenance Requests',action:'Red flag vehicle arrival',targetType:'Maintenance request',targetReference:reference,reason:'Vehicle has not reached maintenance after one hour',changedFields:[{field:'arrivalFlaggedAt',before:'',after:rows[0].arrivalFlaggedAt},{field:'arrivalFlaggedBy',before:'',after:rows[0].arrivalFlaggedBy}]};
+    req.audit={eventType:'Workflow',module:'Maintenance Requests',action:'Red flag vehicle arrival',targetType:'Maintenance request',targetReference:reference,reason:remark,changedFields:[{field:'arrivalFlaggedAt',before:'',after:rows[0].arrivalFlaggedAt},{field:'arrivalFlaggedBy',before:'',after:rows[0].arrivalFlaggedBy},{field:'arrivalFlagRemark',before:'',after:rows[0].arrivalFlagRemark}]};
     res.json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
 });
