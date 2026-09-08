@@ -1,0 +1,30 @@
+/* Keep wide manager tables inside the page rather than expanding the grid. */
+.manager-dashboard {
+  min-width: 0;
+  max-width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+}
+.manager-dashboard > *,
+.manager-detail-panel,
+.manager-detail-panel > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.manager-detail-panel > .scroll {
+  width: 100%;
+  max-height: 65vh;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.manager-detail-panel > .scroll th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg, #f5f7fb);
+}
+.manager-dashboard .manager-table-search-toolbar {
+  flex-wrap: wrap;
+}
+.manager-dashboard .toolbar-actions-end {
+  flex-wrap: wrap;
+}

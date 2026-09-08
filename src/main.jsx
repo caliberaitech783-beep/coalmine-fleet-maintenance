@@ -140,6 +140,7 @@ import "./meta-whatsapp-setup.css";
 import "./mobile-compat.css";
 import "./maintenance-mobile-compact.css";
 import "./dashboard-record-browser.css";
+import "./manager-scroll.css";
 import { APP_VERSION } from "./app-version.js";
 
 const vehicles = [];
@@ -919,7 +920,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     : activeManagerRole === "Maintenance Manager"
       ? "Site equipment, maintenance intake, remaining workload, and completed equipment."
       : "Location-wise verified requests and first-trip status.";
-  return <section className="manager-dashboard">
+  return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
