@@ -59,8 +59,8 @@ test('screen-only operational overrides preserve print styling and do not hide c
   assert.match(compact,/\[data-mobile-open="false"\][\s\S]*?display:\s*none\s*!important/);
 });
 
-test('workspace text has a 16 pixel floor and readable controls without resizing checkbox or hidden fields',()=>{
-  for(const [name,min] of [['copy',16],['label',18]]){
+test('workspace text has a 15 pixel floor while form controls retain the 16 pixel iOS minimum',()=>{
+  for(const [name,min] of [['copy',15],['label',17]]){
     const values=[...css.matchAll(new RegExp(`--workspace-${name}:\\s*(?:clamp\\()?([\\d.]+)px`,'g'))].map(match=>Number(match[1]));
     assert.ok(values.length,`Missing ${name} size token`);
     assert.ok(values.every(value=>value>=min));
@@ -72,14 +72,22 @@ test('workspace text has a 16 pixel floor and readable controls without resizing
   assert.match(fields,/max-width:\s*100%/);
 });
 
+test('the workspace-only font adjustment is exactly one pixel below the previous readable scale',()=>{
+  assert.match(css,/--workspace-copy:\s*clamp\(15px,\s*\.3vw \+ 11px,\s*17px\)/);
+  assert.match(css,/--workspace-label:\s*clamp\(17px,\s*\.4vw \+ 11px,\s*20px\)/);
+  assert.match(rule(':is(.mobile-workspace, .pagepanel, .ticket-page, .admin-lock-page) h1'),/font-size:\s*clamp\(25px,\s*1\.3vw \+ 11px,\s*35px\) !important/);
+  assert.match(rule(':is(h2, h3, .sectiontitle)'),/font-size:\s*clamp\(20px,\s*\.6vw \+ 12px,\s*25px\) !important/);
+  assert.match(rule('.reports-page :is(.reports-kpi, .reports-event-card) strong'),/font-size:\s*clamp\(31px,\s*1\.1vw \+ 17px,\s*43px\)/);
+});
+
 test('mobile compact hero and tab caps are overridden without removing existing controls',()=>{
-  assert.match(rule('.mobile-workspace .workspace-hero h1'),/font-size:\s*clamp\(26px,[^;]*!important/);
+  assert.match(rule('.mobile-workspace .workspace-hero h1'),/font-size:\s*clamp\(25px,[^;]*!important/);
   assert.match(rule('.mobile-workspace .workspace-hero small'),/font-size:\s*var\(--workspace-copy\) !important/);
   const tabs=rule('.mobile-workspace .mobile-tabs button');
   assert.match(tabs,/font-size:\s*var\(--workspace-copy\) !important/);
   assert.match(tabs,/min-height:\s*44px !important/);
   assert.match(rule('.mobile-workspace .mobile-tabs {'),/flex-wrap:\s*wrap/);
-  assert.match(rule('.mobile-workspace .sectiontitle'),/font-size:\s*clamp\(21px,[^;]*!important/);
+  assert.match(rule('.mobile-workspace .sectiontitle'),/font-size:\s*clamp\(20px,[^;]*!important/);
   assert.match(mobile,/\.mobile-workspace \.mobile-tabs button\s*\{[^}]*flex:\s*1 1 135px/);
 });
 
