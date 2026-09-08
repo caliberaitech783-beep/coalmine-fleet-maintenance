@@ -1,6 +1,10 @@
 export const ADMIN_LOCK_TICKET_CUTOFF = "2026-08-28T00:00:00+05:30";
 export const ADMIN_LOCK_HOURS = 72;
 
+// Owner-requested temporary pause. Keep the policy and incident history intact;
+// do not resume automatically or clear saved incidents when toggling this flag.
+export const ADMIN_LOCK_POLICY_PAUSED = true;
+
 export function isTrueSuperAdmin(value = {}) {
   return String(value?.adminLevel || value || "").trim().toLowerCase().replace(/\s+/g," ") === "super admin";
 }

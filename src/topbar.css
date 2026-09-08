@@ -17,6 +17,12 @@
   padding: 0;
 }
 
+/* The colored navigation bar is 2px larger; page and dashboard text is separate. */
+.app > aside .caliber-app-name strong { font-size: 16px; }
+.app > aside .caliber-app-name small { font-size: 9px; }
+.app > aside .user b,
+.app > aside .user small { font-size: 13px; }
+
 .app > aside nav {
   min-width: 0;
   flex: 1;
@@ -49,6 +55,7 @@
   flex: 0 0 auto;
   padding: 9px 10px;
   white-space: nowrap;
+  font-size: 15px;
 }
 
 .masters-menu {
@@ -149,7 +156,7 @@
   }
 
   .app > aside .caliber-app-name strong {
-    font-size: 12px;
+    font-size: 14px;
   }
 
   .app > aside .caliber-app-name small {
@@ -163,7 +170,7 @@
   .app > aside nav button {
     gap: 5px;
     padding: 8px 6px;
-    font-size: 11px;
+    font-size: 13px;
   }
 
   .app > aside nav > .nav-config-row > button > svg:first-child,
@@ -202,11 +209,11 @@
 }
 
 @media (min-width: 1601px) {
-  .app > aside .caliber-app-name strong { font-size: 15px; }
+  .app > aside .caliber-app-name strong { font-size: 17px; }
   .app > aside nav > .nav-config-row > button,
-  .app > aside nav > .masters-menu > .nav-config-row > button { font-size: 13px; }
-  .app > aside .user b { font-size: 12px; }
-  .app > aside .user small { font-size: 11px; }
+  .app > aside nav > .masters-menu > .nav-config-row > button { font-size: 15px; }
+  .app > aside .user b { font-size: 14px; }
+  .app > aside .user small { font-size: 13px; }
 }
 
 /* One fluid size drives every clock instance: icon, gaps and text all derive

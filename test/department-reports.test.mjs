@@ -5,6 +5,26 @@ import {availabilityRows,buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from '
 const now = new Date('2026-09-07T12:00:00+05:30');
 const build = requests => buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-07'});
 const cell = (report,key,row=report.rows[0]) => report.columns.find(c=>c.key===key).value(row);
+
+test('general summary uses only verified requests and the approved overlapping TAT sum',()=>{
+  const row={ref:'verified',start:'2026-09-01 08:00',acceptedAt:'2026-09-01 09:00',closedAt:'2026-09-01 12:00',firstTripAt:'2026-09-01 12:30',verifiedAt:'2026-09-01 17:00'};
+  const report=build([row,{...row,ref:'unverified',verifiedAt:''}]).find(r=>r.title==='Summary Report');
+  assert.equal(report.category,'general');
+  assert.deepEqual(report.rows.map(r=>r.ref),['verified']);
+  assert.deepEqual(report.columns.map(c=>c.key),['submittedAt','overallTat','door','chassis','equipmentGroup','model','complaint','category','productionTat','maintenanceTat','misTat']);
+  assert.equal(cell(report,'submittedAt'),row.start);
+  assert.equal(report.dateValue(row),row.start);
+  assert.equal(cell(report,'productionTat'),'4.00');
+  assert.equal(cell(report,'maintenanceTat'),'3.00');
+  assert.equal(cell(report,'misTat'),'0.50');
+  assert.equal(cell(report,'overallTat'),'7.50');
+  assert.equal(cell(report,'misTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01',firstTripTime:'12:30:00'}),'0.50');
+  assert.equal(cell(report,'productionTat',{...row,start:'',createdAt:row.start}),'4.00');
+  for(const changes of [{acceptedAt:''},{closedAt:''},{firstTripAt:''},{firstTripAt:'2026-09-01 11:00'},{acceptedAt:'invalid'}]) {
+    assert.equal(cell(report,'overallTat',{...row,...changes}),'Not recorded');
+  }
+  assert.equal(cell(report,'misTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01'}),'Not recorded');
+});
 test('department reports include the two red flag reports alongside existing reports',()=>{
   const reports=build([]);
   assert.deepEqual(reports.map(r=>r.title),DEPARTMENT_REPORT_TITLES);
@@ -30,6 +50,21 @@ test('mismatch uses firstTripAt and strictly more than 30 minutes across all clo
   assert.deepEqual(reports.find(r=>r.title==='30 Min. Mismatch').rows.map(r=>r.ref),['31']);
   assert.equal(reports.find(r=>r.title==='Unverified Cases').rows.length,2);
 });
+test('mismatch flag uses verification minus trip without changing Difference or report membership',()=>{
+  const requests=[
+    {ref:'delay',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00',verifiedAt:'2026-09-01 11:31'},
+    {ref:'exact',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00',verifiedAt:'2026-09-01 11:30'},
+    {ref:'missing',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00'},
+    {ref:'reverse',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 11:00',verifiedAt:'2026-09-01 10:30'},
+    {ref:'excluded',closedAt:'2026-09-01 10:00',firstTripAt:'2026-09-01 10:20',verifiedAt:'2026-09-01 12:00'},
+  ];
+  const report=build(requests).find(r=>r.title==='30 Min. Mismatch');
+  assert.deepEqual(report.rows.map(r=>r.ref),['delay','exact','missing','reverse']);
+  assert.equal(cell(report,'difference'),'1h 0m');
+  assert.equal(report.columns.find(column=>column.key==='closedAt').label,'Request Closed');
+  assert.deepEqual(report.rows.map(r=>cell(report,'mismatch',r)),['Delay','','','']);
+});
+
 test('acceptance is not inferred from status or closure',()=>{
   const report=build([{status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-01 10:00'}]).find(r=>r.title.includes('Acceptance'));
   assert.equal(cell(report,'acceptedAt'),'Not accepted');

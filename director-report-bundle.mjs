@@ -1,7 +1,9 @@
 import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
+import {equipmentGroupValue,normalizeEquipmentGroup} from './equipment-group.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows} from './in-out-report.mjs';
 import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
+import {reportTime12} from './report-time-format.mjs';
 import {reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
 
@@ -131,7 +133,7 @@ function enrichRequests(requests=[],equipmentRecords=[]){
       reportMake:request.make||equipment.make||'',
       reportModel:request.model||equipment.model||'',
       chassis:request.chassis||equipment.chassisNo||equipment.manufacturerSerialNo||'',
-      equipmentGroup:request.equipmentGroup||equipment.group||'',
+      equipmentGroup:normalizeEquipmentGroup(request.equipmentGroup)||equipmentGroupValue(equipment),
       reportSite:request.site||equipment.currentLocation||equipment.location||'',
     };
   });
@@ -210,7 +212,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     table(DIRECTOR_REPORT_TITLES[13],'General',IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_COLUMNS,inOutRows),
     ...buildDepartmentReports({requests:reportRequests,equipmentRecords,transferRecords,now,from:`${indiaDateTimeInputValue(now).slice(0,7)}-01`,to:indiaDateTimeInputValue(now).slice(0,10)})
       .filter(report=>report.title!=='Vehicle Transfer Report')
-      .map(report=>table(report.title,report.category==='mis'?'MIS':report.category==='maintenance'?'Maintenance':'Production',report.description,report.columns,report.rows)),
+      .map(report=>table(report.title,report.category==='general'?'General':report.category==='mis'?'MIS':report.category==='maintenance'?'Maintenance':'Production',report.description,report.columns,report.rows)),
   ];
 }
 
@@ -260,6 +262,7 @@ function excelCellReference(columnIndex,rowIndex){
 }
 
 export function buildXlsxWorkbookBuffer(title,columns=[],rows=[]){
+  rows=rows.map(row=>row.map(reportTime12));
   const headings=columns.map((column)=>column.label||column.key||'Column');
   const worksheetRows=[headings,...rows];
   const sheetData=worksheetRows.map((row,rowIndex)=>`<row r="${rowIndex+1}">${row.map((value,columnIndex)=>`<c r="${excelCellReference(columnIndex,rowIndex)}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`).join('')}</row>`).join('');

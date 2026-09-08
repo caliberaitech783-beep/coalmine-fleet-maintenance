@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import {reportTime12} from './report-time-format.mjs';
 
 const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff',highlight:'#f8caca'};
 const clean=(value,fallback='—')=>String(value??'').replace(/\s+/g,' ').trim()||fallback;
@@ -56,6 +57,7 @@ function footer(doc){
 }
 
 export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[],highlights=[]}={}){
+  rows=rows.map(row=>row.map(reportTime12));
   const highlighted=new Set(highlights);
   const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info:{Title:clean(title),Author:'Nerve Center'}}),result=collect(doc);
   const width=doc.page.width-doc.page.margins.left-doc.page.margins.right,widths=columnWidths(columns,width),bottom=doc.page.height-doc.page.margins.bottom-22;

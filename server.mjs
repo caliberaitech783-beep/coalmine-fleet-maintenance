@@ -30,7 +30,7 @@ import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepare
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
-import {ADMIN_LOCK_TICKET_CUTOFF,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
+import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage} from './request-conflict.mjs';
 import {auditChangedFields,auditRouteDetails,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
@@ -698,6 +698,7 @@ function loginPayload({token,profile,employee,login}){
 }
 
 async function auditAdminLockIncidents(client=pool){
+  if(ADMIN_LOCK_POLICY_PAUSED)return;
   await client.query(`INSERT INTO admin_lock_incidents (ticket_reference,ticket_created_at)
     SELECT reference,created_at FROM crm_tickets
     WHERE created_at >= $1::timestamptz AND created_at <= NOW()-INTERVAL '72 hours'
@@ -706,6 +707,7 @@ async function auditAdminLockIncidents(client=pool){
 }
 
 async function activeAdminLockIncidents(client=pool){
+  if(ADMIN_LOCK_POLICY_PAUSED)return [];
   await auditAdminLockIncidents(client);
   const {rows}=await client.query(`SELECT ticket_reference AS "ticketReference",ticket_created_at AS "ticketCreatedAt",locked_at AS "lockedAt"
     FROM admin_lock_incidents WHERE unlocked_at IS NULL ORDER BY locked_at DESC`);
@@ -763,7 +765,7 @@ app.post('/api/login',async(req,res,next)=>{
     };
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
     if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, or MIS User in Users & employees.'});
-    if(profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
+    if(!ADMIN_LOCK_POLICY_PAUSED&&profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
       const incidents=await activeAdminLockIncidents();
       if(incidents.length)return res.status(423).json({error:`This admin account is locked because CRM ticket ${incidents[0].ticketReference} has remained open for 72 hours. Contact a Super Admin.`});
     }
@@ -964,15 +966,18 @@ app.get('/api/navigation-settings',requireSuper,async(_req,res,next)=>{
 
 app.get('/api/admin-locks',requireSuper,requireTrueSuperAdmin,async(_req,res,next)=>{
   try{
+    res.set('Cache-Control','no-store');
+    if(ADMIN_LOCK_POLICY_PAUSED)return res.json({paused:true,locked:false,incidents:[],accounts:[]});
     const incidents=await activeAdminLockIncidents();
     const {rows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`);
     const accounts=rows.map(row=>({id:row.id,...publicUserRecord(row.record_data)})).filter(row=>isLockableAdmin(row));
-    res.json({locked:incidents.length>0,incidents,accounts:incidents.length?accounts:[]});
+    res.json({paused:false,locked:incidents.length>0,incidents,accounts:incidents.length?accounts:[]});
   }catch(error){next(error)}
 });
 
 app.post('/api/admin-locks/unlock',requireSuper,requireTrueSuperAdmin,async(req,res,next)=>{
   try{
+    if(ADMIN_LOCK_POLICY_PAUSED)return res.status(409).json({error:'Automatic ticket-based account locking is paused. Existing incidents are preserved and do not block login.'});
     await auditAdminLockIncidents();
     const result=await pool.query(`UPDATE admin_lock_incidents SET unlocked_at=NOW(),unlocked_by=$1 WHERE unlocked_at IS NULL`,[req.session.name||req.session.login||'Super Admin']);
     res.json({unlocked:result.rowCount});
@@ -1093,7 +1098,7 @@ app.get('/api/health',async(_req,res)=>{
     const result=await pool.query('SELECT NOW() AS database_time');
     databaseReady=true;
     databaseError='';
-    res.json({status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled});
+    res.json({status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled,crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED});
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database connection failed.';

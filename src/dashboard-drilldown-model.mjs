@@ -1,6 +1,7 @@
 import { recordBelongsToSite } from "../site-location.mjs";
+import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
 
-export const equipmentGroupLabel = (record = {}) => String(record.group || record.equipmentGroup || record.itemName || record.category || "Unclassified").trim() || "Unclassified";
+export const equipmentGroupLabel = (record = {}) => equipmentGroupValue(record, normalizeEquipmentGroup(record.itemName || record.category) || "Unclassified");
 export const equipmentCategoryLabel = (record = {}) => ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())
   ? "Total vehicles"
   : ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()) ? "Total equipment" : "Unclassified";

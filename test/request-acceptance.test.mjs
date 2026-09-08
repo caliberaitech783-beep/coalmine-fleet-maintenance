@@ -41,7 +41,7 @@ test("Maintenance acceptance is server timed and shared by every request view", 
   assert.match(client, /request\.acceptanceRequired \? "Production timing" : "Timing"/);
   assert.match(client, /request\.acceptanceRequired && <label>Acceptance timing/);
   assert.match(client, /request\.acceptanceRequired \? "Accept vehicle" : "Save changes"/);
-  assert.match(client, /value=\{request\.equipmentGroup \|\| request\.equipment \|\| ""\} readOnly/);
+  assert.match(client, /value=\{normalizeEquipmentGroup\(request\.equipmentGroup\) \|\| request\.equipment \|\| ""\} readOnly/);
   for (const field of ["door", "chassis", "site"]) assert.match(client, new RegExp(`value=\\{request\\.${field}[^>]+readOnly`));
   assert.doesNotMatch(editForm, /name="(?:equipment|door|chassis|site)"/);
   assert.match(client, /!row\.acceptanceRequired \|\| row\.acceptedAt/);

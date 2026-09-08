@@ -8,6 +8,7 @@ import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdow
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
+import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
@@ -24,6 +25,7 @@ import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
 import { buildDepartmentReports } from "../department-reports.mjs";
+import { reportTime12 } from "../report-time-format.mjs";
 import { olderThanTenDays, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
@@ -143,6 +145,7 @@ import "./mobile-compat.css";
 import "./maintenance-mobile-compact.css";
 import "./dashboard-record-browser.css";
 import "./manager-scroll.css";
+import "./workspace-readability.css";
 import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
 
@@ -883,9 +886,9 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const idle=Math.min(Math.max(0,siteEquipment.length-offRoad),idleEquipment.length);
   const fleet = {total:siteEquipment.length,offRoad,idle,onRoad:Math.max(0,siteEquipment.length-offRoad-idle)};
   const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
-  const totalTypes=typeSummary(siteEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
+  const totalTypes=typeSummary(siteEquipment,equipmentGroupLabel);
   const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
-  const idleTypes=typeSummary(idleEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
+  const idleTypes=typeSummary(idleEquipment,equipmentGroupLabel);
   const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
   const closedRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() === "closed");
   const verifiedRequests = requestRows.filter((request) => Boolean(request.verifiedAt));
@@ -1145,7 +1148,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       equipmentName: equipment?.equipmentName || request.equipment || request.door || "Unclassified equipment",
       door: equipment?.door || request.door || "",
       category: equipment?.category || request.equipmentCategory || "Unclassified",
-      group: equipment?.group || equipment?.equipmentGroup || request.equipmentGroup || request.equipment || "Unclassified",
+      group: equipmentGroupValue(equipment || {}) || normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Unclassified",
       make: equipment?.make || request.make || "",
       model: equipment?.model || request.model || "",
       currentLocation: equipment?.currentLocation || equipment?.location || request.site || "",
@@ -1456,7 +1459,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
     case "ref": return <td><b>{r.ref}</b></td>;
-    case "equipment": return <td>{r.equipmentGroup || r.equipment || "—"}</td>;
+    case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
     case "door": return <td>{r.door}</td>;
     case "make": return <td>{r.make || "—"}</td>;
     case "model": return <td>{r.model || "—"}</td>;
@@ -1515,7 +1518,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       key,
       label,
       value: (row) => {
-        if (key === "equipment") return row.equipmentGroup || row.equipment;
+        if (key === "equipment") return normalizeEquipmentGroup(row.equipmentGroup) || row.equipment;
         if (key === "createdBy") return row.owner || row.requesterLogin;
         if (key === "start") return formatTwelveHourDateTime(row.start);
         if (key === "audio") return row.complaintAudio || row.maintenanceAudio ? "Available" : "Not available";
@@ -1561,7 +1564,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <b>{r.ref}</b>
                 </td>
-                <td>{r.equipmentGroup || r.equipment || "—"}</td>
+                <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
                 <td>{r.door}</td>
                 {showMakeModel && <><td>{r.make || "—"}</td><td>{r.model || "—"}</td></>}
                 <td>
@@ -2129,7 +2132,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
   );
 }
 function exportCellText(value) {
-  return tableFilterText(value).replace(/\s+/g, " ").trim() || "—";
+  return reportTime12(tableFilterText(value).replace(/\s+/g, " ").trim()) || "—";
 }
 function exportFileName(title, extension) {
   const safeTitle = String(title || "nerve-center-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "nerve-center-report";
@@ -2593,7 +2596,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
         <tbody>
           {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" ? "report-complaint-cell" : undefined}>{column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
             </tr>
           )) : <tr><td colSpan={displayedColumns.length} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
@@ -3290,6 +3293,7 @@ function Equipment({
       ["chassisNo", "Chassis no."], ["documentStatus", "Document status"], ["status", "Fleet status"],
     ],
     equipmentValue = (record, key) => {
+      if (key === "group") return equipmentGroupValue(record);
       if (key === "currentLocation") return record.currentLocation || record.location;
       if (key === "equipmentName") return record.equipmentName || record.door;
       if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
@@ -3468,7 +3472,7 @@ function Equipment({
                   <td>
                     {v.category}
                   </td>
-                  <td>{v.group}</td>
+                  <td>{equipmentGroupValue(v)}</td>
                   <td>{v.itemName}</td>
                   <td>{v.itemSpecification}</td>
                   <td>{v.acquisitionDate || v.acquired}</td>
@@ -3523,7 +3527,7 @@ function Equipment({
               .map(([k, v]) => (
                 <div key={k}>
                   <span>{k.replace(/([A-Z])/g, " $1")}</span>
-                  <b>{v}</b>
+                  <b>{["group", "equipmentGroup"].includes(k) ? normalizeEquipmentGroup(v) : v}</b>
                 </div>
               ))}
           </div>
@@ -4978,7 +4982,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportMake: request.make || equipment?.make || "",
       reportModel: request.model || equipment?.model || "",
       chassis: request.chassis || equipment?.chassisNo || equipment?.manufacturerSerialNo || "",
-      equipmentGroup: request.equipmentGroup || equipment?.group || "",
+      equipmentGroup: normalizeEquipmentGroup(request.equipmentGroup) || equipmentGroupValue(equipment || {}),
       reportSite: request.site || equipment?.currentLocation || equipment?.location || "",
     };
   }), [requests, equipmentByReference]);
@@ -7113,7 +7117,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   const filterColumns = [
     ...(showAcceptedTime ? [{key: "acceptedTime", label: "Accepted time", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
     {key: "ref", label: "Job reference", value: (row) => row.ref},
-    {key: "equipmentGroup", label: "Equipment group", value: (row) => row.equipmentGroup || row.equipment},
+    {key: "equipmentGroup", label: "Equipment group", value: (row) => normalizeEquipmentGroup(row.equipmentGroup) || row.equipment},
     {key: "door", label: "Door no.", value: (row) => row.door},
     ...(showMakeModel ? [{key: "make", label: "Make", value: (row) => row.make}, {key: "model", label: "Model", value: (row) => row.model}] : []),
     {key: "site", label: "Site location", value: (row) => row.site},
@@ -7206,7 +7210,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
               <td><b>{row.ref}</b></td>
-              <td>{row.equipmentGroup || row.equipment || "—"}</td>
+              <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
@@ -7251,7 +7255,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
     }}>
       <div className="formgrid">
-        <label>Equipment group<input value={request.equipmentGroup || request.equipment || ""} readOnly aria-readonly="true" /></label>
+        <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
         <label>
           Type of breakdown *
           <select name="category" required defaultValue={request.category || ""} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
@@ -7315,7 +7319,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
       onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
     }}>
       <div className="details request-linked-details">
-        <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
+        <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
@@ -7385,7 +7389,7 @@ function VerifyRequestForm({ request, close, onSave }) {
       }
     }}>
       <div className="details request-linked-details">
-        <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
+        <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
@@ -7527,8 +7531,8 @@ function AdminLockManagement({session}){
   const load=async()=>{setLoading(true);try{const response=await fetch('/api/admin-locks',{headers:{Authorization:`Bearer ${session.token}`}});const body=await response.json();if(!response.ok)throw new Error(body.error||'Could not load admin locks');setData(body)}catch(error){alert(error.message)}finally{setLoading(false)}};
   useEffect(()=>{load()},[session.token]);
   const unlock=async()=>{if(!window.confirm('Unlock all Admin and Non Admin Manager accounts for the current CRM lock incidents?'))return;const response=await fetch('/api/admin-locks/unlock',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}});const body=await response.json();if(!response.ok)return alert(body.error||'Could not unlock accounts');await load()};
-  return <section className="admin-lock-page"><header><div><small>SUPER ADMIN CONTROL</small><h1>Admin account locks</h1><p>CRM tickets created from 28 August 2026 that remain open for 72 hours lock every Admin and Non Admin Manager login.</p></div><ShieldCheck /></header>
-    {loading?<p>Loading lock status…</p>:<><div className={`admin-lock-status ${data.locked?'locked':'clear'}`}><div><b>{data.locked?'Admin logins are locked':'Admin logins are available'}</b><span>{data.locked?`${data.incidents.length} overdue CRM ticket incident${data.incidents.length===1?'':'s'} active`:'No active 72-hour CRM lock incident'}</span></div>{data.locked&&<button className="primary" onClick={unlock}>Unlock all accounts</button>}</div>
+  return <section className="admin-lock-page"><header><div><small>SUPER ADMIN CONTROL</small><h1>Admin account locks</h1><p>{data.paused?'The 72-hour overdue-ticket account-locking rule is temporarily paused. Admin and Manager logins will not be blocked by overdue CRM tickets.':'CRM tickets created from 28 August 2026 that remain open for 72 hours lock every Admin and Non Admin Manager login.'}</p></div><ShieldCheck /></header>
+    {loading?<p>Loading lock status…</p>:<><div className={`admin-lock-status ${data.locked?'locked':'clear'}`}><div><b>{data.paused?'Automatic ticket locking is paused':data.locked?'Admin logins are locked':'Admin logins are available'}</b><span>{data.paused?'Existing lock incidents are preserved but do not block login while paused. Tickets and other account security rules are unchanged.':data.locked?`${data.incidents.length} overdue CRM ticket incident${data.incidents.length===1?'':'s'} active`:'No active 72-hour CRM lock incident'}</span></div>{data.locked&&!data.paused&&<button className="primary" onClick={unlock}>Unlock all accounts</button>}</div>
     {data.locked&&<><h2>Triggering CRM tickets</h2><div className="emptytable"><ActionsTable><thead><tr><th>Ticket reference</th><th>Ticket created</th><th>Locked at</th></tr></thead><tbody>{data.incidents.map(row=><tr key={row.ticketReference}><td><b>{row.ticketReference}</b></td><td>{formatTwelveHourDateTime(row.ticketCreatedAt)}</td><td>{formatTwelveHourDateTime(row.lockedAt)}</td></tr>)}</tbody></ActionsTable></div><h2>Locked accounts</h2><div className="emptytable"><ActionsTable><thead><tr><th>Login</th><th>Employee</th><th>Authority</th></tr></thead><tbody>{data.accounts.map(row=><tr key={row.id}><td><b>{row.login}</b></td><td>{row.employee||'—'}</td><td>{row.adminLevel==='Manager'?'Non Admin Manager':row.adminLevel}</td></tr>)}</tbody></ActionsTable></div></>}</>}
   </section>;
 }
@@ -7729,11 +7733,11 @@ function NotificationRequestEntry({ reference, request = {} }) {
   const meterType = request.meterType || "KMR/HMR";
   return <div className="notification-entry-record">
     <div className="notification-entry-hero">
-      <div><span>Maintenance request</span><h2>{reference}</h2><p>{request.equipmentGroup || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
+      <div><span>Maintenance request</span><h2>{reference}</h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
       <Status>{request.status || "Open"}</Status>
     </div>
     <dl className="notification-entry-fields">
-      <NotificationEntryField label="Equipment group" value={request.equipmentGroup || request.equipment} />
+      <NotificationEntryField label="Equipment group" value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment} />
       <NotificationEntryField label="Door number" value={request.door} />
       <NotificationEntryField label="Chassis number" value={request.chassis} />
       <NotificationEntryField label="Site location" value={request.site} />
