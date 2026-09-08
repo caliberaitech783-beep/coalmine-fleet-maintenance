@@ -6,6 +6,17 @@ const now = new Date('2026-09-07T12:00:00+05:30');
 const build = requests => buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-07'});
 const cell = (report,key,row=report.rows[0]) => report.columns.find(c=>c.key===key).value(row);
 
+test('repair TAT uses maintenance acceptance, not production submission',()=>{
+  const row={start:'2026-09-08 08:00',acceptedAt:'2026-09-08 16:01:02',closedAt:'2026-09-08 16:46:00'};
+  const report=build([row]).find(r=>r.title==='Turn Around Time for Repair');
+  assert.equal(cell(report,'tat'),'44m');
+  assert.equal(cell(report,'tat',{...row,acceptedAt:'2026-09-08 15:46:00'}),'1h 0m');
+  assert.equal(cell(report,'tat',{...row,acceptedAt:row.closedAt}),'0m');
+  for(const acceptedAt of ['', 'invalid', '2026-09-08 17:00']) {
+    assert.equal(cell(report,'tat',{...row,acceptedAt}),'Not recorded');
+  }
+});
+
 test('general summary uses only verified requests and the approved overlapping TAT sum',()=>{
   const row={ref:'verified',start:'2026-09-01 08:00',acceptedAt:'2026-09-01 09:00',closedAt:'2026-09-01 12:00',firstTripAt:'2026-09-01 12:30',verifiedAt:'2026-09-01 17:00'};
   const report=build([row,{...row,ref:'unverified',verifiedAt:''}]).find(r=>r.title==='Summary Report');
