@@ -3632,7 +3632,9 @@ function EnhancedSpeechComplaint({
     recognition.current = null;
     stopAudio();
     setListening(false);
-    if (required) setText((current) => current.trim() ? current : "Details recorded in the attached audio.");
+    if (required) setText((current) => current.trim() ? current : lang === "hi-IN"
+      ? "विवरण संलग्न ऑडियो में रिकॉर्ड किया गया है।"
+      : "Details recorded in the attached audio.");
     setNote(message);
   };
   const stop = () => {
@@ -3757,7 +3759,10 @@ function EnhancedSpeechComplaint({
       clearTimers();
       stopAudio();
       setListening(false);
-      if (!final.trim()) return;
+      if (!final.trim()) {
+        setNote("No clear speech was detected. Review your audio, then type the text or record again.");
+        return;
+      }
       // Keep every recognized detail and the selected language, including negations.
       setText(final.trim());
       setNote(`Transcribed in ${languageName}. Review and edit the text before submitting.`);
@@ -3804,6 +3809,7 @@ function EnhancedSpeechComplaint({
       </div>
       <textarea
         name={name}
+        aria-label={label.replace(/\s*\*$/, "")}
         lang={lang}
         required={required}
         value={text}
@@ -3811,7 +3817,7 @@ function EnhancedSpeechComplaint({
         placeholder={placeholder}
       />
       <input type="hidden" name={audioName} value={audioData} />
-      {audioData && <audio className="request-audio-preview" controls src={audioData}>Recorded complaint</audio>}
+      {audioData && <audio className="request-audio-preview" controls src={audioData} aria-label={`${label.replace(/\s*\*$/, "")} audio`}>Recorded audio</audio>}
       <small className={listening ? "voice-note live" : "voice-note"}>
         {note ||
           "Choose Hindi or English and speak in that language. The text stays in your selected language; your audio is also saved."}
@@ -7060,7 +7066,10 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
 function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
-  const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date), [ideal,setIdeal]=useState(false), [idleReason,setIdleReason]=useState(""), [status,setStatus]=useState(request.status === "Closed" ? "Closed" : "In progress");
+  const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date),
+    [ideal,setIdeal]=useState(() => ["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase())),
+    [idleReason,setIdleReason]=useState(() => String(request.idleReason || "").trim()),
+    [status,setStatus]=useState(request.status === "Closed" ? "Closed" : "In progress");
   const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
   const [delayedReason, setDelayedReason] = useState("");
   const [customDelayedReason, setCustomDelayedReason] = useState("");
@@ -7077,6 +7086,10 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={close}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
+      if (ideal && !["No driver", "No work"].includes(idleReason)) {
+        alert("Choose an Idle reason: No driver or No work.");
+        return;
+      }
       const form = new FormData(event.currentTarget);
       let openingMeterFile = "";
       if (legacyOpeningMeterFile) {
@@ -7105,14 +7118,37 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
         <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Idle</option>}</select></label>
-<fieldset className="ideal-choice"><legend>Idle? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>{setIdeal(false);setIdleReason("")}} /> No</label>{ideal&&<><label>Idle reason *<select name="idleReason" required value={idleReason} onChange={(event)=>setIdleReason(event.target.value)}><option value="">Select idle reason</option><option>No driver</option><option>No work</option></select></label><small>The request will remain Idle until an assigned manager approves Make on road.</small></>}</fieldset>
+        <fieldset className="ideal-choice full">
+          <legend>Idle? <small>Optional</small></legend>
+          <div className="idle-options">
+            <label className={`idle-option${ideal ? " selected" : ""}`}>
+              <input type="radio" name="idealChoice" value="yes" checked={ideal} onChange={()=>setIdeal(true)} />
+              <span>Yes</span>
+            </label>
+            <label className={`idle-option${!ideal ? " selected" : ""}`}>
+              <input type="radio" name="idealChoice" value="no" checked={!ideal} onChange={()=>setIdeal(false)} />
+              <span>No</span>
+            </label>
+          </div>
+          {ideal && <>
+            <label className="idle-reason-field">Idle reason *
+              <select name="idleReason" required value={idleReason} aria-describedby="maintenance-idle-summary" onChange={(event)=>setIdleReason(event.target.value)}>
+                <option value="">Select idle reason</option><option>No driver</option><option>No work</option>
+              </select>
+            </label>
+            <div id="maintenance-idle-summary" className="idle-summary" role="status">
+              {idleReason && <strong>Selected idle reason: {idleReason}</strong>}
+              <span>The request will remain Idle until an assigned manager approves Make on road.</span>
+            </div>
+          </>}
+        </fieldset>
         {delayedReasonNeeded&&<fieldset className="delayed-reason-field full"><legend>Delayed reason *</legend><p>This request is being closed at least 4 hours after ETC. Select the reason for the delay.</p><label>Reason<select name="delayedReason" required value={delayedReason} onChange={(event)=>{setDelayedReason(event.target.value);if(event.target.value!=="__custom__")setCustomDelayedReason("")}}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}<option value="__custom__">Add custom delayed reason</option></select></label>{delayedReason==="__custom__"&&<label>New delayed reason *<input name="customDelayedReason" required maxLength="160" value={customDelayedReason} onChange={(event)=>setCustomDelayedReason(event.target.value)} placeholder="Enter a new delayed reason" /></label>}</fieldset>}
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
           audioName="maintenanceAudio"
           buttonLabel="Speak maintenance update"
-          placeholder="Describe the work completed, or choose Hindi/English and speak."
+          placeholder="Describe the work completed, or select Hindi / English and speak in that language."
         />
       </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save maintenance update <ChevronRight /></button></footer>
@@ -7229,7 +7265,7 @@ function TicketCreateForm({ session, close, onCreated }) {
     <form className="form ticket-form" onSubmit={submit}>
       <div className="formgrid">
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
-        <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue here or record an audio message." required={false} />
+        <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue, or select Hindi / English and speak in that language." required={false} />
         <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       </div>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
@@ -7285,7 +7321,7 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
   };
   return <Modal title={`Resolve ${ticket.reference}`} close={close}>
     <form className="form ticket-resolution-form" onSubmit={submit}>
-      <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain how this ticket was resolved or record an audio message." required={false} />
+      <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain the resolution, or select Hindi / English and speak in that language." required={false} />
       <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
     </form>

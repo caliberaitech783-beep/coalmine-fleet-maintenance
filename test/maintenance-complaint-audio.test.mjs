@@ -16,5 +16,7 @@ test("iOS can save complaint audio when browser speech transcription is unavaila
 
   assert.match(source, /if \(!Speech\) \{[\s\S]*audioOnlyMode\.current = true;[\s\S]*Recording audio… live transcription is unavailable/);
   assert.match(source, /preferredType = \["audio\/mp4", "audio\/webm;codecs=opus", "audio\/webm"\]/);
-  assert.match(source, /if \(required\) setText\(\(current\) => current\.trim\(\) \? current : "Details recorded in the attached audio\."\)/);
+  assert.match(source, /if \(required\) setText\(\(current\) => current\.trim\(\) \? current : lang === "hi-IN"/);
+  assert.match(source, /विवरण संलग्न ऑडियो में रिकॉर्ड किया गया है।/);
+  assert.match(source, /Details recorded in the attached audio\./);
 });

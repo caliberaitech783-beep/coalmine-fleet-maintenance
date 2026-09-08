@@ -12,6 +12,8 @@ const formSource = source.slice(formStart, source.indexOf('\n}\n', formStart) + 
 const speechSource = source.slice(source.indexOf('const speechLanguages ='), source.indexOf('function readMeterEvidence('));
 const { code: formCode } = await transformWithOxc(formSource, 'maintenance-form.jsx', { jsx: { runtime: 'classic' } });
 const { code: speechCode } = await transformWithOxc(speechSource, 'speech-complaint.jsx', { jsx: { runtime: 'classic' } });
+const closeSource = source.slice(source.indexOf('function CloseRequestForm('), source.indexOf('function VerifyRequestForm('));
+const { code: closeCode } = await transformWithOxc(closeSource, 'close-request.jsx', { jsx: { runtime: 'classic' } });
 const Null = () => null;
 const all = (tree, predicate) => {
   const result = [];
@@ -125,28 +127,45 @@ function speechHarness({ supported = true, permission } = {}) {
   return { ...app, get recognition() { return recognition; }, get microphoneRequests() { return microphoneRequests; } };
 }
 
-for (const [lang, transcript] of [
+const speechPurposes = [
+  { label: 'Reason / complaint *', name: 'complaint', audioName: 'complaintAudio' },
+  { label: 'Things done in maintenance *', name: 'maintenanceWork', audioName: 'maintenanceAudio' },
+  { label: 'Description', name: 'message', audioName: 'messageAudio', required: false },
+  { label: 'Resolution message', name: 'resolutionMessage', audioName: 'resolutionAudio', required: false },
+];
+for (const props of speechPurposes) for (const [lang, transcript] of [
   ['hi-IN', 'इंजन में तेल का रिसाव नहीं है। ब्रेक काम नहीं कर रहे हैं और टायर पंक्चर है।'],
   ['en-IN', 'The engine is not leaking. The brake is broken and the tyre is punctured.'],
-]) test(`speech retains the full ${lang} complaint and audio, including negation and multiple faults`, async () => {
+]) test(`${props.name} retains the full ${lang} speech and audio, including negation and multiple faults`, async () => {
   const app = speechHarness();
-  let tree = app.render();
+  let tree = app.render(props);
   byType(tree, 'select').props.onChange({ target: { value: lang } });
-  tree = app.render();
+  tree = app.render(props);
   await byType(tree, 'button').props.onClick();
-  tree = app.render();
+  tree = app.render(props);
   assert.equal(app.recognition.lang, lang);
   assert.equal(byType(tree, 'select').props.disabled, true);
   const result = [{ transcript }];
   result.isFinal = true;
   app.recognition.onresult({ resultIndex: 0, results: [result] });
   byType(tree, 'button').props.onClick();
-  tree = app.render();
+  tree = app.render(props);
+  assert.equal(byType(tree, 'textarea').props.name, props.name);
+  assert.equal(byType(tree, 'input').props.name, props.audioName);
   assert.equal(byType(tree, 'textarea').props.value, transcript);
   assert.equal(byType(tree, 'textarea').props.lang, lang);
   assert.equal(byType(tree, 'select').props.disabled, false);
   assert.equal(byType(tree, 'input').props.value, 'data:audio/mp4;base64,dGVzdA==');
   assert.ok(byType(tree, 'audio'));
+});
+
+test('every speech-enabled form uses the same selected-language implementation', () => {
+  assert.equal((source.match(/new Speech\(/g) || []).length, 1);
+  assert.match(source, /const SpeechComplaint = EnhancedSpeechComplaint;/);
+  for (const audioName of ['maintenanceAudio', 'messageAudio', 'resolutionAudio']) {
+    assert.match(source, new RegExp(`<EnhancedSpeechComplaint[^>]*audioName="${audioName}"`));
+  }
+  assert.doesNotMatch(speechSource, /mymemory|langpair|normalizeComplaint|clear English|simple English/);
 });
 
 test('language selection is locked while microphone permission is pending and duplicate clicks start only one recording', async () => {
@@ -174,4 +193,67 @@ test('audio-only browsers still save the recording and keep user-entered text', 
   tree = app.render();
   assert.equal(byType(tree, 'textarea').props.value, 'ब्रेक काम नहीं कर रहा है।');
   assert.ok(byType(tree, 'audio'));
+});
+
+test('Hindi audio-only fallback does not insert English into a required field', async () => {
+  const app = speechHarness({ supported: false });
+  await byType(app.render(), 'button').props.onClick();
+  byType(app.render(), 'button').props.onClick();
+  assert.equal(byType(app.render(), 'textarea').props.value, 'विवरण संलग्न ऑडियो में रिकॉर्ड किया गया है।');
+});
+
+const textContent = node => Array.isArray(node) ? node.map(textContent).join('') : React.isValidElement(node) ? textContent(node.props.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : '';
+function closeHarness(request = {}) {
+  const saved = [], alerts = [];
+  const app = harness(closeCode, 'CloseRequestForm', {
+    useMemo: fn => fn(), useMasterRecords: () => [[]], Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, ChevronRight: Null,
+    requestStartParts: () => ({ date: '2026-09-08', time: '18:00:00' }), requestMeterTypeForRequest: () => 'KMR',
+    delayedReasonRequired: () => false, normalizeEquipmentGroup: value => value,
+    TIME_24H_PATTERN: '.*', alert: value => alerts.push(value),
+    FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] || ''; } },
+  });
+  return {
+    saved, alerts,
+    render() { return app.render({ request: { ref: 'REQ-IDLE-TEST', status: 'In progress', ...request }, close() {}, onSave: value => saved.push(value) }); },
+    async submit(tree) { await byType(tree, 'form').props.onSubmit({ preventDefault() {}, currentTarget: { maintenanceWork: 'Repair completed', closingDate: '2026-09-08', closingTime: '18:00:00' } }); },
+  };
+}
+const field = (tree, name) => all(tree, node => node.props.name === name)[0];
+const idleRadio = (tree, value) => all(tree, node => node.props.name === 'idealChoice' && node.props.value === value)[0];
+
+for (const reason of ['No driver', 'No work']) test(`Idle reason ${reason} stays visible through toggles and is submitted only for Idle`, async () => {
+  const app = closeHarness();
+  let tree = app.render();
+  assert.equal(idleRadio(tree, 'no').props.checked, true);
+  idleRadio(tree, 'yes').props.onChange();
+  tree = app.render();
+  await app.submit(tree);
+  assert.equal(app.saved.length, 0);
+  assert.match(app.alerts[0], /Choose an Idle reason/);
+  field(tree, 'idleReason').props.onChange({ target: { value: reason } });
+  tree = app.render();
+  assert.equal(field(tree, 'idleReason').props.value, reason);
+  assert.ok(textContent(tree).includes(`Selected idle reason: ${reason}`));
+  assert.equal(field(tree, 'status').props.value, 'Idle');
+  await app.submit(tree);
+  assert.equal(app.saved[0].status, 'Idle');
+  assert.equal(app.saved[0].idleReason, reason);
+  idleRadio(tree, 'no').props.onChange();
+  tree = app.render();
+  assert.equal(field(tree, 'idleReason'), undefined);
+  assert.equal(field(tree, 'status').props.disabled, false);
+  await app.submit(tree);
+  assert.equal(app.saved[1].status, 'In progress');
+  assert.equal(app.saved[1].idleReason, '');
+  idleRadio(tree, 'yes').props.onChange();
+  tree = app.render();
+  assert.equal(field(tree, 'idleReason').props.value, reason);
+  assert.ok(textContent(tree).includes(`Selected idle reason: ${reason}`));
+});
+
+test('an existing Idle record initializes both its radio choice and saved reason', () => {
+  const tree = closeHarness({ status: 'Idle', idleReason: 'No work' }).render();
+  assert.equal(idleRadio(tree, 'yes').props.checked, true);
+  assert.equal(field(tree, 'idleReason').props.value, 'No work');
+  assert.ok(textContent(tree).includes('Selected idle reason: No work'));
 });
