@@ -9,6 +9,7 @@ import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mj
 import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
+import { managerRoleSelection } from "../admin-access.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const codes = {};
@@ -53,7 +54,7 @@ function harness(name, extra = {}) {
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
     useDashboardEquipment: () => ({records: equipment, loaded: true, scope: {restrictToScope: true, allowedSites: ["Sasti OB"]}}),
     visibleInProductionHistory, visibleInMaintenanceHistory, visibleInMisRequests, visibleInMisHistory,
-    recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus,
+    recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus, managerRoleSelection,
     requestWithEquipmentMasterDetails: row => row, equipmentGroupLabel: row => row.group,
     BreakdownTable, MobileWorkflowTable, DailyRemarkForm, ManagerIdleConfirmation, RequestEditForm: Null, CloseRequestForm: Null, VerifyRequestForm: Null,
     RequestRedFlagForm: Null, MaintenanceForm: Null, preventTableAutoScroll: () => {},
@@ -142,7 +143,7 @@ for (const role of ["Production User", "Maintenance User", "MIS User"]) test(`${
   assert.deepEqual(table(tree).props.rows, [verified]);
 });
 
-for (const role of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) test(`${role}: Idle actions are scoped, cancel is connected, and fleet counts agree`, () => {
+for (const role of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) test(`${role}: Idle actions are scoped, cancel matches server authority, and fleet counts agree`, () => {
   const app = harness("ManagerDashboard");
   const onApproveIdeal = () => {}, onCancelIdeal = () => {};
   const props = {managerRole: role, requests: [idle, {...accepted, ref: "REQ-OFF", door: "V2", chassis: "C2"}, {...idle, ref: "REQ-OTHER-SITE", site: "Jayant OB"}], onApproveIdeal, onCancelIdeal};
@@ -156,6 +157,10 @@ for (const role of ["Project Manager", "Production Manager", "Maintenance Manage
   tree = app.render(props);
   assert.deepEqual(table(tree).props.rows, [idle]);
   for (const [callback, action, confirm] of [["onApproveIdeal", "approve", onApproveIdeal], ["onCancelIdeal", "cancel", onCancelIdeal]]) {
+    if (action === "cancel" && role !== "Maintenance Manager") {
+      assert.equal(table(tree).props[callback], null, "non-maintenance managers must not receive a cancel action");
+      continue;
+    }
     table(tree).props[callback](idle);
     tree = app.render(props);
     const dialog = all(tree, node => node.type === ManagerIdleConfirmation)[0];
@@ -170,6 +175,27 @@ for (const role of ["Project Manager", "Production Manager", "Maintenance Manage
   tree = app.render({...props, requests: [verified]});
   assert.deepEqual(table(tree).props.rows, [verified]);
   assert.equal(table(tree).props.onCancelIdeal, null);
+});
+
+test("Cancel idle honors assigned multi-role membership and cannot be enabled by an unassigned active role", () => {
+  for (const [managerRoles, allowed] of [
+    [["Production Manager", "Maintenance Manager"], true],
+    [["Project Manager", "MIS Manager"], false],
+    [["Maintenance Manager"], true],
+  ]) {
+    const app = harness("ManagerDashboard");
+    const props = {managerRole: "Maintenance Manager", managerRoles, requests: [idle], onApproveIdeal() {}, onCancelIdeal() {}};
+    let tree = app.render(props);
+    button(tree, "Idle approvals (1)").props.onClick();
+    tree = app.render(props);
+    assert.equal(typeof table(tree).props.onApproveIdeal, "function");
+    assert.equal(typeof table(tree).props.onCancelIdeal === "function", allowed);
+    if (managerRoles.length > 1) {
+      button(tree, managerRoles[1]).props.onClick(); tree = app.render(props);
+      button(tree, "Idle approvals (1)").props.onClick(); tree = app.render(props);
+      assert.equal(typeof table(tree).props.onCancelIdeal === "function", allowed);
+    }
+  }
 });
 
 for (const action of ["approve", "cancel"]) test(`manager ${action}: explicit confirmation preserves identity, cancel makes no API call, pending save is guarded`, async () => {
