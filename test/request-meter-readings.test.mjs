@@ -42,8 +42,9 @@ test("request edit captures opening KMR/HMR evidence but leaves closing evidence
   assert.doesNotMatch(createForm, /name="openingMeterReading"|name="openingMeterFile"|name="closingMeterReading"|name="closingMeterFile"/);
   assert.match(editForm, /name="openingMeterReading"[\s\S]*name="openingMeterFile"/);
   assert.doesNotMatch(editForm, /name="closingMeterReading"|name="closingMeterFile"/);
-  assert.match(editForm, /required=\{meterType !== "KMR" && !request\.openingMeterFileUploaded\}/);
-  assert.match(editForm, /required=\{meterType !== "KMR"\} defaultValue=\{request.openingMeterReading/);
+  assert.match(editForm, /Opening \{meterType\} reading \(optional\)/);
+  assert.match(editForm, /Opening \{meterType\} file \(optional\)/);
+  assert.doesNotMatch(editForm, /name="openingMeterReading"[^>]*required|name="openingMeterFile"[^>]*required/);
   assert.match(closeForm, /Opening \{meterType\}[\s\S]*stage="opening"[\s\S]*Closing \{meterType\}[\s\S]*stage="closing"/);
   assert.match(source, /showMeterData[\s\S]*Opening KMR\/HMR[\s\S]*Closing KMR\/HMR/);
   assert.match(source, /Opening \{request\.meterType \|\| "KMR\/HMR"\}[\s\S]*MeterFileCell/);
@@ -68,8 +69,8 @@ test("request edit validates opening evidence and does not modify closing eviden
   const editRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference'"), server.indexOf("app.patch('/api/requests/:reference/close'"));
 
   assert.match(editRoute, /validMeterReading\(normalizedOpeningMeterReading\)/);
-  assert.match(editRoute, /if\(\(normalizedMeterType!=='KMR'\|\|normalizedOpeningMeterReading\)&&!validMeterReading/);
+  assert.match(editRoute, /if\(normalizedOpeningMeterReading&&!validMeterReading/);
   assert.doesNotMatch(editRoute, /normalizedClosingMeterReading|closing_meter_reading=|closing_meter_file=/);
-  assert.match(editRoute, /if\(normalizedMeterType!=='KMR'&&!openingMeterFile&&!meterRows\[0\]\.opening_meter_file\)/);
+  assert.doesNotMatch(editRoute, /if\(normalizedMeterType!=='KMR'&&!openingMeterFile/);
   assert.match(editRoute, /opening_meter_file=CASE WHEN \$6<>'' THEN \$6 ELSE opening_meter_file END/);
 });
