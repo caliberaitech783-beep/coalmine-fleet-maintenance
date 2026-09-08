@@ -1,4 +1,5 @@
 import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
+import {equipmentGroupValue,normalizeEquipmentGroup} from './equipment-group.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows} from './in-out-report.mjs';
 import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
@@ -132,7 +133,7 @@ function enrichRequests(requests=[],equipmentRecords=[]){
       reportMake:request.make||equipment.make||'',
       reportModel:request.model||equipment.model||'',
       chassis:request.chassis||equipment.chassisNo||equipment.manufacturerSerialNo||'',
-      equipmentGroup:request.equipmentGroup||equipment.group||'',
+      equipmentGroup:normalizeEquipmentGroup(request.equipmentGroup)||equipmentGroupValue(equipment),
       reportSite:request.site||equipment.currentLocation||equipment.location||'',
     };
   });

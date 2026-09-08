@@ -1,3 +1,5 @@
+import { equipmentGroupValue } from './equipment-group.mjs';
+
 function text(value) {
   return String(value ?? "").trim();
 }
@@ -31,7 +33,7 @@ export function requestEquipmentDetails(record = {}) {
     equipment;
   return {
     equipment,
-    group: text(record.group) || text(record.equipmentGroup),
+    group: equipmentGroupValue(record),
     door,
     reg,
     chassis: text(record.chassisNo) || text(record.chassis),
@@ -103,7 +105,7 @@ export function requestEquipmentOptionLabel(record = {}) {
 // selected record still supplies door, site, and registration details through
 // requestEquipmentDetails.
 export function requestEquipmentGroupOptionLabel(record = {}) {
-  return text(record.group);
+  return equipmentGroupValue(record);
 }
 
 /**

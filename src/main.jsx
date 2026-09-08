@@ -8,6 +8,7 @@ import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdow
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
+import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
@@ -885,9 +886,9 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const idle=Math.min(Math.max(0,siteEquipment.length-offRoad),idleEquipment.length);
   const fleet = {total:siteEquipment.length,offRoad,idle,onRoad:Math.max(0,siteEquipment.length-offRoad-idle)};
   const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
-  const totalTypes=typeSummary(siteEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
+  const totalTypes=typeSummary(siteEquipment,equipmentGroupLabel);
   const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
-  const idleTypes=typeSummary(idleEquipment,(record)=>record.group||record.equipmentGroup||record.itemName||record.category);
+  const idleTypes=typeSummary(idleEquipment,equipmentGroupLabel);
   const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
   const closedRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() === "closed");
   const verifiedRequests = requestRows.filter((request) => Boolean(request.verifiedAt));
@@ -1147,7 +1148,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       equipmentName: equipment?.equipmentName || request.equipment || request.door || "Unclassified equipment",
       door: equipment?.door || request.door || "",
       category: equipment?.category || request.equipmentCategory || "Unclassified",
-      group: equipment?.group || equipment?.equipmentGroup || request.equipmentGroup || request.equipment || "Unclassified",
+      group: equipmentGroupValue(equipment || {}) || normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Unclassified",
       make: equipment?.make || request.make || "",
       model: equipment?.model || request.model || "",
       currentLocation: equipment?.currentLocation || equipment?.location || request.site || "",
@@ -1458,7 +1459,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
     case "ref": return <td><b>{r.ref}</b></td>;
-    case "equipment": return <td>{r.equipmentGroup || r.equipment || "—"}</td>;
+    case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
     case "door": return <td>{r.door}</td>;
     case "make": return <td>{r.make || "—"}</td>;
     case "model": return <td>{r.model || "—"}</td>;
@@ -1517,7 +1518,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       key,
       label,
       value: (row) => {
-        if (key === "equipment") return row.equipmentGroup || row.equipment;
+        if (key === "equipment") return normalizeEquipmentGroup(row.equipmentGroup) || row.equipment;
         if (key === "createdBy") return row.owner || row.requesterLogin;
         if (key === "start") return formatTwelveHourDateTime(row.start);
         if (key === "audio") return row.complaintAudio || row.maintenanceAudio ? "Available" : "Not available";
@@ -1563,7 +1564,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <b>{r.ref}</b>
                 </td>
-                <td>{r.equipmentGroup || r.equipment || "—"}</td>
+                <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
                 <td>{r.door}</td>
                 {showMakeModel && <><td>{r.make || "—"}</td><td>{r.model || "—"}</td></>}
                 <td>
@@ -3292,6 +3293,7 @@ function Equipment({
       ["chassisNo", "Chassis no."], ["documentStatus", "Document status"], ["status", "Fleet status"],
     ],
     equipmentValue = (record, key) => {
+      if (key === "group") return equipmentGroupValue(record);
       if (key === "currentLocation") return record.currentLocation || record.location;
       if (key === "equipmentName") return record.equipmentName || record.door;
       if (key === "acquisitionDate") return record.acquisitionDate || record.acquired;
@@ -3470,7 +3472,7 @@ function Equipment({
                   <td>
                     {v.category}
                   </td>
-                  <td>{v.group}</td>
+                  <td>{equipmentGroupValue(v)}</td>
                   <td>{v.itemName}</td>
                   <td>{v.itemSpecification}</td>
                   <td>{v.acquisitionDate || v.acquired}</td>
@@ -3525,7 +3527,7 @@ function Equipment({
               .map(([k, v]) => (
                 <div key={k}>
                   <span>{k.replace(/([A-Z])/g, " $1")}</span>
-                  <b>{v}</b>
+                  <b>{["group", "equipmentGroup"].includes(k) ? normalizeEquipmentGroup(v) : v}</b>
                 </div>
               ))}
           </div>
@@ -4980,7 +4982,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportMake: request.make || equipment?.make || "",
       reportModel: request.model || equipment?.model || "",
       chassis: request.chassis || equipment?.chassisNo || equipment?.manufacturerSerialNo || "",
-      equipmentGroup: request.equipmentGroup || equipment?.group || "",
+      equipmentGroup: normalizeEquipmentGroup(request.equipmentGroup) || equipmentGroupValue(equipment || {}),
       reportSite: request.site || equipment?.currentLocation || equipment?.location || "",
     };
   }), [requests, equipmentByReference]);
@@ -7115,7 +7117,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   const filterColumns = [
     ...(showAcceptedTime ? [{key: "acceptedTime", label: "Accepted time", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
     {key: "ref", label: "Job reference", value: (row) => row.ref},
-    {key: "equipmentGroup", label: "Equipment group", value: (row) => row.equipmentGroup || row.equipment},
+    {key: "equipmentGroup", label: "Equipment group", value: (row) => normalizeEquipmentGroup(row.equipmentGroup) || row.equipment},
     {key: "door", label: "Door no.", value: (row) => row.door},
     ...(showMakeModel ? [{key: "make", label: "Make", value: (row) => row.make}, {key: "model", label: "Model", value: (row) => row.model}] : []),
     {key: "site", label: "Site location", value: (row) => row.site},
@@ -7208,7 +7210,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
               <td><b>{row.ref}</b></td>
-              <td>{row.equipmentGroup || row.equipment || "—"}</td>
+              <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
@@ -7253,7 +7255,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
     }}>
       <div className="formgrid">
-        <label>Equipment group<input value={request.equipmentGroup || request.equipment || ""} readOnly aria-readonly="true" /></label>
+        <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
         <label>
           Type of breakdown *
           <select name="category" required defaultValue={request.category || ""} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
@@ -7317,7 +7319,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
       onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
     }}>
       <div className="details request-linked-details">
-        <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
+        <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
@@ -7387,7 +7389,7 @@ function VerifyRequestForm({ request, close, onSave }) {
       }
     }}>
       <div className="details request-linked-details">
-        <div><span>Equipment group</span><b>{request.equipmentGroup || request.equipment || "—"}</b></div>
+        <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
@@ -7731,11 +7733,11 @@ function NotificationRequestEntry({ reference, request = {} }) {
   const meterType = request.meterType || "KMR/HMR";
   return <div className="notification-entry-record">
     <div className="notification-entry-hero">
-      <div><span>Maintenance request</span><h2>{reference}</h2><p>{request.equipmentGroup || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
+      <div><span>Maintenance request</span><h2>{reference}</h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
       <Status>{request.status || "Open"}</Status>
     </div>
     <dl className="notification-entry-fields">
-      <NotificationEntryField label="Equipment group" value={request.equipmentGroup || request.equipment} />
+      <NotificationEntryField label="Equipment group" value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment} />
       <NotificationEntryField label="Door number" value={request.door} />
       <NotificationEntryField label="Chassis number" value={request.chassis} />
       <NotificationEntryField label="Site location" value={request.site} />

@@ -22,8 +22,8 @@ test("mobile request forms enforce chassis, search, duplicate blocking, and stor
   assert.match(server, /equipment_group AS "equipmentGroup"/);
   assert.match(server, /SET equipment_group=COALESCE/);
   assert.match(source, /equipmentGroup: equipmentDetails\.group \|\| equipmentGroup/);
-  assert.match(source, /row\.equipmentGroup \|\| row\.equipment/);
-  assert.match(source, /r\.equipmentGroup \|\| r\.equipment/);
+  assert.match(source, /normalizeEquipmentGroup\(row\.equipmentGroup\) \|\| row\.equipment/);
+  assert.match(source, /normalizeEquipmentGroup\(r\.equipmentGroup\) \|\| r\.equipment/);
   assert.match(server, /duplicate:true/);
   assert.match(server, /lower\(trim\(door_number\)\)/);
   assert.doesNotMatch(server, /forceDuplicate/);

@@ -5,6 +5,7 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {transformWithOxc} from 'vite';
 import * as requestAcceptance from '../request-acceptance.mjs';
+import {normalizeEquipmentGroup} from '../equipment-group.mjs';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const componentSource=source.slice(source.indexOf('function RequestRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('))+'\n'+source.slice(source.indexOf('function Normal('),source.indexOf('function App('));
@@ -46,7 +47,7 @@ function harness(){
     formatTwelveHourDateTime:value=>value||'—',firstTripTimestamp:row=>row.firstTripAt,
     matchesSmartSearch:()=>true,tableRowMatchesFilters:()=>true,tableFilterText:value=>String(value||''),
     sortCollator:new Intl.Collator(),useSortableRows:rows=>[rows,{},()=>{}],
-    calculateBreakdownDaysFromStart:()=>1,...requestAcceptance,elapsedLabel:()=>'',
+    calculateBreakdownDaysFromStart:()=>1,...requestAcceptance,normalizeEquipmentGroup,elapsedLabel:()=>'',
     RequestEditForm,DailyRemarkForm,CloseRequestForm,VerifyRequestForm,alert:()=>{},
     requestStartParts:start=>({date:String(start).slice(0,10),time:String(start).slice(11)}),
     requestMeterTypeForRequest:()=> 'HMR',indiaDateTimeInputValue:()=> '2026-09-08T10:59:00',TIME_24H_PATTERN:'.*',

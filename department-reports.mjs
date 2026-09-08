@@ -1,4 +1,5 @@
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
+import {equipmentGroupValue} from './equipment-group.mjs';
 import {elapsedLabel} from './report-metrics.mjs';
 import {acceptanceTime, maintenanceDelay, pendingRemark, availabilityPercentage} from './report-refinements.mjs';
 import {visibleInMisRequests} from './src/mis-history.mjs';
@@ -12,7 +13,7 @@ const firstTrip = row => row.firstTripAt || (row.firstTripDate ? `${row.firstTri
 const col = (key, label, value = row => row[key]) => ({key, label, value});
 const duration = (a, b) => Number.isFinite(indiaDateTimeEpoch(a)) && indiaDateTimeEpoch(b) >= indiaDateTimeEpoch(a) ? elapsedLabel(a, b) : 'Not recorded';
 const ids = [col('door', 'Door no.', r => r.reportDoor || r.door), col('chassis', 'Chassis No', r => r.chassis || r.chassisNo || r.manufacturerSerialNo)];
-const base = [...ids, col('equipmentGroup', 'Equipment group'), col('model', 'Model', r => r.reportModel || r.model), col('complaint', 'Reason/Complaint'), col('category', 'Repair category')];
+const base = [...ids, col('equipmentGroup', 'Equipment group', equipmentGroupValue), col('model', 'Model', r => r.reportModel || r.model), col('complaint', 'Reason/Complaint'), col('category', 'Repair category')];
 const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
 const ref = col('ref', 'Job Reference No');
 const closed = col('closedAt', 'Ticket Closed');
@@ -65,7 +66,7 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
   return [
     report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Request opening to maintenance closure.', [...base,col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(r.start,r.closedAt)),site,ref], finished, r => r.closedAt),
     report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open and in-progress off-road requests.', [...base,col('start','Rep. Started'),col('days','BD Days',r => Number.isFinite(indiaDateTimeEpoch(r.start)) ? Math.max(0,(now.getTime()-indiaDateTimeEpoch(r.start))/86400000).toFixed(2) : 'Not recorded'),site,ref],open),
-    report('maintenance', DEPARTMENT_REPORT_TITLES[2], '22 productive hours per selected day. Downtime is clipped to the period; overlapping incidents are counted once. Negative availability flags downtime exceeding planned hours.', [...ids,col('equipmentGroup','Equipment group',r => r.group || r.equipmentGroup),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => availabilityPercentage(r.percentage))], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[2], '22 productive hours per selected day. Downtime is clipped to the period; overlapping incidents are counted once. Negative availability flags downtime exceeding planned hours.', [...ids,col('equipmentGroup','Equipment group',equipmentGroupValue),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => availabilityPercentage(r.percentage))], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
 report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus ticket closed. Mismatch shows Delay when MIS verification is more than 30 minutes after first trip.', [...base,closed,col('firstTrip','First Trip Made',firstTrip),col('difference','Difference',r => duration(r.closedAt,firstTrip(r))),col('mismatch','Mismatch',r => indiaDateTimeEpoch(r.verifiedAt)-indiaDateTimeEpoch(firstTrip(r))>1800000 ? 'Delay' : ''),col('verifiedBy','MIS user'),col('driverName','Driver Name'),site,ref],finished.filter(r => indiaDateTimeEpoch(firstTrip(r))-indiaDateTimeEpoch(r.closedAt)>1800000), firstTrip),
     report('mis', DEPARTMENT_REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification.', [...base,closed,site,ref],requests.filter(r => status(r)==='closed' && !r.verifiedAt).filter(visibleInMisRequests),r => r.closedAt),
     report('mis', DEPARTMENT_REPORT_TITLES[5], 'Maintenance closure to MIS verification.', [...base,closed,col('verifiedAt','MIS verified at'),col('firstTripAt','First trip time',firstTrip),col('difference','Difference',r => duration(r.closedAt,r.verifiedAt)),col('verifiedBy','MIS user'),site,ref],finished.filter(r => r.verifiedAt),r => r.verifiedAt),
