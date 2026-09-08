@@ -1,6 +1,10 @@
 import {fileURLToPath} from 'node:url';
 
 const devanagariFont=fileURLToPath(new URL('./assets/fonts/NotoSansDevanagari.ttf',import.meta.url));
+// Helvetica/WinAnsi and the Hindi font lack these directional glyphs. Use
+// readable equivalents only in PDFs, before both measurement and rendering.
+const directionalFallbacks={'→':'->','←':'<-','↔':'<->','⇒':'=>','⇐':'<=','⇔':'<=>'};
+export const reportPdfText=value=>String(value??'').replace(/[→←↔⇒⇐⇔]/gu,char=>directionalFallbacks[char]);
 export const reportPdfFont=(value,bold=false)=>/[\u0900-\u097f\ua8e0-\ua8ff]/u.test(String(value??''))?'NotoDevanagari':bold?'Helvetica-Bold':'Helvetica';
 export const registerReportPdfFonts=doc=>doc.registerFont('NotoDevanagari',devanagariFont);
 

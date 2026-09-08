@@ -1,9 +1,9 @@
 import PDFDocument from 'pdfkit';
 import {reportTime12} from './report-time-format.mjs';
-import {reportPdfFont as fontFor,registerReportPdfFonts,fittingReportText as fittingCellText} from './report-pdf-text.mjs';
+import {reportPdfFont as fontFor,reportPdfText,registerReportPdfFonts,fittingReportText as fittingCellText} from './report-pdf-text.mjs';
 
 const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff',highlight:'#f8caca'};
-const clean=(value,fallback='—')=>String(value??'').replace(/\s+/g,' ').trim()||fallback;
+const clean=(value,fallback='—')=>reportPdfText(value).replace(/\s+/g,' ').trim()||fallback;
 
 function collect(doc){
   const chunks=[];

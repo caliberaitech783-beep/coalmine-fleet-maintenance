@@ -1,10 +1,10 @@
 import PDFDocument from 'pdfkit';
 import {canonicalSiteName} from './site-location.mjs';
-import {reportPdfFont,registerReportPdfFonts,fittingReportText} from './report-pdf-text.mjs';
+import {reportPdfFont,reportPdfText,registerReportPdfFonts,fittingReportText} from './report-pdf-text.mjs';
 
 const COLORS={navy:'#10284c',blue:'#2859b8',muted:'#65758b',line:'#dce4ef',red:'#c43c35',green:'#16845b',soft:'#f4f7fb'};
 const indiaDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
-const clean=(value,fallback='—')=>String(value??'').trim()||fallback;
+const clean=(value,fallback='—')=>reportPdfText(value).trim()||fallback;
 
 function collect(doc){
   const chunks=[];
@@ -20,7 +20,7 @@ function header(doc,{title,scopeLabel,start,end,openLabel,openCount,closedLabel,
   const left=doc.page.margins.left,top=doc.y;
   doc.roundedRect(left,top,width,92,8).fill(COLORS.navy);
   doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(19).text(title,left+18,top+18,{width:width-36});
-  doc.font(reportPdfFont(scopeLabel)).fontSize(9).fillColor('#dce8ff').text(`Scope: ${scopeLabel}`,left+18,top+48,{width:width-36});
+  doc.font(reportPdfFont(scopeLabel)).fontSize(9).fillColor('#dce8ff').text(`Scope: ${clean(scopeLabel)}`,left+18,top+48,{width:width-36});
   doc.font('Helvetica').text(`Window: ${indiaDateTime(start)} - ${indiaDateTime(end)}`,left+18,top+64,{width:width-36});
   const cardsY=top+108;
   const cardWidth=(width-12)/2;
