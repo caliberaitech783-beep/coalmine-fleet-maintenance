@@ -14,7 +14,7 @@ test("production, maintenance, and MIS request tables use header filter popovers
   assert.match(workflowTable, /showMakeModel && <>\{workflowHeader\("make", "Make"\)\}\{workflowHeader\("model", "Model"\)\}<\/>/);
   assert.match(workflowTable, /showMakeModel && <><td>\{row\.make \|\| "—"\}<\/td><td>\{row\.model \|\| "—"\}<\/td><\/>/);
   assert.match(source, /isProduction && tab === "requests"[\s\S]*<BreakdownTable rows=\{activeRequests\} exportTitle=\{workspaceReportTitles\.requests\} showReadOnlyAction showMakeModel/);
-  assert.match(source, /isMaintenance && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{activeRequests\} exportTitle=\{workspaceReportTitles\.requests\} showMakeModel/);
+  assert.match(source, /isMaintenance && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{activeRequests\} exportTitle=\{workspaceReportTitles\.requests\} highlightLateAcceptance showMakeModel/);
   assert.match(source, /isMaintenance && tab === "close"[\s\S]*showMakeModel/);
   assert.match(source, /isMis && tab === "requests"[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} exportTitle=\{workspaceReportTitles\.requests\} showMakeModel/);
   assert.match(source, /tab === "idle"[\s\S]*<MobileWorkflowTable rows=\{idleRows\} exportTitle=\{workspaceReportTitles\.idle\} showMakeModel/);

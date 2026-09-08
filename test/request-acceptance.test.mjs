@@ -49,7 +49,8 @@ test("requests accepted more than one hour after production timing are highlight
   assert.match(client, /highlightLateAcceptance && requestAcceptedLate\(row\) \? "request-accepted-late"/);
   assert.match(client, /exportTitle=\{workspaceReportTitles\.close\} showAcceptedTime highlightLateAcceptance/);
   assert.match(client, /rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\} highlightLateAcceptance/);
-  assert.equal(client.match(/highlightLateAcceptance(?=[\s}])/g)?.length, 6);
+  assert.match(client, /rows=\{activeRequests\} exportTitle=\{workspaceReportTitles\.requests\} highlightLateAcceptance showMakeModel/);
+  assert.equal(client.match(/highlightLateAcceptance(?=[\s}])/g)?.length, 7);
   assert.match(workflowCss, /\.request-accepted-late > td \{\s*background: #f8caca !important;/);
   assert.match(workflowCss, /\.request-accepted-late > td:first-child \{\s*box-shadow: inset 4px 0 #d92f45;/);
 });
