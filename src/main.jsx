@@ -19,7 +19,7 @@ import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { delayedReasonRequired } from "../delayed-reason.mjs";
-import { requestAcceptedLate, requestAwaitingAcceptance } from "../request-acceptance.mjs";
+import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
@@ -6928,6 +6928,7 @@ function Modal({ title, close, children, className = "" }) {
     );
     if (!dialog.contains(document.activeElement)) (preferredFocus || dialog).focus();
     const handleKeyDown = (event) => {
+      if (Array.from(document.querySelectorAll('.overlay > .modal[role="dialog"]')).at(-1) !== dialog) return;
       if (event.key === "Escape") {
         event.preventDefault();
         closeRef.current();
@@ -7013,8 +7014,9 @@ function RequestRedFlagForm({ request, close, onSave, flagKind = "mis" }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const submitLock = useRef(false);
-  const saved = Boolean(flaggedAt);
-  return <Modal title={`${isArrival ? "Vehicle arrival" : "MIS"} red flag · ${request.ref}`} close={close}>
+  const saved = isArrival ? hasArrivalRedFlagReason(request) : Boolean(flaggedAt);
+  const closeDialog = () => { if (!submitLock.current) close(); };
+  return <Modal title={`${isArrival ? "Vehicle arrival" : "MIS"} red flag · ${request.ref}`} close={closeDialog}>
     <form className="form mis-red-flag-form" onSubmit={async (event) => {
       event.preventDefault();
       if (saved || submitLock.current) return;
@@ -7032,10 +7034,11 @@ function RequestRedFlagForm({ request, close, onSave, flagKind = "mis" }) {
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
       </div>
-      {saved ? <p>Flagged by <b>{flaggedBy || (isArrival ? "Maintenance User" : "MIS User")}</b> on {formatTwelveHourDateTime(flaggedAt, true)}.</p> : <p>{isArrival ? "Describe why the vehicle has not reached maintenance." : "Describe what is wrong with this entry."} Your remark will be saved in Reports → {reportName}.</p>}
+      {flaggedAt && <p>Flagged by <b>{flaggedBy || (isArrival ? "Maintenance User" : "MIS User")}</b> on {formatTwelveHourDateTime(flaggedAt, true)}.</p>}
+      {!saved && <p>{isArrival ? request.acceptedAt ? "This vehicle was accepted late. A red flag with the reason for the arrival delay is required before you can continue." : "This vehicle has been waiting for one hour. Save a red flag with the reason for the arrival delay before accepting it or continuing maintenance updates." : "Describe what is wrong with this entry."} Your remark will be saved in Reports → {reportName}.</p>}
       <label>{saved ? "Remark" : "Remark *"}<textarea name="remark" required={!saved} maxLength={2000} value={saved ? savedRemark || "No remark recorded" : remark} readOnly={saved} disabled={saving} onChange={(event) => setRemark(event.target.value)} placeholder={isArrival ? "Enter the reason for the vehicle arrival delay" : "Describe the incorrect details or issue found during verification"} rows={5} /></label>
       {error && <p className="mis-red-flag-error" role="alert">{error}</p>}
-      <footer><button type="button" onClick={close}>{saved ? "Close" : "Cancel"}</button>{!saved && <button type="submit" className="primary mis-red-flag-submit" disabled={saving}>{saving ? "Saving…" : "Raise red flag"} <Flag /></button>}</footer>
+      <footer><button type="button" onClick={closeDialog} disabled={saving}>{saved ? "Close" : "Cancel"}</button>{!saved && <button type="submit" className="primary mis-red-flag-submit" disabled={saving}>{saving ? "Saving…" : "Raise red flag"} <Flag /></button>}</footer>
     </form>
   </Modal>;
 }
@@ -7167,8 +7170,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   const closedByCell = (row) => showClosedBy && <td>{row.closedBy || "—"}</td>;
   const verifiedCells = (row) => <>{showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}{showVerifiedAt && <><td>{formatTwelveHourDateTime(row.verifiedAt, true)}</td><td>{formatTwelveHourDateTime(firstTripTimestamp(row), true)}</td></>}</>;
   const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">
-    {onFlagArrival && requestAwaitingAcceptance(row, now) && !row.arrivalFlaggedAt && <button type="button" className="arrival-red-flag" onClick={() => onFlagArrival(row)} title="Record that this vehicle has not reached maintenance"><Flag /> Red flag</button>}
-    {onFlagArrival && row.arrivalFlaggedAt && <button type="button" className="arrival-flagged" onClick={() => onFlagArrival(row)} title={`Flagged ${formatTwelveHourDateTime(row.arrivalFlaggedAt)} by ${row.arrivalFlaggedBy || "Maintenance User"}`}><Flag /> View red flag</button>}
+    {onFlagArrival && arrivalRedFlagRequired(row, now) && <button type="button" className="arrival-red-flag" onClick={() => onFlagArrival(row)} title="Required: record the reason for the vehicle arrival delay before proceeding"><Flag /> Red flag</button>}
+    {onFlagArrival && row.arrivalFlaggedAt && !arrivalRedFlagRequired(row, now) && <button type="button" className="arrival-flagged" onClick={() => onFlagArrival(row)} title={`Flagged ${formatTwelveHourDateTime(row.arrivalFlaggedAt)} by ${row.arrivalFlaggedBy || "Maintenance User"}`}><Flag /> View red flag</button>}
     {onEdit && !lockedIdeal && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
     {onDelete && !lockedIdeal && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
     {onClose && !lockedIdeal && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
@@ -7231,7 +7234,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   );
 }
 
-function RequestEditForm({ request, equipmentRecords = [], close, onSave, repairTypeRecords = [], repairTypesLoaded = false }) {
+function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, repairTypeRecords = [], repairTypesLoaded = false }) {
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
   const acceptanceTime = request.acceptedAt || indiaDateTimeInputValue(new Date()).replace("T", " ");
@@ -7240,6 +7243,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, repair
   return <Modal title={`Edit request ${request.ref}`} close={close}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
+      if (arrivalRedFlagRequired(request)) { onRequireArrivalFlag?.(request); return; }
       const form = new FormData(event.currentTarget);
       const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
       if (openingMeterFile && !openingMeterEvidence) return;
@@ -7918,6 +7922,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
+  const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
   const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardRequests,setDashboardRequests]=useState(requests);
   const permissions = session?.permissions || {};
@@ -7972,11 +7977,45 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     return () => { active = false; };
   }, [session?.token, session?.login, session?.name, show]);
   const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
-  const saveEdit = async (payload) => { try { await onUpdateRequest(payload.ref, payload); setEditing(null); } catch (error) { alert(error.message); } };
-  const closeRequest = async (payload) => { try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); } catch (error) { alert(error.message); } };
+  const openArrivalFlag = (row, nextAction = null) => { setArrivalFlagNextAction(nextAction); setArrivalFlagging(row); };
+  const openMaintenanceAction = (row, action) => {
+    const current = requests.find((item) => item.ref === row.ref) || row;
+    if (arrivalRedFlagRequired(current)) { openArrivalFlag(current, action); return; }
+    if (action === "edit") setEditing(current);
+    else if (action === "close") setClosing(current);
+    else if (action === "remark") setRemarking(current);
+  };
+  const requireArrivalReason = (row, error) => {
+    const current = requests.find((item) => item.ref === row.ref) || row;
+    if (error?.code !== "ARRIVAL_RED_FLAG_REQUIRED" && !arrivalRedFlagRequired(current)) return false;
+    openArrivalFlag(current);
+    return true;
+  };
+  const saveEdit = async (payload) => {
+    if (requireArrivalReason(editing)) return;
+    try { await onUpdateRequest(payload.ref, payload); setEditing(null); }
+    catch (error) { if (!requireArrivalReason(editing, error)) alert(error.message); }
+  };
+  const closeRequest = async (payload) => {
+    if (requireArrivalReason(closing)) return;
+    try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); }
+    catch (error) { if (!requireArrivalReason(closing, error)) alert(error.message); }
+  };
+  const saveDailyRemark = async (payload) => {
+    if (requireArrivalReason(remarking)) return;
+    try { await onAddDailyRemark(remarking.ref, payload); setRemarking(null); }
+    catch (error) { if (!requireArrivalReason(remarking, error)) alert(error.message); }
+  };
   const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); };
   const saveMisFlag = async (payload) => { await onUpdateRequest(misFlagging.ref, payload, "mis-flag"); setMisFlagging(null); };
-  const saveArrivalFlag = async (payload) => { await onUpdateRequest(arrivalFlagging.ref, payload, "arrival-flag"); setArrivalFlagging(null); };
+  const saveArrivalFlag = async (payload) => {
+    const saved = await onUpdateRequest(arrivalFlagging.ref, payload, "arrival-flag");
+    setArrivalFlagging(null);
+    setArrivalFlagNextAction(null);
+    if (arrivalFlagNextAction === "edit") setEditing(saved);
+    else if (arrivalFlagNextAction === "close") setClosing(saved);
+    else if (arrivalFlagNextAction === "remark") setRemarking(saved);
+  };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):requests;
   const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)).filter(visibleInOperationalUserRequests);
@@ -8003,8 +8042,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       </div>
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests ? setArrivalFlagging : null} onRemark={setRemarking} onEdit={permissions.editRequests ? setEditing : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onRemark={setRemarking} onClose={setClosing} /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason={isMaintenance || isMis} showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}
@@ -8012,12 +8051,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
-    {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={async (payload) => {try{await onAddDailyRemark(remarking.ref,payload);setRemarking(null);}catch(error){alert(error.message)}}} />}
-    {editing && <RequestEditForm request={editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} />}
+    {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
+    {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} close={() => setVerifying(null)} onSave={verifyRequest} />}
     {misFlagging && <RequestRedFlagForm request={requests.find((row) => row.ref === misFlagging.ref) || misFlagging} close={() => setMisFlagging(null)} onSave={saveMisFlag} />}
-    {arrivalFlagging && <RequestRedFlagForm flagKind="arrival" request={requests.find((row) => row.ref === arrivalFlagging.ref) || arrivalFlagging} close={() => setArrivalFlagging(null)} onSave={saveArrivalFlag} />}
+    {arrivalFlagging && <RequestRedFlagForm flagKind="arrival" request={requests.find((row) => row.ref === arrivalFlagging.ref) || arrivalFlagging} close={() => {setArrivalFlagging(null);setArrivalFlagNextAction(null);}} onSave={saveArrivalFlag} />}
   </div>;
 }
 function App() {
@@ -8259,7 +8298,9 @@ function App() {
           : response.status === 403 && !saved.error
             ? "The update was blocked before reaching the application. Refresh, choose a smaller image, and try again."
             : "Could not update request";
-        throw new Error(saved.error || fallback);
+        const error = new Error(saved.error || fallback);
+        error.code = saved.code;
+        throw error;
       }
       requestLoadSequence.current += 1;
       setRequests((current) => current.map((row) => row.ref === reference ? saved : row));
@@ -8268,7 +8309,7 @@ function App() {
     addDailyRemark = async (reference, payload) => {
       const response = await fetch(`/api/requests/${encodeURIComponent(reference)}/daily-remarks`, {method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${authToken}`},body:JSON.stringify(payload)});
       const saved=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(saved.error||"Could not save the daily update");
+      if(!response.ok){const error=new Error(saved.error||"Could not save the daily update");error.code=saved.code;throw error;}
       requestLoadSequence.current += 1;
       setRequests((current)=>current.map((row)=>row.ref===reference?saved:row));
       return saved;

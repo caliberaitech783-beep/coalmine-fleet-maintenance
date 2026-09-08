@@ -17,3 +17,17 @@ export function requestAcceptedLate(request = {}) {
   const acceptanceDelay = elapsedMilliseconds(request.start, request.acceptedAt);
   return acceptanceDelay !== null && acceptanceDelay > REQUEST_ACCEPTANCE_DELAY_MS;
 }
+
+export function hasArrivalRedFlagReason(request = {}) {
+  return Boolean(request.arrivalFlaggedAt && String(request.arrivalFlagRemark || "").trim());
+}
+
+export function arrivalRedFlagEligible(request = {}, now = Date.now()) {
+  const status = String(request.status || "Open").trim().toLowerCase();
+  if (request.verifiedAt || ["closed", "idle", "ideal"].includes(status)) return false;
+  return requestAwaitingAcceptance(request, now) || requestAcceptedLate(request);
+}
+
+export function arrivalRedFlagRequired(request = {}, now = Date.now()) {
+  return arrivalRedFlagEligible(request, now) && !hasArrivalRedFlagReason(request);
+}

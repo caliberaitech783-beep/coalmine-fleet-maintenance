@@ -2068,8 +2068,8 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
-  to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
-  to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
+  to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
+  to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
   to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy", arrival_flag_remark AS "arrivalFlagRemark",
   to_char(mis_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "misFlaggedAt", mis_flagged_by AS "misFlaggedBy", mis_flag_remark AS "misFlagRemark",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
@@ -2228,26 +2228,62 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+const arrivalDelaySql=`((acceptance_required=TRUE AND accepted_at IS NULL AND started_at<=NOW()-INTERVAL '1 hour')
+  OR (accepted_at IS NOT NULL AND accepted_at>started_at+INTERVAL '1 hour'))`;
+const arrivalFlagReadySql=`(NOT ${arrivalDelaySql} OR (arrival_flagged_at IS NOT NULL AND length(btrim(arrival_flag_remark,E' \\t\\n\\r'))>0))`;
+const arrivalRedFlagError=()=>Object.assign(new Error('Raise a red flag and save the arrival delay reason before continuing with this request.'),{status:409,code:'ARRIVAL_RED_FLAG_REQUIRED'});
+function requireArrivalFlagPermission(req,res,next){
+  return requirePermission(req.session?.permissions?.editRequests===true?'editRequests':'closeRequests',{role:'Maintenance User'})(req,res,next);
+}
+function maintenanceWriteFailure(error,res,next){
+  if(error.status)return res.status(error.status).json({error:error.message,...(error.code?{code:error.code}:{})});
+  return next(error);
+}
+async function withMaintenanceArrivalGuard(req,reference,write){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    // Lock the request through every related write. NOW() is shared with the
+    // acceptance update, so its timestamp and the one-hour check cannot diverge.
+    const {rows}=await client.query(`SELECT site,${arrivalFlagReadySql} AS arrival_flag_ready
+      FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL FOR UPDATE`,[reference]);
+    if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
+    if(req.session.role==='normal'){
+      const user=await currentUserRecord(req.session,client);
+      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(rows[0].site))throw Object.assign(new Error('This vehicle is outside your assigned maintenance location.'),{status:403});
+    }
+    if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
+    const result=await write(client);
+    await client.query('COMMIT');
+    return result;
+  }catch(error){await client.query('ROLLBACK');throw error}
+  finally{client.release()}
+}
+
 app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermission('closeRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const remark=String(req.body?.remark||'').trim();
     const delayReason=String(req.body?.delayReason||'').trim();
     if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and the reason for delay.'});
-    const eligible=await pool.query(`SELECT reference,site,requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal')`,[reference]);
-    if(!eligible.rows.length)return res.status(409).json({error:'Daily remarks are available only while the request is open.'});
-    const existingToday=await pool.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
-      AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
     const authorLogin=String(req.session.login||'').trim().toLowerCase();
     const authorName=req.session.name||'Maintenance User';
-    const updatedToday=existingToday.rows.length>0;
-    if(updatedToday){
-      await pool.query(`UPDATE maintenance_daily_remarks SET remark=$1,delay_reason=$2,author_login=$3,author_name=$4 WHERE id=$5`,
-        [remark,delayReason,authorLogin,authorName,existingToday.rows[0].id]);
-    }else{
-      await pool.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name) VALUES ($1,$2,$3,$4,$5)`,
-        [reference,remark,delayReason,authorLogin,authorName]);
-    }
+    const {eligible,updatedToday}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
+      const eligible=await client.query(`SELECT reference,site,requester_login FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
+      if(!eligible.rows.length)throw arrivalRedFlagError();
+      const existingToday=await client.query(`SELECT id FROM maintenance_daily_remarks WHERE request_reference=$1
+        AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
+      const updatedToday=existingToday.rows.length>0;
+      if(updatedToday){
+        await client.query(`UPDATE maintenance_daily_remarks SET remark=$1,delay_reason=$2,author_login=$3,author_name=$4 WHERE id=$5`,
+          [remark,delayReason,authorLogin,authorName,existingToday.rows[0].id]);
+      }else{
+        await client.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name) VALUES ($1,$2,$3,$4,$5)`,
+          [reference,remark,delayReason,authorLogin,authorName]);
+      }
+      return {eligible,updatedToday};
+    });
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
     const recipients=[String(eligible.rows[0].requester_login||'').trim().toLowerCase()];
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
@@ -2259,14 +2295,14 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:false});
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     res.status(updatedToday?200:201).json((await attachDailyRemarks(rows))[0]);
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
-app.patch('/api/requests/:reference/arrival-flag',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+app.patch('/api/requests/:reference/arrival-flag',requireSession,requireArrivalFlagPermission,async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const remark=typeof req.body?.remark==='string'?req.body.remark.trim():'';
-    if(!remark||remark.length>2000)return res.status(400).json({error:'Enter a remark explaining why the vehicle has not reached maintenance (1 to 2,000 characters).'});
+    if(!remark||remark.length>2000)return res.status(400).json({error:'Enter a remark explaining the vehicle arrival delay (1 to 2,000 characters).'});
     const {rows:currentRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     const current=currentRows[0];
     if(!current)return res.status(404).json({error:'This maintenance request no longer exists.'});
@@ -2276,15 +2312,15 @@ app.patch('/api/requests/:reference/arrival-flag',requireSession,requirePermissi
       if(!assignedSite||assignedSite!==canonicalSiteName(current.site))
         return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
-    if(current.arrivalFlaggedAt)return res.json((await attachDailyRemarks(currentRows))[0]);
+    if(current.arrivalFlaggedAt&&String(current.arrivalFlagRemark||'').trim())return res.json((await attachDailyRemarks(currentRows))[0]);
     const {rows}=await pool.query(`UPDATE maintenance_requests
-      SET arrival_flagged_at=NOW(),arrival_flagged_by=$1,arrival_flag_remark=$2
-      WHERE reference=$3 AND acceptance_required=TRUE AND accepted_at IS NULL
-        AND status NOT IN ('Closed','Idle','Ideal') AND started_at<=NOW()-INTERVAL '1 hour'
-        AND arrival_flagged_at IS NULL AND site=$4
+      SET arrival_flagged_at=COALESCE(arrival_flagged_at,NOW()),arrival_flagged_by=CASE WHEN arrival_flagged_at IS NULL THEN $1 ELSE arrival_flagged_by END,arrival_flag_remark=$2
+      WHERE reference=$3 AND ${arrivalDelaySql}
+        AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
+        AND length(btrim(arrival_flag_remark,E' \\t\\n\\r'))=0 AND site=$4
       RETURNING ${requestProjection}`,[req.session.name||'Maintenance User',remark,reference,current.site]);
-    if(!rows.length)return res.status(409).json({error:'The red flag is available only after the vehicle has remained unreceived for one hour.'});
-    req.audit={eventType:'Workflow',module:'Maintenance Requests',action:'Red flag vehicle arrival',targetType:'Maintenance request',targetReference:reference,reason:remark,changedFields:[{field:'arrivalFlaggedAt',before:'',after:rows[0].arrivalFlaggedAt},{field:'arrivalFlaggedBy',before:'',after:rows[0].arrivalFlaggedBy},{field:'arrivalFlagRemark',before:'',after:rows[0].arrivalFlagRemark}]};
+    if(!rows.length)return res.status(409).json({error:'A red flag can be raised only for an active, unverified request whose vehicle is overdue or arrived more than one hour late.'});
+    req.audit={eventType:'Workflow',module:'Maintenance Requests',action:current.arrivalFlaggedAt?'Complete arrival red flag reason':'Red flag vehicle arrival',targetType:'Maintenance request',targetReference:reference,reason:remark,changedFields:[{field:'arrivalFlaggedAt',before:current.arrivalFlaggedAt||'',after:rows[0].arrivalFlaggedAt},{field:'arrivalFlaggedBy',before:current.arrivalFlaggedBy||'',after:rows[0].arrivalFlaggedBy},{field:'arrivalFlagRemark',before:current.arrivalFlagRemark||'',after:rows[0].arrivalFlagRemark}]};
     res.json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
 });
@@ -2359,16 +2395,17 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     // Opening meter data is optional; validate it only when supplied.
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
-    const {rows:meterRows}=await pool.query(`SELECT opening_meter_file FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
-    if(!meterRows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
+    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
+    const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
       accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=($3::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END
-      WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL
+      WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
       RETURNING ${requestProjection}`,[category,complaint,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
-    if(!rows.length)return res.status(409).json({error:'Only open, unverified requests can be edited.'});
+    if(!result.rows.length)throw arrivalRedFlagError();
+    return result;
+    });
     res.json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.patch('/api/requests/:reference/close',requireSession,requirePermission('closeRequests',{role:'Maintenance User'}),async(req,res,next)=>{
@@ -2394,39 +2431,45 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!ideal&&!REQUEST_CLOSE_STATUSES.includes(status))return res.status(400).json({error:'Choose a valid maintenance status.'});
     const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
+    if(req.session.role==='normal'){
+      const user=await currentUserRecord(req.session);
+      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
+    }
     if(!ideal&&status==='Closed'&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt)return res.json(existingRows[0]);
-    const {rows:meterRows}=await pool.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[reference]);
-    if(!meterRows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
+    const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
+    const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
+    if(!meterRows.length)throw arrivalRedFlagError();
     const delayedClosure=!ideal&&status==='Closed'&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
-    if(delayedClosure&&!delayedReason)return res.status(400).json({error:'Select a delayed reason because this request is being closed at least 4 hours after ETC.'});
-    if(openingMeterReading&&!validMeterReading(openingMeterReading))return res.status(400).json({error:`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`});
-    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`});
+    if(delayedClosure&&!delayedReason)throw Object.assign(new Error('Select a delayed reason because this request is being closed at least 4 hours after ETC.'),{status:400});
+    if(openingMeterReading&&!validMeterReading(openingMeterReading))throw Object.assign(new Error(`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`),{status:400});
+    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))throw Object.assign(new Error(`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`),{status:400});
     if(openingMeterReading||openingMeterFile){
       const effectiveMeterType=['KMR','HMR'].includes(meterType)?meterType:String(meterRows[0].meter_type||'').trim().toUpperCase();
-      if(!['KMR','HMR'].includes(effectiveMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-      await pool.query(`UPDATE maintenance_requests SET meter_type=CASE WHEN meter_type='' THEN $1 ELSE meter_type END,
+      if(!['KMR','HMR'].includes(effectiveMeterType))throw Object.assign(new Error('Choose a valid KMR/HMR meter type.'),{status:400});
+      await client.query(`UPDATE maintenance_requests SET meter_type=CASE WHEN meter_type='' THEN $1 ELSE meter_type END,
         opening_meter_reading=CASE WHEN $2<>'' THEN $2 ELSE opening_meter_reading END,
         opening_meter_file=CASE WHEN $3<>'' THEN $3 ELSE opening_meter_file END,
         opening_meter_file_name=CASE WHEN $3<>'' THEN $4 ELSE opening_meter_file_name END
-        WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference]);
+        WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference]);
     }
     const {rows}=ideal
-      ? await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status='Idle',idle_reason=$3,
+      ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status='Idle',idle_reason=$3,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
-          WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+          WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
           [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference])
       : status==='Closed'
-        ? await pool.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,delayed_reason=$5,status='Closed'
-            WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+        ? await client.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,delayed_reason=$5,status='Closed'
+            WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,delayedClosure?delayedReason:'',reference])
-        : await pool.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status=$3,
+        : await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status=$3,
             in_progress_at=CASE WHEN status<>'In progress' AND $3='In progress' THEN COALESCE(in_progress_at,NOW()) ELSE in_progress_at END,
             in_progress_by=CASE WHEN status<>'In progress' AND $3='In progress' AND in_progress_at IS NULL THEN $5 ELSE in_progress_by END
-            WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL RETURNING ${requestProjection}`,
+            WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User']);
-    if(!rows.length)return res.status(409).json({error:'This request has already been verified or no longer exists.'});
+    if(!rows.length)throw arrivalRedFlagError();
     if(delayedClosure){
-      await pool.query(`INSERT INTO master_records (master_name,record_data)
+      await client.query(`INSERT INTO master_records (master_name,record_data)
         SELECT 'Delayed Reason',$1::jsonb
         WHERE NOT EXISTS (
           SELECT 1 FROM master_records
@@ -2434,6 +2477,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
         )`,[JSON.stringify({delayedReason}),delayedReason]);
     }
+    return {rows,delayedClosure};
+    });
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
       const whatsappRecipients=workflowWhatsAppRecipientLogins(userRows,{eventType:'idle',site:rows[0].site});
@@ -2458,7 +2503,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       }
     }
     res.json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,next)=>{

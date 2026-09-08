@@ -7,27 +7,29 @@ const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8")
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../src/mobile-workflow.css", import.meta.url), "utf8");
 
-test("maintenance can red flag only an unreceived vehicle delayed by at least one hour", () => {
+test("maintenance can flag overdue or accepted-late active vehicles and retain original evidence", () => {
   assert.match(server, /ADD COLUMN IF NOT EXISTS arrival_flagged_at TIMESTAMPTZ/);
   assert.match(server, /ADD COLUMN IF NOT EXISTS arrival_flagged_by TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /ADD COLUMN IF NOT EXISTS arrival_flag_remark TEXT NOT NULL DEFAULT ''/);
-  assert.match(server, /app\.patch\('\/api\/requests\/:reference\/arrival-flag',requireSession,requirePermission\('editRequests',\{role:'Maintenance User'\}\)/);
+  assert.match(server, /app\.patch\('\/api\/requests\/:reference\/arrival-flag',requireSession,requireArrivalFlagPermission/);
   const route = server.slice(server.indexOf("app.patch('/api/requests/:reference/arrival-flag'"), server.indexOf("async function activeRequestConflict"));
-  assert.match(route, /acceptance_required=TRUE AND accepted_at IS NULL/);
-  assert.match(route, /started_at<=NOW\(\)-INTERVAL '1 hour'/);
+  assert.match(server, /acceptance_required=TRUE AND accepted_at IS NULL AND started_at<=NOW\(\)-INTERVAL '1 hour'/);
+  assert.match(server, /accepted_at IS NOT NULL AND accepted_at>started_at\+INTERVAL '1 hour'/);
+  assert.match(route, /\$\{arrivalDelaySql\}/);
   assert.match(route, /status NOT IN \('Closed','Idle','Ideal'\)/);
   assert.match(route, /arrival_flagged_at IS NULL/);
-  assert.match(route, /arrival_flagged_at=NOW\(\),arrival_flagged_by=\$1/);
+  assert.match(route, /arrival_flagged_at=COALESCE\(arrival_flagged_at,NOW\(\)\)/);
+  assert.match(route, /length\(btrim\(arrival_flag_remark,E'[^']*'\)\)=0/);
   assert.match(route, /outside your assigned maintenance location/);
 });
 
 test("the red flag action precedes Edit and flagged requests stay idempotent", () => {
   const actions = client.slice(client.indexOf("const workflowActions"), client.indexOf("useEffect(() =>", client.indexOf("const workflowActions")));
   assert.ok(actions.indexOf("arrival-red-flag") < actions.indexOf("<Pencil /> Edit"));
-  assert.match(actions, /requestAwaitingAcceptance\(row, now\) && !row\.arrivalFlaggedAt/);
+  assert.match(actions, /arrivalRedFlagRequired\(row, now\)/);
   assert.match(actions, /row\.arrivalFlaggedAt/);
   assert.match(actions, /View red flag/);
-  assert.match(client, /onFlagArrival=\{permissions\.editRequests \? setArrivalFlagging : null\}/);
+  assert.match(client, /onFlagArrival=\{permissions\.editRequests \|\| permissions\.closeRequests \? openArrivalFlag : null\}/);
   assert.match(client, /action === "arrival-flag" \? `\/api\/requests\/\$\{encodeURIComponent\(reference\)\}\/arrival-flag`/);
   assert.match(styles, /button\.arrival-red-flag\{[^}]*background:#c9253d/);
 });

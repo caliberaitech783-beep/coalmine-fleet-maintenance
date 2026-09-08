@@ -79,7 +79,7 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
       ref,...base,site,col('status','Request status'),col('start','Production date and time'),
       col('arrivalFlaggedAt','Red flag raised'),col('arrivalFlaggedBy','Flagged by'),
       col('arrivalFlagRemark','Red flag reason',r => clean(r.arrivalFlagRemark) || 'No remark recorded'),
-      col('flagWaitingTime','Waiting when flagged',r => duration(r.start,r.arrivalFlaggedAt)),
+      col('flagWaitingTime','Waiting when flagged',r => duration(r.start,r.acceptedAt && indiaDateTimeEpoch(r.acceptedAt) < indiaDateTimeEpoch(r.arrivalFlaggedAt) ? r.acceptedAt : r.arrivalFlaggedAt)),
       col('acceptedAt','Vehicle received',r => r.acceptedAt || 'Not reached'),
       col('arrivalDelay','Arrival delay',r => duration(r.start,r.acceptedAt || now.toISOString())),
       col('acceptedBy','Received by',r => r.acceptedBy || 'Pending'),

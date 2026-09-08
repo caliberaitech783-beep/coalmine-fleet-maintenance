@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { REQUEST_ACCEPTANCE_DELAY_MS, requestAcceptedLate, requestAwaitingAcceptance } from "../request-acceptance.mjs";
+import { REQUEST_ACCEPTANCE_DELAY_MS, requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagEligible, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
 
 test("unaccepted requests are highlighted one hour after production timing", () => {
   const start = "2026-09-07 10:00";
@@ -11,6 +11,26 @@ test("unaccepted requests are highlighted one hour after production timing", () 
   assert.equal(requestAwaitingAcceptance({ start, status: "Open", acceptanceRequired: true, acceptedAt: "2026-09-07 11:00" }, productionEpoch + REQUEST_ACCEPTANCE_DELAY_MS * 2), false);
   assert.equal(requestAwaitingAcceptance({ start, status: "Closed", acceptanceRequired: true }, productionEpoch + REQUEST_ACCEPTANCE_DELAY_MS * 2), false);
   assert.equal(requestAwaitingAcceptance({ start, status: "Open" }, productionEpoch + REQUEST_ACCEPTANCE_DELAY_MS * 2), false);
+});
+
+test("a complete arrival red flag is mandatory for active overdue or accepted-late requests", () => {
+  const pending = {start:"2026-09-08 10:00:00",acceptanceRequired:true,status:"Open"};
+  const deadline = Date.parse("2026-09-08T11:00:00+05:30");
+  assert.equal(arrivalRedFlagRequired(pending,deadline-1),false);
+  assert.equal(arrivalRedFlagRequired(pending,deadline),true);
+  const late = {...pending,acceptedAt:"2026-09-08 11:00:01"};
+  assert.equal(arrivalRedFlagRequired({...late,acceptedAt:"2026-09-08 11:00:00"},deadline),false);
+  assert.equal(arrivalRedFlagRequired(late,deadline),true);
+  assert.equal(arrivalRedFlagRequired({...late,arrivalFlaggedAt:"2026-09-08 11:02:00",arrivalFlagRemark:"  "},deadline),true);
+  assert.equal(hasArrivalRedFlagReason({...late,arrivalFlagRemark:"Recovery crane delayed"}),false);
+  const complete = {...late,arrivalFlaggedAt:"2026-09-08 11:02:00",arrivalFlagRemark:"Recovery crane delayed"};
+  assert.equal(arrivalRedFlagEligible(complete,deadline),true);
+  assert.equal(arrivalRedFlagRequired(complete,deadline),false);
+  for (const historical of [{...late,verifiedAt:"2026-09-09 12:00:00"},...['Closed','Idle','Ideal'].map(status=>({...late,status}))]) {
+    assert.equal(arrivalRedFlagEligible(historical,deadline),false);
+    assert.equal(arrivalRedFlagRequired(historical,deadline),false);
+  }
+  assert.equal(arrivalRedFlagRequired({start:'invalid',acceptanceRequired:true},deadline),false);
 });
 
 test("Maintenance acceptance is server timed and shared by every request view", () => {
