@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {META_WORKFLOW_TEMPLATES,baseTemplateKey,reportTemplateChoices,validateCustomTemplate} from './whatsapp-template-catalog.mjs';
+import {META_WORKFLOW_TEMPLATES,baseTemplateKey,reportTemplateChoices,validateCustomTemplate,resolvedReportTemplateChoice} from './whatsapp-template-catalog.mjs';
 
 export function candidateReportTemplate(purpose,selection={variant:'standard'}) {
   const base=META_WORKFLOW_TEMPLATES[baseTemplateKey(purpose)];
@@ -11,15 +11,19 @@ export function candidateReportTemplate(purpose,selection={variant:'standard'}) 
   return {...base,name:`bdms_${purpose.toLowerCase()}_${fingerprint}`,body};
 }
 
+export function requestedReportTemplate(purpose,settings) {
+  const resolved=resolvedReportTemplateChoice(purpose,settings);
+  return candidateReportTemplate(resolved.purpose,resolved.selection);
+}
+
 export function effectiveReportTemplate(purpose,settings,approvals={}) {
-  const selection=settings?.templates?.[purpose]||{variant:'standard'};
-  const candidate=candidateReportTemplate(purpose,selection);
+  const candidate=requestedReportTemplate(purpose,settings);
   const base=META_WORKFLOW_TEMPLATES[baseTemplateKey(purpose)];
   return candidate?.name===base?.name||approvals[candidate?.name]?.status==='APPROVED' ? candidate : base;
 }
 
 export function reportTemplateFallback(purpose,parameters,settings,approvals,standardMessage) {
-  if(!settings?.templates?.[purpose]||settings.templates[purpose].variant==='standard')return standardMessage;
+  if(resolvedReportTemplateChoice(purpose,settings).selection.variant==='standard')return standardMessage;
   const template=effectiveReportTemplate(purpose,settings,approvals);
   return template?.body?template.body.replace(/\{\{(\d+)\}\}/g,(_,index)=>String(parameters[Number(index)-1]??'')):standardMessage;
 }

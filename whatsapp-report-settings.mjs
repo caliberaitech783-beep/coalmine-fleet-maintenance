@@ -1,3 +1,5 @@
+import {SINGLE_REPORT_TEMPLATE_PURPOSES,isSingleReportPurpose,validReportTemplateVariant} from './whatsapp-template-catalog.mjs';
+
 export const WORKFLOW_ROLE_OPTIONS = [
   ['maintenanceSupervisor','Maintenance supervisor'],['maintenanceManager','Maintenance manager'],
   ['productionSupervisor','Production supervisor'],['productionManager','Production manager'],
@@ -13,13 +15,14 @@ export const EVENT_OPTIONS = [
   {key:'idle',label:'Marked Idle',purpose:'requestIdle'},
 ];
 export const PURPOSE_OPTIONS = [
-  ...EVENT_OPTIONS.map(({purpose:key,label})=>({key,label})),
-  {key:'offRoadEscalation',label:'Off Road escalation'}, {key:'idleReminder',label:'Idle reminder'},
-  {key:'consolidatedRequestReport',label:'Hierarchy / fleet report bundle'},
-  {key:'consolidatedTicketReport',label:'Scheduled CRM report'},
-  {key:'ticketCreated',label:'CRM ticket created'}, {key:'ticketResolved',label:'CRM ticket resolved'},
-  {key:'dailyUpdate',label:'Daily maintenance update'},
-  {key:'manualReports',label:'Manual report send'},
+  ...EVENT_OPTIONS.map(({purpose:key,label})=>({key,label,group:'Individual alerts and updates'})),
+  {key:'offRoadEscalation',label:'Off Road escalation',group:'Reminders'}, {key:'idleReminder',label:'Idle reminder',group:'Reminders'},
+  {key:'consolidatedRequestReport',label:'Consolidated hierarchy / fleet bundle',group:'Consolidated reports'},
+  {key:'consolidatedTicketReport',label:'Scheduled CRM report',group:'Consolidated reports'},
+  {key:'ticketCreated',label:'CRM ticket created',group:'Individual alerts and updates'}, {key:'ticketResolved',label:'CRM ticket resolved',group:'Individual alerts and updates'},
+  {key:'dailyUpdate',label:'Daily maintenance update',group:'Individual alerts and updates'},
+  {key:'manualReports',label:'Manual report send',group:'Manual reports'},
+  ...SINGLE_REPORT_TEMPLATE_PURPOSES,
 ];
 const initialRoles = {opened:['maintenanceSupervisor','maintenanceManager','productionManager'],closed:['productionSupervisor','productionManager','maintenanceManager'],verified:['productionManager','maintenanceManager','misManager'],idle:['projectManager','productionManager','maintenanceManager','misManager']};
 export const validWhatsAppTime = value => typeof value==='string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
@@ -35,7 +38,7 @@ export function defaultWhatsAppReportSettings() {
     crm:{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:['Admin','Manager'],sendEmpty:true,format:'both'},
     channels:{hierarchyReports:true,ticketCreated:false,ticketResolved:false,dailyUpdate:false,passwordResetOtp:true,manualReports:true},
     quietHours:{enabled:false,start:'22:00',end:'07:00'},
-    templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:'standard',body:''}])),
+    templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:isSingleReportPurpose(key)?'inherit':'standard',body:''}])),
   };
 }
 
@@ -52,7 +55,7 @@ export function normalizeWhatsAppReportSettings(input={}) {
       sendEmpty:bool(crm.sendEmpty,true),format:['both','summary','pdf'].includes(crm.format)?crm.format:'both'},
     channels:Object.fromEntries(Object.entries(defaults.channels).map(([key,fallback])=>[key,bool(channels[key],fallback)])),
     quietHours:{enabled:bool(quiet.enabled,false),start:validWhatsAppTime(quiet.start)?quiet.start:defaults.quietHours.start,end:validWhatsAppTime(quiet.end)?quiet.end:defaults.quietHours.end},
-    templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:['standard','brief','detailed','custom'].includes(templates[key]?.variant)?templates[key].variant:'standard',body:typeof templates[key]?.body==='string'?templates[key].body.slice(0,1024):''}])),
+    templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:validReportTemplateVariant(key,templates[key]?.variant)?templates[key].variant:defaults.templates[key].variant,body:typeof templates[key]?.body==='string'?templates[key].body.slice(0,1024):''}])),
   };
 }
 
@@ -67,7 +70,7 @@ export function whatsappSettingsValidationError(input) {
   const quiet=input.quietHours;
   if(!quiet||typeof quiet.enabled!=='boolean'||!validWhatsAppTime(quiet.start)||!validWhatsAppTime(quiet.end)||quiet.enabled&&quiet.start===quiet.end)return 'Quiet hours need different valid start and end times.';
   for(const key of Object.keys(defaultWhatsAppReportSettings().channels))if(typeof input.channels?.[key]!=='boolean')return 'Choose the delivery switches for each message type.';
-  for(const {key} of PURPOSE_OPTIONS){const template=input.templates?.[key];if(!template||!['standard','brief','detailed','custom'].includes(template.variant)||typeof template.body!=='string'||template.body.length>1024)return 'Choose a valid template style with at most 1,024 characters.';}
+  for(const {key} of PURPOSE_OPTIONS){const template=input.templates?.[key];if(!template||!validReportTemplateVariant(key,template.variant)||typeof template.body!=='string'||template.body.length>1024)return 'Choose a valid template style with at most 1,024 characters.';}
   return '';
 }
 
@@ -86,7 +89,7 @@ export function whatsappPurposeEnabled(settings,purpose='',now=new Date()) {
   if(purpose==='offRoadEscalation')return settings.reminders.offRoad.enabled&&settings.events.opened.enabled;
   if(purpose==='idleReminder')return settings.reminders.idle.enabled&&settings.events.idle.enabled;
   if(purpose==='consolidatedTicketReport')return settings.crm.enabled;
-  if(purpose==='consolidatedRequestReport')return settings.channels.hierarchyReports;
+  if(purpose==='consolidatedRequestReport'||isSingleReportPurpose(purpose))return settings.channels.hierarchyReports;
   if(purpose==='manualReports')return settings.channels.manualReports;
   if(Object.hasOwn(settings.channels,purpose))return settings.channels[purpose];
   return true;

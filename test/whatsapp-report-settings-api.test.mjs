@@ -4,6 +4,7 @@ import express from 'express';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from '../whatsapp-report-settings-api.mjs';
 import {defaultWhatsAppReportSettings} from '../whatsapp-report-settings.mjs';
 import {candidateReportTemplate} from '../whatsapp-template-runtime.mjs';
+import {SINGLE_REPORT_TEMPLATE_PURPOSES} from '../whatsapp-template-catalog.mjs';
 
 async function harness(t){
   const app=express();app.use(express.json());
@@ -68,4 +69,21 @@ test('template status distinguishes requested wording from the template actually
   assert.equal(state.usingRequested,false);assert.equal(state.name,candidate.name);assert.equal(state.effectiveName,'bdms_vehicle_idle_v1');
   state=reportTemplateState(settings,{[candidate.name]:{status:'APPROVED'}}).idleReminder;
   assert.equal(state.usingRequested,true);
+});
+
+test('new library samples and independent single-report choices persist through the settings API',async t=>{
+  const api=await harness(t),initial=await (await api.request()).json();
+  const [first,second]=SINGLE_REPORT_TEMPLATE_PURPOSES;
+  initial.settings.templates.consolidatedRequestReport={variant:'executive',body:''};
+  initial.settings.templates[first.key]={variant:'checklist',body:''};
+  initial.settings.templates.ticketResolved={variant:'formal',body:''};
+  const response=await api.request('',{method:'PUT',body:JSON.stringify(initial)});
+  assert.equal(response.status,200);
+  const saved=await (await api.request()).json();
+  assert.equal(saved.settings.templates[first.key].variant,'checklist');
+  assert.equal(saved.settings.templates[second.key].variant,'inherit');
+  assert.equal(saved.settings.templates.consolidatedRequestReport.variant,'executive');
+  assert.equal(saved.settings.templates.ticketResolved.variant,'formal');
+  assert.equal(saved.templateState[first.key].usingRequested,false);
+  assert.equal(saved.templateState[second.key].name,saved.templateState.consolidatedRequestReport.name);
 });

@@ -5,6 +5,7 @@ import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,report
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {defaultWhatsAppReportSettings,whatsappPurposeEnabled} from '../whatsapp-report-settings.mjs';
 import {reportTemplateFallback} from '../whatsapp-template-runtime.mjs';
+import {hierarchyReportMessagePurpose} from '../whatsapp-template-catalog.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const request={ref:'REQ/123',site:'Sasti OB',requesterLogin:'production',status:'Open'};
@@ -43,7 +44,7 @@ function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
   settings.designations.productionSupervisor.recipientLogins=selected?['production']:[];
   const sent=[],published=[],history=[],claims=new Set();
   const users=[{login:'production',phone:'919999999999'},{login:'other-site',phone:'918888888888'}];
-  const dependencies={databaseReady:true,storedWhatsAppReportSettings:async()=>defaultWhatsAppReportSettings(),whatsappPurposeEnabled,reportTemplateFallback,
+  const dependencies={databaseReady:true,storedWhatsAppReportSettings:async()=>defaultWhatsAppReportSettings(),whatsappPurposeEnabled,reportTemplateFallback,hierarchyReportMessagePurpose,
     pool:{query:async(sql,args=[])=>{
       if(sql.includes("master_name='Users & employees'"))return {rows:users.map(record_data=>({record_data}))};
       if(sql.includes("master_name='Hierarchy master'"))return {rows:[]};
@@ -76,6 +77,7 @@ test('event delivery honors recipients and site scope, publishes one request, an
   assert.deepEqual(results.map(result=>result.sent),[1,1]);
   assert.equal(harness.sent.length,2);
   assert.equal(harness.sent[0].templateKey,'consolidatedRequestReport');
+  assert.equal(harness.sent[0].purpose,hierarchyReportMessagePurpose([DIRECTOR_REPORT_TITLES[0]]));
   assert.equal(harness.sent[0].parameters[0].includes('\n'),false);
   assert.deepEqual(harness.published[0].eventRequest,request);
   assert.deepEqual(harness.published[0].reportTitles,[DIRECTOR_REPORT_TITLES[0]]);

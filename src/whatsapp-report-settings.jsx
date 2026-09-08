@@ -2,7 +2,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {Bell, Check, Clock, FileText, MessageSquare, Plus, RefreshCw, Save, Settings2, ShieldCheck, X} from 'lucide-react';
 import {defaultWhatsAppReportSettings, EVENT_OPTIONS, PURPOSE_OPTIONS, WORKFLOW_ROLE_OPTIONS, whatsappSettingsValidationError} from '../whatsapp-report-settings.mjs';
-import {baseTemplateKey, previewReportTemplate, reportTemplateChoices, TEMPLATE_FIELD_LABELS, validateCustomTemplate} from '../whatsapp-template-catalog.mjs';
+import {baseTemplateKey, isSingleReportPurpose, previewReportTemplate, reportTemplateChoices, resolvedReportTemplateChoice, SINGLE_REPORT_TEMPLATE_PURPOSES, TEMPLATE_FIELD_LABELS, validateCustomTemplate} from '../whatsapp-template-catalog.mjs';
 import {readApiJson} from './api-response.mjs';
 import './whatsapp-report-settings.css';
 
@@ -82,12 +82,18 @@ export function WhatsAppReportSettingsDialog({token,onClose}) {
     try{apply(await request('/templates',{method:'POST',body:JSON.stringify({action})}));setNotice(action==='submit'?'Selected templates submitted or matched to existing templates. See their approval status below.':'Approval status refreshed. Approved choices are now available for delivery.');}catch(cause){setError(cause.message);}finally{setBusy('');}
   };
   const choices=reportTemplateChoices(purpose), selection=draft?.templates[purpose];
-  const body=selection?.variant==='custom'?selection.body:choices.find(choice=>choice.variant===selection?.variant)?.body||'';
+  const resolvedChoice=resolvedReportTemplateChoice(purpose,draft);
+  const resolvedChoices=reportTemplateChoices(resolvedChoice.purpose);
+  const body=resolvedChoice.selection.variant==='custom'?resolvedChoice.selection.body:resolvedChoices.find(choice=>choice.variant===resolvedChoice.selection.variant)?.body||'';
   const templateState=details?.templateState?.[purpose];
   const savedSelection=details?.settings.templates[purpose];
-  const templateDirty=JSON.stringify(selection)!==JSON.stringify(savedSelection);
+  const templateDirty=JSON.stringify(selection)!==JSON.stringify(savedSelection)||JSON.stringify(resolvedChoice)!==JSON.stringify(resolvedReportTemplateChoice(purpose,details?.settings));
   const validation=selection?.variant==='custom'?validateCustomTemplate(purpose,body):'';
   const preview=previewReportTemplate(purpose,body).split(/(\*[^*\n]+\*)/g).map((text,index)=>text.startsWith('*')&&text.endsWith('*')?<strong key={index}>{text.slice(1,-1)}</strong>:text);
+  const selectedLabel=selection?.variant==='inherit'?'Follow consolidated choice':selection?.variant==='custom'?'Custom wording':choices.find(choice=>choice.variant===selection?.variant)?.label;
+  const editableSample=/\}\}\s*$/.test(body)?`${body}\n\nOpen Nerve Center for the latest status.`:body;
+  const purposeGroups=[...new Set(PURPOSE_OPTIONS.map(option=>option.group))];
+  const displayChoices=[...(isSingleReportPurpose(purpose)?[{variant:'inherit',label:'Follow consolidated choice',description:'Keep the same style as the fleet bundle.'}]:[]),...choices,{variant:'custom',label:'Custom wording',description:'Adapt a sample or write your own.'}];
 
   return createPortal(<div className="wrs-overlay" onPointerDown={event=>{if(event.target===event.currentTarget)close();}}>
     <div className="wrs-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="wrs-title" tabIndex={-1}>
@@ -133,11 +139,14 @@ export function WhatsAppReportSettingsDialog({token,onClose}) {
             </div>
           </>}
           {section==='templates'&&<>
-            <div className="wrs-section-heading"><span>05 / MESSAGE TEMPLATES</span><h3>Choose wording for each purpose</h3><p>Keep the current format, select a prepared style or write your own using the required fields.</p></div>
-            <label className="wrs-field-label">Message purpose<select value={purpose} onChange={event=>setPurpose(event.target.value)}>{PURPOSE_OPTIONS.map(option=><option key={option.key} value={option.key}>{option.label}</option>)}</select></label>
-            <div className="wrs-template-choices">{[...choices,{variant:'custom',label:'Custom wording',description:'Write your own message.'}].map(choice=><label key={choice.variant} className={selection.variant===choice.variant?'is-selected':''}><input type="radio" name="wrs-template-style" checked={selection.variant===choice.variant} onChange={()=>patchTemplate({variant:choice.variant,...(choice.variant==='custom'&&!selection.body?{body:choices.find(item=>item.variant==='detailed').body}:{})})}/><strong>{choice.label}</strong><small>{choice.description}</small></label>)}</div>
+            <div className="wrs-section-heading"><span>05 / MESSAGE TEMPLATES</span><h3>A sample for every report and update</h3><p>Choose from 10 ready-made samples for each purpose, or customise one. Includes {SINGLE_REPORT_TEMPLATE_PURPOSES.length} single reports, consolidated bundles, alerts and reminders.</p></div>
+            <label className="wrs-field-label">Message purpose<select value={purpose} onChange={event=>setPurpose(event.target.value)}>{purposeGroups.map(group=><optgroup key={group} label={group}>{PURPOSE_OPTIONS.filter(option=>option.group===group).map(option=><option key={option.key} value={option.key}>{option.label}</option>)}</optgroup>)}</select></label>
+            {isSingleReportPurpose(purpose)?<p className="wrs-help">This choice applies when this is the only report in a scheduled or event delivery. A delivery containing multiple reports uses the consolidated bundle choice. By default, single reports follow that choice too.</p>:purpose==='consolidatedRequestReport'?<p className="wrs-help">Used for deliveries with multiple reports, and for single reports set to Follow consolidated choice.</p>:null}
+            <div className="wrs-template-workbench">
+              <div className="wrs-sample-library"><div className="wrs-library-heading"><strong>{choices.length} ready-made samples</strong><span>Choose one to preview</span></div><div className="wrs-template-choices" role="radiogroup" aria-label="Template samples">{displayChoices.map(choice=><label key={choice.variant} className={selection.variant===choice.variant?'is-selected':''}><span className="wrs-sample-top"><input type="radio" name="wrs-template-style" aria-label={choice.label} checked={selection.variant===choice.variant} onChange={()=>patchTemplate({variant:choice.variant,...(choice.variant==='custom'&&!selection.body?{body:editableSample||choices.find(item=>item.variant==='detailed').body}:{})})}/><span>{choices.some(item=>item.variant===choice.variant)?String(choices.findIndex(item=>item.variant===choice.variant)+1).padStart(2,'0'):choice.variant==='inherit'?'Default':'Edit'}</span></span><strong>{choice.label}</strong><small>{choice.description}</small></label>)}</div></div>
+              <div className="wrs-preview"><div className="wrs-preview-label"><MessageSquare size={17}/><strong>Message preview</strong><span>Sample data</span></div><p className="wrs-preview-style">{selectedLabel}</p><pre>{preview}</pre><button type="button" className="wrs-outline-button" disabled={selection.variant==='custom'} onClick={()=>patchTemplate({variant:'custom',body:editableSample})}>Customise this sample</button></div>
+            </div>
             {selection.variant==='custom'&&<div className="wrs-card wrs-inset"><label className="wrs-field-label">Message wording<textarea rows="9" maxLength="1024" value={body} onChange={event=>patchTemplate({body:event.target.value})}/></label><div className="wrs-character-count">{body.length} / 1,024 characters</div>{validation&&<p className="wrs-inline-error" role="status">{validation}</p>}<p className="wrs-help">Keep every placeholder. The real request or report details replace these values when sending.</p><div className="wrs-placeholders">{TEMPLATE_FIELD_LABELS[baseTemplateKey(purpose)].map((label,index)=><span key={label}><code>{`{{${index+1}}}`}</code> {label}</span>)}</div></div>}
-            <div className="wrs-preview"><div className="wrs-preview-label"><MessageSquare size={17}/><strong>Message preview</strong><span>Sample data</span></div><pre>{preview}</pre></div>
             <div className="wrs-approval"><div><strong>{templateDirty?'Unsaved template choice':templateState?.usingRequested?'Selected wording is active':'Current standard remains active'}</strong><span>{templateDirty?'Save settings before submitting this choice.':`Meta status: ${(templateState?.status||'NOT_CHECKED').replaceAll('_',' ').toLowerCase()}`}</span>{!templateDirty&&templateState?.checkedAt&&<small>Last checked: {new Date(templateState.checkedAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})} IST</small>}</div><p>New or edited templates need Meta approval. Save your choices, submit them, then refresh approval status. The current standard remains in use until the selected template is approved. Meta can still reject delivery.</p><div className="wrs-template-actions"><button type="button" className="wrs-outline-button" disabled={dirty||!!validation} onClick={()=>sync('submit')}>{busy==='submit'?'Submitting…':'Submit saved template choices'}</button><button type="button" className="wrs-outline-button" disabled={dirty} onClick={()=>sync('refresh')}><RefreshCw size={15}/>{busy==='refresh'?'Refreshing…':'Refresh approval status'}</button></div></div>
             <p className="wrs-help">Templates change WhatsApp wording, not PDF contents or report access. Password reset OTPs retain their authentication template.</p>
           </>}

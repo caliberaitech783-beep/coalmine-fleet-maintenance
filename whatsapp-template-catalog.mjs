@@ -1,3 +1,16 @@
+import {DIRECTOR_REPORT_TITLES,canonicalReportTitle} from './director-report-bundle.mjs';
+
+export const SINGLE_REPORT_TEMPLATE_PURPOSES = [...new Set(DIRECTOR_REPORT_TITLES)].map(label=>({
+  key:`report_${label.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'')}`,
+  label,reportTitle:label,group:'Single reports',
+}));
+const singleReportsByKey = new Map(SINGLE_REPORT_TEMPLATE_PURPOSES.map(report=>[report.key,report]));
+export const isSingleReportPurpose = purpose => singleReportsByKey.has(purpose);
+export function hierarchyReportMessagePurpose(reportTitles=[]) {
+  const titles=[...new Set(reportTitles.map(canonicalReportTitle))];
+  return titles.length===1?SINGLE_REPORT_TEMPLATE_PURPOSES.find(report=>report.reportTitle===titles[0])?.key||'consolidatedRequestReport':'consolidatedRequestReport';
+}
+
 export const META_WORKFLOW_TEMPLATES={
   passwordResetOtp:{name:'nerve_password_reset_otp',category:'AUTHENTICATION',example:['123456'],otpButton:true,components:[
     {type:'BODY',add_security_recommendation:true},
@@ -26,16 +39,54 @@ export const TEMPLATE_FIELD_LABELS = {
   dailyUpdate:['Updated by','Request reference'],
 };
 const aliases={offRoadEscalation:'requestOpened',idleReminder:'requestIdle',manualReports:'consolidatedRequestReport'};
-export const baseTemplateKey = purpose => aliases[purpose] || purpose;
+export const baseTemplateKey = purpose => isSingleReportPurpose(purpose)?'consolidatedRequestReport':aliases[purpose] || purpose;
 const titles={requestOpened:'OFF ROAD ALERT',requestClosed:'ON ROAD UPDATE',requestVerified:'MIS VERIFIED',requestIdle:'IDLE VEHICLE',offRoadEscalation:'OFF ROAD ESCALATION',idleReminder:'IDLE REMINDER',consolidatedRequestReport:'FLEET REPORTS',consolidatedTicketReport:'CRM TICKET REPORT',ticketCreated:'NEW CRM TICKET',ticketResolved:'CRM TICKET RESOLVED',dailyUpdate:'MAINTENANCE UPDATE'};
+const purposeNotes={
+  requestOpened:{intro:'A breakdown request has been opened.',action:'Review the reported breakdown and update the acceptance or repair plan in Nerve Center.'},
+  requestClosed:{intro:'A request has been closed and marked On Road.',action:'Review the closure record and follow the applicable verification steps in Nerve Center.'},
+  requestVerified:{intro:'MIS verification has been recorded for this request.',action:'Review the verified record and recorded closing meter in Nerve Center.'},
+  requestIdle:{intro:'A vehicle has been marked Idle.',action:'Review the idle reason and follow the approval action shown in this message.'},
+  offRoadEscalation:{intro:'This request remains Off Road at the escalation check.',action:'Review the repair progress and update the expected completion time in Nerve Center.'},
+  idleReminder:{intro:'This vehicle remains Idle at the reminder check.',action:'Review the idle reason and complete the applicable approval action in Nerve Center.'},
+  consolidatedRequestReport:{intro:'Your consolidated fleet report bundle is ready.',action:'Review the included reports and use their download links for the detailed records.'},
+  consolidatedTicketReport:{intro:'Your scheduled CRM ticket summary is ready.',action:'Review the reporting window and follow up on the listed ticket activity in Nerve Center.'},
+  ticketCreated:{intro:'A new CRM ticket has been created.',action:'Open the ticket to review its description and record the next action in Nerve Center.'},
+  ticketResolved:{intro:'A CRM ticket has been resolved.',action:'Open the ticket to review the recorded resolution in Nerve Center.'},
+  dailyUpdate:{intro:'A daily maintenance update has been recorded.',action:'Review the latest maintenance remarks and recorded progress in Nerve Center.'},
+  manualReports:{intro:'A report has been shared with you from Nerve Center.',action:'Review the shared report details and any included download links.'},
+};
+export function reportTemplateContext(purpose) {
+  const report=singleReportsByKey.get(purpose);
+  if(report)return {title:report.label,intro:`Your ${report.label} is ready.`,action:'Open the report links to review the records and follow up in Nerve Center.'};
+  return {title:titles[purpose]||titles[baseTemplateKey(purpose)]||'REPORT',...purposeNotes[purpose]};
+}
+export const REPORT_TEMPLATE_VARIANTS = ['standard','brief','detailed','executive','action','handover','checklist','formal','numbered','dashboard'];
+export function validReportTemplateVariant(purpose,variant) {
+  return REPORT_TEMPLATE_VARIANTS.includes(variant)||variant==='custom'||variant==='inherit'&&isSingleReportPurpose(purpose);
+}
+export function resolvedReportTemplateChoice(purpose,settings) {
+  if(isSingleReportPurpose(purpose)&&(!settings?.templates?.[purpose]||settings.templates[purpose].variant==='inherit')){
+    return {purpose:'consolidatedRequestReport',selection:settings?.templates?.consolidatedRequestReport||{variant:'standard',body:''}};
+  }
+  return {purpose,selection:settings?.templates?.[purpose]||{variant:'standard',body:''}};
+}
 export function reportTemplateChoices(purpose) {
   const key=baseTemplateKey(purpose), base=META_WORKFLOW_TEMPLATES[key], fields=TEMPLATE_FIELD_LABELS[key];
   if(!base||!fields)return [];
-  const title=titles[purpose]||titles[key];
+  const {title,intro,action}=reportTemplateContext(purpose);
+  const single=isSingleReportPurpose(purpose),report=fields.length===1;
+  const lines=fields.map((field,index)=>`${field}: {{${index+1}}}`).join('\n');
   return [
     {variant:'standard',label:'Current standard',description:'Keep the existing wording.',body:base.body},
     {variant:'brief',label:'Compact summary',description:'Short lines for quick reading.',body:`Nerve Center · ${title}\n${fields.map((field,index)=>`${field}: {{${index+1}}}`).join(' | ')}\nView Nerve Center for the latest status.`},
     {variant:'detailed',label:'Structured detail',description:'Clear labels, one item per line.',body:`*NERVE CENTER | ${title}*\n\n${fields.map((field,index)=>`*${field}:* {{${index+1}}}`).join('\n')}\n\nThis is an automated operational update. Please review the details in Nerve Center.`},
+    {variant:'executive',label:'Executive brief',description:report?'A short introduction for management review.':'Event context followed by key facts.',body:`*${title} | MANAGEMENT BRIEF*\n${intro}\n\n${lines}\n\nFor review: ${action}`},
+    {variant:'action',label:'Action focused',description:'Make the next operational step clear.',body:`*ACTION REVIEW · ${title}*\n\n${action}\n\n*Supporting details*\n${lines}\n\nRecord follow-up in Nerve Center so the team has the latest information.`},
+    {variant:'handover',label:'Team handover',description:report?'Share report context with the next team.':'Pass the event details to the next team.',body:`*TEAM HANDOVER | ${title}*\n${intro}\n\n${fields.map((field,index)=>`• ${field}: {{${index+1}}}`).join('\n')}\n\n*Next team:* ${action}\nCheck Nerve Center for updates since this message was generated.`},
+    {variant:'checklist',label:'Review checklist',description:'Facts followed by a short review checklist.',body:`*${title} — REVIEW CHECKLIST*\n\n${lines}\n\n☐ Review the ${report?'reporting scope and included records':'reference and recorded details'}.\n☐ ${action}\n☐ Record any required follow-up in Nerve Center.`},
+    {variant:'formal',label:'Formal notice',description:'Professional wording for official updates.',body:`Nerve Center | ${title}\n\nDear colleague,\n${intro} The recorded details are provided below for your review.\n\n${lines}\n\n${action}\nRegards,\nNerve Center Operations`},
+    {variant:'numbered',label:report?'Report review card':'Numbered facts',description:report?'Separate the report contents and follow-up.':'Numbered fields for easy reference.',body:report?`*${title} | REPORT REVIEW*\n\n*1. ${single?'Selected report':'Report contents'}*\n${lines}\n\n*2. Review and follow-up*\n${action}\n\nGenerated by Nerve Center.`:`*${title} | FACTS AT A GLANCE*\n\n${fields.map((field,index)=>`${index+1}. ${field}: {{${index+1}}}`).join('\n')}\n\n*Follow-up:* ${action}`},
+    {variant:'dashboard',label:'Status card',description:report?'A report-ready card with a clear next step.':'A visual event card with labelled facts.',body:`📋 *${title}*\n${intro}\n━━━━━━━━━━━━\n${lines}\n━━━━━━━━━━━━\n*Next step*\n${action}\n\nNerve Center · Operational update`},
   ];
 }
 export function validateCustomTemplate(purpose,body) {
@@ -50,5 +101,9 @@ export function validateCustomTemplate(purpose,body) {
 }
 export function previewReportTemplate(purpose,body) {
   const base=META_WORKFLOW_TEMPLATES[baseTemplateKey(purpose)];
-  return String(body||'').replace(/\{\{(\d+)\}\}/g,(_,index)=>base?.example[Number(index)-1]||`[field ${index}]`);
+  const single=singleReportsByKey.get(purpose);
+  const example=single?[`${single.label} | SCOPE: Sasti OB | 4 rows | PDF: https://example.com/reports/sample.pdf | Excel: https://example.com/reports/sample.xlsx`]
+    :purpose==='consolidatedRequestReport'?['Fleet report bundle | SCOPE: Sasti OB | Road status: 24 rows | Availability: 8 rows | PDF / Excel: https://example.com/reports/bundle']
+    :base?.example;
+  return String(body||'').replace(/\{\{(\d+)\}\}/g,(_,index)=>String(example?.[Number(index)-1]||`[field ${index}]`).replace(/\s+/g,' '));
 }

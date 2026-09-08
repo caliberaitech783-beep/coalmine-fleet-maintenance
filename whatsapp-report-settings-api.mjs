@@ -1,6 +1,6 @@
 import {normalizeWhatsAppReportSettings,whatsappSettingsValidationError,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {validateCustomTemplate} from './whatsapp-template-catalog.mjs';
-import {candidateReportTemplate,effectiveReportTemplate} from './whatsapp-template-runtime.mjs';
+import {requestedReportTemplate,effectiveReportTemplate} from './whatsapp-template-runtime.mjs';
 
 export function canManageWhatsAppReports(session={}) {
   return session.role==='super'&&['Admin','Super Admin'].includes(session.permissions?.adminLevel);
@@ -35,7 +35,7 @@ export function registerWhatsAppReportSettingsApi(app,{requireSession,authorize,
 
 export function reportTemplateState(settings,approvals) {
   return Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>{
-    const candidate=candidateReportTemplate(key,settings.templates[key]),effective=effectiveReportTemplate(key,settings,approvals);
+    const candidate=requestedReportTemplate(key,settings),effective=effectiveReportTemplate(key,settings,approvals);
     return [key,{name:candidate.name,status:approvals[candidate.name]?.status||'NOT_CHECKED',checkedAt:approvals[candidate.name]?.checkedAt||null,
       usingRequested:candidate.name===effective.name,effectiveName:effective.name}];
   }));

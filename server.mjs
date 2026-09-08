@@ -25,7 +25,8 @@ import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDe
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
-import {candidateReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
+import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
+import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
@@ -1040,7 +1041,7 @@ registerWhatsAppReportSettingsApi(app,{
   },
   syncTemplates:async(action)=>{
     const [settings,previous,env]=await Promise.all([storedWhatsAppReportSettings(),storedWhatsAppTemplateApprovals(),metaWhatsAppRuntimeEnv()]);
-    const candidates=new Map(PURPOSE_OPTIONS.map(({key})=>{const template=candidateReportTemplate(key,settings.templates[key]);return [template.name,template];}));
+    const candidates=new Map(PURPOSE_OPTIONS.map(({key})=>{const template=requestedReportTemplate(key,settings);return [template.name,template];}));
     const templates=Object.fromEntries(candidates);
     const statuses=action==='submit'?await submitMetaWhatsAppTemplates({env,templates}):await metaWhatsAppTemplateStatuses({env,templates});
     const checkedAt=new Date().toISOString();
@@ -1837,9 +1838,10 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
           eventRequest:event?.request||null,
         });
         const env=await metaWhatsAppRuntimeEnv();
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
+        const messagePurpose=hierarchyReportMessagePurpose(reportTitles);
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:messagePurpose,parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
         catch(templateError){
-          if(event&&templateError.code!=='WHATSAPP_POLICY_PAUSED')await sendMetaWhatsAppText({to:phone,message:reportTemplateFallback('consolidatedRequestReport',[bundle.message],env.WHATSAPP_REPORT_SETTINGS,env.WHATSAPP_TEMPLATE_APPROVALS,bundle.message),purpose:'consolidatedRequestReport'},{env});
+          if(event&&templateError.code!=='WHATSAPP_POLICY_PAUSED')await sendMetaWhatsAppText({to:phone,message:reportTemplateFallback(messagePurpose,[bundle.message],env.WHATSAPP_REPORT_SETTINGS,env.WHATSAPP_TEMPLATE_APPROVALS,bundle.message),purpose:messagePurpose},{env});
           else throw templateError;
         }
         sent++;
