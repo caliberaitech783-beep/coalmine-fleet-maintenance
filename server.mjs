@@ -2423,9 +2423,8 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
   try{
     const manager=await currentUserRecord(req.session);
     const designation=flowDesignationForUser(manager,{permissions:req.session.permissions,assignedRole:req.session.assignedRole});
-    const managerRoles=managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole);
-    const canApproveIdle=req.session.role==='super'&&(designation?.key==='projectManager'||(req.session.permissions?.adminLevel==='Manager'&&managerRoles.includes('Production Manager')));
-    if(!canApproveIdle)return res.status(403).json({error:'Only the assigned Project Manager or Production Manager can approve an Idle request.'});
+    const canApproveIdle=req.session.role==='super'&&(designation?.key==='projectManager'||req.session.permissions?.adminLevel==='Manager');
+    if(!canApproveIdle)return res.status(403).json({error:'Only an assigned manager can approve an Idle request.'});
     const reference=String(req.params.reference||'').trim();
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
