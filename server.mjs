@@ -198,6 +198,8 @@ async function migrate(){
       accepted_at TIMESTAMPTZ,
       accepted_by TEXT NOT NULL DEFAULT '',
       acceptance_required BOOLEAN NOT NULL DEFAULT FALSE,
+      arrival_flagged_at TIMESTAMPTZ,
+      arrival_flagged_by TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'Open',
       owner_name TEXT NOT NULL DEFAULT 'Normal User',
       closed_at TIMESTAMPTZ,
@@ -270,6 +272,8 @@ async function migrate(){
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS accepted_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS arrival_flagged_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS arrival_flagged_by TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'Pending';
     ALTER TABLE maintenance_requests
@@ -2058,6 +2062,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
+  to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
@@ -2245,6 +2250,31 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:false});
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     res.status(updatedToday?200:201).json((await attachDailyRemarks(rows))[0]);
+  }catch(error){next(error)}
+});
+
+app.patch('/api/requests/:reference/arrival-flag',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const {rows:currentRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const current=currentRows[0];
+    if(!current)return res.status(404).json({error:'This maintenance request no longer exists.'});
+    if(req.session.role==='normal'){
+      const user=await currentUserRecord(req.session);
+      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(current.site))
+        return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
+    }
+    if(current.arrivalFlaggedAt)return res.json((await attachDailyRemarks(currentRows))[0]);
+    const {rows}=await pool.query(`UPDATE maintenance_requests
+      SET arrival_flagged_at=NOW(),arrival_flagged_by=$1
+      WHERE reference=$2 AND acceptance_required=TRUE AND accepted_at IS NULL
+        AND status NOT IN ('Closed','Idle','Ideal') AND started_at<=NOW()-INTERVAL '1 hour'
+        AND arrival_flagged_at IS NULL
+      RETURNING ${requestProjection}`,[req.session.name||'Maintenance User',reference]);
+    if(!rows.length)return res.status(409).json({error:'The red flag is available only after the vehicle has remained unreceived for one hour.'});
+    req.audit={eventType:'Workflow',module:'Maintenance Requests',action:'Red flag vehicle arrival',targetType:'Maintenance request',targetReference:reference,reason:'Vehicle has not reached maintenance after one hour',changedFields:[{field:'arrivalFlaggedAt',before:'',after:rows[0].arrivalFlaggedAt},{field:'arrivalFlaggedBy',before:'',after:rows[0].arrivalFlaggedBy}]};
+    res.json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
 });
 
