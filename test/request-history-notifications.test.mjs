@@ -41,8 +41,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
 });
 
 test("maintenance closed history shows closing time beside started time",()=>{
-  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\}/);
-  assert.match(source,/\{startedHeader\(\)\}<\/>\}\{showClosedAt && workflowHeader\("closedAt", "Closing time"\)\}/);
+  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{isMis \? "Maintenance Closing Time" : "Closing time"\} showVerifiedBy=\{isMis\}/);
+  assert.match(source,/\{startedHeader\(\)\}<\/>\}\{showClosedAt && workflowHeader\("closedAt", closedAtLabel\)\}/);
   assert.match(source,/\{startedCell\(row\)\}<\/>\}\s*\{showClosedAt && <td>\{formatTwelveHourDateTime\(row\.closedAt\)\}<\/td>\}/);
 });
 
@@ -50,4 +50,5 @@ test("MIS closed history labels production and maintenance timestamps", () => {
   assert.match(source,/startedLabel=\{isMis \? "Production date and time" : "Started"\}/);
   assert.match(source,/showClosedAt=\{isMaintenance \|\| isMis\}/);
   assert.match(source,/const startedHeader = \(\) => workflowHeader\("start", startedLabel\)/);
+  assert.match(source,/closedAtLabel=\{isMis \? "Maintenance Closing Time" : "Closing time"\}/);
 });
