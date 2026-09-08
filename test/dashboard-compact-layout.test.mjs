@@ -24,7 +24,9 @@ test("site breakdown view reconciles one-line site totals and opens day-wise con
   assert.match(client, /breakdownMovementForRange/);
   assert.match(client, /dailyBreakdownMovement/);
   assert.match(client, /<span>Site name<\/span><span>BD Open<\/span><span>BD In<\/span><span>BD Out<\/span><span>BD Balance<\/span><span>Availability count impact<\/span>/);
-  assert.match(client, /className: "balance" \}\]\.map\(\(item\) => <div[^>]*className=\{item\.className\} key=\{item\.label\}><span>\{item\.label\}<\/span><strong>\{item\.value\.toLocaleString\(\)\}<\/strong><\/div>\)\}/);
+  assert.match(client, /label: "BD In", value: breakdownMovementTotals\.open \+ breakdownMovementTotals\.incoming, className: "all"/);
+  assert.doesNotMatch(client, /label: "BD Open", value: breakdownMovementTotals\.open/);
+  assert.match(css, /\.mine-breakdown-movement-kpis\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
   assert.doesNotMatch(client, /<small>\{breakdownSummaryStartKey\} to \{breakdownSummaryEndKey\}<\/small>/);
   assert.match(client, /\[2, 5, 10\]\.map/);
   assert.match(client, /aria-label="Breakdown movement from date"/);
