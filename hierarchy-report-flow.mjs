@@ -155,12 +155,6 @@ function hierarchyList(value){
 
 export function applyHierarchyDeliveryRule(settings,designationKey,rule={}){
   const normalized=normalizeHierarchyReportScheduleSettings(settings||{});
-  const existing=normalized.designations[designationKey];
-  if(existing){
-    if(typeof rule.deliveryEnabled==='boolean')existing.enabled=rule.deliveryEnabled;
-    if(typeof rule.deliveryAllRecipients==='boolean')existing.allRecipients=rule.deliveryAllRecipients;
-    if(Array.isArray(rule.deliveryRecipientLogins))existing.recipientLogins=[...new Set(rule.deliveryRecipientLogins.map(login=>clean(login).toLowerCase()).filter(Boolean))].slice(0,500);
-  }
   if(!Object.prototype.hasOwnProperty.call(rule,'scheduleDays')&&!Object.prototype.hasOwnProperty.call(rule,'scheduleTimes'))return normalized;
   const designation=normalized.designations[designationKey];
   if(!designation)return normalized;

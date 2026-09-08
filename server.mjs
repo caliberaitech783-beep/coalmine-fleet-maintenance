@@ -38,9 +38,6 @@ import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipme
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
-import {personalReportsForUser} from './report-access.mjs';
-import {defaultPersonalReportSchedules,normalizePersonalReportSchedules,personalScheduleValidationError,personalReportSourceData} from './personal-report-schedules.mjs';
-import {createPersonalReportDelivery} from './personal-report-delivery.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -417,11 +414,6 @@ async function migrate(){
     CREATE TABLE IF NOT EXISTS app_settings (
       setting_key TEXT PRIMARY KEY,
       setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS personal_report_schedules (
-      user_id BIGINT PRIMARY KEY REFERENCES master_records(id) ON DELETE CASCADE,
-      settings JSONB NOT NULL DEFAULT '{"enabled":false,"schedules":[]}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE TABLE IF NOT EXISTS whatsapp_alert_history (
@@ -1005,71 +997,77 @@ function canManageAllReportSchedules(session){
   return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager';
 }
 
-// Legacy organisation settings are read only here, for Hierarchy master to
-// display pre-existing recipient gates without silently reactivating delivery.
+function reportsAssignedToDesignation(settings,designationKey){
+  return [...new Set((settings.designations?.[designationKey]?.schedules||[]).flatMap((schedule)=>schedule.reports||[]))];
+}
+
+async function reportScheduleScope(session,settings){
+  if(canManageAllReportSchedules(session))return {canManageAll:true,allowedDesignationKeys:Object.keys(settings.designations||{}),allowedReports:DIRECTOR_REPORT_TITLES};
+  const user=await currentUserRecord(session);
+  const resolved=resolveMobileAccess({user});
+  const profile={...resolved,assignedRole:session?.assignedRole||resolved.assignedRole,permissions:{...resolved.permissions,...(session?.permissions||{})}};
+  const designation=flowDesignationForUser(user,profile);
+  if(!designation)return null;
+  return {canManageAll:false,allowedDesignationKeys:[designation.key],allowedReports:reportsAssignedToDesignation(settings,designation.key),user};
+}
+
+function scopedReportScheduleSettings(settings,scope){
+  if(scope.canManageAll)return settings;
+  const key=scope.allowedDesignationKeys[0];
+  return {designations:{[key]:settings.designations[key]}};
+}
+
 app.get('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
   try{
-    const authorization=await currentDashboardAuthorization(req.session);
-    if(!authorization||!canManageAllReportSchedules(authorization.session)
-      ||(!masterAccessAllows(authorization.session.permissions,'Hierarchy master')&&!masterAccessAllows(authorization.session.permissions,'Hierarchy master','mobileMasterAccess')))
-      return res.status(403).json({error:'Only a hierarchy administrator can view organisation delivery settings.'});
     const [{rows},settings]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
       storedHierarchyReportScheduleSettings(),
     ]);
+    const scope=await reportScheduleScope(req.session,settings);
+    if(!scope)return res.status(403).json({error:'No report designation is assigned to this profile.'});
     const recipients={};
     for(const row of rows){
       const user=row.record_data||{};
       const designation=flowDesignationForUser(user,resolveMobileAccess({user}));
       const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
-      if(!designation||!login)continue;
+      if(!designation||!login||!scope.allowedDesignationKeys.includes(designation.key))continue;
       (recipients[designation.key]??=[]).push({login,name:String(user.employee||user.name||user.login||login).trim(),hasPhone:Boolean(String(user.phone||user.phoneNo||user.phoneNumber||'').trim())});
     }
-    res.set('Cache-Control','private, no-store');
-    res.json({settings,recipients});
+    res.json({settings:scopedReportScheduleSettings(settings,scope),recipients,canManageAll:scope.canManageAll,allowedDesignationKeys:scope.allowedDesignationKeys,allowedReports:scope.allowedReports});
   }catch(error){next(error)}
 });
 
 app.put('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
-  res.status(410).json({error:'Organisation delivery is now managed in Masters > Hierarchy master. Reload the app to use My report schedules for personal delivery.'});
-});
-
-async function personalReportContext(session){
-  const authorization=await currentDashboardAuthorization(session);
-  if(!authorization?.userId)return null;
-  const allowedReports=personalReportsForUser(authorization.session);
-  const scope=dashboardEquipmentScope(authorization.session,authorization.user);
-  const user=authorization.user;
-  return {...authorization,allowedReports:dashboardEquipmentScopeIsUsable(scope)?allowedReports:[],scope,
-    phone:String(user.phone||user.phoneNo||user.phoneNumber||'').trim(),
-    name:String(user.employee||user.name||user.login||'').trim(),
-  };
-}
-
-app.get('/api/me/report-schedules',requireSession,async(req,res,next)=>{
   try{
-    const context=await personalReportContext(req.session);
-    if(!context)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
-    const {rows}=await pool.query('SELECT settings FROM personal_report_schedules WHERE user_id=$1',[context.userId]);
-    res.set('Cache-Control','private, no-store');
-    res.vary('Authorization');
-    res.json({settings:normalizePersonalReportSchedules(rows[0]?.settings||defaultPersonalReportSchedules(),context.allowedReports),
-      allowedReports:context.allowedReports,recipient:{name:context.name,phone:context.phone},
-      unavailableReason:context.allowedReports.length?'':'No reports or report sites are currently assigned to your account. Contact an administrator.'});
-  }catch(error){next(error)}
-});
-
-app.put('/api/me/report-schedules',requireSession,async(req,res,next)=>{
-  try{
-    const context=await personalReportContext(req.session);
-    if(!context)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
-    const error=personalScheduleValidationError(req.body,context.allowedReports);
-    if(error)return res.status(400).json({error});
-    if(req.body.enabled&&!context.phone)return res.status(400).json({error:'Add your WhatsApp phone number in Users & employees before enabling personal delivery.'});
-    const settings=normalizePersonalReportSchedules(req.body,context.allowedReports);
-    await pool.query(`INSERT INTO personal_report_schedules (user_id,settings,updated_at) VALUES ($1,$2::jsonb,NOW())
-      ON CONFLICT (user_id) DO UPDATE SET settings=EXCLUDED.settings,updated_at=NOW()`,[context.userId,JSON.stringify(settings)]);
-    res.json({settings,allowedReports:context.allowedReports,recipient:{name:context.name,phone:context.phone}});
+    const current=await storedHierarchyReportScheduleSettings();
+    const scope=await reportScheduleScope(req.session,current);
+    if(!scope)return res.status(403).json({error:'No report designation is assigned to this profile.'});
+    let settings;
+    if(scope.canManageAll){
+      settings=normalizeHierarchyReportScheduleSettings(req.body||{});
+    }else{
+      const designationKey=scope.allowedDesignationKeys[0];
+      const existing=current.designations[designationKey];
+      const submitted=req.body?.designations?.[designationKey];
+      if(!submitted||typeof submitted!=='object')return res.status(400).json({error:'Your assigned report schedule was not provided.'});
+      const allowedReports=new Set(scope.allowedReports);
+      const schedules=(Array.isArray(submitted.schedules)?submitted.schedules:[]).map((schedule)=>({
+        ...schedule,
+        reports:(Array.isArray(schedule.reports)?schedule.reports:scope.allowedReports).filter((title)=>allowedReports.has(title)),
+      }));
+      settings=normalizeHierarchyReportScheduleSettings({designations:{...current.designations,[designationKey]:{
+        ...submitted,
+        allRecipients:existing.allRecipients,
+        recipientLogins:existing.recipientLogins,
+        schedules,
+      }}});
+    }
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
+      HIERARCHY_REPORT_SCHEDULE_SETTING_KEY,JSON.stringify(settings),
+    ]);
+    const savedScope=await reportScheduleScope(req.session,settings);
+    res.json({settings:scopedReportScheduleSettings(settings,savedScope),canManageAll:savedScope.canManageAll,allowedDesignationKeys:savedScope.allowedDesignationKeys,allowedReports:savedScope.allowedReports});
   }catch(error){next(error)}
 });
 
@@ -1377,7 +1375,7 @@ async function currentUserRecord(session,client=pool){
 
 async function currentDashboardAuthorization(session,client=pool){
   const [{rows:userRows},{rows:privilegeRows}]=await Promise.all([
-    client.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`),
+    client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
     client.query(`SELECT record_data FROM master_records WHERE master_name='Privilege'`),
   ]);
   const user=currentDashboardUserCandidate(userRows,session);
@@ -1387,7 +1385,7 @@ async function currentDashboardAuthorization(session,client=pool){
     String(session?.login||'').trim().toLowerCase(),
   ].filter(Boolean));
   const profile=resolveMobileAccess({user,privilege:privilegeForUser(privilegeRows,identifiers)});
-  return {user,userId:userRows.find(row=>row.record_data===user)?.id,session:dashboardSessionFromProfile(profile)};
+  return {user,session:dashboardSessionFromProfile(profile)};
 }
 
 function ticketProjection(){
@@ -1635,12 +1633,11 @@ function hierarchyRuleForDesignation(records=[],designation={}){
     .find((record)=>String(record.designation||'').trim().toLowerCase()===wanted);
 }
 
-async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST',siteAccess='',eventRequest=null,personalScope=null}){
+async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST',siteAccess='',eventRequest=null}){
   const selectedTitles=reportTitles?new Set(reportTitles):null;
-  const rawSourceData=await directorReportSourceData();
-  const sourceData=personalScope?personalReportSourceData(rawSourceData,personalScope):sourceDataForSites(rawSourceData,siteAccess);
+  const sourceData=sourceDataForSites(await directorReportSourceData(),siteAccess);
   if(eventRequest)sourceData.requests=sourceDataForSites({requests:[eventRequest],equipmentRecords:[],transferRecords:[]},siteAccess).requests;
-  const tables=buildDirectorReportTables({...sourceData,now}).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
+  const tables=buildDirectorReportTables(sourceData).filter((table)=>!selectedTitles||selectedTitles.has(table.title));
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
   const links=[];
   const files=[];
@@ -1718,36 +1715,6 @@ async function sendScheduledDirectorReportBundles(now=new Date()){
   return {skipped:true,reason:'Director schedule is handled by the hierarchy report flow'};
 }
 
-const sendPersonalReports=createPersonalReportDelivery({
-  listSchedules:async()=>{
-    if(!databaseReady)return [];
-    const {rows}=await pool.query(`SELECT p.user_id AS "userId",p.settings,p.updated_at AS "updatedAt",u.record_data AS "user"
-      FROM personal_report_schedules p JOIN master_records u ON u.id=p.user_id
-      WHERE u.master_name='Users & employees' AND p.settings->>'enabled'='true'`);
-    return rows;
-  },
-  resolveContext:saved=>personalReportContext({login:saved.user.login||String(saved.user.employee||'').trim().split(/\s+/)[0],name:saved.user.employee}),
-  claim:async(userId,slotKey)=>{
-    const {rows}=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
-      (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,'PERSONAL','Sending',1,NOW())
-      ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
-        SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
-        WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
-      RETURNING id`,[slotKey,`user:${userId}`]);
-    return rows[0]?.id;
-  },
-  publish:({context,slot,now})=>publishDirectorReportFiles({baseUrl:publicBaseUrl(),slotKey:`personal-${context.userId}-${slot.slotKey}`,now,
-    reportTitles:slot.reports,heading:'My scheduled reports',scheduleLabel:slot.scheduleLabel,personalScope:context.scope}),
-  deliver:async({to,message})=>sendMetaWhatsAppTemplate({to,templateKey:'consolidatedRequestReport',parameters:[message.replace(/\s+/g,' ').trim()]},{env:await metaWhatsAppRuntimeEnv()}),
-  finish:async({runId,context,slot,status})=>{
-    await Promise.all([
-      pool.query('UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2',[status,runId]),
-      pool.query(`INSERT INTO whatsapp_alert_history (report_type,target_name,report_level,recipient_name,recipient_phone,status)
-        VALUES ($1,$2,$3,$4,$5,$6)`,['Personal scheduled reports','My report schedules',slot.slotKey,context.name,context.phone,status]),
-    ]);
-  },
-});
-
 let hierarchyReportRunning=false;
 async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
   if(!databaseReady||(!event&&hierarchyReportRunning))return {skipped:true};
@@ -1765,12 +1732,12 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
       const profile=resolveMobileAccess({user});
       const designation=flowDesignationForUser(user,profile);
       if(!designation)continue;
+      const designationSettings=scheduleSettings.designations[designation.key];
       const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
       if(eventRecipients&&!eventRecipients.has(login)){skipped++;continue}
+      if(!designationSettings?.allRecipients&&!designationSettings?.recipientLogins?.includes(login)){skipped++;continue}
       const hierarchyRule=hierarchyRuleForDesignation(hierarchyRows,designation);
       const effectiveScheduleSettings=hierarchyRule?applyHierarchyDeliveryRule(scheduleSettings,designation.key,hierarchyRule):scheduleSettings;
-      const designationSettings=effectiveScheduleSettings.designations[designation.key];
-      if(!designationSettings?.allRecipients&&!designationSettings?.recipientLogins?.includes(login)){skipped++;continue}
       const dueGroups=event?reportsForHierarchyEvent(designation.key,event,effectiveScheduleSettings):reportsDueForDesignation(designation.key,now,20,effectiveScheduleSettings);
       if(!dueGroups.length)continue;
       if(event&&hierarchyRule?.siteAccess&&!sourceDataForSites({requests:[event.request],equipmentRecords:[],transferRecords:[]},hierarchyRule.siteAccess).requests.length){skipped++;continue}
@@ -3211,7 +3178,6 @@ async function initializeDatabase(){
       void sendScheduledDirectorReportBundles()
         .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
         .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
-      void sendPersonalReports().catch(error=>console.error('Personal scheduled reports failed.',error));
       void sendScheduledHierarchyReportBundles()
         .then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result))
         .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
@@ -3262,10 +3228,6 @@ if(scheduledJobsEnabled){
       .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
   },60*1000);
   directorWhatsAppTimer.unref?.();
-  const personalReportTimer=setInterval(()=>{
-    void sendPersonalReports().catch(error=>console.error('Personal scheduled reports failed.',error));
-  },60*1000);
-  personalReportTimer.unref?.();
   const hierarchyWhatsAppTimer=setInterval(()=>{
     void sendScheduledHierarchyReportBundles()
       .then(result=>{if(!result?.skipped)console.log('Scheduled hierarchy WhatsApp report check completed.',result)})

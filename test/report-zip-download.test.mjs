@@ -31,9 +31,9 @@ test('reports and schedule configuration are exposed to every signed-in profile 
   assert.match(source,/section === "reports"/);
   assert.match(source,/<FileBarChart \/> Reports/);
   assert.match(source,/accessibleReportGroups/);
-  assert.match(server,/app\.get\('\/api\/me\/report-schedules',requireSession/);
-  assert.match(server,/app\.put\('\/api\/me\/report-schedules',requireSession/);
-  assert.match(server,/personalReportContext\(req\.session\)/);
-  assert.match(server,/user_id=\$1/);
+  assert.match(server,/app\.get\('\/api\/report-schedule-settings',requireSession/);
+  assert.match(server,/app\.put\('\/api\/report-schedule-settings',requireSession/);
+  assert.match(server,/canManageAllReportSchedules/);
+  assert.match(server,/allowedDesignationKeys/);
   assert.match(server,/allowedReports/);
 });

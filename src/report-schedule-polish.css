@@ -1,16 +1,4 @@
 /* Visual refinement for the editable report-schedule dialog. */
-.personal-schedule-help { margin: 16px 20px; color: #65536b; line-height: 1.6; }
-.personal-schedule-help p { margin: 6px 0; }
-.personal-schedule-error { margin: 16px 20px; color: #a12043; line-height: 1.5; }
-.personal-schedule-help .personal-schedule-error { margin: 8px 0; }
-.personal-schedule-empty { padding: 24px 12px; text-align: center; color: #65536b; }
-.personal-schedule-confirmation { color: #286043; max-width: 320px; font-size: 12px; }
-.personal-report-modal .report-schedule-toolbar { display: flex; flex-wrap: wrap; gap: 12px; }
-.personal-report-modal .report-schedule-toolbar > span { color: #65536b; font-size: 12px; }
-.personal-report-modal .report-schedule-switch { padding: 10px; gap: 8px; }
-.personal-report-modal .report-schedule-switch span { white-space: normal; }
-.hierarchy-recipient-controls > label { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
-.hierarchy-recipient-controls input[type="checkbox"] { width: 17px; height: 17px; }
 .director-timing-modal {
   padding: 0 !important;
   border: 1px solid #eadce7;
