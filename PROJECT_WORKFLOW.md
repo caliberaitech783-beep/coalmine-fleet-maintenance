@@ -214,6 +214,24 @@ flowchart TD
 
 ## 9. Dashboard and reports
 
+### Personal schedules and organisation delivery
+
+| UI location | Who it affects | Controls |
+|---|---|---|
+| Reports → **My report schedules** | The signed-in user only | Choose accessible reports, Daily or Weekly, weekday, up to six IST times per schedule, add/delete/pause schedules, pause personal delivery |
+| Masters → **Hierarchy master** → Edit designation | Matching users in that designation | Organisation delivery active, all matching users or selected recipients, reporting files, site access, weekdays and times |
+| Masters → **Users & employees** | The selected employee's account | Registered phone, account role, department and assigned report sites/regions |
+
+Personal delivery is opt-in and starts with no schedules. It sends PDF and Excel links to the employee's current registered WhatsApp number. The user cannot enter another recipient or change a designation's settings from this dialog. Personal reports use the same report categories and site scope as the Reports page; deselecting a report changes delivery preferences, not access permissions. Current report data is generated at delivery time, with Availability covering the current month and other reports retaining their normal report definitions. Download links retain the existing 14-day expiry.
+
+Personal schedules are additional to organisation report bundles and workflow alerts. Turning personal delivery off does not unsubscribe the employee from administrator-controlled messages. Personal schedules support Daily and Weekly delivery; event delivery remains in the existing organisation/workflow paths. The UI supports up to 20 schedules, and overlapping selections at the same time are combined into one personal delivery.
+
+`GET/PUT /api/me/report-schedules` authenticates the caller, resolves the current employee and privilege records, and uses the employee's master-record ID as the storage key. Submitted owner, recipient, designation or site fields cannot change that identity or scope. Report access is checked on saving and again before each send. Missing/removed accounts, missing phone numbers and missing report/site access cannot receive personal bundles. A foreign key deletes personal preferences when the employee master record is deleted, so a reused login does not inherit another employee's schedules.
+
+Storage is the new `personal_report_schedules(user_id, settings, updated_at)` table. It is separate from organisation settings. The sender runs at startup and every minute when scheduled jobs are enabled, allows a 20-minute delivery grace period (including across midnight), and considers only time slots at or after the latest save. It claims each employee/time slot in `whatsapp_consolidated_report_runs` with scope `PERSONAL`; repeated checks do not resend successful slots. Provider failures use the existing maximum of three attempts. History is recorded as **Personal scheduled reports** in WhatsApp alert history. “Sent” means the provider accepted the API request, not confirmed handset delivery/read status.
+
+Hierarchy rows now own `deliveryEnabled`, `deliveryAllRecipients` and `deliveryRecipientLogins`. Until explicitly saved, these fall back to the existing `hierarchy_report_schedules` app setting, preserving paused delivery and existing recipient restrictions during rollout. Its old API GET is restricted to hierarchy administrators; PUT returns 410 and instructs stale clients to reload. Hierarchy master saves the organisation controls with the row's reporting files, sites and days/times. The old organisation configuration is not converted into personal preferences, and rollout does not enable new personal sends.
+
 The Super User dashboard is the mining-operations view. It loads Equipment master, Users & employees, Repair type master, and request data, then derives:
 
 - top-row repair-type cards from the configured Repair type master;

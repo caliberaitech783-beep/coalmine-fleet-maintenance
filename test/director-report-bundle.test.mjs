@@ -72,12 +72,13 @@ test('Director report API and all-user schedule popup are wired into server and 
   assert.match(server,/publishDirectorReportArchive/);
   assert.match(server,/archiveUrl/);
   assert.match(server,/sendScheduledDirectorReportBundles/);
-  assert.match(source,/Report delivery schedules/);
+  const personal=readFileSync(new URL('../src/personal-report-schedules.jsx',import.meta.url),'utf8');
+  assert.match(personal,/My report schedules/);
   assert.match(source,/HIERARCHY_REPORT_DESIGNATIONS/);
-  assert.match(source,/Seven day report schedule summary/);
-  assert.match(source,/Assign schedule to/);
-  assert.match(source,/Save schedules/);
-  assert.match(source,/Every N days/);
+  assert.match(personal,/Seven day personal report schedule summary/);
+  assert.doesNotMatch(personal,/Assign schedule to/);
+  assert.match(personal,/Save my schedules/);
+  assert.match(personal,/<option value="weekly">Weekly/);
   assert.match(server,/app\.get\('\/api\/report-schedule-settings'/);
   assert.match(server,/app\.put\('\/api\/report-schedule-settings'/);
   assert.match(css,/\.director-timing-modal/);
