@@ -7029,7 +7029,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showArrivalFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onEdit, onDelete, onClose, onVerify, onRemark, onFlagArrival }) {
+function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showArrivalFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onFlagArrival, onEdit, onDelete, onClose, onVerify, onRemark }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
@@ -7062,6 +7062,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
     ...(startedFirst ? [startedColumn, ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn]),
+    ...(showClosedAt ? [{key: "closedAt", label: closedAtLabel, value: (row) => formatTwelveHourDateTime(row.closedAt)}] : []),
     ...(showArrivalFlagData ? [
       {key: "arrivalFlaggedAt", label: "Red flag raised", value: (row) => formatTwelveHourDateTime(row.arrivalFlaggedAt)},
       {key: "arrivalFlaggedBy", label: "Flagged by", value: (row) => row.arrivalFlaggedBy},
@@ -7070,7 +7071,6 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
       {key: "arrivalDelay", label: "Arrival delay", value: (row) => elapsedLabel(row.start, row.acceptedAt || new Date(now))},
       {key: "acceptedBy", label: "Received by", value: (row) => row.acceptedBy || "Pending"},
     ] : []),
-    ...(showClosedAt ? [{key: "closedAt", label: closedAtLabel, value: (row) => formatTwelveHourDateTime(row.closedAt)}] : []),
     ...(showTurnaroundTime ? [{key: "hours", label: "Turn around time (TAT)", value: (row) => row.hours}] : []),
     {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysFromStart(row.start, now)},
     {key: "dailyRemarks", label: "Daily remarks", value: (row) => row.dailyRemarks},
@@ -7128,7 +7128,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
           {showActions && actionsFirst && <th>Actions</th>}
           {showAcceptedTime && workflowHeader("acceptedTime", "Accepted time")}
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
-          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
@@ -7147,8 +7147,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               {showReason && <td className="request-reason-cell"><div className="request-reason-text">{String(row.complaint || "").trim() || "—"}</div></td>}
               {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}
               {startedFirst ? <>{startedCell(row)}{closedByCell(row)}{verifiedCells(row)}</> : <>{verifiedCells(row)}{closedByCell(row)}{startedCell(row)}</>}
-              {showArrivalFlagData && <><td>{formatTwelveHourDateTime(row.arrivalFlaggedAt)}</td><td>{row.arrivalFlaggedBy || "—"}</td><td><b>{elapsedLabel(row.start, row.arrivalFlaggedAt)}</b></td><td>{row.acceptedAt ? formatTwelveHourDateTime(row.acceptedAt) : <span className="arrival-not-reached">Not reached</span>}</td><td><b>{elapsedLabel(row.start, row.acceptedAt || new Date(now))}</b></td><td>{row.acceptedBy || "Pending"}</td></>}
               {showClosedAt && <td>{formatTwelveHourDateTime(row.closedAt)}</td>}
+              {showArrivalFlagData && <><td>{formatTwelveHourDateTime(row.arrivalFlaggedAt)}</td><td>{row.arrivalFlaggedBy || "—"}</td><td><b>{elapsedLabel(row.start, row.arrivalFlaggedAt)}</b></td><td>{row.acceptedAt ? formatTwelveHourDateTime(row.acceptedAt) : <span className="arrival-not-reached">Not reached</span>}</td><td><b>{elapsedLabel(row.start, row.acceptedAt || new Date(now))}</b></td><td>{row.acceptedBy || "Pending"}</td></>}
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
               <td><MaintenanceRemarks remarks={row.dailyRemarks} /></td>
