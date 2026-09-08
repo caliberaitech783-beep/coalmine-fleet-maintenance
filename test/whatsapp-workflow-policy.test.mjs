@@ -18,7 +18,7 @@ test('workbook event roles are site scoped',()=>{
   assert.deepEqual(workflowWhatsAppRecipientLogins(users,{eventType:'idle',site:'Sasti OB'}),['production-manager','maintenance-manager','mis-manager','project-manager']);
 });
 
-test('Directors, Admins, and Super Admins never receive workflow WhatsApp messages',()=>{
+test('default rules exclude Directors, Admins and Super Admins from direct workflow WhatsApp messages',()=>{
   const excluded=[
     {login:'admin',userType:'Super User',adminLevel:'Admin',site:'Sasti OB'},
     {login:'super',userType:'Super User',adminLevel:'Super Admin',site:'Sasti OB'},

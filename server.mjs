@@ -23,7 +23,10 @@ import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
-import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
+import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
+import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
+import {candidateReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
+import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
@@ -61,7 +64,8 @@ const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Ko
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
-const WHATSAPP_DELIVERY_PAUSED=false;
+const WHATSAPP_REPORT_SETTING_KEY='whatsapp_report_settings';
+const WHATSAPP_APPROVAL_SETTING_KEY='whatsapp_template_approvals';
 const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
 const AUDIT_REASON_HEADER='x-audit-reason';
 const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
@@ -106,9 +110,20 @@ async function storedHierarchyReportScheduleSettings(){
   return rows.length?normalizeHierarchyReportScheduleSettings(rows[0].setting_value):defaultHierarchyReportScheduleSettings();
 }
 
+async function storedWhatsAppReportSettings(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[WHATSAPP_REPORT_SETTING_KEY]);
+  return normalizeWhatsAppReportSettings(rows[0]?.setting_value);
+}
+setWhatsAppDeliveryPolicyReader(storedWhatsAppReportSettings);
+
+async function storedWhatsAppTemplateApprovals(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[WHATSAPP_APPROVAL_SETTING_KEY]);
+  return rows[0]?.setting_value||{};
+}
+
 async function metaWhatsAppRuntimeEnv(){
   try{
-    const settings=await storedWhatsAppSettings();
+    const [settings,reportSettings,approvals]=await Promise.all([storedWhatsAppSettings(),storedWhatsAppReportSettings(),storedWhatsAppTemplateApprovals()]);
     return {
       ...process.env,
       WHATSAPP_PROVIDER:String(settings.provider||process.env.WHATSAPP_PROVIDER||'meta').trim(),
@@ -117,11 +132,13 @@ async function metaWhatsAppRuntimeEnv(){
       META_WHATSAPP_ACCESS_TOKEN:String(settings.accessToken||process.env.META_WHATSAPP_ACCESS_TOKEN||'').trim(),
       META_WHATSAPP_BUSINESS_ACCOUNT_ID:String(settings.businessAccountId||process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||'').trim(),
       META_GRAPH_VERSION:String(settings.graphVersion||process.env.META_GRAPH_VERSION||'v25.0').trim(),
-      META_WHATSAPP_DELIVERY_PAUSED:String(WHATSAPP_DELIVERY_PAUSED),
+      META_WHATSAPP_DELIVERY_PAUSED:String(!reportSettings.enabled),
+      WHATSAPP_REPORT_SETTINGS:reportSettings,WHATSAPP_TEMPLATE_APPROVALS:approvals,
     };
   }catch(error){
-    console.warn('Could not load stored WhatsApp settings; falling back to environment variables:',error.message);
-    return {...process.env,META_WHATSAPP_DELIVERY_PAUSED:String(WHATSAPP_DELIVERY_PAUSED)};
+    console.warn('Could not load stored WhatsApp settings; delivery is paused until settings can be read:',error.message);
+    // A database read failure must not bypass the saved global pause.
+    return {...process.env,META_WHATSAPP_DELIVERY_PAUSED:'true'};
   }
 }
 
@@ -823,7 +840,7 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
       await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',parameters:[otp]},{env:whatsappEnv});
     }catch(templateError){
       console.warn('Password reset OTP template unavailable; using WhatsApp text fallback:',templateError.message);
-      try{await sendMetaWhatsAppText({to:phone,message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv})}
+      try{await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv})}
       catch(deliveryError){
         await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
         console.error('Password reset OTP delivery failed:',deliveryError.message);
@@ -997,6 +1014,43 @@ function canManageAllReportSchedules(session){
   return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager';
 }
 
+async function readWhatsAppReportSettingsDetails(){
+  const [{rows},approvals]=await Promise.all([
+    pool.query('SELECT setting_value,updated_at FROM app_settings WHERE setting_key=$1',[WHATSAPP_REPORT_SETTING_KEY]),
+    storedWhatsAppTemplateApprovals(),
+  ]);
+  const settings=normalizeWhatsAppReportSettings(rows[0]?.setting_value);
+  return {settings,revision:rows[0]?new Date(rows[0].updated_at).toISOString():null,templateState:reportTemplateState(settings,approvals)};
+}
+
+registerWhatsAppReportSettingsApi(app,{
+  requireSession,authorize:currentDashboardAuthorization,read:readWhatsAppReportSettingsDetails,
+  save:async(settings,revision)=>{
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[WHATSAPP_REPORT_SETTING_KEY]);
+      const {rows}=await client.query('SELECT updated_at FROM app_settings WHERE setting_key=$1',[WHATSAPP_REPORT_SETTING_KEY]);
+      const currentRevision=rows[0]?new Date(rows[0].updated_at).toISOString():null;
+      if(revision!==currentRevision)throw Object.assign(new Error('Report settings changed in another session. Reload before saving.'),{status:409});
+      await client.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+        ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[WHATSAPP_REPORT_SETTING_KEY,JSON.stringify(settings)]);
+      await client.query('COMMIT');
+    }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  },
+  syncTemplates:async(action)=>{
+    const [settings,previous,env]=await Promise.all([storedWhatsAppReportSettings(),storedWhatsAppTemplateApprovals(),metaWhatsAppRuntimeEnv()]);
+    const candidates=new Map(PURPOSE_OPTIONS.map(({key})=>{const template=candidateReportTemplate(key,settings.templates[key]);return [template.name,template];}));
+    const templates=Object.fromEntries(candidates);
+    const statuses=action==='submit'?await submitMetaWhatsAppTemplates({env,templates}):await metaWhatsAppTemplateStatuses({env,templates});
+    const checkedAt=new Date().toISOString();
+    const approvals={...previous,...Object.fromEntries([...candidates.keys()].map(name=>[name,{status:'NOT_SUBMITTED',checkedAt}]))};
+    for(const template of statuses)approvals[template.name]={status:template.status,checkedAt};
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[WHATSAPP_APPROVAL_SETTING_KEY,JSON.stringify(approvals)]);
+  },
+});
+
 function reportsAssignedToDesignation(settings,designationKey){
   return [...new Set((settings.designations?.[designationKey]?.schedules||[]).flatMap((schedule)=>schedule.reports||[]))];
 }
@@ -1167,7 +1221,7 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
   try{
     const result=await sendMetaWhatsAppTemplate({
       to:recipientPhone,
-      templateKey:'consolidatedRequestReport',
+      templateKey:'consolidatedRequestReport',purpose:'manualReports',
       parameters:[message],
     },{env:await metaWhatsAppRuntimeEnv()});
     const {rows}=await pool.query(`INSERT INTO whatsapp_alert_history
@@ -1401,29 +1455,32 @@ function ticketProjection(){
 function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
 const userManagesSite=(user,site)=>reportScopeIncludesSite(managerReportScope(user),site);
 
-async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site=''}={}){
+async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site='',purpose=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   if(!logins.length)return [];
+  const reportSettings=await storedWhatsAppReportSettings();
+  const messagePurpose=purpose||workflowTemplate?.templateKey||'';
+  if(!whatsappPurposeEnabled(reportSettings,messagePurpose))return logins.map(login=>({login,status:'Skipped - paused by Report settings'}));
   const {rows}=await client.query(`SELECT record_data FROM master_records
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
   const contacts=new Map();
   const usersByLogin=new Map();
   const requestTemplate=String(workflowTemplate?.templateKey||'').startsWith('request');
-  const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
-  // A duplicate legacy Admin row must never opt the same Super Admin login
-  // into immediate request traffic. Super Admin receives scheduled bundles.
+  const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user,resolveMobileAccess({user}),reportSettings,workflowType)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
+  // Workflows use explicit role choices, including duplicate-login exclusions.
+  // Legacy request calls without a workflow still exclude Super Admin traffic.
   const superAdminLogins=new Set(rows.map(({record_data})=>record_data||{}).filter(isTrueSuperAdmin).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean));
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
     if(workflowExcludedLogins.has(login))continue;
-    if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site))continue;
-    if(requestTemplate&&superAdminLogins.has(login))continue;
+    if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site,reportSettings))continue;
+    if(requestTemplate&&!workflowType&&superAdminLogins.has(login))continue;
     const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
     if(login&&!usersByLogin.has(login))usersByLogin.set(login,user);
     if(login&&phone&&!contacts.has(login))contacts.set(login,{name:String(user.employee||user.name||user.login||login),phone});
   }
-  const eligibleLogins=requestTemplate?logins.filter((login)=>!superAdminLogins.has(login)):logins;
+  const eligibleLogins=workflowType?[...usersByLogin.keys()]:requestTemplate?logins.filter((login)=>!superAdminLogins.has(login)):logins;
   const missingPhone=eligibleLogins.filter((login)=>!contacts.has(login));
   const missingResults=await Promise.all(missingPhone.map(async(login)=>{const user=usersByLogin.get(login)||{};const status='Skipped - phone number missing';await pool.query(`INSERT INTO whatsapp_alert_history
     (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -1432,11 +1489,15 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
     let status='Sent';
     try{
       const whatsappEnv=await metaWhatsAppRuntimeEnv();
-      if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate},{env:whatsappEnv})}
-      catch(templateError){console.warn(`WhatsApp template ${workflowTemplate.templateKey} unavailable; using text fallback:`,templateError.message);await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv})}
-      else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv});
+      if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate,purpose:messagePurpose},{env:whatsappEnv})}
+      catch(templateError){
+        if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
+        const fallback=reportTemplateFallback(messagePurpose,workflowTemplate.parameters,whatsappEnv.WHATSAPP_REPORT_SETTINGS,whatsappEnv.WHATSAPP_TEMPLATE_APPROVALS,`Nerve Center notification\n${message}`);
+        await sendMetaWhatsAppText({to:contact.phone,message:fallback,purpose:messagePurpose},{env:whatsappEnv});
+      }
+      else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`,purpose:messagePurpose},{env:whatsappEnv});
     }
-    catch(error){status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;console.error(`WhatsApp notification failed for ${login}:`,error.message)}
+    catch(error){status=`${error.code==='WHATSAPP_POLICY_PAUSED'?'Skipped':'Failed'} - ${String(error?.message||'Meta delivery error').slice(0,160)}`;console.error(`WhatsApp notification failed for ${login}:`,error.message)}
     await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
       ['System notification',String(reference||''),'',contact.name,contact.phone,status]);
@@ -1534,10 +1595,12 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
 let consolidatedTicketReportRunning=false;
 async function sendScheduledConsolidatedTicketReports(now=new Date()){
   if(!databaseReady||consolidatedTicketReportRunning)return {skipped:true};
-  if(!ticketReportDue(now))return {skipped:true,reason:'outside scheduled CRM report window'};
+  const reportSettings=await storedWhatsAppReportSettings();
+  if(!whatsappPurposeEnabled(reportSettings,'consolidatedTicketReport',now))return {skipped:true,reason:'paused by Report settings'};
+  if(!ticketReportDue(now,20,reportSettings.crm))return {skipped:true,reason:'outside scheduled CRM report window'};
   consolidatedTicketReportRunning=true;
   try{
-    const window=ticketReportWindow(now);
+    const window=ticketReportWindow(now,reportSettings.crm);
     const [{rows:ticketRows},{rows:userRows}]=await Promise.all([
       pool.query(`SELECT reference,site,creator_name AS "user",message AS remarks,status,
         created_at AS "openedAt",resolved_at AS "resolvedAt"
@@ -1555,16 +1618,17 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       const profile=resolveMobileAccess({user});
       if(profile.sessionRole!=='super')continue;
       const isAdmin=profile.permissions.adminLevel==='Admin';
-      const isManager=profile.permissions.adminLevel==='Manager';
-      if(!isAdmin&&!isManager)continue;
+      const isSuperAdmin=profile.permissions.adminLevel==='Super Admin';
+      if(!reportSettings.crm.recipientRoles.includes(profile.permissions.adminLevel))continue;
       const login=String(user.login||'').trim().toLowerCase();
       const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       if(!login)continue;
       let scope=managerReportScope(user);
-      if(isAdmin&&scope.sites!==null&&!scope.sites.length)scope={key:'ALL',label:'All regions',sites:null};
+      if((isAdmin||isSuperAdmin)&&scope.sites!==null&&!scope.sites.length)scope={key:'ALL',label:'All regions',sites:null};
       if(scope.sites!==null&&!scope.sites.length){skipped++;continue}
       const scopedOpen=openTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
       const scopedClosed=closedTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
+      if(!reportSettings.crm.sendEmpty&&!scopedOpen.length&&!scopedClosed.length){skipped++;continue;}
       const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
         (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
         ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
@@ -1576,12 +1640,14 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       let status='Sent';
       try{
         if(!phone)throw new Error('Phone number missing');
-        const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOPEN TICKETS: ${scopedOpen.length}\nCLOSED TICKETS: ${scopedClosed.length}\nThe complete report is attached as a PDF.`;
+        const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOPEN TICKETS: ${scopedOpen.length}\nCLOSED TICKETS: ${scopedClosed.length}\n${reportSettings.crm.format==='summary'?'Open Nerve Center for complete ticket details.':'The complete report is attached as a PDF.'}`;
         const whatsappEnv=await metaWhatsAppRuntimeEnv();
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]},{env:whatsappEnv})}
-        catch(templateError){console.warn('Consolidated CRM WhatsApp notification template unavailable; attempting PDF delivery:',templateError.message)}
-        const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
-        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`},{env:whatsappEnv});
+        if(reportSettings.crm.format!=='pdf')try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]},{env:whatsappEnv})}
+        catch(templateError){if(templateError.code==='WHATSAPP_POLICY_PAUSED'||reportSettings.crm.format==='summary')throw templateError;console.warn('CRM summary unavailable; attempting PDF delivery:',templateError.message);}
+        if(reportSettings.crm.format!=='summary'){
+          const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
+          await sendMetaWhatsAppDocument({to:phone,buffer:pdf,purpose:'consolidatedTicketReport',filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`},{env:whatsappEnv});
+        }
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
@@ -1695,7 +1761,7 @@ async function sendDirectorReportBundle({recipientPhone,recipientName='Director'
     bundle=await publishDirectorReportFiles({baseUrl,slotKey:window.slotKey,now});
     await sendMetaWhatsAppTemplate({
       to:phone,
-      templateKey:'consolidatedRequestReport',
+      templateKey:'consolidatedRequestReport',purpose:manual?'manualReports':'consolidatedRequestReport',
       parameters:[bundle.message],
     },{env:await metaWhatsAppRuntimeEnv()});
   }catch(error){
@@ -1718,6 +1784,7 @@ async function sendScheduledDirectorReportBundles(now=new Date()){
 let hierarchyReportRunning=false;
 async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
   if(!databaseReady||(!event&&hierarchyReportRunning))return {skipped:true};
+  if(!whatsappPurposeEnabled(await storedWhatsAppReportSettings(),'consolidatedRequestReport',now))return {skipped:true,reason:'paused by Report settings'};
   if(!event)hierarchyReportRunning=true;
   try{
     const [{rows:userRows},{rows:hierarchyRows},scheduleSettings]=await Promise.all([
@@ -1772,7 +1839,7 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
         const env=await metaWhatsAppRuntimeEnv();
         try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
         catch(templateError){
-          if(event)await sendMetaWhatsAppText({to:phone,message:bundle.message},{env});
+          if(event&&templateError.code!=='WHATSAPP_POLICY_PAUSED')await sendMetaWhatsAppText({to:phone,message:reportTemplateFallback('consolidatedRequestReport',[bundle.message],env.WHATSAPP_REPORT_SETTINGS,env.WHATSAPP_TEMPLATE_APPROVALS,bundle.message),purpose:'consolidatedRequestReport'},{env});
           else throw templateError;
         }
         sent++;
@@ -1918,7 +1985,7 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const recipients=await ticketSuperRecipients(client,{creatorRole,site});
     const creatorLogin=String(req.session.login||'').trim().toLowerCase();
     await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} (@${creatorLogin}) created ticket ${reference}.`,
-      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:false});
+      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:true});
     await client.query('COMMIT');
     res.status(201).json(rows[0]);
     sendTicketRaisedEmail(rows[0]).catch((error)=>console.error(`Ticket email failed for ${reference}:`,error.message));
@@ -1948,7 +2015,7 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
     const ticket=result.rows[0];
     const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
     await addTicketNotifications(client,[ticket.creatorLogin,...recipients.managerLogins],ticket.reference,`Ticket ${ticket.reference} was resolved by ${req.session.name||'Admin'}.`,
-      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},{whatsapp:false});
+      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},{whatsapp:true});
     await client.query('COMMIT');
     res.json(ticket);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
@@ -2145,12 +2212,14 @@ async function attachDailyRemarks(rows,client=pool){
 
 async function requestWorkflowWhatsAppLogins(client,{eventType,site}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
-  return workflowWhatsAppRecipientLogins(rows,{eventType,site});
+  return workflowWhatsAppRecipientLogins(rows,{eventType,site,settings:await storedWhatsAppReportSettings()});
 }
 
 let workflowReminderRunning=false;
 async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
   if(!databaseReady||workflowReminderRunning)return {skipped:true};
+  const reportSettings=await storedWhatsAppReportSettings();
+  if(!whatsappPurposeEnabled(reportSettings,'offRoadEscalation',now)&&!whatsappPurposeEnabled(reportSettings,'idleReminder',now))return {skipped:true};
   workflowReminderRunning=true;
   let sent=0,failed=0,skipped=0;
   try{
@@ -2158,14 +2227,16 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
       site,category,owner_name AS owner,idle_reason AS "idleReason",status,started_at AS "startedAtRaw",
       expected_completion_at AS "expectedCompletionAtRaw",ideal_requested_at AS "idleAtRaw"
       FROM maintenance_requests WHERE verified_at IS NULL AND (
-        (status NOT IN ('Closed','Idle','Ideal') AND started_at<=$1::timestamptz-INTERVAL '4 hours') OR
-        (status IN ('Idle','Ideal') AND ideal_requested_at IS NOT NULL AND ideal_requested_at<=$1::timestamptz-INTERVAL '1 hour')
-      )`,[now]);
+        (status NOT IN ('Closed','Idle','Ideal') AND started_at<=$1::timestamptz-($2::int*INTERVAL '1 hour')) OR
+        (status IN ('Idle','Ideal') AND ideal_requested_at IS NOT NULL AND ideal_requested_at<=$1::timestamptz-($3::int*INTERVAL '1 hour'))
+      )`,[now,reportSettings.reminders.offRoad.hours,reportSettings.reminders.idle.hours]);
     for(const request of rows){
       const idle=['Idle','Ideal'].includes(request.status);
       const eventType=idle?'idle':'opened';
       const eventTime=new Date(idle?request.idleAtRaw:request.startedAtRaw);
-      const slotKey=workflowReminderSlot(eventType,eventTime,now);
+      const purpose=idle?'idleReminder':'offRoadEscalation';
+      if(!whatsappPurposeEnabled(reportSettings,purpose,now))continue;
+      const slotKey=workflowReminderSlot(eventType,eventTime,now,reportSettings);
       if(!slotKey)continue;
       const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site});
       const equipmentDetails=requestEquipmentNotificationDetails(request);
@@ -2176,7 +2247,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
         const claim=await pool.query(`INSERT INTO whatsapp_workflow_dispatches (event_type,request_reference,recipient_login,slot_key)
           VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[idle?'idle_repeat':'offroad_escalation',request.ref,login,slotKey]);
         if(!claim.rows.length){skipped+=1;continue}
-        const results=await sendWhatsAppNotifications(pool,[login],request.ref,`${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}.`,workflowTemplate,{workflowType:eventType,site:request.site});
+        const results=await sendWhatsAppNotifications(pool,[login],request.ref,`${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}.`,workflowTemplate,{workflowType:eventType,site:request.site,purpose});
         const status=results[0]?.status||'Skipped';
         if(status==='Sent')sent+=1;else failed+=1;
         await pool.query(`UPDATE whatsapp_workflow_dispatches SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]);
@@ -2297,7 +2368,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&userManagesSite(user,eligible.rows[0].site))recipients.push(login);
     }
     await addTicketNotifications(pool,recipients,reference,`${authorName} ${updatedToday?'updated today’s':'added a'} daily maintenance update for ${reference}.`,
-      {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:false});
+      {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:true});
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     res.status(updatedToday?200:201).json((await attachDailyRemarks(rows))[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
@@ -2486,7 +2557,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     });
     if(ideal){
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
-      const whatsappRecipients=workflowWhatsAppRecipientLogins(userRows,{eventType:'idle',site:rows[0].site});
+      const whatsappRecipients=workflowWhatsAppRecipientLogins(userRows,{eventType:'idle',site:rows[0].site,settings:await storedWhatsAppReportSettings()});
       const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
       const idleAt=requestNotificationTime(new Date());
       await addTicketNotificationsBestEffort(pool,whatsappRecipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Project Manager or Production Manager approval is required to Make On Road.`,

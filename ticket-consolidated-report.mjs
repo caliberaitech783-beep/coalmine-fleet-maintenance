@@ -3,37 +3,32 @@ import {canonicalSiteName} from './site-location.mjs';
 export const TICKET_REPORT_HOURS=[8,15,20];
 const INDIA_OFFSET_MS=330*60*1000;
 
-function zonedParts(date){
-  const shifted=new Date(date.getTime()+INDIA_OFFSET_MS);
-  return {year:shifted.getUTCFullYear(),month:shifted.getUTCMonth(),day:shifted.getUTCDate(),hour:shifted.getUTCHours()};
+export function ticketReportWindow(now=new Date(),settings={}){
+  const times=settings.times??TICKET_REPORT_HOURS.map(hour=>`${String(hour).padStart(2,'0')}:00`);
+  const days=settings.days??[0,1,2,3,4,5,6];
+  const slots=[];
+  for(let age=0;age<=15;age++){
+    const local=new Date(now.getTime()+INDIA_OFFSET_MS-age*86400000);
+    if(!days.includes(local.getUTCDay()))continue;
+    const day=local.toISOString().slice(0,10);
+    for(const time of new Set(times)){
+      if(!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time))continue;
+      const end=new Date(`${day}T${time}:00+05:30`);
+      if(end<=now)slots.push({end,time,day});
+    }
+  }
+  slots.sort((a,b)=>b.end-a.end);
+  if(slots.length<2)return null;
+  const [{end,time,day},{end:start}]=slots;
+  const endHour=Number(time.slice(0,2));
+  const timeKey=time.endsWith(':00')?time.slice(0,2):time.replace(':','');
+  return {start,end,endHour,slotKey:`CRM-${day}-${timeKey}`};
 }
 
-function indiaSlotDate({year,month,day},hour){return new Date(Date.UTC(year,month,day,hour)-INDIA_OFFSET_MS)}
-
-export function ticketReportWindow(now=new Date()){
-  const local=zonedParts(now);
-  let index=TICKET_REPORT_HOURS.findLastIndex((hour)=>hour<=local.hour);
-  let endDay={year:local.year,month:local.month,day:local.day};
-  if(index<0){
-    index=TICKET_REPORT_HOURS.length-1;
-    const yesterday=new Date(Date.UTC(local.year,local.month,local.day)-86400000);
-    endDay={year:yesterday.getUTCFullYear(),month:yesterday.getUTCMonth(),day:yesterday.getUTCDate()};
-  }
-  const endHour=TICKET_REPORT_HOURS[index];
-  const end=indiaSlotDate(endDay,endHour);
-  let startDay=endDay,startIndex=index-1;
-  if(startIndex<0){
-    startIndex=TICKET_REPORT_HOURS.length-1;
-    const yesterday=new Date(Date.UTC(endDay.year,endDay.month,endDay.day)-86400000);
-    startDay={year:yesterday.getUTCFullYear(),month:yesterday.getUTCMonth(),day:yesterday.getUTCDate()};
-  }
-  const start=indiaSlotDate(startDay,TICKET_REPORT_HOURS[startIndex]);
-  const slotKey=`CRM-${endDay.year}-${String(endDay.month+1).padStart(2,'0')}-${String(endDay.day).padStart(2,'0')}-${String(endHour).padStart(2,'0')}`;
-  return {start,end,endHour,slotKey};
-}
-
-export function ticketReportDue(now=new Date(),graceMinutes=20){
-  const window=ticketReportWindow(now),delay=now.getTime()-window.end.getTime();
+export function ticketReportDue(now=new Date(),graceMinutes=20,settings={}){
+  const window=ticketReportWindow(now,settings);
+  if(!window)return false;
+  const delay=now.getTime()-window.end.getTime();
   return delay>=0&&delay<=graceMinutes*60*1000;
 }
 

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,reportsForHierarchyEvent,reportsDueForDesignation,flowDesignationForUser} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
+import {defaultWhatsAppReportSettings,whatsappPurposeEnabled} from '../whatsapp-report-settings.mjs';
+import {reportTemplateFallback} from '../whatsapp-template-runtime.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const request={ref:'REQ/123',site:'Sasti OB',requesterLogin:'production',status:'Open'};
@@ -41,7 +43,7 @@ function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
   settings.designations.productionSupervisor.recipientLogins=selected?['production']:[];
   const sent=[],published=[],history=[],claims=new Set();
   const users=[{login:'production',phone:'919999999999'},{login:'other-site',phone:'918888888888'}];
-  const dependencies={databaseReady:true,
+  const dependencies={databaseReady:true,storedWhatsAppReportSettings:async()=>defaultWhatsAppReportSettings(),whatsappPurposeEnabled,reportTemplateFallback,
     pool:{query:async(sql,args=[])=>{
       if(sql.includes("master_name='Users & employees'"))return {rows:users.map(record_data=>({record_data}))};
       if(sql.includes("master_name='Hierarchy master'"))return {rows:[]};
