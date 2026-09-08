@@ -27,8 +27,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/rows=\{activeRequests\} exportTitle=\{workspaceReportTitles.\w+\} showMakeModel showReason showCreatedBy showComplaintAudio/);
   assert.match(source,/rows=\{activeRequests\.filter\(\(row\) => !row\.verifiedAt[\s\S]*showCreatedBy showComplaintAudio showMeterData showActions/);
   assert.match(source,/rows=\{visibleRows\} exportTitle=\{workspaceReportTitles.\w+\} showMakeModel showReason showClosedBy showTurnaroundTime/);
-  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
-  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
+  assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{isMis \? "Maintenance Closing Time" : "Closing time"\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
+  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{isMis \? "Maintenance Closing Time" : "Closing time"\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
   assert.match(source,/showReason=\{productionManagerView\} showClosedBy=\{queueTab==="history"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);
