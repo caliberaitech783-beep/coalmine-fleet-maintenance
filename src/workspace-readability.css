@@ -35,7 +35,8 @@
     min-height: 42px;
     height: auto;
     white-space: normal;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
+    word-break: normal;
   }
   :is(.mobile-workspace, .pagepanel, .ticket-page, .admin-lock-page,
       .modal:not([class*="dashboard-"]):not(.director-timing-modal),
@@ -62,6 +63,24 @@
   .mobile-workspace .row-actions button svg { width: 16px; height: 16px; flex-shrink: 0; }
   :is(.mobile-workspace, .pagepanel, .ticket-page) .status { padding: 6px 10px; gap: 6px; }
 
+  /* Action labels determine their column width, rather than shrinking to letters.
+     Keep real table cells in the table layout; wide tables scroll inside their panel. */
+  :is(.mobile-workspace, .pagepanel, .ticket-page, .admin-lock-page) td.row-actions {
+    display: table-cell;
+    vertical-align: middle;
+    width: 1%;
+    min-width: 0;
+    white-space: nowrap;
+  }
+  :is(.mobile-workspace, .pagepanel, .ticket-page, .admin-lock-page) .row-actions > button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  :is(.mobile-workspace, .pagepanel, .ticket-page, .admin-lock-page) td.row-actions > button + button { margin-inline-start: 8px; }
+  :is(.mobile-workspace, .pagepanel, .ticket-page, .admin-lock-page) button > svg { flex-shrink: 0; }
+
   /* Let controls wrap while wide records retain their own horizontal scroll. */
   :is(.mobile-workspace, .pagepanel) :is(.table-search-toolbar, .toolbar, .master-actions, .shared-table-actions-toolbar),
   .ticket-page :is(.ticket-page-head, .ticket-page-actions, .ticket-toolbar, .ticket-toolbar-controls) {
@@ -71,6 +90,9 @@
   }
   :is(.mobile-workspace, .pagepanel) .table-search-toolbar label { flex: 1 1 220px; min-width: 0; }
   :is(.mobile-workspace, .pagepanel) .table-search-toolbar :is(input, select) { min-height: 44px; }
+  .pagepanel .toolbar > div:first-child:not(.toolbar-actions-end) { min-width: 0; flex: 1 1 220px; }
+  :is(.mobile-workspace, .pagepanel) .toolbar-actions-end { flex-wrap: wrap; max-width: 100%; }
+  :is(.mobile-workspace, .pagepanel) :is(.toolbar, .table-search-toolbar) svg { flex-shrink: 0; }
   .pagepanel > header { flex-wrap: wrap; gap: 16px; }
   .pagepanel > header > div { min-width: 0; }
   :is(.mobile-workspace, .pagepanel, .ticket-page, .admin-lock-page) :is(th, td) { padding: 14px 16px; }
@@ -91,6 +113,7 @@
   .reports-page .generated-report-title { min-width: 0; flex: 1 1 320px; }
   .reports-page .generated-report-title > div { min-width: 0; }
   .reports-page .report-row-limit { height: auto; min-height: 44px; }
+  .reports-page .report-table-filter-toolbar > label { height: auto; min-height: 44px; }
   .reports-page .report-row-limit select { min-height: 40px; }
   .reports-page .report-table-pagination { min-height: 52px; }
   .reports-page .report-category-copy { min-width: 0; overflow-wrap: anywhere; }
@@ -131,6 +154,8 @@
   .pagepanel > header { padding: 16px; }
   .pagepanel .master-actions { flex-wrap: wrap; }
   .pagepanel .master-actions button { flex: 1 1 130px; }
+  /* These toolbars become columns on phones: a desktop flex-basis would be height. */
+  :is(.mobile-workspace, .pagepanel) .table-search-toolbar label { flex: 0 1 auto; width: 100%; }
   .ticket-page :is(.ticket-page-head, .ticket-toolbar) { align-items: stretch; flex-direction: column; padding: 16px; }
   .ticket-page .ticket-page-actions { width: 100%; }
   .reports-page .reports-category-tabs { display: grid; grid-template-columns: minmax(0, 1fr); }
