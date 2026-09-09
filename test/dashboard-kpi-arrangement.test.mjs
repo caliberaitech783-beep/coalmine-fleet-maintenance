@@ -23,7 +23,7 @@ test("request lifecycle counts each workflow timestamp separately", () => {
   assert.match(client, /requestLifecycleRows\.idle/);
   assert.match(client, /opened: locationBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"/);
   assert.match(client, /closed: locationBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "closed"/);
-  assert.match(client, /label: "Opened", note: "New requests"/);
+  assert.match(client, /key: "total", className: "opened", label: "Total Requests", note: "Open \+ Closed", value: requestLifecycleRows\.opened\.length \+ requestLifecycleRows\.closed\.length/);
   assert.match(client, /lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
   assert.match(css, /\.mine-request-lifecycle-chart/);
 });
