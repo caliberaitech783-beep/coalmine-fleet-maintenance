@@ -61,6 +61,10 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
+test("dashboard opens in Breakdown fleet mode by default", () => {
+  assert.match(source, /const \[fleetChartMode, setFleetChartMode\] = useState\("breakdown"\);/);
+});
+
 test("breakdown mode retains total bar heights and adds green breakdown sections", () => {
   assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, siteRequests\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);

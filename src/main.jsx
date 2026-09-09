@@ -1014,7 +1014,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState("");
-  const [fleetChartMode, setFleetChartMode] = useState("total");
+  const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
