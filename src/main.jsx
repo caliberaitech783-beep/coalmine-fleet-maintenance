@@ -7888,6 +7888,11 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardRequests,setDashboardRequests]=useState(requests);
   const [createdRequestRef, setCreatedRequestRef] = useState("");
+  useEffect(() => {
+    if (!createdRequestRef) return undefined;
+    const timer = window.setTimeout(() => setCreatedRequestRef(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [createdRequestRef]);
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
