@@ -59,7 +59,7 @@ function harness(name, extra = {}) {
     BreakdownTable, MobileWorkflowTable, DailyRemarkForm, ManagerIdleConfirmation, RequestEditForm: Null, CloseRequestForm: Null, VerifyRequestForm: Null,
     RequestRedFlagForm: Null, MaintenanceForm: Null, preventTableAutoScroll: () => {},
     arrivalRedFlagRequired: () => false, MIS_VERIFICATION_MENU: "MIS verification", PRODUCTION_REQUEST_COLUMNS: [],
-    Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null,
+    Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, MaintenanceEtcInput: Null,
     requestStartParts: () => ({date: "2026-09-08", time: "14:00:00"}), requestMeterTypeForRequest: () => "HMR",
     indiaDateTimeInputValue: () => "2026-09-08T14:00:00", formatTwelveHourDateTime: value => value || "—",
     normalizeEquipmentGroup: value => value, TIME_24H_PATTERN: ".*", delayedReasonRequired: () => false,

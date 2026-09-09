@@ -11,7 +11,8 @@ test("Breakdown Master status tabs select and filter the table", () => {
     source.indexOf("const OriginalEquipment"),
   );
   assert.match(breakdown, /const \[statusFilter, setStatusFilter\] = useState\("all"\)/);
-  assert.match(breakdown, /const filteredRows = statusFilter === "all"[\s\S]*record\.status/);
+  assert.match(breakdown, /const filteredRows = statusFilter === "all"[\s\S]*requestStatusLabel\(record\)/);
+  assert.match(breakdown, /\["Verified", "Verified", count\("Verified"\)\]/);
   assert.match(breakdown, /role="tablist" aria-label="Breakdown request status"/);
   assert.match(breakdown, /type="button"[\s\S]*role="tab"[\s\S]*aria-selected=\{statusFilter === value\}/);
   assert.match(breakdown, /onClick=\{\(\) => setStatusFilter\(value\)\}/);

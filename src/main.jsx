@@ -1,3 +1,4 @@
+import { requestStatusLabel } from "./request-status.mjs";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
@@ -1202,7 +1203,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       manufacturerSerialNo: equipment?.manufacturerSerialNo || equipment?.chassisNo || request.chassis || "",
       requestSite: request.site || request.location || equipment?.currentLocation || equipment?.location || "",
       requestReference: request.ref || request.reference || "—",
-      requestStatus: request.status || "—",
+      requestStatus: requestStatusLabel(request),
       repairCategory: request.category || "—",
       requestStart: request.start || "—",
       requestClosed: request.closedAt || "—",
@@ -1519,7 +1520,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "category": return <td>{r.category}</td>;
     case "start": return <td>{formatTwelveHourDateTime(r.start)}</td>;
     case "hours": return <td>{r.hours}</td>;
-    case "status": return <td><Status>{r.status}</Status></td>;
+    case "status": return <td><Status>{requestStatusLabel(r)}</Status></td>;
     case "idleReason": return <td>{r.idleReason || "—"}</td>;
     case "dailyRemarks": return <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>;
     case "audio": return <td><div className="request-audio-list">
@@ -1565,6 +1566,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       key,
       label,
       value: (row) => {
+        if (key === "status") return requestStatusLabel(row);
         if (key === "equipment") return normalizeEquipmentGroup(row.equipmentGroup) || row.equipment;
         if (key === "createdBy") return row.owner || row.requesterLogin;
         if (key === "start") return formatTwelveHourDateTime(row.start);
@@ -1572,8 +1574,8 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         return row[key];
       },
     })),
-    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, row.status, row.complaint, row.owner, row.closedBy, row.make, row.model) && (!statusFilter || row.status === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
-    [sortedRows, sort, changeSort] = useSortableRows(searchedRows);
+    searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model) && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
+    [sortedRows, sort, changeSort] = useSortableRows(searchedRows, "", (row, key) => key === "status" ? requestStatusLabel(row) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;
@@ -1593,7 +1595,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
-    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Table controls</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} /><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} /></div></div><div id={statusPanelId || undefined} role={statusPanelId ? "tabpanel" : undefined} aria-labelledby={statusPanelLabelledBy || undefined} className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Table controls</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(requestStatusLabel).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} /><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} /></div></div><div id={statusPanelId || undefined} role={statusPanelId ? "tabpanel" : undefined} aria-labelledby={statusPanelLabelledBy || undefined} className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <ActionsTable className="breakdown-table-auto-fit" printTitle={stableToolbar ? "Manager dashboard requests" : ""} toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
@@ -1630,7 +1632,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>{formatTwelveHourDateTime(r.start)}</td>
                 <td>{r.hours}</td>
                 <td>
-                  <Status>{r.status}</Status>
+                  <Status>{requestStatusLabel(r)}</Status>
                 </td>
                 <td>{r.idleReason || "—"}</td>
                 <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>
@@ -4501,7 +4503,7 @@ function Generic({ name, requests = [] }) {
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
                       <td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td>
-                      <td>{request.start}</td><td><b>{age} {age === 1 ? "day" : "days"}</b></td><td><Status>{request.status}</Status></td>
+                      <td>{request.start}</td><td><b>{age} {age === 1 ? "day" : "days"}</b></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
                 }) : <tr><td colSpan="7" className="empty-state">No service or maintenance requests available</td></tr>}
@@ -4801,7 +4803,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   }), [requests, equipmentByReference]);
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
   const formatTimestamp = (value) => String(value || "—").trim() || "—";
-  const reportRequestStatus = (request) => String(request.status || "").trim() || "Open";
+  const reportRequestStatus = requestStatusLabel;
   const activeCategory = departmentReportCategoryTabs.find((category) => category.id === activeReportCategory) || departmentReportCategoryTabs[0] || reportCategoryTabs[0];
   const openBreakdownRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
   const closedBreakdownRows = reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed");
@@ -6125,17 +6127,18 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
   if ((loadError && !loaded) || (equipmentLoadError && !equipmentLoaded)) return <MasterLoadError name="Breakdown master" error={loadError || equipmentLoadError} retry={() => { retryLoad(); retryEquipmentLoad(); }} />;
   if (!loaded || !equipmentLoaded) return <MasterLoader name="Breakdown master" />;
   const rows = [...requests, ...manualRecords].map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
-  const count = (status) => rows.filter((record) => String(record.status || "").toLowerCase() === status.toLowerCase()).length;
+  const count = (status) => rows.filter((record) => requestStatusLabel(record).toLowerCase() === status.toLowerCase()).length;
   const statusTabs = [
     ["all", "All requests", rows.length],
     ["Open", "Open", count("Open")],
     ["In progress", "In progress", count("In progress")],
     ["Awaiting parts", "Awaiting parts", count("Awaiting parts")],
     ["Closed", "Closed", count("Closed")],
+    ["Verified", "Verified", count("Verified")],
   ];
   const filteredRows = statusFilter === "all"
     ? rows
-    : rows.filter((record) => String(record.status || "").toLowerCase() === statusFilter.toLowerCase());
+    : rows.filter((record) => requestStatusLabel(record).toLowerCase() === statusFilter.toLowerCase());
   const selectStatusFromKeyboard = (event, currentIndex) => {
     const direction = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     const nextIndex = event.key === "Home" ? 0
@@ -6916,7 +6919,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
-  const statusLabel = (row) => (showAcceptanceStatus || showInProgressStatus)
+  const statusLabel = (row) => String(row.verifiedAt || "").trim() ? "Verified" : (showAcceptanceStatus || showInProgressStatus)
     && String(row.acceptedAt || "").trim()
     && ["open", "in progress"].includes(String(row.status || "").trim().toLowerCase())
       ? (showAcceptanceStatus ? "Accepted" : "In progress") : row.status;
@@ -7618,7 +7621,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
             </div>
             <ChevronDown className={expanded === alert.id ? "rotated" : ""} aria-hidden="true" />
             </button>
-            {expanded === alert.id && <div className="ai-feeder-detail" id={`feeder-detail-${alert.id}`}><strong>Recommended next step</strong><p>{alert.detail}</p>{request && <dl>{[["Status", request.status], ["Breakdown started", request.start], ["Expected completion", request.expectedCompletionAt], ["Reported issue", request.complaint], ["Latest remark", request.dailyRemarks]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "Not recorded")}</dd></div>)}</dl>}</div>}
+            {expanded === alert.id && <div className="ai-feeder-detail" id={`feeder-detail-${alert.id}`}><strong>Recommended next step</strong><p>{alert.detail}</p>{request && <dl>{[["Status", requestStatusLabel(request)], ["Breakdown started", request.start], ["Expected completion", request.expectedCompletionAt], ["Reported issue", request.complaint], ["Latest remark", request.dailyRemarks]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "Not recorded")}</dd></div>)}</dl>}</div>}
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
@@ -7685,7 +7688,7 @@ function NotificationRequestEntry({ reference, request = {} }) {
   return <div className="notification-entry-record">
     <div className="notification-entry-hero">
       <div><span>Maintenance request</span><h2>{reference}</h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
-      <Status>{request.status || "Open"}</Status>
+      <Status>{requestStatusLabel(request)}</Status>
     </div>
     <RequestTimelineButton reference={reference} token={authToken} Dialog={Modal} label="View time breakdown and correction history" />
     <dl className="notification-entry-fields">

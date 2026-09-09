@@ -1,3 +1,4 @@
+import {requestStatusLabel} from './src/request-status.mjs';
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
 import {equipmentGroupValue} from './equipment-group.mjs';
 import {elapsedLabel} from './report-metrics.mjs';
@@ -100,11 +101,11 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
     report('mis', DEPARTMENT_REPORT_TITLES[6], 'Transfer history. Chassis number appears once.', [...ids,col('equipment','Equipment / vehicle',r => r.equipment || r.equipmentName),col('model','Model',r => r.model || r.modelNo),col('source','From location'),col('destination','To location'),col('transferNo','Transfer no.'),col('transferDate','Transfer date')],transferRecords,r => r.transferDate),
     report('mis', DEPARTMENT_REPORT_TITLES[7], 'Current equipment and vehicle master records.', [...ids,col('equipmentName','Equipment / vehicle'),col('model','Model'),col('make','Make'),col('itemSpecification','Item specification name'),site],equipmentRecords,() => now.toISOString()),
     report('mis', DEPARTMENT_REPORT_TITLES[8], IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_COLUMNS,buildInOutReportRows(requests,{today:now}),r => r.date),
-    report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...base,col('status','Status'),ref,site],requests),
-    report('production', DEPARTMENT_REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...base,col('status','Status'),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),site,ref],requests),
-    report('production', DEPARTMENT_REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...base,col('status','Status'),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),ref],open),
+    report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...base,col('status','Status',requestStatusLabel),ref,site],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...base,col('status','Status',requestStatusLabel),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),site,ref],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...base,col('status','Status',requestStatusLabel),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),ref],open),
     report('maintenance', DEPARTMENT_REPORT_TITLES[12], 'Vehicle arrival delays reported by maintenance, including the reason for each red flag.', [
-      ref,...base,site,col('status','Request status'),col('start','Production date and time'),
+      ref,...base,site,col('status','Request status',requestStatusLabel),col('start','Production date and time'),
       col('arrivalFlaggedAt','Red flag raised'),col('arrivalFlaggedBy','Flagged by'),
       col('arrivalFlagRemark','Red flag reason',r => clean(r.arrivalFlagRemark) || 'No remark recorded'),
       col('flagWaitingTime','Waiting when flagged',r => duration(r.start,r.acceptedAt && indiaDateTimeEpoch(r.acceptedAt) < indiaDateTimeEpoch(r.arrivalFlaggedAt) ? r.acceptedAt : r.arrivalFlaggedAt)),

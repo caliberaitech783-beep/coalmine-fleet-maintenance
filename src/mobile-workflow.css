@@ -225,3 +225,6 @@
     align-items: stretch;
   }
 }
+
+.status.verified { background: #e2f4ec; color: #087448; }
+:root[data-theme="dark"] .status.verified { background: #183e32; color: #9ce3bd; }

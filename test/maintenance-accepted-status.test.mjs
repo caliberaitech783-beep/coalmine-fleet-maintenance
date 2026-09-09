@@ -6,12 +6,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import { matchesSmartSearch } from '../smart-search.mjs';
 import * as acceptance from '../request-acceptance.mjs';
+import {requestStatusLabel} from '../src/request-status.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const component = source.slice(source.indexOf('function Status('), source.indexOf('function ThemeToggle('))
   + source.slice(source.indexOf('const sortCollator ='), source.indexOf('function SortableHeader('))
   + source.slice(source.indexOf('const EMPTY_TABLE_FILTER_VALUE ='), source.indexOf('function TableParameterFilter('))
-  + source.slice(source.indexOf('function MobileWorkflowTable('), source.indexOf('function RequestEditForm('));
+  + source.slice(source.indexOf('function MobileWorkflowTable('), source.indexOf('function RequestEditForm('))
+  + source.slice(source.indexOf('function breakdownCell('), source.indexOf('const masterFields ='));
 const { code } = await transformWithOxc(component, 'maintenance-status.jsx', { jsx: { runtime: 'classic' } });
 const Null = () => null;
 const ExportMenu = () => null, PrintButton = () => null, TableParameterFilter = () => null;
@@ -30,7 +32,7 @@ function all(tree, predicate) {
 const find = (tree, type) => all(tree, node => node.type === type)[0];
 const content = node => Array.isArray(node) ? node.map(content).join('') : React.isValidElement(node) ? content(node.props.children) : typeof node === 'string' || typeof node === 'number' ? String(node) : '';
 const rowKeys = tree => all(tree, node => node.type === 'tr' && node.key).map(node => node.key);
-function harness() {
+function harness(name = 'MobileWorkflowTable') {
   const slots = [];
   let cursor = 0;
   const useState = initial => {
@@ -40,14 +42,14 @@ function harness() {
   };
   const scope = {
     React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(),
-    ...acceptance, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,
+    ...acceptance, requestStatusLabel, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,
     ActionsTable: ({ children }) => React.createElement('table', {}, children), MaintenanceRemarks: Null, Modal: Null,
     RequestTimelineButton: ({ reference }) => React.createElement('b', {}, reference), authToken: 'fixture',
     formatTwelveHourDateTime: value => value || '—', normalizeEquipmentGroup: value => value,
     calculateBreakdownDaysFromStart: () => 1, MeterFileCell: Null, TripCardCell: Null,
   };
   for (const icon of ['Menu', 'Search', 'ListFilter', 'MapPin', 'Flag', 'Pencil', 'Trash2', 'CheckCircle2', 'MessageCircle', 'ShieldCheck']) scope[icon] = Null;
-  const Table = new Function(...Object.keys(scope), `${code}; return MobileWorkflowTable;`)(...Object.values(scope));
+  const Table = new Function(...Object.keys(scope), `${code}; return ${name};`)(...Object.values(scope));
   return { render(props) { cursor = 0; return Table(props); } };
 }
 const rows = Object.freeze([
@@ -59,6 +61,41 @@ const rows = Object.freeze([
   Object.freeze({ ref: 'REQ-LEGACY', status: 'In progress', acceptedAt: ' ' }),
 ]);
 const props = { rows, showAcceptanceStatus: true };
+
+test('production and admin breakdown tables display and export Verified with matching filters', () => {
+  for (const columnOrder of [null, ['ref', 'status']]) {
+    const app = harness('BreakdownTable');
+    const verified = Object.freeze({ref:'VERIFIED',status:'Closed',verifiedAt:'2026-09-09 11:00:00'});
+    const props = {rows:[{ref:'CLOSED',status:'Closed'},verified],columnOrder};
+    let tree = app.render(props);
+    assert.ok(renderToStaticMarkup(tree).includes('class="status verified"'));
+    find(tree,'select').props.onChange({target:{value:'Verified'}});
+    tree = app.render(props);
+    assert.deepEqual(rowKeys(tree),['VERIFIED']);
+    assert.equal(find(tree,ExportMenu).props.columns.find(column => column.key === 'status').value(verified),'Verified');
+    assert.equal(verified.status,'Closed');
+  }
+});
+
+test('verified history badges, filtering, print and export use Verified in every table mode', () => {
+  const closed = {ref:'CLOSED', status:'Closed'};
+  const verified = Object.freeze({...closed, ref:'VERIFIED', verifiedAt:'2026-09-09 11:00:00'});
+  for (const mode of [{}, {showAcceptanceStatus:true}, {showInProgressStatus:true}]) {
+    const app = harness();
+    const props = {...mode, rows:[closed,verified]};
+    let tree = app.render(props);
+    assert.ok(renderToStaticMarkup(tree).includes('class="status verified"'));
+    find(tree,'select').props.onChange({target:{value:'Verified'}});
+    tree = app.render(props);
+    assert.deepEqual(rowKeys(tree), ['VERIFIED']);
+    for (const type of [PrintButton,ExportMenu]) {
+      const output = find(tree,type).props;
+      assert.equal(output.columns.find(column => column.key === 'status').value(verified),'Verified');
+      assert.deepEqual(output.rows,[verified]);
+    }
+    assert.equal(verified.status,'Closed');
+  }
+});
 
 test('close list shows accepted active vehicles In progress and filters by that label', () => {
   const app = harness();

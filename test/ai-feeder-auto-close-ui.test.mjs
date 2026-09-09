@@ -1,3 +1,4 @@
+import {requestStatusLabel} from '../src/request-status.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -39,7 +40,7 @@ function harness() {
     addEventListener(type, handler) {if (!listeners.has(type)) listeners.set(type, new Set()); listeners.get(type).add(handler);},
     removeEventListener(type, handler) {listeners.get(type)?.delete(handler);},
   };
-  const scope = {React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect,
+  const scope = {requestStatusLabel,React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect,
     Date: {now: () => now}, document, window: {setInterval(callback) {const id = ++nextTimer; timers.set(id, callback); return id;}, clearInterval(id) {timers.delete(id);}},
     AI_FEEDER_CLOSE_DELAY_SECONDS: 60, AI_FEEDER_SEVERITY_ICONS: {}, createPortal: tree => tree,
     ...Object.fromEntries(["Activity", "MapPin", "Clock", "X", "Truck", "ChevronDown", "Bell"].map(name => [name, Null])),

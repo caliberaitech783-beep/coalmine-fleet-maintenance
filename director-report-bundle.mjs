@@ -1,3 +1,4 @@
+import {requestStatusLabel} from './src/request-status.mjs';
 import {liveEquipmentRoadStatus} from './dashboard-equipment-metrics.mjs';
 import {equipmentGroupValue,normalizeEquipmentGroup} from './equipment-group.mjs';
 import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
@@ -167,7 +168,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'model',label:'Model',value:(request)=>request.reportModel},
     {key:'site',label:'Location',value:(request)=>request.reportSite},
     {key:'category',label:'Category',value:(request)=>request.equipmentGroup||request.category||request.type},
-    {key:'status',label:'Status',value:(request)=>clean(request.status)||'Open'},
+    {key:'status',label:'Status',value:requestStatusLabel},
     {key:'createdBy',label:'Production user',value:(request)=>request.owner||request.requesterLogin},
     {key:'started',label:'Opened at',value:(request)=>request.start},
   ];
