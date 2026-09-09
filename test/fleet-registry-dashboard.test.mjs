@@ -113,6 +113,16 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
   assert.match(css, /@media \(max-width:\s*700px\)[\s\S]*\.mine-breakdown-trend-body\s*\{\s*grid-template-columns:\s*1fr/);
 });
 
+test("breakdown trend summary no longer shows the forecast count card", () => {
+  // The "Forecast / Next N days" summary card was removed; only Recorded and Daily baseline remain.
+  assert.doesNotMatch(source, /<span>Forecast<\/span>/);
+  assert.doesNotMatch(source, /Next \{breakdownTrendDays\} days/);
+  assert.doesNotMatch(source, /breakdownForecastTotal/);
+  assert.doesNotMatch(source, /forecastTrendDays/);
+  assert.match(source, /<span>Recorded<\/span>/);
+  assert.match(source, /<span>Daily baseline<\/span>/);
+});
+
 test("the region and site graph panel is titled only Total Fleet", () => {
   assert.match(source, /<h2>Total Fleet<\/h2>/);
   assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\(fleetChartAllKey\)\}/);
