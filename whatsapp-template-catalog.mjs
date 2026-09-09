@@ -34,7 +34,7 @@ export const TEMPLATE_FIELD_LABELS = {
   requestClosed:['Request reference','Equipment / door','Site','Closed by','Closed at','Downtime','Request link'],
   requestVerified:['Request reference','Equipment / door','Site','Verified by','Verified at','Closing meter','Request link'],
   requestIdle:['Equipment / door','Site','Idle since','Idle reason','Request reference','Approval action','Request link'],
-  consolidatedRequestReport:['Report summary and download links'],consolidatedTicketReport:['CRM summary'],
+  consolidatedRequestReport:['Report summary and download links'],consolidatedTicketReport:['PDF and Excel downloads'],
   ticketCreated:['Ticket reference','Created by','Site'],ticketResolved:['Ticket reference','Resolved by'],
   dailyUpdate:['Updated by','Request reference'],
 };
@@ -49,7 +49,7 @@ const purposeNotes={
   offRoadEscalation:{intro:'This request remains Off Road at the escalation check.',action:'Review the repair progress and update the expected completion time in Nerve Center.'},
   idleReminder:{intro:'This vehicle remains Idle at the reminder check.',action:'Review the idle reason and complete the applicable approval action in Nerve Center.'},
   consolidatedRequestReport:{intro:'Your consolidated fleet report bundle is ready.',action:'Review the included reports and use their download links for the detailed records.'},
-  consolidatedTicketReport:{intro:'Your scheduled CRM ticket summary is ready.',action:'Review the reporting window and follow up on the listed ticket activity in Nerve Center.'},
+  consolidatedTicketReport:{intro:'Your consolidated CRM report files are ready.',action:'Open the PDF or Excel download link for complete ticket details.'},
   ticketCreated:{intro:'A new CRM ticket has been created.',action:'Open the ticket to review its description and record the next action in Nerve Center.'},
   ticketResolved:{intro:'A CRM ticket has been resolved.',action:'Open the ticket to review the recorded resolution in Nerve Center.'},
   dailyUpdate:{intro:'A daily maintenance update has been recorded.',action:'Review the latest maintenance remarks and recorded progress in Nerve Center.'},
@@ -103,7 +103,8 @@ export function previewReportTemplate(purpose,body) {
   const base=META_WORKFLOW_TEMPLATES[baseTemplateKey(purpose)];
   const single=singleReportsByKey.get(purpose);
   const example=single?[`${single.label} | SCOPE: Sasti OB | 4 rows | PDF: https://example.com/reports/sample.pdf | Excel: https://example.com/reports/sample.xlsx`]
-    :purpose==='consolidatedRequestReport'?['Fleet report bundle | SCOPE: Sasti OB | Road status: 24 rows | Availability: 8 rows | PDF / Excel: https://example.com/reports/bundle']
+    :['consolidatedRequestReport','manualReports'].includes(purpose)?['Fleet report bundle | SCOPE: Sasti OB | Road status: 24 rows | Availability: 8 rows | PDF / Excel: https://example.com/reports/bundle']
+    :purpose==='consolidatedTicketReport'?['CRM consolidated report | SCOPE: WCL | WINDOW: 27 Aug 2026, 8:00 AM - 3:00 PM | 3 open, 2 closed | PDF: https://example.com/reports/crm.pdf | Excel: https://example.com/reports/crm.xlsx | Links expire in 14 days.']
     :base?.example;
   return String(body||'').replace(/\{\{(\d+)\}\}/g,(_,index)=>String(example?.[Number(index)-1]||`[field ${index}]`).replace(/\s+/g,' '));
 }

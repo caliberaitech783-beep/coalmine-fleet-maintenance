@@ -48,33 +48,22 @@ export function prepareTicketReportRows(tickets=[],reportTime=new Date()){
 }
 
 const indiaDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
-const ticketLines=(ticket,index,closed=false)=>[
-  `${index+1}. *${ticket.reference||'Ticket'}* — *${ticket.elapsed}*`,
-  `   ${closed?'Time taken':'Time lapsed'}: ${ticket.elapsed}`,
-  `   User: ${ticket.user||'Not assigned'}`,
-  `   Remarks: ${ticket.remarks||'No description provided'}`,
-].join('\n');
+export function buildTicketReportTable({scopeLabel='Site',start,end,openTickets=[],closedTickets=[]}) {
+  const columns=['Ticket reference','Site','Status','Raised by','Remarks','Opened at (IST)','Resolved at (IST)','Elapsed time','Report scope','Window start (IST)','Window end (IST)'].map(label=>({label}));
+  const date=value=>value&&!Number.isNaN(new Date(value).getTime())?indiaDateTime(new Date(value)):'';
+  const rows=[...openTickets,...closedTickets].map(ticket=>[
+    ticket.reference||'',ticket.site||'Not assigned',ticket.resolvedAt?'Resolved':ticket.status||'Open',ticket.user||'',ticket.remarks||'',
+    date(ticket.openedAt||ticket.createdAt),date(ticket.resolvedAt),ticket.elapsed||'',scopeLabel,date(start),date(end),
+  ]);
+  return {title:'CRM consolidated report',columns,rows};
+}
 
-export function buildTicketWhatsAppReport({scopeLabel='Site',start,end,openTickets=[],closedTickets=[],maxLength=3900}){
-  const sites=[...new Set([...openTickets,...closedTickets].map(({site})=>canonicalSiteName(site)||'Not assigned'))].sort();
-  const sections=[];
-  if(!sites.length)sections.push('\n✅ *NO CRM TICKET ACTIVITY IN THIS WINDOW*');
-  for(const site of sites){
-    const opened=openTickets.filter((row)=>row.site===site);
-    const closed=closedTickets.filter((row)=>row.site===site);
-    sections.push(`\n━━━━━━━━━━━━━━━━━━\n📍 *${site.toUpperCase()}*\n━━━━━━━━━━━━━━━━━━`);
-    sections.push(`🔴 *OPEN TICKETS (${opened.length})*`);
-    sections.push(opened.length?opened.map((row,index)=>ticketLines(row,index)).join('\n'):'No open tickets.');
-    sections.push(`🟢 *CLOSED TICKETS (${closed.length})*`);
-    sections.push(closed.length?closed.map((row,index)=>ticketLines(row,index,true)).join('\n'):'No closed tickets.');
-  }
-  let message=[
-    '🎫 *NERVE CENTER CRM TICKET REPORT*',
-    `*SCOPE:* ${scopeLabel}`,
-    `*WINDOW:* ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
-    `*GENERATED:* ${indiaDateTime(end)}`,
-    ...sections,
+export function buildTicketWhatsAppReport({scopeLabel='Site',start,end,openTickets=[],closedTickets=[],pdfUrl,xlsxUrl}){
+  for(const link of [pdfUrl,xlsxUrl])if(!link||!/^https?:\/\//.test(link))throw new Error('CRM consolidated reports require PDF and Excel download links.');
+  return [
+    'NERVE CENTER CRM CONSOLIDATED REPORT',`SCOPE: ${scopeLabel}`,
+    `WINDOW: ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
+    `OPEN TICKETS: ${openTickets.length} | CLOSED TICKETS: ${closedTickets.length}`,
+    `PDF: ${pdfUrl}`,`Excel: ${xlsxUrl}`,'Open the files for complete ticket details. Links expire in 14 days.',
   ].join('\n');
-  if(message.length>maxLength)message=`${message.slice(0,maxLength-105).trimEnd()}\n\n*Additional tickets omitted.* Open Nerve Center for the complete list.`;
-  return message;
 }

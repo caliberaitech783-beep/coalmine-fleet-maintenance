@@ -35,7 +35,7 @@ export function defaultWhatsAppReportSettings() {
   return {enabled:true,
     events:Object.fromEntries(EVENT_OPTIONS.map(({key})=>[key,{enabled:true,recipientRoles:[...initialRoles[key]]}])),
     reminders:{offRoad:{enabled:true,hours:4},idle:{enabled:true,hours:1}},
-    crm:{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:['Admin','Manager'],sendEmpty:true,format:'both'},
+    crm:{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:['Admin','Manager'],sendEmpty:true,format:'links'},
     channels:{hierarchyReports:true,ticketCreated:false,ticketResolved:false,dailyUpdate:false,passwordResetOtp:true,manualReports:true},
     quietHours:{enabled:false,start:'22:00',end:'07:00'},
     templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:isSingleReportPurpose(key)?'inherit':'standard',body:''}])),
@@ -52,7 +52,7 @@ export function normalizeWhatsAppReportSettings(input={}) {
     crm:{enabled:bool(crm.enabled,true),days:Array.isArray(crm.days)?unique(crm.days.filter(day=>Number.isInteger(day)&&day>=0&&day<=6)).sort():defaults.crm.days,
       times:Array.isArray(crm.times)?unique(crm.times.filter(validWhatsAppTime)).sort().slice(0,6):defaults.crm.times,
       recipientRoles:Array.isArray(crm.recipientRoles)?unique(crm.recipientRoles.filter(role=>['Admin','Manager','Super Admin'].includes(role))):defaults.crm.recipientRoles,
-      sendEmpty:bool(crm.sendEmpty,true),format:['both','summary','pdf'].includes(crm.format)?crm.format:'both'},
+      sendEmpty:bool(crm.sendEmpty,true),format:'links'},
     channels:Object.fromEntries(Object.entries(defaults.channels).map(([key,fallback])=>[key,bool(channels[key],fallback)])),
     quietHours:{enabled:bool(quiet.enabled,false),start:validWhatsAppTime(quiet.start)?quiet.start:defaults.quietHours.start,end:validWhatsAppTime(quiet.end)?quiet.end:defaults.quietHours.end},
     templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:validReportTemplateVariant(key,templates[key]?.variant)?templates[key].variant:defaults.templates[key].variant,body:typeof templates[key]?.body==='string'?templates[key].body.slice(0,1024):''}])),
@@ -65,7 +65,7 @@ export function whatsappSettingsValidationError(input) {
   for(const key of ['offRoad','idle']){const reminder=input.reminders?.[key];if(!reminder||typeof reminder.enabled!=='boolean'||!Number.isInteger(reminder.hours)||reminder.hours<1||reminder.hours>(key==='idle'?24:168))return 'Use 1–168 hours for Off Road escalation and 1–24 hours for Idle reminders.';}
   const crm=input.crm;
   if(!crm||typeof crm.enabled!=='boolean'||!Array.isArray(crm.days)||crm.days.some(day=>!Number.isInteger(day)||day<0||day>6)||!Array.isArray(crm.times)||crm.times.length>6||crm.times.some(time=>!validWhatsAppTime(time)))return 'Set valid CRM weekdays and up to six IST delivery times.';
-  if(!Array.isArray(crm.recipientRoles)||crm.recipientRoles.some(role=>!['Admin','Manager','Super Admin'].includes(role))||!['both','pdf','summary'].includes(crm.format)||typeof crm.sendEmpty!=='boolean')return 'Choose valid CRM recipients, report format and empty-report preference.';
+  if(!Array.isArray(crm.recipientRoles)||crm.recipientRoles.some(role=>!['Admin','Manager','Super Admin'].includes(role))||!['links','both','pdf','summary'].includes(crm.format)||typeof crm.sendEmpty!=='boolean')return 'Choose valid CRM recipients, report format and empty-report preference.';
   if(crm.enabled&&(!crm.days.length||!crm.times.length||!crm.recipientRoles.length))return 'Choose at least one CRM day, time and recipient role, or turn CRM reports off.';
   const quiet=input.quietHours;
   if(!quiet||typeof quiet.enabled!=='boolean'||!validWhatsAppTime(quiet.start)||!validWhatsAppTime(quiet.end)||quiet.enabled&&quiet.start===quiet.end)return 'Quiet hours need different valid start and end times.';

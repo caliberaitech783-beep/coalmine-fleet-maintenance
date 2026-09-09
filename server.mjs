@@ -24,7 +24,7 @@ import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
-import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
+import {prepareTicketReportRows,ticketReportDue,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
 import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
@@ -1617,6 +1617,23 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
   }finally{consolidatedReportRunning=false}
 }
 
+async function publishCrmReportFiles({scopeLabel,start,end,openTickets=[],closedTickets=[],slotKey,scopeKey,baseUrl=publicBaseUrl()}){
+  const data={scopeLabel,start,end,openTickets,closedTickets};
+  const pdf=await buildTicketConsolidatedReportPdf(data);
+  const table=buildTicketReportTable(data);
+  const xlsx=buildXlsxWorkbookBuffer(table.title,table.columns,table.rows);
+  const pdfFilename=reportFilename('CRM',scopeKey,slotKey);
+  const xlsxFilename=pdfFilename.replace(/\.pdf$/i,'.xlsx');
+  const pdfCode=randomUUID().replace(/-/g,'').slice(0,10),xlsxCode=randomUUID().replace(/-/g,'').slice(0,10);
+  await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+  await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at) VALUES
+    ($1,$2,$3,'application/pdf',$4,NOW()+INTERVAL '14 days'),
+    ($5,$6,$7,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$8,NOW()+INTERVAL '14 days')`,
+    [randomUUID(),pdfCode,pdfFilename,pdf,randomUUID(),xlsxCode,xlsxFilename,xlsx]);
+  const pdfUrl=`${baseUrl}/r/${pdfCode}`,xlsxUrl=`${baseUrl}/r/${xlsxCode}`;
+  return {pdf,pdfFilename,pdfUrl,xlsxUrl,message:buildTicketWhatsAppReport({...data,pdfUrl,xlsxUrl})};
+}
+
 let consolidatedTicketReportRunning=false;
 async function sendScheduledConsolidatedTicketReports(now=new Date()){
   if(!databaseReady||consolidatedTicketReportRunning)return {skipped:true};
@@ -1665,13 +1682,13 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       let status='Sent';
       try{
         if(!phone)throw new Error('Phone number missing');
-        const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOPEN TICKETS: ${scopedOpen.length}\nCLOSED TICKETS: ${scopedClosed.length}\n${reportSettings.crm.format==='summary'?'Open Nerve Center for complete ticket details.':'The complete report is attached as a PDF.'}`;
+        const bundle=await publishCrmReportFiles({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed,slotKey:window.slotKey,scopeKey:scope.key});
         const whatsappEnv=await metaWhatsAppRuntimeEnv();
-        if(reportSettings.crm.format!=='pdf')try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]},{env:whatsappEnv})}
-        catch(templateError){if(templateError.code==='WHATSAPP_POLICY_PAUSED'||reportSettings.crm.format==='summary')throw templateError;console.warn('CRM summary unavailable; attempting PDF delivery:',templateError.message);}
-        if(reportSettings.crm.format!=='summary'){
-          const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
-          await sendMetaWhatsAppDocument({to:phone,buffer:pdf,purpose:'consolidatedTicketReport',filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`},{env:whatsappEnv});
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[bundle.message]},{env:whatsappEnv})}
+        catch(templateError){
+          if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
+          console.warn('CRM linked template unavailable; attempting PDF delivery:',templateError.message);
+          await sendMetaWhatsAppDocument({to:phone,buffer:bundle.pdf,purpose:'consolidatedTicketReport',filename:bundle.pdfFilename,caption:`CRM consolidated report • ${scope.label}. PDF: ${bundle.pdfUrl} Excel: ${bundle.xlsxUrl}. Links expire in 14 days.`},{env:whatsappEnv});
         }
         sent++;
       }catch(error){
