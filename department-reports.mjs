@@ -18,6 +18,12 @@ const base = [...ids, col('equipmentGroup', 'Equipment group', equipmentGroupVal
 const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
 const ref = col('ref', 'Job Reference No');
 const closed = col('closedAt', 'Ticket Closed');
+function breakdownDaysHours(start, now) {
+  const elapsed = now.getTime() - indiaDateTimeEpoch(start);
+  if (!Number.isFinite(elapsed)) return 'Not recorded';
+  const hours = Math.floor(Math.max(0,elapsed) / 3600000);
+  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+}
 const summaryTimingRow = row => ({...row,firstTripAt:row.firstTripAt || (row.firstTripDate && row.firstTripTime ? `${row.firstTripDate} ${row.firstTripTime}` : '')});
 const summaryDuration = (row,key) => formatTimelineDuration(requestTimelineDurations(summaryTimingRow(row))[key]);
 function summaryClosure(row) {
@@ -86,7 +92,7 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
   });
   return [
     report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Maintenance acceptance to repair closure. TAT = Repair Closed Date & Time minus Maintenance Acceptance Date & Time.', [...base,col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(acceptanceTime(r),r.closedAt)),site,ref], finished, r => r.closedAt),
-    report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open, in-progress and awaiting-parts off-road requests.', [...base,col('start','Rep. Started'),col('days','BD Days',r => Number.isFinite(indiaDateTimeEpoch(r.start)) ? Math.max(0,(now.getTime()-indiaDateTimeEpoch(r.start))/86400000).toFixed(2) : 'Not recorded'),site,ref],open),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open, in-progress and awaiting-parts off-road requests. BD duration shows completed days and hours since production submission.', [...base,col('start','Rep. Started'),col('days','BD Days / Hrs',r => breakdownDaysHours(r.start,now)),site,ref],open),
     report('maintenance', DEPARTMENT_REPORT_TITLES[2], '22 productive hours per selected day. Downtime is clipped to the period; overlapping incidents are counted once. Negative availability flags downtime exceeding planned hours.', [...ids,col('equipmentGroup','Equipment group',equipmentGroupValue),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => availabilityPercentage(r.percentage))], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
 report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus request closed. Mismatch shows Delay when MIS verification is more than 30 minutes after first trip.', [...base,col('closedAt','Request Closed'),col('firstTrip','First Trip Made',firstTrip),col('difference','Difference',r => duration(r.closedAt,firstTrip(r))),col('mismatch','Mismatch',r => indiaDateTimeEpoch(r.verifiedAt)-indiaDateTimeEpoch(firstTrip(r))>1800000 ? 'Delay' : ''),col('verifiedBy','MIS user'),col('driverName','Driver Name'),site,ref],finished.filter(r => indiaDateTimeEpoch(firstTrip(r))-indiaDateTimeEpoch(r.closedAt)>1800000), firstTrip),
     report('mis', DEPARTMENT_REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification.', [...base,closed,site,ref],requests.filter(r => status(r)==='closed' && !r.verifiedAt).filter(visibleInMisRequests),r => r.closedAt),

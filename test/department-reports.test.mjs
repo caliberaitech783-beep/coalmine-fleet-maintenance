@@ -6,6 +6,15 @@ const now = new Date('2026-09-07T12:00:00+05:30');
 const build = requests => buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-07'});
 const cell = (report,key,row=report.rows[0]) => report.columns.find(c=>c.key===key).value(row);
 
+test('open off-road BD duration includes days and hours from production submission',()=>{
+  const report=build([{status:'Open',start:'2026-09-05 06:00'}]).find(r=>r.title==='Open Off road Cases');
+  assert.equal(report.columns.find(c=>c.key==='days').label,'BD Days / Hrs');
+  assert.equal(cell(report,'days'),'2d 6h');
+  for(const [start,expected] of [['2026-09-06 13:00','0d 23h'],['2026-09-06 12:00','1d 0h'],['2026-09-07 11:30','0d 0h'],['2026-09-08 12:00','0d 0h'],['invalid','Not recorded'],['','Not recorded']]) {
+    assert.equal(cell(report,'days',{start}),expected);
+  }
+});
+
 test('MIS verification durations distinguish closure, actual first trip, and verification',()=>{
   const row={closedAt:'2026-09-08 10:00',firstTripAt:'2026-09-08 11:30',verifiedAt:'2026-09-08 12:00'};
   const report=build([row,{...row,verifiedAt:''}]).find(r=>r.title==='Time Taken for MIS Verification');
