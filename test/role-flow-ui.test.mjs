@@ -80,6 +80,24 @@ const closed = {...idle, status: "Closed", closedBy: "maimaintenance manager", i
 const verified = {...closed, verifiedAt: "2026-09-08 13:00:00", verifiedBy: "Damini Rai"};
 const normalProps = (role, row) => ({embedded: true, session: {assignedRole: role, location: "Sasti OB", permissions: {editRequests: role === "Maintenance User", closeRequests: role === "Maintenance User", verifyRequests: role === "MIS User"}}, requests: [row]});
 
+test('Accepted status is enabled only in Maintenance Requests and close eligibility still requires acceptance', () => {
+  const app = harness('Normal');
+  const pending = {...opened, ref: 'REQ-PENDING', acceptanceRequired: true};
+  const received = {...accepted, ref: 'REQ-ACCEPTED', acceptanceRequired: true};
+  const props = {...normalProps('Maintenance User', received), requests: [pending, received, idle]};
+  let tree = app.render(props);
+  assert.equal(table(tree).props.showAcceptanceStatus, true);
+  assert.deepEqual(table(tree).props.rows.map(row => row.ref), [pending.ref, received.ref, idle.ref]);
+  button(tree, 'Close request form').props.onClick();
+  tree = app.render(props);
+  assert.equal(table(tree).props.showAcceptanceStatus, undefined);
+  assert.deepEqual(table(tree).props.rows.map(row => row.ref), [received.ref]);
+  for (const role of ['Production User', 'MIS User']) {
+    const other = harness('Normal').render(normalProps(role, received));
+    assert.notEqual(table(other).props.showAcceptanceStatus, true);
+  }
+});
+
 for (const role of ["Production User", "Maintenance User", "MIS User"]) test(`${role}: mounted request/history rows use refreshed master make and model`, () => {
   let masterRecords = [];
   const app = harness("Normal", {requestWithEquipmentMasterDetails, useMasterRecords: () => [masterRecords, null, true]});
