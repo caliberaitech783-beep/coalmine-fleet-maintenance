@@ -114,6 +114,7 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
       col('verifiedAt','MIS verified at'),col('verifiedBy','Verified by'),col('firstTripAt','First trip time',firstTrip),
     ],requests.filter(r => r.misFlaggedAt),r => r.misFlaggedAt),
     report('general', DEPARTMENT_REPORT_TITLES[14], 'MIS-verified requests only. Exact durations: waiting = submission to acceptance; maintenance = acceptance to request closure; return to work = closure to actual first trip. These stages do not overlap; overall = submission to first trip. Repair/closure elapsed and first-trip-to-verification lag are separate measures, not additional stages. For Idle cases, manager on-road approval is request closure, not a separately recorded repair completion; the acceptance-to-closure interval includes the Idle approval wait. Missing or reversed timestamps are not treated as zero. Date filters continue to use production submission.', [
+      // Keep asset identifiers first in both the report and its exports.
       ...base.slice(0,4),
       ref,
       col('submittedAt','Production submission',r => r.start || 'Not recorded'),

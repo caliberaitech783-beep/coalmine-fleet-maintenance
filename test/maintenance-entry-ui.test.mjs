@@ -274,9 +274,10 @@ for (const reason of ['No driver', 'No work']) test(`Idle reason ${reason} stays
   idleRadio(tree, 'no').props.onChange();
   tree = app.render();
   assert.equal(field(tree, 'idleReason'), undefined);
-  assert.equal(field(tree, 'status').props.disabled, false);
+  assert.equal(field(tree, 'status').props.disabled, true);
+  assert.equal(field(tree, 'status').props.value, 'Closed');
   await app.submit(tree);
-  assert.equal(app.saved[1].status, 'In progress');
+  assert.equal(app.saved[1].status, 'Closed');
   assert.equal(app.saved[1].idleReason, '');
   idleRadio(tree, 'yes').props.onChange();
   tree = app.render();
