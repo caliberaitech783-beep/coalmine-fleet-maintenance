@@ -4,6 +4,7 @@ export const MIS_HIDDEN_REQUEST_REFERENCES = new Set([
   "REQ-1787759984730",
 ]);
 
+// Apply the same exclusions to authenticated MIS users and embedded MIS workspaces.
 export function requestsVisibleToSession(rows = [], session = {}) {
   if (session?.role !== "normal" || session?.assignedRole !== "MIS User") return rows;
   return requestsVisibleToMisWorkspace(rows, true);
