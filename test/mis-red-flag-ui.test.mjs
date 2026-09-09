@@ -43,7 +43,7 @@ function harness(){
     ActionsTable:({children})=>React.createElement('table',{},children),
     FilterableHeader:({label})=>React.createElement('th',{},label),
     Status:({children})=>React.createElement('span',{},children),
-    ExportMenu,PrintButton,TableParameterFilter:Null,MaintenanceRemarks:Null,MeterFileCell:Null,TripCardCell:Null,
+    ExportMenu,PrintButton,TableParameterFilter:Null,MaintenanceRemarks:Null,MeterFileCell:Null,TripCardCell:Null,MaintenanceEtcInput:Null,
     formatTwelveHourDateTime:value=>value||'—',firstTripTimestamp:row=>row.firstTripAt,
     matchesSmartSearch:()=>true,tableRowMatchesFilters:()=>true,tableFilterText:value=>String(value||''),
     sortCollator:new Intl.Collator(),useSortableRows:rows=>[rows,{},()=>{}],

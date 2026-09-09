@@ -24,7 +24,7 @@ test("request forms expose elapsed time, site/group-scoped equipment search, and
   assert.match(ui, /groupRecords = requestEquipmentRecordsForGroup\(locationEquipmentRecords, equipmentGroup\)/);
   assert.match(ui, /<EquipmentCombobox[^]*records=\{groupRecords\}/);
   assert.doesNotMatch(ui, /equipmentSearchActive/);
-  assert.match(ui, /ETC \(Expected Time For Completion\)/);
+  assert.match(readFileSync(new URL('../src/maintenance-etc-input.jsx', import.meta.url), 'utf8'), /ETC \(Expected Time For Completion\)/);
   assert.match(server, /expected_completion_at TIMESTAMPTZ/);
   assert.match(server, /expectedCompletionAt/);
 });
@@ -32,7 +32,7 @@ test("request forms expose elapsed time, site/group-scoped equipment search, and
 test("Maintenance User edits ETC instead of entering it in the close form", () => {
   const editForm = ui.slice(ui.indexOf("function RequestEditForm"), ui.indexOf("function CloseRequestForm"));
   const closeForm = ui.slice(ui.indexOf("function CloseRequestForm"), ui.indexOf("function VerifyRequestForm"));
-  assert.match(editForm, /name="expectedCompletionAt" type="datetime-local" required/);
+  assert.match(editForm, /<MaintenanceEtcInput value=\{expectedCompletionAt\} onChange=\{setExpectedCompletionAt\}/);
   assert.match(editForm, /expectedCompletionAt: form\.get\("expectedCompletionAt"\)/);
   assert.doesNotMatch(closeForm, /name="expectedCompletionAt"/);
   assert.match(server, /requestExpectedCompletionValue\(before\.expectedCompletionAt,expectedCompletionAt\)/);

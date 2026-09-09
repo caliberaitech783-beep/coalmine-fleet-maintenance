@@ -27,7 +27,10 @@ const all = (tree, predicate) => {
 };
 const text = node => Array.isArray(node) ? node.map(text).join("") : React.isValidElement(node) ? text(node.props.children) : typeof node === "string" || typeof node === "number" ? String(node) : "";
 const button = (tree, label) => all(tree, node => node.type === "button" && text(node).trim() === label)[0];
-const field = (tree, name) => all(tree, node => node.props.name === name)[0];
+const field = (tree, name) => {
+  const node = all(tree, node => node.props.name === name || (name === "expectedCompletionAt" && node.type === "maintenance-etc"))[0];
+  return node?.type === "maintenance-etc" ? {...node, props: {...node.props, onChange: event => node.props.onChange(event.target.value)}} : node;
+};
 const form = tree => all(tree, node => node.type === "form")[0];
 const alerts = tree => all(tree, node => node.props.role === "alert").map(text).join(" ");
 
@@ -51,7 +54,7 @@ function harness(name, extra = {}) {
       respond(data, ok = true) {resolve({ok, json: async () => data});},
       malformed() {resolve({ok: true, json: async () => {throw new Error("Bad JSON");}});},
     })),
-    Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, ChevronRight: Null,
+    Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, ChevronRight: Null, MaintenanceEtcInput: "maintenance-etc",
     requestStartParts: () => ({date: "2026-09-08", time: "12:00:00"}), requestMeterTypeForRequest: () => "KMR",
     useMasterRecords: () => [[]], normalizeEquipmentGroup: value => value,
     formatTwelveHourDateTime: value => value || "Not recorded", delayedReasonRequired: () => false,
