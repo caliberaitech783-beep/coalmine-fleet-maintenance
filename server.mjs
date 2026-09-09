@@ -44,6 +44,7 @@ import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipme
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
+// Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 
 const {Pool}=pg;
