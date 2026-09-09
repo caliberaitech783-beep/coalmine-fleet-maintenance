@@ -60,6 +60,19 @@ const rows = Object.freeze([
 ]);
 const props = { rows, showAcceptanceStatus: true };
 
+test('close list shows accepted active vehicles In progress and filters by that label', () => {
+  const app = harness();
+  const closeProps = {rows, showInProgressStatus: true};
+  let tree = app.render(closeProps);
+  const status = find(tree, ExportMenu).props.columns.find(column => column.key === 'status');
+  assert.deepEqual(rows.map(status.value), ['Open', 'In progress', 'In progress', 'Idle', 'Closed by Maintenance', 'In progress']);
+  assert.equal((renderToStaticMarkup(tree).match(/class="status in-progress"/g) || []).length, 3);
+  find(tree, 'select').props.onChange({target: {value: 'In progress'}});
+  tree = app.render(closeProps);
+  assert.deepEqual(rowKeys(tree), ['REQ-RECEIVED', 'REQ-WORKING', 'REQ-LEGACY']);
+  assert.equal(rows[1].status, 'Open');
+});
+
 test('only accepted active requests receive the Accepted badge without changing saved statuses', () => {
   const tree = harness().render(props);
   const labels = find(tree, ExportMenu).props.columns.find(column => column.key === 'status');

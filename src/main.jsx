@@ -6908,7 +6908,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
@@ -6920,10 +6920,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
-  const statusLabel = (row) => showAcceptanceStatus
+  const statusLabel = (row) => (showAcceptanceStatus || showInProgressStatus)
     && String(row.acceptedAt || "").trim()
     && ["open", "in progress"].includes(String(row.status || "").trim().toLowerCase())
-      ? "Accepted" : row.status;
+      ? (showAcceptanceStatus ? "Accepted" : "In progress") : row.status;
   const verifiedColumns = [
     ...(showVerifiedBy ? [{key: "verifiedBy", label: "Verified by", value: (row) => row.verifiedBy}] : []),
     ...(showVerifiedAt ? [
@@ -7132,8 +7132,8 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const now = requestStartParts("");
   const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date),
     [ideal,setIdeal]=useState(() => ["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase())),
-    [idleReason,setIdleReason]=useState(() => String(request.idleReason || "").trim()),
-    [status,setStatus]=useState(["Closed", "Awaiting parts"].includes(request.status) ? request.status : "In progress");
+    [idleReason,setIdleReason]=useState(() => String(request.idleReason || "").trim());
+  const status = "Closed";
   const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
   const [delayedReason, setDelayedReason] = useState("");
   const [customDelayedReason, setCustomDelayedReason] = useState("");
@@ -7188,7 +7188,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {request.closedAt}. The original and replacement will be retained.</small></label>}
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
-        <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option value="Closed">Closed by Maintenance</option>{request.status === "Awaiting parts" && <option value="Awaiting parts">Awaiting parts</option>}{ideal&&<option>Idle</option>}</select></label>
+        <label>Status *<select name="status" disabled value={ideal?"Idle":status}>{ideal ? <option value="Idle">Idle</option> : <option value="Closed">Closed by Maintenance</option>}</select></label>
         <fieldset className="ideal-choice full">
           <legend>Idle? <small>Optional</small></legend>
           <div className="idle-options">
@@ -8013,7 +8013,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {createdRequestRef && <div className="hierarchy-save-message" role="status"><CheckCircle2 /><span>Request <b>{createdRequestRef}</b> saved successfully. It is shown in Requests.</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {tab === "history" && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason={isMaintenance || isMis} showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}

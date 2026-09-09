@@ -91,6 +91,7 @@ test('Accepted status is enabled only in Maintenance Requests and close eligibil
   button(tree, 'Close request form').props.onClick();
   tree = app.render(props);
   assert.equal(table(tree).props.showAcceptanceStatus, undefined);
+  assert.equal(table(tree).props.showInProgressStatus, true);
   assert.deepEqual(table(tree).props.rows.map(row => row.ref), [received.ref]);
   for (const role of ['Production User', 'MIS User']) {
     const other = harness('Normal').render(normalProps(role, received));
@@ -327,13 +328,38 @@ test("already accepted vehicles say Save changes, not Accept vehicle again", () 
   }
 });
 
-test("saving an existing Awaiting parts request preserves its status", async () => {
+for (const status of ['Open', 'In progress', 'Awaiting parts', 'Closed']) test(`onroad form closes ${status} requests without offering progress statuses`, async () => {
   const saved = [];
-  const tree = harness("CloseRequestForm").render({request: {...accepted, status: "Awaiting parts"}, close() {}, onSave: payload => saved.push(payload)});
-  assert.equal(field(tree, "status").props.value, "Awaiting parts");
-  assert.ok(all(field(tree, "status"), node => node.type === "option" && node.props.value === "Awaiting parts").length);
-  await form(tree).props.onSubmit({preventDefault() {}, currentTarget: {maintenanceWork: "Waiting for parts", closingDate: "2026-09-08", closingTime: "14:00:00"}});
-  assert.equal(saved[0].status, "Awaiting parts");
+  const tree = harness("CloseRequestForm").render({request: {...accepted, status}, close() {}, onSave: payload => saved.push(payload)});
+  assert.equal(field(tree, "status").props.value, "Closed");
+  assert.deepEqual(all(field(tree, "status"), node => node.type === "option").map(node => node.props.value), ['Closed']);
+  await form(tree).props.onSubmit({preventDefault() {}, currentTarget: {maintenanceWork: "Repair completed", closingDate: "2026-09-08", closingTime: "14:00:00"}});
+  assert.equal(saved[0].status, "Closed");
+});
+
+test('onroad form still validates Idle reasons and returns to Closed when Idle is cleared', async () => {
+  const saved = [];
+  const app = harness('CloseRequestForm');
+  const props = {request: accepted, close() {}, onSave: payload => saved.push(payload)};
+  let tree = app.render(props);
+  all(tree, node => node.props.name === 'idealChoice' && node.props.value === 'yes')[0].props.onChange();
+  tree = app.render(props);
+  assert.equal(field(tree, 'status').props.value, 'Idle');
+  const event = {preventDefault() {}, currentTarget: {maintenanceWork: 'Repair completed'}};
+  await form(tree).props.onSubmit(event);
+  assert.equal(saved.length, 0);
+  tree = app.render(props);
+  field(tree, 'idleReason').props.onChange({target: {value: 'No work'}});
+  tree = app.render(props);
+  await form(tree).props.onSubmit(event);
+  assert.equal(saved[0].status, 'Idle');
+  assert.equal(saved[0].idleReason, 'No work');
+  all(tree, node => node.props.name === 'idealChoice' && node.props.value === 'no')[0].props.onChange();
+  tree = app.render(props);
+  assert.equal(field(tree, 'status').props.value, 'Closed');
+  await form(tree).props.onSubmit(event);
+  assert.equal(saved[1].status, 'Closed');
+  assert.equal(saved[1].idleReason, '');
 });
 
 for (const name of ["RequestEditForm", "CloseRequestForm", "VerifyRequestForm"]) test(`${name}: duplicate clicks and dialog dismissal cannot interrupt a pending save`, async () => {
