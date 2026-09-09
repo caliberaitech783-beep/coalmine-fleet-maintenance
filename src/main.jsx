@@ -1177,7 +1177,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const maintenanceClosedRows = requestLifecycleRows.closed.filter((record) => !requestEventDate(record, "verified"));
   const requestLifecycleAvailability = {
     maintenance: requestLifecycleRows.opened.length,
-    mis: Math.max(0, requestLifecycleRows.closed.length - requestLifecycleRows.verified.length),
+    mis: maintenanceClosedRows.length,
   };
   const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
     date,
