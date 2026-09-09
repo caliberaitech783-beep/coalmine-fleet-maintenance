@@ -7956,12 +7956,13 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   };
   const saveEdit = async (payload) => {
     if (requireArrivalReason(editing)) return;
-    try { await onUpdateRequest(payload.ref, payload); setEditing(null); }
+    const acceptingVehicle = Boolean(editing?.acceptanceRequired && !editing?.acceptedAt);
+    try { await onUpdateRequest(payload.ref, payload); setEditing(null); if (acceptingVehicle) setCreatedRequestRef("Vehicle Accepted"); }
     catch (error) { if (!requireArrivalReason(editing, error)) alert(error.message); }
   };
   const closeRequest = async (payload) => {
     if (requireArrivalReason(closing)) return;
-    try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); }
+    try { await onUpdateRequest(closing.ref, payload, "close"); setClosing(null); setCreatedRequestRef("Vehicle Has Been On road"); }
     catch (error) { if (!requireArrivalReason(closing, error)) alert(error.message); }
   };
   const saveDailyRemark = async (payload) => {
@@ -7969,7 +7970,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     try { await onAddDailyRemark(remarking.ref, payload); setRemarking(null); }
     catch (error) { if (!requireArrivalReason(remarking, error)) alert(error.message); }
   };
-  const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); };
+  const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); setCreatedRequestRef("Vehicle Verified"); };
   const saveMisFlag = async (payload) => { await onUpdateRequest(misFlagging.ref, payload, "mis-flag"); setMisFlagging(null); };
   const saveArrivalFlag = async (payload) => {
     const saved = await onUpdateRequest(arrivalFlagging.ref, payload, "arrival-flag");
@@ -7982,7 +7983,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
   const createRequest = async (request) => {
     const saved = await onCreate(request);
-    setCreatedRequestRef(saved?.ref || request.ref);
+    setCreatedRequestRef("Request Submitted");
     setTab("requests");
     setSection("profile");
     return saved;
@@ -8013,7 +8014,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
       </div>
       </div>
-      {createdRequestRef && <div className="hierarchy-save-message" role="status"><CheckCircle2 /><span>Request <b>{createdRequestRef}</b> saved successfully. It is shown in Requests.</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div>}
+      {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}

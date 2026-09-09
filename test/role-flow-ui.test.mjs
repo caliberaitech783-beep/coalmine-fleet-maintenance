@@ -285,7 +285,7 @@ for (const role of ["Production User", "Maintenance User"]) test(`${role}: succe
   assert.deepEqual(table(tree).props.rows, [saved]);
   assert.equal(button(tree, "Requests").props.className, "active");
   const notice = all(tree, node => node.props.role === "status")[0];
-  assert.match(text(notice), /REQ-SERVER-SAVED.*saved successfully/);
+  assert.equal(text(notice), "Request Submitted");
   assert.equal(all(tree, node => node.type === MaintenanceForm).length, 0);
   all(notice, node => node.props["aria-label"] === "Dismiss request confirmation")[0].props.onClick();
   assert.equal(all(app.render({...props, requests: [saved, verified]}), node => node.props.role === "status").length, 0);
