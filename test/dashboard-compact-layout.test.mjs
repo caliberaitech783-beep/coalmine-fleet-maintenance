@@ -30,6 +30,8 @@ test("Breakdown trend sits beside Request Lifecycle in breakdown mode", () => {
   assert.match(css, /\.mine-dashboard\.breakdown-dashboard-view\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/s);
   assert.match(css, /\.mine-dashboard\.breakdown-dashboard-view > :is\(\.mine-dashboard-core, \.mine-dashboard-lower-grid\)\s*\{\s*display:\s*contents/);
   assert.match(css, /@media \(max-width:\s*1100px\)[\s\S]*?\.mine-dashboard\.breakdown-dashboard-view\s*\{\s*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(css, /\.mine-dashboard\.breakdown-dashboard-view \.mine-breakdown-trend\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column/);
+  assert.match(css, /\.mine-dashboard\.breakdown-dashboard-view \.mine-breakdown-trend-body\s*\{[^}]*flex:\s*1;[^}]*min-height:\s*0/);
 });
 
 test("site breakdown view reconciles one-line site totals and opens day-wise controls", () => {

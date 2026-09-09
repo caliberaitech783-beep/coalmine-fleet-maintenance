@@ -1928,6 +1928,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-dashboard.breakdown-dashboard-view > .mine-dashboard-feature-row { grid-column: 1 / -1; }
 .mine-dashboard.breakdown-dashboard-view > :is(.mine-dashboard-core, .mine-dashboard-lower-grid) { display: contents; }
 .mine-dashboard.breakdown-dashboard-view :is(.mine-request-lifecycle, .mine-breakdown-trend) { min-width: 0; margin-top: 0; }
+.mine-dashboard.breakdown-dashboard-view .mine-breakdown-trend { display: flex; flex-direction: column; }
+.mine-dashboard.breakdown-dashboard-view .mine-breakdown-trend-body { flex: 1; min-height: 0; }
 @media (max-width: 1100px) {
   .mine-dashboard.breakdown-dashboard-view { grid-template-columns: minmax(0, 1fr); }
 }
