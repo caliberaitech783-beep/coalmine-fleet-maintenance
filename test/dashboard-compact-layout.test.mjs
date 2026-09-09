@@ -108,6 +108,7 @@ test("Maintenance and Availability Count uses its available width without empty 
 
 test("equipment intelligence and request lifecycle share a responsive row", () => {
   assert.match(css, /\.mine-dashboard-core\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /\.mine-dashboard-core\s*>\s*\.mine-fleet-command\s*\{[^}]*align-self:\s*start/);
   assert.match(css, /@media \(max-width: 1100px\)[\s\S]*?\.mine-dashboard-core\s*\{\s*grid-template-columns:\s*1fr/);
   assert.match(client, /className="mine-panel mine-fleet-command"/);
   assert.match(client, /className="mine-panel mine-request-lifecycle"/);

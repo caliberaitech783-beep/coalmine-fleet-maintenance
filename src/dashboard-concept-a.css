@@ -1174,7 +1174,7 @@ button.mine-primary-kpi-card:focus-visible,
   align-items: stretch;
 }
 .mine-dashboard-core > article { min-width: 0; }
-.mine-dashboard-core > .mine-fleet-command { grid-column: auto; }
+.mine-dashboard-core > .mine-fleet-command { grid-column: auto; align-self: start; }
 .mine-fleet-command-actions { display: flex; align-items: center; gap: 8px; }
 .mine-fleet-command-head .mine-view-full-fleet {
   min-height: 30px;
