@@ -21,7 +21,8 @@ test("request lifecycle counts each workflow timestamp separately", () => {
   assert.match(client, /requestLifecycleRows\.closed/);
   assert.match(client, /requestLifecycleRows\.verified/);
   assert.match(client, /requestLifecycleRows\.idle/);
-  assert.match(client, /opened: locationBreakdowns\.filter\(\(record\) => requestEventDate\(record, "opened"\)/);
+  assert.match(client, /opened: locationBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"/);
+  assert.match(client, /closed: locationBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "closed"/);
   assert.match(client, /label: "Opened", note: "New requests"/);
   assert.match(client, /lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
   assert.match(css, /\.mine-request-lifecycle-chart/);
