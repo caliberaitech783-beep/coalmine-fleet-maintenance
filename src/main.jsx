@@ -247,10 +247,11 @@ const operationalWorkspaceNav = [
 ];
 function Status({ children }) {
   let c = children.toLowerCase().replaceAll(" ", "-");
+  const label = children === "Closed" ? "Closed by Maintenance" : children;
   return (
     <span className={"status " + c}>
       <i />
-      {children}
+      {label}
     </span>
   );
 }
@@ -1283,7 +1284,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
   const requestAssetDrilldown = fleetBreakdownDrilldown || assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
-  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
+  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed by Maintenance requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
   const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1]} to ${movementDrilldownParts[2]}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
@@ -1435,7 +1436,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
-            {[{ key: "opened", label: "Opened", note: "New requests", value: requestLifecycleRows.opened.length }, { key: "closed", label: "Closed", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Opened - Closed", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
+            {[{ key: "opened", label: "Opened", note: "New requests", value: requestLifecycleRows.opened.length }, { key: "closed", label: "Closed by Maintenance", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Opened - Closed by Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed by Maintenance - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
             <div className="mine-request-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, requestLifecycleTrend.length)}, minmax(28px, 1fr))`, minWidth: `${Math.max(100, requestLifecycleTrend.length * 34)}px` }}>
@@ -3625,7 +3626,7 @@ function Breakdown({ requests = [] }) {
           `Open ${open}`,
           `In progress ${inProgress}`,
           `Awaiting parts ${awaiting}`,
-          `Closed ${closed}`,
+          `Closed by Maintenance ${closed}`,
         ].map((x, i) => (
           <button key={x} className={i === 0 ? "active" : ""}>
             {x}
@@ -6135,7 +6136,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
     ["Open", "Open", count("Open")],
     ["In progress", "In progress", count("In progress")],
     ["Awaiting parts", "Awaiting parts", count("Awaiting parts")],
-    ["Closed", "Closed", count("Closed")],
+    ["Closed", "Closed by Maintenance", count("Closed")],
   ];
   const filteredRows = statusFilter === "all"
     ? rows
@@ -6942,7 +6943,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
       {key: "misFlagRemark", label: "MIS remark", value: (row) => row.misFlagRemark},
       {key: "misVerificationStatus", label: "Verification status", value: (row) => row.verifiedAt ? "Verified" : "Awaiting verification"},
     ] : []),
-    {key: "status", label: "Status", value: (row) => row.status},
+    {key: "status", label: "Status", value: (row) => row.status === "Closed" ? "Closed by Maintenance" : row.status},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
     ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
@@ -7184,7 +7185,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {request.closedAt}. The original and replacement will be retained.</small></label>}
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
-        <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{request.status === "Awaiting parts" && <option value="Awaiting parts">Awaiting parts</option>}{ideal&&<option>Idle</option>}</select></label>
+        <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option value="Closed">Closed by Maintenance</option>{request.status === "Awaiting parts" && <option value="Awaiting parts">Awaiting parts</option>}{ideal&&<option>Idle</option>}</select></label>
         <fieldset className="ideal-choice full">
           <legend>Idle? <small>Optional</small></legend>
           <div className="idle-options">
@@ -7698,7 +7699,7 @@ function NotificationRequestEntry({ reference, request = {} }) {
       <NotificationEntryField label="Started" value={formatTwelveHourDateTime(request.start)} />
       <NotificationEntryField label="Accepted" value={request.acceptedAt ? `${formatTwelveHourDateTime(request.acceptedAt)}${request.acceptedBy ? ` · ${request.acceptedBy}` : ""}` : "—"} />
       <NotificationEntryField label="Expected completion" value={formatTwelveHourDateTime(request.expectedCompletionAt)} />
-      <NotificationEntryField label="Closed" value={request.closedAt ? `${formatTwelveHourDateTime(request.closedAt)}${request.closedBy ? ` · ${request.closedBy}` : ""}` : "—"} />
+      <NotificationEntryField label="Closed by Maintenance" value={request.closedAt ? `${formatTwelveHourDateTime(request.closedAt)}${request.closedBy ? ` · ${request.closedBy}` : ""}` : "—"} />
       <NotificationEntryField label="First trip time" value={formatTwelveHourDateTime(firstTripTimestamp(request), true)} />
       <NotificationEntryField label="MIS verification" value={request.verifiedAt ? `${formatTwelveHourDateTime(request.verifiedAt, true)}${request.verifiedBy ? ` · ${request.verifiedBy}` : ""}` : request.verificationStatus} />
       <NotificationEntryField label="Downtime" value={request.hours} />
