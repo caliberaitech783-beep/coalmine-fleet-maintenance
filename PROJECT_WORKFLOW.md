@@ -185,6 +185,8 @@ The first selector in Create Request is **Equipment group**. It displays the Equ
 
 After an equipment or vehicle is selected, the form checks `GET /api/requests/conflict` by normalized door number and chassis. Any request whose status is not `Closed` blocks the form, identifies the existing request in a popup and inline warning, and disables submission. `POST /api/requests` repeats the same check and has no duplicate override, so Production and Maintenance users cannot create a second active request for the same asset.
 
+While submission is in progress, the form pauses background conflict checks and ignores late check responses so a refresh cannot flag the newly created request as its own duplicate. Repeated submit events are blocked immediately. The request list adds the server-confirmed row after a successful POST, and the form closes without waiting for another list refresh. The API acknowledges the committed database transaction before running opening reports and notifications; delivery failures are logged without changing the successful creation response.
+
 The form also supports manual 24-hour `HH:MM:SS` time entry and speech-to-text complaint input in supported Chrome/Edge browsers. The mobile submitted table shows Job reference, Equipment group, Door number, Site location, Days of breakdown, and the existing request fields. Days are calculated from the stored start timestamp and are not a separate database parameter.
 
 ## 8. Maintenance and MIS workflow

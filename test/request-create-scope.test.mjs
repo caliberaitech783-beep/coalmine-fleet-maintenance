@@ -15,8 +15,9 @@ const production={role:'normal',assignedRole:'Production User',name:'Stupal Moon
 
 async function create({user={site:'Sasti OB'},session=production,body={}}={}){
   let handlers;
-  const calls=[];
+  const calls=[],followups=[];
   const context={
+    setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},readSession:async req=>req.testSession,
     currentUserRecord:async()=>user,canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,
@@ -41,6 +42,7 @@ async function create({user={site:'Sasti OB'},session=production,body={}}={}){
     if(error)throw error;
     if(!advanced)break;
   }
+  for(const followup of followups)await followup();
   return {status:res.statusCode,body:res.body,calls};
 }
 

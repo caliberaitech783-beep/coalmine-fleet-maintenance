@@ -198,18 +198,19 @@ test("failed request updates do not notify other tabs or replace saved local row
   assert.deepEqual(app.rows(), [open]);
 });
 
-test("successful creation notifies after saving and retains the saved row if the refresh fails", async () => {
+test("successful creation adds the saved row and notifies without waiting for a refresh", async () => {
   const saved = { ...open, ref: "NEW" };
   const app = mutationHarness({ saved, refreshError: true });
   assert.deepEqual(await app.addRequest(saved), saved);
-  assert.deepEqual(app.events, ["local-state", "local-state", "notify", "reload"]);
+  assert.deepEqual(app.events, ["local-state", "notify"]);
   assert.equal(app.rows().filter((row) => row.ref === saved.ref).length, 1);
 });
 
-test("failed creation removes its optimistic row without announcing a successful mutation", async () => {
+test("failed creation leaves the existing list unchanged without announcing success", async () => {
   const app = mutationHarness({ ok: false, saved: { error: "Duplicate active request", duplicate: true } });
   await assert.rejects(app.addRequest({ ...open, ref: "NEW" }), /Duplicate/);
   assert.equal(app.events.includes("notify"), false);
+  assert.deepEqual(app.events, []);
   assert.deepEqual(app.rows(), [open]);
 });
 

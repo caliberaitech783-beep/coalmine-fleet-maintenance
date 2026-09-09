@@ -2573,18 +2573,22 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
     return result;
     });
-    await sendRequestEventReports('opened',rows[0]);
-    try{
-    const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
-    const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'opened',site:rows[0].site});
-    const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
-    const openedAt=requestNotificationTime(startedAt);
-    const openedBy=req.session.name||'Production User';
-    await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened for ${equipmentDetails}. Breakdown: ${rows[0].category}. Date & time: ${openedAt}. Location: ${rows[0].site}. User: ${openedBy}.`,
-      {templateKey:'requestOpened',parameters:[rows[0].ref,rows[0].site,rows[0].equipmentGroup||rows[0].equipment||'Not available',rows[0].door||'Not available',rows[0].category,openedBy,openedAt,rows[0].expectedCompletionAt||'Not set',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
-      {whatsapp:true,whatsappRecipients,workflowType:'opened',site:rows[0].site});
-    }catch(error){console.error(`Request ${rows[0].ref} saved, but opening notification recipients could not be resolved.`,error.message)}
+    // Acknowledge the committed request before reports or external delivery.
+    // Polling can already see it while those follow-up operations are running.
     res.status(201).json(rows[0]);
+    setImmediate(async()=>{
+      try{
+        await sendRequestEventReports('opened',rows[0]);
+        const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
+        const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'opened',site:rows[0].site});
+        const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
+        const openedAt=requestNotificationTime(startedAt);
+        const openedBy=req.session.name||'Production User';
+        await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} opened for ${equipmentDetails}. Breakdown: ${rows[0].category}. Date & time: ${openedAt}. Location: ${rows[0].site}. User: ${openedBy}.`,
+          {templateKey:'requestOpened',parameters:[rows[0].ref,rows[0].site,rows[0].equipmentGroup||rows[0].equipment||'Not available',rows[0].door||'Not available',rows[0].category,openedBy,openedAt,rows[0].expectedCompletionAt||'Not set',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
+          {whatsapp:true,whatsappRecipients,workflowType:'opened',site:rows[0].site});
+      }catch(error){console.error(`Request ${rows[0].ref} saved, but opening notifications could not be completed.`,error.message)}
+    });
   }catch(error){
     if(error.duplicate)return res.status(409).json({duplicate:true,existingReference:error.existingReference,error:error.message});
     if(error.code==='23505'&&error.constraint==='maintenance_requests_reference_key')return res.status(409).json({code:'REQUEST_REFERENCE_CONFLICT',error:'This request reference already exists. Refresh the request form and try again.'});

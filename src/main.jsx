@@ -3921,6 +3921,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const [requestDate, setRequestDate] = useState(systemDate);
   const [driverLookup, setDriverLookup] = useState({status: "idle", name: "", source: ""});
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [checkingConflict, setCheckingConflict] = useState(false);
   const [duplicateConflict, setDuplicateConflict] = useState(null);
   const conflictAlerted = useRef("");
@@ -3952,6 +3953,12 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [equipmentDetails.door, equipmentDetails.equipment, currentLocation, requestDate, requestTime]);
   useEffect(() => {
+    // Polling can see this form's saved request before its POST completes.
+    // The create response decides the outcome while submission is in flight.
+    if (submittingRef.current) {
+      setCheckingConflict(false);
+      return undefined;
+    }
     const selectedDoor = String(door || "").trim();
     const selectedChassis = String(equipmentDetails.chassis || "").trim();
     if (!selectedDoor) {
@@ -3963,7 +3970,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
 
     let cancelled = false;
     const showConflict = (conflict) => {
-      if (cancelled || !conflict) return;
+      if (cancelled || submittingRef.current || !conflict) return;
       const normalizedConflict = {
         ...conflict,
         duplicate: true,
@@ -3989,6 +3996,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     setCheckingConflict(true);
     conflictAlerted.current = "";
     const timer = window.setTimeout(async () => {
+      if (cancelled || submittingRef.current) return;
       try {
         const query = new URLSearchParams({door: selectedDoor});
         if (selectedChassis) query.set("chassis", selectedChassis);
@@ -3997,21 +4005,21 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
           headers: {Authorization: `Bearer ${authToken}`},
         });
         const result = await response.json().catch(() => ({}));
-        if (cancelled) return;
+        if (cancelled || submittingRef.current) return;
         if (!response.ok) throw new Error(result.error || "Could not check the selected door number.");
         if (result.duplicate) showConflict(result);
         else setDuplicateConflict(null);
       } catch (error) {
-        if (!cancelled) setDuplicateConflict({checkFailed: true, message: error.message});
+        if (!cancelled && !submittingRef.current) setDuplicateConflict({checkFailed: true, message: error.message});
       } finally {
-        if (!cancelled) setCheckingConflict(false);
+        if (!cancelled && !submittingRef.current) setCheckingConflict(false);
       }
     }, 200);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [door, equipmentDetails.chassis, activeRequestRecords]);
+  }, [door, equipmentDetails.chassis, activeRequestRecords, submitting]);
   const submit = async (e) => {
     e.preventDefault();
-    if (submitting || checkingConflict) return;
+    if (submittingRef.current || submitting || checkingConflict) return;
     if (!v) {
       alert("Select an equipment or vehicle from the selected equipment group.");
       return;
@@ -4045,7 +4053,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
       alert("Chassis number is not available. Contact the admin team to update the chassis number in Equipment Master before creating this request.");
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
+    setCheckingConflict(false);
+    setDuplicateConflict(null);
     try {
       await submitMaintenanceRequest(onSubmit, request);
       close();
@@ -4056,6 +4067,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         alert(conflict.message);
       } else alert(error?.message || "Could not save request. Please retry.");
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -8264,7 +8276,6 @@ function App() {
     },
     addRequest = async (request) => {
       requestLoadSequence.current += 1;
-      setRequests((current) => [request, ...current.filter((row) => row.ref !== request.ref)]);
       const response = await fetch("/api/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
@@ -8273,7 +8284,6 @@ function App() {
       const saved = await response.json().catch(() => ({}));
       if (!response.ok) {
         requestLoadSequence.current += 1;
-        setRequests((current) => current.filter((row) => row.ref !== request.ref));
         const error = new Error(saved.error || "Could not save request");
         error.duplicate = saved.duplicate === true;
         error.existingReference = saved.existingReference || "";
@@ -8282,12 +8292,6 @@ function App() {
       requestLoadSequence.current += 1;
       setRequests((current) => [saved, ...current.filter((row) => row.ref !== request.ref)]);
       notifyRequestChange(window);
-      try {
-        await loadRequests();
-      } catch (error) {
-        // The POST succeeded; keep the saved row visible if a refresh is transiently unavailable.
-        console.warn("Request saved, but the list refresh failed.", error);
-      }
       return saved;
     },
     updateRequest = async (reference, payload, action = "edit") => {

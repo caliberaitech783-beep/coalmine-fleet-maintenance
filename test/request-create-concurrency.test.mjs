@@ -15,7 +15,7 @@ const route=source.slice(source.indexOf("app.post('/api/requests',"),source.inde
 const normalize=value=>String(value||'').trim().toLowerCase();
 
 function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
-  const saved=structuredClone(initial),queries=[],lockTails=new Map(),clients=[];
+  const saved=structuredClone(initial),queries=[],lockTails=new Map(),clients=[],followups=[];
   let handlers,reads=0,releaseReads;
   const bothReads=new Promise(resolve=>{releaseReads=resolve;});
   async function query(sql,values,client){
@@ -58,6 +58,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
     clients.push(client);return client;
   }};
   const context={
+    setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,currentUserRecord:async()=>({site:'Sasti OB'}),
     canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,activeRequestConflictMessage,requestProjection:'*',
@@ -70,6 +71,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
     const req={testSession:{role:'normal',assignedRole:'Production User',name:'Local operator',login:'local',permissions:{createRequests:true}},body:{ref:'REQ-LOCAL-A',door:'DOOR-1',chassis:'CHASSIS-1',site:'Sasti OB',complaint:'Local concurrency test',start:'2026-09-08 10:00:00',meterType:'HMR',...body}};
     const res={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
     for(const handler of handlers){let next=false,error;await handler(req,res,value=>{next=true;error=value;});if(error)throw error;if(!next)break;}
+    for(const followup of followups.splice(0))await followup();
     return {status:res.statusCode,body:res.body};
   }};
 }
