@@ -48,7 +48,8 @@ test("Super Admin sessions carry their selected master and tab visibility", () =
     },
   });
   assert.deepEqual(profile.permissions.masterAccess, ["Equipment master"]);
-  assert.deepEqual(profile.permissions.tabAccess, ["Audit Trail", "Reports", "Tickets"]);
+  assert.deepEqual(profile.permissions.tabAccess, ["System Administration", "Reports", "Tickets"]);
+  assert.deepEqual(profile.permissions.systemAdminAccess, ["Audit Trail"]);
 });
 
 test("MIS can verify but cannot create or maintain requests", () => {

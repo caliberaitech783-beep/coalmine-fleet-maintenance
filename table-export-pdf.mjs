@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import {reportTime12} from './report-time-format.mjs';
 import {reportPdfFont as fontFor,reportPdfText,registerReportPdfFonts,fittingReportText as fittingCellText} from './report-pdf-text.mjs';
+import {formatDisplayDateTime} from './date-time-format.mjs';
 
 const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff',highlight:'#f8caca'};
 const clean=(value,fallback='—')=>reportPdfText(value).replace(/\s+/g,' ').trim()||fallback;
@@ -53,7 +54,7 @@ function footer(doc){
   const pages=doc.bufferedPageRange();
   for(let index=0;index<pages.count;index++){
     doc.switchToPage(index);
-    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Nerve Center | Generated ${new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'}).format(new Date())} IST | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
+    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Nerve Center | Generated ${formatDisplayDateTime(new Date())} | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
   }
 }
 

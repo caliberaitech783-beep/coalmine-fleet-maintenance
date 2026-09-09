@@ -7,6 +7,7 @@ import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-repo
 import {reportTime12} from './report-time-format.mjs';
 import {reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
+import {formatDisplayDateTime} from './date-time-format.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
 export const DIRECTOR_REPORT_TITLES=[
@@ -293,14 +294,14 @@ export function directorReportFilename(title,extension,slotKey){
   return `director-${safeFilePart(title)}-${slotKey}.${extension}`;
 }
 
-export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[],heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST'}={}){
+export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[],heading="Director's Daily Report",scheduleLabel='Daily 07:00:00 PM IST'}={}){
   const byDepartment=links.reduce((groups,link)=>{
     const department=link.department||'General';
     if(!groups.has(department))groups.set(department,[]);
     groups.get(department).push(link);
     return groups;
   },new Map());
-  const generated=new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(generatedAt);
+  const generated=formatDisplayDateTime(generatedAt);
   const lines=['▣ Nerve Center',heading,`Schedule: ${scheduleLabel}`,`Generated: ${generated}`,'','Department Wise Report Links:'];
   for(const [department,items] of byDepartment){
     lines.push('',`${department} --`);

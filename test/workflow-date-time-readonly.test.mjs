@@ -10,7 +10,9 @@ test("workflow date and time fields are read only except MIS first-trip verifica
     const inputs = [...source.matchAll(new RegExp(`<input[^>]*name="${name}"[^>]*>`, "g"))];
     assert.ok(inputs.length, `${name} should be present`);
     for (const [input] of inputs) {
-      assert.match(input, /\breadOnly\b/, `${name} must not be editable`);
+      if (!/\btype="hidden"/.test(input)) {
+        assert.match(input, /\breadOnly\b/, `${name} must not be editable`);
+      }
       assert.doesNotMatch(input, /\bonChange=/, `${name} must not have an edit handler`);
     }
   }

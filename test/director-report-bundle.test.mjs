@@ -50,7 +50,8 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   ]});
   assert.match(message,/▣ Nerve Center/);
   assert.match(message,/Director's Daily Report/);
-  assert.match(message,/Schedule: Daily 7:00 PM IST/);
+  assert.match(message,/Schedule: Daily 07:00:00 PM IST/);
+  assert.match(message,/Generated: 01-09-2026 07:00:00 PM/);
   assert.match(message,/Department Wise Report Links:/);
   assert.match(message,/Production --/);
   assert.match(message,/1\. Location wise opened BD/);

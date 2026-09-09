@@ -1,3 +1,5 @@
+import {SYSTEM_ADMINISTRATION_OPTIONS} from "./system-administration.mjs";
+
 export const ADMIN_MASTER_OPTIONS = [
   "Users & employees",
   "Equipment master",
@@ -15,7 +17,7 @@ export const ADMIN_TAB_OPTIONS = [
   "Masters",
   "WhatsApp Integration",
   "Reports",
-  "Audit Trail",
+  "System Administration",
   "Tickets",
 ];
 export const ADMIN_REPORT_OPTIONS = [
@@ -31,7 +33,7 @@ export const ADMIN_SUBMENU_OPTIONS = {
   Masters: {field: "masterAccess", label: "Visible masters", options: ADMIN_MASTER_OPTIONS},
   "WhatsApp Integration": {field: "whatsappAccess", label: "Visible WhatsApp menus", options: ["Meta API setup", "Daily site-wise report", "Daily OEM report", "WhatsApp alert history"]},
   Reports: {field: "reportAccess", label: "Visible report menus", options: ADMIN_REPORT_OPTIONS},
-  "Audit Trail": {field: "auditAccess", label: "Visible audit menus", options: ["Audit Trail"]},
+  "System Administration": {field: "systemAdminAccess", label: "Visible system administration menus", options: SYSTEM_ADMINISTRATION_OPTIONS},
   Tickets: {field: "ticketAccess", label: "Visible ticket menus", options: ["Tickets"]},
 };
 
@@ -67,11 +69,17 @@ export function managerRoleSelection(value) {
 
 export function adminAccessPermissions(user = {}) {
   const adminLevel = normalizeAdminLevel(user.adminLevel);
-  const selectedTabs = accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS);
+  const legacyTabs = accessSelection(user, "tabAccess", [...ADMIN_TAB_OPTIONS, "Audit Trail"]);
+  const selectedTabs = legacyTabs == null ? null : [...new Set(legacyTabs.map((tab) => tab === "Audit Trail" ? "System Administration" : tab))];
   const ticketAccount = adminLevel === "Manager" || ["Admin", "Manager"].includes(String(user.adminLevel || "").trim()) || String(user.userType || "").toLowerCase().includes("super");
   const tabAccess = ticketAccount && selectedTabs != null
     ? [...new Set([...selectedTabs, "Tickets"])]
     : selectedTabs;
+  const legacyFullTabSet = ["Dashboard", "Masters", "WhatsApp Integration", "Reports", "Audit Trail"];
+  const legacySystemAccess = legacyTabs?.includes("Audit Trail")
+    ? (legacyFullTabSet.every((tab) => legacyTabs.includes(tab)) ? null : ["Audit Trail"])
+    : null;
+  const systemAdminAccess = accessSelection(user, "systemAdminAccess", SYSTEM_ADMINISTRATION_OPTIONS) ?? legacySystemAccess;
   const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
   const managerRoles=managerRoleSelection(user.managerRole);
   return {
@@ -83,14 +91,16 @@ export function adminAccessPermissions(user = {}) {
     dashboardAccess: accessSelection(user, "dashboardAccess", ADMIN_SUBMENU_OPTIONS.Dashboard.options),
     whatsappAccess: accessSelection(user, "whatsappAccess", ADMIN_SUBMENU_OPTIONS["WhatsApp Integration"].options),
     reportAccess: accessSelection(user, "reportAccess", ADMIN_SUBMENU_OPTIONS.Reports.options),
-    auditAccess: accessSelection(user, "auditAccess", ADMIN_SUBMENU_OPTIONS["Audit Trail"].options),
+    systemAdminAccess,
+    auditAccess: accessSelection(user, "auditAccess", ["Audit Trail"]),
     ticketAccess: accessSelection(user, "ticketAccess", ADMIN_SUBMENU_OPTIONS.Tickets.options),
     mobileMasterAccess: mobileSelection("masterAccess",ADMIN_MASTER_OPTIONS,accessSelection(user,"masterAccess",ADMIN_MASTER_OPTIONS)),
     mobileTabAccess: mobileSelection("tabAccess",ADMIN_TAB_OPTIONS,tabAccess),
     mobileDashboardAccess: mobileSelection("dashboardAccess",ADMIN_SUBMENU_OPTIONS.Dashboard.options,accessSelection(user,"dashboardAccess",ADMIN_SUBMENU_OPTIONS.Dashboard.options)),
     mobileWhatsappAccess: mobileSelection("whatsappAccess",ADMIN_SUBMENU_OPTIONS["WhatsApp Integration"].options,accessSelection(user,"whatsappAccess",ADMIN_SUBMENU_OPTIONS["WhatsApp Integration"].options)),
     mobileReportAccess: mobileSelection("reportAccess",ADMIN_SUBMENU_OPTIONS.Reports.options,accessSelection(user,"reportAccess",ADMIN_SUBMENU_OPTIONS.Reports.options)),
-    mobileAuditAccess: mobileSelection("auditAccess",ADMIN_SUBMENU_OPTIONS["Audit Trail"].options,accessSelection(user,"auditAccess",ADMIN_SUBMENU_OPTIONS["Audit Trail"].options)),
+    mobileSystemAdminAccess: mobileSelection("systemAdminAccess",SYSTEM_ADMINISTRATION_OPTIONS,systemAdminAccess),
+    mobileAuditAccess: mobileSelection("auditAccess",["Audit Trail"],accessSelection(user,"auditAccess",["Audit Trail"])),
     mobileTicketAccess: mobileSelection("ticketAccess",ADMIN_SUBMENU_OPTIONS.Tickets.options,accessSelection(user,"ticketAccess",ADMIN_SUBMENU_OPTIONS.Tickets.options)),
   };
 }
@@ -103,6 +113,7 @@ export function navigationPermissionsForView(permissions={},mobile=false){
     dashboardAccess:permissions.mobileDashboardAccess??permissions.dashboardAccess,
     whatsappAccess:permissions.mobileWhatsappAccess??permissions.whatsappAccess,
     reportAccess:permissions.mobileReportAccess??permissions.reportAccess,
+    systemAdminAccess:permissions.mobileSystemAdminAccess??permissions.systemAdminAccess,
     auditAccess:permissions.mobileAuditAccess??permissions.auditAccess,
     ticketAccess:permissions.mobileTicketAccess??permissions.ticketAccess,
   };

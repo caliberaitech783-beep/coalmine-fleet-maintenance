@@ -28,10 +28,10 @@ test('history displays saved first trip independently, preserves seconds and sup
   assert.equal(firstTrip(request), request.firstTripAt);
   assert.equal(firstTrip({firstTripDate:'2026-09-06',firstTripTime:'23:45:10'}), '2026-09-06 23:45:10');
   assert.equal(firstTrip({verifiedAt:request.verifiedAt}), '');
-  assert.equal(format(request.verifiedAt, true), '2026-09-07 12:31:42 PM');
-  assert.equal(format(firstTrip(request), true), '2026-09-07 11:45:17 AM');
-  assert.equal(format('2026-09-07 00:05:03', true), '2026-09-07 12:05:03 AM');
-  assert.equal(format('2026-09-07 13:05', true), '2026-09-07 1:05:00 PM');
+  assert.equal(format(request.verifiedAt, true), '07-09-2026 12:31:42 PM');
+  assert.equal(format(firstTrip(request), true), '07-09-2026 11:45:17 AM');
+  assert.equal(format('2026-09-07 00:05:03', true), '07-09-2026 12:05:03 AM');
+  assert.equal(format('2026-09-07 13:05', true), '07-09-2026 1:05:00 PM');
   assert.equal(format(''), '—');
 });
 

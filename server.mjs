@@ -1,4 +1,5 @@
 import express from 'express';
+import {formatDisplayDateTime} from './date-time-format.mjs';
 import pg from 'pg';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -46,6 +47,8 @@ import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflow
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
+import {auditDeviceDetails} from './device-details.mjs';
+import {DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './system-administration.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -65,13 +68,14 @@ const deploymentSha=/^[0-9a-f]{40}$/.test(deploymentShaCandidate)?deploymentShaC
 const connectionString=process.env.DATABASE_URL;
 const scheduledJobsEnabled=String(process.env.DISABLE_SCHEDULED_JOBS||'').trim().toLowerCase()!=='true';
 const driverSyncIntervalMs=2*60*1000;
-const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
+const reportDateTime=(value)=>formatDisplayDateTime(value);
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
 const WHATSAPP_REPORT_SETTING_KEY='whatsapp_report_settings';
 const WHATSAPP_APPROVAL_SETTING_KEY='whatsapp_template_approvals';
 const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
+const BACKUP_SETTING_KEY='system_backup_settings';
 const AUDIT_REASON_HEADER='x-audit-reason';
 const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
 
@@ -170,6 +174,96 @@ async function appendAuditEvent(req,event={}){
       auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditIpAddress(req),auditClean(req.get?.(AUDIT_DEVICE_ID_HEADER),80),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
     ]);
   }catch(error){console.error('Audit event could not be recorded:',error.message)}
+}
+
+async function appendLoginHistory(req,event={}){
+  await pool.query(`INSERT INTO login_history
+    (session_public_id,login_name,employee_name,actor_role,event_type,outcome,reason,ip_address,device_id,user_agent)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[
+    auditClean(event.sessionId,80),auditClean(event.login||req.session?.login||req.body?.username,120),auditClean(event.name||req.session?.name,160),
+    auditClean(event.role||auditRole(req.session),100),auditClean(event.eventType||'Login',50),auditClean(event.outcome||'Success',30),
+    auditClean(event.reason,500),auditIpAddress(req),auditClean(req.get?.(AUDIT_DEVICE_ID_HEADER),80),auditClean(req.get?.('user-agent'),500),
+  ]);
+}
+
+async function storedBackupSettings(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[BACKUP_SETTING_KEY]);
+  return normalizeBackupSettings(rows[0]?.setting_value||DEFAULT_BACKUP_SETTINGS);
+}
+
+function sanitizeBackupValue(value){
+  if(Array.isArray(value))return value.map(sanitizeBackupValue);
+  if(value instanceof Date)return value.toISOString();
+  if(Buffer.isBuffer(value))return {encoding:'base64',data:value.toString('base64')};
+  if(!value||typeof value!=='object')return value;
+  return Object.fromEntries(Object.entries(value).map(([key,entry])=>[
+    key,/password|hash|secret|token|api.?key|access.?key/i.test(key)?'[excluded from export]':sanitizeBackupValue(entry),
+  ]));
+}
+
+async function backupActivity({backupId=null,action,outcome='Success',details='',actor={}}){
+  await pool.query(`INSERT INTO backup_activity_logs (backup_id,action,outcome,details,actor_login,actor_name)
+    VALUES ($1,$2,$3,$4,$5,$6)`,[backupId,action,outcome,auditClean(details,1000),auditClean(actor.login,120),auditClean(actor.name,160)]);
+}
+
+async function applyBackupRetention(settings){
+  const expired=await pool.query(`DELETE FROM system_backups WHERE expires_at<NOW() RETURNING id`);
+  const excess=await pool.query(`DELETE FROM system_backups WHERE id IN (
+    SELECT id FROM system_backups WHERE status='Completed' ORDER BY completed_at DESC NULLS LAST OFFSET $1
+  ) RETURNING id`,[settings.maxBackups]);
+  const removed=expired.rowCount+excess.rowCount;
+  if(removed)await backupActivity({action:'Retention cleanup',details:`Removed ${removed} expired or excess backup(s).`,actor:{login:'system',name:'Scheduled backup service'}});
+}
+
+async function createApplicationBackup({actor={login:'system',name:'Scheduled backup service'},triggerType='Manual',scheduleSlot=null}={}){
+  const settings=await storedBackupSettings();
+  const id=randomUUID();
+  const date=indiaBackupSlot(new Date()).date;
+  const fileName=`${settings.namePrefix}-${date}-${id.slice(0,8)}.json`;
+  try{
+    await pool.query(`INSERT INTO system_backups
+      (id,file_name,trigger_type,schedule_slot,storage_provider,created_by_login,created_by_name,expires_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()+make_interval(days=>$8::int))`,[
+      id,fileName,triggerType,scheduleSlot,settings.storageTarget,actor.login||'system',actor.name||'Scheduled backup service',settings.retentionDays,
+    ]);
+  }catch(error){
+    if(error?.code==='23505'&&scheduleSlot)return null;
+    throw error;
+  }
+  await backupActivity({backupId:id,action:'Backup started',details:`${triggerType} application-data backup started.`,actor});
+  try{
+    const tableNames=['maintenance_requests','maintenance_daily_remarks','master_records','app_metadata','app_settings','crm_tickets','crm_notifications','admin_lock_incidents','whatsapp_alert_history'];
+    if(settings.includeAuditTrail)tableNames.push('audit_events');
+    if(settings.includeLoginHistory)tableNames.push('login_history');
+    const data={};
+    const recordCounts={};
+    for(const table of tableNames){
+      const {rows}=await pool.query(`SELECT * FROM ${table}`);
+      data[table]=sanitizeBackupValue(rows);
+      recordCounts[table]=rows.length;
+    }
+    const payload={format:'BDMS application-data backup',version:1,createdAt:new Date().toISOString(),createdBy:actor.login||'system',data};
+    const serialized=JSON.stringify(payload);
+    const checksum=createHash('sha256').update(serialized).digest('hex');
+    await pool.query(`UPDATE system_backups SET status='Completed',size_bytes=$2,checksum=$3,record_counts=$4::jsonb,
+      backup_payload=$5::jsonb,completed_at=NOW() WHERE id=$1`,[id,Buffer.byteLength(serialized),checksum,JSON.stringify(recordCounts),serialized]);
+    await backupActivity({backupId:id,action:'Backup completed',details:`${Object.values(recordCounts).reduce((sum,count)=>sum+count,0)} records protected.`,actor});
+    await applyBackupRetention(settings);
+    return id;
+  }catch(error){
+    await pool.query(`UPDATE system_backups SET status='Failed',error_message=$2,completed_at=NOW() WHERE id=$1`,[id,auditClean(error.message,1000)]).catch(()=>{});
+    await backupActivity({backupId:id,action:'Backup failed',outcome:'Failed',details:error.message,actor}).catch(()=>{});
+    throw error;
+  }
+}
+
+async function runScheduledApplicationBackup(now=new Date()){
+  if(!databaseReady)return {skipped:true,reason:'database-not-ready'};
+  const settings=await storedBackupSettings();
+  if(!scheduledBackupDue(settings,now))return {skipped:true,reason:'not-due'};
+  const slot=indiaBackupSlot(now);
+  const id=await createApplicationBackup({triggerType:'Scheduled',scheduleSlot:slot.slotKey});
+  return id?{id}:{skipped:true,reason:'already-created'};
 }
 
 async function publicWhatsAppSettings(){
@@ -392,6 +486,13 @@ async function migrate(){
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS assigned_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS session_public_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS ip_address TEXT NOT NULL DEFAULT '';
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS device_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_agent TEXT NOT NULL DEFAULT '';
+    UPDATE auth_sessions SET session_public_id=md5(token::text||clock_timestamp()::text||random()::text) WHERE session_public_id='';
+    CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_public_id_idx ON auth_sessions (session_public_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
     CREATE TABLE IF NOT EXISTS audit_events (
       id BIGSERIAL PRIMARY KEY,
@@ -455,6 +556,70 @@ async function migrate(){
       setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS login_history (
+      id BIGSERIAL PRIMARY KEY,
+      session_public_id TEXT NOT NULL DEFAULT '',
+      login_name TEXT NOT NULL DEFAULT '',
+      employee_name TEXT NOT NULL DEFAULT '',
+      actor_role TEXT NOT NULL DEFAULT '',
+      event_type TEXT NOT NULL DEFAULT 'Login',
+      outcome TEXT NOT NULL DEFAULT 'Success',
+      reason TEXT NOT NULL DEFAULT '',
+      ip_address TEXT NOT NULL DEFAULT '',
+      device_id TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT '',
+      occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS login_history_occurred_at_idx ON login_history (occurred_at DESC);
+    CREATE INDEX IF NOT EXISTS login_history_login_idx ON login_history (login_name,occurred_at DESC);
+    CREATE TABLE IF NOT EXISTS system_backups (
+      id UUID PRIMARY KEY,
+      file_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Running',
+      trigger_type TEXT NOT NULL DEFAULT 'Manual',
+      schedule_slot TEXT,
+      size_bytes BIGINT NOT NULL DEFAULT 0,
+      checksum TEXT NOT NULL DEFAULT '',
+      record_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
+      backup_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      storage_provider TEXT NOT NULL DEFAULT 'Application database',
+      created_by_login TEXT NOT NULL DEFAULT '',
+      created_by_name TEXT NOT NULL DEFAULT '',
+      error_message TEXT NOT NULL DEFAULT '',
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS system_backups_schedule_slot_idx ON system_backups (schedule_slot) WHERE schedule_slot IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS system_backups_started_at_idx ON system_backups (started_at DESC);
+    CREATE TABLE IF NOT EXISTS backup_activity_logs (
+      id BIGSERIAL PRIMARY KEY,
+      backup_id UUID,
+      action TEXT NOT NULL,
+      outcome TEXT NOT NULL DEFAULT 'Success',
+      details TEXT NOT NULL DEFAULT '',
+      actor_login TEXT NOT NULL DEFAULT '',
+      actor_name TEXT NOT NULL DEFAULT '',
+      occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS backup_activity_logs_occurred_at_idx ON backup_activity_logs (occurred_at DESC);
+    CREATE TABLE IF NOT EXISTS remote_support_sessions (
+      id UUID PRIMARY KEY,
+      requester_login TEXT NOT NULL DEFAULT '',
+      requester_name TEXT NOT NULL DEFAULT '',
+      target_login TEXT NOT NULL,
+      target_name TEXT NOT NULL DEFAULT '',
+      target_device_id TEXT NOT NULL DEFAULT '',
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Requested',
+      approved_by_login TEXT NOT NULL DEFAULT '',
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      approved_at TIMESTAMPTZ,
+      started_at TIMESTAMPTZ,
+      ended_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()+INTERVAL '30 minutes'
+    );
+    CREATE INDEX IF NOT EXISTS remote_support_target_idx ON remote_support_sessions (target_login,status,requested_at DESC);
     CREATE TABLE IF NOT EXISTS whatsapp_alert_history (
       id BIGSERIAL PRIMARY KEY,
       report_type TEXT NOT NULL,
@@ -703,7 +868,7 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
 
 app.get('/api/reports/director/timing',requireSuper,(_req,res)=>{
   const window=directorReportWindow(new Date());
-  res.json({level:'Director',schedule:'Daily 7:00 PM IST',nextSlotKey:window.slotKey,nextWindowEnd:window.end.toISOString(),reportCount:13});
+  res.json({level:'Director',schedule:'Daily 07:00:00 PM IST',nextSlotKey:window.slotKey,nextWindowEnd:window.end.toISOString(),reportCount:13});
 });
 
 app.get(['/reports/published/:id','/r/:id'],async(req,res,next)=>{
@@ -789,8 +954,14 @@ app.post('/api/login',async(req,res,next)=>{
     });
     const exactLoginCandidates=candidates.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);
     const matchingRows=exactLoginCandidates.length?exactLoginCandidates:candidates;
-    if(!matchingRows.length)return res.status(401).json({error:'Invalid employee first name or password.'});
-    if(matchingRows.length>1)return res.status(409).json({error:'More than one account uses this login. A Super User must assign a unique Login name in Users & employees.'});
+    if(!matchingRows.length){
+      if(typeof appendLoginHistory==='function')await appendLoginHistory(req,{login:username,outcome:'Failed',reason:'Invalid user name or password'}).catch(()=>{});
+      return res.status(401).json({error:'Invalid employee first name or password.'});
+    }
+    if(matchingRows.length>1){
+      if(typeof appendLoginHistory==='function')await appendLoginHistory(req,{login:username,outcome:'Failed',reason:'Duplicate login name'}).catch(()=>{});
+      return res.status(409).json({error:'More than one account uses this login. A Super User must assign a unique Login name in Users & employees.'});
+    }
     const employeeRow=matchingRows[0];
     const employee=employeeRow.record_data;
     const login=String(employee.login||userLoginCandidates(employee)[0]||username).trim();
@@ -825,7 +996,11 @@ app.post('/api/login',async(req,res,next)=>{
       return res.json({requiresPasswordChange:true,changeToken,name:employee.employee});
     }
     const token=randomUUID();
-    await sessionStore.create({token,role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+    const sessionMetadata=typeof auditIpAddress==='function'&&typeof auditClean==='function'
+      ? {ipAddress:auditIpAddress(req),deviceId:auditClean(req.get(AUDIT_DEVICE_ID_HEADER),80),userAgent:auditClean(req.get('user-agent'),500)}
+      : {};
+    const sessionId=await sessionStore.create({token,role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions,...sessionMetadata});
+    if(typeof appendLoginHistory==='function')await appendLoginHistory(req,{sessionId,login,name:employee.employee,role:profile.permissions?.adminLevel||profile.assignedRole||profile.userType});
     res.json(loginPayload({token,profile,employee,login}));
   }catch(error){next(error)}
 });
@@ -945,14 +1120,34 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
     await pool.query('DELETE FROM password_change_sessions WHERE master_record_id=$1',[reset.master_record_id]);
     const token=randomUUID();
     const profile={sessionRole:reset.role,userType:reset.user_type,assignedRole:reset.assigned_role,permissions:reset.permissions||{}};
-    await sessionStore.create({token,role:profile.sessionRole,name:reset.employee_name,login:reset.login_name,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+    const sessionId=await sessionStore.create({token,role:profile.sessionRole,name:reset.employee_name,login:reset.login_name,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions,ipAddress:auditIpAddress(req),deviceId:auditClean(req.get(AUDIT_DEVICE_ID_HEADER),80),userAgent:auditClean(req.get('user-agent'),500)});
+    await appendLoginHistory(req,{sessionId,login:reset.login_name,name:reset.employee_name,role:profile.permissions?.adminLevel||profile.assignedRole||profile.userType});
     res.json(loginPayload({token,profile,employee:{employee:reset.employee_name},login:reset.login_name}));
   }catch(error){next(error)}
 });
 
 async function readSession(req){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-  return sessionStore.get(token);
+  const session=await sessionStore.get(token);
+  if(session)await sessionStore.touch(token,{ipAddress:auditIpAddress(req),deviceId:auditClean(req.get(AUDIT_DEVICE_ID_HEADER),80),userAgent:auditClean(req.get('user-agent'),500)});
+  return session;
+}
+
+function requireSystemAdministrator(req,res,next){
+  const allowedTab=accessAllows(req.session?.permissions?.tabAccess,'System Administration')
+    || accessAllows(req.session?.permissions?.mobileTabAccess,'System Administration')
+    || accessAllows(req.session?.permissions?.tabAccess,'Audit Trail');
+  if(req.session?.role==='super'&&req.session?.permissions?.adminLevel!=='Manager'&&allowedTab)return next();
+  return res.status(403).json({error:'Only an authorized Admin or Super Admin can open System Administration.'});
+}
+
+function requireSystemSections(...sections){
+  return (req,res,next)=>{
+    const desktop=req.session?.permissions?.systemAdminAccess;
+    const mobile=req.session?.permissions?.mobileSystemAdminAccess;
+    if(sections.some((section)=>accessAllows(desktop,section)||accessAllows(mobile,section)))return next();
+    return res.status(403).json({error:'You do not have access to this System Administration section.'});
+  };
 }
 
 async function requireSession(req,res,next){
@@ -990,7 +1185,8 @@ async function requireSuper(req,res,next){
 app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
   try{
     const isAdministrator=req.session.permissions?.adminLevel!=='Manager';
-    if(!isAdministrator&&!accessAllows(req.session.permissions?.tabAccess,'Audit Trail')&&!accessAllows(req.session.permissions?.mobileTabAccess,'Audit Trail'))
+    const hasSystemAudit=accessAllows(req.session.permissions?.systemAdminAccess,'Audit Trail')||accessAllows(req.session.permissions?.mobileSystemAdminAccess,'Audit Trail');
+    if(!isAdministrator&&!hasSystemAudit&&!accessAllows(req.session.permissions?.tabAccess,'Audit Trail')&&!accessAllows(req.session.permissions?.mobileTabAccess,'Audit Trail'))
       return res.status(403).json({error:'You do not have access to the Audit Trail.'});
     const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||2000));
     const {rows}=await pool.query(`SELECT id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
@@ -1744,7 +1940,7 @@ function hierarchyRuleForDesignation(records=[],designation={}){
     .find((record)=>String(record.designation||'').trim().toLowerCase()===wanted);
 }
 
-async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 7:00 PM IST',siteAccess='',eventRequest=null}){
+async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 07:00:00 PM IST',siteAccess='',eventRequest=null}){
   const selectedTitles=reportTitles?new Set(reportTitles):null;
   const sourceData=sourceDataForSites(await directorReportSourceData(),siteAccess);
   if(eventRequest)sourceData.requests=sourceDataForSites({requests:[eventRequest],equipmentRecords:[],transferRecords:[]},siteAccess).requests;
@@ -1956,8 +2152,182 @@ async function ticketSuperRecipients(client,{creatorRole,site}){
 }
 
 function requestNotificationTime(value){
-  return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(new Date(value));
+  return formatDisplayDateTime(value);
 }
+
+app.post('/api/logout',requireSession,async(req,res,next)=>{
+  try{
+    const current=req.session;
+    const revoked=await sessionStore.revoke(current.sessionId);
+    if(revoked)await appendLoginHistory(req,{...revoked,eventType:'Logout',reason:'User signed out'});
+    req.audit={eventType:'Security',module:'Authentication',action:'Logout',targetType:'Session',targetReference:current.sessionId,changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+
+const backupSummarySql=`SELECT id,file_name AS "fileName",status,trigger_type AS "triggerType",schedule_slot AS "scheduleSlot",
+  size_bytes::text AS "sizeBytes",checksum,record_counts AS "recordCounts",storage_provider AS "storageProvider",
+  created_by_login AS "createdByLogin",created_by_name AS "createdByName",error_message AS "errorMessage",
+  started_at AS "startedAt",completed_at AS "completedAt",expires_at AS "expiresAt" FROM system_backups`;
+
+app.get('/api/system-admin/backups',requireSession,requireSystemAdministrator,requireSystemSections('Daily Backup','Backup History','Export Backup','Create Schedule Backup','Backup Settings','Storage and Retention'),async(_req,res,next)=>{
+  try{
+    const [{rows},settings]=await Promise.all([
+      pool.query(`${backupSummarySql} ORDER BY started_at DESC LIMIT 500`),
+      storedBackupSettings(),
+    ]);
+    res.set('Cache-Control','no-store');
+    res.json({backups:rows,settings});
+  }catch(error){next(error)}
+});
+
+app.post('/api/system-admin/backups',requireSession,requireSystemAdministrator,requireSystemSections('Daily Backup'),async(req,res,next)=>{
+  try{
+    const id=await createApplicationBackup({actor:{login:req.session.login,name:req.session.name},triggerType:'Manual'});
+    req.audit={eventType:'Administration',module:'System Administration',action:'Create backup',targetType:'Application data backup',targetReference:id,changedFields:[]};
+    const {rows}=await pool.query(`${backupSummarySql} WHERE id=$1`,[id]);
+    res.status(201).json(rows[0]);
+  }catch(error){next(error)}
+});
+
+app.get('/api/system-admin/backups/:id/export',requireSession,requireSystemAdministrator,requireSystemSections('Export Backup'),async(req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT id,file_name,backup_payload,checksum FROM system_backups WHERE id=$1 AND status='Completed'`,[req.params.id]);
+    if(!rows.length)return res.status(404).json({error:'This completed backup could not be found.'});
+    const backup=rows[0];
+    await backupActivity({backupId:backup.id,action:'Backup exported',details:`Exported ${backup.file_name}.`,actor:{login:req.session.login,name:req.session.name}});
+    await appendAuditEvent(req,{eventType:'Administration',module:'System Administration',action:'Export backup',targetType:'Application data backup',targetReference:String(backup.id),changedFields:[]});
+    res.set('Cache-Control','no-store');
+    res.set('X-BDMS-Checksum-SHA256',backup.checksum);
+    res.type('application/json').attachment(backup.file_name).send(JSON.stringify(backup.backup_payload,null,2));
+  }catch(error){next(error)}
+});
+
+app.get('/api/system-admin/backup-settings',requireSession,requireSystemAdministrator,requireSystemSections('Create Schedule Backup','Backup Settings','Storage and Retention'),async(_req,res,next)=>{
+  try{res.set('Cache-Control','no-store');res.json(await storedBackupSettings())}catch(error){next(error)}
+});
+
+app.put('/api/system-admin/backup-settings',requireSession,requireSystemAdministrator,requireSystemSections('Create Schedule Backup','Backup Settings','Storage and Retention'),async(req,res,next)=>{
+  try{
+    const settings=normalizeBackupSettings(req.body||{});
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[BACKUP_SETTING_KEY,JSON.stringify(settings)]);
+    await backupActivity({action:'Backup settings updated',details:`Schedule ${settings.enabled?'enabled':'paused'} at ${settings.scheduleTime} IST; ${settings.retentionDays}-day retention.`,actor:{login:req.session.login,name:req.session.name}});
+    req.audit={eventType:'Administration',module:'System Administration',action:'Update backup settings',targetType:'Backup configuration',targetReference:BACKUP_SETTING_KEY,changedFields:auditSubmittedFields(req.body)};
+    res.json(settings);
+  }catch(error){next(error)}
+});
+
+app.get('/api/system-admin/backup-activity',requireSession,requireSystemAdministrator,requireSystemSections('Backup Activity Logs'),async(_req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT id,backup_id AS "backupId",action,outcome,details,actor_login AS "actorLogin",actor_name AS "actorName",occurred_at AS "occurredAt"
+      FROM backup_activity_logs ORDER BY occurred_at DESC LIMIT 1000`);
+    res.set('Cache-Control','no-store');res.json(rows);
+  }catch(error){next(error)}
+});
+
+app.get('/api/system-admin/login-sessions',requireSession,requireSystemAdministrator,requireSystemSections('Login Sessions','Device Access'),async(req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT session_public_id AS "sessionId",login_name AS login,employee_name AS name,
+      COALESCE(NULLIF(permissions->>'adminLevel',''),NULLIF(assigned_role,''),NULLIF(user_type,''),role) AS "displayRole",
+      ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",created_at AS "createdAt",last_seen_at AS "lastSeenAt"
+      FROM auth_sessions WHERE created_at>NOW()-INTERVAL '30 days' ORDER BY last_seen_at DESC`);
+    res.set('Cache-Control','no-store');
+    res.json(rows.map((row)=>({...row,device:auditDeviceDetails(row.userAgent),isCurrent:row.sessionId===req.session.sessionId})));
+  }catch(error){next(error)}
+});
+
+app.delete('/api/system-admin/login-sessions/:id',requireSession,requireSystemAdministrator,requireSystemSections('Login Sessions'),async(req,res,next)=>{
+  try{
+    const id=String(req.params.id||'').trim();
+    if(id===req.session.sessionId)return res.status(400).json({error:'Use Sign out to close your current session.'});
+    const reason=auditClean(req.body?.reason||req.get(AUDIT_REASON_HEADER),500);
+    if(!reason)return res.status(400).json({error:'Enter a reason for forcefully closing this session.'});
+    const revoked=await sessionStore.revoke(id);
+    if(!revoked)return res.status(404).json({error:'This session is already closed.'});
+    await appendLoginHistory(req,{...revoked,eventType:'Force closed',reason:`Closed by ${req.session.name || req.session.login}: ${reason}`});
+    req.audit={eventType:'Security',module:'System Administration',action:'Force close login session',targetType:'User session',targetReference:id,reason,changedFields:[]};
+    res.json({closed:true,sessionId:id});
+  }catch(error){next(error)}
+});
+
+app.get('/api/system-admin/login-history',requireSession,requireSystemAdministrator,requireSystemSections('Login History'),async(_req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT id,session_public_id AS "sessionId",login_name AS login,employee_name AS name,
+      actor_role AS role,event_type AS "eventType",outcome,reason,ip_address AS "ipAddress",device_id AS "deviceId",
+      user_agent AS "userAgent",occurred_at AS "occurredAt" FROM login_history ORDER BY occurred_at DESC LIMIT 5000`);
+    res.set('Cache-Control','no-store');res.json(rows.map((row)=>({...row,device:auditDeviceDetails(row.userAgent)})));
+  }catch(error){next(error)}
+});
+
+app.get('/api/system-admin/device-access',requireSession,requireSystemAdministrator,requireSystemSections('Device Access'),async(_req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT id,requester_login AS "requesterLogin",requester_name AS "requesterName",target_login AS "targetLogin",
+      target_name AS "targetName",target_device_id AS "targetDeviceId",reason,status,approved_by_login AS "approvedByLogin",
+      requested_at AS "requestedAt",approved_at AS "approvedAt",started_at AS "startedAt",ended_at AS "endedAt",expires_at AS "expiresAt"
+      FROM remote_support_sessions ORDER BY requested_at DESC LIMIT 500`);
+    res.set('Cache-Control','no-store');res.json(rows);
+  }catch(error){next(error)}
+});
+
+app.get('/api/system-admin/device-access/mine',requireSession,async(req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT id,requester_name AS "requesterName",target_device_id AS "targetDeviceId",reason,status,requested_at AS "requestedAt",expires_at AS "expiresAt"
+      FROM remote_support_sessions WHERE lower(target_login)=lower($1) AND status IN ('Requested','Approved','Active')
+        AND (status<>'Requested' OR expires_at>NOW()) ORDER BY requested_at DESC`,[req.session.login]);
+    res.set('Cache-Control','no-store');res.json(rows);
+  }catch(error){next(error)}
+});
+
+app.post('/api/system-admin/device-access',requireSession,requireSystemAdministrator,requireSystemSections('Device Access'),async(req,res,next)=>{
+  try{
+    const targetSessionId=String(req.body?.targetSessionId||'').trim();
+    const reason=auditClean(req.body?.reason,500);
+    if(!targetSessionId||!reason)return res.status(400).json({error:'Select an active user session and enter a support reason.'});
+    const {rows:targets}=await pool.query(`SELECT login_name,employee_name,device_id FROM auth_sessions WHERE session_public_id=$1`,[targetSessionId]);
+    const target=targets[0];
+    if(!target)return res.status(404).json({error:'The selected user session is no longer active.'});
+    if(String(target.login_name).toLowerCase()===String(req.session.login).toLowerCase())return res.status(400).json({error:'Select another user device for support.'});
+    const id=randomUUID();
+    await pool.query(`INSERT INTO remote_support_sessions
+      (id,requester_login,requester_name,target_login,target_name,target_device_id,reason)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)`,[id,req.session.login,req.session.name,target.login_name,target.employee_name,target.device_id,reason]);
+    req.audit={eventType:'Security',module:'System Administration',action:'Request remote support access',targetType:'User device',targetReference:target.device_id||target.login_name,reason,changedFields:[]};
+    res.status(201).json({id,status:'Requested'});
+  }catch(error){next(error)}
+});
+
+app.patch('/api/system-admin/device-access/:id',requireSession,async(req,res,next)=>{
+  try{
+    const action=String(req.body?.action||'').trim().toLowerCase();
+    if(!['approve','decline','start','end'].includes(action))return res.status(400).json({error:'Choose approve, decline, start, or end.'});
+    const {rows}=await pool.query('SELECT * FROM remote_support_sessions WHERE id=$1',[req.params.id]);
+    const support=rows[0];
+    if(!support)return res.status(404).json({error:'Support request not found.'});
+    const isTarget=String(support.target_login).toLowerCase()===String(req.session.login).toLowerCase();
+    const isAdmin=req.session.role==='super'&&req.session.permissions?.adminLevel!=='Manager'&&(
+      accessAllows(req.session.permissions?.tabAccess,'System Administration')
+      || accessAllows(req.session.permissions?.mobileTabAccess,'System Administration')
+      || accessAllows(req.session.permissions?.tabAccess,'Audit Trail')
+    )&&(accessAllows(req.session.permissions?.systemAdminAccess,'Device Access')||accessAllows(req.session.permissions?.mobileSystemAdminAccess,'Device Access'));
+    if(['approve','decline'].includes(action)&&!isTarget)return res.status(403).json({error:'Only the requested employee can approve or decline device access.'});
+    if(['start'].includes(action)&&!isAdmin)return res.status(403).json({error:'Only an administrator can start an approved support session.'});
+    if(action==='end'&&!isTarget&&!isAdmin)return res.status(403).json({error:'You cannot end this support session.'});
+    const allowed=(action==='approve'||action==='decline')&&support.status==='Requested'
+      || action==='start'&&support.status==='Approved'
+      || action==='end'&&['Requested','Approved','Active'].includes(support.status);
+    if(!allowed)return res.status(409).json({error:`This support request is already ${String(support.status).toLowerCase()}.`});
+    const status={approve:'Approved',decline:'Declined',start:'Active',end:'Ended'}[action];
+    const {rows:updated}=await pool.query(`UPDATE remote_support_sessions SET status=$2,
+      approved_by_login=CASE WHEN $2='Approved' THEN $3 ELSE approved_by_login END,
+      approved_at=CASE WHEN $2='Approved' THEN NOW() ELSE approved_at END,
+      started_at=CASE WHEN $2='Active' THEN NOW() ELSE started_at END,
+      ended_at=CASE WHEN $2 IN ('Ended','Declined') THEN NOW() ELSE ended_at END
+      WHERE id=$1 RETURNING id,status`,[support.id,status,req.session.login]);
+    req.audit={eventType:'Security',module:'System Administration',action:`${status} remote support session`,targetType:'User device',targetReference:support.target_device_id||support.target_login,reason:support.reason,changedFields:[{field:'status',before:support.status,after:status}]};
+    res.json(updated[0]);
+  }catch(error){next(error)}
+});
 
 async function requestStakeholderLogins(client,{site,requesterLogin}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
@@ -3459,6 +3829,9 @@ async function initializeDatabase(){
       void sendScheduledWorkflowWhatsAppReminders()
         .then(result=>console.log('Scheduled workflow WhatsApp reminder check completed.',result))
         .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
+      void runScheduledApplicationBackup()
+        .then(result=>{if(!result?.skipped)console.log('Scheduled application backup completed.',result)})
+        .catch(error=>console.error('Scheduled application backup failed.',error));
       void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
       void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
         if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
@@ -3517,4 +3890,10 @@ if(scheduledJobsEnabled){
   workflowReminderTimer.unref?.();
   const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
   adminLockAuditTimer.unref?.();
+  const applicationBackupTimer=setInterval(()=>{
+    void runScheduledApplicationBackup()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled application backup completed.',result)})
+      .catch(error=>console.error('Scheduled application backup failed.',error));
+  },60*1000);
+  applicationBackupTimer.unref?.();
 }

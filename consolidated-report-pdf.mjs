@@ -1,9 +1,10 @@
 import PDFDocument from 'pdfkit';
 import {canonicalSiteName} from './site-location.mjs';
 import {reportPdfFont,reportPdfText,registerReportPdfFonts,fittingReportText} from './report-pdf-text.mjs';
+import {formatDisplayDateTime} from './date-time-format.mjs';
 
 const COLORS={navy:'#10284c',blue:'#2859b8',muted:'#65758b',line:'#dce4ef',red:'#c43c35',green:'#16845b',soft:'#f4f7fb'};
-const indiaDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
+const indiaDateTime=(value)=>formatDisplayDateTime(value);
 const clean=(value,fallback='—')=>reportPdfText(value).trim()||fallback;
 
 function collect(doc){

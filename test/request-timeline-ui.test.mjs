@@ -221,7 +221,7 @@ test("editing unchanged ETC preserves minute display without a correction prompt
   tree = app.render();
   assert.equal(field(tree, "correctionReason").props.required, true);
   assert.equal(field(tree, "correctionReason").props.maxLength, 500);
-  assert.match(text(tree), /Previous ETC: 2026-09-08 12:00:17/);
+  assert.match(text(tree), /Previous ETC: 08-09-2026 12:00:17 PM/);
   await submit(tree, submitValues({expectedCompletionAt: "2026-09-08T13:00", correctionReason: "  "}));
   assert.match(alerts(app.render()), /Explain why/);
   assert.equal(saved.length, 1);

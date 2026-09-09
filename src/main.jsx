@@ -25,7 +25,7 @@ import { userMasterLocation } from "./user-master-location.mjs";
 import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
-import { TIME_24H_PATTERN } from "../request-time.mjs";
+import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime } from "../date-time-format.mjs";
 import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
 import { delayedReasonRequired } from "../delayed-reason.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
@@ -61,6 +61,7 @@ import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAl
 import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
+import {SYSTEM_ADMINISTRATION_OPTIONS} from "../system-administration.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
@@ -132,6 +133,7 @@ import {
   Monitor,
   Smartphone,
   Flag,
+  HardDrive,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -151,6 +153,7 @@ import "./dashboard-concept-a.css";
 import "./brand-theme.css";
 import "./report-schedule-polish.css";
 import "./reports-workspace.css";
+import "./system-administration.css";
 import "./meta-whatsapp-setup.css";
 import "./mobile-compat.css";
 import "./maintenance-mobile-compact.css";
@@ -159,6 +162,7 @@ import "./manager-scroll.css";
 import "./workspace-readability.css";
 import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
+import SystemAdministrationPage, {RemoteSupportConsent} from "./system-administration.jsx";
 
 const vehicles = [];
 const breakdowns = [];
@@ -229,7 +233,6 @@ const nav = [
   ["Dashboard", LayoutDashboard],
   ["Tickets", Ticket],
   ["Reports", FileBarChart],
-  ["Audit Trail", History],
 ];
 const masterNav = [
   ["Users & employees", Users],
@@ -287,9 +290,8 @@ function HeaderClock({ className = "" }) {
     const timer = window.setInterval(updateClock, 1000);
     return () => window.clearInterval(timer);
   }, []);
-  const padClockPart = (value) => String(value).padStart(2, "0");
-  const date = `${padClockPart(currentDateTime.getDate())}-${padClockPart(currentDateTime.getMonth() + 1)}-${currentDateTime.getFullYear()}`;
-  const time = `${padClockPart(currentDateTime.getHours())}:${padClockPart(currentDateTime.getMinutes())}:${padClockPart(currentDateTime.getSeconds())}`;
+  const date = formatDisplayDate(currentDateTime);
+  const time = formatDisplayTime(currentDateTime);
   return (
     <time className={`header-clock ${className}`.trim()} dateTime={currentDateTime.toISOString()} aria-label={`Current date and time ${date} ${time}`}>
       <CalendarDays aria-hidden="true" />
@@ -630,6 +632,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
+  const [systemAdministrationOpen, setSystemAdministrationOpen] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
   useEffect(() => {
@@ -650,6 +653,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setWhatsappOpen(false);
     setWorkspacesOpen(false);
     setReportsOpen(false);
+    setSystemAdministrationOpen(false);
   };
   const selectPage = (page) => {
     closeMenus();
@@ -672,7 +676,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   }, [active]);
   const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
   const visibleMasterNav = masterNav.filter(([name]) => masterAccessAllows(viewPermissions, name));
-  const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+  const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => name !== "Meta API setup" || permissions.adminLevel !== "Manager").filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
@@ -682,6 +686,9 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
+  const availableSystemAdministrationNav = typeof systemAdministrationNav === "undefined" ? [] : systemAdministrationNav;
+  const visibleSystemAdministrationNav = availableSystemAdministrationNav.filter(([name]) => accessAllows(viewPermissions.systemAdminAccess, name));
+  const canViewSystemAdministration = permissions.adminLevel !== "Manager" && accessAllows(viewPermissions.tabAccess, "System Administration") && visibleSystemAdministrationNav.length > 0;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   const navigationHidden = collapsedNavigation && !open;
   return (
@@ -794,6 +801,21 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             ))}
           </div>
         </div>}
+        {canViewSystemAdministration && <div className={systemAdministrationOpen ? "masters-menu open" : "masters-menu"}>
+          <div className="nav-config-row"><button
+            className={SYSTEM_ADMINISTRATION_OPTIONS.includes(active) ? "active" : ""}
+            aria-haspopup="menu"
+            aria-expanded={systemAdministrationOpen}
+            onClick={() => setSystemAdministrationOpen((value) => !value)}
+          >
+            <Settings />
+            <span className="nav-label">System Administration</span>
+            <ChevronDown className="masters-chevron" />
+          </button></div>
+          <div className="masters-dropdown system-administration-dropdown" role="menu">
+            {visibleSystemAdministrationNav.map(([name, Icon]) => <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={() => selectPage(name)}><Icon/><span className="nav-label">{name}</span></button></div>)}
+          </div>
+        </div>}
         {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
             className={active === n ? "active" : ""}
@@ -818,11 +840,13 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     </aside>
   );
 }
-function formatTwelveHourDateTime(value, includeSeconds = false) {
-  const match=String(value||"").match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
-  if(!match)return value||"—";
-  const hour=Number(match[2]);
-  return `${match[1]} ${hour%12||12}:${match[3]}${includeSeconds ? `:${match[4] || "00"}` : ""} ${hour>=12?"PM":"AM"}`;
+function formatTwelveHourDateTime(value) {
+  if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
+  const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) return value || "—";
+  const [year, month, day] = match[1].split("-");
+  const hour = Number(match[2]);
+  return `${day}-${month}-${year} ${hour % 12 || 12}:${match[3]}:${match[4] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
 }
 
 function dashboardRecordDate(record = {}) {
@@ -894,6 +918,34 @@ function FleetDataState({ error = "", retry, className = "" }) {
     <span className="dashboard-fleet-data-copy"><strong>{failed ? "Fleet data is unavailable" : "Loading fleet data"}</strong><small>{failed ? error : "Retrieving the latest equipment records…"}</small></span>
     {failed && <button type="button" onClick={retry}><RotateCcw /> Retry</button>}
   </div>;
+}
+
+const dashboardKpiExportColumns = [
+  { label: "Section", value: (row) => row.section },
+  { label: "KPI / Measure", value: (row) => row.metric },
+  { label: "Value", value: (row) => row.value },
+  { label: "Location / Period", value: (row) => row.scope },
+  { label: "Details", value: (row) => row.details },
+];
+const systemAdministrationNav = [
+  ["Daily Backup", HardDrive],
+  ["Backup History", History],
+  ["Export Backup", Download],
+  ["Create Schedule Backup", CalendarDays],
+  ["Backup Settings", Settings],
+  ["Storage and Retention", HardDrive],
+  ["Backup Activity Logs", Activity],
+  ["Login Sessions", UserRound],
+  ["Login History", History],
+  ["Device Access", Monitor],
+  ["Audit Trail", ShieldCheck],
+];
+const masterDateFields = new Set(["acquisitionDate", "transferDate", "lastMaintenanceDate"]);
+const masterDateTimeFields = new Set(["start", "createdAt", "updatedAt", "closedAt", "verifiedAt"]);
+function formatMasterFieldValue(key, value) {
+  if (masterDateTimeFields.has(key)) return formatDisplayDateTime(value);
+  if (masterDateFields.has(key)) return formatDisplayDate(value);
+  return value;
 }
 
 function ManagerIdleConfirmation({ request, action, close, onConfirm }) {
@@ -992,8 +1044,15 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     : activeManagerRole === "Maintenance Manager"
       ? "Site equipment, maintenance intake, remaining workload, and completed equipment."
       : "Location-wise verified requests and first-trip status.";
+  const managerScopeLabel = managerLocation || managerAllowedSites?.join(", ") || "Assigned locations";
+  const managerDashboardExportRows = [
+    ...cards.map(([label, value, hint]) => ({ section: "Dashboard KPI", metric: label, value: equipmentLoaded ? value : "Loading", scope: managerScopeLabel, details: hint })),
+    { section: "Request queue", metric: "Active requests", value: visibleActiveRows.length, scope: managerScopeLabel, details: "Requests currently requiring action" },
+    ...(canApproveIdle ? [{ section: "Request queue", metric: "Idle approvals", value: idealRows.length, scope: managerScopeLabel, details: "Idle vehicles awaiting on-road approval" }] : []),
+    { section: "Request queue", metric: "Closed history", value: historyRows.length, scope: managerScopeLabel, details: "Closed or verified requests" },
+  ];
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
-    <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
+    <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" />}</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
     {(!equipmentLoaded||equipmentLoadError)&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
     {(!requestsLoaded||requestsError)&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
@@ -1034,8 +1093,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   useEffect(() => localStorage.setItem("nerveCenterFleetIntelligenceView", fleetIntelligenceView), [fleetIntelligenceView]);
   const now = new Date();
   const todayKey = localDateKey(now);
-  const dateLabel = new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(now);
-  const filteredDateLabel = dashboardDate ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${dashboardDate}T00:00:00`)) : dateLabel;
+  const dateLabel = formatDisplayDate(now);
+  const filteredDateLabel = dashboardDate ? formatDisplayDate(dashboardDate) : dateLabel;
   const normalizedAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
   const normalizedAllowedRegions=Array.isArray(equipmentScope?.allowedRegions)?equipmentScope.allowedRegions.filter((region)=>region&&region!=="All"):null;
   const restrictToScope=equipmentScope?.restrictToScope===true;
@@ -1215,7 +1274,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   }));
   const requestLifecycleScale = dashboardCountScale(requestLifecycleTrend.flatMap((day) => [day.opened, day.closed, day.verified, day.idle]));
   const requestLifecycleMaximum = requestLifecycleScale.maximum;
-  const requestLifecycleRangeLabel = `${new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${safeTrendStartKey}T12:00:00`))} - ${new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${requestTrendEndKey}T12:00:00`))}`;
+  const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ");
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
     const equipment = equipmentForRequest(request);
     return {
@@ -1315,13 +1374,35 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
-  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1]} to ${movementDrilldownParts[2]}` : "";
+  const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2])}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
-    ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${breakdownTrendAnchorKey}`
-      : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? assetDrilldown.split(":")[2] : `${actualTrendDays[0]?.date} to ${breakdownTrendAnchorKey}`}`
+    ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${formatDisplayDate(breakdownTrendAnchorKey)}`
+      : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
     : "";
   const fleetBreakdownDrilldownTitle = fleetBreakdownDrilldown ? `${assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13) + " · " : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) + " · " : assetDrilldown === "fleet-breakdown:equipment" ? "Equipment · " : assetDrilldown === "fleet-breakdown:vehicles" ? "Vehicles · " : ""}Breakdown requests` : "";
-  const assetDrilldownTitle = fleetBreakdownDrilldownTitle || movementDrilldownTitle || trendDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${lifecycleDrilldownParts[2]}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
+  const assetDrilldownTitle = fleetBreakdownDrilldownTitle || movementDrilldownTitle || trendDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${formatDisplayDate(lifecycleDrilldownParts[2])}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
+  const dashboardScopeLabel = dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || (restrictToScope ? "All assigned locations" : "All regions");
+  const dashboardPeriodLabel = dashboardDate ? formatDisplayDate(dashboardDate) : formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey);
+  const dashboardExportRows = [
+    { section: "Fleet", metric: "Total fleet", value: kpis.total, scope: dashboardScopeLabel, details: `${assetCounts.equipment} equipment; ${assetCounts.vehicles} vehicles` },
+    { section: "Fleet", metric: "On road", value: kpis.onRoad, scope: dashboardScopeLabel, details: `${utilizationPercent}% utilization` },
+    { section: "Fleet", metric: "Off road", value: kpis.offRoad, scope: dashboardScopeLabel, details: "Unavailable for operations" },
+    { section: "Fleet", metric: "Idle", value: kpis.idle, scope: dashboardScopeLabel, details: "Available but not utilized" },
+    { section: "Fleet", metric: "Overall availability", value: `${availabilityPercent}%`, scope: dashboardScopeLabel, details: `${availableFleet} on-road and idle assets` },
+    { section: "Breakdown movement", metric: "BD Open", value: breakdownMovementTotals.open, scope: dashboardPeriodLabel, details: dashboardScopeLabel },
+    { section: "Breakdown movement", metric: "BD In", value: breakdownMovementTotals.incoming, scope: dashboardPeriodLabel, details: dashboardScopeLabel },
+    { section: "Breakdown movement", metric: "BD Out", value: breakdownMovementTotals.outgoing, scope: dashboardPeriodLabel, details: dashboardScopeLabel },
+    { section: "Breakdown movement", metric: "BD Balance", value: breakdownMovementTotals.balance, scope: dashboardPeriodLabel, details: dashboardScopeLabel },
+    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown type", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of BD In` })),
+    ...breakdownSiteSummary.map((site) => {
+      const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
+      return { section: "Site summary", metric: site.site, value: site.balance, scope: dashboardPeriodLabel, details: `Open ${site.open}; In ${site.incoming}; Out ${site.outgoing}; Availability ${road.availability}%; On road ${road.onRoad}; Off road ${road.offRoad}; Idle ${road.idle}; Total ${road.total}` };
+    }),
+    { section: "Request lifecycle", metric: "Opened", value: requestLifecycleRows.opened.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
+    { section: "Request lifecycle", metric: "Closed", value: requestLifecycleRows.closed.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
+    { section: "Request lifecycle", metric: "MIS verified", value: requestLifecycleRows.verified.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
+    { section: "Request lifecycle", metric: "Idle", value: requestLifecycleRows.idle.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
+  ];
   const openAssetDrilldown = (key) => {
     setAssetDrilldown(key);
   };
@@ -1343,7 +1424,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}`}>
       <header className="mine-dashboard-head">
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
-        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span></div>
+        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
       </header>
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article {...cardAction(fleetChartAllKey, showFleetBreakdowns ? "Breakdown fleet" : "Total Fleet")} className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
@@ -1378,7 +1459,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </header>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
-              {[{ label: "BD In", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong></div>)}
+              {[{ label: "BD In", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey)}</small></div>)}
             </div>
             <section {...cardAction(movementKey("incoming"), "All BD In types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
               <header><div><b>BD Type Mix</b><small>All six maintenance types</small></div><span>Percentage share of BD In</span></header>
@@ -1472,9 +1553,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <div className="mine-request-chart-grid" aria-hidden="true">{requestLifecycleScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / requestLifecycleMaximum * 100}%` }} />)}</div>
               {requestLifecycleTrend.map((day, index) => <div className="mine-request-chart-day" key={day.date}>
                 <span>
-                  {(["opened", "closed", "verified", "idle"]).map((event) => <button type="button" key={event} className={event} style={{ height: `${day[event] / requestLifecycleMaximum * 100}%` }} aria-label={`${day.date}: ${day[event]} ${event} requests`} title={`${day.date}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
+                  {(["opened", "closed", "verified", "idle"]).map((event) => <button type="button" key={event} className={event} disabled={!day[event]} style={{ height: `${day[event] ? Math.max(7, (day[event] / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${formatDisplayDate(day.date)}: ${day[event]} ${event} requests`} title={`${formatDisplayDate(day.date)}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
                 </span>
-                <small {...listAction(`event:all:${day.date}`, `All lifecycle requests on ${day.date}`)}>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small>
+                <small {...listAction(`event:all:${day.date}`, `All lifecycle requests on ${formatDisplayDate(day.date)}`)}>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? formatDisplayDate(day.date) : ""}</small>
               </div>)}
             </div>
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
@@ -1490,7 +1571,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <button type="button" className="dashboard-breakdown-road-shortcut" onClick={() => openRoadAvailabilityForSite(breakdownDetailSite)}><Gauge />Availability count <ChevronRight /></button>
         </div>
         <div className="dashboard-breakdown-detail-kpis">
-          {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{breakdownDetailStartKey} to {breakdownDetailEndKey}</small></div>)}
+          {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}</small></div>)}
         </div>
         <section {...cardAction(movementKey("incoming", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} BD In types`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of BD In`}>
           <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of BD In</span></header>
@@ -1502,7 +1583,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </section>
         <div className="dashboard-breakdown-day-table"><ActionsTable printTitle={`${breakdownDetailSite} · Day-wise BD Movement`}><thead><tr><th>Date</th><th>BD Open</th><th>BD In</th><th>BD Out</th><th>BD Balance</th><th>BD %</th></tr></thead><tbody>{breakdownDetailRows.length ? breakdownDetailRows.map((day) => {
           const breakdownPercentage = selectedBreakdownSiteRoad.total ? (day.balance / selectedBreakdownSiteRoad.total) * 100 : 0;
-          return <tr key={day.date}><td><b>{new Intl.DateTimeFormat(undefined, { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${day.date}T12:00:00`))}</b></td><td>{day.open}</td><td className="incoming">+{day.incoming}</td><td className="outgoing">-{day.outgoing}</td><td className="balance">{day.balance}</td><td className="percentage"><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></td></tr>;
+          return <tr key={day.date}><td><b>{formatDisplayDate(day.date)}</b></td><td>{day.open}</td><td className="incoming">+{day.incoming}</td><td className="outgoing">-{day.outgoing}</td><td className="balance">{day.balance}</td><td className="percentage"><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></td></tr>;
         }) : <tr><td colSpan="6">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
       </div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={assetDrilldownTitle} close={() => setAssetDrilldown("")}>
@@ -1513,7 +1594,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button></div></header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
           <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>Past {breakdownTrendDays} days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
-          <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b>Selected day: {new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${breakdownTrendAnchorKey}T12:00:00`))}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${day.date}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? new Intl.DateTimeFormat(undefined, { day: "2-digit", month: "short" }).format(new Date(`${day.date}T12:00:00`)) : ""}</small></div>)}</div></div></section>
+          <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b>Selected day: {formatDisplayDate(breakdownTrendAnchorKey)}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? formatDisplayDate(day.date) : ""}</small></div>)}</div></div></section>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-breakdown-trend-state" />}
       </section>
       <article {...cardAction("all", "Overall Fleet Performance")} className="mine-panel mine-fleet-performance" aria-label="Overall utilization and availability">
@@ -1914,13 +1995,13 @@ const hierarchyReportCodes = new Map([
   hierarchyReports.inOut,
 ].map((report, index) => [report, `R${index + 1}`]));
 const hierarchyDefaults = [
-  {section:"Management", designation:"Director's", level:"1", schedule:"Daily 7 PM; weekly fleet Sat 7 PM", reportAccess:hierarchyReportTitles.join(" | ")},
-  {section:"Management", designation:"Project Manager (P.M)", level:"2", schedule:"8 AM & 6 PM common; 7 PM operational; weekly fleet Sat 7 PM", reportAccess:hierarchyReportTitles.join(" | ")},
-  {section:"Production Dept.", designation:"Production Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
+  {section:"Management", designation:"Director's", level:"1", schedule:"Daily 07:00:00 PM; weekly fleet Sat 07:00:00 PM", reportAccess:hierarchyReportTitles.join(" | ")},
+  {section:"Management", designation:"Project Manager (P.M)", level:"2", schedule:"08:00:00 AM & 06:00:00 PM common; 07:00:00 PM operational; weekly fleet Sat 07:00:00 PM", reportAccess:hierarchyReportTitles.join(" | ")},
+  {section:"Production Dept.", designation:"Production Manager", level:"3", schedule:"Every event for opening/closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
   {section:"Production Dept.", designation:"Production Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
-  {section:"Maintenance Dept.", designation:"Maintenance Manager", level:"3", schedule:"Every event for opening/closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
+  {section:"Maintenance Dept.", designation:"Maintenance Manager", level:"3", schedule:"Every event for opening/closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
   {section:"Maintenance Dept.", designation:"Maintenance Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
-  {section:"MIS Dept.", designation:"MIS Manager", level:"3", schedule:"Every event for closing/MIS; 8 AM & 6 PM road status; 7 PM operational", reportAccess:[hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
+  {section:"MIS Dept.", designation:"MIS Manager", level:"3", schedule:"Every event for closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:[hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
   {section:"MIS Dept.", designation:"MIS Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
   {section:"OEM", designation:"National Head", level:"1", schedule:"Every 7th day consolidate", reportAccess:hierarchyReports.closingBd},
   {section:"OEM", designation:"Regional Head / Zonal Head", level:"2", schedule:"Every 5th day consolidate", reportAccess:hierarchyReports.closingBd},
@@ -2213,7 +2294,7 @@ function exportCellText(value) {
 }
 function exportFileName(title, extension) {
   const safeTitle = String(title || "nerve-center-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "nerve-center-report";
-  return `${safeTitle}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+  return `${safeTitle}-${formatDisplayDate(new Date())}.${extension}`;
 }
 function CaliberActivityMark({ size = "medium" }) {
   return (
@@ -2350,7 +2431,7 @@ function printTableReport({ title, columns = [], rows = [], highlightRow }) {
     return;
   }
   printDocument.open();
-  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{@page{size:A4 landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date()))}</p><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`);
+  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{@page{size:A4 landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`);
   printDocument.close();
   window.setTimeout(() => {
     frame.contentWindow?.focus();
@@ -2985,7 +3066,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     fileInput = useRef(null),
     fields = masterFields[name],
     formFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
-    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : name === "Users & employees" && ["login", "employee"].includes(key) ? String(record[key] || "").toUpperCase() : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : record[key] })) || [];
+    exportColumns = fields?.map(([key, label, type]) => ({ label, value: (record) => name === "Users & employees" && key === "site" ? userMasterLocation(record) : name === "Users & employees" && key === "userType" ? userMasterRole(record) : name === "Users & employees" && ["login", "employee"].includes(key) ? String(record[key] || "").toUpperCase() : type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : formatMasterFieldValue(key, record[key]) })) || [];
   if (!fields) return null;
   const saveManual = async (e) => {
     e.preventDefault();
@@ -3915,6 +3996,7 @@ function readMeterEvidence(file) {
   });
 }
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
+  const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
     [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -4162,19 +4244,13 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </label>
           )}
           <label>
-            Timing (HH:MM:SS)
+            Time (12-hour with seconds)
+            <input name="time" type="hidden" value={requestTime} />
             <input
-              name="time"
               type="text"
-              inputMode="numeric"
-              value={requestTime}
+              value={displayTime(requestTime)}
               readOnly
               aria-readonly="true"
-              placeholder="HH:MM:SS"
-              pattern={TIME_24H_PATTERN}
-              title="Enter time in 24-hour HH:MM:SS format"
-              autoComplete="off"
-              required
             />
           </label>
           <label className={v && !equipmentDetails.chassis ? "chassis-missing" : ""}>
@@ -4609,12 +4685,7 @@ function auditChangesLabel(changes = []) {
 }
 
 function auditTimestampLabel(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value || "—";
-  return new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true,
-  }).format(date);
+  return formatDisplayDateTime(value);
 }
 
 const auditDeviceTypeOptions = [
@@ -4842,7 +4913,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     };
   }), [requests, equipmentByReference]);
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
-  const formatTimestamp = (value) => String(value || "—").trim() || "—";
+  const formatTimestamp = (value) => formatDisplayDateTime(value);
   const reportRequestStatus = requestStatusLabel;
   const activeCategory = departmentReportCategoryTabs.find((category) => category.id === activeReportCategory) || departmentReportCategoryTabs[0] || reportCategoryTabs[0];
   const openBreakdownRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
@@ -4872,7 +4943,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const inOutRows = useMemo(() => buildInOutReportRows(reportRequests), [reportRequests]);
   const inOutColumns = IN_OUT_REPORT_COLUMNS.map((column) => ({
     ...column,
-    ...(column.key === "date" ? { render: (row) => <b>{row.date}</b> } : {}),
+    ...(column.key === "date" ? { value: (row) => formatDisplayDate(row.date), sortValue: (row) => row.date, render: (row) => <b>{formatDisplayDate(row.date)}</b> } : {}),
     ...(column.key === "net" ? { sortValue: (row) => row.net, render: (row) => <strong className={`in-out-net${row.net > 0 ? " positive" : row.net < 0 ? " negative" : ""}`}>{signedCount(row.net)}</strong> } : {}),
     ...(column.key === "averageTat" ? { sortValue: (row) => row.averageTatMinutes ?? -1 } : {}),
   }));
@@ -4886,17 +4957,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "category", label: "Category", value: (request) => request.equipmentGroup || request.category || request.type},
     {key: "status", label: "Status", value: reportRequestStatus, render: (request) => <Status>{reportRequestStatus(request)}</Status>},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
-    {key: "started", label: "Opened at", value: (request) => request.start, render: (request) => formatTimestamp(request.start)},
+    {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
   ];
   const closureColumns = [
     ...requestColumns,
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
-    {key: "closedAt", label: "Closed at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+    {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
   ];
   const misColumns = [
     ...closureColumns,
     {key: "verifiedBy", label: "MIS user", value: (request) => request.verifiedBy},
-    {key: "verifiedAt", label: "MIS verified at", value: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt)},
+    {key: "verifiedAt", label: "MIS verified at", value: (request) => formatTimestamp(request.verifiedAt), sortValue: (request) => request.verifiedAt, render: (request) => formatTimestamp(request.verifiedAt)},
     {key: "firstTripAt", label: "First trip time", value: firstTripTimestamp, render: (request) => formatTimestamp(firstTripTimestamp(request))},
   ];
   const fleetColumns = [
@@ -4911,7 +4982,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   ];
   const transferColumns = [
     {key: "transferNo", label: "Transfer no.", value: (record) => record.transferNo, render: (record) => <b>{record.transferNo || "—"}</b>},
-    {key: "transferDate", label: "Transfer date", value: (record) => record.transferDate},
+    {key: "transferDate", label: "Transfer date", value: (record) => formatDisplayDate(record.transferDate), sortValue: (record) => record.transferDate, render: (record) => formatDisplayDate(record.transferDate)},
     {key: "equipment", label: "Equipment / vehicle", value: (record) => record.reportEquipment},
     {key: "from", label: "From location", value: (record) => record.source},
     {key: "to", label: "To location", value: (record) => record.destination},
@@ -4934,7 +5005,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {category: "maintenance", title: "Idle Vehicle Report", description: "Idle breakdown requests and idle fleet records that need follow-up.", rows: idleRequestRows, columns: [
       ...requestColumns,
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
-      {key: "closedAt", label: "Maintenance close / idle at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+      {key: "closedAt", label: "Maintenance close / idle at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
     ], dateValue: (row) => row.closedAt || row.start, emptyMessage: "No idle vehicle records available"},
     {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp.", rows: recentBreakdownRows, columns: closureColumns, dateValue: (row) => row.start || row.closedAt || row.verifiedAt, emptyMessage: "No recent breakdown cases available"},
     {category: "general", title: IN_OUT_REPORT_TITLE, description: IN_OUT_REPORT_DESCRIPTION, rows: inOutRows, columns: inOutColumns, dateValue: (row) => row.date, emptyMessage: "No in and out movement recorded yet", rowKey: (row) => `in-out-${row.date}`},
@@ -5286,7 +5357,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       if (name === "Users & employees" && key === "userType")
         return userMasterRole(record);
       if (name === "Users & employees" && ["login", "employee"].includes(key)) return String(record[key] || "").toUpperCase();
-      return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(record[key] ?? "").trim();
+      return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(formatMasterFieldValue(key, record[key]) ?? "").trim();
     },
     filterColumns = displayFields.map(([key, label]) => ({ key, label, value: (record) => masterValue(record, key) })),
     columnValues = Object.fromEntries(
@@ -5480,7 +5551,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 <tr key={row.id || ri}>
                   {displayFields.map(([key, , type], ci) => {
                     const value = name === "Privilege" ? privilegeValue(row, key) : name === "Users & employees" && key === "site" ? userMasterLocation(row) : name === "Users & employees" && key === "userType" ? userMasterRole(row) : row[key];
-                    const displayValue = name === "Users & employees" && ["login", "employee"].includes(key) ? String(value || "").toUpperCase() : value;
+                    const displayValue = name === "Users & employees" && ["login", "employee"].includes(key) ? String(value || "").toUpperCase() : formatMasterFieldValue(key, value);
                     return (
                     <td key={key}>
                       {name === "Privilege" && key === "username" ? (
@@ -5927,7 +5998,7 @@ function WhatsAppReport({type, requests = []}) {
   const [lastPrepared, setLastPrepared] = useState("");
   const [metaConnection, setMetaConnection] = useState(null);
   const [oemRegion, setOemRegion] = useState("all");
-  const today = new Intl.DateTimeFormat("en-IN", {day:"2-digit", month:"short", year:"numeric"}).format(new Date());
+  const today = formatDisplayDate(new Date());
   const rows = isSite
     ? subsidiaryData.flatMap((region) => region.sites).map((site) => {
         const siteRecords = records.filter((record) => String(record.location || "").trim().toLowerCase() === site.toLowerCase());
@@ -6144,9 +6215,7 @@ function WhatsAppAlertHistory() {
         window.dispatchEvent(new CustomEvent("menu-data-loaded"));
       });
   }, []);
-  const formatDate = (value) => new Intl.DateTimeFormat("en-IN", {
-    day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit",
-  }).format(new Date(value));
+  const formatDate = (value) => formatDisplayDateTime(value);
   return <section className="panel table pagepanel generic whatsapp-history">
     <header><div><h1>WhatsApp alert history</h1><p>{loaded ? `${history.length} prepared alerts recorded` : "Loading alert history..."}</p></div></header>
     <div className="emptytable"><ActionsTable>
@@ -6852,8 +6921,9 @@ function MaintenanceRemarks({ remarks = [] }) {
 }
 
 function DailyRemarkForm({ request, close, onSave }) {
+  const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const previous=[...(request.dailyRemarks||[])].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
-  const today=new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date());
+  const today=displayDate(new Date());
   const todayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   const todayRemark=previous.filter((item)=>String(item.createdAt||"").slice(0,10)===todayKey).at(-1);
   const history=todayRemark?previous.filter((item)=>item!==todayRemark):previous;
@@ -7111,6 +7181,14 @@ function meterReadingsFromForm(form, request, stage, equipmentRecords = []) {
 }
 
 function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, repairTypeRecords = [], repairTypesLoaded = false }) {
+  const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
+  const displayDateTime = (value) => {
+    if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return value || "—";
+    const hour = Number(match[4]);
+    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+  };
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
   const acceptanceTime = request.acceptedAt;
@@ -7165,10 +7243,10 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Chassis number<input value={request.chassis || ""} readOnly aria-readonly="true" /></label>
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
-        <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (12-hour with seconds)<input name="time" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
         {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
         <MaintenanceEtcInput value={expectedCompletionAt} onChange={setExpectedCompletionAt} />
-        {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {formatTwelveHourDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
+        {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} />
         <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
@@ -7180,6 +7258,14 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
 }
 
 function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
+  const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
+  const displayDateTime = (value) => {
+    if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return value || "—";
+    const hour = Number(match[4]);
+    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+  };
   const [formError,setFormError] = useState("");
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
@@ -7227,8 +7313,8 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Category</span><b>{request.category || "Maintenance request"}</b></div>
-        <div><span>Started</span><b>{request.start || "—"}</b></div>
-        <div><span>ETC</span><b>{request.expectedCompletionAt || "Not set"}</b></div>
+        <div><span>Started</span><b>{displayDateTime(request.start)}</b></div>
+        <div><span>ETC</span><b>{request.expectedCompletionAt ? displayDateTime(request.expectedCompletionAt) : "Not set"}</b></div>
         <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
         <div><span>Closing readings</span><b>{requestMeterReadingLabel(request, "closing")}</b><MeterFileCell request={request} stage="closing" /></div>
         <div><span>Reason / complaint</span><b>{request.complaint || "—"}</b></div>
@@ -7239,8 +7325,8 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} />
         <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small></label>
         <label>Closing date *<input name="closingDate" type="date" required value={closingDate} readOnly aria-readonly="true" /></label>
-        <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
-        {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {request.closedAt}. The original and replacement will be retained.</small></label>}
+        <label>Closing time (12-hour with seconds) *<input name="closingTime" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
+        {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {displayDateTime(request.closedAt)}. The original and replacement will be retained.</small></label>}
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
         <label>Status *<select name="status" disabled value={ideal?"Idle":status}>{ideal ? <option value="Idle">Idle</option> : <option value="Closed">Closed</option>}</select></label>
         <fieldset className="ideal-choice full">
@@ -7283,6 +7369,13 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
 }
 
 function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
+  const displayDateTime = (value) => {
+    if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return value || "—";
+    const hour = Number(match[4]);
+    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+  };
   const [formError,setFormError] = useState("");
   const today = requestStartParts("");
   const [firstTripDone, setFirstTripDone] = useState(false);
@@ -7327,7 +7420,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
-        <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
+        <div><span>Closed at</span><b>{displayDateTime(request.closedAt)}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
         <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
       </div>
@@ -7504,6 +7597,13 @@ function AdminLockManagement({session}){
 }
 
 function TicketPage({ session }) {
+  const displayDateTime = (value) => {
+    if (typeof formatDisplayDateTime === "function") return formatDisplayDateTime(value);
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T·]+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (!match) return value || "—";
+    const hour = Number(match[4]);
+    return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
+  };
   const [ticketState, setTicketState] = useState(null), [refreshing, setRefreshing] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null), [refreshCount, setRefreshCount] = useState(0);
   const requestSequence = useRef(0), activeLoad = useRef(null), currentScope = useRef(null);
   currentScope.current = {token: session?.token, category};
@@ -7516,7 +7616,7 @@ function TicketPage({ session }) {
   const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const canCreate = Boolean(session?.token);
   const ticketExportColumns = [
-    { label: "Ticket ID", value: (ticket) => ticket.reference }, { label: "User", value: (ticket) => ticket.creatorName }, { label: "Site", value: (ticket) => ticket.site }, { label: "Category", value: (ticket) => ticket.category }, { label: "Priority", value: (ticket) => ticket.priority || "Medium" }, { label: "Description", value: (ticket) => ticket.message || "Audio description" }, { label: "Status", value: (ticket) => ticket.status }, { label: "Resolution", value: (ticket) => ticket.resolutionMessage || "—" },
+    { label: "Ticket ID", value: (ticket) => ticket.reference }, { label: "Created at", value: (ticket) => displayDateTime(ticket.createdAt) }, { label: "User", value: (ticket) => ticket.creatorName }, { label: "Site", value: (ticket) => ticket.site }, { label: "Category", value: (ticket) => ticket.category }, { label: "Priority", value: (ticket) => ticket.priority || "Medium" }, { label: "Description", value: (ticket) => ticket.message || "Audio description" }, { label: "Status", value: (ticket) => ticket.status }, { label: "Resolved at", value: (ticket) => displayDateTime(ticket.resolvedAt) }, { label: "Resolution", value: (ticket) => ticket.resolutionMessage || "—" },
   ];
   useEffect(() => watchVisibleMasterRefresh(() => setRefreshCount((current) => current + 1), {win: window, doc: document}), []);
   useEffect(() => { setCreating(false); setResolving(null); }, [session?.token]);
@@ -7573,7 +7673,7 @@ function TicketPage({ session }) {
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><div className="ticket-toolbar-controls"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
     {error && <div className="hierarchy-save-error" role="alert"><span>{error}{tickets.length > 0 ? " Showing previously loaded tickets." : ""}</span><button type="button" onClick={refresh} disabled={loading}>Retry</button></div>}
-    <div className="ticket-table-wrap"><ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
+    <div className="ticket-table-wrap"><ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{displayDateTime(ticket.createdAt)}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {displayDateTime(ticket.resolvedAt)}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
     {sameAccount && canCreate && creating && <TicketCreateForm key={session.token} session={session} close={() => setCreating(false)} onCreated={applySavedTicket} />}
     {sameAccount && resolving && <TicketResolutionForm key={`${session.token}:${resolving.reference}`} ticket={resolving} session={session} close={() => setResolving(null)} onResolved={applySavedTicket} />}
   </section>;
@@ -7678,7 +7778,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
             </div>
             <ChevronDown className={expanded === alert.id ? "rotated" : ""} aria-hidden="true" />
             </button>
-            {expanded === alert.id && <div className="ai-feeder-detail" id={`feeder-detail-${alert.id}`}><strong>Recommended next step</strong><p>{alert.detail}</p>{request && <dl>{[["Status", requestStatusLabel(request)], ["Breakdown started", request.start], ["Expected completion", request.expectedCompletionAt], ["Reported issue", request.complaint], ["Latest remark", request.dailyRemarks]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "Not recorded")}</dd></div>)}</dl>}</div>}
+            {expanded === alert.id && <div className="ai-feeder-detail" id={`feeder-detail-${alert.id}`}><strong>Recommended next step</strong><p>{alert.detail}</p>{request && <dl>{[["Status", requestStatusLabel(request)], ["Breakdown started", request.start ? formatDisplayDateTime(request.start) : "Not recorded"], ["Expected completion", request.expectedCompletionAt ? formatDisplayDateTime(request.expectedCompletionAt) : "Not recorded"], ["Reported issue", request.complaint], ["Latest remark", request.dailyRemarks]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "Not recorded")}</dd></div>)}</dl>}</div>}
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
@@ -7930,10 +8030,11 @@ function NotificationBell({ session, onOpenEntry }) {
     entrySequenceRef.current += 1;
     entryControllerRef.current?.abort();
   }, []);
-  return <><div className="notification-center" ref={centerRef}><button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><span>{item.message}</span><small>{item.createdAt}</small></button>) : <p>No notifications yet.</p>}</div></div>}</div><NotificationEntryDialog state={entryState} onClose={closeEntry} /></>;
+  return <><div className="notification-center" ref={centerRef}><button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><span>{item.message}</span><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>No notifications yet.</p>}</div></div>}</div><NotificationEntryDialog state={entryState} onClose={closeEntry} /></>;
 }
 
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
+  const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const mobileRole = session?.assignedRole || "Mobile User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
@@ -7999,7 +8100,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       .catch(() => {});
     return () => { active = false; };
   }, [session?.token, session?.login, session?.name, show]);
-  const dateLabel = new Intl.DateTimeFormat(undefined, {timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
+  const dateLabel = displayDate(new Date());
   const openArrivalFlag = (row, nextAction = null) => { setArrivalFlagNextAction(nextAction); setArrivalFlagging(row); };
   const openMaintenanceAction = (row, action) => {
     const current = requests.find((item) => item.ref === row.ref) || row;
@@ -8143,8 +8244,9 @@ function App() {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name);
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
+    if (SYSTEM_ADMINISTRATION_OPTIONS.includes(name)) return adminPermissions.adminLevel !== "Manager" && accessAllows(activeNavigationPermissions.tabAccess, "System Administration") && accessAllows(activeNavigationPermissions.systemAdminAccess, name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
-    const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+    const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
@@ -8152,6 +8254,7 @@ function App() {
     const firstMaster = masterNav.find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
     if (accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.whatsappAccess, name))?.[0];
+    if (accessAllows(activeNavigationPermissions.tabAccess, "System Administration")) return systemAdministrationNav.find(([name]) => canOpenAdminPage(name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
   };
   const selectedOperationalRole = operationalWorkspaceNav.find(([name]) => name === active)?.[2];
@@ -8298,6 +8401,7 @@ function App() {
       selectMenu("Breakdown master");
     },
     logout = () => {
+      void fetch("/api/logout", {method:"POST", headers:{Authorization:`Bearer ${session?.token || authToken}`}}).catch(() => {});
       clearStoredSession();
       setSession(null);
     },
@@ -8383,7 +8487,7 @@ function App() {
   };
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.role === "normal")
-    return (
+    return (<>
       <Normal
         requests={requests}
         onCreate={addRequest}
@@ -8395,7 +8499,8 @@ function App() {
         theme={theme}
         toggleTheme={toggleTheme}
       />
-    );
+      <RemoteSupportConsent session={session}/>
+    </>);
   return (
     <div className="app">
       <Side
@@ -8471,8 +8576,8 @@ function App() {
             <WhatsAppAlertHistory />
               ) : active === "Reports" ? (
                 <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
-              ) : active === "Audit Trail" ? (
-                <AuditTrailPage session={session} />
+              ) : SYSTEM_ADMINISTRATION_OPTIONS.includes(active) ? (
+                <SystemAdministrationPage section={active} session={session} auditTrail={<AuditTrailPage session={session} />} />
               ) : operationalSession ? (
               <Normal
                   embedded
@@ -8498,6 +8603,7 @@ function App() {
           <b>Data loaded. Time taken: {loadTime.toFixed(1)} sec.</b>
         </div>
       )}
+      <RemoteSupportConsent session={session}/>
     </div>
   );
 }

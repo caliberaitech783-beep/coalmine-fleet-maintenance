@@ -1,4 +1,5 @@
 import {canonicalReportTitle,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
+import {formatDisplayTime} from './date-time-format.mjs';
 
 const INDIA_OFFSET_MS=330*60*1000;
 const REPORT={
@@ -33,53 +34,53 @@ const WEEKDAY_NUMBER=new Map(HIERARCHY_WEEK_DAYS.map((day,index)=>[day.toLowerCa
 
 export const HIERARCHY_REPORT_DESIGNATIONS={
   superAdmin:{label:'Super Admin',level:1,schedules:[
-    {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:[...commonDaily,...dailyOperational]},
-    {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 7:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
+    {key:'daily-19',label:'Daily consolidate @ 07:00:00 PM',hours:[19],reports:[...commonDaily,...dailyOperational]},
+    {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 07:00:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
   ]},
   director:{label:"Director's",level:1,schedules:[
-    {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:[...commonDaily,...dailyOperational]},
-    {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 7:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
+    {key:'daily-19',label:'Daily consolidate @ 07:00:00 PM',hours:[19],reports:[...commonDaily,...dailyOperational]},
+    {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 07:00:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
   ]},
   projectManager:{label:'Project Manager (P.M)',level:2,schedules:[
-    {key:'daily-08-18',label:'Daily consolidate twice @ 8:00 AM & 6:00 PM',hours:[8,18],reports:commonDaily},
-    {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 7:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
-    {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:dailyOperational},
+    {key:'daily-08-18',label:'Daily consolidate twice @ 08:00:00 AM & 06:00:00 PM',hours:[8,18],reports:commonDaily},
+    {key:'weekly-sat-19',label:'Weekly once consolidate (Saturday @ 07:00:00 PM)',hours:[19],weekday:6,reports:weeklyFleet},
+    {key:'daily-19',label:'Daily consolidate @ 07:00:00 PM',hours:[19],reports:dailyOperational},
   ]},
   productionManager:{label:'Production Manager',level:3,schedules:[
     {key:'every-event',label:'Every event',eventBased:true,reports:eventCore},
-    {key:'daily-08-18',label:'Daily twice consolidate @ 8:00 AM & 6:00 PM',hours:[8,18],reports:[REPORT.ROAD_STATUS]},
-    {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:dailyOperational},
+    {key:'daily-08-18',label:'Daily twice consolidate @ 08:00:00 AM & 06:00:00 PM',hours:[8,18],reports:[REPORT.ROAD_STATUS]},
+    {key:'daily-19',label:'Daily consolidate @ 07:00:00 PM',hours:[19],reports:dailyOperational},
   ]},
   productionSupervisor:{label:'Production Incharge / Supervisor',level:4,schedules:[
     {key:'every-event',label:'Every event',eventBased:true,reports:eventCore},
   ]},
   maintenanceManager:{label:'Maintenance Manager',level:3,schedules:[
     {key:'every-event',label:'Every event',eventBased:true,reports:eventCore},
-    {key:'daily-08-18',label:'Daily twice consolidate @ 8:00 AM & 6:00 PM',hours:[8,18],reports:[REPORT.ROAD_STATUS]},
-    {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:dailyOperational},
+    {key:'daily-08-18',label:'Daily twice consolidate @ 08:00:00 AM & 06:00:00 PM',hours:[8,18],reports:[REPORT.ROAD_STATUS]},
+    {key:'daily-19',label:'Daily consolidate @ 07:00:00 PM',hours:[19],reports:dailyOperational},
   ]},
   maintenanceSupervisor:{label:'Maintenance Incharge / Supervisor',level:4,schedules:[
     {key:'every-event',label:'Every event',eventBased:true,reports:eventCore},
   ]},
   misManager:{label:'MIS Manager',level:3,schedules:[
     {key:'every-event',label:'Every event',eventBased:true,reports:[REPORT.CLOSING_BD,REPORT.MIS_VERIFICATION]},
-    {key:'daily-08-18',label:'Daily twice consolidate @ 8:00 AM & 6:00 PM',hours:[8,18],reports:[REPORT.ROAD_STATUS]},
-    {key:'daily-19',label:'Daily consolidate @ 7:00 PM',hours:[19],reports:dailyOperational},
+    {key:'daily-08-18',label:'Daily twice consolidate @ 08:00:00 AM & 06:00:00 PM',hours:[8,18],reports:[REPORT.ROAD_STATUS]},
+    {key:'daily-19',label:'Daily consolidate @ 07:00:00 PM',hours:[19],reports:dailyOperational},
   ]},
   misSupervisor:{label:'MIS Incharge / Supervisor',level:4,schedules:[
     {key:'every-event',label:'Every event',eventBased:true,reports:[REPORT.CLOSING_BD,REPORT.MIS_VERIFICATION]},
   ]},
   oemNationalHead:{label:'National Head',level:1,schedules:[
-    {key:'every-7-days-19',label:'Every 7th day consolidate @ 7:00 PM',hours:[19],intervalDays:7,reports:oemClosing},
+    {key:'every-7-days-19',label:'Every 7th day consolidate @ 07:00:00 PM',hours:[19],intervalDays:7,reports:oemClosing},
   ]},
   oemRegionalHead:{label:'Regional Head / Zonal Head',level:2,schedules:[
-    {key:'every-5-days-19',label:'Every 5th day consolidate @ 7:00 PM',hours:[19],intervalDays:5,reports:oemClosing},
+    {key:'every-5-days-19',label:'Every 5th day consolidate @ 07:00:00 PM',hours:[19],intervalDays:5,reports:oemClosing},
   ]},
   oemAreaServiceEngineer:{label:'Area Service engineer',level:3,schedules:[
-    {key:'every-3-days-19',label:'Every 3rd day consolidate @ 7:00 PM',hours:[19],intervalDays:3,reports:oemClosing},
+    {key:'every-3-days-19',label:'Every 3rd day consolidate @ 07:00:00 PM',hours:[19],intervalDays:3,reports:oemClosing},
   ]},
   oemServiceEngineer:{label:'Service Engineer / Site Service Engineer',level:4,schedules:[
-    {key:'daily-19',label:'Every day consolidate @ 7:00 PM',hours:[19],reports:oemClosing},
+    {key:'daily-19',label:'Every day consolidate @ 07:00:00 PM',hours:[19],reports:oemClosing},
   ]},
 };
 
@@ -177,7 +178,7 @@ export function applyHierarchyDeliveryRule(settings,designationKey,rule={}){
 
 export function hierarchyScheduleLabel(schedule={}){
   if(schedule.cadence==='event')return 'Every event';
-  const times=(schedule.times||[]).join(' & ')||'Time not set';
+  const times=(schedule.times||[]).map((time)=>formatDisplayTime(time)).join(' & ')||'Time not set';
   if(schedule.cadence==='weekly')return `Weekly on ${['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][schedule.weekday]||'Sunday'} @ ${times}`;
   if(schedule.cadence==='interval')return `Every ${schedule.intervalDays||7} days @ ${times}`;
   return `Daily @ ${times}`;

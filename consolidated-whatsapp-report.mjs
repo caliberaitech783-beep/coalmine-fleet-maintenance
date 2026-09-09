@@ -1,4 +1,5 @@
 import {canonicalSiteName} from './site-location.mjs';
+import {formatDisplayDateTime} from './date-time-format.mjs';
 
 export const CONSOLIDATED_REPORT_HOURS=[6,10,14,18,22];
 const INDIA_OFFSET_MS=330*60*1000;
@@ -66,7 +67,7 @@ export function prepareConsolidatedRows(requests=[],reportTime=new Date()){
   }).sort((left,right)=>right.elapsedMs-left.elapsedMs);
 }
 
-const indiaDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
+const indiaDateTime=(value)=>formatDisplayDateTime(value);
 const recordLines=(request,index,closed=false)=>[
   `${index+1}. *${request.door||request.equipment||'Door not assigned'}* — *${request.elapsed}*`,
   `   Request: ${request.reference||request.ref||'—'}`,

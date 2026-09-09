@@ -9,9 +9,8 @@ test("signed-in headers render a bold live date and time clock", () => {
   assert.match(source, /function HeaderClock\(/);
   assert.match(source, /window\.setInterval\(updateClock, 1000\)/);
   assert.match(source, /window\.clearInterval\(timer\)/);
-  assert.match(source, /currentDateTime\.getDate\(\)/);
-  assert.match(source, /currentDateTime\.getHours\(\)/);
-  assert.match(source, /currentDateTime\.getSeconds\(\)/);
+  assert.match(source, /const date = formatDisplayDate\(currentDateTime\)/);
+  assert.match(source, /const time = formatDisplayTime\(currentDateTime\)/);
   assert.match(source, /<HeaderClock \/>/);
   assert.match(source, /<HeaderClock className="normal-header-clock" \/>/);
   assert.match(styles, /\.header-clock \{[\s\S]*font: 900 var\(--header-clock-size\)\/1 Manrope/);

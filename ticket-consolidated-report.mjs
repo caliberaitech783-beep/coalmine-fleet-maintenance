@@ -1,4 +1,5 @@
 import {canonicalSiteName} from './site-location.mjs';
+import {formatDisplayDateTime} from './date-time-format.mjs';
 
 export const TICKET_REPORT_HOURS=[8,15,20];
 const INDIA_OFFSET_MS=330*60*1000;
@@ -47,7 +48,7 @@ export function prepareTicketReportRows(tickets=[],reportTime=new Date()){
   }).sort((left,right)=>right.elapsedMs-left.elapsedMs);
 }
 
-const indiaDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
+const indiaDateTime=(value)=>formatDisplayDateTime(value);
 export function buildTicketReportTable({scopeLabel='Site',start,end,openTickets=[],closedTickets=[]}) {
   const columns=['Ticket reference','Site','Status','Raised by','Remarks','Opened at (IST)','Resolved at (IST)','Elapsed time','Report scope','Window start (IST)','Window end (IST)'].map(label=>({label}));
   const date=value=>value&&!Number.isNaN(new Date(value).getTime())?indiaDateTime(new Date(value)):'';

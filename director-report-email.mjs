@@ -1,5 +1,6 @@
 import {createTicketMailer,cleanEmailText,escapeEmailHtml} from './ticket-email.mjs';
 import {buildDirectorReportArchiveBuffer} from './director-report-bundle.mjs';
+import {formatDisplayDateTime} from './date-time-format.mjs';
 
 function groupLinks(links=[]){
   return links.reduce((groups,link)=>{
@@ -11,7 +12,7 @@ function groupLinks(links=[]){
 }
 
 function emailDate(value){
-  return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:true}).format(value);
+  return formatDisplayDateTime(value);
 }
 
 export function buildDirectorReportEmail({generatedAt=new Date(),links=[],archiveUrl=''}={}){
@@ -45,7 +46,7 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[],archiv
   const text=[
     'Nerve Center',
     "Director's Daily Report",
-    'Schedule: Daily 7:00 PM IST',
+    'Schedule: Daily 07:00:00 PM IST',
     `Generated: ${generated}`,
     ...(archiveLine?['',`Download ZIP: ${archiveLine}`]:[]),
     '',
@@ -58,7 +59,7 @@ export function buildDirectorReportEmail({generatedAt=new Date(),links=[],archiv
     <div style="max-width:940px">
       <p style="margin:0 0 6px;color:#1d4ed8;font-weight:800;letter-spacing:.04em">NERVE CENTER</p>
       <h2 style="margin:0;color:#10213d">Director's Daily Report</h2>
-      <p style="margin:6px 0 0;color:#61708a">Schedule: Daily 7:00 PM IST</p>
+      <p style="margin:6px 0 0;color:#61708a">Schedule: Daily 07:00:00 PM IST</p>
       <p style="margin:0 0 20px;color:#61708a">Generated: ${escapeEmailHtml(generated)}</p>
       ${archiveLine?`<p style="margin:0 0 18px"><a href="${escapeEmailHtml(archiveLine)}" style="display:inline-block;background:#1d4ed8;color:#fff;text-decoration:none;font-weight:800;padding:11px 16px;border-radius:7px">Download complete ZIP report</a></p>`:''}
       <h3 style="margin:0 0 12px;color:#10213d">Department Wise Report Links</h3>

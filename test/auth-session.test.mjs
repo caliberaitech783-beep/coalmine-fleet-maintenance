@@ -11,7 +11,7 @@ test("stores login sessions in PostgreSQL", async () => {
     }
   });
 
-  await store.create({
+  const sessionId = await store.create({
     token: "token-1", role: "normal", name: "Anoop Paul", login: "anoop",
     userType: "Mobile User", assignedRole: "Production User", permissions: {createRequests: true},
   });
@@ -19,7 +19,25 @@ test("stores login sessions in PostgreSQL", async () => {
   assert.match(calls[0].sql, /DELETE FROM auth_sessions/);
   assert.deepEqual(calls[0].params, [30]);
   assert.match(calls[1].sql, /INSERT INTO auth_sessions/);
-  assert.deepEqual(calls[1].params, ["token-1", "normal", "Anoop Paul", "anoop", "Mobile User", "Production User", '{"createRequests":true}']);
+  assert.match(sessionId, /^[0-9a-f-]{36}$/);
+  assert.deepEqual(calls[1].params, ["token-1", sessionId, "normal", "Anoop Paul", "anoop", "Mobile User", "Production User", '{"createRequests":true}', "", "", ""]);
+});
+
+test("touches activity without replacing known device evidence with blanks", async () => {
+  const calls = [];
+  const store = createSessionStore({async query(sql, params) { calls.push({sql, params}); return {rows: []}; }});
+  await store.touch("token-1", {ipAddress:"10.0.0.8", deviceId:"BDMS-DEVICE", userAgent:"Edge"});
+  assert.match(calls[0].sql, /last_seen_at=NOW\(\)/);
+  assert.deepEqual(calls[0].params, ["token-1", "10.0.0.8", "BDMS-DEVICE", "Edge"]);
+});
+
+test("revokes a session by its public id rather than exposing its token", async () => {
+  const store = createSessionStore({async query(sql, params) {
+    assert.match(sql, /WHERE session_public_id=\$1/);
+    assert.deepEqual(params, ["public-session"]);
+    return {rows:[{sessionId:"public-session",login:"anoop"}]};
+  }});
+  assert.deepEqual(await store.revoke("public-session"), {sessionId:"public-session",login:"anoop"});
 });
 
 test("loads an existing session from PostgreSQL", async () => {
