@@ -9,6 +9,7 @@ import EquipmentCombobox from "./equipment-combobox.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
+import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
 import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
@@ -1072,6 +1073,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownTrendTotal = actualTrendDays.reduce((total, day) => total + day.count, 0);
   const breakdownTrendAverage = breakdownTrendDays ? (breakdownTrendTotal / breakdownTrendDays).toFixed(1) : "0.0";
   const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
+  const availabilityRequests = availabilityRequestsForDate(locationBreakdowns, dashboardDate);
+  const availabilityKpis = liveEquipmentMetrics(visibleEquipment, availabilityRequests);
   const breakdownSummaryEndKey = dashboardDate || todayKey;
   const breakdownSummaryStartDate = new Date(`${breakdownSummaryEndKey}T12:00:00`);
   breakdownSummaryStartDate.setDate(breakdownSummaryStartDate.getDate() - 4);
@@ -1092,6 +1095,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return { site, ...liveEquipmentMetrics(records, visibleBreakdowns) };
   });
   const roadAvailabilityBySiteName = new Map(roadAvailabilityBySite.map((site) => [site.site, site]));
+  const availabilityCountBySite = trendAvailableSites.map((site) => ({
+    site,
+    ...liveEquipmentMetrics(visibleEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
+  }));
   const selectedBreakdownSiteRequests = breakdownDetailSite
     ? locationBreakdowns.filter((record) => recordBelongsToSite(record, breakdownDetailSite))
     : [];
@@ -1104,7 +1111,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailTotals = breakdownMovementForRange(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const breakdownDetailTypeSummary = breakdownTypeShare(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
-  const roadStatusTotal = kpis.onRoad + kpis.offRoad + kpis.idle;
+  const roadStatusTotal = availabilityKpis.onRoad + availabilityKpis.offRoad + availabilityKpis.idle;
   const roadStatusShare = (value) => roadStatusTotal ? (value / roadStatusTotal) * 100 : 0;
   const utilizationPercent = kpis.total ? Math.round((kpis.onRoad / kpis.total) * 100) : 0;
   const availableFleet = kpis.onRoad + kpis.idle;
@@ -1245,7 +1252,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key === "vehicle") return visibleEquipment.filter((record) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase()));
     if (key === "available") return visibleEquipment.filter((record) => ["onroad", "idle"].includes(liveEquipmentRoadStatus(record, visibleBreakdowns)));
     if (key === "unavailable") return visibleEquipment.filter((record) => !["onroad", "idle"].includes(liveEquipmentRoadStatus(record, visibleBreakdowns)));
-    if (["onroad","offroad","idle","unknown"].includes(key)) return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === key);
+    if (["onroad","offroad","idle","unknown"].includes(key)) return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, availabilityRequests) === key);
     if (key.startsWith("region:")) {
       const region = availableRegions.find((item) => item.code === key.slice(7));
       return region ? visibleEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))) : [];
@@ -1389,14 +1396,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </div> : <div className="mine-site-road-view">
             <div className="mine-site-road-summary">
-              <button type="button" className="availability" onClick={() => openAssetDrilldown("road-availability")}><span className="mine-site-road-gauge" style={{ "--availability": `${roadStatusShare(kpis.onRoad) * 3.6}deg` }}><b>{kpis.availability}%</b><small>Available</small></span><span><strong>{roadStatusTotal.toLocaleString()}</strong><small>Total fleet</small></span></button>
-              <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><small>On road</small><strong>{kpis.onRoad.toLocaleString()}</strong></span></button>
-              <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><small>Off road</small><strong>{kpis.offRoad.toLocaleString()}</strong></span></button>
-              <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><small>Idle</small><strong>{kpis.idle.toLocaleString()}</strong></span></button>
+              <button type="button" className="availability" onClick={() => openAssetDrilldown("road-availability")}><span className="mine-site-road-gauge" style={{ "--availability": `${roadStatusShare(availabilityKpis.onRoad) * 3.6}deg` }}><b>{availabilityKpis.availability}%</b><small>Available</small></span><span><strong>{roadStatusTotal.toLocaleString()}</strong><small>Total fleet</small></span></button>
+              <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><small>On road</small><strong>{availabilityKpis.onRoad.toLocaleString()}</strong></span></button>
+              <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><small>Off road</small><strong>{availabilityKpis.offRoad.toLocaleString()}</strong></span></button>
+              <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><small>Idle</small><strong>{availabilityKpis.idle.toLocaleString()}</strong></span></button>
             </div>
             <div className="mine-road-site-table" role="table" aria-label="Site-wise availability count">
               <div className="mine-road-site-head" role="row"><span>Site name</span><span>Total fleet</span><span>On road</span><span>Off road</span><span>Idle</span><span>Availability</span><span>Status distribution</span><span aria-hidden="true" /></div>
-              <div className="mine-road-site-body">{roadAvailabilityBySite.length ? roadAvailabilityBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site-status:${site.site}|all`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
+              <div className="mine-road-site-body">{availabilityCountBySite.length ? availabilityCountBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site-status:${site.site}|all`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
                 <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric total"><b>{site.total}</b></span><span className="metric onroad"><b>{site.onRoad}</b></span><span className="metric offroad"><b>{site.offRoad}</b></span><span className="metric idle"><b>{site.idle}</b></span><span className="availability"><b>{site.availability}%</b></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${site.total ? (site.onRoad / site.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${site.total ? (site.offRoad / site.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${site.total ? (site.idle / site.total) * 100 : 0}%` }} /></span><ChevronRight />
               </button>) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}</div>
             </div>

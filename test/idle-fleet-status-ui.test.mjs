@@ -9,7 +9,7 @@ test("Idle is available throughout fleet KPIs, filters, status editing and site 
   assert.match(source,/mine-site-road-view[\s\S]*<small>Off road<\/small>/);
   assert.match(source,/mine-site-road-view[\s\S]*<small>Idle<\/small>/);
   assert.match(source,/mine-road-site-bar/);
-  assert.match(source,/roadStatusShare\(kpis\.onRoad\)/);
+  assert.match(source,/roadStatusShare\(availabilityKpis\.onRoad\)/);
   assert.match(source,/gotoEquipment\("idle"/);
   assert.match(source,/<option value="idle">Idle<\/option>/);
   assert.match(source,/<option value="Idle">Idle<\/option>/);

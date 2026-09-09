@@ -82,7 +82,7 @@ test("the maintenance summary defines all six BD types with intake percentages",
 });
 
 test("Availability Count provides site-wise on-road, off-road and idle status", () => {
-  assert.match(client, /roadAvailabilityBySite\.length/);
+  assert.match(client, /availabilityCountBySite\.length/);
   assert.match(client, /<span>Total fleet<\/span><span>On road<\/span><span>Off road<\/span><span>Idle<\/span><span>Availability<\/span>/);
   assert.match(client, /className="mine-road-site-bar"/);
   assert.match(css, /\.mine-road-site-row\s*\{[\s\S]*?grid-template-columns:/);
