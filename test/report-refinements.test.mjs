@@ -31,7 +31,7 @@ test('availability and PDF titles retain precise values and unique site names',(
   assert.equal(availabilityPercentage(98.994),'98.99%');
   assert.equal(reportPdfHeading('Report',[{site:'Sasti OB'},{site:'Majri OB'},{site:'Sasti OB'}]),'Report - Sasti OB, Majri OB');
   const [row]=availabilityRows([{door:'A'}],[],'2026-09-08T00:00','2026-09-08T12:00',now);
-  assert.equal(row.productive,11);
+  assert.equal(row.productive,12);
 });
 test('approved columns and unverified queue match MIS requests',()=>{
   const requests=[{ref:'a',status:'Closed',closedAt:'2026-09-08 10:00'}, {ref:'b',status:'Closed',closedAt:'2026-09-08 10:00',verifiedAt:'2026-09-08 11:00'}, {ref:'c',status:'Open'}, {ref:'d',status:'Closed',closedBy:'sanskar manohare'}];

@@ -57,6 +57,7 @@ function assetReferences(equipment) {
 export function availabilityRows(equipment, requests, from, to, now = new Date()) {
   const start = indiaDateTimeEpoch(from), end = indiaDateTimeEpoch(to) + (/^\d{4}-\d{2}-\d{2}$/.test(to) ? 86400000 : 0);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  // A full selected day contributes 24 hours; date-time ranges retain partial days.
   const productive = 24 * ((end - start) / 86400000);
   const key = value => clean(value).toLowerCase();
   const references = assetReferences(equipment);
