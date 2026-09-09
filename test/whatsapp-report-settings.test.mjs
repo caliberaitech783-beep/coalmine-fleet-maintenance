@@ -17,7 +17,7 @@ test('an absent settings record preserves current delivery defaults',()=>{
   assert.deepEqual(settings.events.verified.recipientRoles,['productionManager','maintenanceManager','misManager']);
   assert.deepEqual(settings.events.idle.recipientRoles,['projectManager','productionManager','maintenanceManager','misManager']);
   assert.deepEqual(settings.reminders,{offRoad:{enabled:true,hours:4},idle:{enabled:true,hours:1}});
-  assert.deepEqual(settings.crm,{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:['Admin','Manager'],sendEmpty:true,format:'both'});
+  assert.deepEqual(settings.crm,{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:['Admin','Manager'],sendEmpty:true,format:'links'});
   assert.deepEqual(settings.channels,{hierarchyReports:true,ticketCreated:false,ticketResolved:false,dailyUpdate:false,passwordResetOtp:true,manualReports:true});
   assert.equal(settings.quietHours.enabled,false);
   for(const [key,value] of Object.entries(settings.templates))assert.equal(value.variant,isSingleReportPurpose(key)?'inherit':'standard');
@@ -253,4 +253,23 @@ test('provider template status follows pagination and submissions contain only s
   }});
   assert.equal(submitted.length,1);assert.equal(submitted[0].name,candidate.name);
   assert.equal(submitted[0].components[0].text,candidate.body);
+});
+
+test('legacy CRM formats migrate to file links without changing the schedule',()=>{
+  for(const format of ['summary','pdf','both','links']) {
+    const input=defaultWhatsAppReportSettings();input.crm.format=format;
+    const result=normalizeWhatsAppReportSettings(input);
+    assert.equal(result.crm.format,'links');assert.deepEqual(result.crm.times,input.crm.times);
+  }
+});
+
+test('all consolidated previews include file links and individual alerts remain individual',()=>{
+  for(const purpose of ['consolidatedTicketReport','consolidatedRequestReport','manualReports'])
+    for(const sample of reportTemplateChoices(purpose)){
+      const text=previewReportTemplate(purpose,sample.body);
+      assert.match(text,/https:\/\/example.com\/reports\//);
+      assert.match(text,/PDF/);assert.match(text,/Excel/);
+    }
+  const alert=previewReportTemplate('requestOpened',reportTemplateChoices('requestOpened')[0].body);
+  assert.match(alert,/REQ-/);assert.doesNotMatch(alert,/reports\/crm/);
 });

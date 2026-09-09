@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {defaultWhatsAppReportSettings,whatsappPurposeEnabled} from '../whatsapp-report-settings.mjs';
-import {ticketReportWindow,ticketReportDue,prepareTicketReportRows} from '../ticket-consolidated-report.mjs';
+import {ticketReportWindow,ticketReportDue,prepareTicketReportRows,buildTicketReportTable,buildTicketWhatsAppReport} from '../ticket-consolidated-report.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
 import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
 import {isWorkflowWhatsAppRecipient,isExcludedWorkflowWhatsAppRecipient} from '../whatsapp-workflow-policy.mjs';
@@ -17,36 +17,49 @@ const users=[
   {login:'unassigned-manager',userType:'Super User',adminLevel:'Manager',managerRole:'Maintenance Manager',phone:'9000000004'},
 ];
 
-function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTemplate=false}={}){
+function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTemplate=false,failFiles=false}={}){
   const templates=[],documents=[],pdfs=[],queries=[],claims=new Set();
+  let uuid=0;
   const dependencies={databaseReady:true,storedWhatsAppReportSettings:async()=>settings,whatsappPurposeEnabled,ticketReportDue,ticketReportWindow,
     pool:{query:async(sql,args=[])=>{
       queries.push({sql,args});
+      if(sql.startsWith('INSERT INTO published_reports')&&failFiles)throw new Error('File storage failed');
       if(sql.includes('FROM crm_tickets'))return {rows:empty?[]:[{reference:'TIC/1',site:'Sasti OB',openedAt:'2026-09-08T05:00:00Z',status:'Open'},{reference:'TIC/2',site:'Majri OB',openedAt:'2026-09-08T05:00:00Z',status:'Open'}]};
       if(sql.includes("master_name='Users & employees'"))return {rows:users.map(record_data=>({record_data}))};
       if(sql.startsWith('INSERT INTO whatsapp_consolidated_report_runs')){const key=args.join('|');if(claims.has(key))return {rows:[],rowCount:0};claims.add(key);return {rows:[{id:claims.size}],rowCount:1};}
       return {rows:[],rowCount:1};
-    }},prepareTicketReportRows,resolveMobileAccess,managerReportScope,reportScopeIncludesSite,
+    }},prepareTicketReportRows,buildTicketReportTable,buildTicketWhatsAppReport,resolveMobileAccess,managerReportScope,reportScopeIncludesSite,
+    publicBaseUrl:()=> 'https://reports.example',randomUUID:()=>String(++uuid).padStart(32,'0').split('').reverse().join(''),
+    buildXlsxWorkbookBuffer:(_title,_columns,rows)=>Buffer.from(JSON.stringify(rows)),
     reportDateTime:value=>value.toISOString(),reportFilename:()=> 'CRM.pdf',metaWhatsAppRuntimeEnv:async()=>({WHATSAPP_REPORT_SETTINGS:settings}),
-    sendMetaWhatsAppTemplate:async args=>{if(failTemplate)throw new Error('Template unavailable');templates.push(args);},
+    sendMetaWhatsAppTemplate:async args=>{if(failTemplate)throw Object.assign(new Error('Template unavailable'),{code:typeof failTemplate==='string'?failTemplate:undefined});templates.push(args);},
     sendMetaWhatsAppDocument:async args=>{documents.push(args);},
     buildTicketConsolidatedReportPdf:async args=>{pdfs.push(args);return Buffer.from('%PDF');},console:{warn:()=>{},error:()=>{}},
   };
-  const snippet=source.slice(source.indexOf('let consolidatedTicketReportRunning=false;'),source.indexOf('async function directorReportSourceData'));
+  const snippet=source.slice(source.indexOf('async function publishCrmReportFiles('),source.indexOf('async function directorReportSourceData'));
   const send=new Function(...Object.keys(dependencies),`${snippet};return sendScheduledConsolidatedTicketReports;`)(...Object.values(dependencies));
   return {send,templates,documents,pdfs,queries,settings};
 }
 
-test('CRM sender uses saved formats and recipient scopes, and deduplicates the same slot',async()=>{
-  for(const format of ['both','summary','pdf']){
+test('CRM always publishes scoped PDF and Excel links, including legacy formats, and deduplicates the slot',async()=>{
+  for(const format of ['links','both','summary','pdf']){
     const harness=crmHarness();harness.settings.crm.format=format;
     assert.equal((await harness.send(now)).sent,2);
-    assert.equal(harness.templates.length,format==='pdf'?0:2);
-    assert.equal(harness.documents.length,format==='summary'?0:2);
-    if(format==='summary')assert.doesNotMatch(harness.templates[0].parameters[0],/attached as a PDF/);
-    else{assert.equal(harness.pdfs[0].openTickets.length,2);assert.equal(harness.pdfs[1].openTickets.length,1);assert.equal(harness.documents[0].purpose,'consolidatedTicketReport');}
+    assert.equal(harness.templates.length,2);
+    assert.equal(harness.documents.length,0);
+    assert.equal(harness.pdfs[0].openTickets.length,2);assert.equal(harness.pdfs[1].openTickets.length,1);
+    for(const message of harness.templates.map(item=>item.parameters[0])){
+      assert.match(message,/PDF: https:\/\/reports.example\/r\//);assert.match(message,/Excel: https:\/\/reports.example\/r\//);
+      assert.doesNotMatch(message,/TIC\/1|TIC\/2/);
+    }
+    const files=harness.queries.filter(q=>q.sql.startsWith('INSERT INTO published_reports'));
+    assert.equal(files.length,2);
+    assert.match(files[0].sql,/14 days/);
+    assert.equal(JSON.parse(files[0].args[7]).length,2);
+    assert.equal(JSON.parse(files[1].args[7]).length,1);
+    assert.notEqual(files[0].args[1],files[1].args[1]);
     await harness.send(now);
-    assert.equal(harness.templates.length,format==='pdf'?0:2);
+    assert.equal(harness.templates.length,2);
   }
 });
 
@@ -61,10 +74,24 @@ test('CRM master pause, empty-report preference and selected account types affec
   assert.equal((await otherTime.send(now)).skipped,true);assert.equal(otherTime.queries.length,0);
 });
 
-test('summary-only delivery reports template failure without sending an unwanted PDF',async()=>{
+test('CRM falls back to the PDF with both file links when its template is unavailable',async()=>{
   const settings=defaultWhatsAppReportSettings();settings.crm.format='summary';
   const harness=crmHarness({settings,failTemplate:true});
-  const result=await harness.send(now);assert.equal(result.failed,2);assert.equal(harness.documents.length,0);
+  const result=await harness.send(now);assert.equal(result.sent,2);assert.equal(harness.documents.length,2);
+  assert.match(harness.documents[0].caption,/Excel: https:\/\/reports.example\/r\//);
+  assert.equal(harness.documents[0].purpose,'consolidatedTicketReport');
+});
+
+test('CRM never sends a summary or marks success if file publishing fails',async()=>{
+  const harness=crmHarness({failFiles:true});
+  assert.equal((await harness.send(now)).failed,2);
+  assert.equal(harness.templates.length,0);assert.equal(harness.documents.length,0);
+});
+
+test('pausing CRM delivery during publication does not trigger the document fallback',async()=>{
+  const harness=crmHarness({failTemplate:'WHATSAPP_POLICY_PAUSED'});
+  assert.equal((await harness.send(now)).failed,2);
+  assert.equal(harness.templates.length,0);assert.equal(harness.documents.length,0);
 });
 
 test('direct notification sender rechecks saved event roles and optional channel switches',async()=>{
