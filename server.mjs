@@ -44,6 +44,7 @@ import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipme
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
+import {requestsVisibleToSession} from './mis-request-visibility.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -2294,7 +2295,7 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
       return res.status(403).json({error:'Your assigned role is not authorized to view Info Pulse.'});
     const scope=infoPulseRequestScope(authorization.session,authorization.user);
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`);
-    const visibleRows=scopeInfoPulseRequests(rows,scope);
+    const visibleRows=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
     res.set('Cache-Control','no-store');
     res.json({requests:await attachDailyRemarks(visibleRows),scope});
   }catch(error){next(error)}
@@ -2320,13 +2321,14 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       scopedManagerSites=managerReportScope(manager).sites;
     }
     const {rows}=await pool.query(query);
-    const visibleRows=scopedManagerSites!==null
+    const siteVisibleRows=scopedManagerSites!==null
       ? rows.filter((row)=>reportScopeIncludesSite({sites:scopedManagerSites},row.site))
       : scopedSite===null
       ? rows
       : scopedSite
         ? rows.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(scopedSite))
         : [];
+    const visibleRows=requestsVisibleToSession(siteVisibleRows,req.session);
     res.json(await attachDailyRemarks(visibleRows));
   }catch(error){next(error)}
 });
