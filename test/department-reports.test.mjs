@@ -6,6 +6,19 @@ const now = new Date('2026-09-07T12:00:00+05:30');
 const build = requests => buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-07'});
 const cell = (report,key,row=report.rows[0]) => report.columns.find(c=>c.key===key).value(row);
 
+test('MIS verification durations distinguish closure, actual first trip, and verification',()=>{
+  const row={closedAt:'2026-09-08 10:00',firstTripAt:'2026-09-08 11:30',verifiedAt:'2026-09-08 12:00'};
+  const report=build([row,{...row,verifiedAt:''}]).find(r=>r.title==='Time Taken for MIS Verification');
+  assert.equal(report.rows.length,1);
+  assert.equal(cell(report,'closeToMis'),'2h 0m');
+  assert.equal(cell(report,'closeToFirstTrip'),'1h 30m');
+  assert.equal(cell(report,'firstTripToMis'),'30m');
+  assert.equal(cell(report,'firstTripToMis',{...row,firstTripAt:row.verifiedAt}),'0m');
+  assert.equal(cell(report,'firstTripToMis',{...row,firstTripAt:'2026-09-08 13:00'}),'Not recorded');
+  assert.equal(cell(report,'closeToFirstTrip',{...row,firstTripAt:''}),'Not recorded');
+  assert.equal(cell(report,'closeToFirstTrip',{...row,firstTripAt:'',firstTripDate:'2026-09-08',firstTripTime:'11:30:00'}),'1h 30m');
+});
+
 test('repair TAT uses maintenance acceptance, not production submission',()=>{
   const row={start:'2026-09-08 08:00',acceptedAt:'2026-09-08 16:01:02',closedAt:'2026-09-08 16:46:00'};
   const report=build([row]).find(r=>r.title==='Turn Around Time for Repair');

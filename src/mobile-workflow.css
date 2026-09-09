@@ -188,6 +188,16 @@
   background: #f2f4f8;
 }
 
+.status.accepted {
+  background: #e8f1ff;
+  color: #2459b3;
+}
+
+:root[data-theme="dark"] .status.accepted {
+  background: #243c65;
+  color: #b9d0ff;
+}
+
 .mobile-workspace .scroll.mobile-workflow-table::-webkit-scrollbar-thumb {
   background: #c3cad8;
   border-radius: 8px;

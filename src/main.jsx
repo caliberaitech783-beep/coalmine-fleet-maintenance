@@ -6908,7 +6908,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
@@ -6920,6 +6920,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+  const statusLabel = (row) => showAcceptanceStatus
+    && String(row.acceptedAt || "").trim()
+    && ["open", "in progress"].includes(String(row.status || "").trim().toLowerCase())
+      ? "Accepted" : row.status;
   const verifiedColumns = [
     ...(showVerifiedBy ? [{key: "verifiedBy", label: "Verified by", value: (row) => row.verifiedBy}] : []),
     ...(showVerifiedAt ? [
@@ -6942,7 +6946,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
       {key: "misFlagRemark", label: "MIS remark", value: (row) => row.misFlagRemark},
       {key: "misVerificationStatus", label: "Verification status", value: (row) => row.verifiedAt ? "Verified" : "Awaiting verification"},
     ] : []),
-    {key: "status", label: "Status", value: (row) => row.status === "Closed" ? "Closed by Maintenance" : row.status},
+    {key: "status", label: "Status", value: (row) => row.status === "Closed" ? "Closed by Maintenance" : statusLabel(row)},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
     ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
@@ -6967,10 +6971,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudio ? "Available" : "Not available"}] : []),
   ];
   const filteredRows = rows.filter((row) => {
-    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, row.status, row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy, ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
-    return matchesText && (!statusFilter || String(row.status || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
+    const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy, ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
+    return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
-  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, "", (row, key) => key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : row[key]);
+  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, "", (row, key) => key === "status" ? statusLabel(row) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;
@@ -7008,7 +7012,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
-    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Table controls</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map((row) => row.status).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /></div></div><div className="scroll mobile-workflow-table">
+    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Table controls</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(statusLabel).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /></div></div><div className="scroll mobile-workflow-table">
       <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
@@ -7030,7 +7034,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
-              <td><Status>{row.status || "Open"}</Status></td>
+              <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
               {showReason && <td className="request-reason-cell"><div className="request-reason-text">{String(row.complaint || "").trim() || "—"}</div></td>}
               {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}
@@ -8008,7 +8012,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       {createdRequestRef && <div className="hierarchy-save-message" role="status"><CheckCircle2 /><span>Request <b>{createdRequestRef}</b> saved successfully. It is shown in Requests.</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
