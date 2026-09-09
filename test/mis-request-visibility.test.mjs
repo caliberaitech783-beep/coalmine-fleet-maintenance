@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { MIS_HIDDEN_REQUEST_REFERENCES, requestsVisibleToSession } from "../mis-request-visibility.mjs";
+import { MIS_HIDDEN_REQUEST_REFERENCES, requestsVisibleToMisWorkspace, requestsVisibleToSession } from "../mis-request-visibility.mjs";
 
 const rows = [
   { ref: "REQ-1787994776734" },
@@ -23,4 +23,9 @@ test("the same requests remain visible to every other role", () => {
     { role: "normal", assignedRole: "Maintenance User" },
     { role: "super", assignedRole: "MIS User", permissions: { adminLevel: "Manager" } },
   ]) assert.deepEqual(requestsVisibleToSession(rows, session), rows);
+});
+
+test("an embedded MIS workspace also hides the selected requests for an administrator", () => {
+  assert.deepEqual(requestsVisibleToMisWorkspace(rows, true), [{ ref: "REQ-KEEP-VISIBLE" }]);
+  assert.deepEqual(requestsVisibleToMisWorkspace(rows, false), rows);
 });

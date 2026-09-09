@@ -61,6 +61,7 @@ import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
+import {requestsVisibleToMisWorkspace} from "../mis-request-visibility.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
 import RequestTimelineButton from "./request-timeline.jsx";
 import {
@@ -7649,7 +7650,7 @@ function AiFeeder({ role = "", session }) {
       })
       .then((body) => {
         if (!active) return;
-        setRequests(Array.isArray(body.requests) ? body.requests : []);
+        setRequests(requestsVisibleToMisWorkspace(Array.isArray(body.requests) ? body.requests : [], role === "MIS User"));
         if (body.scope?.label) setScope(body.scope);
       })
       .catch((error) => { if (active) console.warn("Info Pulse refresh failed; retaining the last permitted feed.", error); });
@@ -7657,7 +7658,7 @@ function AiFeeder({ role = "", session }) {
     load();
     const timer = window.setInterval(load, 30000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [session?.token]);
+  }, [session?.token, role]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
@@ -7986,7 +7987,9 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     setSection("profile");
     return saved;
   };
-  const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):requests;
+  const misWorkspaceRequests=requestsVisibleToMisWorkspace(requests,isMis);
+  const misDashboardRequests=requestsVisibleToMisWorkspace(dashboardRequests,isMis);
+  const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):misWorkspaceRequests;
   const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
   const activeRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()!=="closed");
   const closedRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed");
@@ -7996,8 +7999,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&<Dashboard requests={dashboardRequests} theme={theme} />}
-      {!embedded&&section==="reports"&&<ReportsPage requests={isMaintenance || isMis ? requests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
+      {!embedded&&section==="dashboard"&&<Dashboard requests={misDashboardRequests} theme={theme} />}
+      {!embedded&&section==="reports"&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>

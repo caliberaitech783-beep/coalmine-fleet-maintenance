@@ -6,5 +6,10 @@ export const MIS_HIDDEN_REQUEST_REFERENCES = new Set([
 
 export function requestsVisibleToSession(rows = [], session = {}) {
   if (session?.role !== "normal" || session?.assignedRole !== "MIS User") return rows;
+  return requestsVisibleToMisWorkspace(rows, true);
+}
+
+export function requestsVisibleToMisWorkspace(rows = [], isMisWorkspace = false) {
+  if (!isMisWorkspace) return rows;
   return rows.filter((row) => !MIS_HIDDEN_REQUEST_REFERENCES.has(String(row?.ref || row?.reference || "").trim().toUpperCase()));
 }
