@@ -1279,12 +1279,14 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-request-lifecycle-summary button small { overflow: hidden; color: var(--mine-muted); font-size: 6.5px; text-overflow: ellipsis; white-space: nowrap; }
 .mine-request-lifecycle-summary button strong { justify-self: end; font: 900 15px/1 Manrope; white-space: nowrap; }
 .mine-request-lifecycle-summary .opened > i { background: #315fd4; }
+.mine-request-lifecycle-summary .openedMaintenance > i { background: #e36a5f; }
 .mine-request-lifecycle-summary .closed > i { background: #f04e53; }
 .mine-request-lifecycle-summary .verified > i { background: #26956f; }
 .mine-request-lifecycle-summary .idle > i { background: #d4922e; }
 .mine-request-lifecycle-summary .maintenance > i { background: #7b55c7; }
 .mine-request-lifecycle-summary .mis > i { background: #1689a8; }
 .mine-request-lifecycle-summary .opened:hover,.mine-request-lifecycle-summary .opened:focus-visible { border-color: #315fd466; background: #315fd408; }
+.mine-request-lifecycle-summary .openedMaintenance:hover,.mine-request-lifecycle-summary .openedMaintenance:focus-visible { border-color: #e36a5f66; background: #e36a5f08; }
 .mine-request-lifecycle-summary .closed:hover,.mine-request-lifecycle-summary .closed:focus-visible { border-color: #f04e5366; background: #f04e5308; }
 .mine-request-lifecycle-summary .verified:hover,.mine-request-lifecycle-summary .verified:focus-visible { border-color: #26956f66; background: #26956f08; }
 .mine-request-lifecycle-summary .idle:hover,.mine-request-lifecycle-summary .idle:focus-visible { border-color: #d4922e66; background: #d4922e08; }
