@@ -121,12 +121,23 @@ test('availability clips intervals to selected inclusive days and merges overlap
     {door:'B',start:'2026-09-03 00:00',closedAt:'2026-09-03 01:00'},
   ];
   const rows=availabilityRows(equipment,requests,'2026-09-01','2026-09-02',now);
-  assert.equal(rows[0].productive,44);
+  assert.equal(rows[0].productive,48);
   assert.equal(rows[0].breakdown,3);
-  assert.equal(rows[0].available,41);
-  assert.equal(rows[0].percentage,41/44*100);
+  assert.equal(rows[0].available,45);
+  assert.equal(rows[0].percentage,45/48*100);
   assert.equal(rows[1].breakdown,0);
   assert.deepEqual(availabilityRows(equipment,requests,'bad','bad',now),[]);
+});
+test('availability uses 24 hours per full day and actual hours for partial days',()=>{
+  const equipment=[{door:'A'}];
+  const day=availabilityRows(equipment,[],'2026-09-01','2026-09-01',now)[0];
+  assert.equal(day.productive,24);
+  assert.equal(day.available,24);
+  assert.equal(day.percentage,100);
+  const partial=availabilityRows(equipment,[{door:'A',start:'2026-09-01 08:00',closedAt:'2026-09-01 10:00'}],'2026-09-01T08:00','2026-09-01T20:00',now)[0];
+  assert.equal(partial.productive,12);
+  assert.equal(partial.available,10);
+  assert.equal(partial.percentage,10/12*100);
 });
 test('acceptance capture is additive, atomic and preserves first transition; report source includes remarks',()=>{
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
