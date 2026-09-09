@@ -20,6 +20,12 @@ test("Total Fleet leads the Tracking Vehicle Throughput panel", () => {
   assert.doesNotMatch(client, /className="mine-primary-kpi-card mine-road-status-graphic mine-feature-road-availability"/);
 });
 
+test("Breakdown mode shows only the four breakdown dashboard sections", () => {
+  assert.match(client, /showFleetBreakdowns \? " breakdown-dashboard-view" : ""/);
+  assert.match(css, /\.mine-dashboard\.breakdown-dashboard-view \.mine-dashboard-core > :not\(\.mine-request-lifecycle\)/);
+  assert.match(css, /\.mine-dashboard\.breakdown-dashboard-view \.mine-dashboard-lower-grid > :not\(\.mine-breakdown-trend\)/);
+});
+
 test("site breakdown view reconciles one-line site totals and opens day-wise controls", () => {
   assert.match(client, /breakdownMovementForRange/);
   assert.match(client, /dailyBreakdownMovement/);
