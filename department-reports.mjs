@@ -114,6 +114,7 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
       col('verifiedAt','MIS verified at'),col('verifiedBy','Verified by'),col('firstTripAt','First trip time',firstTrip),
     ],requests.filter(r => r.misFlaggedAt),r => r.misFlaggedAt),
     report('general', DEPARTMENT_REPORT_TITLES[14], 'MIS-verified requests only. Exact durations: waiting = submission to acceptance; maintenance = acceptance to request closure; return to work = closure to actual first trip. These stages do not overlap; overall = submission to first trip. Repair/closure elapsed and first-trip-to-verification lag are separate measures, not additional stages. For Idle cases, manager on-road approval is request closure, not a separately recorded repair completion; the acceptance-to-closure interval includes the Idle approval wait. Missing or reversed timestamps are not treated as zero. Date filters continue to use production submission.', [
+      ...base.slice(0,4),
       ref,
       col('submittedAt','Production submission',r => r.start || 'Not recorded'),
       col('acceptedAt','Maintenance acceptance',r => acceptanceTime(r) || 'Not recorded'),
@@ -121,7 +122,7 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
       col('firstTripAt','Actual first trip',r => summaryTimingRow(r).firstTripAt || 'Not recorded'),
       col('verifiedAt','MIS verified at',r => r.verifiedAt || 'Not recorded'),
       col('closureEvent','Closure type / recorded by',summaryClosure),
-      ...base,site,
+      ...base.slice(4),site,
       col('waitingTat','Waiting: submission to acceptance',r => summaryDuration(r,'waiting')),
       col('maintenanceTat','Maintenance: acceptance to closure',r => summaryDuration(r,'maintenance')),
       col('returnToWorkTat','Return to work: closure to first trip',r => summaryDuration(r,'returnToWork')),
