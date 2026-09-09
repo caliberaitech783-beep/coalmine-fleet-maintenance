@@ -143,7 +143,7 @@ test('acceptance capture is additive, atomic and preserves first transition; rep
   const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(source,/ADD COLUMN IF NOT EXISTS in_progress_at TIMESTAMPTZ/);
   assert.match(source,/status<>'In progress' AND \$3='In progress' THEN COALESCE\(in_progress_at,NOW\(\)\)/);
-  assert.match(source,/requests:await attachDailyRemarks\(requestRows\)/);
+  assert.match(source,/requests:await attachDailyRemarks\(requestsVisibleGlobally\(requestRows\)\)/);
 });
 test('report master reads use current authorization and site scope without granting master writes',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
