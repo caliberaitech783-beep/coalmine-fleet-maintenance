@@ -123,6 +123,17 @@ test("breakdown trend summary no longer shows the forecast count card", () => {
   assert.match(source, /<span>Daily baseline<\/span>/);
 });
 
+test("breakdown trend chart drops the forecast legend, view toggle and wording", () => {
+  assert.doesNotMatch(source, /<i className="forecast" \/>Forecast/);
+  assert.doesNotMatch(source, /listAction\("trend:forecast"/);
+  assert.doesNotMatch(source, /\["upcoming", "Upcoming"\]/);
+  assert.doesNotMatch(source, /className="mine-trend-view" role="group"/);
+  assert.doesNotMatch(source, /weekday-weighted upcoming estimates/);
+  assert.doesNotMatch(source, /actual and forecast breakdown chart/);
+  assert.match(source, /<i className="actual" \/>Actual<\/span><b>Selected day:/);
+  assert.match(source, /day recorded breakdown chart`\}/);
+});
+
 test("the region and site graph panel is titled only Total Fleet", () => {
   assert.match(source, /<h2>Total Fleet<\/h2>/);
   assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\(fleetChartAllKey\)\}/);
