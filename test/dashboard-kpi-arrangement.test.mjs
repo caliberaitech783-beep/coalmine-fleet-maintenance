@@ -30,7 +30,7 @@ test("request lifecycle counts each workflow timestamp separately", () => {
 test("request lifecycle shows maintenance and MIS availability cards", () => {
   assert.match(client, /maintenance: Math\.max\(0, requestLifecycleRows\.opened\.length - requestLifecycleRows\.closed\.length\)/);
   assert.match(client, /mis: Math\.max\(0, requestLifecycleRows\.closed\.length - requestLifecycleRows\.verified\.length\)/);
-  assert.match(client, /label: "Open in Maint", note: "Opened - Closed by Maintenance"/);
-  assert.match(client, /label: "Open in MIS", note: "Closed by Maintenance - Verified"/);
+  assert.match(client, /label: "Open in Maint", note: "Opened - Closed"/);
+  assert.match(client, /label: "Open in MIS", note: "Closed - Verified"/);
   assert.match(css, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
 });

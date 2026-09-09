@@ -104,7 +104,7 @@ for (const role of ["Production User", "Maintenance User", "MIS User"]) test(`${
   const app = harness("Normal", {requestWithEquipmentMasterDetails, useMasterRecords: () => [masterRecords, null, true]});
   const props = normalProps(role, verified);
   let tree = app.render(props);
-  button(tree, "Closed by Maintenance history").props.onClick();
+  button(tree, "Closed history").props.onClick();
   tree = app.render(props);
   assert.notEqual(table(tree).props.rows[0].make, "QA MAKE");
   masterRecords = [{...equipment[0], make: "QA MAKE", model: "QA MODEL"}];
@@ -149,14 +149,14 @@ for (const role of ["Production User", "Maintenance User", "MIS User"]) test(`${
   props = normalProps(role, closed);
   tree = app.render(props);
   assert.deepEqual(table(tree).props.rows, []);
-  button(tree, role === "MIS User" ? "MIS verification" : "Closed by Maintenance history").props.onClick();
+  button(tree, role === "MIS User" ? "MIS verification" : "Closed history").props.onClick();
   tree = app.render(props);
   assert.deepEqual(table(tree).props.rows, [closed]);
   props = normalProps(role, verified);
   tree = app.render(props);
   if (role === "MIS User") {
     assert.deepEqual(table(tree).props.rows, []);
-    button(tree, "Closed by Maintenance history").props.onClick();
+    button(tree, "Closed history").props.onClick();
     tree = app.render(props);
   }
   assert.deepEqual(table(tree).props.rows, [verified]);
@@ -190,7 +190,7 @@ for (const role of ["Project Manager", "Production Manager", "Maintenance Manage
     tree = app.render(props);
     assert.equal(all(tree, node => node.type === ManagerIdleConfirmation).length, 0);
   }
-  button(tree, "Closed by Maintenance history").props.onClick();
+  button(tree, "Closed history").props.onClick();
   tree = app.render({...props, requests: [verified]});
   assert.deepEqual(table(tree).props.rows, [verified]);
   assert.equal(table(tree).props.onCancelIdeal, null);
@@ -269,7 +269,7 @@ for (const role of ["Production User", "Maintenance User"]) test(`${role}: succe
   const app = harness("Normal", {MaintenanceForm, useMasterRecords: () => [equipment, null, true, null, null, null, "", () => {}]});
   const props = {...normalProps(role, verified), onCreate: () => new Promise(resolve => {resolveSave = resolve;})};
   let tree = app.render(props);
-  button(tree, "Closed by Maintenance history").props.onClick();
+  button(tree, "Closed history").props.onClick();
   tree = app.render(props);
   button(tree, "Create request").props.onClick();
   tree = app.render(props);
@@ -295,11 +295,11 @@ test("failed creation does not announce success or leave Closed history", async 
   const app = harness("Normal", {MaintenanceForm, useMasterRecords: () => [equipment, null, true, null, null, null, "", () => {}]});
   const props = {...normalProps("Production User", verified), onCreate: async () => {throw new Error("Request could not be saved.");}};
   let tree = app.render(props);
-  button(tree, "Closed by Maintenance history").props.onClick(); tree = app.render(props);
+  button(tree, "Closed history").props.onClick(); tree = app.render(props);
   button(tree, "Create request").props.onClick(); tree = app.render(props);
   await assert.rejects(all(tree, node => node.type === MaintenanceForm)[0].props.onSubmit(opened), /could not be saved/);
   tree = app.render(props);
-  assert.equal(button(tree, "Closed by Maintenance history").props.className, "active");
+  assert.equal(button(tree, "Closed history").props.className, "active");
   assert.deepEqual(table(tree).props.rows, [verified]);
   assert.equal(all(tree, node => node.type === MaintenanceForm).length, 1);
   assert.equal(all(tree, node => node.props.role === "status").length, 0);

@@ -65,7 +65,7 @@ test('close list shows accepted active vehicles In progress and filters by that 
   const closeProps = {rows, showInProgressStatus: true};
   let tree = app.render(closeProps);
   const status = find(tree, ExportMenu).props.columns.find(column => column.key === 'status');
-  assert.deepEqual(rows.map(status.value), ['Open', 'In progress', 'In progress', 'Idle', 'Closed by Maintenance', 'In progress']);
+  assert.deepEqual(rows.map(status.value), ['Open', 'In progress', 'In progress', 'Idle', 'Closed', 'In progress']);
   assert.equal((renderToStaticMarkup(tree).match(/class="status in-progress"/g) || []).length, 3);
   find(tree, 'select').props.onChange({target: {value: 'In progress'}});
   tree = app.render(closeProps);
@@ -76,7 +76,7 @@ test('close list shows accepted active vehicles In progress and filters by that 
 test('only accepted active requests receive the Accepted badge without changing saved statuses', () => {
   const tree = harness().render(props);
   const labels = find(tree, ExportMenu).props.columns.find(column => column.key === 'status');
-  assert.deepEqual(rows.map(labels.value), ['Open', 'Accepted', 'Accepted', 'Idle', 'Closed by Maintenance', 'In progress']);
+  assert.deepEqual(rows.map(labels.value), ['Open', 'Accepted', 'Accepted', 'Idle', 'Closed', 'In progress']);
   const html = renderToStaticMarkup(tree);
   assert.equal((html.match(/class="status accepted"/g) || []).length, 2);
   assert.equal((html.match(/class="status open"/g) || []).length, 1);
@@ -130,6 +130,6 @@ test('edit and daily-update actions still receive the original request with its 
 test('other workflow tables continue showing their existing status values', () => {
   const tree = harness().render({ rows });
   const statusColumn = find(tree, ExportMenu).props.columns.find(column => column.key === 'status');
-  assert.deepEqual(rows.map(statusColumn.value), rows.map(row => row.status === 'Closed' ? 'Closed by Maintenance' : row.status));
+  assert.deepEqual(rows.map(statusColumn.value), rows.map(row => row.status));
   assert.equal(renderToStaticMarkup(tree).includes('status accepted'), false);
 });

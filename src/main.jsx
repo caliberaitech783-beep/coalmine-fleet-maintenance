@@ -247,11 +247,10 @@ const operationalWorkspaceNav = [
 ];
 function Status({ children }) {
   let c = children.toLowerCase().replaceAll(" ", "-");
-  const label = children === "Closed" ? "Closed by Maintenance" : children;
   return (
     <span className={"status " + c}>
       <i />
-      {label}
+      {children}
     </span>
   );
 }
@@ -981,8 +980,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && equipmentLoaded && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter||!equipmentLoaded} aria-busy={!equipmentLoaded}>
       <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
-    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed by Maintenance history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed by Maintenance request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
+    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
     {idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
 }
@@ -1283,7 +1282,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
   const requestAssetDrilldown = fleetBreakdownDrilldown || assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
-  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed by Maintenance requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
+  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
   const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1]} to ${movementDrilldownParts[2]}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
@@ -1435,7 +1434,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
-            {[{ key: "opened", label: "Opened", note: "New requests", value: requestLifecycleRows.opened.length }, { key: "closed", label: "Closed by Maintenance", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Opened - Closed by Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed by Maintenance - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
+            {[{ key: "opened", label: "Opened", note: "New requests", value: requestLifecycleRows.opened.length }, { key: "closed", label: "Closed", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Opened - Closed", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
             <div className="mine-request-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, requestLifecycleTrend.length)}, minmax(28px, 1fr))`, minWidth: `${Math.max(100, requestLifecycleTrend.length * 34)}px` }}>
@@ -3625,7 +3624,7 @@ function Breakdown({ requests = [] }) {
           `Open ${open}`,
           `In progress ${inProgress}`,
           `Awaiting parts ${awaiting}`,
-          `Closed by Maintenance ${closed}`,
+          `Closed ${closed}`,
         ].map((x, i) => (
           <button key={x} className={i === 0 ? "active" : ""}>
             {x}
@@ -4848,7 +4847,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const closureColumns = [
     ...requestColumns,
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
-    {key: "closedAt", label: "Closed by Maintenance at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+    {key: "closedAt", label: "Closed at", value: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
   ];
   const misColumns = [
     ...closureColumns,
@@ -4878,7 +4877,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   ];
   const legacyReportGroups = [
     {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, dateValue: (row) => row.start, emptyMessage: "No open breakdown cases available"},
-    {category: "maintenance", title: "Location wise closing BD", description: "Breakdown cases closed by Maintenance with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, dateValue: (row) => row.closedAt, emptyMessage: "No cases closed by Maintenance available"},
+    {category: "maintenance", title: "Location wise closing BD", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, dateValue: (row) => row.closedAt, emptyMessage: "No closed maintenance cases available"},
     {category: "mis", title: "MIS Verification Report", description: "Requests verified by MIS, including maintenance close and MIS verification timestamps.", rows: misVerificationRows, columns: misColumns, dateValue: (row) => row.verifiedAt, emptyMessage: "No MIS verification records available"},
     {category: "general", title: "Report for On Road / Off Road & Idle", description: "Current road status of equipment and vehicles from the Equipment Master.", rows: fleetStatusRows, columns: fleetColumns, dateValue: () => reportGeneratedAt, emptyMessage: "No equipment road-status records available", rowKey: (record) => `road-${record.reportId}`},
     {category: "general", title: "Vehicle Transfer Report", description: "Vehicle transfer history with source, destination, equipment, model, driver, and chassis details.", rows: transferRows, columns: transferColumns, dateValue: (row) => row.transferDate, emptyMessage: "No vehicle transfer records available", rowKey: (record) => `transfer-${record.reportId}`},
@@ -6135,7 +6134,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
     ["Open", "Open", count("Open")],
     ["In progress", "In progress", count("In progress")],
     ["Awaiting parts", "Awaiting parts", count("Awaiting parts")],
-    ["Closed", "Closed by Maintenance", count("Closed")],
+    ["Closed", "Closed", count("Closed")],
   ];
   const filteredRows = statusFilter === "all"
     ? rows
@@ -6946,7 +6945,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
       {key: "misFlagRemark", label: "MIS remark", value: (row) => row.misFlagRemark},
       {key: "misVerificationStatus", label: "Verification status", value: (row) => row.verifiedAt ? "Verified" : "Awaiting verification"},
     ] : []),
-    {key: "status", label: "Status", value: (row) => row.status === "Closed" ? "Closed by Maintenance" : statusLabel(row)},
+    {key: "status", label: "Status", value: (row) => statusLabel(row)},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
     ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
@@ -7188,7 +7187,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {request.closedAt}. The original and replacement will be retained.</small></label>}
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
-        <label>Status *<select name="status" disabled value={ideal?"Idle":status}>{ideal ? <option value="Idle">Idle</option> : <option value="Closed">Closed by Maintenance</option>}</select></label>
+        <label>Status *<select name="status" disabled value={ideal?"Idle":status}>{ideal ? <option value="Idle">Idle</option> : <option value="Closed">Closed</option>}</select></label>
         <fieldset className="ideal-choice full">
           <legend>Idle? <small>Optional</small></legend>
           <div className="idle-options">
@@ -7271,7 +7270,7 @@ function VerifyRequestForm({ request, close, onSave }) {
         <div><span>Door number</span><b>{request.door || "—"}</b></div>
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
-        <div><span>Closed by Maintenance at</span><b>{request.closedAt || "—"}</b></div>
+        <div><span>Closed at</span><b>{request.closedAt || "—"}</b></div>
         <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
         <div><span>Opening {request.meterType || "KMR/HMR"}</span><b>{request.openingMeterReading || "—"}</b><MeterFileCell request={request} stage="opening" /></div>
       </div>
@@ -7702,7 +7701,7 @@ function NotificationRequestEntry({ reference, request = {} }) {
       <NotificationEntryField label="Started" value={formatTwelveHourDateTime(request.start)} />
       <NotificationEntryField label="Accepted" value={request.acceptedAt ? `${formatTwelveHourDateTime(request.acceptedAt)}${request.acceptedBy ? ` · ${request.acceptedBy}` : ""}` : "—"} />
       <NotificationEntryField label="Expected completion" value={formatTwelveHourDateTime(request.expectedCompletionAt)} />
-      <NotificationEntryField label="Closed by Maintenance" value={request.closedAt ? `${formatTwelveHourDateTime(request.closedAt)}${request.closedBy ? ` · ${request.closedBy}` : ""}` : "—"} />
+      <NotificationEntryField label="Closed" value={request.closedAt ? `${formatTwelveHourDateTime(request.closedAt)}${request.closedBy ? ` · ${request.closedBy}` : ""}` : "—"} />
       <NotificationEntryField label="First trip time" value={formatTwelveHourDateTime(firstTripTimestamp(request), true)} />
       <NotificationEntryField label="MIS verification" value={request.verifiedAt ? `${formatTwelveHourDateTime(request.verifiedAt, true)}${request.verifiedBy ? ` · ${request.verifiedBy}` : ""}` : request.verificationStatus} />
       <NotificationEntryField label="Downtime" value={request.hours} />
@@ -7901,7 +7900,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const workspaceReportTitles = {
     requests: isProduction ? "Active Production Requests" : isMaintenance ? "Active Maintenance Requests" : "MIS Requests Awaiting Verification",
     verify: "MIS Verification Requests",
-    history: isProduction ? "Production Requests Closed by Maintenance" : isMaintenance ? "Maintenance Requests Closed by Maintenance" : "MIS Requests Closed by Maintenance",
+    history: isProduction ? "Closed Production Requests" : isMaintenance ? "Closed Maintenance Requests" : "Closed MIS Requests",
     idle: "Idle Vehicles",
     close: "Maintenance Close Request Form",
   };
@@ -8005,7 +8004,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => {refreshEquipmentRecords();refreshRepairTypes();setShow(true);}}><Plus /> Create request</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU)&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>MIS verification</button>}
-        {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed by Maintenance history</button>}
+        {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
       </div>
