@@ -4,8 +4,10 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 
-test("request lifecycle total card combines open and closed requests", () => {
-  assert.match(source, /label: "Total Requests", note: "Open \+ Closed", value: requestLifecycleRows\.opened\.length \+ requestLifecycleRows\.closed\.length/);
-  assert.match(source, /item\.key === "total" \? openAssetDrilldown\("event:all"\)/);
+test("Production Request card contains only Production and Maintenance created requests", () => {
+  assert.match(source, /production: locationBreakdowns\.filter\(\(record\) => \["production user", "maintenance user"\]\.includes\(String\(record\.requesterRole \|\| ""\)\.trim\(\)\.toLowerCase\(\)\)/);
+  assert.match(source, /requestEventDate\(record, "opened"\) >= safeTrendStartKey && requestEventDate\(record, "opened"\) <= requestTrendEndKey/);
+  assert.match(source, /label: "Production Request", note: "Production \+ Maintenance", value: requestLifecycleRows\.production\.length/);
+  assert.match(source, /openAssetDrilldown\(`event:\$\{item\.key\}`\)/);
   assert.doesNotMatch(source, /label: "Opened", note: "New requests"/);
 });
