@@ -44,7 +44,7 @@ import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipme
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
-import {requestsVisibleToSession} from './mis-request-visibility.mjs';
+import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -1714,7 +1714,7 @@ async function directorReportSourceData(){
     pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Vehicle transfers' ORDER BY created_at ASC`),
   ]);
   return {
-    requests:await attachDailyRemarks(requestRows),
+    requests:await attachDailyRemarks(requestsVisibleGlobally(requestRows)),
     equipmentRecords:equipmentRows.map(({id,record_data})=>({id,...record_data})),
     transferRecords:transferRows.map(({id,record_data})=>({id,...record_data})),
   };
