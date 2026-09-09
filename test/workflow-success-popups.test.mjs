@@ -13,7 +13,7 @@ test("successful workflow actions show the requested popup notifications", () =>
   assert.match(source, /className="workflow-success-popup"[\s\S]*?role="status" aria-live="polite"/);
   assert.match(styles, /\.workflow-success-popup\{position:fixed;top:24px;left:50%/);
   assert.match(styles, /transform:translateX\(-50%\)/);
-  assert.match(styles, /width:min\(480px,calc\(100vw - 32px\)\)/);
-  assert.match(styles, /\.workflow-success-popup \.hierarchy-save-message\{[^}]*font-size:20px/);
+  assert.match(styles, /width:min\(640px,calc\(100vw - 32px\)\)/);
+  assert.match(styles, /\.workflow-success-popup \.hierarchy-save-message\{[^}]*font-size:40px/);
   assert.match(source, /window\.setTimeout\(\(\) => setCreatedRequestRef\(""\), 5000\)/);
 });
