@@ -28,7 +28,13 @@ test("request lifecycle counts each workflow timestamp separately", () => {
 });
 
 test("request lifecycle shows maintenance and MIS availability cards", () => {
-  assert.match(client, /maintenance: Math\.max\(0, requestLifecycleRows\.opened\.length - requestLifecycleRows\.closed\.filter\(openedByProduction\)\.length\)/);
+  // Open in Maint counts only opened requests that maintenance has not closed yet, never a net of opened minus closed.
+  assert.doesNotMatch(client, /maintenance: Math\.max\(0, requestLifecycleRows\.opened\.length - requestLifecycleRows\.closed/);
+  assert.match(client, /const openInMaintenanceRows = requestLifecycleRows\.opened\.filter\(\(record\) => !requestEventDate\(record, "closed"\) && String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"\)/);
+  assert.match(client, /maintenance: openInMaintenanceRows\.length/);
+  assert.match(client, /item\.key === "maintenance" \? openAssetDrilldown\("event:maintenance"\)/);
+  assert.match(client, /const rows = event === "maintenance" \? openInMaintenanceRows : requestLifecycleRows\[event\] \|\| \[\]/);
+  assert.match(client, /lifecycleDrilldownParts\[1\] === "maintenance" \? "Open in Maintenance requests"/);
   assert.match(client, /mis: Math\.max\(0, requestLifecycleRows\.closed\.length - requestLifecycleRows\.verified\.length\)/);
   assert.match(client, /label: "Open in Maint", note: "Opened by Production - Closed by Maintenance"/);
   assert.match(client, /label: "Open in MIS", note: "Closed by Maintenance - Verified"/);

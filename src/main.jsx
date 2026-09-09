@@ -1173,8 +1173,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     verified: locationBreakdowns.filter((record) => requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
     idle: locationBreakdowns.filter((record) => ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
   };
+  const openInMaintenanceRows = requestLifecycleRows.opened.filter((record) => !requestEventDate(record, "closed") && String(record.status || "").trim().toLowerCase() !== "closed");
   const requestLifecycleAvailability = {
-    maintenance: Math.max(0, requestLifecycleRows.opened.length - requestLifecycleRows.closed.filter(openedByProduction).length),
+    maintenance: openInMaintenanceRows.length,
     mis: Math.max(0, requestLifecycleRows.closed.length - requestLifecycleRows.verified.length),
   };
   const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
@@ -1258,7 +1259,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("event:")) {
       const [, event, date] = key.split(":");
       if (event === "all") return requestAssetRows(allLifecycleRequestRows(requestLifecycleRows, requestEventDate, date));
-      const rows = requestLifecycleRows[event] || [];
+      const rows = event === "maintenance" ? openInMaintenanceRows : requestLifecycleRows[event] || [];
       return requestAssetRows(date ? rows.filter((record) => requestEventDate(record, event) === date) : rows);
     }
     return [];
@@ -1284,7 +1285,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
   const requestAssetDrilldown = fleetBreakdownDrilldown || assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
-  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened by Production requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed by Maintenance requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
+  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "opened" ? "Opened by Production requests" : lifecycleDrilldownParts[1] === "maintenance" ? "Open in Maintenance requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed by Maintenance requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
   const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1]} to ${movementDrilldownParts[2]}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
@@ -1436,7 +1437,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
-            {[{ key: "opened", label: "Opened by Production", note: "Production user requests", value: requestLifecycleRows.opened.length }, { key: "closed", label: "Closed by Maintenance", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Opened by Production - Closed by Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed by Maintenance - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
+            {[{ key: "opened", label: "Opened by Production", note: "Production user requests", value: requestLifecycleRows.opened.length }, { key: "closed", label: "Closed by Maintenance", note: "Maintenance completed", value: requestLifecycleRows.closed.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Opened by Production - Closed by Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed by Maintenance - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:maintenance") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
             <div className="mine-request-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, requestLifecycleTrend.length)}, minmax(28px, 1fr))`, minWidth: `${Math.max(100, requestLifecycleTrend.length * 34)}px` }}>

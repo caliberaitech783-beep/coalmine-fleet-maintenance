@@ -28,7 +28,7 @@ test("request lists retain job, equipment, site and lifecycle details", () => {
 
 test("repair and event chart context stays applied before the list filters", () => {
   assert.match(source, /key\.startsWith\("repair:"\)\) return requestAssetRows\(visibleBreakdowns\.filter/);
-  assert.match(source, /const rows = requestLifecycleRows\[event\] \|\| \[\]/);
+  assert.match(source, /const rows = event === "maintenance" \? openInMaintenanceRows : requestLifecycleRows\[event\] \|\| \[\]/);
   assert.match(source, /lifecycleDrilldownParts\[1\] === "opened" \? "Opened by Production requests"/);
   assert.match(source, /date \? rows\.filter\(\(record\) => requestEventDate\(record, event\) === date\) : rows/);
   assert.match(source, /requestRecords=\{requestAssetDrilldown\} lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
