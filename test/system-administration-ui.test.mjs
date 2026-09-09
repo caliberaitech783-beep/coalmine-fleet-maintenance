@@ -19,6 +19,10 @@ test("backup administration supports creation, export, schedules, retention, and
   assert.match(ui, /Run on weekdays/);
   assert.match(ui, /Retention period \(days\)/);
   assert.match(server, /X-BDMS-Checksum-SHA256/);
+  assert.match(server, /CREATE TABLE IF NOT EXISTS system_backup_chunks/);
+  assert.match(server, /BACKUP_CHUNK_TARGET_BYTES/);
+  assert.match(server, /res\.write\(`\$\{JSON\.stringify\(documentHeader\)/);
+  assert.doesNotMatch(server, /data\[table\]=sanitizeBackupValue\(rows\)/);
 });
 
 test("session administration uses a non-secret public id and requires a force-close reason", () => {

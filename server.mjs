@@ -201,6 +201,35 @@ function sanitizeBackupValue(value){
   ]));
 }
 
+const BACKUP_QUERY_PAGE_SIZE=5;
+const BACKUP_CHUNK_TARGET_BYTES=4*1024*1024;
+const backupByteLength=(value)=>Buffer.byteLength(value,'utf8');
+
+async function storeBackupTableChunks({backupId,table,rows,chunkIndexStart=0}){
+  let chunkIndex=chunkIndexStart;
+  let chunkRows=[];
+  let chunkBytes=2;
+  const flush=async()=>{
+    if(!chunkRows.length)return;
+    const payload=`[${chunkRows.join(',')}]`;
+    await pool.query(`INSERT INTO system_backup_chunks
+      (backup_id,table_name,chunk_index,payload_text,record_count,size_bytes)
+      VALUES ($1,$2,$3,$4,$5,$6)`,[backupId,table,chunkIndex,payload,chunkRows.length,backupByteLength(payload)]);
+    chunkIndex+=1;
+    chunkRows=[];
+    chunkBytes=2;
+  };
+  for(const row of rows){
+    const serialized=JSON.stringify(sanitizeBackupValue(row));
+    const rowBytes=backupByteLength(serialized)+(chunkRows.length?1:0);
+    if(chunkRows.length&&chunkBytes+rowBytes>BACKUP_CHUNK_TARGET_BYTES)await flush();
+    chunkRows.push(serialized);
+    chunkBytes+=rowBytes;
+  }
+  await flush();
+  return chunkIndex;
+}
+
 async function backupActivity({backupId=null,action,outcome='Success',details='',actor={}}){
   await pool.query(`INSERT INTO backup_activity_logs (backup_id,action,outcome,details,actor_login,actor_name)
     VALUES ($1,$2,$3,$4,$5,$6)`,[backupId,action,outcome,auditClean(details,1000),auditClean(actor.login,120),auditClean(actor.name,160)]);
@@ -235,22 +264,45 @@ async function createApplicationBackup({actor={login:'system',name:'Scheduled ba
     const tableNames=['maintenance_requests','maintenance_daily_remarks','master_records','app_metadata','app_settings','crm_tickets','crm_notifications','admin_lock_incidents','whatsapp_alert_history'];
     if(settings.includeAuditTrail)tableNames.push('audit_events');
     if(settings.includeLoginHistory)tableNames.push('login_history');
-    const data={};
     const recordCounts={};
+    const createdAt=new Date().toISOString();
+    const documentHeader={format:'BDMS application-data backup',version:2,createdAt,createdBy:actor.login||'system'};
+    const checksumBuilder=createHash('sha256');
+    let sizeBytes=0;
+    const addDocumentPart=(part)=>{checksumBuilder.update(part);sizeBytes+=backupByteLength(part);};
+    addDocumentPart(`${JSON.stringify(documentHeader).slice(0,-1)},"data":{`);
     for(const table of tableNames){
-      const {rows}=await pool.query(`SELECT * FROM ${table}`);
-      data[table]=sanitizeBackupValue(rows);
-      recordCounts[table]=rows.length;
+      addDocumentPart(`${Object.keys(recordCounts).length?',':''}${JSON.stringify(table)}:[`);
+      let offset=0;
+      let chunkIndex=0;
+      let firstRecord=true;
+      recordCounts[table]=0;
+      while(true){
+        const {rows}=await pool.query(`SELECT * FROM ${table} ORDER BY ctid LIMIT $1 OFFSET $2`,[BACKUP_QUERY_PAGE_SIZE,offset]);
+        if(!rows.length)break;
+        chunkIndex=await storeBackupTableChunks({backupId:id,table,rows,chunkIndexStart:chunkIndex});
+        for(const row of rows){
+          const serialized=JSON.stringify(sanitizeBackupValue(row));
+          if(!firstRecord)addDocumentPart(',');
+          addDocumentPart(serialized);
+          firstRecord=false;
+        }
+        recordCounts[table]+=rows.length;
+        offset+=rows.length;
+        if(rows.length<BACKUP_QUERY_PAGE_SIZE)break;
+      }
+      addDocumentPart(']');
     }
-    const payload={format:'BDMS application-data backup',version:1,createdAt:new Date().toISOString(),createdBy:actor.login||'system',data};
-    const serialized=JSON.stringify(payload);
-    const checksum=createHash('sha256').update(serialized).digest('hex');
+    addDocumentPart('}}');
+    const checksum=checksumBuilder.digest('hex');
+    const manifest={...documentHeader,chunked:true,tables:tableNames};
     await pool.query(`UPDATE system_backups SET status='Completed',size_bytes=$2,checksum=$3,record_counts=$4::jsonb,
-      backup_payload=$5::jsonb,completed_at=NOW() WHERE id=$1`,[id,Buffer.byteLength(serialized),checksum,JSON.stringify(recordCounts),serialized]);
+      backup_payload=$5::jsonb,completed_at=NOW() WHERE id=$1`,[id,sizeBytes,checksum,JSON.stringify(recordCounts),JSON.stringify(manifest)]);
     await backupActivity({backupId:id,action:'Backup completed',details:`${Object.values(recordCounts).reduce((sum,count)=>sum+count,0)} records protected.`,actor});
     await applyBackupRetention(settings);
     return id;
   }catch(error){
+    await pool.query('DELETE FROM system_backup_chunks WHERE backup_id=$1',[id]).catch(()=>{});
     await pool.query(`UPDATE system_backups SET status='Failed',error_message=$2,completed_at=NOW() WHERE id=$1`,[id,auditClean(error.message,1000)]).catch(()=>{});
     await backupActivity({backupId:id,action:'Backup failed',outcome:'Failed',details:error.message,actor}).catch(()=>{});
     throw error;
@@ -592,6 +644,16 @@ async function migrate(){
     );
     CREATE UNIQUE INDEX IF NOT EXISTS system_backups_schedule_slot_idx ON system_backups (schedule_slot) WHERE schedule_slot IS NOT NULL;
     CREATE INDEX IF NOT EXISTS system_backups_started_at_idx ON system_backups (started_at DESC);
+    CREATE TABLE IF NOT EXISTS system_backup_chunks (
+      backup_id UUID NOT NULL REFERENCES system_backups(id) ON DELETE CASCADE,
+      table_name TEXT NOT NULL,
+      chunk_index INTEGER NOT NULL,
+      payload_text TEXT NOT NULL,
+      record_count INTEGER NOT NULL DEFAULT 0,
+      size_bytes BIGINT NOT NULL DEFAULT 0,
+      PRIMARY KEY (backup_id, table_name, chunk_index)
+    );
+    CREATE INDEX IF NOT EXISTS system_backup_chunks_lookup_idx ON system_backup_chunks (backup_id, table_name, chunk_index);
     CREATE TABLE IF NOT EXISTS backup_activity_logs (
       id BIGSERIAL PRIMARY KEY,
       backup_id UUID,
@@ -2199,8 +2261,43 @@ app.get('/api/system-admin/backups/:id/export',requireSession,requireSystemAdmin
     await appendAuditEvent(req,{eventType:'Administration',module:'System Administration',action:'Export backup',targetType:'Application data backup',targetReference:String(backup.id),changedFields:[]});
     res.set('Cache-Control','no-store');
     res.set('X-BDMS-Checksum-SHA256',backup.checksum);
-    res.type('application/json').attachment(backup.file_name).send(JSON.stringify(backup.backup_payload,null,2));
-  }catch(error){next(error)}
+    res.type('application/json').attachment(backup.file_name);
+    const manifest=backup.backup_payload||{};
+    if(manifest.chunked!==true){
+      res.send(JSON.stringify(manifest,null,2));
+      return;
+    }
+    const tables=Array.isArray(manifest.tables)?manifest.tables.filter((table)=>/^[a-z_]+$/.test(String(table))):[];
+    const documentHeader={format:manifest.format,version:manifest.version,createdAt:manifest.createdAt,createdBy:manifest.createdBy};
+    res.write(`${JSON.stringify(documentHeader).slice(0,-1)},"data":{`);
+    for(let tableIndex=0;tableIndex<tables.length;tableIndex+=1){
+      const table=tables[tableIndex];
+      res.write(`${tableIndex?',':''}${JSON.stringify(table)}:[`);
+      let afterChunk=-1;
+      let firstRecord=true;
+      while(true){
+        const chunkResult=await pool.query(`SELECT chunk_index AS "chunkIndex",payload_text AS payload
+          FROM system_backup_chunks WHERE backup_id=$1 AND table_name=$2 AND chunk_index>$3
+          ORDER BY chunk_index LIMIT 10`,[backup.id,table,afterChunk]);
+        if(!chunkResult.rows.length)break;
+        for(const chunk of chunkResult.rows){
+          const records=String(chunk.payload||'[]').slice(1,-1);
+          if(records){
+            if(!firstRecord)res.write(',');
+            res.write(records);
+            firstRecord=false;
+          }
+          afterChunk=Number(chunk.chunkIndex);
+        }
+        if(chunkResult.rows.length<10)break;
+      }
+      res.write(']');
+    }
+    res.end('}}');
+  }catch(error){
+    if(res.headersSent){res.destroy(error);return}
+    next(error);
+  }
 });
 
 app.get('/api/system-admin/backup-settings',requireSession,requireSystemAdministrator,requireSystemSections('Create Schedule Backup','Backup Settings','Storage and Retention'),async(_req,res,next)=>{
