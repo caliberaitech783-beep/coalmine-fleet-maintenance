@@ -23,6 +23,12 @@ export function validMeterReading(value = "") {
   return /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/.test(String(value).trim());
 }
 
+export function validMeterReadings(value = {}) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.entries(value).every(([type, reading]) => ["HMR", "KMR"].includes(type)
+      && typeof reading === "string" && (reading === "" || validMeterReading(reading)));
+}
+
 export function validRequestAudioDataUrl(value = "") {
   if (!value) return true;
   const match = String(value).match(/^data:audio\/(?:webm|ogg|mp4|mpeg|wav);base64,([A-Za-z0-9+/]+={0,2})$/);

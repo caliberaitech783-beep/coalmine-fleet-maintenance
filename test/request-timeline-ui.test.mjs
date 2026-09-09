@@ -5,13 +5,15 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
 import {formatTimelineDuration, requestTimelineEvents, requestTimelineDurations, buildRequestTimelineChanges} from "../request-timeline.mjs";
+import * as equipment from "../request-equipment.mjs";
 
 const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export (?:default )?function /g, "function ");
 const code = (await transformWithOxc(source, "request-timeline.jsx", {jsx: {runtime: "classic"}})).code;
 const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const formCode = {};
 for (const [name, end] of [["RequestEditForm", "CloseRequestForm"], ["CloseRequestForm", "VerifyRequestForm"], ["VerifyRequestForm", "TicketCreateForm"]]) {
-  formCode[name] = (await transformWithOxc(main.slice(main.indexOf(`function ${name}(`), main.indexOf(`function ${end}(`)), `${name}.jsx`, {jsx: {runtime: "classic"}})).code;
+  const helpers = main.slice(main.indexOf('function MeterReadingFields('), main.indexOf('function RequestEditForm('));
+  formCode[name] = (await transformWithOxc(helpers + main.slice(main.indexOf(`function ${name}(`), main.indexOf(`function ${end}(`)), `${name}.jsx`, {jsx: {runtime: "classic"}})).code;
 }
 const Null = () => null;
 const Dialog = () => null;
@@ -49,6 +51,7 @@ function harness(name, extra = {}) {
     if (!prior || deps.some((value, i) => !Object.is(value, prior.deps[i]))) queued.push(() => {prior?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
   };
   const scope = {requestStatusLabel,
+    ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
     formatTimelineDuration, AbortController,
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({url, options, reject,

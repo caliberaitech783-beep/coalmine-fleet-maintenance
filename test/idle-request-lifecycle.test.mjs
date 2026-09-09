@@ -7,7 +7,7 @@ import {flowDesignationForUser} from '../hierarchy-report-flow.mjs';
 import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {arrivalRedFlagRequired} from '../request-acceptance.mjs';
-import {requestDateTimeValue,requestMayBeChanged,requestMayBeVerified,validMeterReading,validTripCardImageDataUrl} from '../request-workflow.mjs';
+import {requestDateTimeValue,requestMayBeChanged,requestMayBeVerified,validMeterReading,validMeterReadings,validTripCardImageDataUrl} from '../request-workflow.mjs';
 import * as timeline from '../request-timeline.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
@@ -43,7 +43,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
     app:{patch(_path,...handlers){chain=handlers;}},readSession:async req=>req.testSession,
     currentUserRecord:async()=>user,flowDesignationForUser,managerRoleSelection,canonicalSiteName,
     userManagesSite:(manager,site)=>reportScopeIncludesSite(managerReportScope(manager),site),
-    requestProjection:'*',requestDateTimeValue,validTripCardImageDataUrl,validMeterReading,
+    requestProjection:'*',requestDateTimeValue,validTripCardImageDataUrl,validMeterReading,validMeterReadings,
     pool:{async query(sql,values){
       queries.push({sql,values});
       if(sql==='BEGIN'){snapshot=structuredClone(saved);return {rows:[]};}

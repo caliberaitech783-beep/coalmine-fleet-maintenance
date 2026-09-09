@@ -9,13 +9,14 @@ import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mj
 import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
+import * as requestEquipment from "../request-equipment.mjs";
 import { managerRoleSelection } from "../admin-access.mjs";
 import { requestsVisibleToMisWorkspace } from "../mis-request-visibility.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const codes = {};
 for (const [name, next] of [["Normal", "App"], ["ManagerDashboard", "Dashboard"], ["ManagerIdleConfirmation", "ManagerDashboard"], ["RequestEditForm", "CloseRequestForm"], ["CloseRequestForm", "VerifyRequestForm"], ["VerifyRequestForm", "TicketCreateForm"]]) {
-  const text = source.slice(source.indexOf(`function ${name}(`), source.indexOf(`function ${next}(`));
+  const text = source.slice(source.indexOf('function MeterReadingFields('), source.indexOf('function RequestEditForm(')) + source.slice(source.indexOf(`function ${name}(`), source.indexOf(`function ${next}(`));
   codes[name] = (await transformWithOxc(text, `${name}.jsx`, {jsx: {runtime: "classic"}})).code;
 }
 const Null = () => null;
@@ -51,6 +52,7 @@ function harness(name, extra = {}) {
     return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; }];
   };
   const scope = {
+    ...requestEquipment,
     React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect: () => {}, useMemo: fn => fn(),
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
     useDashboardEquipment: () => ({records: equipment, loaded: true, scope: {restrictToScope: true, allowedSites: ["Sasti OB"]}}),

@@ -5,13 +5,14 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {transformWithOxc} from 'vite';
 import * as requestAcceptance from '../request-acceptance.mjs';
+import * as equipment from '../request-equipment.mjs';
 import {normalizeEquipmentGroup} from '../equipment-group.mjs';
 import {requestsVisibleToMisWorkspace} from '../mis-request-visibility.mjs';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const componentSource=source.slice(source.indexOf('function RequestRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('))+'\n'+source.slice(source.indexOf('function Normal('),source.indexOf('function App('));
 const {code:compiled}=await transformWithOxc(componentSource,'mis-red-flag-components.jsx',{jsx:{runtime:'classic'},target:'es2022'});
-const {code:compiledEditor}=await transformWithOxc(source.slice(source.indexOf('function RequestEditForm('),source.indexOf('function CloseRequestForm(')),'arrival-edit-component.jsx',{jsx:{runtime:'classic'},target:'es2022'});
+const {code:compiledEditor}=await transformWithOxc(source.slice(source.indexOf('function MeterReadingFields('),source.indexOf('function CloseRequestForm(')),'arrival-edit-component.jsx',{jsx:{runtime:'classic'},target:'es2022'});
 const {code:compiledModal}=await transformWithOxc(source.slice(source.indexOf('function Modal('),source.indexOf('function requestStartParts(')),'workflow-modal.jsx',{jsx:{runtime:'classic'},target:'es2022'});
 const Null=()=>null;
 const ExportMenu=()=>null, PrintButton=()=>null;
@@ -40,6 +41,7 @@ function harness(){
     return [slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];
   };
   const scope={React:{...React,useId:()=> 'test-controls'},useState:state,useRef:value=>state(()=>({current:value}))[0],useEffect:()=>{},
+    ...equipment,
     Modal:({title,children})=>React.createElement('section',{},React.createElement('h1',{},title),children),
     ActionsTable:({children})=>React.createElement('table',{},children),
     FilterableHeader:({label})=>React.createElement('th',{},label),

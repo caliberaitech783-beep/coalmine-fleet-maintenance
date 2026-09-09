@@ -12,7 +12,7 @@ import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
-import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
@@ -323,6 +323,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS first_trip_card_image TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS meter_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_reading TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_readings JSONB NOT NULL DEFAULT '{}';
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_readings JSONB NOT NULL DEFAULT '{}';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_file TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS opening_meter_file_name TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS closing_meter_reading TEXT NOT NULL DEFAULT '';
@@ -2201,6 +2203,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
   meter_type AS "meterType", opening_meter_reading AS "openingMeterReading",
+  opening_meter_readings AS "openingMeterReadings", closing_meter_readings AS "closingMeterReadings",
   (opening_meter_file <> '') AS "openingMeterFileUploaded", opening_meter_file_name AS "openingMeterFileName",
   closing_meter_reading AS "closingMeterReading", (closing_meter_file <> '') AS "closingMeterFileUploaded",
   closing_meter_file_name AS "closingMeterFileName"`;
@@ -2603,12 +2606,14 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     const {category='Maintenance request',complaint,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     const normalizedOpeningMeterReading=String(openingMeterReading).trim();
+    const openingMeterReadings=req.body?.openingMeterReadings ?? {};
+    if(!validMeterReadings(openingMeterReadings))return res.status(400).json({error:'Enter valid opening HMR and KMR readings.'});
     if(!reference||!complaint)return res.status(400).json({error:'The complaint is required.'});
     if(!String(expectedCompletionAt||'').trim())return res.status(400).json({error:'Enter the expected time for completion.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     // Opening meter data is optional; validate it only when supplied.
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
-    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
+    if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
     const accepting=before.acceptanceRequired&&!before.acceptedAt;
@@ -2616,9 +2621,10 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
       accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
-      opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END
+      opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
+      opening_meter_readings=opening_meter_readings || $10::jsonb
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading})]);
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });
@@ -2641,6 +2647,11 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const openingMeterReading=String(req.body?.openingMeterReading||'').trim();
     const openingMeterFile=String(req.body?.openingMeterFile||'');
     const openingMeterFileName=String(req.body?.openingMeterFileName||'').trim().slice(0,255);
+    const openingMeterReadings=req.body?.openingMeterReadings ?? {};
+    const closingMeterReadings=req.body?.closingMeterReadings ?? {};
+    const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
+    const closingMeterFile=String(req.body?.closingMeterFile||'');
+    const closingMeterFileName=String(req.body?.closingMeterFileName||'').trim().slice(0,255);
     const closedAt=parseRequestTimelineTimestamp(`${closingDate}T${closingTime}`);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
@@ -2666,14 +2677,25 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(delayedClosure&&!delayedReason)throw Object.assign(new Error('Select a delayed reason because this request is being closed at least 4 hours after ETC.'),{status:400});
     if(openingMeterReading&&!validMeterReading(openingMeterReading))throw Object.assign(new Error(`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`),{status:400});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))throw Object.assign(new Error(`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`),{status:400});
-    if(openingMeterReading||openingMeterFile){
+    if(!validMeterReadings(openingMeterReadings)||!validMeterReadings(closingMeterReadings))throw Object.assign(new Error('Enter valid HMR and KMR readings.'),{status:400});
+    if(closingMeterReading&&!validMeterReading(closingMeterReading))throw Object.assign(new Error('Enter a valid closing HMR/KMR reading.'),{status:400});
+    if(closingMeterFile&&!validMeterEvidenceDataUrl(closingMeterFile))throw Object.assign(new Error('Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.'),{status:400});
+    if(openingMeterReading||openingMeterFile||closingMeterReading||closingMeterFile||Object.keys(openingMeterReadings).length||Object.keys(closingMeterReadings).length){
       const effectiveMeterType=['KMR','HMR'].includes(meterType)?meterType:String(meterRows[0].meter_type||'').trim().toUpperCase();
       if(!['KMR','HMR'].includes(effectiveMeterType))throw Object.assign(new Error('Choose a valid KMR/HMR meter type.'),{status:400});
       await client.query(`UPDATE maintenance_requests SET meter_type=CASE WHEN meter_type='' THEN $1 ELSE meter_type END,
         opening_meter_reading=CASE WHEN $2<>'' THEN $2 ELSE opening_meter_reading END,
         opening_meter_file=CASE WHEN $3<>'' THEN $3 ELSE opening_meter_file END,
-        opening_meter_file_name=CASE WHEN $3<>'' THEN $4 ELSE opening_meter_file_name END
-        WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference]);
+        opening_meter_file_name=CASE WHEN $3<>'' THEN $4 ELSE opening_meter_file_name END,
+        opening_meter_readings=opening_meter_readings || $6::jsonb,
+        closing_meter_readings=closing_meter_readings || $7::jsonb,
+        closing_meter_reading=CASE WHEN $8<>'' THEN $8 ELSE closing_meter_reading END,
+        closing_meter_file=CASE WHEN $9<>'' THEN $9 ELSE closing_meter_file END,
+        closing_meter_file_name=CASE WHEN $9<>'' THEN $10 ELSE closing_meter_file_name END
+        WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[effectiveMeterType,openingMeterReading,openingMeterFile,openingMeterFileName,reference,
+          JSON.stringify(Object.fromEntries(Object.entries({...openingMeterReadings,...(openingMeterReading?{[effectiveMeterType]:openingMeterReading}:{})}).filter(([,value])=>value!==''))),
+          JSON.stringify(Object.fromEntries(Object.entries({...closingMeterReadings,...(closingMeterReading?{[effectiveMeterType]:closingMeterReading}:{})}).filter(([,value])=>value!==''))),
+          closingMeterReading,closingMeterFile,closingMeterFileName]);
     }
     const {rows}=ideal
       ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status='Idle',idle_reason=$3,
@@ -2838,6 +2860,8 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     const firstTripAt=firstTripDone?parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`):null;
     const firstTripCardImage=String(req.body?.firstTripCardImage||'');
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
+    const closingMeterReadings=req.body?.closingMeterReadings ?? {};
+    if(!validMeterReadings(closingMeterReadings)||Object.values(closingMeterReadings).some((reading)=>!validMeterReading(reading)))return res.status(400).json({error:'Enter valid closing HMR and KMR readings.'});
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
     if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     if(!validMeterReading(closingMeterReading))return res.status(400).json({error:'Enter a valid closing KMR/HMR reading.'});
@@ -2857,9 +2881,10 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
     validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
     buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
+    const primaryMeterType=['HMR','KMR'].includes(before.meterType)?before.meterType:'HMR';
     const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site]);
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6,closing_meter_readings=closing_meter_readings || $9::jsonb WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site,JSON.stringify({...closingMeterReadings,[primaryMeterType]:closingMeterReading})]);
     if(!result.rows.length)throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
     return {...result,timelineEvents:['firstTripAt','verifiedAt'],timelineSources:{firstTripAt:'user',verifiedAt:'system'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['firstTripAt']};
     });

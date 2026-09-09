@@ -14,7 +14,7 @@ const formSource = source.slice(formStart, source.indexOf('\n}\n', formStart) + 
 const speechSource = source.slice(source.indexOf('const speechLanguages ='), source.indexOf('function readMeterEvidence('));
 const { code: formCode } = await transformWithOxc(formSource, 'maintenance-form.jsx', { jsx: { runtime: 'classic' } });
 const { code: speechCode } = await transformWithOxc(speechSource, 'speech-complaint.jsx', { jsx: { runtime: 'classic' } });
-const closeSource = source.slice(source.indexOf('function CloseRequestForm('), source.indexOf('function VerifyRequestForm('));
+const closeSource = source.slice(source.indexOf('function MeterReadingFields('), source.indexOf('function RequestEditForm(')) + source.slice(source.indexOf('function CloseRequestForm('), source.indexOf('function VerifyRequestForm('));
 const { code: closeCode } = await transformWithOxc(closeSource, 'close-request.jsx', { jsx: { runtime: 'classic' } });
 const Null = () => null;
 const all = (tree, predicate) => {
@@ -237,6 +237,7 @@ const textContent = node => Array.isArray(node) ? node.map(textContent).join('')
 function closeHarness(request = {}) {
   const saved = [], alerts = [];
   const app = harness(closeCode, 'CloseRequestForm', {
+    ...equipment,
     useMemo: fn => fn(), useMasterRecords: () => [[]], Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, ChevronRight: Null,
     requestStartParts: () => ({ date: '2026-09-08', time: '18:00:00' }), requestMeterTypeForRequest: () => 'KMR',
     delayedReasonRequired: () => false, normalizeEquipmentGroup: value => value,

@@ -90,6 +90,32 @@ export function requestMeterTypeForRequest(request = {}, records = []) {
   return requestEquipmentMeterType(equipment || {});
 }
 
+export function requestMeterTypesForRequest(request = {}, records = []) {
+  const keys = [request.chassis, request.door, request.reg].map((value) => text(value).toLowerCase()).filter(Boolean);
+  const equipment = records.find((record) => {
+    const details = requestEquipmentDetails(record);
+    return [details.chassis, details.door, details.reg].some((value) => value && keys.includes(text(value).toLowerCase()));
+  });
+  const isTipper = [request, equipment || {}].some((record) =>
+    [record.equipmentGroup, record.group, record.equipment, record.equipmentName, record.itemName]
+      .some((value) => /\btippers?\b/i.test(text(value))),
+  );
+  const savedTypes = new Set([...Object.keys(request.openingMeterReadings || {}), ...Object.keys(request.closingMeterReadings || {})]);
+  return isTipper || (savedTypes.has("HMR") && savedTypes.has("KMR")) ? ["HMR", "KMR"] : [requestMeterTypeForRequest(request, records)];
+}
+
+export function requestMeterReadings(request = {}, stage = "opening", records = []) {
+  const primaryType = requestMeterTypeForRequest(request, records);
+  const saved = request[`${stage}MeterReadings`] || {};
+  return Object.fromEntries(requestMeterTypesForRequest(request, records).map((type) => [type,
+    text(saved[type] ?? (type === primaryType ? request[`${stage}MeterReading`] : "")),
+  ]));
+}
+
+export function requestMeterReadingLabel(request = {}, stage = "opening") {
+  return Object.entries(requestMeterReadings(request, stage)).map(([type, reading]) => `${type} ${reading || "—"}`).join(" · ");
+}
+
 export function requestEquipmentOptionLabel(record = {}) {
   const details = requestEquipmentDetails(record);
   const context = [
