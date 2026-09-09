@@ -25,7 +25,7 @@ async function create({user={site:'Sasti OB'},session=production,body={}}={}){
       if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.includes('pg_advisory_xact_lock'))return {rows:[]};
       assert.ok(sql.startsWith('INSERT INTO maintenance_requests'));
       calls.push({kind:'insert',sql,values});
-      return {rows:[{ref:values[0],site:values[9],driverName:values[6],driverNameSource:values[7],owner:values[14],requesterLogin:values[15],status:'Open'}]};
+      return {rows:[{ref:values[0],site:values[9],driverName:values[6],driverNameSource:values[7],owner:values[14],requesterLogin:values[15],requesterRole:values[16],status:'Open'}]};
     }},
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],
     addTicketNotificationsBestEffort:async()=>{},requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',
@@ -63,6 +63,7 @@ test('canonical site aliases and location/currentLocation profile fallbacks perm
     assert.equal(result.status,201);
     assert.equal(result.body.owner,'Stupal Moon');
     assert.equal(result.body.requesterLogin,'stupal');
+    assert.equal(result.body.requesterRole,'Production User');
     assert.equal(result.calls.filter(call=>call.kind==='insert').length,1);
   }
 });

@@ -198,6 +198,7 @@ async function migrate(){
       equipment_name TEXT NOT NULL DEFAULT '',
       equipment_group TEXT NOT NULL DEFAULT '',
       requester_login TEXT NOT NULL DEFAULT '',
+      requester_role TEXT NOT NULL DEFAULT '',
       door_number TEXT NOT NULL,
       registration_number TEXT NOT NULL DEFAULT '',
       chassis_number TEXT NOT NULL DEFAULT '',
@@ -256,6 +257,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS equipment_group TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS requester_login TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS requester_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS chassis_number TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
@@ -345,6 +348,18 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS master_records_master_name_idx
       ON master_records (master_name, created_at DESC);
+    UPDATE maintenance_requests AS request
+      SET requester_role=CASE
+        WHEN lower(COALESCE(NULLIF(employee.record_data->>'userGroup',''),NULLIF(employee.record_data->>'mobileRole',''),NULLIF(employee.record_data->>'assignedRole',''),NULLIF(employee.record_data->>'department',''),'')) LIKE '%production%' THEN 'Production User'
+        WHEN lower(COALESCE(NULLIF(employee.record_data->>'userGroup',''),NULLIF(employee.record_data->>'mobileRole',''),NULLIF(employee.record_data->>'assignedRole',''),NULLIF(employee.record_data->>'department',''),'')) LIKE '%maintenance%' THEN 'Maintenance User'
+        WHEN lower(COALESCE(NULLIF(employee.record_data->>'userGroup',''),NULLIF(employee.record_data->>'mobileRole',''),NULLIF(employee.record_data->>'assignedRole',''),NULLIF(employee.record_data->>'department',''),'')) LIKE '%mis%' THEN 'MIS User'
+        ELSE ''
+      END
+      FROM master_records AS employee
+      WHERE employee.master_name='Users & employees'
+        AND request.requester_role=''
+        AND request.requester_login<>''
+        AND lower(trim(request.requester_login))=lower(trim(COALESCE(employee.record_data->>'login','')));
     UPDATE maintenance_requests AS request
       SET equipment_group=COALESCE(NULLIF(equipment.record_data->>'group',''),NULLIF(equipment.record_data->>'equipmentGroup',''),'')
       FROM master_records AS equipment
@@ -2157,7 +2172,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy", arrival_flag_remark AS "arrivalFlagRemark",
   to_char(mis_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "misFlaggedAt", mis_flagged_by AS "misFlaggedBy", mis_flag_remark AS "misFlagRemark",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
-  status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
+  status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin", requester_role AS "requesterRole",
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
@@ -2531,10 +2546,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
     const {rows}=await createRequestWithVehicleLock({door,chassis},async(client)=>{
     const result=await client.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,acceptance_required,status,owner_name,requester_login,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','']);
     await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
     return result;
     });

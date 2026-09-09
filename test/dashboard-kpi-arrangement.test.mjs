@@ -21,14 +21,16 @@ test("request lifecycle counts each workflow timestamp separately", () => {
   assert.match(client, /requestLifecycleRows\.closed/);
   assert.match(client, /requestLifecycleRows\.verified/);
   assert.match(client, /requestLifecycleRows\.idle/);
+  assert.match(client, /openedByProduction\(record\).*requestEventDate\(record, "opened"\)/);
+  assert.match(client, /label: "Opened by Production", note: "Production user requests"/);
   assert.match(client, /lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
   assert.match(css, /\.mine-request-lifecycle-chart/);
 });
 
 test("request lifecycle shows maintenance and MIS availability cards", () => {
-  assert.match(client, /maintenance: Math\.max\(0, requestLifecycleRows\.opened\.length - requestLifecycleRows\.closed\.length\)/);
+  assert.match(client, /maintenance: Math\.max\(0, requestLifecycleRows\.opened\.length - requestLifecycleRows\.closed\.filter\(openedByProduction\)\.length\)/);
   assert.match(client, /mis: Math\.max\(0, requestLifecycleRows\.closed\.length - requestLifecycleRows\.verified\.length\)/);
-  assert.match(client, /label: "Open in Maint", note: "Opened - Closed by Maintenance"/);
+  assert.match(client, /label: "Open in Maint", note: "Opened by Production - Closed by Maintenance"/);
   assert.match(client, /label: "Open in MIS", note: "Closed by Maintenance - Verified"/);
   assert.match(css, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
 });
