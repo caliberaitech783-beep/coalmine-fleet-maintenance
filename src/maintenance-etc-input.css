@@ -1,0 +1,6 @@
+.maintenance-etc-input{border:0;padding:0;margin:0;min-width:0}
+.maintenance-etc-input legend{font-weight:600;margin-bottom:10px}
+.maintenance-etc-controls{display:grid;grid-template-columns:minmax(150px,2fr) repeat(3,minmax(75px,1fr));gap:10px}
+.maintenance-etc-controls label{min-width:0}
+.maintenance-etc-controls input,.maintenance-etc-controls select{width:100%;min-width:0}
+@media(max-width:520px){.maintenance-etc-controls{grid-template-columns:repeat(3,minmax(0,1fr))}.maintenance-etc-controls label:first-child{grid-column:1/-1}}

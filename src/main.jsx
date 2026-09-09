@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
+import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
@@ -7109,7 +7110,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
         {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
-        <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required value={expectedCompletionAt} onChange={event => setExpectedCompletionAt(event.target.value)} /><small>Planned time entered by Maintenance—not the actual completion time.</small></label>
+        <MaintenanceEtcInput value={expectedCompletionAt} onChange={setExpectedCompletionAt} />
         {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {formatTwelveHourDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
         <label>Opening {meterType} reading (optional)<input name="openingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" defaultValue={request.openingMeterReading || ""} placeholder={`Enter opening ${meterType}`} /><small>{meterType === "KMR" ? "KMR is used for Vehicle-category assets." : "HMR is used for Equipment-category assets."}</small></label>
         <label>Opening {meterType} file (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
