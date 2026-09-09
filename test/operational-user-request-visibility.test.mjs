@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { visibleInProductionHistory } from "../src/production-history.mjs";
 import { visibleInMaintenanceHistory } from "../src/maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mjs";
+import { requestsVisibleToMisWorkspace } from "../mis-request-visibility.mjs";
 
 const historyVisible = [visibleInProductionHistory, visibleInMaintenanceHistory];
 
@@ -30,14 +31,15 @@ test("Stupal to Sanskar to manager to MIS cycle never disappears at a handoff", 
   assert.equal(visibleInMisRequests(directClose), true);
 });
 
-test("persisted historical references are not silently removed from authorized queues", () => {
-  for (const ref of ["REQ-1788429762428", "REQ-1788428319118", "REQ-1787759984730"]) {
+test("persisted historical references follow the explicit MIS exclusions", () => {
+  for (const ref of ["REQ-1788429762428", "REQ-1788428319118"]) {
     const row = Object.freeze({ref, status: "Closed", closedBy: "Sanskar Manohare"});
     assert.ok(historyVisible.every(visible => visible(row)));
     assert.equal(visibleInMisRequests(row), true);
   }
+  assert.deepEqual(requestsVisibleToMisWorkspace([{ref:"REQ-1787759984730",status:"Closed"}],true),[]);
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /const requestRows=siteRequests\.map\(\(request\)=>requestWithEquipmentMasterDetails\(request,equipmentRecords\)\);/);
   assert.doesNotMatch(source, /visibleInOperationalUserRequests/);
-  assert.match(source, /const siteRequests=!embedded&&isMaintenance\?recordsForSite\(requests,assignedLocation\):requests;/);
+  assert.match(source, /const siteRequests=!embedded&&isMaintenance\?recordsForSite\(requests,assignedLocation\):misWorkspaceRequests;/);
 });

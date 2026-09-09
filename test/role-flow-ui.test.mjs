@@ -10,6 +10,7 @@ import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equi
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 import { managerRoleSelection } from "../admin-access.mjs";
+import { requestsVisibleToMisWorkspace } from "../mis-request-visibility.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const codes = {};
@@ -54,7 +55,7 @@ function harness(name, extra = {}) {
     window: {matchMedia: () => ({matches: false})}, vehicles: [], useMasterRecords: () => [equipment, null, true],
     useDashboardEquipment: () => ({records: equipment, loaded: true, scope: {restrictToScope: true, allowedSites: ["Sasti OB"]}}),
     visibleInProductionHistory, visibleInMaintenanceHistory, visibleInMisRequests, visibleInMisHistory,
-    recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus, managerRoleSelection,
+    recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus, managerRoleSelection, requestsVisibleToMisWorkspace,
     requestWithEquipmentMasterDetails: row => row, equipmentGroupLabel: row => row.group,
     BreakdownTable, MobileWorkflowTable, DailyRemarkForm, ManagerIdleConfirmation, RequestEditForm: Null, CloseRequestForm: Null, VerifyRequestForm: Null,
     RequestRedFlagForm: Null, MaintenanceForm: Null, preventTableAutoScroll: () => {},

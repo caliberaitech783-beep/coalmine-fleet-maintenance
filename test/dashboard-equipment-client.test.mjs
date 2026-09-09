@@ -72,7 +72,7 @@ test("a failed profile request cannot turn an otherwise valid fleet response int
 
   assert.match(app,/fetch\("\/api\/me\/profile"[\s\S]*\.catch\(\(\) => \{\}\)/);
   assert.match(app,/<Dashboard goto=\{selectMenu\}[\s\S]*requests=\{requests\} theme=\{theme\} \/>/);
-  assert.match(normal,/<Dashboard requests=\{dashboardRequests\} theme=\{theme\} \/>/);
+  assert.match(normal,/<Dashboard requests=\{misDashboardRequests\} theme=\{theme\} \/>/);
   assert.doesNotMatch(app,/profileManagerSites|allowedSites=\{|allowedRegions=\{|restrictToScope=/);
   assert.doesNotMatch(normal,/allowedSites=\{|allowedRegions=\{|restrictToScope/);
   assert.match(dashboard,/const scopedBreakdowns=equipmentLoaded\?/);
