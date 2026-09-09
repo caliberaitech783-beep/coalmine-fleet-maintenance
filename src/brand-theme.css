@@ -70,7 +70,7 @@ h3,
 
 .caliber-logo-frame img {
   display: block;
-  width: 104px;
+  width: 84px;
   height: auto;
   object-fit: contain;
 }
@@ -401,7 +401,7 @@ input[type="radio"] {
 }
 
 .login-brand .caliber-logo-frame img {
-  width: 128px;
+  width: 104px;
 }
 
 .login-brand .caliber-logo-frame,
@@ -428,14 +428,14 @@ input[type="radio"] {
 }
 
 .login-mobile-brand .caliber-logo-frame {
-  min-width: 104px;
+  min-width: 84px;
   padding: 7px 10px;
   border-radius: 9px;
   background: var(--brand-gradient);
 }
 
 .login-mobile-brand .caliber-logo-frame img {
-  width: 84px;
+  width: 68px;
 }
 
 .login-mobile-brand .caliber-app-name {
@@ -546,7 +546,7 @@ input[type="radio"] {
 
 @media (max-width: 1180px) {
   .app > aside .caliber-logo-frame img {
-    width: 86px;
+    width: 70px;
   }
 
   .app > aside .caliber-app-name {
@@ -556,7 +556,7 @@ input[type="radio"] {
 
 @media (max-width: 900px) {
   .app > aside .caliber-logo-frame img {
-    width: 118px;
+    width: 96px;
   }
 
   .app > aside .caliber-app-name {
@@ -570,7 +570,7 @@ input[type="radio"] {
   }
 
   .normal > header .caliber-logo-frame img {
-    width: 84px;
+    width: 68px;
   }
 
   .normal > header .caliber-app-name {
