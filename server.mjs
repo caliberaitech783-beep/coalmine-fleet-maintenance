@@ -2319,6 +2319,7 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
 });
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
+  res.set('Cache-Control','no-store');
   try{
     const operationalRole=req.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(req.session.assignedRole);
     if(req.session.role!=='super'&&!operationalRole&&req.session.permissions?.readRequests!==true)

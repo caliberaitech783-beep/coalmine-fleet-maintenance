@@ -27,7 +27,10 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(source,/showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
   assert.match(server,/app\.get\('\/api\/requests\/:reference\/trip-card'/);
   assert.match(server,/first_trip_card_image AS image/);
-  assert.match(manager,/"Total requests", verifiedRequests\.length/);
+  assert.match(manager,/"Awaiting verification", pendingVerification\.length/);
+  assert.match(manager,/"Verified requests", verifiedRequests\.length/);
+  assert.match(manager,/"First trip completed", verifiedRequests\.filter\(\(request\) => request\.firstTripDone\)\.length/);
+  assert.match(manager,/"First trip pending", verifiedRequests\.filter\(\(request\) => !request\.firstTripDone\)\.length/);
   assert.doesNotMatch(manager,/"Pending verification"/);
   assert.doesNotMatch(manager,/\["Verified", verifiedRequests\.length/);
   assert.match(manager,/activeRows=activeManagerRole==="MIS Manager"\?pendingVerification:openRequests/);

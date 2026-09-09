@@ -19,6 +19,7 @@ import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
 import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
+import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
@@ -921,12 +922,21 @@ function ManagerIdleConfirmation({ request, action, close, onConfirm }) {
   </Modal>;
 }
 
-function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], gotoEquipment, onApproveIdeal, onCancelIdeal }) {
+function RequestDataState({ error, retry }) {
+  return <div className="fleet-data-state" role={error ? "alert" : "status"}>
+    <strong>{error ? "Live request data is unavailable" : "Loading live requests…"}</strong>
+    <p>{error ? "Counts are hidden until the latest requests can be checked. Retrying automatically." : "Checking current vehicle status before displaying counts."}</p>
+    {error && <button type="button" onClick={() => { void retry?.().catch(() => {}); }}><RotateCcw /> Retry</button>}
+  </div>;
+}
+
+function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
   const [idleConfirmation, setIdleConfirmation] = useState(null);
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
   const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
+  const managerDataReady = equipmentLoaded && requestsLoaded && !equipmentLoadError && !requestsError;
   // The dedicated endpoint has already applied the manager's current server-side scope.
   const siteEquipment = equipmentRecords;
   const managerAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
@@ -934,6 +944,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const scopedRequests=equipmentLoaded?(managerAllowedSites?.length?requests.filter((request)=>managerAllowedSites.some((site)=>recordBelongsToSite(request,site))):restrictManagerScope?[]:requests):[];
   const requestRows = scopedRequests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
   const openRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
+  const maintenanceActiveRequests = openRequests.filter((request) => !["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase()));
   const fleet = liveEquipmentMetrics(siteEquipment, requestRows);
   const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
   const totalTypes=typeSummary(siteEquipment,equipmentGroupLabel);
@@ -942,32 +953,33 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const onRoadTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="onroad"),equipmentGroupLabel);
   const closedRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() === "closed");
   const verifiedRequests = closedRequests.filter(visibleInMisHistory);
+  const pendingVerification=closedRequests.filter(visibleInMisRequests);
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
   const cards = productionManagerView
     ? [
         ["Total equipment", fleet.total, "Registered fleet", "all", totalTypes],
         ["On road", fleet.onRoad, "Available for production", "onroad", onRoadTypes],
-        ["Off road", fleet.offRoad, "Equipment currently in maintenance", "offroad", offRoadTypes],
+        ["Off road", fleet.offRoad, "Vehicles with active maintenance requests", "offroad", offRoadTypes],
         ["Idle", fleet.idle, "Operational but currently idle", "idle", idleTypes],
       ]
     : activeManagerRole === "Maintenance Manager"
       ? [
           ["Total equipment", fleet.total, "Equipment at the assigned location", "all"],
           ["Received for maintenance", scopedRequests.length, "Total maintenance intake", ""],
-          ["Remaining", openRequests.length, "Still requiring action", ""],
+          ["Remaining", maintenanceActiveRequests.length, "Active maintenance requests; idle shown separately", ""],
           ["Completed", closedRequests.length, "Returned from maintenance", ""],
         ]
       : [
-          ["Total requests", verifiedRequests.length, "Requests verified at this location", ""],
+          ["Awaiting verification", pendingVerification.length, "Closed requests awaiting MIS verification", ""],
+          ["Verified requests", verifiedRequests.length, "Requests verified at this location", ""],
           ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", ""],
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
-  const pendingVerification=closedRequests.filter(visibleInMisRequests);
   const canApproveIdle=true; // Every manager profile can approve within its assigned site scope.
   const canCancelIdle=managerRoleSelection(managerRoles.length?managerRoles:managerRole).includes("Maintenance Manager");
   const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").trim().toLowerCase())):[];
   const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
-  const visibleActiveRows=activeManagerRole==="Maintenance Manager"?activeRows.filter((request)=>!["idle","ideal"].includes(String(request.status||"").toLowerCase())):activeRows;
+  const visibleActiveRows=activeManagerRole==="Maintenance Manager"?maintenanceActiveRequests:activeRows;
   const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
   const detailRows=queueTab==="history"?historyRows:activeRows;
   const visibleDetailRows=queueTab==="ideal"?idealRows:activeManagerRole==="Maintenance Manager"&&queueTab==="active"?visibleActiveRows:detailRows;
@@ -980,13 +992,17 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
-    {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
-    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && equipmentLoaded && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter||!equipmentLoaded} aria-busy={!equipmentLoaded}>
-      <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
+    {(!equipmentLoaded||equipmentLoadError)&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
+    {(!requestsLoaded||requestsError)&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
+    {managerDataReady && <p className="manager-live-status">Live status · Updated {new Date(requestsUpdatedAt).toLocaleTimeString("en-IN")} · Refreshes every 10 seconds and when you return to this tab.</p>}
+    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && managerDataReady && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter||!managerDataReady} aria-busy={!managerDataReady}>
+      <span>{label}</span><strong>{managerDataReady?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&managerDataReady && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
-    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
+    <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({managerDataReady?idealRows.length:"—"})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
+    {managerDataReady && <>
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
-    {idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
+    </>}
+    {managerDataReady && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
@@ -8048,6 +8064,7 @@ function App() {
     [breakdownFleetSites, setBreakdownFleetSites] = useState([]),
     [activeReportCategory, setActiveReportCategory] = useState("general"),
     [requests, setRequests] = useState([]),
+    [requestState, setRequestState] = useState({ token: "", loaded: false, error: "", updatedAt: 0 }),
     [menu, setMenu] = useState(false),
     [loadTime, setLoadTime] = useState(null),
     [canGoBack, setCanGoBack] = useState(false),
@@ -8189,35 +8206,45 @@ function App() {
       if (loadSequence === requestLoadSequence.current) setRequests([]);
       return [];
     }
-    const response = await fetch(`/api/requests?t=${Date.now()}`, {
-      cache: "no-store",
-      headers: { Authorization: `Bearer ${session.token}` },
-    });
-    if (!response.ok) throw new Error("Could not load requests");
-    const data = await response.json();
-    if (loadSequence === requestLoadSequence.current) setRequests(data);
-    return data;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    try {
+      const response = await fetch(`/api/requests?t=${Date.now()}`, {
+        cache: "no-store",
+        signal: controller.signal,
+        headers: { Authorization: `Bearer ${session.token}` },
+      });
+      if (!response.ok) throw new Error("Could not load requests");
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error("Invalid request data received");
+      if (loadSequence === requestLoadSequence.current) {
+        setRequests(data);
+        setRequestState({ token: session.token, loaded: true, error: "", updatedAt: Date.now() });
+      }
+      return data;
+    } catch (error) {
+      if (loadSequence === requestLoadSequence.current) {
+        setRequestState((current) => ({ ...current, token: session.token, error: error.message || "Could not load requests" }));
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   };
+  const requestsLoaded = requestState.token === session?.token && requestState.loaded;
+  const requestsError = requestState.token === session?.token ? requestState.error : "";
   useEffect(() => {
-    let stopped = false;
+    setRequestState({ token: session?.token || "", loaded: false, error: "", updatedAt: 0 });
+    setRequests([]);
     if (!session?.token) {
       requestLoadSequence.current += 1;
       setRequests([]);
       return undefined;
     }
-    const refresh = async () => {
-      try {
-        if (!stopped) await loadRequests();
-      } catch (error) {
-        if (!stopped) console.error(error);
-      }
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 10000);
+    const stopRefresh = watchRequestRefresh(loadRequests, { win: window, doc: document, initial: true });
     return () => {
-      stopped = true;
       requestLoadSequence.current += 1;
-      window.clearInterval(timer);
+      stopRefresh();
     };
   }, [session?.token]);
   const gotoEquipment = (filter = "all", location = "", category = "all") => {
@@ -8254,6 +8281,7 @@ function App() {
       }
       requestLoadSequence.current += 1;
       setRequests((current) => [saved, ...current.filter((row) => row.ref !== request.ref)]);
+      notifyRequestChange(window);
       try {
         await loadRequests();
       } catch (error) {
@@ -8284,6 +8312,7 @@ function App() {
       }
       requestLoadSequence.current += 1;
       setRequests((current) => current.map((row) => row.ref === reference ? saved : row));
+      notifyRequestChange(window);
       return saved;
     },
     addDailyRemark = async (reference, payload) => {
@@ -8292,6 +8321,7 @@ function App() {
       if(!response.ok){const error=new Error(saved.error||"Could not save the daily update");error.code=saved.code;throw error;}
       requestLoadSequence.current += 1;
       setRequests((current)=>current.map((row)=>row.ref===reference?saved:row));
+      notifyRequestChange(window);
       return saved;
     },
     deleteRequest = async (reference) => {
@@ -8303,6 +8333,7 @@ function App() {
       if (!response.ok) throw new Error(details.error || "Could not delete request");
       requestLoadSequence.current += 1;
       setRequests((current) => current.filter((row) => row.ref !== reference));
+      notifyRequestChange(window);
     };
   const completeLogin = (nextSession) => {
     setActive(LOGIN_LANDING_PAGE);
@@ -8385,9 +8416,9 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} />
+            requestsLoaded && !requestsError ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
           ) : active === "Manager Profile" ? (
-            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} />
+            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (

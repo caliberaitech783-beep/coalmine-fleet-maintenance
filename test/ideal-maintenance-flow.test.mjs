@@ -21,7 +21,7 @@ test("Idle requests require a reason and assigned-site manager approval before M
   assert.match(server,/status='In progress',idle_reason=''/);
   assert.match(server,/The request has returned to active maintenance/);
   assert.match(server,/status NOT IN \('Closed','Idle','Ideal'\)/);
-  assert.match(client,/Idle approvals \(\{idealRows\.length\}\)/);
+  assert.match(client,/Idle approvals \(\{managerDataReady\?idealRows\.length:"—"\}\)/);
   assert.match(client,/Make on road/);
   assert.match(client,/an assigned manager approves Make on road/);
   assert.match(client,/name="idealChoice"/);

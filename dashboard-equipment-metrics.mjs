@@ -82,8 +82,9 @@ function matchingRoadStatus(record, requests, matches) {
     normalize(request.status) !== "closed" && matches(request, record));
   if (matchingRequests.some((request) => !["ideal", "idle"].includes(normalize(request.status)))) return "offroad";
   if (matchingRequests.some((request) => ["ideal", "idle"].includes(normalize(request.status)))) return "idle";
-  const storedStatus = equipmentRoadStatus(record);
-  return storedStatus === "unknown" ? "onroad" : storedStatus;
+  // Live BDMS availability follows the request lifecycle, not a stale master
+  // snapshot. Keep equipmentRoadStatus/equipmentMetrics for snapshot consumers.
+  return "onroad";
 }
 
 export function liveEquipmentRoadStatus(record = {}, requests = []) {

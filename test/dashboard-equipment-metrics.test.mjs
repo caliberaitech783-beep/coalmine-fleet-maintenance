@@ -144,7 +144,7 @@ test("fleet totals use only the Equipment Master category column", () => {
   ]), { equipment: 2, vehicles: 2, total: 5 });
 });
 
-test("live dashboard availability overlays requests on imported equipment without fleet statuses", () => {
+test("live dashboard availability derives idle and off-road status only from active requests", () => {
   const equipment = [
     { equipmentName: "D23 - 07339", chassisNo: "7339", status: "" },
     { equipmentName: "HP12 - 10016", chassisNo: "JJ202405310016", status: "" },
@@ -158,11 +158,137 @@ test("live dashboard availability overlays requests on imported equipment withou
   ];
   assert.deepEqual(liveEquipmentMetrics(equipment, requests), {
     total: 4,
-    onRoad: 1,
+    onRoad: 2,
     offRoad: 1,
-    idle: 2,
+    idle: 1,
     unknown: 0,
-    availability: 25,
+    availability: 50,
+  });
+});
+
+test("303-asset fleet ignores stale master breakdowns and immediately releases a closed request", () => {
+  const records = Array.from({ length: 303 }, (_, index) => ({
+    door: `FLEET-${index}`,
+    currentLocation: "Sasti OB",
+    status: index < 64 ? "Breakdown" : "Operational",
+  }));
+  const historicalRequests = Array.from({ length: 64 }, (_, index) => ({
+    ref: `HISTORY-${index}`,
+    door: `FLEET-${index}`,
+    site: "Sasti OB",
+    status: "Closed",
+  }));
+  const activeRequests = Array.from({ length: 35 }, (_, index) => ({
+    ref: `ACTIVE-${index}`,
+    door: `FLEET-${index + 64}`,
+    site: "Sasti OB",
+    status: "Open",
+  }));
+  const requests = [...historicalRequests, ...activeRequests];
+  const originalMaster = structuredClone(records);
+
+  assert.deepEqual(liveEquipmentMetrics(records, requests), {
+    total: 303, onRoad: 268, offRoad: 35, idle: 0, unknown: 0, availability: 88,
+  });
+  activeRequests[0].status = "Closed";
+  assert.deepEqual(liveEquipmentMetrics(records, requests), {
+    total: 303, onRoad: 269, offRoad: 34, idle: 0, unknown: 0, availability: 89,
+  });
+  assert.deepEqual(records, originalMaster, "calculating live status must not rewrite master data");
+  assert.equal(equipmentMetrics(records).offRoad, 64, "static master metrics retain their snapshot meaning");
+});
+
+test("closed or absent requests release every stale master status without modifying source data", () => {
+  for (const status of ["Off road", "Breakdown", "In maintenance", "Idle", "Idling", "", "Operational"]) {
+    const record = Object.freeze({ door: "D1", status });
+    const closed = Object.freeze({ door: "D1", status: " Closed ", verifiedAt: "2026-09-08 12:00" });
+    assert.equal(liveEquipmentRoadStatus(record, []), "onroad", `no active request: ${status}`);
+    assert.equal(liveEquipmentRoadStatus(record, [closed]), "onroad", `closed request: ${status}`);
+    assert.deepEqual(liveEquipmentMetrics([record], [closed]), {
+      total: 1, onRoad: 1, offRoad: 0, idle: 0, unknown: 0, availability: 100,
+    });
+    assert.equal(record.status, status);
+  }
+});
+
+test("idle approval, idle cancellation, and a new breakdown update live status despite stale master data", () => {
+  const record = Object.freeze({ door: "D1", currentLocation: "Sasti OB", status: "Off road" });
+  const request = { ref: "FIRST", door: "D1", site: "Sasti OB", status: "Open" };
+  const requests = [request];
+  const expectStatus = (expected) => {
+    assert.equal(liveEquipmentRoadStatus(record, requests), expected);
+    const metrics = liveEquipmentMetrics([record], requests);
+    assert.equal(metrics.onRoad, Number(expected === "onroad"));
+    assert.equal(metrics.offRoad, Number(expected === "offroad"));
+    assert.equal(metrics.idle, Number(expected === "idle"));
+  };
+
+  expectStatus("offroad");
+  request.status = "Idle";
+  expectStatus("idle");
+  request.status = "In progress"; // Cancelling Idle returns the request to maintenance.
+  expectStatus("offroad");
+  request.status = "Idle";
+  expectStatus("idle");
+  request.status = "Closed"; // Manager approval returns the asset to the road before MIS verification.
+  expectStatus("onroad");
+  request.verifiedAt = "2026-09-08 12:00";
+  expectStatus("onroad");
+  requests.push({ ref: "SECOND", door: "D1", site: "Sasti OB", status: "Open" });
+  expectStatus("offroad");
+  requests[1].status = "Closed";
+  expectStatus("onroad");
+});
+
+test("live status supports maintenance states and the legacy Ideal spelling", () => {
+  const record = { door: "D1", status: "Idle" };
+  for (const status of ["Open", "In progress", "Awaiting parts"])
+    assert.equal(liveEquipmentRoadStatus(record, [{ door: "D1", status }]), "offroad");
+  for (const status of ["Idle", "Ideal", " IDLE "])
+    assert.equal(liveEquipmentRoadStatus(record, [{ door: "D1", status }]), "idle");
+  assert.equal(liveEquipmentRoadStatus(record, [{ door: "D1", status: "closed" }]), "onroad");
+});
+
+test("multiple requests for one asset count once and active maintenance takes priority over idle", () => {
+  const records = [{ door: "D1", status: "Breakdown" }, { door: "D2", status: "Idle" }];
+  const requests = [
+    { ref: "ONE", door: "D1", status: "Open" },
+    { ref: "TWO", door: "D1", status: "Awaiting parts" },
+    { ref: "THREE", door: "D1", status: "Idle" },
+    { ref: "HISTORY", door: "D1", status: "Closed" },
+  ];
+  assert.deepEqual(liveEquipmentMetrics(records, requests), {
+    total: 2, onRoad: 1, offRoad: 1, idle: 0, unknown: 0, availability: 50,
+  });
+  requests[0].status = "Closed";
+  requests[1].status = "Closed";
+  assert.deepEqual(liveEquipmentMetrics(records, requests), {
+    total: 2, onRoad: 1, offRoad: 0, idle: 1, unknown: 0, availability: 50,
+  });
+});
+
+test("other-site active requests cannot revive stale off-road status at this site", () => {
+  const records = [
+    { door: "D1", chassisNo: "CH1", currentLocation: "Sasti OB", status: "Breakdown" },
+    { door: "D1", chassisNo: "CH2", currentLocation: "Jayant OB", status: "Idle" },
+  ];
+  const requests = [
+    { door: "D1", chassis: "CH1", site: "Sasti OB", status: "Closed" },
+    { door: "D1", chassis: "CH2", site: "Jayant OB", status: "Open" },
+  ];
+  assert.deepEqual(records.map((record) => liveEquipmentRoadStatus(record, requests)), ["onroad", "offroad"]);
+  assert.deepEqual(liveEquipmentMetrics(records, requests), {
+    total: 2, onRoad: 1, offRoad: 1, idle: 0, unknown: 0, availability: 50,
+  });
+});
+
+test("live metrics preserve registered master rows instead of silently deduplicating assets", () => {
+  const records = [
+    Object.freeze({ id: 1, door: "D1", status: "Off road" }),
+    Object.freeze({ id: 2, door: "D1", status: "Off road" }),
+  ];
+  assert.deepEqual(liveEquipmentMetrics(Object.freeze(records), []), {
+    total: 2, onRoad: 2, offRoad: 0, idle: 0, unknown: 0, availability: 100,
   });
 });
 

@@ -71,7 +71,7 @@ function harness(name, extra = {}) {
     ...extra,
   };
   const component = new Function(...Object.keys(scope), `${codes[name]}; return ${name};`)(...Object.values(scope));
-  return {render(props) { cursor = 0; return component(props); }};
+  return {render(props) { cursor = 0; return component(name === "ManagerDashboard" ? {requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props} : props); }};
 }
 
 const opened = {ref: "REQ-ROLE-CYCLE", owner: "Stupal Moon", requesterLogin: "stupal", door: "V1", chassis: "C1", status: "Open", site: "Sasti OB"};
