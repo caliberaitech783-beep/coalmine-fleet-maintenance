@@ -1,0 +1,39 @@
+.report-period-filter{display:flex;align-items:center;gap:14px;padding:14px 22px;flex-wrap:wrap;border-bottom:1px solid var(--line,#e2e4ee)}
+.report-period-filter>button{display:inline-flex;align-items:center;gap:8px;min-height:42px}
+.report-period-filter>span{font-size:13px;color:var(--muted,#61728c)}
+.report-period-dialog{padding:0;border:1px solid #dcdde5;border-radius:12px;width:min(370px,calc(100vw - 24px));max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);margin:auto;overflow:auto;background:#fff;color:#26344b;box-shadow:0 16px 60px #14234433}
+.report-period-dialog::backdrop{background:#18223955}
+.report-period-dialog form{margin:0;display:flex;flex-direction:column;max-height:calc(100dvh - 26px)}
+.report-period-dialog header{display:flex;align-items:center;justify-content:space-between;padding:12px 17px;border-bottom:1px solid #e4e5ed}
+.report-period-dialog h2{margin:0;font-size:17px;font-weight:700}
+.report-period-dialog button{font:inherit;cursor:pointer;color:inherit;background:transparent;border:1px solid transparent;border-radius:6px}
+.report-period-dialog button:focus-visible,.report-period-dialog input:focus-visible,.report-period-dialog select:focus-visible{outline:2px solid #6c46ad;outline-offset:2px}
+.report-period-dialog .period-icon{padding:6px;display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:34px}
+.report-period-body{padding:15px 17px;overflow-y:auto;min-height:0}
+.report-period-summary>span{font-size:12px;color:#64748b}
+.report-period-summary strong{display:flex;align-items:center;justify-content:space-between;gap:5px;font-size:14px;margin:5px 0 12px}
+.report-period-presets{display:flex;flex-wrap:wrap;gap:7px;padding:3px 0 13px}
+.report-period-presets button{font-size:12px;padding:6px 10px;border:1px solid #e3e3eb;border-radius:22px;min-height:32px}
+.report-period-presets button[aria-pressed=true]{background:#58368f;color:#fff;border-color:#58368f}
+.report-period-month{display:flex;align-items:center;justify-content:space-between;margin:2px 0 10px;font-size:14px}
+.report-period-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));row-gap:4px;text-align:center}
+.report-period-calendar .period-weekday{font-size:11px;color:#758095;padding:5px 0}
+.report-period-calendar button{height:35px;min-width:0;padding:0;font-size:13px;border-radius:0}
+.report-period-calendar button.in-range{background:#eee7f7}
+.report-period-calendar button.range-edge{background:#58368f;color:white;border-radius:18px}
+.report-period-calendar button.today:not(.range-edge){box-shadow:inset 0 0 0 1px #805cb3;border-radius:18px}
+.report-period-dialog .period-hint{font-size:11px;line-height:1.5;color:#64748b;margin:12px 0}
+.report-period-times{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.report-period-dialog .report-period-time{display:flex;align-items:center;gap:2px;border:0;padding:0;margin:0;min-width:0}
+.report-period-time legend,.report-period-dialog .period-date{display:block;font-size:11px;color:#64748b;margin-bottom:5px}
+.report-period-dialog select{font:inherit;font-size:13px;border:0;border-bottom:1px solid #d9dce5;border-radius:0;background:transparent;color:inherit;min-width:0;padding:6px 0;min-height:36px;flex:1;max-width:48px}
+.report-period-dialog .period-date{margin-top:7px}
+.report-period-dialog input[type=date]{display:block;width:100%;box-sizing:border-box;padding:5px 1px;min-width:0;min-height:35px;border:0;border-bottom:1px solid #d9dce5;border-radius:0;background:transparent;color:inherit;font:inherit;font-size:12px}
+.report-period-dialog footer{display:flex;align-items:center;gap:8px;justify-content:flex-end;border-top:1px solid #e4e5ed;padding:12px 17px}
+.report-period-dialog header,.report-period-dialog footer{flex-shrink:0;background:#fff}
+.report-period-dialog footer button{font-size:13px;padding:9px 13px;min-height:36px}
+.report-period-dialog .period-clear{margin-right:auto;color:#6f4c9b}
+.report-period-dialog .period-apply{background:#58368f;color:white}
+.report-period-dialog .period-apply:disabled{opacity:.45;cursor:not-allowed}
+.report-period-dialog .period-error{color:#b42318;font-size:12px;margin:10px 0 0}
+@media(max-width:430px){.report-period-filter{padding:12px}.report-period-filter>span{font-size:12px;overflow-wrap:anywhere}.report-period-dialog input[type=date]{font-size:16px}.report-period-dialog select{font-size:16px}.report-period-body{padding:12px}.report-period-times{gap:8px}}

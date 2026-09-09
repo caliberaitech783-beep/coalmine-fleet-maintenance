@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import ReportPeriodFilter from "./report-period-filter.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
@@ -5200,12 +5201,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       </div>}
       {reportMasterData.loading && <p role="status">Loading report master data…</p>}
       {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
-      {selectedReport && <div className="report-zip-range">
-        <label>From date & time<input type="datetime-local" value={reportFrom} max={reportTo || undefined} onChange={event => setReportFrom(event.target.value)} /></label>
-        <label>To date & time<input type="datetime-local" value={reportTo} min={reportFrom || undefined} onChange={event => setReportTo(event.target.value)} /></label>
-        <button type="button" className="secondary" onClick={() => {setReportFrom("");setReportTo("");}}>Clear dates</button>
-        {invalidReportRange && <span role="alert">From must be before To.</span>}
-      </div>}
+      {selectedReport && <ReportPeriodFilter from={reportFrom} to={reportTo} onApply={(from,to)=>{setReportFrom(from);setReportTo(to);}} />}
       {selectedReport?.title === "Open Off road Cases" && <div className="mobile-tabs" aria-label="Off-road age filter">
         <button type="button" className={offRoadAge === "all" ? "active" : ""} onClick={() => setOffRoadAge("all")}>All</button>
         <button type="button" className={offRoadAge === "ten" ? "active" : ""} onClick={() => setOffRoadAge("ten")}>10 days</button>
