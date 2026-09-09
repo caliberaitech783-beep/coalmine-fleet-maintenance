@@ -28,6 +28,6 @@ export default function MaintenanceEtcInput({value, onChange}) {
       <label>AM/PM<select required value={parts.period} onChange={e => change('period', e.target.value)}><option value="">AM/PM</option><option>AM</option><option>PM</option></select></label>
     </div>
     <input type="hidden" name="expectedCompletionAt" value={etcValue(parts)} />
-    <small>Planned time entered by Maintenance—not the actual completion time.</small>
+    <small>Select a 12-hour time with AM/PM. Planned time entered by Maintenance—not the actual completion time.</small>
   </fieldset>;
 }
