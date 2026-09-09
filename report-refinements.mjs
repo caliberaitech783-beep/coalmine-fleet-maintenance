@@ -8,9 +8,15 @@ export function maintenanceDelay(row, now = new Date()) {
   return elapsedLabel(new Date(Math.min(accepted, now.getTime())).toISOString(), now.toISOString());
 }
 export function pendingRemark(row, now = new Date()) {
-  if (now.getTime() - indiaDateTimeEpoch(acceptanceTime(row)) > 86400000) return 'No Update';
-  const remarks = row.dailyRemarks || [];
-  const last = remarks[remarks.length - 1];
+  const remarks = Array.isArray(row.dailyRemarks) ? row.dailyRemarks : [];
+  // API rows are newest-first; optimistic rows can be appended. Select by
+  // timestamp so the report never substitutes the oldest maintenance update.
+  const dated = remarks.map(remark => ({remark,at:indiaDateTimeEpoch(remark?.updatedAt || remark?.createdAt)}))
+    .filter(({at}) => Number.isFinite(at) && at <= now.getTime())
+    .sort((a,b) => b.at-a.at);
+  const last = dated[0]?.remark || remarks[remarks.length - 1];
+  const lastUpdate = dated[0]?.at ?? indiaDateTimeEpoch(acceptanceTime(row));
+  if (now.getTime() - lastUpdate > 86400000) return 'No Update';
   return (typeof last === 'string' ? last : last?.remark) || 'No Remark';
 }
 export const olderThanTenDays = (row, now = new Date()) => now.getTime() - indiaDateTimeEpoch(row.start || row.createdAt) > 10 * 86400000;

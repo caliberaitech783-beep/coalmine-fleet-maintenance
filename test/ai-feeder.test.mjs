@@ -190,7 +190,7 @@ test("Info Pulse locks only its automatic post-login display", () => {
   assert.match(mainSource, /AI_FEEDER_CLOSE_DELAY_SECONDS = 60/);
   assert.match(mainSource, /lockForLogin \? AI_FEEDER_CLOSE_DELAY_SECONDS : 0/);
   assert.match(mainSource, /window\.setInterval\(tick, 1000\)/);
-  assert.doesNotMatch(mainSource, /if \(remaining === 0\) closeRef\.current\(\)/);
+  assert.match(mainSource, /if \(remaining === 0\) \{\s*finished = true;\s*window\.clearInterval\(timer\);\s*closeRef\.current\(\);/);
   assert.match(mainSource, /canClose && <button type="button" onClick=\{onClose\} aria-label="Close Info Pulse"/);
   assert.match(mainSource, /event\.key === "Escape" && canCloseRef\.current/);
   assert.match(mainSource, /setOpenMode\("login"\)/);

@@ -6,6 +6,7 @@ import {existsSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
+import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
@@ -22,8 +23,13 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
+import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow} from './ticket-consolidated-report.mjs';
-import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates} from './meta-whatsapp.mjs';
+import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
+import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
+import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
+import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
+import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
 import {canonicalSiteName} from './site-location.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
@@ -61,7 +67,8 @@ const reportDateTime=(value)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Ko
 const reportFilename=(kind,scope,slot)=>`Nerve-Center-${kind}-${scope}-${slot}.pdf`.replace(/[^a-z0-9._-]+/gi,'-').replace(/-+/g,'-');
 const publicBaseUrl=(req)=>String(process.env.PUBLIC_APP_URL||`${req?.protocol||'https'}://${req?.get?.('host')||'bdms.cmll.in'}`).replace(/\/+$/,'');
 const WHATSAPP_SETTING_KEY='meta_whatsapp';
-const WHATSAPP_DELIVERY_PAUSED=false;
+const WHATSAPP_REPORT_SETTING_KEY='whatsapp_report_settings';
+const WHATSAPP_APPROVAL_SETTING_KEY='whatsapp_template_approvals';
 const HIERARCHY_REPORT_SCHEDULE_SETTING_KEY='hierarchy_report_schedules';
 const AUDIT_REASON_HEADER='x-audit-reason';
 const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
@@ -106,9 +113,20 @@ async function storedHierarchyReportScheduleSettings(){
   return rows.length?normalizeHierarchyReportScheduleSettings(rows[0].setting_value):defaultHierarchyReportScheduleSettings();
 }
 
+async function storedWhatsAppReportSettings(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[WHATSAPP_REPORT_SETTING_KEY]);
+  return normalizeWhatsAppReportSettings(rows[0]?.setting_value);
+}
+setWhatsAppDeliveryPolicyReader(storedWhatsAppReportSettings);
+
+async function storedWhatsAppTemplateApprovals(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[WHATSAPP_APPROVAL_SETTING_KEY]);
+  return rows[0]?.setting_value||{};
+}
+
 async function metaWhatsAppRuntimeEnv(){
   try{
-    const settings=await storedWhatsAppSettings();
+    const [settings,reportSettings,approvals]=await Promise.all([storedWhatsAppSettings(),storedWhatsAppReportSettings(),storedWhatsAppTemplateApprovals()]);
     return {
       ...process.env,
       WHATSAPP_PROVIDER:String(settings.provider||process.env.WHATSAPP_PROVIDER||'meta').trim(),
@@ -117,11 +135,13 @@ async function metaWhatsAppRuntimeEnv(){
       META_WHATSAPP_ACCESS_TOKEN:String(settings.accessToken||process.env.META_WHATSAPP_ACCESS_TOKEN||'').trim(),
       META_WHATSAPP_BUSINESS_ACCOUNT_ID:String(settings.businessAccountId||process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID||'').trim(),
       META_GRAPH_VERSION:String(settings.graphVersion||process.env.META_GRAPH_VERSION||'v25.0').trim(),
-      META_WHATSAPP_DELIVERY_PAUSED:String(WHATSAPP_DELIVERY_PAUSED),
+      META_WHATSAPP_DELIVERY_PAUSED:String(!reportSettings.enabled),
+      WHATSAPP_REPORT_SETTINGS:reportSettings,WHATSAPP_TEMPLATE_APPROVALS:approvals,
     };
   }catch(error){
-    console.warn('Could not load stored WhatsApp settings; falling back to environment variables:',error.message);
-    return {...process.env,META_WHATSAPP_DELIVERY_PAUSED:String(WHATSAPP_DELIVERY_PAUSED)};
+    console.warn('Could not load stored WhatsApp settings; delivery is paused until settings can be read:',error.message);
+    // A database read failure must not bypass the saved global pause.
+    return {...process.env,META_WHATSAPP_DELIVERY_PAUSED:'true'};
   }
 }
 
@@ -547,10 +567,9 @@ async function migrate(){
             AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
         )`,[JSON.stringify({delayedReason}),delayedReason]);
     }
-    const seededSuperAdmin={login:'superadamin',employee:'System Super Admin',mail:'',phone:'',userType:'Super Admin',userGroup:'',adminLevel:'Super Admin',passwordHash:hashPassword('admin'),mustChangePassword:false};
-    await client.query(`INSERT INTO master_records (master_name,record_data)
-      SELECT 'Users & employees',$1::jsonb
-      WHERE NOT EXISTS (SELECT 1 FROM master_records WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))='superadamin')`,[JSON.stringify(seededSuperAdmin)]);
+    // Privileged accounts must be provisioned explicitly by an authorized
+    // administrator, never recreated with a known password during startup.
+    // Existing accounts and credentials are not changed by this policy.
     // One-time rewrite of stored user site names ("sasti ob", "Sasti ob") to
     // the single display form ("Sasti OB"). Only known sites are rewritten;
     // unrecognised values are kept exactly as entered so no data is lost.
@@ -643,10 +662,17 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
     if(!requestedColumns.length||requestedColumns.length>24)return res.status(400).json({error:'Select between 1 and 24 report columns.'});
     if(requestedRows.length>5000)return res.status(413).json({error:'This report has too many rows to export at once. Apply a filter and try again.'});
     const columns=requestedColumns.map((column,index)=>({label:String(column?.label||`Column ${index+1}`).replace(/\s+/g,' ').trim().slice(0,100)||`Column ${index+1}`}));
-    const rows=requestedRows.map((row)=>{
-      if(!Array.isArray(row))return columns.map(()=> '—');
-      return columns.map((_,index)=>String(row[index]??'').replace(/\s+/g,' ').trim().slice(0,600));
-    });
+    const rows=[];
+    let reportCharacters=0;
+    for(const row of requestedRows){
+      const cells=columns.map((_,index)=>Array.isArray(row)?String(row[index]??'').replace(/\s+/g,' ').trim():'—');
+      // Preserve complete remarks (up to 2,000 characters) and longer work
+      // descriptions. Oversized exports fail visibly instead of losing text.
+      if(cells.some((cell)=>cell.length>10000))return res.status(413).json({error:'A report field exceeds the 10,000-character PDF limit. Export as Excel to preserve the complete text.'});
+      reportCharacters+=cells.reduce((total,cell)=>total+cell.length,0);
+      if(reportCharacters>1000000)return res.status(413).json({error:'This PDF report contains too much text. Apply a filter or export as Excel to preserve all details.'});
+      rows.push(cells);
+    }
     const highlights=(Array.isArray(req.body?.highlights)?req.body.highlights:[]).map(Number).filter((index)=>Number.isInteger(index)&&index>=0&&index<rows.length);
     const pdf=await buildTableExportPdf({title,columns,rows,highlights});
     res.set('Cache-Control','no-store');
@@ -823,7 +849,7 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
       await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',parameters:[otp]},{env:whatsappEnv});
     }catch(templateError){
       console.warn('Password reset OTP template unavailable; using WhatsApp text fallback:',templateError.message);
-      try{await sendMetaWhatsAppText({to:phone,message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv})}
+      try{await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv})}
       catch(deliveryError){
         await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
         console.error('Password reset OTP delivery failed:',deliveryError.message);
@@ -997,6 +1023,43 @@ function canManageAllReportSchedules(session){
   return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager';
 }
 
+async function readWhatsAppReportSettingsDetails(){
+  const [{rows},approvals]=await Promise.all([
+    pool.query('SELECT setting_value,updated_at FROM app_settings WHERE setting_key=$1',[WHATSAPP_REPORT_SETTING_KEY]),
+    storedWhatsAppTemplateApprovals(),
+  ]);
+  const settings=normalizeWhatsAppReportSettings(rows[0]?.setting_value);
+  return {settings,revision:rows[0]?new Date(rows[0].updated_at).toISOString():null,templateState:reportTemplateState(settings,approvals)};
+}
+
+registerWhatsAppReportSettingsApi(app,{
+  requireSession,authorize:currentDashboardAuthorization,read:readWhatsAppReportSettingsDetails,
+  save:async(settings,revision)=>{
+    const client=await pool.connect();
+    try{
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[WHATSAPP_REPORT_SETTING_KEY]);
+      const {rows}=await client.query('SELECT updated_at FROM app_settings WHERE setting_key=$1',[WHATSAPP_REPORT_SETTING_KEY]);
+      const currentRevision=rows[0]?new Date(rows[0].updated_at).toISOString():null;
+      if(revision!==currentRevision)throw Object.assign(new Error('Report settings changed in another session. Reload before saving.'),{status:409});
+      await client.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+        ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[WHATSAPP_REPORT_SETTING_KEY,JSON.stringify(settings)]);
+      await client.query('COMMIT');
+    }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  },
+  syncTemplates:async(action)=>{
+    const [settings,previous,env]=await Promise.all([storedWhatsAppReportSettings(),storedWhatsAppTemplateApprovals(),metaWhatsAppRuntimeEnv()]);
+    const candidates=new Map(PURPOSE_OPTIONS.map(({key})=>{const template=requestedReportTemplate(key,settings);return [template.name,template];}));
+    const templates=Object.fromEntries(candidates);
+    const statuses=action==='submit'?await submitMetaWhatsAppTemplates({env,templates}):await metaWhatsAppTemplateStatuses({env,templates});
+    const checkedAt=new Date().toISOString();
+    const approvals={...previous,...Object.fromEntries([...candidates.keys()].map(name=>[name,{status:'NOT_SUBMITTED',checkedAt}]))};
+    for(const template of statuses)approvals[template.name]={status:template.status,checkedAt};
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[WHATSAPP_APPROVAL_SETTING_KEY,JSON.stringify(approvals)]);
+  },
+});
+
 function reportsAssignedToDesignation(settings,designationKey){
   return [...new Set((settings.designations?.[designationKey]?.schedules||[]).flatMap((schedule)=>schedule.reports||[]))];
 }
@@ -1167,7 +1230,7 @@ app.post('/api/whatsapp/send',requireSuper,async(req,res,next)=>{
   try{
     const result=await sendMetaWhatsAppTemplate({
       to:recipientPhone,
-      templateKey:'consolidatedRequestReport',
+      templateKey:'consolidatedRequestReport',purpose:'manualReports',
       parameters:[message],
     },{env:await metaWhatsAppRuntimeEnv()});
     const {rows}=await pool.query(`INSERT INTO whatsapp_alert_history
@@ -1401,29 +1464,32 @@ function ticketProjection(){
 function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
 const userManagesSite=(user,site)=>reportScopeIncludesSite(managerReportScope(user),site);
 
-async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site=''}={}){
+async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site='',purpose=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   if(!logins.length)return [];
+  const reportSettings=await storedWhatsAppReportSettings();
+  const messagePurpose=purpose||workflowTemplate?.templateKey||'';
+  if(!whatsappPurposeEnabled(reportSettings,messagePurpose))return logins.map(login=>({login,status:'Skipped - paused by Report settings'}));
   const {rows}=await client.query(`SELECT record_data FROM master_records
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
   const contacts=new Map();
   const usersByLogin=new Map();
   const requestTemplate=String(workflowTemplate?.templateKey||'').startsWith('request');
-  const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
-  // A duplicate legacy Admin row must never opt the same Super Admin login
-  // into immediate request traffic. Super Admin receives scheduled bundles.
+  const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user,resolveMobileAccess({user}),reportSettings,workflowType)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
+  // Workflows use explicit role choices, including duplicate-login exclusions.
+  // Legacy request calls without a workflow still exclude Super Admin traffic.
   const superAdminLogins=new Set(rows.map(({record_data})=>record_data||{}).filter(isTrueSuperAdmin).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean));
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
     if(workflowExcludedLogins.has(login))continue;
-    if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site))continue;
-    if(requestTemplate&&superAdminLogins.has(login))continue;
+    if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site,reportSettings))continue;
+    if(requestTemplate&&!workflowType&&superAdminLogins.has(login))continue;
     const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
     if(login&&!usersByLogin.has(login))usersByLogin.set(login,user);
     if(login&&phone&&!contacts.has(login))contacts.set(login,{name:String(user.employee||user.name||user.login||login),phone});
   }
-  const eligibleLogins=requestTemplate?logins.filter((login)=>!superAdminLogins.has(login)):logins;
+  const eligibleLogins=workflowType?[...usersByLogin.keys()]:requestTemplate?logins.filter((login)=>!superAdminLogins.has(login)):logins;
   const missingPhone=eligibleLogins.filter((login)=>!contacts.has(login));
   const missingResults=await Promise.all(missingPhone.map(async(login)=>{const user=usersByLogin.get(login)||{};const status='Skipped - phone number missing';await pool.query(`INSERT INTO whatsapp_alert_history
     (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -1432,11 +1498,15 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
     let status='Sent';
     try{
       const whatsappEnv=await metaWhatsAppRuntimeEnv();
-      if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate},{env:whatsappEnv})}
-      catch(templateError){console.warn(`WhatsApp template ${workflowTemplate.templateKey} unavailable; using text fallback:`,templateError.message);await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv})}
-      else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`},{env:whatsappEnv});
+      if(workflowTemplate)try{await sendMetaWhatsAppTemplate({to:contact.phone,...workflowTemplate,purpose:messagePurpose},{env:whatsappEnv})}
+      catch(templateError){
+        if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
+        const fallback=reportTemplateFallback(messagePurpose,workflowTemplate.parameters,whatsappEnv.WHATSAPP_REPORT_SETTINGS,whatsappEnv.WHATSAPP_TEMPLATE_APPROVALS,`Nerve Center notification\n${message}`);
+        await sendMetaWhatsAppText({to:contact.phone,message:fallback,purpose:messagePurpose},{env:whatsappEnv});
+      }
+      else await sendMetaWhatsAppText({to:contact.phone,message:`Nerve Center notification\n${message}`,purpose:messagePurpose},{env:whatsappEnv});
     }
-    catch(error){status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;console.error(`WhatsApp notification failed for ${login}:`,error.message)}
+    catch(error){status=`${error.code==='WHATSAPP_POLICY_PAUSED'?'Skipped':'Failed'} - ${String(error?.message||'Meta delivery error').slice(0,160)}`;console.error(`WhatsApp notification failed for ${login}:`,error.message)}
     await pool.query(`INSERT INTO whatsapp_alert_history
       (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
       ['System notification',String(reference||''),'',contact.name,contact.phone,status]);
@@ -1534,10 +1604,12 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
 let consolidatedTicketReportRunning=false;
 async function sendScheduledConsolidatedTicketReports(now=new Date()){
   if(!databaseReady||consolidatedTicketReportRunning)return {skipped:true};
-  if(!ticketReportDue(now))return {skipped:true,reason:'outside scheduled CRM report window'};
+  const reportSettings=await storedWhatsAppReportSettings();
+  if(!whatsappPurposeEnabled(reportSettings,'consolidatedTicketReport',now))return {skipped:true,reason:'paused by Report settings'};
+  if(!ticketReportDue(now,20,reportSettings.crm))return {skipped:true,reason:'outside scheduled CRM report window'};
   consolidatedTicketReportRunning=true;
   try{
-    const window=ticketReportWindow(now);
+    const window=ticketReportWindow(now,reportSettings.crm);
     const [{rows:ticketRows},{rows:userRows}]=await Promise.all([
       pool.query(`SELECT reference,site,creator_name AS "user",message AS remarks,status,
         created_at AS "openedAt",resolved_at AS "resolvedAt"
@@ -1555,16 +1627,17 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       const profile=resolveMobileAccess({user});
       if(profile.sessionRole!=='super')continue;
       const isAdmin=profile.permissions.adminLevel==='Admin';
-      const isManager=profile.permissions.adminLevel==='Manager';
-      if(!isAdmin&&!isManager)continue;
+      const isSuperAdmin=profile.permissions.adminLevel==='Super Admin';
+      if(!reportSettings.crm.recipientRoles.includes(profile.permissions.adminLevel))continue;
       const login=String(user.login||'').trim().toLowerCase();
       const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       if(!login)continue;
       let scope=managerReportScope(user);
-      if(isAdmin&&scope.sites!==null&&!scope.sites.length)scope={key:'ALL',label:'All regions',sites:null};
+      if((isAdmin||isSuperAdmin)&&scope.sites!==null&&!scope.sites.length)scope={key:'ALL',label:'All regions',sites:null};
       if(scope.sites!==null&&!scope.sites.length){skipped++;continue}
       const scopedOpen=openTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
       const scopedClosed=closedTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
+      if(!reportSettings.crm.sendEmpty&&!scopedOpen.length&&!scopedClosed.length){skipped++;continue;}
       const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
         (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
         ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
@@ -1576,12 +1649,14 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
       let status='Sent';
       try{
         if(!phone)throw new Error('Phone number missing');
-        const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOPEN TICKETS: ${scopedOpen.length}\nCLOSED TICKETS: ${scopedClosed.length}\nThe complete report is attached as a PDF.`;
+        const summary=`SCOPE: ${scope.label}\nWINDOW: ${reportDateTime(window.start)} - ${reportDateTime(window.end)}\nOPEN TICKETS: ${scopedOpen.length}\nCLOSED TICKETS: ${scopedClosed.length}\n${reportSettings.crm.format==='summary'?'Open Nerve Center for complete ticket details.':'The complete report is attached as a PDF.'}`;
         const whatsappEnv=await metaWhatsAppRuntimeEnv();
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]},{env:whatsappEnv})}
-        catch(templateError){console.warn('Consolidated CRM WhatsApp notification template unavailable; attempting PDF delivery:',templateError.message)}
-        const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
-        await sendMetaWhatsAppDocument({to:phone,buffer:pdf,filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`},{env:whatsappEnv});
+        if(reportSettings.crm.format!=='pdf')try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[summary]},{env:whatsappEnv})}
+        catch(templateError){if(templateError.code==='WHATSAPP_POLICY_PAUSED'||reportSettings.crm.format==='summary')throw templateError;console.warn('CRM summary unavailable; attempting PDF delivery:',templateError.message);}
+        if(reportSettings.crm.format!=='summary'){
+          const pdf=await buildTicketConsolidatedReportPdf({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed});
+          await sendMetaWhatsAppDocument({to:phone,buffer:pdf,purpose:'consolidatedTicketReport',filename:reportFilename('CRM',scope.key,window.slotKey),caption:`Nerve Center CRM ticket report • ${scope.label} • ${reportDateTime(window.end)}. Open the attached PDF for complete details.`},{env:whatsappEnv});
+        }
         sent++;
       }catch(error){
         status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
@@ -1695,7 +1770,7 @@ async function sendDirectorReportBundle({recipientPhone,recipientName='Director'
     bundle=await publishDirectorReportFiles({baseUrl,slotKey:window.slotKey,now});
     await sendMetaWhatsAppTemplate({
       to:phone,
-      templateKey:'consolidatedRequestReport',
+      templateKey:'consolidatedRequestReport',purpose:manual?'manualReports':'consolidatedRequestReport',
       parameters:[bundle.message],
     },{env:await metaWhatsAppRuntimeEnv()});
   }catch(error){
@@ -1718,6 +1793,7 @@ async function sendScheduledDirectorReportBundles(now=new Date()){
 let hierarchyReportRunning=false;
 async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
   if(!databaseReady||(!event&&hierarchyReportRunning))return {skipped:true};
+  if(!whatsappPurposeEnabled(await storedWhatsAppReportSettings(),'consolidatedRequestReport',now))return {skipped:true,reason:'paused by Report settings'};
   if(!event)hierarchyReportRunning=true;
   try{
     const [{rows:userRows},{rows:hierarchyRows},scheduleSettings]=await Promise.all([
@@ -1740,7 +1816,9 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
       const effectiveScheduleSettings=hierarchyRule?applyHierarchyDeliveryRule(scheduleSettings,designation.key,hierarchyRule):scheduleSettings;
       const dueGroups=event?reportsForHierarchyEvent(designation.key,event,effectiveScheduleSettings):reportsDueForDesignation(designation.key,now,20,effectiveScheduleSettings);
       if(!dueGroups.length)continue;
-      if(event&&hierarchyRule?.siteAccess&&!sourceDataForSites({requests:[event.request],equipmentRecords:[],transferRecords:[]},hierarchyRule.siteAccess).requests.length){skipped++;continue}
+      const recipientScope=hierarchyRecipientReportScope(user,profile,hierarchyRule?.siteAccess);
+      if(Array.isArray(recipientScope.sites)&&!recipientScope.sites.length){skipped++;continue}
+      if(event&&!reportScopeIncludesSite(recipientScope,event.request.site)){skipped++;continue}
       const allowedReports=hierarchyRule?new Set(splitHierarchyValues(hierarchyRule.reportAccess)):null;
       const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))].filter((title)=>!allowedReports||allowedReports.has(title));
       if(!reportTitles.length){skipped++;continue}
@@ -1764,15 +1842,16 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
           slotKey,
           now,
           reportTitles,
-          siteAccess:hierarchyRule?.siteAccess||'',
+          siteAccess:recipientScope.sites===null?'':recipientScope.sites.join(' | '),
           heading:`${designation.label} ${event?'Event':'Consolidated'} Report`,
           scheduleLabel,
           eventRequest:event?.request||null,
         });
         const env=await metaWhatsAppRuntimeEnv();
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
+        const messagePurpose=hierarchyReportMessagePurpose(reportTitles);
+        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:messagePurpose,parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
         catch(templateError){
-          if(event)await sendMetaWhatsAppText({to:phone,message:bundle.message},{env});
+          if(event&&templateError.code!=='WHATSAPP_POLICY_PAUSED')await sendMetaWhatsAppText({to:phone,message:reportTemplateFallback(messagePurpose,[bundle.message],env.WHATSAPP_REPORT_SETTINGS,env.WHATSAPP_TEMPLATE_APPROVALS,bundle.message),purpose:messagePurpose},{env});
           else throw templateError;
         }
         sent++;
@@ -1918,7 +1997,7 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const recipients=await ticketSuperRecipients(client,{creatorRole,site});
     const creatorLogin=String(req.session.login||'').trim().toLowerCase();
     await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} (@${creatorLogin}) created ticket ${reference}.`,
-      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:false});
+      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:true});
     await client.query('COMMIT');
     res.status(201).json(rows[0]);
     sendTicketRaisedEmail(rows[0]).catch((error)=>console.error(`Ticket email failed for ${reference}:`,error.message));
@@ -1948,7 +2027,7 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
     const ticket=result.rows[0];
     const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
     await addTicketNotifications(client,[ticket.creatorLogin,...recipients.managerLogins],ticket.reference,`Ticket ${ticket.reference} was resolved by ${req.session.name||'Admin'}.`,
-      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},{whatsapp:false});
+      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},{whatsapp:true});
     await client.query('COMMIT');
     res.json(ticket);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
@@ -2079,8 +2158,8 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(mis_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "misFlaggedAt", mis_flagged_by AS "misFlaggedBy", mis_flag_remark AS "misFlagRemark",
   CASE WHEN closed_at IS NULL THEN '—' ELSE CONCAT(FLOOR(EXTRACT(EPOCH FROM (closed_at-started_at))/86400)::int,'d ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),86400)/3600)::int,'h ',FLOOR(MOD(EXTRACT(EPOCH FROM (closed_at-started_at)),3600)/60)::int,'m') END AS hours,
   status, idle_reason AS "idleReason", owner_name AS owner, requester_login AS "requesterLogin",
-  to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealRequestedAt",
-  ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
+  to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealRequestedAt",
+  ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
   closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
@@ -2145,12 +2224,14 @@ async function attachDailyRemarks(rows,client=pool){
 
 async function requestWorkflowWhatsAppLogins(client,{eventType,site}){
   const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
-  return workflowWhatsAppRecipientLogins(rows,{eventType,site});
+  return workflowWhatsAppRecipientLogins(rows,{eventType,site,settings:await storedWhatsAppReportSettings()});
 }
 
 let workflowReminderRunning=false;
 async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
   if(!databaseReady||workflowReminderRunning)return {skipped:true};
+  const reportSettings=await storedWhatsAppReportSettings();
+  if(!whatsappPurposeEnabled(reportSettings,'offRoadEscalation',now)&&!whatsappPurposeEnabled(reportSettings,'idleReminder',now))return {skipped:true};
   workflowReminderRunning=true;
   let sent=0,failed=0,skipped=0;
   try{
@@ -2158,14 +2239,16 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
       site,category,owner_name AS owner,idle_reason AS "idleReason",status,started_at AS "startedAtRaw",
       expected_completion_at AS "expectedCompletionAtRaw",ideal_requested_at AS "idleAtRaw"
       FROM maintenance_requests WHERE verified_at IS NULL AND (
-        (status NOT IN ('Closed','Idle','Ideal') AND started_at<=$1::timestamptz-INTERVAL '4 hours') OR
-        (status IN ('Idle','Ideal') AND ideal_requested_at IS NOT NULL AND ideal_requested_at<=$1::timestamptz-INTERVAL '1 hour')
-      )`,[now]);
+        (status NOT IN ('Closed','Idle','Ideal') AND started_at<=$1::timestamptz-($2::int*INTERVAL '1 hour')) OR
+        (status IN ('Idle','Ideal') AND ideal_requested_at IS NOT NULL AND ideal_requested_at<=$1::timestamptz-($3::int*INTERVAL '1 hour'))
+      )`,[now,reportSettings.reminders.offRoad.hours,reportSettings.reminders.idle.hours]);
     for(const request of rows){
       const idle=['Idle','Ideal'].includes(request.status);
       const eventType=idle?'idle':'opened';
       const eventTime=new Date(idle?request.idleAtRaw:request.startedAtRaw);
-      const slotKey=workflowReminderSlot(eventType,eventTime,now);
+      const purpose=idle?'idleReminder':'offRoadEscalation';
+      if(!whatsappPurposeEnabled(reportSettings,purpose,now))continue;
+      const slotKey=workflowReminderSlot(eventType,eventTime,now,reportSettings);
       if(!slotKey)continue;
       const recipients=await requestWorkflowWhatsAppLogins(pool,{eventType,site:request.site});
       const equipmentDetails=requestEquipmentNotificationDetails(request);
@@ -2176,7 +2259,7 @@ async function sendScheduledWorkflowWhatsAppReminders(now=new Date()){
         const claim=await pool.query(`INSERT INTO whatsapp_workflow_dispatches (event_type,request_reference,recipient_login,slot_key)
           VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id`,[idle?'idle_repeat':'offroad_escalation',request.ref,login,slotKey]);
         if(!claim.rows.length){skipped+=1;continue}
-        const results=await sendWhatsAppNotifications(pool,[login],request.ref,`${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}.`,workflowTemplate,{workflowType:eventType,site:request.site});
+        const results=await sendWhatsAppNotifications(pool,[login],request.ref,`${idle?'Idle reminder':'Off Road escalation'} for ${request.ref}.`,workflowTemplate,{workflowType:eventType,site:request.site,purpose});
         const status=results[0]?.status||'Skipped';
         if(status==='Sent')sent+=1;else failed+=1;
         await pool.query(`UPDATE whatsapp_workflow_dispatches SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]);
@@ -2233,6 +2316,57 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+const requestTimelineProjection=`id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
+async function recordRequestTimeline(client,req,reference,before,{events,sources={},reason='',requireCorrectionReason=[]}={}){
+  const {rows}=await client.query(`SELECT ${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+  const after=rows[0];
+  if(!after)throw Object.assign(new Error('Request changed before its timeline could be recorded.'),{status:409});
+  const changes=buildRequestTimelineChanges(before,after,{events,sources,reason,requireCorrectionReason,now:after.timelineRecordedAt,actorLogin:req.session.login,actorName:req.session.name}).map(change=>({...change,requestId:String(after.timelineRequestId)}));
+  if(!changes.length)return;
+  await client.query(`INSERT INTO audit_events (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,occurred_at)
+    VALUES ('Workflow timeline','Success',$1,$2,$3,'Maintenance Requests','Record workflow timestamps','Maintenance request',$4,$5,$6::jsonb,$7)`,
+    [String(req.session.login||''),String(req.session.name||''),String(req.session.permissions?.adminLevel||req.session.assignedRole||req.session.role||''),reference,String(reason||'').trim(),JSON.stringify(changes),after.timelineRecordedAt]);
+}
+
+async function withRequestTimelineTransaction(req,reference,write){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT site,status,${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
+    if(!rows.length)throw Object.assign(new Error('This request no longer exists.'),{status:409});
+    const result=await write(client,rows[0]);
+    if(result.timelineEvents)await recordRequestTimeline(client,req,reference,rows[0],{events:result.timelineEvents,sources:result.timelineSources,reason:result.timelineReason,requireCorrectionReason:result.timelineRequireReason});
+    await client.query('COMMIT');
+    return result;
+  }catch(error){await client.query('ROLLBACK');throw error}
+  finally{client.release()}
+}
+
+app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>{
+  try{
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+    const {session,user}=authorization;
+    const operational=session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(session.assignedRole);
+    if(session.role!=='super'&&!operational&&session.permissions?.readRequests!==true)return res.status(403).json({error:'Your assigned role cannot view request timelines.'});
+    const reference=String(req.params.reference||'').trim();
+    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const request=rows[0];
+    if(!request)return res.status(404).json({error:'Request not found.'});
+    if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+    if(session.role==='normal'){
+      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+      if(session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==String(user.login||req.session.login||'').trim().toLowerCase())return res.status(403).json({error:'Only your own request timelines are available.'});
+    }
+    const {rows:records}=await pool.query(`SELECT changed_fields FROM audit_events WHERE event_type='Workflow timeline' AND action='Record workflow timestamps' AND outcome='Success' AND target_type='Maintenance request' AND target_reference=$1 AND changed_fields @> $2::jsonb ORDER BY occurred_at ASC,id ASC`,[reference,JSON.stringify([{requestId:String(request.timelineRequestId)}])]);
+    const history=records.flatMap(row=>Array.isArray(row.changed_fields)?row.changed_fields:[]).filter(item=>item?.requestId===String(request.timelineRequestId)&&REQUEST_TIMELINE_FIELDS.includes(item?.event)).map(item=>({event:item.event,oldValue:parseRequestTimelineTimestamp(item.oldValue)?.toISOString()??null,newValue:parseRequestTimelineTimestamp(item.newValue)?.toISOString()??null,source:['system','user'].includes(item.source)?item.source:'unknown',recordedAt:parseRequestTimelineTimestamp(item.recordedAt)?.toISOString()??null,actorLogin:String(item.actorLogin||''),actorName:String(item.actorName||''),reason:String(item.reason||''),correction:item.correction===true}));
+    res.set('Cache-Control','no-store');
+    const {timelineRequestId,timelineRecordedAt,...visibleRequest}=request;
+    res.json({reference,request:visibleRequest,events:requestTimelineEvents(request,history),history,durations:requestTimelineDurations(request)});
+  }catch(error){next(error)}
+});
+
 const arrivalDelaySql=`((acceptance_required=TRUE AND accepted_at IS NULL AND started_at<=NOW()-INTERVAL '1 hour')
   OR (accepted_at IS NOT NULL AND accepted_at>started_at+INTERVAL '1 hour'))`;
 const arrivalFlagReadySql=`(NOT ${arrivalDelaySql} OR (arrival_flagged_at IS NOT NULL AND length(btrim(arrival_flag_remark,E' \\t\\n\\r'))>0))`;
@@ -2250,7 +2384,7 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     await client.query('BEGIN');
     // Lock the request through every related write. NOW() is shared with the
     // acceptance update, so its timestamp and the one-hour check cannot diverge.
-    const {rows}=await client.query(`SELECT site,${arrivalFlagReadySql} AS arrival_flag_ready
+    const {rows}=await client.query(`SELECT site,${arrivalFlagReadySql} AS arrival_flag_ready,acceptance_required AS "acceptanceRequired",${requestTimelineProjection}
       FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL FOR UPDATE`,[reference]);
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
@@ -2259,7 +2393,8 @@ async function withMaintenanceArrivalGuard(req,reference,write){
       if(!assignedSite||assignedSite!==canonicalSiteName(rows[0].site))throw Object.assign(new Error('This vehicle is outside your assigned maintenance location.'),{status:403});
     }
     if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
-    const result=await write(client);
+    const result=await write(client,rows[0]);
+    if(result.timelineEvents)await recordRequestTimeline(client,req,reference,rows[0],{events:result.timelineEvents,sources:result.timelineSources,reason:result.timelineReason,requireCorrectionReason:result.timelineRequireReason});
     await client.query('COMMIT');
     return result;
   }catch(error){await client.query('ROLLBACK');throw error}
@@ -2289,6 +2424,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       }
       return {eligible,updatedToday};
     });
+    try{
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
     const recipients=[String(eligible.rows[0].requester_login||'').trim().toLowerCase()];
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
@@ -2296,8 +2432,11 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&userManagesSite(user,eligible.rows[0].site))recipients.push(login);
     }
-    await addTicketNotifications(pool,recipients,reference,`${authorName} ${updatedToday?'updated today’s':'added a'} daily maintenance update for ${reference}.`,
-      {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:false});
+    await addTicketNotificationsBestEffort(pool,recipients,reference,`${authorName} ${updatedToday?'updated today’s':'added a'} daily maintenance update for ${reference}.`,
+      {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:true});
+    }catch(error){
+      console.error(`Request ${reference} daily update was saved, but its notification recipients could not be resolved.`,error);
+    }
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     res.status(updatedToday?200:201).json((await attachDailyRemarks(rows))[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
@@ -2330,17 +2469,36 @@ app.patch('/api/requests/:reference/arrival-flag',requireSession,requireArrivalF
   }catch(error){next(error)}
 });
 
-async function activeRequestConflict({door='',chassis=''}={}){
+async function activeRequestConflict({door='',chassis=''}={},client=pool){
   const normalizedDoor=String(door||'').trim();
   const normalizedChassis=String(chassis||'').trim();
   if(!normalizedDoor&&!normalizedChassis)return null;
-  const {rows}=await pool.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status
+  const {rows}=await client.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status
     FROM maintenance_requests
     WHERE status<>'Closed' AND (
       ($1<>'' AND lower(trim(door_number))=lower(trim($1))) OR
       ($2<>'' AND lower(trim(chassis_number))=lower(trim($2)))
     ) ORDER BY created_at DESC LIMIT 1`,[normalizedDoor,normalizedChassis]);
   return rows[0]||null;
+}
+
+async function createRequestWithVehicleLock({door='',chassis=''},write){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    // Match the existing case-insensitive door OR chassis conflict policy.
+    // Stable ordering prevents overlapping vehicle identities from deadlocking.
+    const keys=[['door',door],['chassis',chassis]]
+      .map(([field,value])=>[field,String(value||'').trim().toLowerCase()])
+      .filter(([,value])=>value).map(([field,value])=>`bdms-request:${field}:${value}`).sort();
+    for(const key of keys)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[key]);
+    const duplicate=await activeRequestConflict({door,chassis},client);
+    if(duplicate)throw Object.assign(new Error(activeRequestConflictMessage(duplicate,door)),{status:409,duplicate:true,existingReference:duplicate.ref});
+    const result=await write(client);
+    await client.query('COMMIT');
+    return result;
+  }catch(error){await client.query('ROLLBACK');throw error}
+  finally{client.release()}
 }
 
 app.get('/api/requests/conflict',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
@@ -2361,18 +2519,25 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
-    const duplicate=await activeRequestConflict({door,chassis});
-    if(duplicate)return res.status(409).json({duplicate:true,existingReference:duplicate.ref,error:activeRequestConflictMessage(duplicate,door)});
-    const startedAt=parseIndiaRequestDateTime(start);
     const requester=await currentUserRecord(req.session);
+    if(req.session.role==='normal'){
+      const assignedSite=canonicalSiteName(requester.site||requester.location||requester.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(site))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});
+    }
+    const startedAt=String(start||'').trim()?parseRequestTimelineTimestamp(start):new Date();
+    validateRequestTimelineChange({}, {start:startedAt||String(start)}, {userEntered:['start']});
     const superior=String(requester.superior||'').trim().slice(0,200);
-    const storedDriverName=String(driverName).trim().slice(0,200)||'Demo Driver';
-    const storedDriverSource=String(driverNameSource).trim().slice(0,200)||(storedDriverName==='Demo Driver'?'Demo':'Manual');
-    const {rows}=await pool.query(`INSERT INTO maintenance_requests
+    const storedDriverName=String(driverName).trim().slice(0,200);
+    const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
+    const {rows}=await createRequestWithVehicleLock({door,chassis},async(client)=>{
+    const result=await client.query(`INSERT INTO maintenance_requests
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,acceptance_required,status,owner_name,requester_login,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20)
       RETURNING ${requestProjection}`,
       [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),normalizedMeterType,'','','']);
+    await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
+    return result;
+    });
     await sendRequestEventReports('opened',rows[0]);
     try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
@@ -2385,7 +2550,11 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       {whatsapp:true,whatsappRecipients,workflowType:'opened',site:rows[0].site});
     }catch(error){console.error(`Request ${rows[0].ref} saved, but opening notification recipients could not be resolved.`,error.message)}
     res.status(201).json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){
+    if(error.duplicate)return res.status(409).json({duplicate:true,existingReference:error.existingReference,error:error.message});
+    if(error.code==='23505'&&error.constraint==='maintenance_requests_reference_key')return res.status(409).json({code:'REQUEST_REFERENCE_CONFLICT',error:'This request reference already exists. Refresh the request form and try again.'});
+    maintenanceWriteFailure(error,res,next);
+  }
 });
 
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
@@ -2400,14 +2569,18 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     // Opening meter data is optional; validate it only when supplied.
     if(normalizedOpeningMeterReading&&!validMeterReading(normalizedOpeningMeterReading))return res.status(400).json({error:`Enter a valid opening ${normalizedMeterType} reading.`});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload an opening ${normalizedMeterType} JPEG, PNG, WebP, or PDF up to 5 MB.`});
-    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
+    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
+    const accepting=before.acceptanceRequired&&!before.acceptedAt;
+    validateRequestTimelineChange(before,{expectedCompletionAt:expectedAt||expectedCompletionAt,...(accepting?{acceptedAt:before.timelineRecordedAt}:{})},{now:before.timelineRecordedAt,userEntered:['expectedCompletionAt']});
+    buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
-      accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=($3::timestamp AT TIME ZONE 'Asia/Kolkata'),meter_type=$4,
+      accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,String(expectedCompletionAt).trim(),normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference]);
     if(!result.rows.length)throw arrivalRedFlagError();
-    return result;
+    return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });
     res.json(rows[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
@@ -2428,7 +2601,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const openingMeterReading=String(req.body?.openingMeterReading||'').trim();
     const openingMeterFile=String(req.body?.openingMeterFile||'');
     const openingMeterFileName=String(req.body?.openingMeterFileName||'').trim().slice(0,255);
-    const closedAt=requestDateTimeValue(closingDate,closingTime);
+    const closedAt=parseRequestTimelineTimestamp(`${closingDate}T${closingTime}`);
     if(!closedAt)return res.status(400).json({error:'Enter a valid closing date and time in HH:MM:SS format.'});
     if(!maintenanceWork)return res.status(400).json({error:'Describe the maintenance work completed.'});
     if(ideal&&!['No driver','No work'].includes(idleReason))return res.status(400).json({error:'Choose an Idle reason: No driver or No work.'});
@@ -2442,7 +2615,11 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       if(!assignedSite||assignedSite!==canonicalSiteName(existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
     if(!ideal&&status==='Closed'&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt)return res.json(existingRows[0]);
-    const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
+    const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
+    if(!ideal&&status==='Closed'){
+      validateRequestTimelineChange(before,{closedAt},{now:before.timelineRecordedAt,userEntered:['closedAt']});
+      buildRequestTimelineChanges(before,{...before,closedAt},{events:['closedAt'],reason:req.body?.correctionReason,requireCorrectionReason:['closedAt']});
+    }
     const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
     if(!meterRows.length)throw arrivalRedFlagError();
     const delayedClosure=!ideal&&status==='Closed'&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
@@ -2482,16 +2659,21 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
         )`,[JSON.stringify({delayedReason}),delayedReason]);
     }
-    return {rows,delayedClosure};
+    const timelineEvents=ideal?['idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
+    return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:!ideal&&status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:!ideal&&status==='Closed'?['closedAt']:[]};
     });
     if(ideal){
+      try{
       const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
-      const whatsappRecipients=workflowWhatsAppRecipientLogins(userRows,{eventType:'idle',site:rows[0].site});
+      const whatsappRecipients=workflowWhatsAppRecipientLogins(userRows,{eventType:'idle',site:rows[0].site,settings:await storedWhatsAppReportSettings()});
       const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
       const idleAt=requestNotificationTime(new Date());
       await addTicketNotificationsBestEffort(pool,whatsappRecipients,rows[0].ref,`Request ${rows[0].ref} was marked Idle (${rows[0].idleReason}) by ${req.session.name||'Maintenance User'}. Project Manager or Production Manager approval is required to Make On Road.`,
         {templateKey:'requestIdle',parameters:[equipmentDetails,rows[0].site,idleAt,rows[0].idleReason,rows[0].ref,'Project Manager or Production Manager must approve Make On Road',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
         {whatsapp:true,whatsappRecipients,workflowType:'idle',site:rows[0].site});
+      }catch(error){
+        console.error(`Request ${rows[0].ref} was marked Idle, but its notification recipients could not be resolved.`,error);
+      }
     }else if(status==='Closed'){
       await sendRequestEventReports('closed',rows[0]);
       try{
@@ -2520,20 +2702,30 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
     const reference=String(req.params.reference||'').trim();
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your approval or is outside your assigned sites.'});
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
-      ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'Project / Production Manager',reference]);
+    const {rows}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
+    if(!['Idle','Ideal'].includes(before.status)||before.verifiedAt||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
+    validateRequestTimelineChange(before,{closedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt});
+    const result=await client.query(`UPDATE maintenance_requests SET status='Closed',closed_at=NOW(),closed_by=$1,
+      ideal_approved_at=NOW(),ideal_approved_by=$1 WHERE reference=$2 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
+      RETURNING ${requestProjection}`,[req.session.name||'Project / Production Manager',reference,eligible.rows[0].site]);
+    if(!result.rows.length)throw Object.assign(new Error('This Idle request is no longer awaiting your approval.'),{status:409});
+    return {...result,timelineEvents:['closedAt','idealApprovedAt'],timelineSources:{closedAt:'system',idealApprovedAt:'system'}};
+    });
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your approval.'});
     await sendRequestEventReports('closed',rows[0]);
+    try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     const whatsappRecipients=await requestWorkflowWhatsAppLogins(pool,{eventType:'closed',site:rows[0].site});
     const approvedAt=requestNotificationTime(new Date());
     const equipmentDetails=requestEquipmentNotificationDetails(rows[0]);
-    await addTicketNotifications(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Project / Production Manager'}. It is now awaiting MIS verification.`,
+    await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Project / Production Manager'}. It is now awaiting MIS verification.`,
       {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].site,req.session.name||'Project / Production Manager',approvedAt,rows[0].hours||'Not available',workflowRequestLink(rows[0].ref,publicBaseUrl())]},
       {whatsapp:true,whatsappRecipients,workflowType:'closed',site:rows[0].site});
+    }catch(error){
+      console.error(`Request ${rows[0].ref} was approved on road, but its notification recipients could not be resolved.`,error);
+    }
     res.json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,next)=>{
@@ -2544,16 +2736,25 @@ app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,ne
     const reference=String(req.params.reference||'').trim();
     const eligible=await pool.query(`SELECT site FROM maintenance_requests WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL`,[reference]);
     if(!eligible.rows.length||!userManagesSite(manager,eligible.rows[0].site))return res.status(409).json({error:'This Idle request is no longer awaiting your decision or is outside your assigned sites.'});
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
+    const {rows}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
+    if(!['Idle','Ideal'].includes(before.status)||before.verifiedAt||before.site!==eligible.rows[0].site)throw Object.assign(new Error('This Idle request is no longer awaiting your decision.'),{status:409});
+    const result=await client.query(`UPDATE maintenance_requests SET status='In progress',idle_reason='',closed_at=NULL,closed_by='',
       ideal_requested_at=NULL,ideal_requested_by='',ideal_approved_at=NULL,ideal_approved_by='',
       in_progress_at=COALESCE(in_progress_at,NOW()),in_progress_by=CASE WHEN in_progress_at IS NULL THEN $2 ELSE in_progress_by END
-      WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[reference,req.session.name||req.session.login||'Maintenance Manager']);
+      WHERE reference=$1 AND status IN ('Idle','Ideal') AND verified_at IS NULL AND site=$3
+      RETURNING ${requestProjection}`,[reference,req.session.name||req.session.login||'Maintenance Manager',eligible.rows[0].site]);
+    if(!result.rows.length)throw Object.assign(new Error('This Idle request is no longer awaiting your decision.'),{status:409});
+    return {...result,timelineEvents:['closedAt','idealRequestedAt','idealApprovedAt','inProgressAt'],timelineSources:{closedAt:'system',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:'Idle status cancelled by Maintenance Manager.'};
+    });
     if(!rows.length)return res.status(409).json({error:'This Idle request is no longer awaiting your decision.'});
+    try{
     const recipients=await requestStakeholderLogins(pool,{site:rows[0].site,requesterLogin:rows[0].requesterLogin});
     await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Idle status for request ${rows[0].ref} was cancelled by ${req.session.name||'Maintenance Manager'}. The request has returned to active maintenance.`,null,{whatsapp:false});
+    }catch(error){
+      console.error(`Request ${rows[0].ref} Idle status was cancelled, but its notification recipients could not be resolved.`,error);
+    }
     res.json(rows[0]);
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.delete('/api/requests/:reference',requireSession,requirePermission('deleteRequests',{role:'Maintenance User'}),async(req,res,next)=>{
@@ -2594,7 +2795,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
   try{
     const reference=String(req.params.reference||'').trim();
     const firstTripDone=req.body?.firstTripDone===true||String(req.body?.firstTripDone||'').toLowerCase()==='true';
-    const firstTripAt=firstTripDone?requestDateTimeValue(req.body?.firstTripDate,req.body?.firstTripTime):null;
+    const firstTripAt=firstTripDone?parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`):null;
     const firstTripCardImage=String(req.body?.firstTripCardImage||'');
     const closingMeterReading=String(req.body?.closingMeterReading||'').trim();
     if(firstTripDone&&!firstTripAt)return res.status(400).json({error:'Enter a valid first-trip date and time in HH:MM:SS format.'});
@@ -2611,9 +2812,18 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     // Mobile browsers can retry a slow image upload after the first request has
     // already committed. Return the saved row so that retry is idempotent.
     if(existing.verifiedAt)return res.json(existing);
-    const {rows}=await pool.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
-      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL
-      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference]);
+    const {rows,idempotent}=await withRequestTimelineTransaction(req,reference,async(client,before)=>{
+    if(before.site!==existing.site||before.status!=='Closed')throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
+    if(before.verifiedAt)return {...await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),idempotent:true};
+    validateRequestTimelineChange(before,{firstTripAt,verifiedAt:before.timelineRecordedAt},{now:before.timelineRecordedAt,userEntered:['firstTripAt']});
+    buildRequestTimelineChanges(before,{...before,firstTripAt},{events:['firstTripAt'],reason:req.body?.correctionReason,requireCorrectionReason:['firstTripAt']});
+    const result=await client.query(`UPDATE maintenance_requests SET verification_status='Verified',verified_at=NOW(),verified_by=$1,
+      first_trip_done=$2,first_trip_at=$3,first_trip_by=$4,first_trip_card_image=$5,closing_meter_reading=$6 WHERE reference=$7 AND status='Closed' AND verified_at IS NULL AND site=$8
+      RETURNING ${requestProjection}`,[req.session.name||'MIS User',firstTripDone,firstTripAt,firstTripDone?(req.session.name||'MIS User'):'',firstTripCardImage,closingMeterReading,reference,existing.site]);
+    if(!result.rows.length)throw Object.assign(new Error('This request could not be verified because its status changed. Refresh and try again.'),{status:409});
+    return {...result,timelineEvents:['firstTripAt','verifiedAt'],timelineSources:{firstTripAt:'user',verifiedAt:'system'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['firstTripAt']};
+    });
+    if(idempotent)return res.json(rows[0]);
     if(!rows.length){
       const {rows:retryRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
       if(retryRows[0]?.verifiedAt&&canonicalSiteName(retryRows[0].site)===canonicalSiteName(misSite))return res.json(retryRows[0]);
@@ -2636,7 +2846,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
         console.error(`Request ${rows[0].ref} was verified, but its notification recipients could not be resolved.`,error);
       }
     })();
-  }catch(error){next(error)}
+  }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
 app.get('/api/requests/:reference/trip-card',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{

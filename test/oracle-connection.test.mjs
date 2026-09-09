@@ -44,6 +44,8 @@ test("request forms fetch and persist Oracle logbook driver names", () => {
   assert.match(client, /Driver \/ operator name/);
   assert.match(client, /\/api\/oracle\/driver\?/);
   assert.match(client, /driverName: driverLookup\.name/);
-  assert.match(client, /name: "Demo Driver", source: "Demo"/);
-  assert.match(client, /source: event\.target\.value\.trim\(\) === "Demo Driver" \? "Demo" : "Manual"/);
+  assert.doesNotMatch(client, /name: "Demo Driver"/);
+  assert.match(client, /name: "", source: "Lookup unavailable"/);
+  assert.match(client, /name: "", source: "Not found"/);
+  assert.match(client, /name: event\.target\.value, source: "Manual"/);
 });

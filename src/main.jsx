@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import SharedActionsTable from "./shared-actions-table.jsx";
+import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
+import EquipmentCombobox from "./equipment-combobox.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
@@ -12,9 +14,10 @@ import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
+import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
+import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import { userMasterRole } from "./user-master-role.mjs";
-import { visibleInOperationalUserRequests } from "./operational-user-request-visibility.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
@@ -39,7 +42,6 @@ import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
   requestEquipmentDetails,
-  requestEquipmentOptionLabel,
   requestEquipmentGroupOptions,
   requestEquipmentMeterType,
   requestEquipmentRecordsForGroup,
@@ -57,6 +59,7 @@ import {profileHeaderDesignation, profileHeaderName} from "./profile-designation
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
+import RequestTimelineButton from "./request-timeline.jsx";
 import {
   LayoutDashboard,
   Truck,
@@ -620,6 +623,14 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
+  const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
+  useEffect(() => {
+    // Match the navigation's CSS breakpoint, not the role-permission breakpoint.
+    const query = window.matchMedia("(max-width: 1250px)");
+    const update = () => setCollapsedNavigation(query.matches);
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   useEffect(() => {
     const query = window.matchMedia("(max-width: 900px)");
     const update = () => setResponsiveMobile(query.matches);
@@ -664,8 +675,9 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
+  const navigationHidden = collapsedNavigation && !open;
   return (
-    <aside className={open ? "open" : ""}>
+    <aside id="admin-primary-navigation" className={open ? "open" : ""} aria-label="Primary navigation" aria-hidden={navigationHidden ? true : undefined} inert={navigationHidden ? true : undefined}>
       <CaliberBrand className="logo" />
       <nav>
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
@@ -819,11 +831,18 @@ function useDashboardEquipment() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const loadedFleetScope = useRef({token: authToken, loaded: false});
+  useEffect(() => watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document}), []);
   useEffect(() => {
     let activeRequest = true;
     const controller = new AbortController();
-    setLoaded(false);
-    setScope(null);
+    const sameScope = loadedFleetScope.current.token === authToken;
+    if (!sameScope) {
+      loadedFleetScope.current = {token: authToken, loaded: false};
+      setRecords([]);
+      setScope(null);
+    }
+    setLoaded(sameScope && loadedFleetScope.current.loaded);
     setLoadError("");
     fetch("/api/dashboard/equipment", {
       cache: "no-store",
@@ -839,6 +858,7 @@ function useDashboardEquipment() {
           || (data.scope.allowedRegions !== null && !Array.isArray(data.scope.allowedRegions)))
           throw new Error("Fleet scope response was invalid. Please retry.");
         if (!activeRequest) return;
+        loadedFleetScope.current.loaded = true;
         setRecords(data.records);
         setScope(data.scope);
         setLoaded(true);
@@ -850,7 +870,7 @@ function useDashboardEquipment() {
       activeRequest = false;
       controller.abort();
     };
-  }, [loadAttempt]);
+  }, [loadAttempt, authToken]);
   return {records, scope, loaded, loadError, retry: () => setLoadAttempt((attempt) => attempt + 1)};
 }
 
@@ -868,8 +888,38 @@ function FleetDataState({ error = "", retry, className = "" }) {
   </div>;
 }
 
+function ManagerIdleConfirmation({ request, action, close, onConfirm }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const submitLock = useRef(false);
+  const approving = action === "approve";
+  const closeDialog = () => { if (!submitLock.current) close(); };
+  return <Modal title={approving ? "Confirm make on road" : "Confirm cancel idle"} close={closeDialog}>
+    <form className="form" onSubmit={async (event) => {
+      event.preventDefault();
+      if (submitLock.current) return;
+      submitLock.current = true;
+      setSubmitting(true);
+      setError("");
+      try { await onConfirm(request); close(); }
+      catch (failure) { setError(failure?.message || "Could not update this request. Please try again."); }
+      finally { submitLock.current = false; setSubmitting(false); }
+    }}>
+      <div className="details request-linked-details">
+        <div><span>Job reference</span><b>{request.ref}</b></div>
+        <div><span>Door number</span><b>{request.door || "—"}</b></div>
+        <div><span>Site location</span><b>{request.site || "—"}</b></div>
+      </div>
+      <p>{approving ? "This will close the request, make the vehicle on road and forward it to MIS verification. Confirm only after the vehicle is ready to return to service; this dialog cannot undo the approval after it is saved." : "This will cancel Idle status and return the request to active maintenance. The request will not be closed or forwarded to MIS verification."}</p>
+      {error && <p role="alert">{error}</p>}
+      <footer><button type="button" disabled={submitting} onClick={closeDialog}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : approving ? "Confirm make on road" : "Confirm cancel idle"}</button></footer>
+    </form>
+  </Modal>;
+}
+
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], gotoEquipment, onApproveIdeal, onCancelIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
+  const [idleConfirmation, setIdleConfirmation] = useState(null);
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
   const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
@@ -879,19 +929,15 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const restrictManagerScope=equipmentScope?.restrictToScope===true;
   const scopedRequests=equipmentLoaded?(managerAllowedSites?.length?requests.filter((request)=>managerAllowedSites.some((site)=>recordBelongsToSite(request,site))):restrictManagerScope?[]:requests):[];
   const requestRows = scopedRequests.map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
-  const openRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() !== "closed");
-  const offRoadKeys = new Set(openRequests.map((request) => String(request.chassis || request.door || request.equipment || "").trim().toLowerCase()).filter(Boolean));
-  const offRoad = Math.min(siteEquipment.length, offRoadKeys.size);
-  const idleEquipment=siteEquipment.filter((record)=>equipmentRoadStatus(record)==="idle"&&!offRoadKeys.has(String(record.chassisNo||record.manufacturerSerialNo||record.door||record.equipmentName||"").trim().toLowerCase()));
-  const idle=Math.min(Math.max(0,siteEquipment.length-offRoad),idleEquipment.length);
-  const fleet = {total:siteEquipment.length,offRoad,idle,onRoad:Math.max(0,siteEquipment.length-offRoad-idle)};
+  const openRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() !== "closed");
+  const fleet = liveEquipmentMetrics(siteEquipment, requestRows);
   const typeSummary=(records,valueOf)=>Object.entries(records.reduce((counts,record)=>{const type=String(valueOf(record)||"Unspecified").trim()||"Unspecified";counts[type]=(counts[type]||0)+1;return counts},{})).sort((a,b)=>b[1]-a[1]).map(([type,count])=>`${type}: ${count}`);
   const totalTypes=typeSummary(siteEquipment,equipmentGroupLabel);
-  const offRoadTypes=typeSummary(openRequests,(request)=>request.equipment);
-  const idleTypes=typeSummary(idleEquipment,equipmentGroupLabel);
-  const onRoadTypes=totalTypes.map((line)=>{const separator=line.lastIndexOf(": ");const type=line.slice(0,separator),total=Number(line.slice(separator+2));const offLine=offRoadTypes.find((item)=>item.startsWith(`${type}: `));const idleLine=idleTypes.find((item)=>item.startsWith(`${type}: `));return `${type}: ${Math.max(0,total-Number(offLine?.slice(offLine.lastIndexOf(": ")+2)||0)-Number(idleLine?.slice(idleLine.lastIndexOf(": ")+2)||0))}`}).filter((line)=>!line.endsWith(": 0"));
-  const closedRequests = requestRows.filter((request) => String(request.status || "").toLowerCase() === "closed");
-  const verifiedRequests = requestRows.filter((request) => Boolean(request.verifiedAt));
+  const offRoadTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="offroad"),equipmentGroupLabel);
+  const idleTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="idle"),equipmentGroupLabel);
+  const onRoadTypes=typeSummary(siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)==="onroad"),equipmentGroupLabel);
+  const closedRequests = requestRows.filter((request) => String(request.status || "").trim().toLowerCase() === "closed");
+  const verifiedRequests = closedRequests.filter(visibleInMisHistory);
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
   const cards = productionManagerView
     ? [
@@ -912,9 +958,10 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
           ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", ""],
           ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
         ];
-  const pendingVerification=closedRequests.filter((request)=>!request.verifiedAt);
+  const pendingVerification=closedRequests.filter(visibleInMisRequests);
   const canApproveIdle=true; // Every manager profile can approve within its assigned site scope.
-  const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").toLowerCase())):[];
+  const canCancelIdle=managerRoleSelection(managerRoles.length?managerRoles:managerRole).includes("Maintenance Manager");
+  const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").trim().toLowerCase())):[];
   const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
   const visibleActiveRows=activeManagerRole==="Maintenance Manager"?activeRows.filter((request)=>!["idle","ideal"].includes(String(request.status||"").toLowerCase())):activeRows;
   const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
@@ -934,7 +981,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
       <span>{label}</span><strong>{equipmentLoaded?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&equipmentLoaded && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({idealRows.length})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"?onApproveIdeal:null} stableToolbar /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
+    {idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
@@ -1458,7 +1506,7 @@ const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "break
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal } = {}) {
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
-    case "ref": return <td><b>{r.ref}</b></td>;
+    case "ref": return <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} /></td>;
     case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
     case "door": return <td>{r.door}</td>;
     case "make": return <td>{r.make || "—"}</td>;
@@ -1562,7 +1610,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction, onApproveIdeal, onCancelIdeal })}</React.Fragment>) : <>
                 {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
                 <td>
-                  <b>{r.ref}</b>
+                  <RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} />
                 </td>
                 <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
                 <td>{r.door}</td>
@@ -3141,7 +3189,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                     </select>
                     </>
                   ) : (
-                    <>{label} *
+                    <>{label}{key === fields[0][0] ? " *" : ""}
                     <input
                       className={name === "Users & employees" && ["login", "employee"].includes(key) ? "uppercase-user-field" : ""}
                       name={key}
@@ -3594,204 +3642,12 @@ const speechLanguages = [
   ["hi-IN", "Hindi"],
   ["en-IN", "English"],
 ];
-function SpeechComplaint() {
-  const [text, setText] = useState(""),
-    [lang, setLang] = useState("hi-IN"),
-    [listening, setListening] = useState(false),
-    [working, setWorking] = useState(false),
-    [note, setNote] = useState("");
-  const recognition = useRef(null);
-  const start = () => {
-    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Speech) {
-      setNote("Voice input is not supported here. Please use Chrome or Edge.");
-      return;
-    }
-    const r = new Speech();
-    recognition.current = r;
-    r.lang = lang;
-    r.interimResults = true;
-    r.continuous = false;
-    let final = "";
-    r.onstart = () => {
-      setListening(true);
-      setNote("Listening… speak naturally in your selected language.");
-    };
-    r.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript;
-        else interim += e.results[i][0].transcript;
-      }
-      setNote(interim || "Converting speech…");
-    };
-    r.onerror = (e) => {
-      setListening(false);
-      setNote(
-        e.error === "not-allowed"
-          ? "Microphone permission is required."
-          : "Could not hear clearly. Please try again.",
-      );
-    };
-    r.onend = async () => {
-      setListening(false);
-      if (!final) return;
-      setWorking(true);
-      setNote("Converting to simple English…");
-      try {
-        const source = lang.split("-")[0];
-        if (source === "en") {
-          setText(final.trim());
-          setNote("Voice converted to text.");
-        } else {
-          const res = await fetch(
-            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(final)}&langpair=${source}|en`,
-          );
-          const data = await res.json();
-          const english = data?.responseData?.translatedText;
-          if (!english) throw new Error();
-          setText(english.replace(/&#39;/g, "'").trim());
-          setNote("Translated into simple English.");
-        }
-      } catch {
-        setText(final.trim());
-        setNote(
-          "Speech was transcribed, but English translation is unavailable. You can edit the text.",
-        );
-      } finally {
-        setWorking(false);
-      }
-    };
-    r.start();
-  };
-  const stop = () => recognition.current?.stop();
-  return (
-    <label className="full speechfield">
-      <span>Reason / complaint *</span>
-      <div className="speechtools">
-        <select
-          aria-label="Spoken language"
-          value={lang}
-          onChange={(e) => setLang(e.target.value)}
-        >
-          {speechLanguages.map(([code, name]) => (
-            <option key={code} value={code}>
-              {name}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className={listening ? "recording" : ""}
-          onClick={listening ? stop : start}
-          disabled={working}
-        >
-          {listening ? <Square /> : <Mic />}
-          {listening
-            ? "Stop recording"
-            : working
-              ? "Translating…"
-              : "Speak complaint"}
-        </button>
-      </div>
-      <textarea
-        name="complaint"
-        required
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Type here, or select your language and speak. Simple English text will appear here."
-      />
-      <small className={listening ? "voice-note live" : "voice-note"}>
-        {note ||
-          "Your microphone is used only while recording. You can edit the result before submitting."}
-      </small>
-    </label>
-  );
-}
-const speechCorrections = {
-  tamani: "kamani",
-  kamni: "kamani",
-  tutt: "toot",
-  bake: "brake",
-  brek: "brake",
-  hydrolic: "hydraulic",
-  hydralic: "hydraulic",
-  haidrolik: "hydraulic",
-  stering: "steering",
-  radiater: "radiator",
-  alternetor: "alternator",
-  transmision: "transmission",
-  diferential: "differential",
-  coolent: "coolant",
-  puncure: "puncture",
-};
-const speechComponents = {
-  "leaf spring": ["leaf spring", "kamani"],
-  brake: ["brake"],
-  engine: ["engine"],
-  "hydraulic pipe": ["hydraulic pipe"],
-  "hydraulic hose": ["hydraulic hose"],
-  "hydraulic pump": ["hydraulic pump"],
-  steering: ["steering"],
-  tyre: ["tyre", "tire"],
-  battery: ["battery"],
-  gearbox: ["gearbox", "gear box"],
-  clutch: ["clutch"],
-  radiator: ["radiator"],
-  alternator: ["alternator"],
-  "starter motor": ["starter motor"],
-  differential: ["differential"],
-  "propeller shaft": ["propeller shaft"],
-  axle: ["axle"],
-};
-const speechFaults = {
-  broken: ["broken", "toot", "tut"],
-  notWorking: ["not working"],
-  leaking: ["leaking", "leak", "leakage"],
-  overheating: ["overheating", "overheat"],
-  punctured: ["punctured", "puncture"],
-  notStarting: ["not starting", "won't start"],
-  discharged: ["battery down", "down battery", "discharged"],
-  lowPressure: ["low pressure", "pressure low"],
-};
-function normalizeComplaint(value) {
-  let text = String(value || "")
-    .trim()
-    .replace(/\b([a-z]{1,3})-(?:\1-)+([a-z]+)\b/gi, "$2")
-    .replace(/\b(uh+|um+|erm+|hmm+)\b[\s,]*/gi, "")
-    .replace(/\b([a-z]+)(?:[\s,]+\1\b)+/gi, "$1");
-  for (const [wrong, right] of Object.entries(speechCorrections))
-    text = text.replace(new RegExp("\\b" + wrong + "\\b", "gi"), right);
-  const lower = text.toLowerCase(),
-    component = Object.entries(speechComponents).find(([, aliases]) =>
-      aliases.some((a) => lower.includes(a)),
-    )?.[0],
-    fault = Object.entries(speechFaults).find(([, aliases]) =>
-      aliases.some((a) => lower.includes(a)),
-    )?.[0];
-  if (component && fault) {
-    if (fault === "broken") text = `The ${component} is broken.`;
-    if (fault === "notWorking") text = `The ${component} is not working.`;
-    if (fault === "leaking") text = `The ${component} is leaking.`;
-    if (fault === "overheating") text = `The ${component} is overheating.`;
-    if (fault === "punctured") text = `The ${component} is punctured.`;
-    if (fault === "notStarting") text = `The ${component} is not starting.`;
-    if (fault === "discharged") text = `The ${component} is discharged.`;
-    if (fault === "lowPressure") text = `The ${component} pressure is low.`;
-  }
-  text = text
-    .replace(/\s+([,.;:!?])/g, "$1")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  if (text && !/[.!?]$/.test(text)) text += ".";
-  return text ? text[0].toUpperCase() + text.slice(1) : "";
-}
 function EnhancedSpeechComplaint({
   label = "Reason / complaint *",
   name = "complaint",
   audioName = "complaintAudio",
   buttonLabel = "Speak complaint",
-  placeholder = "Type here, or select your language and speak. Clear English text will appear here.",
+  placeholder = "Type here, or select Hindi / English and speak in that language.",
   required = true,
 }) {
   const [text, setText] = useState(""),
@@ -3801,6 +3657,8 @@ function EnhancedSpeechComplaint({
     [note, setNote] = useState(""),
     [audioData, setAudioData] = useState("");
   const recognition = useRef(null),
+    starting = useRef(false),
+    mounted = useRef(true),
     audioOnlyMode = useRef(false),
     silenceTimer = useRef(null),
     maxTimer = useRef(null),
@@ -3821,27 +3679,45 @@ function EnhancedSpeechComplaint({
     recognition.current = null;
     stopAudio();
     setListening(false);
-    if (required) setText((current) => current.trim() ? current : "Details recorded in the attached audio.");
+    if (required) setText((current) => current.trim() ? current : lang === "hi-IN"
+      ? "विवरण संलग्न ऑडियो में रिकॉर्ड किया गया है।"
+      : "Details recorded in the attached audio.");
     setNote(message);
   };
   const stop = () => {
     if (recognition.current) recognition.current.stop();
     else if (audioOnlyMode.current) finishAudioOnly();
   };
-  useEffect(() => () => {
-    clearTimers();
-    recognition.current?.abort?.();
-    mediaStream.current?.getTracks().forEach((track) => track.stop());
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      clearTimers();
+      if (recognition.current) {
+        recognition.current.onend = null;
+        recognition.current.onerror = null;
+        recognition.current.abort?.();
+      }
+      stopAudio();
+    };
   }, []);
   const start = async () => {
+    if (starting.current || listening) return;
     const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setNote("Audio recording is not supported here. Please use current Chrome or Edge.");
       return;
     }
+    starting.current = true;
+    setWorking(true);
+    const languageName = speechLanguages.find(([code]) => code === lang)?.[1] || "selected language";
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mounted.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       mediaStream.current = stream;
       audioChunks.current = [];
       const preferredType = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((type) => window.MediaRecorder.isTypeSupported?.(type));
@@ -3865,13 +3741,17 @@ function EnhancedSpeechComplaint({
           return;
         }
         const reader = new FileReader();
-        reader.onload = () => setAudioData(String(reader.result || ""));
+        reader.onload = () => { if (mounted.current) setAudioData(String(reader.result || "")); };
         reader.readAsDataURL(blob);
       };
       mediaRecorder.start();
     } catch {
+      stream?.getTracks().forEach((track) => track.stop());
       setNote("Microphone permission is required to save the audio clip.");
       return;
+    } finally {
+      starting.current = false;
+      setWorking(false);
     }
     if (!Speech) {
       audioOnlyMode.current = true;
@@ -3882,6 +3762,7 @@ function EnhancedSpeechComplaint({
     }
     const r = new Speech();
     recognition.current = r;
+    setListening(true);
     r.lang = lang;
     r.interimResults = true;
     r.continuous = true;
@@ -3893,7 +3774,7 @@ function EnhancedSpeechComplaint({
     r.onstart = () => {
       audioOnlyMode.current = false;
       setListening(true);
-      setNote("Listening… pause up to 5 seconds while speaking.");
+      setNote(`Listening in ${languageName}… pause up to 5 seconds while speaking.`);
       resetSilence();
       maxTimer.current = setTimeout(stop, 45000);
     };
@@ -3918,36 +3799,20 @@ function EnhancedSpeechComplaint({
             : "Audio saved, but speech transcription was unavailable.",
       );
     };
-    r.onend = async () => {
+    r.onend = () => {
       recognition.current = null;
       audioOnlyMode.current = false;
       if (recognitionFailed) return;
       clearTimers();
       stopAudio();
       setListening(false);
-      if (!final.trim()) return;
-      setWorking(true);
-      try {
-        const source = lang.split("-")[0];
-        let result = final.trim();
-        if (source !== "en") {
-          setNote("Translating into clear English…");
-          const res = await fetch(
-            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(result)}&langpair=${source}|en`,
-          );
-          const data = await res.json();
-          result = data?.responseData?.translatedText || result;
-        }
-        setText(normalizeComplaint(result.replace(/&#39;/g, "'")));
-        setNote(
-          "Complaint converted to clear English. You can edit it before submitting.",
-        );
-      } catch {
-        setText(normalizeComplaint(final));
-        setNote("Speech transcribed. You can edit it before submitting.");
-      } finally {
-        setWorking(false);
+      if (!final.trim()) {
+        setNote("No clear speech was detected. Review your audio, then type the text or record again.");
+        return;
       }
+      // Keep every recognized detail and the selected language, including negations.
+      setText(final.trim());
+      setNote(`Transcribed in ${languageName}. Review and edit the text before submitting.`);
     };
     try {
       r.start();
@@ -3966,6 +3831,7 @@ function EnhancedSpeechComplaint({
         <select
           aria-label="Spoken language"
           value={lang}
+          disabled={listening || working}
           onChange={(e) => setLang(e.target.value)}
         >
           {speechLanguages.map(([code, name]) => (
@@ -3990,21 +3856,23 @@ function EnhancedSpeechComplaint({
       </div>
       <textarea
         name={name}
+        aria-label={label.replace(/\s*\*$/, "")}
+        lang={lang}
         required={required}
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={placeholder}
       />
       <input type="hidden" name={audioName} value={audioData} />
-      {audioData && <audio className="request-audio-preview" controls src={audioData}>Recorded complaint</audio>}
+      {audioData && <audio className="request-audio-preview" controls src={audioData} aria-label={`${label.replace(/\s*\*$/, "")} audio`}>Recorded audio</audio>}
       <small className={listening ? "voice-note live" : "voice-note"}>
         {note ||
-          "Choose Hindi or English. Your recording and transcript will be saved with this request."}
+          "Choose Hindi or English and speak in that language. The text stays in your selected language; your audio is also saved."}
       </small>
     </label>
   );
 }
-SpeechComplaint = EnhancedSpeechComplaint;
+const SpeechComplaint = EnhancedSpeechComplaint;
 function readMeterEvidence(file) {
   return new Promise((resolve, reject) => {
     if (!file) return reject(new Error("Select a KMR/HMR evidence file."));
@@ -4020,28 +3888,15 @@ function readMeterEvidence(file) {
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const [equipmentGroup, setEquipmentGroup] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
-    [door, setDoor] = useState(""),
-    [equipmentSearch, setEquipmentSearch] = useState(""),
-    [equipmentSearchActive, setEquipmentSearchActive] = useState(false),
     [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [openedAt] = useState(() => new Date());
-  const pad = (n) => String(n).padStart(2, "0");
-  const systemDate = `${openedAt.getFullYear()}-${pad(openedAt.getMonth() + 1)}-${pad(openedAt.getDate())}`,
-    systemTime = `${pad(openedAt.getHours())}:${pad(openedAt.getMinutes())}:${pad(openedAt.getSeconds())}`,
-    locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
-    v = findRequestEquipment(locationEquipmentRecords, equipmentId),
+  const {date: systemDate, time: systemTime} = indiaWorkflowDateTimeParts(openedAt);
+  const locationEquipmentRecords = recordsForSite(equipmentRecords, assignedLocation),
     equipmentGroups = requestEquipmentGroupOptions(locationEquipmentRecords),
     groupRecords = requestEquipmentRecordsForGroup(locationEquipmentRecords, equipmentGroup),
-    searchableRecords = equipmentSearchActive || equipmentSearch.trim() ? locationEquipmentRecords : groupRecords,
-    equipmentVehicleRecords = searchableRecords.reduce((unique, record) => {
-      const label = requestEquipmentOptionLabel(record);
-      if (record.id != null && label && !unique.some((item) => item.label.toLowerCase() === label.toLowerCase())) {
-        unique.push({ record, label });
-      }
-      return unique;
-    }, []),
-    visibleEquipmentVehicleRecords = equipmentVehicleRecords.filter(({ record, label }) => String(record.id) === equipmentId || matchesSmartSearch(equipmentSearch, label, record)),
+    v = findRequestEquipment(groupRecords, equipmentId),
     equipmentDetails = requestEquipmentDetails(v || {}),
+    door = equipmentDetails.door,
     currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
   const [requestTime, setRequestTime] = useState(systemTime);
   const [requestDate, setRequestDate] = useState(systemDate);
@@ -4068,11 +3923,11 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         const response = await fetch(`/api/oracle/driver?${query}`, {headers: {Authorization: `Bearer ${authToken}`}});
         const result = await response.json().catch(() => ({}));
         if (cancelled) return;
-        if (!response.ok) setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
+        if (!response.ok) setDriverLookup({status: "temporary", name: "", source: "Lookup unavailable"});
         else if (result.found) setDriverLookup({status: "found", name: result.driverName || "", source: result.source || "Oracle logbook"});
-        else setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
+        else setDriverLookup({status: "temporary", name: "", source: "Not found"});
       } catch {
-        if (!cancelled) setDriverLookup({status: "temporary", name: "Demo Driver", source: "Demo"});
+        if (!cancelled) setDriverLookup({status: "temporary", name: "", source: "Lookup unavailable"});
       }
     }, 350);
     return () => { cancelled = true; window.clearTimeout(timer); };
@@ -4138,6 +3993,10 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
   const submit = async (e) => {
     e.preventDefault();
     if (submitting || checkingConflict) return;
+    if (!v) {
+      alert("Select an equipment or vehicle from the selected equipment group.");
+      return;
+    }
     if (duplicateConflict) {
       alert(duplicateConflict.message || "This door number already has an active maintenance request.");
       return;
@@ -4160,7 +4019,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         reg: equipmentDetails.reg,
         chassis: equipmentDetails.chassis,
         driverName: driverLookup.name,
-        driverNameSource: driverLookup.status === "found" ? `Oracle - ${driverLookup.source}` : driverLookup.source || "Demo",
+        driverNameSource: driverLookup.name.trim() ? (driverLookup.status === "found" ? `Oracle - ${driverLookup.source}` : "Manual") : "",
         meterType,
       };
     if (!request.chassis) {
@@ -4171,9 +4030,6 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     try {
       await submitMaintenanceRequest(onSubmit, request);
       close();
-      alert(
-        "Maintenance request submitted successfully. It is now visible to the Super User.",
-      );
     } catch (error) {
       if (error?.duplicate) {
         const conflict = {...error, message: error.message || activeRequestConflictMessage(error, request.door)};
@@ -4202,12 +4058,9 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               onChange={(event) => {
                 const selectedGroup = event.target.value,
                   matches = requestEquipmentRecordsForGroup(locationEquipmentRecords, selectedGroup),
-                  onlyRecord = matches.length === 1 ? matches[0] : null,
-                  details = requestEquipmentDetails(onlyRecord || {});
+                  onlyRecord = matches.length === 1 ? matches[0] : null;
                 setEquipmentGroup(selectedGroup);
-                setEquipmentSearch("");
                 setEquipmentId(onlyRecord?.id != null ? String(onlyRecord.id) : "");
-                setDoor(details.door);
               }}
             >
               <option value="" disabled>
@@ -4249,54 +4102,15 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                 ))}
             </select>
           </label>
-          <label>
-            Equipment / vehicle *
-            {equipmentLoaded && locationEquipmentRecords.length ? (
-              <>
-                <input
-                  className="equipment-request-search"
-                  data-smart-search
-                  type="search"
-                  value={equipmentSearch}
-                  onChange={(event) => setEquipmentSearch(event.target.value)}
-                  onFocus={() => setEquipmentSearchActive(true)}
-                  onClick={() => setEquipmentSearchActive(true)}
-                  placeholder="Search equipment / vehicle"
-                  aria-label="Search equipment or vehicle"
-                />
-                <select
-                  aria-label="Equipment or vehicle"
-                  value={equipmentId}
-                  required
-                  onChange={(event) => {
-                    const selectedId = event.target.value,
-                      selected = findRequestEquipment(locationEquipmentRecords, selectedId),
-                      details = requestEquipmentDetails(selected || {});
-                    setEquipmentId(selectedId);
-                    if (details.group) setEquipmentGroup(details.group);
-                    setDoor(details.door);
-                  }}
-                >
-                  <option value="" disabled>Select equipment or vehicle</option>
-                  {visibleEquipmentVehicleRecords.map(({ record, label }) => (
-                    <option key={String(record.id)} value={String(record.id)}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <input type="hidden" name="door" value={door} />
-              </>
-            ) : (
-              <input
-                name="door"
-                required
-                value={door}
-                onChange={(e) => setDoor(e.target.value)}
-                readOnly={Boolean(v?.door)}
-                placeholder={v?.door ? "Auto-filled from equipment" : "Select equipment group first"}
-              />
-            )}
-          </label>
+          <div>
+            <EquipmentCombobox key={`${assignedLocation}|${equipmentGroup}`} records={groupRecords}
+              group={equipmentGroup} value={equipmentId} loading={!equipmentLoaded}
+              disabled={!equipmentLoaded || !equipmentGroup}
+              onSelect={(selected) => {
+                setEquipmentId(selected?.id != null ? String(selected.id) : "");
+              }} />
+            <input type="hidden" name="door" value={v ? equipmentDetails.door : ""} />
+          </div>
           <label>
             Date *<input name="date" type="date" value={requestDate} readOnly aria-readonly="true" />
           </label>
@@ -4341,12 +4155,12 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               name="driverName"
               value={driverLookup.name}
               readOnly={driverLookup.status === "found" || driverLookup.status === "loading" || driverLookup.status === "idle"}
-              onChange={(event) => setDriverLookup({status: "temporary", name: event.target.value, source: event.target.value.trim() === "Demo Driver" ? "Demo" : "Manual"})}
+              onChange={(event) => setDriverLookup({status: "temporary", name: event.target.value, source: "Manual"})}
               aria-busy={driverLookup.status === "loading"}
-              placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : "Select equipment to fetch driver"}
+              placeholder={driverLookup.status === "loading" ? "Fetching from Oracle logbook…" : driverLookup.status === "temporary" ? "Enter driver name if known (optional)" : "Select equipment to fetch driver"}
             />
             {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
-            {driverLookup.status === "temporary" && <small>Temporary name — enter the driver manually if known. Oracle is checked every two minutes; when the actual driver is available it automatically replaces and removes this temporary name.</small>}
+            {driverLookup.status === "temporary" && <small>{driverLookup.source === "Lookup unavailable" ? "Driver lookup is temporarily unavailable." : driverLookup.source === "Not found" ? "No driver was found for this vehicle and time." : "Manually entered driver."} Enter the actual name if known, or leave it blank. Oracle will retry the lookup automatically.</small>}
           </label>
           <SpeechComplaint />
         </div>
@@ -5256,6 +5070,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
+          {reportAdministrator && ["Admin", "Super Admin"].includes(session?.permissions?.adminLevel) && <WhatsAppReportSettingsButton token={session?.token || authToken} />}
           <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules} disabled={!reportAccessLoaded}><Clock /> Report schedules</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!reportAccessLoaded || !accessibleReportGroups.length}><Download /> Download reports ZIP</button>
         </div>
@@ -5406,7 +5221,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           category={selectedReport.category}
           icon={activeCategory.icon}
           rows={selectedReportRows}
-          columns={selectedReport.columns}
+          columns={selectedReport.columns.map(column => column.key === "ref" ? {...column, render: row => <RequestTimelineButton reference={row.ref} token={session?.token || authToken} Dialog={Modal} />} : column)}
           emptyMessage={selectedReport.emptyMessage}
           rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
           rowClassName={selectedReport.rowClassName}
@@ -5749,7 +5564,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
               ) : type === "site-select" ? (
                 <label key={key}>{label} *<select name={key} required defaultValue={privilegeSelectionValue(editing[key])}><option value="" disabled>Select site</option>{privilegeSelectionValue(editing[key]) && !siteOptions.includes(privilegeSelectionValue(editing[key])) && <option value={privilegeSelectionValue(editing[key])}>{privilegeSelectionValue(editing[key])}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
               ) : (
-              <label key={key}>{label} *
+              <label key={key}>{label}{type !== "checkbox" && (type === "user-select" || key === "level" || key === fields[0][0] || (name === "Users & employees" && ["site", "userType"].includes(key))) ? " *" : ""}
                 {type === "checkbox" ? (
                   <span className="privilege-checkbox-field">
                     <input type="checkbox" name={key} defaultChecked={isCheckedValue(editing[key])} />
@@ -5848,22 +5663,31 @@ function useMasterRecords(name, seed = []) {
     [loaded, setLoaded] = useState(false),
     [loadError, setLoadError] = useState(""),
     [loadAttempt, setLoadAttempt] = useState(0);
+  const loadedMasterScope = useRef({name, token: authToken, loaded: false});
+  useEffect(() => watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document}), []);
   useEffect(() => {
     let activeRequest = true;
     const controller = new AbortController();
     const loadStartedAt = performance.now();
-    setLoaded(false);
+    const sameScope = loadedMasterScope.current.name === name && loadedMasterScope.current.token === authToken;
+    if (!sameScope) {
+      loadedMasterScope.current = {name, token: authToken, loaded: false};
+      setRecords(seed);
+    }
+    setLoaded(sameScope && loadedMasterScope.current.loaded);
     setLoadError("");
     fetch(`/api/masters?t=${Date.now()}`, {cache:"no-store", signal: controller.signal, headers: {Authorization: "Bearer " + authToken}})
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.error || "Could not load " + name + ".");
         if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Could not load " + name + ".");
+        if (data[name] != null && !Array.isArray(data[name])) throw new Error("Could not load " + name + ".");
         return data;
       })
       .then((data) => {
         if (!activeRequest) return;
         setRecords([...seed, ...(data[name] || [])]);
+        loadedMasterScope.current.loaded = true;
         setLoaded(true);
       })
       .catch((error) => {
@@ -5879,7 +5703,7 @@ function useMasterRecords(name, seed = []) {
       activeRequest = false;
       controller.abort();
     };
-  }, [name, loadAttempt]);
+  }, [name, loadAttempt, authToken]);
   const add = async (incoming, { silent = false } = {}) => {
     const batches = batchMasterRecords(incoming);
     const saved = [];
@@ -6304,7 +6128,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
   const [equipmentRecords, , equipmentLoaded, , , , equipmentLoadError, retryEquipmentLoad] = useMasterRecords("Equipment master");
   const [statusFilter, setStatusFilter] = useState("all");
   const statusTabRefs = useRef([]);
-  if (loadError || equipmentLoadError) return <MasterLoadError name="Breakdown master" error={loadError || equipmentLoadError} retry={() => { retryLoad(); retryEquipmentLoad(); }} />;
+  if ((loadError && !loaded) || (equipmentLoadError && !equipmentLoaded)) return <MasterLoadError name="Breakdown master" error={loadError || equipmentLoadError} retry={() => { retryLoad(); retryEquipmentLoad(); }} />;
   if (!loaded || !equipmentLoaded) return <MasterLoader name="Breakdown master" />;
   const rows = [...requests, ...manualRecords].map((request) => requestWithEquipmentMasterDetails(request, equipmentRecords));
   const count = (status) => rows.filter((record) => String(record.status || "").toLowerCase() === status.toLowerCase()).length;
@@ -6364,7 +6188,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
 const OriginalEquipment = Equipment;
 Equipment = function EquipmentWithData(props) {
   const [records, onAdd, loaded, onEdit, onDelete, onDeleteAll, loadError, retryLoad] = useMasterRecords("Equipment master", vehicles);
-  if (loadError) return <MasterLoadError name="Equipment master" error={loadError} retry={retryLoad} />;
+  if (loadError && !loaded) return <MasterLoadError name="Equipment master" error={loadError} retry={retryLoad} />;
   if (!loaded) return <MasterLoader name="Equipment master" />;
   const addEquipment = (incoming) =>
     onAdd(
@@ -6421,7 +6245,7 @@ function PrivilegeMasterPage(props) {
       alert(error.message || "Could not load users into Privilege.");
     });
   }, [syncKey, failedSync]);
-  if (usersLoadError) return <MasterLoadError name="Privilege" error={usersLoadError} retry={retryUsersLoad} />;
+  if (usersLoadError && !usersLoaded) return <MasterLoadError name="Privilege" error={usersLoadError} retry={retryUsersLoad} />;
   if (!usersLoaded) return <MasterLoader name="Privilege" />;
   if (missingUsers.length && failedSync !== syncKey) return <MasterLoader name="Privilege" />;
   return <MasterPage {...props} userOptions={userOptions} siteOptions={privilegeSiteOptions} />;
@@ -6891,7 +6715,7 @@ Generic = function GenericWithMasters(props) {
         ...records.map((record) => displaySiteName(record.site)).filter(Boolean),
       ])]
     : [];
-  if (masterFields[name] && loadError) return <MasterLoadError name={name} error={loadError} retry={retryLoad} />;
+  if (masterFields[name] && loadError && !loaded) return <MasterLoadError name={name} error={loadError} retry={retryLoad} />;
   if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
   return masterFields[name] ? (
     name === "Privilege" ? (
@@ -6911,7 +6735,7 @@ Subsidiaries = function SubsidiariesWithImport({ gotoEquipment, requests = [] } 
     "Region master",
     subsidiaryData.map((s) => ({ ...s, sites: s.sites.join(" | ") })),
   );
-  if (loadError) return <MasterLoadError name="Region master" error={loadError} retry={retryLoad} />;
+  if (loadError && !loaded) return <MasterLoadError name="Region master" error={loadError} retry={retryLoad} />;
   if (!loaded) return <MasterLoader name="Region master" />;
   return <RegionMasterPage records={records} requests={requests} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
@@ -6983,14 +6807,7 @@ function Modal({ title, close, children, className = "" }) {
   );
 }
 function requestStartParts(start) {
-  const match = String(start || "").match(/^(\d{4}-\d{2}-\d{2})\s*(?:·|Â·|\s)\s*((?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)/);
-  if (match) return {date: match[1], time: match[2].length === 5 ? `${match[2]}:00` : match[2]};
-  const now = new Date();
-  const pad = (value) => String(value).padStart(2, "0");
-  return {
-    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
-    time: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`,
-  };
+  return indiaWorkflowDateTimeParts(start || new Date());
 }
 
 function MaintenanceRemarks({ remarks = [] }) {
@@ -6999,7 +6816,7 @@ function MaintenanceRemarks({ remarks = [] }) {
 
 function DailyRemarkForm({ request, close, onSave }) {
   const previous=[...(request.dailyRemarks||[])].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
-  const today=new Intl.DateTimeFormat("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date());
+  const today=new Intl.DateTimeFormat("en-IN",{timeZone:"Asia/Kolkata",weekday:"long",day:"2-digit",month:"long",year:"numeric"}).format(new Date());
   const todayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   const todayRemark=previous.filter((item)=>String(item.createdAt||"").slice(0,10)===todayKey).at(-1);
   const history=todayRemark?previous.filter((item)=>item!==todayRemark):previous;
@@ -7115,7 +6932,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
   const closedByColumns = showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : [];
   const startedColumn = {key: "start", label: startedLabel, value: (row) => formatTwelveHourDateTime(row.start)};
   const filterColumns = [
-    ...(showAcceptedTime ? [{key: "acceptedTime", label: "Accepted time", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
+    ...(showAcceptedTime ? [{key: "acceptedTime", label: "Arrival wait", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
     {key: "ref", label: "Job reference", value: (row) => row.ref},
     {key: "equipmentGroup", label: "Equipment group", value: (row) => normalizeEquipmentGroup(row.equipmentGroup) || row.equipment},
     {key: "door", label: "Door no.", value: (row) => row.door},
@@ -7197,7 +7014,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
       <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
-          {showAcceptedTime && workflowHeader("acceptedTime", "Accepted time")}
+          {showAcceptedTime && workflowHeader("acceptedTime", "Arrival wait")}
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
@@ -7209,7 +7026,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
-              <td><b>{row.ref}</b></td>
+              <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} /></td>
               <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
@@ -7242,17 +7059,32 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
 function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequireArrivalFlag, repairTypeRecords = [], repairTypesLoaded = false }) {
   const parts = requestStartParts(request.start);
   const [time, setTime] = useState(parts.time);
-  const acceptanceTime = request.acceptedAt || indiaDateTimeInputValue(new Date()).replace("T", " ");
+  const acceptanceTime = request.acceptedAt;
+  const initialEtc = String(request.expectedCompletionAt || "").replace(" ", "T").slice(0,16);
+  const [expectedCompletionAt,setExpectedCompletionAt] = useState(initialEtc);
+  const [formError,setFormError] = useState("");
+  const etcChanged = Boolean(initialEtc && expectedCompletionAt.slice(0,16) !== initialEtc);
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const closeDialog = () => { if (!submitLock.current) close(); };
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
-  return <Modal title={`Edit request ${request.ref}`} close={close}>
+  return <Modal title={`Edit request ${request.ref}`} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
+      if (submitLock.current) return;
       if (arrivalRedFlagRequired(request)) { onRequireArrivalFlag?.(request); return; }
       const form = new FormData(event.currentTarget);
-      const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile).catch((error) => { alert(error.message); return ""; }) : "";
-      if (openingMeterFile && !openingMeterEvidence) return;
-      onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      const correctionReason = String(form.get("correctionReason") || "").trim();
+      if (etcChanged && !correctionReason) return setFormError("Explain why the expected completion time is being changed.");
+      setFormError("");
+      submitLock.current = true;
+      setSubmitting(true);
+      try {
+        const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
+        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, meterType, openingMeterReading: String(form.get("openingMeterReading") || "").trim(), openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+      } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
+      finally { submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="formgrid">
         <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
@@ -7279,25 +7111,34 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Site location<input value={request.site || "Not assigned"} readOnly aria-readonly="true" /></label>
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (HH:MM:SS)<input name="time" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
-        {request.acceptanceRequired && <label>Acceptance timing<input value={formatTwelveHourDateTime(acceptanceTime)} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "Automatically recorded when the vehicle is accepted."}</small></label>}
-        <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required defaultValue={String(request.expectedCompletionAt || "").replace(" ", "T")} /></label>
+        {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
+        <label className="full etc-field">ETC (Expected Time For Completion) *<input name="expectedCompletionAt" type="datetime-local" required value={expectedCompletionAt} onChange={event => setExpectedCompletionAt(event.target.value)} /><small>Planned time entered by Maintenance—not the actual completion time.</small></label>
+        {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {formatTwelveHourDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
         <label>Opening {meterType} reading (optional)<input name="openingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" defaultValue={request.openingMeterReading || ""} placeholder={`Enter opening ${meterType}`} /><small>{meterType === "KMR" ? "KMR is used for Vehicle-category assets." : "HMR is used for Equipment-category assets."}</small></label>
         <label>Opening {meterType} file (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing file saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">{request.acceptanceRequired ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : request.acceptanceRequired && !request.acceptedAt ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
 
 function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
+  const [formError,setFormError] = useState("");
   const opened = requestStartParts(request.start);
   const now = requestStartParts("");
-  const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date), [ideal,setIdeal]=useState(false), [idleReason,setIdleReason]=useState(""), [status,setStatus]=useState(request.status === "Closed" ? "Closed" : "In progress");
+  const [time, setTime] = useState(now.time), [closingDate,setClosingDate]=useState(now.date),
+    [ideal,setIdeal]=useState(() => ["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase())),
+    [idleReason,setIdleReason]=useState(() => String(request.idleReason || "").trim()),
+    [status,setStatus]=useState(["Closed", "Awaiting parts"].includes(request.status) ? request.status : "In progress");
   const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
   const [delayedReason, setDelayedReason] = useState("");
   const [customDelayedReason, setCustomDelayedReason] = useState("");
   const [legacyOpeningMeterFile, setLegacyOpeningMeterFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const closeDialog = () => { if (!submitLock.current) close(); };
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
   const openingMeterReadingMissing = !String(request.openingMeterReading || "").trim();
   const openingMeterFileMissing = !request.openingMeterFileUploaded;
@@ -7307,16 +7148,23 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const delayedReasonNeeded=!ideal&&status==="Closed"&&delayedReasonRequired(request.expectedCompletionAt,closingAt);
   const delayedReasonOptions=useMemo(()=>[...new Set(delayedReasonRecords.map((record)=>String(record.delayedReason||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[delayedReasonRecords]);
   const selectedDelayedReason=delayedReason==="__custom__"?customDelayedReason.trim():delayedReason;
-  return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={close}>
+  return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
-      const form = new FormData(event.currentTarget);
-      let openingMeterFile = "";
-      if (legacyOpeningMeterFile) {
-        openingMeterFile = await readMeterEvidence(legacyOpeningMeterFile).catch((error) => { alert(error.message); return ""; });
-        if (!openingMeterFile) return;
+      if (submitLock.current) return;
+      if (ideal && !["No driver", "No work"].includes(idleReason)) {
+        setFormError("Choose an Idle reason: No driver or No work.");
+        return;
       }
-      onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
+      const form = new FormData(event.currentTarget);
+      setFormError("");
+      submitLock.current = true;
+      setSubmitting(true);
+      try {
+        const openingMeterFile = legacyOpeningMeterFile ? await readMeterEvidence(legacyOpeningMeterFile) : "";
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReading: openingMeterReadingMissing ? String(form.get("openingMeterReading") || "").trim() : "", openingMeterFile, openingMeterFileName: legacyOpeningMeterFile?.name || ""});
+      } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
+      finally { submitLock.current = false; setSubmitting(false); }
     }}>
       <div className="details request-linked-details">
         <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
@@ -7336,30 +7184,57 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         {openingMeterFileMissing && <label>Opening {meterType} file <small>Optional</small><input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setLegacyOpeningMeterFile(event.target.files?.[0] || null)} /><small>{legacyOpeningMeterFile ? `${legacyOpeningMeterFile.name} · ${(legacyOpeningMeterFile.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small></label>}
         <label>Closing date *<input name="closingDate" type="date" required value={closingDate} readOnly aria-readonly="true" /></label>
         <label>Closing time (HH:MM:SS) *<input name="closingTime" required pattern={TIME_24H_PATTERN} value={time} readOnly aria-readonly="true" /></label>
+        {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {request.closedAt}. The original and replacement will be retained.</small></label>}
         <label>Turn around time (TAT)<input value={turnaroundTime} readOnly /></label>
-        <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{ideal&&<option>Idle</option>}</select></label>
-<fieldset className="ideal-choice"><legend>Idle? <small>Optional</small></legend><label><input type="radio" name="idealChoice" checked={ideal} onChange={()=>setIdeal(true)} /> Yes</label><label><input type="radio" name="idealChoice" checked={!ideal} onChange={()=>{setIdeal(false);setIdleReason("")}} /> No</label>{ideal&&<><label>Idle reason *<select name="idleReason" required value={idleReason} onChange={(event)=>setIdleReason(event.target.value)}><option value="">Select idle reason</option><option>No driver</option><option>No work</option></select></label><small>The request will remain Idle until an assigned manager approves Make on road.</small></>}</fieldset>
+        <label>Status *<select name="status" disabled={ideal} value={ideal?"Idle":status} onChange={(event)=>setStatus(event.target.value)}><option>In progress</option><option>Closed</option>{request.status === "Awaiting parts" && <option value="Awaiting parts">Awaiting parts</option>}{ideal&&<option>Idle</option>}</select></label>
+        <fieldset className="ideal-choice full">
+          <legend>Idle? <small>Optional</small></legend>
+          <div className="idle-options">
+            <label className={`idle-option${ideal ? " selected" : ""}`}>
+              <input type="radio" name="idealChoice" value="yes" checked={ideal} onChange={()=>setIdeal(true)} />
+              <span>Yes</span>
+            </label>
+            <label className={`idle-option${!ideal ? " selected" : ""}`}>
+              <input type="radio" name="idealChoice" value="no" checked={!ideal} onChange={()=>setIdeal(false)} />
+              <span>No</span>
+            </label>
+          </div>
+          {ideal && <>
+            <label className="idle-reason-field">Idle reason *
+              <select name="idleReason" required value={idleReason} aria-describedby="maintenance-idle-summary" onChange={(event)=>setIdleReason(event.target.value)}>
+                <option value="">Select idle reason</option><option>No driver</option><option>No work</option>
+              </select>
+            </label>
+            <div id="maintenance-idle-summary" className="idle-summary" role="status">
+              {idleReason && <strong>Selected idle reason: {idleReason}</strong>}
+              <span>The request will remain Idle until an assigned manager approves Make on road.</span>
+            </div>
+          </>}
+        </fieldset>
         {delayedReasonNeeded&&<fieldset className="delayed-reason-field full"><legend>Delayed reason *</legend><p>This request is being closed at least 4 hours after ETC. Select the reason for the delay.</p><label>Reason<select name="delayedReason" required value={delayedReason} onChange={(event)=>{setDelayedReason(event.target.value);if(event.target.value!=="__custom__")setCustomDelayedReason("")}}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}<option value="__custom__">Add custom delayed reason</option></select></label>{delayedReason==="__custom__"&&<label>New delayed reason *<input name="customDelayedReason" required maxLength="160" value={customDelayedReason} onChange={(event)=>setCustomDelayedReason(event.target.value)} placeholder="Enter a new delayed reason" /></label>}</fieldset>}
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
           audioName="maintenanceAudio"
           buttonLabel="Speak maintenance update"
-          placeholder="Describe the work completed, or choose Hindi/English and speak."
+          placeholder="Describe the work completed, or select Hindi / English and speak in that language."
         />
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary">Save maintenance update <ChevronRight /></button></footer>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
 
 function VerifyRequestForm({ request, close, onSave }) {
+  const [formError,setFormError] = useState("");
   const today = requestStartParts("");
   const [firstTripDone, setFirstTripDone] = useState(false);
   const [tripCardFile, setTripCardFile] = useState(null);
   const [tripCardPreview, setTripCardPreview] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
+  const closeDialog = () => { if (!submitLock.current) close(); };
   useEffect(() => () => { if (tripCardPreview) URL.revokeObjectURL(tripCardPreview); }, [tripCardPreview]);
   const fileAsDataUrl = (file) => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -7367,22 +7242,23 @@ function VerifyRequestForm({ request, close, onSave }) {
     reader.onerror = () => reject(new Error("Could not read the trip-card image."));
     reader.readAsDataURL(file);
   });
-  return <Modal title={`Verify closed request ${request.ref}`} close={close}>
+  return <Modal title={`Verify closed request ${request.ref}`} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (submitLock.current) return;
       const form = new FormData(event.currentTarget);
-      if (!tripCardFile) return alert("Upload the first-trip card image.");
+      if (!tripCardFile) return setFormError("Upload the first-trip card image.");
       if (tripCardFile && (!['image/jpeg', 'image/png', 'image/webp'].includes(tripCardFile.type) || tripCardFile.size > 5 * 1024 * 1024)) {
-        return alert("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
+        return setFormError("Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.");
       }
+      setFormError("");
       submitLock.current = true;
       setSubmitting(true);
       try {
         const firstTripCardImage = await fileAsDataUrl(tripCardFile);
-        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim()});
+        await onSave({firstTripDone, firstTripDate: form.get("firstTripDate"), firstTripTime: form.get("firstTripTime"), correctionReason: String(form.get("correctionReason") || "").trim(), firstTripCardImage, closingMeterReading: String(form.get("closingMeterReading") || "").trim()});
       } catch (error) {
-        alert(error?.message || "Could not verify this request. Please try again.");
+        setFormError(error?.message || "Could not verify this request. Please try again.");
       } finally {
         submitLock.current = false;
         setSubmitting(false);
@@ -7401,10 +7277,11 @@ function VerifyRequestForm({ request, close, onSave }) {
       <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
       <div className="formgrid">
         {firstTripDone && <>
-          <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /></label>
+          <label>First trip date *<input name="firstTripDate" type="date" required defaultValue={today.date} /><small>Enter the actual trip date. It must not be earlier than closure or in the future.</small></label>
           <label>First trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
         </>}
         <label>Closing {request.meterType || "KMR/HMR"} reading *<input name="closingMeterReading" type="number" min="0" step="0.01" inputMode="decimal" required placeholder={`Enter closing ${request.meterType || "KMR/HMR"}`} /></label>
+        {request.firstTripAt && <label className="full">Reason for correcting the recorded first-trip time *<textarea name="correctionReason" required maxLength={500} /><small>This unverified entry already has a first-trip time: {request.firstTripAt}. Any replacement or removal will retain the original value.</small></label>}
         <label className="full">First trip card image *
           <input name="firstTripCardImage" type="file" accept="image/jpeg,image/png,image/webp" required onChange={(event) => {
             const file = event.target.files?.[0] || null;
@@ -7416,7 +7293,8 @@ function VerifyRequestForm({ request, close, onSave }) {
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
       </div>
-      <footer><button type="button" onClick={close} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -7435,17 +7313,30 @@ function readTicketAttachment(file) {
 }
 
 function TicketCreateForm({ session, close, onCreated }) {
-  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false);
+  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const submitLock = useRef(false), formScope = useRef(0);
+  useEffect(() => {
+    formScope.current += 1;
+    submitLock.current = false;
+    setSaving(false);
+    setError("");
+    return () => { formScope.current += 1; };
+  }, [session.token]);
+  const dismiss = () => { if (!submitLock.current) close(); };
   const submit = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (submitLock.current) return;
     const form = new FormData(event.currentTarget);
     const message = String(form.get("message") || "").trim();
     const messageAudio = String(form.get("messageAudio") || "");
-    if (!message && !messageAudio) return alert("Write a message or record an audio message.");
+    if (!message && !messageAudio) return setError("Write a message or record an audio message.");
+    const scope = formScope.current;
+    submitLock.current = true;
     setSaving(true);
+    setError("");
     try {
       const attachmentData = await readTicketAttachment(attachment);
+      if (scope !== formScope.current) return;
       const response = await fetch("/api/tickets", {
         method: "POST",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
@@ -7453,19 +7344,21 @@ function TicketCreateForm({ session, close, onCreated }) {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not create the ticket.");
+      if (scope !== formScope.current) return;
       onCreated(result);
       close();
-    } catch (error) { alert(error.message); }
-    finally { setSaving(false); }
+    } catch (error) { if (scope === formScope.current) setError(error.message || "Could not create the ticket."); }
+    finally { if (scope === formScope.current) { submitLock.current = false; setSaving(false); } }
   };
-  return <Modal title="Create support ticket" close={close}>
+  return <Modal title="Create support ticket" close={dismiss}>
     <form className="form ticket-form" onSubmit={submit}>
       <div className="formgrid">
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
-        <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue here or record an audio message." required={false} />
+        <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue, or select Hindi / English and speak in that language." required={false} />
         <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       </div>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
+      {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
+      <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
     </form>
   </Modal>;
 }
@@ -7493,17 +7386,30 @@ function TicketAttachment({ ticket }) {
 }
 
 function TicketResolutionForm({ ticket, session, close, onResolved }) {
-  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false);
+  const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const submitLock = useRef(false), formScope = useRef(0);
+  useEffect(() => {
+    formScope.current += 1;
+    submitLock.current = false;
+    setSaving(false);
+    setError("");
+    return () => { formScope.current += 1; };
+  }, [session.token, ticket.reference]);
+  const dismiss = () => { if (!submitLock.current) close(); };
   const submit = async (event) => {
     event.preventDefault();
-    if (saving) return;
+    if (submitLock.current) return;
     const form = new FormData(event.currentTarget);
     const resolutionMessage = String(form.get("resolutionMessage") || "").trim();
     const resolutionAudio = String(form.get("resolutionAudio") || "");
-    if (!resolutionMessage && !resolutionAudio) return alert("Write a resolution message or record resolution audio.");
+    if (!resolutionMessage && !resolutionAudio) return setError("Write a resolution message or record resolution audio.");
+    const scope = formScope.current;
+    submitLock.current = true;
     setSaving(true);
+    setError("");
     try {
       const resolutionAttachmentData = await readTicketAttachment(attachment);
+      if (scope !== formScope.current) return;
       const response = await fetch("/api/tickets/resolve", {
         method: "PATCH",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
@@ -7511,16 +7417,18 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not resolve the ticket.");
+      if (scope !== formScope.current) return;
       onResolved(result);
       close();
-    } catch (error) { alert(error.message); }
-    finally { setSaving(false); }
+    } catch (error) { if (scope === formScope.current) setError(error.message || "Could not resolve the ticket."); }
+    finally { if (scope === formScope.current) { submitLock.current = false; setSaving(false); } }
   };
-  return <Modal title={`Resolve ${ticket.reference}`} close={close}>
+  return <Modal title={`Resolve ${ticket.reference}`} close={dismiss}>
     <form className="form ticket-resolution-form" onSubmit={submit}>
-      <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain how this ticket was resolved or record an audio message." required={false} />
+      <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain the resolution, or select Hindi / English and speak in that language." required={false} />
       <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
-      <footer><button type="button" onClick={close}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
+      {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
+      <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
     </form>
   </Modal>;
 }
@@ -7538,39 +7446,78 @@ function AdminLockManagement({session}){
 }
 
 function TicketPage({ session }) {
-  const [tickets, setTickets] = useState([]), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  const [ticketState, setTicketState] = useState(null), [refreshing, setRefreshing] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null), [refreshCount, setRefreshCount] = useState(0);
+  const requestSequence = useRef(0), activeLoad = useRef(null), currentScope = useRef(null);
+  currentScope.current = {token: session?.token, category};
+  const sameAccount = ticketState?.token === session?.token;
+  const sameScope = sameAccount && ticketState?.category === category;
+  const tickets = sameScope ? ticketState.records : [];
+  const error = sameScope ? ticketState.error : "";
+  const loading = refreshing || !sameScope;
+  const refresh = () => setRefreshCount((current) => current + 1);
   const isAdmin = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const canCreate = Boolean(session?.token);
   const ticketExportColumns = [
     { label: "Ticket ID", value: (ticket) => ticket.reference }, { label: "User", value: (ticket) => ticket.creatorName }, { label: "Site", value: (ticket) => ticket.site }, { label: "Category", value: (ticket) => ticket.category }, { label: "Priority", value: (ticket) => ticket.priority || "Medium" }, { label: "Description", value: (ticket) => ticket.message || "Audio description" }, { label: "Status", value: (ticket) => ticket.status }, { label: "Resolution", value: (ticket) => ticket.resolutionMessage || "—" },
   ];
+  useEffect(() => watchVisibleMasterRefresh(() => setRefreshCount((current) => current + 1), {win: window, doc: document}), []);
+  useEffect(() => { setCreating(false); setResolving(null); }, [session?.token]);
   useEffect(() => {
     let activeRequest = true;
     const controller = new AbortController();
-    setLoading(true);
+    const sequence = ++requestSequence.current;
+    activeLoad.current = controller;
+    setRefreshing(true);
+    setTicketState((current) => current?.token === session?.token && current?.category === category
+      ? {...current, error: ""}
+      : {token: session?.token, category, records: [], error: ""});
     fetch(`/api/tickets${category ? `?category=${encodeURIComponent(category)}` : ""}`, {
       signal: controller.signal,
+      cache: "no-store",
       headers: {Authorization: `Bearer ${session.token}`},
     })
       .then(async (response) => {
-        const result = await response.json().catch(() => ([]));
-        if (!response.ok) throw new Error(result.error || "Could not load tickets.");
+        const result = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(result?.error || "Could not load tickets.");
+        if (!Array.isArray(result)) throw new Error("Could not load tickets. Please retry.");
         return result;
       })
-      .then((result) => { if (activeRequest) setTickets(result); })
-      .catch((error) => { if (activeRequest && error.name !== "AbortError") alert(error.message); })
-      .finally(() => { if (activeRequest) setLoading(false); });
+      .then((result) => { if (activeRequest && sequence === requestSequence.current) setTicketState({token: session?.token, category, records: result, error: ""}); })
+      .catch((error) => {
+        if (activeRequest && error.name !== "AbortError" && sequence === requestSequence.current) {
+          setTicketState((current) => ({...current, error: error.message || "Could not load tickets."}));
+        }
+      })
+      .finally(() => { if (activeRequest && sequence === requestSequence.current) setRefreshing(false); });
     return () => {
       activeRequest = false;
       controller.abort();
     };
-  }, [category, session?.token]);
+  }, [category, session?.token, refreshCount]);
+  const applySavedTicket = (ticket) => {
+    if (currentScope.current.token !== session?.token || currentScope.current.category !== category) return;
+    // A GET begun before this save must not undo its newer result.
+    requestSequence.current += 1;
+    activeLoad.current?.abort();
+    setTicketState((current) => {
+      const records = current?.token === session?.token && current?.category === category ? current.records : [];
+      const next = category && ticket.category !== category
+        ? records.filter((row) => row.reference !== ticket.reference)
+        : records.some((row) => row.reference === ticket.reference)
+          ? records.map((row) => row.reference === ticket.reference ? ticket : row)
+          : [ticket, ...records];
+      return {token: session?.token, category, records: next, error: ""};
+    });
+    setRefreshing(false);
+    refresh();
+  };
   return <section className="ticket-page">
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><div className="ticket-toolbar-controls"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
+    {error && <div className="hierarchy-save-error" role="alert"><span>{error}{tickets.length > 0 ? " Showing previously loaded tickets." : ""}</span><button type="button" onClick={refresh} disabled={loading}>Retry</button></div>}
     <div className="ticket-table-wrap"><ActionsTable toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{ticket.createdAt}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {ticket.resolvedAt}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
-    {canCreate && creating && <TicketCreateForm session={session} close={() => setCreating(false)} onCreated={(ticket) => setTickets((current) => [ticket, ...current])} />}
-    {resolving && <TicketResolutionForm ticket={resolving} session={session} close={() => setResolving(null)} onResolved={(result) => setTickets((current) => current.map((ticket) => ticket.reference === result.reference ? result : ticket))} />}
+    {sameAccount && canCreate && creating && <TicketCreateForm key={session.token} session={session} close={() => setCreating(false)} onCreated={applySavedTicket} />}
+    {sameAccount && resolving && <TicketResolutionForm key={`${session.token}:${resolving.reference}`} ticket={resolving} session={session} close={() => setResolving(null)} onResolved={applySavedTicket} />}
   </section>;
 }
 
@@ -7588,15 +7535,21 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
   canCloseRef.current = canClose;
   useEffect(() => {
     if (!lockForLogin) return undefined;
+    let finished = false;
     const deadline = Date.now() + AI_FEEDER_CLOSE_DELAY_SECONDS * 1000;
     const tick = () => {
+      if (finished) return;
       const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
       setSeconds(remaining);
-      if (remaining === 0) window.clearInterval(timer);
+      if (remaining === 0) {
+        finished = true;
+        window.clearInterval(timer);
+        closeRef.current();
+      }
     };
     const timer = window.setInterval(tick, 1000);
     document.addEventListener("visibilitychange", tick);
-    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
+    return () => { finished = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
   }, [lockForLogin]);
   useEffect(() => {
     const previousFocus = document.activeElement;
@@ -7671,7 +7624,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
           </article>;
         }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
       </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{lockForLogin && seconds > 0 ? "Close available at 00:00" : "Close anytime"} · Reopen from Info Pulse</span></footer>
+      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{lockForLogin && seconds > 0 ? "Closes automatically at 00:00" : "Close anytime"} · Reopen from Info Pulse</span></footer>
     </div>
   </div>, document.body);
 }
@@ -7736,6 +7689,7 @@ function NotificationRequestEntry({ reference, request = {} }) {
       <div><span>Maintenance request</span><h2>{reference}</h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
       <Status>{request.status || "Open"}</Status>
     </div>
+    <RequestTimelineButton reference={reference} token={authToken} Dialog={Modal} label="View time breakdown and correction history" />
     <dl className="notification-entry-fields">
       <NotificationEntryField label="Equipment group" value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment} />
       <NotificationEntryField label="Door number" value={request.door} />
@@ -7930,6 +7884,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
   const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardRequests,setDashboardRequests]=useState(requests);
+  const [createdRequestRef, setCreatedRequestRef] = useState("");
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
@@ -7959,8 +7914,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     else if(showRequestsMenu&&canSeeRequestMenu("Closed history"))setTab("history");
     else if(showTicketsMenu)setTab("tickets");
   },[responsiveMobile,showRequestsMenu,showTicketsMenu,visibleRequestMenus?.join("|"),mobileRole]);
-  const [equipmentRecords, , equipmentLoaded] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
-  const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
+  const [equipmentRecords, , equipmentLoaded, , , , , refreshEquipmentRecords] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
+  const [repairTypeRecords, , repairTypesLoaded, , , , , refreshRepairTypes] = useMasterRecords("Repair type master");
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
     let active=true;
@@ -7981,7 +7936,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       .catch(() => {});
     return () => { active = false; };
   }, [session?.token, session?.login, session?.name, show]);
-  const dateLabel = new Intl.DateTimeFormat(undefined, {weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
+  const dateLabel = new Intl.DateTimeFormat(undefined, {timeZone: "Asia/Kolkata", weekday: "long", day: "numeric", month: "long", year: "numeric"}).format(new Date());
   const openArrivalFlag = (row, nextAction = null) => { setArrivalFlagNextAction(nextAction); setArrivalFlagging(row); };
   const openMaintenanceAction = (row, action) => {
     const current = requests.find((item) => item.ref === row.ref) || row;
@@ -8022,13 +7977,20 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     else if (arrivalFlagNextAction === "remark") setRemarking(saved);
   };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
+  const createRequest = async (request) => {
+    const saved = await onCreate(request);
+    setCreatedRequestRef(saved?.ref || request.ref);
+    setTab("requests");
+    setSection("profile");
+    return saved;
+  };
   const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):requests;
-  const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)).filter(visibleInOperationalUserRequests);
-  const activeRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()!=="closed");
-  const closedRequests=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="closed");
-  const visibleRows = isMis ? closedRequests.filter((row) => !row.verifiedAt).filter(visibleInMisRequests) : activeRequests;
-  const historyRows=isMis?closedRequests.filter((row)=>Boolean(row.verifiedAt)).filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
-  const idleRows=requestRows.filter((row)=>String(row.status||"").toLowerCase()==="idle");
+  const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
+  const activeRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()!=="closed");
+  const closedRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed");
+  const visibleRows = isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests;
+  const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
+  const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
@@ -8039,13 +8001,14 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
-        {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => setShow(true)}><Plus /> Create request</button>}
+        {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => {refreshEquipmentRecords();refreshRepairTypes();setShow(true);}}><Plus /> Create request</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU)&&<button className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>MIS verification</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
       </div>
       </div>
+      {createdRequestRef && <div className="hierarchy-save-message" role="status"><CheckCircle2 /><span>Request <b>{createdRequestRef}</b> saved successfully. It is shown in Requests.</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
@@ -8055,7 +8018,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {tab === "idle" && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
-    {canCreate && show && <MaintenanceForm normal onSubmit={onCreate} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
+    {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
@@ -8286,6 +8249,7 @@ function App() {
         // The POST succeeded; keep the saved row visible if a refresh is transiently unavailable.
         console.warn("Request saved, but the list refresh failed.", error);
       }
+      return saved;
     },
     updateRequest = async (reference, payload, action = "edit") => {
       const endpoint = action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
@@ -8382,7 +8346,7 @@ function App() {
       />
       <main className="content">
         <div className="top">
-          <button className="menubtn" onClick={() => setMenu(!menu)}>
+          <button type="button" className="menubtn" aria-label={menu ? "Close navigation menu" : "Open navigation menu"} aria-expanded={menu} aria-controls="admin-primary-navigation" onClick={() => setMenu(!menu)}>
             <Menu />
           </button>
           <div className="crumb">
@@ -8412,7 +8376,7 @@ function App() {
           {active === "Dashboard" ? (
             <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} />
           ) : active === "Manager Profile" ? (
-            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={async(row)=>{if(!window.confirm(`Approve ${row.ref} as on road? This will close the request and forward it to MIS verification.`))return;try{await updateRequest(row.ref,{},"ideal-onroad")}catch(error){alert(error.message)}}} onCancelIdeal={async(row)=>{if(!window.confirm(`Cancel Idle status for ${row.ref}? The request will return to active maintenance and will not be closed.`))return;try{await updateRequest(row.ref,{},"idle-cancel")}catch(error){alert(error.message)}}} />
+            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (
@@ -8437,12 +8401,13 @@ function App() {
               ) : active === "Audit Trail" ? (
                 <AuditTrailPage session={session} />
               ) : operationalSession ? (
-            <Normal
-              embedded
+              <Normal
+                  embedded
               requests={requests}
               onCreate={addRequest}
               onUpdateRequest={updateRequest}
-              onDeleteRequest={deleteRequest}
+                  onDeleteRequest={deleteRequest}
+                  onAddDailyRemark={addDailyRemark}
               session={operationalSession}
               logout={logout}
               theme={theme}

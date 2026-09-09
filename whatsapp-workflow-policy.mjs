@@ -39,7 +39,19 @@ function workflowRoleKeys(user={},profile=resolveMobileAccess({user})){
   return {keys,designation};
 }
 
-export function isExcludedWorkflowWhatsAppRecipient(user={},profile=resolveMobileAccess({user})){
+function leadershipRole(user,profile,designation){
+  const rawAdminLevel=normalizedWords(user.adminLevel),name=normalizedWords(user.employee||user.name);
+  if(rawAdminLevel==='super admin'||designation?.key==='superAdmin')return 'superAdmin';
+  if(DIRECTOR_PROFILE_NAMES.has(name)||designation?.key==='director')return 'director';
+  if(rawAdminLevel==='admin'||(profile.sessionRole==='super'&&profile.permissions?.adminLevel==='Admin'&&designation?.key!=='projectManager'))return 'admin';
+  return '';
+}
+
+export function isExcludedWorkflowWhatsAppRecipient(user={},profile=resolveMobileAccess({user}),settings=null,eventType=''){
+  if(settings){
+    const role=leadershipRole(user,profile,workflowRoleKeys(user,profile).designation);
+    return Boolean(role&&!settings.events?.[eventType]?.recipientRoles.includes(role));
+  }
   const rawAdminLevel=normalizedWords(user.adminLevel);
   const name=normalizedWords(user.employee||user.name);
   const {designation}=workflowRoleKeys(user,profile);
@@ -48,27 +60,32 @@ export function isExcludedWorkflowWhatsAppRecipient(user={},profile=resolveMobil
   return profile.sessionRole==='super'&&profile.permissions?.adminLevel==='Admin'&&designation?.key!=='projectManager';
 }
 
-export function isWorkflowWhatsAppRecipient(user={},eventType='',site=''){
-  const policy=WHATSAPP_WORKFLOW_POLICY[eventType];
+export function isWorkflowWhatsAppRecipient(user={},eventType='',site='',settings=null){
+  const policy=settings?settings.events?.[eventType]:WHATSAPP_WORKFLOW_POLICY[eventType];
   if(!policy)return false;
+  if(settings&&(!settings.enabled||policy.enabled===false))return false;
   const profile=resolveMobileAccess({user});
-  if(isExcludedWorkflowWhatsAppRecipient(user,profile))return false;
-  const {keys}=workflowRoleKeys(user,profile);
+  if(isExcludedWorkflowWhatsAppRecipient(user,profile,settings,eventType))return false;
+  let {keys,designation}=workflowRoleKeys(user,profile);
+  const leadership=leadershipRole(user,profile,designation);
+  if(settings&&leadership)keys=new Set([leadership]);
   if(!policy.recipientRoles.some((role)=>keys.has(role)))return false;
   if(profile.sessionRole==='normal'){
     const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
     return Boolean(userSite)&&userSite===canonicalSiteName(site);
   }
-  return reportScopeIncludesSite(managerReportScope(user),site);
+  const scope=managerReportScope(user);
+  if(settings&&['admin','superAdmin'].includes(leadership)&&Array.isArray(scope.sites)&&!scope.sites.length)return true;
+  return reportScopeIncludesSite(scope,site);
 }
 
-export function workflowWhatsAppRecipientLogins(rows=[],{eventType,site}={}){
-  const excludedLogins=new Set(rows.map((row)=>row?.record_data||row||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean));
+export function workflowWhatsAppRecipientLogins(rows=[],{eventType,site,settings=null}={}){
+  const excludedLogins=new Set(rows.map((row)=>row?.record_data||row||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user,resolveMobileAccess({user}),settings,eventType)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean));
   const logins=[];
   for(const row of rows){
     const user=row?.record_data||row||{};
     const login=String(user.login||'').trim().toLowerCase();
-    if(login&&!excludedLogins.has(login)&&isWorkflowWhatsAppRecipient(user,eventType,site))logins.push(login);
+    if(login&&!excludedLogins.has(login)&&isWorkflowWhatsAppRecipient(user,eventType,site,settings))logins.push(login);
   }
   return [...new Set(logins)];
 }
@@ -78,12 +95,14 @@ export function workflowRequestLink(reference,baseUrl='https://bdms.cmll.in'){
   return `${root}/?request=${encodeURIComponent(String(reference||'').trim())}`;
 }
 
-export function workflowReminderSlot(eventType,eventAt,now=new Date()){
+export function workflowReminderSlot(eventType,eventAt,now=new Date(),settings=null){
   const started=new Date(eventAt);
   const current=new Date(now);
   if(!Number.isFinite(started.getTime())||!Number.isFinite(current.getTime()))return '';
   const elapsedHours=Math.floor((current-started)/(60*60*1000));
-  if(eventType==='opened')return elapsedHours>=WHATSAPP_WORKFLOW_DELIVERY_RULES.offRoadEscalationHours?'offroad-hour-4':'';
-  if(eventType==='idle'&&elapsedHours>=WHATSAPP_WORKFLOW_DELIVERY_RULES.idleRepeatHours)return `idle-hour-${elapsedHours}`;
+  const offRoad=settings?.reminders?.offRoad||{enabled:true,hours:WHATSAPP_WORKFLOW_DELIVERY_RULES.offRoadEscalationHours};
+  const idle=settings?.reminders?.idle||{enabled:true,hours:WHATSAPP_WORKFLOW_DELIVERY_RULES.idleRepeatHours};
+  if(eventType==='opened')return offRoad.enabled&&elapsedHours>=offRoad.hours?`offroad-hour-${offRoad.hours}`:'';
+  if(eventType==='idle'&&idle.enabled&&elapsedHours>=idle.hours)return `idle-hour-${Math.floor(elapsedHours/idle.hours)*idle.hours}`;
   return '';
 }

@@ -7,10 +7,11 @@ export function indiaDateTimeInputValue(value = new Date()) {
 }
 
 export function indiaDateTimeEpoch(value) {
+  if (value instanceof Date) return value.getTime();
   const text = String(value || "").trim();
   if (!text) return Number.NaN;
   if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(text)) return new Date(text).getTime();
-  const normalized = text.replace(" ", "T");
+  const normalized = text.replace(/[ T·]+/, "T");
   const withTime = /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? `${normalized}T00:00:00` : normalized;
   return new Date(`${withTime}+05:30`).getTime();
 }
@@ -24,7 +25,10 @@ export function validReportDateRange(from, to) {
 export function reportRowsWithinRange(rows = [], dateValue, from, to, { includeUndated = false } = {}) {
   if (!validReportDateRange(from, to)) return [];
   const fromEpoch = indiaDateTimeEpoch(from);
-  const toEpoch = indiaDateTimeEpoch(to);
+  // A calendar-date selection includes the entire final day. A datetime
+  // selection continues to use its exact inclusive endpoint.
+  const dateOnlyEnd = /^\d{4}-\d{2}-\d{2}$/.test(String(to).trim());
+  const toEpoch = indiaDateTimeEpoch(to) + (dateOnlyEnd ? 86400000 - 1 : 0);
   return rows.filter((row) => {
     const timestamp = indiaDateTimeEpoch(dateValue?.(row));
     return Number.isFinite(timestamp) ? timestamp >= fromEpoch && timestamp <= toEpoch : includeUndated;

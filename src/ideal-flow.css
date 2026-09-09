@@ -1,17 +1,20 @@
 .ideal-choice {
   border: 1px solid #dfe4ec;
   border-radius: 7px;
-  padding: 10px 12px;
+  padding: 16px;
   margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr);
+  align-items: end;
+  gap: 14px 20px;
+  background: #fafbfe;
 }
 
 .ideal-choice legend {
   padding: 0 4px;
   color: #546177;
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -20,20 +23,88 @@
   font-weight: 500;
 }
 
-.ideal-choice label {
+.idle-options {
   display: flex;
+  gap: 10px;
+  align-self: end;
+}
+
+.ideal-choice .idle-option {
+  display: flex;
+  flex: 1 0 76px;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid #d5deee;
+  border-radius: 8px;
+  color: #53627a;
+  background: #fff;
+  cursor: pointer;
+  white-space: nowrap;
 }
 
-.ideal-choice input {
-  width: auto !important;
+.ideal-choice .idle-option.selected {
+  border-color: #3565cb;
+  background: #edf3ff;
+  color: #234c9d;
+}
+
+.ideal-choice .idle-option:focus-within {
+  outline: 2px solid #3565cb;
+  outline-offset: 2px;
+}
+
+.ideal-choice input[type="radio"] {
+  flex: 0 0 17px;
+  width: 17px !important;
+  height: 17px;
+  min-height: 0;
+  padding: 0;
   margin: 0 !important;
+  accent-color: #3565cb;
 }
 
-.ideal-choice > small {
-  color: #b26618;
-  line-height: 1.35;
+.ideal-choice .idle-reason-field {
+  display: block;
+  min-width: 0;
+}
+
+.ideal-choice .idle-reason-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  color: var(--ink);
+  background-color: #fff;
+}
+
+.idle-summary {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 5px;
+  border-top: 1px solid #e1e7f1;
+  padding-top: 12px;
+  color: #805019;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.idle-summary strong { color: #234c9d; }
+
+:root[data-theme="dark"] .ideal-choice { background: #142139; border-color: #354663; }
+:root[data-theme="dark"] .ideal-choice legend { color: #c8d6ea; }
+:root[data-theme="dark"] .ideal-choice legend small { color: #9db0cb; }
+:root[data-theme="dark"] .ideal-choice .idle-option,
+:root[data-theme="dark"] .ideal-choice .idle-reason-field select { background: #182943; color: #e8eef8; border-color: #405474; }
+:root[data-theme="dark"] .ideal-choice .idle-option.selected { background: #263e68; border-color: #91b3ff; }
+:root[data-theme="dark"] .idle-summary { color: #e5c296; border-color: #354663; }
+:root[data-theme="dark"] .idle-summary strong { color: #b9d0ff; }
+
+@media (max-width: 600px) {
+  .ideal-choice { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .idle-options { width: 100%; }
 }
 
 .delayed-reason-field {

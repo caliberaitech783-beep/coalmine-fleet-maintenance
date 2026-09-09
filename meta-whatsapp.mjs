@@ -1,27 +1,22 @@
+import {META_WORKFLOW_TEMPLATES} from './whatsapp-template-catalog.mjs';
+import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled} from './whatsapp-report-settings.mjs';
+import {effectiveReportTemplate} from './whatsapp-template-runtime.mjs';
+
 const clean=(value)=>String(value??'').trim();
 const providerName=(env=process.env)=>clean(env.WHATSAPP_PROVIDER||'meta').toLowerCase()==='fast2sms'?'fast2sms':'meta';
 const deliveryPaused=(env=process.env)=>['true','1','yes','on'].includes(clean(env.META_WHATSAPP_DELIVERY_PAUSED).toLowerCase());
-const assertDeliveryActive=(env)=>{
-  if(deliveryPaused(env))throw new Error('WhatsApp delivery is temporarily paused pending hierarchy configuration.');
+let deliveryPolicyReader=null;
+export function setWhatsAppDeliveryPolicyReader(reader){deliveryPolicyReader=reader;}
+const assertDeliveryActive=async(env,purpose='')=>{
+  const settings=normalizeWhatsAppReportSettings(deliveryPolicyReader?await deliveryPolicyReader():env.WHATSAPP_REPORT_SETTINGS);
+  if(deliveryPaused(env)||((deliveryPolicyReader||env.WHATSAPP_REPORT_SETTINGS)&&!whatsappPurposeEnabled(settings,purpose))){
+    const error=new Error('WhatsApp delivery is paused by Report settings.');
+    error.code='WHATSAPP_POLICY_PAUSED';error.status=409;throw error;
+  }
+  return settings;
 };
 
-export const META_WORKFLOW_TEMPLATES={
-  passwordResetOtp:{name:'nerve_password_reset_otp',category:'AUTHENTICATION',example:['123456'],otpButton:true,components:[
-    {type:'BODY',add_security_recommendation:true},
-    {type:'FOOTER',code_expiration_minutes:10},
-    {type:'BUTTONS',buttons:[{type:'OTP',otp_type:'COPY_CODE',text:'Copy Code'}]},
-  ]},
-  consolidatedRequestReport:{name:'nerve_consolidated_request_report',body:'Nerve Center scheduled fleet report:\n\n{{1}}\n\nGenerated automatically. Open Nerve Center for the complete live view.',example:['SCOPE: WCL\nWINDOW: 26 Aug 2026, 10:00 PM - 27 Aug 2026, 6:00 AM\nOFF ROAD / OPEN: 2\nON ROAD / CLOSED: 1']},
-  consolidatedTicketReport:{name:'nerve_consolidated_crm_ticket_report',body:'Nerve Center scheduled CRM ticket report:\n\n{{1}}\n\nGenerated automatically. Open Nerve Center for the complete live view.',example:['SCOPE: WCL\nWINDOW: 27 Aug 2026, 8:00 AM - 27 Aug 2026, 3:00 PM\nOPEN TICKETS: 3\nCLOSED TICKETS: 2']},
-  ticketCreated:{name:'nerve_ticket_created',body:'Nerve Center: Ticket {{1}} was created by {{2}} at {{3}}. Please open Nerve Center to review it.',example:['TIC/MAJRI-OB/240826/000001','Anoop Paul','Majri OB']},
-  ticketResolved:{name:'nerve_ticket_resolved',body:'Nerve Center: Ticket {{1}} was resolved by {{2}}. Please open Nerve Center to view the resolution.',example:['TIC/MAJRI-OB/240826/000001','Administrator']},
-  maintenanceReminder:{name:'nerve_maintenance_reminder',body:'Nerve Center reminder: Please add the {{1}} maintenance update and delay reason for request {{2}}. This update is due now.',example:['9:00 AM','REQ-1787566831835']},
-  dailyUpdate:{name:'nerve_daily_update',body:'Nerve Center: {{1}} added a daily maintenance update for request {{2}}. Please open Nerve Center to review it.',example:['Maintenance User','REQ-1787566831835']},
-  requestOpened:{name:'bdms_offroad_request_opened_v1',body:'BDMS Off Road Alert\nRequest {{1}} has been opened at {{2}}. Equipment: {{3}}, Door No.: {{4}}. Breakdown type: {{5}}. Reported by {{6}} at {{7}}. ETC: {{8}}.\nOpen request: {{9}}',example:['REQ-1787566831835','Majri OB','VOLVO TIPPERS','V257 - MH34BZ5560','Breakdown','Production User','24 Aug 2026, 3:49 PM','24 Aug 2026, 8:00 PM','https://bdms.cmll.in/?request=REQ-1787566831835']},
-  requestClosed:{name:'bdms_onroad_request_closed_v1',body:'BDMS On Road Update\nRequest {{1}} for {{2}} at {{3}} has been closed by {{4}} at {{5}}. Total downtime: {{6}}. Status: On Road.\nOpen request: {{7}}',example:['REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','Maintenance User','24 Aug 2026, 6:10 PM','0d 2h 21m','https://bdms.cmll.in/?request=REQ-1787566831835']},
-  requestVerified:{name:'bdms_mis_verification_completed_v1',body:'BDMS MIS Verification\nRequest {{1}} for {{2}} at {{3}} was verified by {{4}} at {{5}}. Closing meter: {{6}}. Final status: Verified.\nOpen request: {{7}}',example:['REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','MIS User','24 Aug 2026, 6:30 PM','HMR 12456','https://bdms.cmll.in/?request=REQ-1787566831835']},
-  requestIdle:{name:'bdms_vehicle_idle_v1',body:'BDMS Idle Vehicle Alert\n{{1}} at {{2}} was marked Idle at {{3}}. Reason: {{4}}. Request: {{5}}. Approval action: {{6}}.\nOpen request: {{7}}',example:['VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','24 Aug 2026, 6:10 PM','No driver','REQ-1787566831835','Project Manager or Production Manager must approve Make On Road','https://bdms.cmll.in/?request=REQ-1787566831835']},
-};
+export {META_WORKFLOW_TEMPLATES} from './whatsapp-template-catalog.mjs';
 
 export function metaWhatsAppConfiguration(env=process.env){
   const provider=providerName(env);
@@ -40,7 +35,8 @@ export function normalizeWhatsAppRecipient(value){
   return phone;
 }
 
-async function metaRequest(path,{method='GET',body,env=process.env,fetchImpl=fetch}={}){
+async function metaRequest(path,{method='GET',body,env=process.env,fetchImpl=fetch,purpose=''}={}){
+  if(path.endsWith('/messages'))await assertDeliveryActive(env,purpose);
   const config=metaWhatsAppConfiguration(env);
   if(!config.configured)throw new Error(`${config.provider==='fast2sms'?'Fast2SMS':'Meta'} WhatsApp API is not configured.`);
   const baseUrl=config.provider==='fast2sms'?'https://www.fast2sms.com/dev/whatsapp':'https://graph.facebook.com';
@@ -81,22 +77,22 @@ export async function registerMetaWhatsAppPhone({pin},{env=process.env,fetchImpl
   return {registered:details.success===true,phoneNumberId:config.phoneNumberId};
 }
 
-export async function sendMetaWhatsAppText({to,message},{env=process.env,fetchImpl=fetch}={}){
-  assertDeliveryActive(env);
+export async function sendMetaWhatsAppText({to,message,purpose=''},{env=process.env,fetchImpl=fetch}={}){
+  await assertDeliveryActive(env,purpose);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
   const text=clean(message);
   if(!recipient||recipient.length<10||recipient.length>15)throw new Error('A valid WhatsApp recipient phone number is required.');
   if(!text)throw new Error('A WhatsApp message is required.');
   if(text.length>4096)throw new Error('WhatsApp text messages cannot exceed 4096 characters.');
-  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,body:{
+  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,purpose,body:{
     messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'text',text:{preview_url:false,body:text},
   }});
   return {sent:true,recipient,messageId:details?.messages?.[0]?.id||''};
 }
 
-export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center-report.pdf',caption=''},{env=process.env,fetchImpl=fetch}={}){
-  assertDeliveryActive(env);
+export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center-report.pdf',caption='',purpose=''},{env=process.env,fetchImpl=fetch}={}){
+  await assertDeliveryActive(env,purpose);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
   const documentBuffer=Buffer.isBuffer(buffer)?buffer:Buffer.from(buffer||[]);
@@ -120,24 +116,24 @@ export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center
     const message=clean(upload?.error?.message)||`Meta WhatsApp media upload failed (${uploadResponse.status}).`;
     throw new Error(message);
   }
-  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,body:{
+  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,purpose,body:{
     messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'document',document:{id:upload.id,filename:safeFilename,...(safeCaption?{caption:safeCaption}:{})},
   }});
   return {sent:true,recipient,mediaId:upload.id,messageId:details?.messages?.[0]?.id||''};
 }
 
-export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[]},{env=process.env,fetchImpl=fetch}={}){
-  assertDeliveryActive(env);
+export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[],purpose=templateKey},{env=process.env,fetchImpl=fetch}={}){
+  const settings=await assertDeliveryActive(env,purpose);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
-  const template=META_WORKFLOW_TEMPLATES[templateKey];
+  const template=effectiveReportTemplate(purpose,settings,env.WHATSAPP_TEMPLATE_APPROVALS)||META_WORKFLOW_TEMPLATES[templateKey];
   if(!template)throw new Error(`Unknown Meta WhatsApp template: ${templateKey}`);
   if(!recipient||recipient.length<10||recipient.length>15)throw new Error('A valid WhatsApp recipient phone number is required.');
   if(parameters.length!==template.example.length)throw new Error(`Template ${template.name} requires ${template.example.length} parameters.`);
   const bodyParameters=parameters.map((value)=>({type:'text',text:clean(value).replace(/\s+/g,' ')}));
   const components=[{type:'body',parameters:bodyParameters}];
   if(template.otpButton)components.push({type:'button',sub_type:'url',index:'0',parameters:bodyParameters});
-  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,body:{
+  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,purpose,body:{
     messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'template',template:{
       name:template.name,language:{code:'en_US'},components,
     },
@@ -145,20 +141,28 @@ export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[]},{e
   return {sent:true,recipient,template:template.name,messageId:details?.messages?.[0]?.id||''};
 }
 
-export async function metaWhatsAppTemplateStatuses({env=process.env,fetchImpl=fetch}={}){
+export async function metaWhatsAppTemplateStatuses({env=process.env,fetchImpl=fetch,templates=META_WORKFLOW_TEMPLATES}={}){
   const config=metaWhatsAppConfiguration(env);
   if(!config.businessAccountId)throw new Error('META_WHATSAPP_BUSINESS_ACCOUNT_ID is required to manage templates.');
-  const details=await metaRequest(`${config.businessAccountId}/message_templates?fields=id,name,status,category,language&limit=250`,{env,fetchImpl});
-  return (details.data||[]).filter((item)=>Object.values(META_WORKFLOW_TEMPLATES).some((template)=>template.name===item.name));
+  const names=new Set(Object.values(templates).map(template=>template.name)), results=[],seen=new Set();
+  let cursor='';
+  for(let page=0;page<20;page++){
+    const details=await metaRequest(`${config.businessAccountId}/message_templates?fields=id,name,status,category,language&limit=250${cursor?`&after=${encodeURIComponent(cursor)}`:''}`,{env,fetchImpl});
+    results.push(...(details.data||[]).filter(item=>names.has(item.name)&&(!item.language||item.language==='en_US')));
+    const after=details.paging?.cursors?.after;
+    if(!details.paging?.next||!after||seen.has(after))break;
+    seen.add(after);cursor=after;
+  }
+  return results;
 }
 
-export async function submitMetaWhatsAppTemplates({env=process.env,fetchImpl=fetch}={}){
+export async function submitMetaWhatsAppTemplates({env=process.env,fetchImpl=fetch,templates=META_WORKFLOW_TEMPLATES}={}){
   const config=metaWhatsAppConfiguration(env);
   if(!config.businessAccountId)throw new Error('META_WHATSAPP_BUSINESS_ACCOUNT_ID is required to manage templates.');
-  const existing=await metaWhatsAppTemplateStatuses({env,fetchImpl});
+  const existing=await metaWhatsAppTemplateStatuses({env,fetchImpl,templates});
   const byName=new Map(existing.map((template)=>[template.name,template]));
   const results=[];
-  for(const [key,template] of Object.entries(META_WORKFLOW_TEMPLATES)){
+  for(const [key,template] of Object.entries(templates)){
     if(byName.has(template.name)){results.push({key,name:template.name,status:byName.get(template.name).status,existing:true});continue}
     let created;
     const category=template.category||'UTILITY';

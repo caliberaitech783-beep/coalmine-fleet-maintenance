@@ -7,6 +7,7 @@ import {
   fleetBreakdownCaseCounts,
   fleetChartCounts,
   liveEquipmentMetrics,
+  liveEquipmentRoadStatus,
 } from "../dashboard-equipment-metrics.mjs";
 
 test("dashboard equipment totals use all persisted master records", () => {
@@ -68,6 +69,37 @@ test("fleet chart does not match one request to every asset sharing a group valu
   assert.deepEqual(fleetChartCounts(records, [
     { equipment: "SCANIA TIPPERS", door: "S1", status: "Open" },
   ]).breakdown, { equipment: 0, vehicles: 1, total: 1 });
+  assert.deepEqual(liveEquipmentMetrics(records,[{equipment:'SCANIA TIPPERS',door:'S1',status:'Open'}]),{
+    total:2,onRoad:1,offRoad:1,idle:0,unknown:0,availability:50,
+  });
+});
+
+test('live asset status respects specific identities and assigned sites, not shared names',()=>{
+  const records=[
+    {category:'Vehicle',equipment:'TIPPERS',equipmentName:'Dumper',door:'S1',chassisNo:'CH1',currentLocation:'Sasti OB'},
+    {category:'Vehicle',equipment:'TIPPERS',equipmentName:'Dumper',door:'S2',chassisNo:'CH2',currentLocation:'Sasti OB'},
+    {category:'Vehicle',equipment:'TIPPERS',equipmentName:'Dumper',door:'S1',chassisNo:'CH3',currentLocation:'Jayant OB'},
+  ];
+  const requests=[{equipment:'Dumper',door:'S1',chassis:'CH1',site:'Sasti OB',status:'Idle'}];
+  assert.deepEqual(records.map(record=>liveEquipmentRoadStatus(record,requests)),['idle','onroad','onroad']);
+  assert.deepEqual(liveEquipmentMetrics(records,requests),{total:3,onRoad:2,offRoad:0,idle:1,unknown:0,availability:67});
+  const opened=requests.map(request=>({...request,status:'Awaiting parts'}));
+  assert.equal(fleetChartCounts(records,opened).breakdown.total,1);
+  assert.equal(liveEquipmentMetrics(records,opened).offRoad,1);
+  assert.equal(liveEquipmentRoadStatus({equipmentName:'Dumper',equipment:'Dumper'},[{equipment:'Dumper',status:'Open'}]),'onroad');
+});
+
+test('legacy individual display names remain usable when stable identifiers are absent',()=>{
+  assert.equal(liveEquipmentRoadStatus({equipmentName:'D23 - 07339',chassisNo:'7339'},[{equipment:'D23 - 07339',status:'Open'}]),'offroad');
+});
+
+test('recalculating after a workflow update cannot reuse a stale identity or state cache',()=>{
+  const assets=[{door:'D1',currentLocation:'Sasti OB'}],requests=[{door:'D1',site:'Sasti OB',status:'Open'}];
+  assert.equal(liveEquipmentMetrics(assets,requests).offRoad,1);
+  requests[0].status='Idle';
+  assert.equal(liveEquipmentMetrics(assets,requests).idle,1);
+  requests[0].status='Closed';
+  assert.equal(liveEquipmentMetrics(assets,requests).onRoad,1);
 });
 
 test("dashboard equipment totals handle an empty master", () => {

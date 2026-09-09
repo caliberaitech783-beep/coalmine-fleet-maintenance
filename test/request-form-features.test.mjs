@@ -6,7 +6,10 @@ test("mobile request forms enforce chassis, search, duplicate blocking, and stor
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
   const server = await readFile(new URL("../server.mjs", import.meta.url), "utf8");
 
-  assert.match(source, /aria-label="Search equipment or vehicle"/);
+  assert.match(source, /<EquipmentCombobox/);
+  const combobox = await readFile(new URL("../src/equipment-combobox.jsx", import.meta.url), "utf8");
+  assert.match(combobox, /role="combobox"/);
+  assert.match(combobox, /aria-autocomplete="list"/);
   assert.match(source, /Chassis number is not available\. Contact the admin team/);
   assert.match(source, /\/api\/requests\/conflict/);
   assert.match(source, /request-conflict-warning/);

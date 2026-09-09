@@ -1,4 +1,5 @@
 import { equipmentGroupValue } from './equipment-group.mjs';
+import { matchesSmartSearch } from './smart-search.mjs';
 
 function text(value) {
   return String(value ?? "").trim();
@@ -135,6 +136,18 @@ export function requestEquipmentRecordsForGroup(records = [], group = "") {
   return records.filter(
     (record) => requestEquipmentGroupOptionLabel(record).toLocaleLowerCase().replace(/\s+/g, " ") === key,
   );
+}
+
+// Call with the already site/group-scoped records. Search never expands that scope.
+export function requestEquipmentSearchOptions(records = [], query = "") {
+  const seen = new Set();
+  return records.flatMap((record) => {
+    if (record?.id == null || seen.has(String(record.id))) return [];
+    seen.add(String(record.id));
+    const label = requestEquipmentOptionLabel(record);
+    return matchesSmartSearch(query, label, requestEquipmentDetails(record), record.manufacturerSerialNo)
+      ? [{ record, label }] : [];
+  });
 }
 
 // Kept for compatibility with older callers/imported deployment helpers.

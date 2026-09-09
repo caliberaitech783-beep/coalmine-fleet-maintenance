@@ -94,15 +94,15 @@ test('Meta phone registration uses the configured number and a six-digit PIN',as
   await assert.rejects(()=>registerMetaWhatsAppPhone({pin:'12345'},{env:{}}),/six-digit/);
 });
 
-test('the hierarchy hold blocks text, template, and document delivery before any Meta request',async()=>{
+test('the delivery hold blocks text, template, and document delivery before any Meta request',async()=>{
   let requests=0;
   const options={
     env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_DELIVERY_PAUSED:'true'},
     fetchImpl:async()=>{requests+=1;throw new Error('Meta must not be called while delivery is paused')},
   };
-  await assert.rejects(()=>sendMetaWhatsAppText({to:'9420476281',message:'Paused'},options),/paused pending hierarchy configuration/);
-  await assert.rejects(()=>sendMetaWhatsAppTemplate({to:'9420476281',templateKey:'ticketResolved',parameters:['TIC\/1','Admin']},options),/paused pending hierarchy configuration/);
-  await assert.rejects(()=>sendMetaWhatsAppDocument({to:'9420476281',buffer:Buffer.from('%PDF-1.7'),filename:'Paused.pdf'},options),/paused pending hierarchy configuration/);
+  await assert.rejects(()=>sendMetaWhatsAppText({to:'9420476281',message:'Paused'},options),/paused by Report settings/);
+  await assert.rejects(()=>sendMetaWhatsAppTemplate({to:'9420476281',templateKey:'ticketResolved',parameters:['TIC\/1','Admin']},options),/paused by Report settings/);
+  await assert.rejects(()=>sendMetaWhatsAppDocument({to:'9420476281',buffer:Buffer.from('%PDF-1.7'),filename:'Paused.pdf'},options),/paused by Report settings/);
   assert.equal(requests,0);
 });
 

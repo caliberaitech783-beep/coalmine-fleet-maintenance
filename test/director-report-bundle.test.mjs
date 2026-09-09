@@ -26,7 +26,8 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.equal(summary.department,'General');
   assert.equal(summary.rows.length,1);
   assert.match(summary.pdfTitle,/Jayant OB/);
-  assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='misTat')],'2.00');
+  assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='returnToWorkTat')],'2h 0s');
+  assert.equal(summary.rows[0][summary.columns.findIndex(column=>column.key==='verificationLag')],'Not recorded');
   assert.equal(tables.find((table)=>table.title==='Vehicle Arrival Red Flag Report').department,'Maintenance');
   assert.equal(tables.find((table)=>table.title==='MIS Red Flag Report').department,'MIS');
   assert.equal(tables.find((table)=>table.title==='In and Out Report').department,'General');
@@ -56,6 +57,21 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.match(message,/PDF 📄\nhttps:\/\/bdms\.cmll\.in\/r\/a/);
   assert.match(message,/Excel 📊\nhttps:\/\/bdms\.cmll\.in\/r\/b/);
   assert.doesNotMatch(message,/\n\s+https:\/\/bdms\.cmll\.in\/r\//);
+});
+
+test('director lifecycle reports distinguish idle, manager approval and MIS verification',()=>{
+  const idle={ref:'IDLE',status:'Idle',start:'2026-09-01 08:00',idealRequestedAt:'2026-09-02 09:00',idealRequestedBy:'Maintenance',idleReason:'No driver'};
+  const approved={...idle,ref:'APPROVED',status:'Closed',closedAt:'2026-09-02 11:00',idealApprovedAt:'2026-09-02 11:00',idealApprovedBy:'Manager',verifiedAt:'2026-09-03 15:00'};
+  const tables=buildDirectorReportTables({requests:[idle,approved,{ref:'PARTS',status:'Awaiting parts',start:'2026-09-01 08:00'}],now:new Date('2026-09-04T12:00:00+05:30')});
+  const opened=tables.find(table=>table.title==='Location wise opened BD');
+  assert.deepEqual(opened.rows.map(row=>row[0]),['PARTS']);
+  const closed=tables.find(table=>table.title==='Location wise closing BD');
+  assert.deepEqual(closed.rows.map(row=>row[0]),['APPROVED']);
+  const pm=tables.find(table=>table.title==='Idle with PM verif.');
+  const column=key=>pm.columns.findIndex(column=>column.key===key);
+  assert.equal(pm.rows[0][column('idleTime')],'—');
+  assert.equal(pm.rows[1][column('idleTime')],'2h 0m');
+  assert.equal(pm.rows[1][column('idealApprovedBy')],'Manager');
 });
 
 test('Director report API and all-user schedule popup are wired into server and reports UI',()=>{

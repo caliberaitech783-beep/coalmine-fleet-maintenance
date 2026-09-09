@@ -23,5 +23,12 @@ test("every active portal search is wired to the shared smart matcher", () => {
   assert.doesNotMatch(source, /Object\.values\([^)]*\)\.join\(" "\)\.toLowerCase\(\)\.includes/);
   assert.match(source, /data-smart-search/);
   assert.match(source, /aria-label="Focus page smart search"/);
-  assert.match(source, /visibleEquipmentVehicleRecords = equipmentVehicleRecords\.filter[\s\S]*matchesSmartSearch\(equipmentSearch/);
+  const equipment = readFileSync(new URL("../request-equipment.mjs", import.meta.url), "utf8");
+  assert.match(equipment, /matchesSmartSearch\(query, label, requestEquipmentDetails\(record\)/);
+});
+
+test("Hindi search terms match their text instead of becoming an empty search", () => {
+  assert.equal(matchesSmartSearch("सड़क", "सड़क उपकरण"), true);
+  assert.equal(matchesSmartSearch("सड़क", "Excavator"), false);
+  assert.equal(matchesSmartSearch("सड़क ex17", "सड़क EX-17"), true);
 });

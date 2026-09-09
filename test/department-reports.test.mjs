@@ -6,24 +6,44 @@ const now = new Date('2026-09-07T12:00:00+05:30');
 const build = requests => buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-07'});
 const cell = (report,key,row=report.rows[0]) => report.columns.find(c=>c.key===key).value(row);
 
-test('general summary uses only verified requests and the approved overlapping TAT sum',()=>{
+test('repair TAT uses maintenance acceptance, not production submission',()=>{
+  const row={start:'2026-09-08 08:00',acceptedAt:'2026-09-08 16:01:02',closedAt:'2026-09-08 16:46:00'};
+  const report=build([row]).find(r=>r.title==='Turn Around Time for Repair');
+  assert.equal(cell(report,'tat'),'44m');
+  assert.equal(cell(report,'tat',{...row,acceptedAt:'2026-09-08 15:46:00'}),'1h 0m');
+  assert.equal(cell(report,'tat',{...row,acceptedAt:row.closedAt}),'0m');
+  for(const acceptedAt of ['', 'invalid', '2026-09-08 17:00']) {
+    assert.equal(cell(report,'tat',{...row,acceptedAt}),'Not recorded');
+  }
+});
+
+test('general summary uses only verified requests with non-overlapping stages and separate elapsed measures',()=>{
   const row={ref:'verified',start:'2026-09-01 08:00',acceptedAt:'2026-09-01 09:00',closedAt:'2026-09-01 12:00',firstTripAt:'2026-09-01 12:30',verifiedAt:'2026-09-01 17:00'};
   const report=build([row,{...row,ref:'unverified',verifiedAt:''}]).find(r=>r.title==='Summary Report');
   assert.equal(report.category,'general');
   assert.deepEqual(report.rows.map(r=>r.ref),['verified']);
-  assert.deepEqual(report.columns.map(c=>c.key),['submittedAt','overallTat','door','chassis','equipmentGroup','model','complaint','category','productionTat','maintenanceTat','misTat']);
+  assert.deepEqual(report.columns.map(c=>c.key),['ref','submittedAt','acceptedAt','closedAt','firstTripAt','verifiedAt','closureEvent','door','chassis','equipmentGroup','model','complaint','category','site','waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','timingNotes']);
+  for(const key of ['acceptedAt','closedAt','firstTripAt','verifiedAt']) assert.equal(cell(report,key),row[key]);
+  assert.equal(cell(report,'acceptedAt',{...row,acceptedAt:''}),'Not recorded');
+  assert.equal(cell(report,'firstTripAt',{...row,firstTripAt:'',firstTripDate:'2026-09-01',firstTripTime:'12:30:00'}),'2026-09-01 12:30:00');
   assert.equal(cell(report,'submittedAt'),row.start);
   assert.equal(report.dateValue(row),row.start);
-  assert.equal(cell(report,'productionTat'),'4.00');
-  assert.equal(cell(report,'maintenanceTat'),'3.00');
-  assert.equal(cell(report,'misTat'),'0.50');
-  assert.equal(cell(report,'overallTat'),'7.50');
-  assert.equal(cell(report,'misTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01',firstTripTime:'12:30:00'}),'0.50');
-  assert.equal(cell(report,'productionTat',{...row,start:'',createdAt:row.start}),'4.00');
-  for(const changes of [{acceptedAt:''},{closedAt:''},{firstTripAt:''},{firstTripAt:'2026-09-01 11:00'},{acceptedAt:'invalid'}]) {
-    assert.equal(cell(report,'overallTat',{...row,...changes}),'Not recorded');
-  }
-  assert.equal(cell(report,'misTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01'}),'Not recorded');
+  assert.equal(cell(report,'waitingTat'),'1h 0s');
+  assert.equal(cell(report,'maintenanceTat'),'3h 0s');
+  assert.equal(cell(report,'returnToWorkTat'),'30m 0s');
+  assert.equal(cell(report,'overallTat'),'4h 30m 0s');
+  assert.equal(cell(report,'repairElapsed'),'4h 0s');
+  assert.equal(cell(report,'verificationLag'),'4h 30m 0s');
+  assert.equal(cell(report,'returnToWorkTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01',firstTripTime:'12:30:00'}),'30m 0s');
+  const missingStart={...row,start:'',createdAt:row.start};
+  assert.equal(cell(report,'submittedAt',missingStart),'Not recorded');
+  assert.equal(cell(report,'waitingTat',missingStart),'Not recorded');
+  assert.equal(cell(report,'overallTat',missingStart),'Not recorded');
+  assert.equal(report.dateValue(missingStart),row.start,'existing creation-date filter fallback is unchanged');
+  assert.equal(cell(report,'overallTat',{...row,acceptedAt:''}),'4h 30m 0s','known endpoint elapsed is not fabricated from a missing stage');
+  assert.match(cell(report,'timingNotes',{...row,acceptedAt:''}),/Missing acceptance/);
+  assert.equal(cell(report,'returnToWorkTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01'}),'Not recorded');
+  assert.doesNotMatch(report.description,/sum of these three intervals, including their overlap/);
 });
 test('department reports include the two red flag reports alongside existing reports',()=>{
   const reports=build([]);
@@ -39,9 +59,10 @@ test('pending includes all open and in-progress requests regardless of remarks',
     {ref:'old',status:'Open',dailyRemarks:[{remark:'Old remark',createdAt:'2025-01-01'}]},
     {ref:'closed',status:'Closed',dailyRemarks:[]},
     {ref:'progress',status:'In progress',dailyRemarks:[]},
+    {ref:'parts',status:'Awaiting parts',dailyRemarks:[]},
     {ref:'unknown',status:'Open'},
   ]).find(r=>r.title==='Maintenance Status Pending');
-  assert.deepEqual(report.rows.map(r=>r.ref),['yes','old','progress','unknown']);
+  assert.deepEqual(report.rows.map(r=>r.ref),['yes','old','progress','parts','unknown']);
   assert.equal(cell(report,'remark'),'No Remark');
   assert.ok(!report.columns.some(c=>/difference|elapsed/i.test(c.label)));
 });

@@ -18,10 +18,12 @@ test("operational tables expose search, filters, sorting, and the MIS idle queue
   assert.doesNotMatch(ui, /isMis && tab === "idle"/);
 });
 
-test("request forms expose elapsed time, site-scoped all-equipment search, and ETC", () => {
+test("request forms expose elapsed time, site/group-scoped equipment search, and ETC", () => {
   assert.match(ui, /request-form-timer/);
   assert.match(ui, /setElapsedSeconds/);
-  assert.match(ui, /searchableRecords = equipmentSearchActive \|\| equipmentSearch\.trim\(\) \? locationEquipmentRecords : groupRecords/);
+  assert.match(ui, /groupRecords = requestEquipmentRecordsForGroup\(locationEquipmentRecords, equipmentGroup\)/);
+  assert.match(ui, /<EquipmentCombobox[^]*records=\{groupRecords\}/);
+  assert.doesNotMatch(ui, /equipmentSearchActive/);
   assert.match(ui, /ETC \(Expected Time For Completion\)/);
   assert.match(server, /expected_completion_at TIMESTAMPTZ/);
   assert.match(server, /expectedCompletionAt/);
@@ -33,7 +35,9 @@ test("Maintenance User edits ETC instead of entering it in the close form", () =
   assert.match(editForm, /name="expectedCompletionAt" type="datetime-local" required/);
   assert.match(editForm, /expectedCompletionAt: form\.get\("expectedCompletionAt"\)/);
   assert.doesNotMatch(closeForm, /name="expectedCompletionAt"/);
-  assert.match(server, /expected_completion_at=\(\$3::timestamp AT TIME ZONE 'Asia\/Kolkata'\)/);
+  assert.match(server, /requestExpectedCompletionValue\(before\.expectedCompletionAt,expectedCompletionAt\)/);
+  assert.match(server, /expected_completion_at=\$3::timestamptz/);
+  assert.match(server, /requireCorrectionReason:\['expectedCompletionAt'\]/);
 });
 
 test("workspaces, masters, tables, and forms use the expanded readable layout", () => {

@@ -8,7 +8,7 @@ const workflowStyles = fs.readFileSync(new URL("../src/mobile-workflow.css", imp
 test("the workspace tab strip sits inside the banner", () => {
   const hero = mainSource.slice(
     mainSource.indexOf('<div className="welcome workspace-hero">'),
-    mainSource.indexOf('{isProduction && tab === "requests"'),
+    mainSource.indexOf('{createdRequestRef && <div className="hierarchy-save-message"'),
   );
   assert.match(hero, /<div className="workspace-hero-intro">/);
   assert.match(hero, /<div className="mobile-tabs" role="tablist">/);
@@ -16,6 +16,7 @@ test("the workspace tab strip sits inside the banner", () => {
     assert.ok(hero.includes(`>${label}</button>`), `${label} tab should render inside the banner`);
   }
   assert.match(hero, /<\/div>\s*<\/div>\s*$/);
+  assert.match(mainSource, /\{createdRequestRef && <div className="hierarchy-save-message"[\s\S]*?\}\s*\{isProduction && tab === "requests"/);
   assert.match(workflowStyles, /\.welcome\.workspace-hero\s*\{[^}]*flex-direction:\s*column/s);
   assert.match(workflowStyles, /\.welcome\.workspace-hero\s\.mobile-tabs\s*\{[^}]*margin:\s*0/s);
 });

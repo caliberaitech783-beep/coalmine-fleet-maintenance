@@ -30,6 +30,9 @@ test('India date helpers bucket workflow timestamps by IST calendar day',()=>{
   assert.equal(requestEventDateKey({createdAt:'2026-09-04T05:00:00.000Z'},'opened'),'2026-09-04');
   assert.equal(requestEventDateKey({closedAt:'2026-09-02 12:00'},'closed'),'2026-09-02');
   assert.equal(requestEventDateKey({status:'Idle',start:'2026-09-01 10:00'},'idle'),'2026-09-01');
+  assert.equal(requestEventDateKey({createdAt:'2026-09-03T20:00:00.000Z'},'opened'),'2026-09-04');
+  assert.equal(requestEventDateKey({verifiedAt:'2026-09-04T00:15:00+09:00'},'verified'),'2026-09-03');
+  assert.equal(requestEventDateKey({start:'2026-09-03 · 23:55:00'},'opened'),'2026-09-03');
 });
 
 test('In and Out rows count vehicles in, out, verified, idle and the balance left in workshop per day',()=>{
@@ -42,7 +45,7 @@ test('In and Out rows count vehicles in, out, verified, idle and the balance lef
   assert.equal(first.idle,1);
   assert.equal(first.net,3);
   assert.equal(first.pendingClose,2);
-  assert.equal(first.pendingVerification,1);
+  assert.equal(first.pendingVerification,0);
   assert.equal(first.inVehicles,'EX-1, TR-1, ID-1');
   assert.equal(first.inLocations,'Jayant OB (1), Majri OB (1), Sasti OB (1)');
   assert.equal(middle.opened,1);
@@ -50,7 +53,7 @@ test('In and Out rows count vehicles in, out, verified, idle and the balance lef
   assert.equal(middle.verified,1);
   assert.equal(middle.net,-1);
   assert.equal(middle.pendingClose,1);
-  assert.equal(middle.pendingVerification,2);
+  assert.equal(middle.pendingVerification,1);
   assert.equal(middle.outVehicles,'TR-1, DZ-1');
   assert.equal(middle.outLocations,'Jayant OB (1), Sasti OB (1)');
   assert.equal(middle.averageTat,'15h 15m');
@@ -58,7 +61,7 @@ test('In and Out rows count vehicles in, out, verified, idle and the balance lef
   assert.equal(latest.closed,0);
   assert.equal(latest.verified,1);
   assert.equal(latest.pendingClose,2);
-  assert.equal(latest.pendingVerification,1);
+  assert.equal(latest.pendingVerification,0);
   assert.equal(latest.averageTat,'—');
 });
 
@@ -73,10 +76,30 @@ test('In and Out summary totals the period and keeps the latest balance',()=>{
   assert.equal(summary.idle,1);
   assert.equal(summary.net,3);
   assert.equal(summary.pendingClose,2);
-  assert.equal(summary.pendingVerification,1);
+  assert.equal(summary.pendingVerification,0);
   assert.equal(summary.averageTat,'15h 15m');
   assert.equal(summary.busiestInDay,'2026-09-01');
   assert.equal(summary.busiestOutDay,'2026-09-02');
+});
+
+test('Idle lifecycle preserves the actual idle date and waits for manager closure before MIS',()=>{
+  const idle={ref:'IDLE-CYCLE',status:'Idle',start:'2026-09-01 08:00',acceptedAt:'2026-09-01 09:00',idealRequestedAt:'2026-09-02 11:00',idleReason:'No driver'};
+  const rows=buildInOutReportRows([idle],{today:'2026-09-03'});
+  assert.equal(rows[2].idle,0);
+  assert.equal(rows[2].pendingClose,1);
+  assert.equal(rows[1].idle,1);
+  assert.equal(rows[1].pendingClose,0);
+  assert.equal(rows[0].pendingVerification,0);
+  const approved={...idle,status:'Closed',idealApprovedAt:'2026-09-03 10:00',closedAt:'2026-09-03 10:00'};
+  const approvedRows=buildInOutReportRows([approved],{today:'2026-09-03'});
+  assert.equal(approvedRows[1].idle,1,'manager approval must not erase the earlier idle event');
+  assert.equal(approvedRows[1].pendingVerification,0);
+  assert.equal(approvedRows[0].closed,1);
+  assert.equal(approvedRows[0].pendingVerification,1);
+  const verifiedRows=buildInOutReportRows([{...approved,verifiedAt:'2026-09-04 11:00'}],{today:'2026-09-04'});
+  assert.equal(verifiedRows[0].verified,1);
+  assert.equal(verifiedRows[0].pendingVerification,0);
+  assert.equal(verifiedRows[2].idle,1);
 });
 
 test('In and Out rows always include today, ignore future events and cap the history window',()=>{

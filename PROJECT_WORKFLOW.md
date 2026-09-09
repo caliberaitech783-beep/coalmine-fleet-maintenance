@@ -338,3 +338,42 @@ Check the authenticated request in the browser network panel and `/api/health`. 
 ## 15. Change map for future maintainers
 
 When changing a feature, update the matching source, focused test, and this file if the public flow, role rule, API, database field, or deployment path changes. Run the release checklist before pushing. A change to the UI version is intentional: it forces active sessions to reload so users receive the same interface and permission model.
+
+## 16. WhatsApp Report settings
+
+Admin and Super Admin accounts open **Reports → Report settings**, immediately left of **Report schedules**. The new panel controls organisation-wide WhatsApp delivery. Every settings and template-management request re-resolves the signed-in user's current Users & employees / Privilege profile; a stale administrator session does not grant access after demotion.
+
+| Section | Controls | Default when no setting is saved |
+| --- | --- | --- |
+| Delivery controls | Global switch covering every WhatsApp message, including manual sends and password reset OTPs | On |
+| Message types | Hierarchy bundles, CRM ticket-created/resolved alerts, daily maintenance updates, manual reports, OTPs | Hierarchy, manual reports and OTPs on; ticket-created/resolved and daily-update alerts off |
+| Quiet hours | Optional daily IST pause for non-OTP delivery | Off; draft window 22:00–07:00 |
+| Direct alerts | Enabled switch and recipient roles for Opened, Closed, Verified and Idle | Existing workflow roles retained |
+| Reminders | One Off Road escalation after 1–168 hours; Idle repeats every 1–24 hours | Four hours / one hour |
+| CRM report schedule | Weekdays, up to six IST times, recipient account types, summary/PDF/both, empty-report preference | Every day at 08:00, 15:00, 20:00; Admin + Manager; both; include empty reports |
+| Message templates | Ten ready-made samples plus custom wording per purpose, including each single report | Existing choices retained; single reports inherit the consolidated choice |
+
+The direct-alert defaults are:
+
+| Event | Recipient roles |
+| --- | --- |
+| Opened / Off Road | Maintenance supervisor, Maintenance manager, Production manager |
+| Closed / On Road | Production supervisor, Production manager, Maintenance manager |
+| MIS Verified | Production manager, Maintenance manager, MIS manager |
+| Marked Idle | Project manager, Production manager, Maintenance manager, MIS manager |
+
+Direct alerts retain site scoping. Admin, Super Admin and Director are excluded unless explicitly selected. Duplicate leadership records cannot opt an excluded login back into direct alerts. Off Road escalation uses the Opened recipients and Idle reminders use the Idle recipients; disabling the corresponding event also pauses its reminders. Existing overdue requests may qualify on the next scheduler check after an interval change. CRM reports cover ticket activity from the previous actual configured slot to the current slot; Managers require a site/region assignment. Ticket-created, resolved and daily-update switches use their existing workflow audiences and do not change in-app notifications.
+
+**Hierarchy Master and Report schedules remain the source of hierarchy report assignments and timing.** A designation's Active switch only controls its hierarchy reports. The new hierarchy delivery switch pauses those bundles, and the new global switch pauses every WhatsApp message. Quiet hours suppress non-OTP delivery; event messages are not queued. A still-overdue reminder may qualify on a later check. A scheduled slot remains eligible only within the existing 20-minute delivery grace window. Messages already handed to the provider cannot be recalled.
+
+Settings live in `app_settings.whatsapp_report_settings`; provider approval snapshots live separately in `app_settings.whatsapp_template_approvals`. Provider credentials remain in `app_settings.meta_whatsapp`. Merely deploying or opening the panel does not create or change settings. Save performs a revision check under a database advisory lock and returns HTTP 409 for a stale edit. Load defaults changes only the draft until Save. The shared Meta/Fast2SMS sending layer reads the current delivery policy before sending, including a second check after PDF upload; settings read failures cannot bypass the global pause.
+
+Endpoints: `GET /api/report-settings`, `PUT /api/report-settings` with `{settings, revision}`, and `POST /api/report-settings/templates` with `{action: "submit" | "refresh"}`. Settings writes and template actions are audited. No endpoint in this panel sends a WhatsApp test message.
+
+For templates: select wording by purpose, **Save settings**, **Submit saved template choices**, then **Refresh approval status**. New variants receive names derived from purpose and content, preserving existing provider templates. Custom text is limited to 1,024 characters and must retain all numbered placeholders once in order. A saved choice is used only after its provider status is recorded as APPROVED; pending, rejected or paused variants fall back to the current standard. Approval refresh is explicit; no new variant is submitted on deployment. Authentication OTP wording remains fixed, and templates do not alter report/PDF contents or data permissions. The preview uses sample values, not live recipients or messages. Provider delivery can still fail; consult WhatsApp alert history and the existing provider settings.
+
+Implementation: `whatsapp-report-settings.mjs` (shared model and delivery rules), `whatsapp-report-settings-api.mjs` (authorisation/validation), `whatsapp-template-catalog.mjs` (wording and preview), `whatsapp-template-runtime.mjs` (versioned template choice), and `src/whatsapp-report-settings.jsx` / `.css` (panel). Behavioural coverage includes API authorisation/revisions, saved-role delivery, CRM formats/site scopes, schedule windows, reminder intervals, provider approval fallback and global pauses during media upload.
+
+The template gallery includes **ten ready-made samples for all 40 purposes (400 samples)**: the 28 named reports from `DIRECTOR_REPORT_TITLES`, plus the existing 12 consolidated, manual, alert and reminder purposes. The styles are Current standard, Compact summary, Structured detail, Executive brief, Action focused, Team handover, Review checklist, Formal notice, Numbered facts / Report review card, and Status card. Each style retains every available parameter; the purpose changes the context and follow-up wording. The gallery shows a sample-data preview alongside the choices, and Customise this sample copies the chosen wording into the editor.
+
+Each single-report purpose has its own saved choice, initially `inherit`. A scheduled/event delivery containing exactly one known report uses that report's purpose; multiple-report deliveries continue to use the consolidated bundle purpose. An inherited choice resolves to the saved consolidated style and its existing provider approval. Explicit per-report choices have their own content-derived template name and approval state. Manual report sends continue to use the separate Manual report send choice. This does not split bundles, add deliveries, or change recipients, report contents or times. Previously saved standard/compact/structured wording and provider names remain stable. Only saved selected templates are submitted by the existing explicit Submit action; deploying the gallery does not submit 400 templates or send sample messages. OTP authentication wording remains fixed.
