@@ -10,9 +10,10 @@ test("dashboard replaces recent cases with a site-wise selectable breakdown tren
   assert.match(source, /className="mine-panel mine-breakdown-trend"/);
   assert.match(source, /\[breakdownTrendDays, setBreakdownTrendDays\] = useState\(7\)/);
   assert.match(source, /\[breakdownTrendSite, setBreakdownTrendSite\] = useState\("all"\)/);
-  assert.match(source, /\[breakdownTrendView, setBreakdownTrendView\] = useState\("both"\)/);
+  // The Past/Both/Upcoming forecast view toggle was removed; the chart only shows recorded days.
+  assert.doesNotMatch(source, /breakdownTrendView/);
   assert.match(source, /aria-label="Breakdown trend anchor day"/);
-  assert.match(source, /aria-label="Breakdown trend view"/);
+  assert.doesNotMatch(source, /aria-label="Breakdown trend view"/);
   assert.match(source, /Overall Utilization/);
   assert.match(source, /Overall Availability/);
   assert.match(source, /const availableFleet = kpis\.onRoad \+ kpis\.idle/);
