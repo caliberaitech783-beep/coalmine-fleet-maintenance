@@ -44,7 +44,7 @@ test('general summary uses only verified requests with non-overlapping stages an
   const report=build([row,{...row,ref:'unverified',verifiedAt:''}]).find(r=>r.title==='Summary Report');
   assert.equal(report.category,'general');
   assert.deepEqual(report.rows.map(r=>r.ref),['verified']);
-  assert.deepEqual(report.columns.map(c=>c.key),['door','chassis','equipmentGroup','model','ref','submittedAt','acceptedAt','closedAt','firstTripAt','verifiedAt','closureEvent','complaint','category','site','waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','timingNotes']);
+  assert.deepEqual(report.columns.map(c=>c.key),['site','door','equipmentGroup','model','submittedAt','acceptedAt','closedAt','firstTripAt','verifiedAt','complaint','category','waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','ref','closureEvent']);
   for(const key of ['acceptedAt','closedAt','firstTripAt','verifiedAt']) assert.equal(cell(report,key),row[key]);
   assert.equal(cell(report,'acceptedAt',{...row,acceptedAt:''}),'Not recorded');
   assert.equal(cell(report,'firstTripAt',{...row,firstTripAt:'',firstTripDate:'2026-09-01',firstTripTime:'12:30:00'}),'2026-09-01 12:30:00');
@@ -63,7 +63,6 @@ test('general summary uses only verified requests with non-overlapping stages an
   assert.equal(cell(report,'overallTat',missingStart),'Not recorded');
   assert.equal(report.dateValue(missingStart),row.start,'existing creation-date filter fallback is unchanged');
   assert.equal(cell(report,'overallTat',{...row,acceptedAt:''}),'4h 30m 0s','known endpoint elapsed is not fabricated from a missing stage');
-  assert.match(cell(report,'timingNotes',{...row,acceptedAt:''}),/Missing acceptance/);
   assert.equal(cell(report,'returnToWorkTat',{...row,firstTripAt:'',firstTripDate:'2026-09-01'}),'Not recorded');
   assert.doesNotMatch(report.description,/sum of these three intervals, including their overlap/);
 });
@@ -73,7 +72,9 @@ test('department reports include the two red flag reports alongside existing rep
   assert.equal(reports.filter(r=>r.category==='maintenance').length,4);
   assert.equal(reports.filter(r=>r.category==='mis').length,7);
   assert.equal(reports.filter(r=>r.category==='production').length,3);
-  assert.equal(reports.find(r=>r.title==='Vehicle Transfer Report').columns.filter(c=>/chassis/i.test(c.label)).length,1);
+  const transfer=reports.find(r=>r.title==='Vehicle Transfer Report');
+  assert.deepEqual(transfer.columns.map(c=>c.key),['door','model','source','destination','transferNo','transferDate']);
+  assert.equal(transfer.columns.filter(c=>/chassis|equipment/i.test(c.label)).length,0);
 });
 test('pending includes all open and in-progress requests regardless of remarks',()=>{
   const report=build([

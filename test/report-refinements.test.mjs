@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {maintenanceDelay,pendingRemark,olderThanTenDays,availabilityPercentage,reportPdfHeading} from '../report-refinements.mjs';
+import {maintenanceDelay,pendingRemark,olderThanTenDays,availabilityPercentage,reportPdfHeading,recentBreakdownStatus} from '../report-refinements.mjs';
+import {buildDirectorReportTables} from '../director-report-bundle.mjs';
 import {buildDepartmentReports,availabilityRows} from '../department-reports.mjs';
 import {visibleInMisRequests} from '../src/mis-history.mjs';
 const now = new Date('2026-09-08T12:00:00+05:30');
@@ -41,4 +42,29 @@ test('approved columns and unverified queue match MIS requests',()=>{
   const columns=reports.find(r=>r.title.includes('Ticket Acceptance')).columns;
   assert.equal(columns[columns.findIndex(c=>c.key==='acceptedAt')-1].key,'submittedAt');
   assert.equal(reports[0].columns.find(c=>c.key==='acceptedAt').label,'Maintenance Acceptance Date & Time');
+});
+
+test('recent breakdown cases lead with status, show Pending after 24 unaccepted hours, and expose TAT',()=>{
+  const opened='2026-09-07 11:00:00';
+  assert.equal(recentBreakdownStatus({status:'Open',start:opened},now),'Pending','unaccepted for more than 24 hours');
+  assert.equal(recentBreakdownStatus({status:'Open',start:'2026-09-07 12:30:00'},now),'Open','within 24 hours keeps the live status');
+  assert.equal(recentBreakdownStatus({status:'Open',start:opened,acceptedAt:'2026-09-07 12:00:00'},now),'Open','accepted requests are never Pending');
+  assert.equal(recentBreakdownStatus({status:'Closed',start:opened,closedAt:'2026-09-07 15:00:00'},now),'Closed');
+  const tables=buildDirectorReportTables({
+    requests:[{ref:'REQ-P',door:'D7',site:'Sasti OB',status:'Open',start:opened,model:'PC-210'},{ref:'REQ-C',door:'D8',site:'Jayant OB',status:'Closed',start:opened,closedAt:'2026-09-07 15:30:00',closedBy:'Maintenance User'}],
+    equipmentRecords:[{equipmentName:'EX-9',door:'D9',chassisNo:'CH-9',category:'Equipment',currentLocation:'Sasti OB'}],
+    transferRecords:[{transferNo:'VT-9',chassisNo:'CH-9',source:'Sasti OB',destination:'Jayant OB',transferDate:'2026-09-01',driver:'Driver A'}],
+    now,
+  });
+  const recent=tables.find(table=>table.title==='Recent Breakdown Cases');
+  assert.deepEqual(recent.columns.map(column=>column.key),['status','site','door','model','started','closedAt','tat','reference','createdBy','closedBy']);
+  const cell=(row,key)=>row[recent.columns.findIndex(column=>column.key===key)];
+  const pending=recent.rows.find(row=>cell(row,'reference')==='REQ-P');
+  const closed=recent.rows.find(row=>cell(row,'reference')==='REQ-C');
+  assert.equal(cell(pending,'status'),'Pending');
+  assert.equal(cell(closed,'status'),'Closed');
+  assert.equal(cell(closed,'tat'),'4h 30m');
+  const transfer=tables.find(table=>table.title==='Vehicle Transfer Report');
+  assert.deepEqual(transfer.columns.map(column=>column.key),['door','transferNo','transferDate','from','to','model','driver']);
+  assert.equal(transfer.rows[0][0],'D9','door number resolved from the chassis in the equipment master');
 });

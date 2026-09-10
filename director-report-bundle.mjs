@@ -5,7 +5,7 @@ import {elapsedLabel,elapsedMilliseconds} from './report-metrics.mjs';
 import {IN_OUT_REPORT_COLUMNS,IN_OUT_REPORT_DESCRIPTION,IN_OUT_REPORT_TITLE,buildInOutReportRows,isIdleRequest} from './in-out-report.mjs';
 import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
 import {reportTime12} from './report-time-format.mjs';
-import {reportPdfHeading} from './report-refinements.mjs';
+import {recentBreakdownStatus,reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 
@@ -158,7 +158,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     reportEquipment:record.equipmentName||record.equipment||record.door||'',reportDoor:record.door||'',
     reportMake:record.make||'',reportModel:record.model||record.modelNo||'',reportSite:record.currentLocation||record.location||'',reportRoadStatus:roadStatusLabel(record,reportRequests),
   }));
-  const transferRows=transferRecords.map((record,index)=>({...record,reportId:record.id||`${record.transferNo||'transfer'}-${index}`,reportEquipment:record.equipment||record.equipmentName||record.door||'',reportSite:record.destination||record.currentLocation||record.location||''}));
+  const transferRows=enrichRequests(transferRecords.map((record)=>({...record,chassis:record.chassisNo||record.manufacturerSerialNo||''})),equipmentRecords).map((record,index)=>({...record,reportId:record.id||`${record.transferNo||'transfer'}-${index}`,reportEquipment:record.equipment||record.equipmentName||record.door||'',reportSite:record.destination||record.currentLocation||record.location||''}));
   const locationWiseRows=locationCountRows(equipmentRecords);
   const recentBreakdownRows=[...reportRequests].sort((a,b)=>latestTime(b)-latestTime(a)).slice(0,250);
   const requestColumns=[
@@ -185,14 +185,25 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'roadStatus',label:'Road status',value:(record)=>record.reportRoadStatus},
   ];
   const transferColumns=[
+    {key:'door',label:'Door no.',value:(record)=>record.reportDoor},
     {key:'transferNo',label:'Transfer no.',value:(record)=>record.transferNo},
     {key:'transferDate',label:'Transfer date',value:(record)=>record.transferDate},
-    {key:'equipment',label:'Equipment / vehicle',value:(record)=>record.reportEquipment},
     {key:'from',label:'From location',value:(record)=>record.source},
     {key:'to',label:'To location',value:(record)=>record.destination},
     {key:'model',label:'Model',value:(record)=>record.modelNo||record.model},
     {key:'driver',label:'Driver',value:(record)=>record.driver},
-    {key:'chassis',label:'Chassis no.',value:(record)=>record.chassisNo||record.manufacturerSerialNo},
+  ];
+  const recentBreakdownColumns=[
+    {key:'status',label:'Status',value:(request)=>recentBreakdownStatus(request,now)},
+    {key:'site',label:'Location',value:(request)=>request.reportSite},
+    {key:'door',label:'Door no.',value:(request)=>request.reportDoor},
+    {key:'model',label:'Model',value:(request)=>request.reportModel},
+    {key:'started',label:'Opened at',value:(request)=>request.start},
+    {key:'closedAt',label:'Closed at',value:(request)=>request.closedAt},
+    {key:'tat',label:'TAT',value:(request)=>elapsedLabel(request.start,request.closedAt)},
+    {key:'reference',label:'Job reference',value:(request)=>request.ref||request.reference},
+    {key:'createdBy',label:'Production user',value:(request)=>request.owner||request.requesterLogin},
+    {key:'closedBy',label:'Maintenance user',value:(request)=>request.closedBy},
   ];
   return [
     table(DIRECTOR_REPORT_TITLES[0],'Production','Open production breakdown cases grouped with location and category details.',requestColumns,openBreakdownRows),
@@ -204,7 +215,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
       {key:'location',label:'Location',value:(row)=>row.location},{key:'equipment',label:'Equipment',value:(row)=>row.equipment},{key:'vehicles',label:'Vehicles',value:(row)=>row.vehicles},{key:'total',label:'Total equipment / vehicle',value:(row)=>row.total},
     ],locationWiseRows),
     table(DIRECTOR_REPORT_TITLES[6],'Maintenance','Idle breakdown requests and idle fleet records that need follow-up.',[...idleVehicleColumns,{key:'idleReason',label:'Idle reason',value:(request)=>request.idleReason},{key:'closedAt',label:'Maintenance close / idle at',value:(request)=>request.closedAt}],idleRequestRows),
-    table(DIRECTOR_REPORT_TITLES[7],'General','Latest breakdown cases by recorded workflow timestamp.',closureColumns,recentBreakdownRows),
+    table(DIRECTOR_REPORT_TITLES[7],'General','Latest breakdown cases by recorded workflow timestamp. Status shows Pending when maintenance has not accepted an open request within 24 hours; TAT is closed at minus opened at.',recentBreakdownColumns,recentBreakdownRows),
     table(DIRECTOR_REPORT_TITLES[8],'Production','Elapsed time from Production off-road marking to MIS verification.',[...misColumns,{key:'prodToMis',label:'Prod to MIS verification',value:(request)=>elapsedLabel(request.start,request.verifiedAt)}],elapsedRows.filter((row)=>row.start&&row.verifiedAt)),
     table(DIRECTOR_REPORT_TITLES[9],'Maintenance','Turnaround time from Production opening to Maintenance close.',[...closureColumns,{key:'tat',label:'TAT',value:(request)=>elapsedLabel(request.start,request.closedAt)}],elapsedRows.filter((row)=>row.start&&row.closedAt)),
     table(DIRECTOR_REPORT_TITLES[10],'Maintenance','Elapsed time from Maintenance close to MIS verification.',[...misColumns,{key:'maintToMis',label:'Maintenance close to MIS verification',value:(request)=>elapsedLabel(request.closedAt,request.verifiedAt)}],elapsedRows.filter((row)=>row.closedAt&&row.verifiedAt)),

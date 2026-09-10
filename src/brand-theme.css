@@ -279,6 +279,11 @@ input[type="radio"] {
   background: var(--brand-red-soft);
 }
 
+.status.pending {
+  color: #b4641a;
+  background: #fff2e5;
+}
+
 .status.operational,
 .status.closed {
   color: var(--brand-green);

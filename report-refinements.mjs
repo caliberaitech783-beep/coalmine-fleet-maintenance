@@ -1,5 +1,6 @@
 import { indiaDateTimeEpoch } from './report-date-range.mjs';
 import { elapsedLabel } from './report-metrics.mjs';
+import { requestStatusLabel } from './src/request-status.mjs';
 
 export const acceptanceTime = row => row.acceptedAt || '';
 export function maintenanceDelay(row, now = new Date()) {
@@ -20,6 +21,8 @@ export function pendingRemark(row, now = new Date()) {
   return (typeof last === 'string' ? last : last?.remark) || 'No Remark';
 }
 export const olderThanTenDays = (row, now = new Date()) => now.getTime() - indiaDateTimeEpoch(row.start || row.createdAt) > 10 * 86400000;
+// Recent Breakdown Cases: an open request that maintenance has not accepted within 24 hours of submission reads as Pending.
+export const recentBreakdownStatus = (row, now = new Date()) => !acceptanceTime(row) && !String(row.closedAt || '').trim() && now.getTime() - indiaDateTimeEpoch(row.start || row.createdAt) > 86400000 ? 'Pending' : requestStatusLabel(row);
 export const availabilityPercentage = value => Number(value) === 100 ? '100%' : `${Number(value).toFixed(2)}%`;
 export function reportPdfHeading(title, rows = [], columns = []) {
   const locationColumns = columns.filter(column => /^(location|current location|request site|site|site location|from location|to location)$/i.test(column.label || ''));

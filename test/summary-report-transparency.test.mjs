@@ -28,11 +28,9 @@ test('missing, impossible and reversed event stamps remain explicit instead of b
     const row={...r4,acceptedAt};
     assert.equal(value(report,row,'waitingTat'),'Not recorded');
     assert.equal(value(report,row,'maintenanceTat'),'Not recorded');
-    assert.match(value(report,row,'timingNotes'),/Missing acceptance|Invalid acceptance/);
   }
   const reversed={...r4,acceptedAt:stamp('22:08:00')};
   assert.equal(value(report,reversed,'maintenanceTat'),'Not recorded');
-  assert.match(value(report,reversed,'timingNotes'),/Out of order: closure before acceptance/);
   assert.equal(value(report,{...r4,firstTripAt:stamp('22:02:00')},'overallTat'),'Not recorded');
   assert.equal(value(report,{...r4,verifiedAt:stamp('22:09:00')},'verificationLag'),'Not recorded');
   assert.equal(value(report,{...r4,acceptedAt:r4.closedAt},'maintenanceTat'),'0s','genuine simultaneous events may show zero');
@@ -52,19 +50,22 @@ test('Idle manager closure is identified without inventing a repair-completion e
   assert.match(report.columns.find(column=>column.key==='closedAt').label,/on-road approval/);
   assert.match(report.description,/not a separately recorded repair completion/);
   assert.equal(value(report,row,'maintenanceTat'),'56s');
-  assert.match(value(report,row,'timingNotes'),/Event source not supplied/);
+  assert.equal(report.columns.at(-1).key,'closureEvent','closure type is the last column');
+  assert.equal(report.columns.at(-2).key,'ref','job reference sits beside closure type at the end');
+  assert.equal(report.columns[0].key,'site','location leads the summary');
+  assert.ok(!report.columns.some(column=>['chassis','timingNotes'].includes(column.key)));
   assert.equal(value(report,{...r4,closedBy:''},'closureEvent'),'Maintenance closure | Actor not recorded');
   assert.equal(value(report,{...r4,closedAt:''},'closureEvent'),'Closure time not recorded | Maintenance actor');
 });
 
-test('Summary UI values and scheduled Excel/PDF data share the same 21-column definitions',async()=>{
+test('Summary UI values and scheduled Excel/PDF data share the same 19-column definitions',async()=>{
   const rows=Object.freeze([r1,r4]);
   const before=JSON.stringify(rows);
   const report=summary(rows);
   const table=buildDirectorReportTables({requests:rows,now:new Date('2026-09-08T23:00:00+05:30')}).find(table=>table.title==='Summary Report');
-  assert.equal(report.columns.length,21);
+  assert.equal(report.columns.length,19);
   assert.deepEqual(table.columns.map(column=>column.key),report.columns.map(column=>column.key));
-  for(const [index,row] of rows.entries())for(const key of ['waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','closureEvent','timingNotes']){
+  for(const [index,row] of rows.entries())for(const key of ['waitingTat','maintenanceTat','returnToWorkTat','overallTat','repairElapsed','verificationLag','closureEvent']){
     assert.equal(table.rows[index][table.columns.findIndex(column=>column.key===key)],value(report,row,key));
   }
   const workbook=buildXlsxWorkbookBuffer(table.title,table.columns,table.rows);

@@ -40,7 +40,7 @@ import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, val
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
 import { buildDepartmentReports } from "../department-reports.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
-import { olderThanTenDays, reportPdfHeading } from "../report-refinements.mjs";
+import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
@@ -4973,12 +4973,18 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     reportSite: record.currentLocation || record.location || "",
     reportRoadStatus: roadStatusLabel(record, reportRequests),
   }));
-  const transferRows = transferRecords.map((record, index) => ({
-    ...record,
-    reportId: record.id || `${record.transferNo || "transfer"}-${index}`,
-    reportEquipment: record.equipment || record.equipmentName || record.door || "",
-    reportSite: record.destination || record.currentLocation || record.location || "",
-  }));
+  const transferRows = transferRecords.map((record, index) => {
+    const asset = [record.door, record.chassisNo, record.manufacturerSerialNo, record.equipment, record.equipmentName]
+      .map((value) => equipmentByReference.get(String(value || "").trim().toLowerCase()))
+      .find(Boolean);
+    return {
+      ...record,
+      reportId: record.id || `${record.transferNo || "transfer"}-${index}`,
+      reportDoor: record.door || asset?.door || "",
+      reportEquipment: record.equipment || record.equipmentName || record.door || "",
+      reportSite: record.destination || record.currentLocation || record.location || "",
+    };
+  });
   const locationWiseRows = locationCountRows(equipmentRecords);
   const recentBreakdownRows = [...reportRequests]
     .sort((a, b) => (new Date(String(b.start || b.closedAt || b.verifiedAt || 0).replace(" ", "T")).getTime() || 0) - (new Date(String(a.start || a.closedAt || a.verifiedAt || 0).replace(" ", "T")).getTime() || 0))
@@ -5026,14 +5032,25 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "roadStatus", label: "Road status", value: (record) => record.reportRoadStatus, render: (record) => <Status>{record.reportRoadStatus}</Status>},
   ];
   const transferColumns = [
-    {key: "transferNo", label: "Transfer no.", value: (record) => record.transferNo, render: (record) => <b>{record.transferNo || "—"}</b>},
+    {key: "door", label: "Door no.", value: (record) => record.reportDoor, render: (record) => <b>{record.reportDoor || "—"}</b>},
+    {key: "transferNo", label: "Transfer no.", value: (record) => record.transferNo},
     {key: "transferDate", label: "Transfer date", value: (record) => formatDisplayDate(record.transferDate), sortValue: (record) => record.transferDate, render: (record) => formatDisplayDate(record.transferDate)},
-    {key: "equipment", label: "Equipment / vehicle", value: (record) => record.reportEquipment},
     {key: "from", label: "From location", value: (record) => record.source},
     {key: "to", label: "To location", value: (record) => record.destination},
     {key: "model", label: "Model", value: (record) => record.modelNo || record.model},
     {key: "driver", label: "Driver", value: (record) => record.driver},
-    {key: "chassis", label: "Chassis no.", value: (record) => record.chassisNo || record.manufacturerSerialNo},
+  ];
+  const recentBreakdownColumns = [
+    {key: "status", label: "Status", value: (request) => recentBreakdownStatus(request, reportNow), render: (request) => <Status>{recentBreakdownStatus(request, reportNow)}</Status>},
+    {key: "site", label: "Location", value: (request) => request.reportSite, render: (request) => <b>{request.reportSite || "—"}</b>},
+    {key: "door", label: "Door no.", value: (request) => request.reportDoor},
+    {key: "model", label: "Model", value: (request) => request.reportModel},
+    {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
+    {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
+    {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
+    {key: "reference", label: "Job reference", value: (request) => request.ref},
+    {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
+    {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
   ];
   const legacyReportGroups = [
     {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, dateValue: (row) => row.start, emptyMessage: "No open breakdown cases available"},
@@ -5052,7 +5069,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
       {key: "closedAt", label: "Maintenance close / idle at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
     ], dateValue: (row) => row.closedAt || row.start, emptyMessage: "No idle vehicle records available"},
-    {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp.", rows: recentBreakdownRows, columns: closureColumns, dateValue: (row) => row.start || row.closedAt || row.verifiedAt, emptyMessage: "No recent breakdown cases available"},
+    {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp. Status shows Pending when maintenance has not accepted an open request within 24 hours; TAT is closed at minus opened at.", rows: recentBreakdownRows, columns: recentBreakdownColumns, dateValue: (row) => row.start || row.closedAt || row.verifiedAt, emptyMessage: "No recent breakdown cases available"},
     {category: "general", title: IN_OUT_REPORT_TITLE, description: IN_OUT_REPORT_DESCRIPTION, rows: inOutRows, columns: inOutColumns, dateValue: (row) => row.date, emptyMessage: "No in and out movement recorded yet", rowKey: (row) => `in-out-${row.date}`},
     {category: "production", title: "Off Road to MIS Veri.", description: "Elapsed time from Production off-road marking to MIS verification.", rows: elapsedRows.filter((row) => row.start && row.verifiedAt), columns: [
       ...misColumns,
