@@ -105,14 +105,14 @@ test("lifecycle region filters its cards and linked rows independently of the da
   const controls = byClass(tree, "mine-request-lifecycle-end-controls");
   assert.ok(byLabel(controls, "Request lifecycle to date"));
   assert.ok(byLabel(controls, "Request lifecycle region"));
-  for (const region of ["NCL", "WCL", "all"]) {
+  for (const region of ["NCL", "WCL", "site:Jayant OB", "site:Sasti OB", "all"]) {
     byLabel(tree, "Request lifecycle region").props.onChange({target: {value: region}});
     tree = view.render(rows);
     assert.equal(byLabel(tree, "Region").props.value, "all");
     const summary = byClass(tree, "mine-request-lifecycle-summary");
     activate(byClass(summary, "opened"));
     tree = view.render(rows);
-    const expected = rows.filter((row) => region === "all" || row.ref.startsWith(region)).map((row) => row.ref);
+    const expected = rows.filter((row) => region === "all" || (region.startsWith("site:") ? row.site === region.slice(5) : row.ref.startsWith(region))).map((row) => row.ref);
     assert.deepEqual(detailView(tree).rows.map((row) => row.requestReference), expected);
     activate(byClass(byClass(tree, "mine-request-lifecycle-summary"), "closed"));
     tree = view.render(rows);
@@ -120,7 +120,9 @@ test("lifecycle region filters its cards and linked rows independently of the da
   }
   byLabel(tree, "Region").props.onChange({target: {value: "WCL"}});
   tree = view.render(rows);
-  assert.deepEqual(findAll(byLabel(tree, "Request lifecycle region"), (node) => node.type === "option").map((node) => node.props.value), ["all", "WCL"]);
+  assert.deepEqual(findAll(byLabel(tree, "Request lifecycle region"), (node) => node.type === "option").map((node) => node.props.value), ["all", "WCL", "site:Sasti OB"]);
+  const restricted = harness({equipment, regions: [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: ["Sasti OB"], restrictToScope: true});
+  assert.deepEqual(findAll(byLabel(restricted.render(rows), "Request lifecycle region"), (node) => node.type === "option").map((node) => node.props.value), ["all", "WCL", "site:Sasti OB"]);
 });
 
 test("every day-wise date, metric and percentage opens its exact site/day entries and returns to the table", () => {

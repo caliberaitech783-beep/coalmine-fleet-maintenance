@@ -1259,8 +1259,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   for (const cursor = new Date(`${safeTrendStartKey}T12:00:00`), end = new Date(`${requestTrendEndKey}T12:00:00`); cursor <= end && requestTrendDateKeys.length < 366; cursor.setDate(cursor.getDate() + 1)) {
     requestTrendDateKeys.push(localDateKey(cursor));
   }
-  const requestLifecycleRegions = selectedRegion ? [selectedRegion] : availableRegions;
+  const requestLifecycleRegions = (selectedRegion ? [selectedRegion] : availableRegions).map((region) => ({
+    ...region,
+    sites: region.sites.filter((site) => (!normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({site: allowed}, site))) && (!selectedRegion || dashboardSite === "all" || recordBelongsToSite({site: dashboardSite}, site))),
+  }));
   const requestLifecycleRegion = requestLifecycleRegions.find((region) => region.code === requestTrendRegion);
+  const requestLifecycleSite = requestLifecycleRegions.flatMap((region) => region.sites).find((site) => `site:${site}` === requestTrendRegion);
   const requestLifecycleRows = {
     production: locationBreakdowns.filter((record) => ["production user", "maintenance user"].includes(String(record.requesterRole || "").trim().toLowerCase()) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
     opened: locationBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() !== "closed" && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
@@ -1268,9 +1272,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     verified: locationBreakdowns.filter((record) => requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
     idle: locationBreakdowns.filter((record) => ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
   };
-  if (requestLifecycleRegion) {
+  if (requestLifecycleRegion || requestLifecycleSite) {
     for (const metric of Object.keys(requestLifecycleRows)) {
-      requestLifecycleRows[metric] = requestLifecycleRows[metric].filter((record) => requestLifecycleRegion.sites.some((site) => recordBelongsToSite(record, site)));
+      requestLifecycleRows[metric] = requestLifecycleRows[metric].filter((record) => (requestLifecycleSite ? [requestLifecycleSite] : requestLifecycleRegion.sites).some((site) => recordBelongsToSite(record, site)));
     }
   }
   const maintenanceClosedRows = requestLifecycleRows.closed.filter((record) => !requestEventDate(record, "verified"));
@@ -1602,7 +1606,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <label><span>From</span><input type="date" aria-label="Request lifecycle from date" value={requestTrendFrom} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
               <div className="mine-request-lifecycle-end-controls">
                 <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
-                <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>
+                <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion || requestLifecycleSite ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <optgroup key={region.code} label={region.code}><option value={region.code}>{region.code}</option>{region.sites.map((site) => <option key={site} value={`site:${site}`}>{site}</option>)}</optgroup>)}</select></label>
               </div>
             </div>
           </header>
