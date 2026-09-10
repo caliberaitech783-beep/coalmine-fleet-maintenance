@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast } from "./table-actions-model.mjs";
+import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder } from "./table-actions-model.mjs";
 import "./table-actions.css";
 import "./sortable-table.css";
 
 export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
-  const columns = jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
+  const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
+  const columns = isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
   const schema = columns.map((column) => column.key).join("|");
   return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }} />;
 }

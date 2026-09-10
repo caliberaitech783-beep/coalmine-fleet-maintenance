@@ -2,11 +2,20 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import React from "react";
-import {tableElements, tableCellText, tableModel, projectTableRow, tableSlots, selectTableRows, dateColumnsFirst, jobReferenceColumnsLast} from "../src/table-actions-model.mjs";
+import {tableElements, tableCellText, tableModel, projectTableRow, tableSlots, selectTableRows, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder} from "../src/table-actions-model.mjs";
 
 const h = React.createElement;
 const row = (key, ...cells) => h("tr", {key}, cells.map((value, i) => h("td", {key: i}, value)));
 const headers = h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Count")));
+
+test("workflow request columns use the requested order with all remaining fields preserved", () => {
+  const labels = ["Actions", "Job reference", "Equipment group", "Door no.", "Model", "Site location", "Repair category", "Reason", "Status", "Started", "Closed", "Days of breakdown"];
+  const {columns} = tableModel(h("thead", {}, h("tr", {}, labels.map(label => h("th", {}, label)))));
+  const ordered = requestColumnsInWorkflowOrder(columns);
+  assert.deepEqual(ordered.map(c => c.label), ["Started", "Closed", "Days of breakdown", "Status", "Door no.", "Site location", "Repair category", "Reason", "Actions", "Equipment group", "Model", "Job reference"]);
+  assert.deepEqual(tableSlots(projectTableRow(row("record", ...labels), ordered.map(c => c.index))).map(s => tableCellText(s.cell)), ordered.map(c => c.label));
+  assert.deepEqual(columns.map(c => c.label), labels);
+});
 
 test("job references come last outside Reports without changing other columns or values", () => {
   const labels = ["Actions", "Job reference", "Site", "Started", "Closed", "Ticket reference"];
