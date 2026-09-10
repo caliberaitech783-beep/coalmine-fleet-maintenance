@@ -5123,7 +5123,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   ];
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
-    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow }),
+    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow }).map((report) => ({
+      ...report,
+      // Department reports return plain status text; render it as the same coloured pill the other reports use.
+      columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
+    })),
   ];
   const accessibleReportGroups = reportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
   const availableReportCategories = departmentReportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
