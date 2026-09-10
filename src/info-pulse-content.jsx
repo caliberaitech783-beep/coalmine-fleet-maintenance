@@ -24,36 +24,47 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
   const sites = useMemo(() => infoPulseSiteOptions(requests, scope?.sites || []), [requests, scope]);
   const summary = useMemo(() => infoPulseView(cases, {...filters, sites}), [cases, filters, sites]);
   const severityCounts = pulseSeverityCounts(summary.rows);
-  const detail = useMemo(() => {
-    const view = infoPulseView(cases, {...filters, site: selection?.site || filters.site, type: selection?.type || ''});
+  const matching = useMemo(() => {
+    const view = infoPulseView(cases, {...filters, site: '', type: selection?.type || ''});
     return selection?.severity ? {...view, rows: view.rows.filter(row => pulseCaseSeverity(row) === selection.severity)} : view;
   }, [cases, filters, selection]);
+  const siteCounts = useMemo(() => {
+    const counts = new Map();
+    for (const row of matching.rows) counts.set(row.siteKey, (counts.get(row.siteKey) || 0) + 1);
+    return counts;
+  }, [matching]);
+  const detail = useMemo(() => ({...matching, rows: filters.site ? matching.rows.filter(row => row.siteKey === filters.site) : matching.rows}), [matching, filters.site]);
   const lastPage = Math.max(0, Math.ceil(detail.rows.length / PAGE_SIZE) - 1);
   const currentPage = Math.min(page, lastPage);
   const rows = detail.rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
-  const selectedSite = sites.find(site => site.key === (selection?.site || filters.site))?.label || 'All sites';
-  const changeFilter = (key, value) => {setFilters(current => ({...current, [key]: value})); setSelection(null); setExpanded(''); setPage(0);};
-  const inspect = (site, type = '', severity = '') => {setSelection({site, type, severity}); setExpanded(''); setPage(0);};
+  const selectedSite = sites.find(site => site.key === filters.site)?.label || 'All sites';
+  const changeFilter = (key, value) => {setFilters(current => ({...current, [key]: value})); setExpanded(''); setPage(0);};
+  const inspect = (site, type = '', severity = '') => {setFilters(current => ({...current, site})); setSelection({type, severity}); setExpanded(''); setPage(0);};
   const countButton = (row, type = '') => {
     const count = type ? row.counts[type] : row.total;
-    return <button type="button" className={`pulse-number ${type ? INFO_PULSE_COLUMNS.find(column => column.key === type)?.tone : 'total'}`} disabled={!count} aria-label={`${row.label}: ${count} ${type ? labels[type] : 'cases'}`} onClick={() => inspect(row.key, type)}>{count}</button>;
+    return <button type="button" className={`pulse-number ${type ? INFO_PULSE_COLUMNS.find(column => column.key === type)?.tone : 'total'}`} disabled={!count} aria-label={`${row.label}: ${count} ${type ? labels[type] : 'cases'}`} onClick={() => inspect(row.key || filters.site, type)}>{count}</button>;
   };
   return <div className="pulse-content">
+    {ready && !summary.invalidRange && <div className="pulse-site-filter">
+      <span className="pulse-site-label" id="pulse-site-label">Site</span>
+      <div className="pulse-site-tabs" role="group" aria-labelledby="pulse-site-label">
+        {[{key: '', label: 'All sites'}, ...sites].map(site => <button type="button" key={site.key} aria-pressed={filters.site === site.key} aria-label={`Filter site: ${site.label}`} onClick={() => changeFilter('site', site.key)}><span>{site.label}</span><b>{site.key ? siteCounts.get(site.key) || 0 : matching.rows.length}</b></button>)}
+      </div>
+    </div>}
     <div className="pulse-toolbar">
-      <label>Site<select value={filters.site} onChange={event => changeFilter('site', event.target.value)}><option value="">All permitted sites</option>{sites.map(site => <option key={site.key} value={site.key}>{site.label}</option>)}</select></label>
       <label>Request date from<input type="date" value={filters.from} max={filters.to || undefined} onChange={event => changeFilter('from', event.target.value)} /></label>
       <label>Request date to<input type="date" value={filters.to} min={filters.from || undefined} onChange={event => changeFilter('to', event.target.value)} /></label>
-      {(filters.site || filters.from || filters.to) && <button type="button" className="pulse-reset" onClick={() => {setFilters({site: '', from: '', to: ''}); setSelection(null); setPage(0);}}>Reset</button>}
+      {(filters.site || filters.from || filters.to || selection) && <button type="button" className="pulse-reset" onClick={() => {setFilters({site: '', from: '', to: ''}); setSelection(null); setExpanded(''); setPage(0);}}>Reset</button>}
       <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
     </div>
     <div className="pulse-meta"><span>{!filters.from && !filters.to ? 'All request dates' : `${filters.from ? formatDisplayDate(filters.from) : 'Earliest'} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`}</span><span>{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span></div>
     {error && <div className="pulse-message pulse-error" role="alert">{ready ? 'Refresh failed. Showing the last loaded counts.' : 'Could not load site counts.'} <button type="button" disabled={refreshing} onClick={onRefresh}>Retry</button></div>}
     {!ready ? <p className="pulse-message" role="status">{error ? 'Counts unavailable.' : 'Loading site counts…'}</p> : summary.invalidRange ? <p className="pulse-message pulse-error" role="alert">From date must be on or before To date.</p> : <>
       {!selection && <div className="pulse-overview" aria-label="Cases by highest priority">
-        {Object.entries(severityLabels).map(([key, label]) => <button type="button" key={key} className={`pulse-stat ${key}${(selection?.severity || (!selection?.type && selection ? 'all' : '')) === key ? ' selected' : ''}`} disabled={!severityCounts[key]} aria-label={`${label}: ${severityCounts[key]} cases`} aria-pressed={(selection?.severity || (!selection?.type && selection ? 'all' : '')) === key} onClick={() => inspect('', '', key === 'all' ? '' : key)}><span>{label}</span><b>{severityCounts[key]}</b></button>)}
+        {Object.entries(severityLabels).map(([key, label]) => <button type="button" key={key} className={`pulse-stat ${key}`} disabled={!severityCounts[key]} aria-label={`${label}: ${severityCounts[key]} cases`} onClick={() => inspect(filters.site, '', key === 'all' ? '' : key)}><span>{label}</span><b>{severityCounts[key]}</b></button>)}
       </div>}
       <div className="pulse-section-heading">
-        {selection ? <><button type="button" className="pulse-back" onClick={() => {setSelection(null); setExpanded('');}}><ArrowLeft size={16} /> Sites</button><h3>{selectedSite} <span>/ {selection.type ? labels[selection.type] : severityLabels[selection.severity] || 'All cases'}</span></h3><b className="pulse-case-count" role="status">{detail.rows.length} cases</b></> : <><h3>Site-wise cases</h3><b className="pulse-case-count" role="status">{summary.totals.total} cases</b></>}
+        {selection ? <><button type="button" className="pulse-back" onClick={() => {setSelection(null); setExpanded(''); setPage(0);}}><ArrowLeft size={16} /> Sites</button><h3>{selectedSite} <span>/ {selection.type ? labels[selection.type] : severityLabels[selection.severity] || 'All cases'}</span></h3><b className="pulse-case-count" role="status">{detail.rows.length} cases</b></> : <><h3>Site-wise cases</h3><b className="pulse-case-count" role="status">{summary.totals.total} cases</b></>}
       </div>
       {!selection ? <>
         <div key="sites" className="pulse-table-scroll" tabIndex={0} role="region" aria-label="Site-wise case counts">
@@ -64,7 +75,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
         </div>
         <p className="pulse-count-note">Cases count each request once. Priority cards use the highest severity; issue columns can overlap.</p>
       </> : <>
-        <div key={`cases:${selection.site}:${selection.type}:${selection.severity}:${currentPage}`} className="pulse-case-list" tabIndex={0} role="region" aria-label="Matching case records">
+        <div key={`cases:${filters.site}:${filters.from}:${filters.to}:${selection.type}:${selection.severity}:${currentPage}`} className="pulse-case-list" tabIndex={0} role="region" aria-label="Matching case records">
           {rows.length ? rows.map(row => {
               const request = row.request;
               const reasons = pulseCaseReasons(row, selection.type);

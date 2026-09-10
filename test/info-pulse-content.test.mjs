@@ -78,7 +78,7 @@ test('date and site controls update totals and drill-down together and reset ret
   descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
   tree = app.render();
   assert.ok(byLabel(tree, 'Total: 67 cases'));
-  descendants(tree, node => node.type === 'select')[0].props.onChange({target: {value: 'sasti ob'}});
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
   tree = app.render();
   assert.ok(byLabel(tree, 'Total: 60 cases'));
   assert.equal(byLabel(tree, 'Majri OB: 7 cases'), undefined);
@@ -125,4 +125,96 @@ test('priority cards count unique cases and open matching records', () => {
   tree = app.render();
   assert.match(text(tree), /All sites.*Critical/);
   assert.match(text(tree), /1–25 of 67 cases/);
+});
+
+test('opens on all sites and all dates with exact site badges and no remembered filter', () => {
+  const app = harness();
+  let tree = app.render();
+  assert.equal(byLabel(tree, 'Filter site: All sites').props['aria-pressed'], true);
+  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites67');
+  assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB60');
+  assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB7');
+  assert.ok(descendants(tree, node => node.type === 'input').every(input => input.props.value === ''));
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
+  tree = app.render();
+  assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
+  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites67');
+  assert.ok(byLabel(tree, 'Total: 60 cases'));
+  byLabel(tree, 'Filter site: All sites').props.onClick();
+  assert.ok(byLabel(app.render(), 'Total: 67 cases'));
+  byLabel(app.render(), 'Filter site: Majri OB').props.onClick();
+  assert.equal(byLabel(harness().render(), 'Filter site: All sites').props['aria-pressed'], true);
+});
+
+test('site tabs retain the issue drill-down, clear pagination, and All sites restores every matching case', () => {
+  const app = harness();
+  let tree = app.render();
+  byLabel(tree, 'Sasti OB: 60 ETC overdue').props.onClick();
+  tree = app.render();
+  assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
+  byLabel(tree, 'Next cases').props.onClick();
+  tree = app.render();
+  assert.match(text(tree), /26–50 of 60 cases/);
+  byLabel(tree, 'Filter site: Majri OB').props.onClick();
+  tree = app.render();
+  assert.match(text(tree), /Majri OB.*ETC overdue/);
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
+  assert.ok(!text(byLabel(tree, 'Matching case records')).includes('R-0'));
+  byLabel(tree, 'Filter site: All sites').props.onClick();
+  tree = app.render();
+  assert.match(text(tree), /All sites.*ETC overdue/);
+  assert.match(text(tree), /1–25 of 67 cases/);
+});
+
+test('site badge counts follow dates and issue or priority, including a site with zero matching cases', () => {
+  const requests = [
+    {ref: 'A', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00'},
+    {ref: 'B', site: 'Sasti OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No driver'},
+    {ref: 'C', site: 'Majri OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No work'},
+    {ref: 'D', site: 'Majri OB', status: 'Open', start: '2026-09-02 12:00', expectedCompletionAt: '2026-09-03 12:00'},
+  ];
+  const props = {requests, cases: data.buildInfoPulseCases(requests, {now: NOW}), scope: {label: 'All regions', sites: ['Lalpeth OB']}};
+  const app = harness();
+  let tree = app.render(props);
+  byLabel(tree, 'Warnings: 2 cases').props.onClick();
+  tree = app.render(props);
+  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites2');
+  assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB1');
+  assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB1');
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
+  tree = app.render(props);
+  assert.match(text(tree), /Sasti OB.*Warnings/);
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 1);
+  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
+  tree = app.render(props);
+  byLabel(tree, 'Total: 2 ETC overdue').props.onClick();
+  tree = app.render(props);
+  descendants(tree, node => node.type === 'input')[0].props.onChange({target: {value: '2026-09-02'}});
+  tree = app.render(props);
+  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites1');
+  assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB0');
+  assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB1');
+  assert.equal(text(byLabel(tree, 'Filter site: Lalpeth OB')), 'Lalpeth OB0');
+  assert.match(text(tree), /All sites.*ETC overdue/);
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
+  tree = app.render(props);
+  assert.match(text(tree), /No matching cases/);
+  byLabel(tree, 'Filter site: All sites').props.onClick();
+  tree = app.render(props);
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 1);
+  assert.ok(text(byLabel(tree, 'Matching case records')).includes('D'));
+});
+
+test('filtered overview totals and priority cards keep the selected site when drilling down', () => {
+  const app = harness();
+  byLabel(app.render(), 'Filter site: Majri OB').props.onClick();
+  byLabel(app.render(), 'Total: 7 cases').props.onClick();
+  let tree = app.render();
+  assert.match(text(tree), /Majri OB.*All cases/);
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
+  descendants(tree, node => node.props.className === 'pulse-back')[0].props.onClick();
+  byLabel(app.render(), 'Critical: 7 cases').props.onClick();
+  tree = app.render();
+  assert.match(text(tree), /Majri OB.*Critical/);
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
 });
