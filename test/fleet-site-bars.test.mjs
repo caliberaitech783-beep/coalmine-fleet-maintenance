@@ -63,54 +63,37 @@ test("partial breakdown segments are marked so the remaining fleet stays visible
   assert.ok(!segments[1].props.className.includes("partial-segment"));
 });
 
-test("screenshot regression: 3 of 31 is taller than 2 of 52 on the same chart", () => {
-  const segmentHeight = (total, count) => {
-    const tree = FleetSiteBars({site: {equipment: total, breakdown: {equipment: count}}, axisMax: 225, showBreakdown: true});
+test("bars and green segments are exactly proportional on one linear scale", () => {
+  const axisMax = 225;
+  const render = (total, count) => {
+    const tree = FleetSiteBars({ site: { equipment: total, breakdown: { equipment: count } }, axisMax, showBreakdown: true });
     const bar = all(tree, (node) => node.type === "i")[0];
     const segment = all(bar, (node) => node.props.className?.startsWith("mine-fleet-breakdown-segment"))[0];
-    return parseFloat(bar.props.style.height) * parseFloat(segment.props.style.height) / 100;
+    return { bar: parseFloat(bar.props.style.height), segment: segment ? parseFloat(bar.props.style.height) * parseFloat(segment.props.style.height) / 100 : 0 };
   };
-  assert.ok(segmentHeight(31, 3) > segmentHeight(52, 2));
-  assert.ok(segmentHeight(31, 3) > 3 / 225 * 100, "small bars are still enlarged");
-  for (const count of [1, 2, 3, 4, 8, 10, 12]) {
-    const expected = fleetBarHeightPercent(count, 225, true);
-    for (const total of [count, 31, 48, 52, 82, 142, 208]) {
-      assert.ok(Math.abs(segmentHeight(total, count) - expected) < 1e-9, `${count} of ${total}`);
-      if (total > count) assert.ok(segmentHeight(total, count) < fleetBarHeightPercent(total, 225, true));
+  for (const total of [4, 15, 31, 48, 52, 82, 142, 208]) {
+    assert.ok(Math.abs(render(total, 0).bar - total / axisMax * 100) < 1e-9, `${total} total is linear`);
+    for (const count of [1, 2, 3, 4, 8, 10, 12, 23]) {
+      if (count > total) continue;
+      const { segment } = render(total, count);
+      assert.ok(Math.abs(segment - count / axisMax * 100) < 1e-9, `${count} of ${total} sits on the same scale as the totals`);
     }
   }
+  // Screenshot regressions: 48 is clearly taller than 31, and 208 is four times 52.
+  assert.ok(render(48, 0).bar / render(31, 0).bar > 1.5);
+  assert.ok(Math.abs(render(208, 0).bar / render(52, 0).bar - 4) < 1e-9);
+  assert.ok(Math.abs(render(208, 12).segment / render(142, 8).segment - 1.5) < 1e-9, "12 is 50% taller than 8");
 });
 
-test("common chart scale is strictly increasing, keeps zero at zero, and Total mode remains linear", () => {
+test("chart scale is linear, strictly increasing and identical in Total and Breakdown modes", () => {
   for (const max of [1, 5, 25, 50, 225, 1200]) {
-    assert.equal(fleetBarHeightPercent(0, max, true), 0);
-    assert.equal(fleetBarHeightPercent(max, max, true), 100);
+    assert.equal(fleetBarHeightPercent(0, max), 0);
+    assert.equal(fleetBarHeightPercent(max, max), 100);
     for (let value = 1; value <= max; value++) {
-      assert.ok(fleetBarHeightPercent(value, max, true) > fleetBarHeightPercent(value - 1, max, true));
-      assert.equal(fleetBarHeightPercent(value, max, false), value / max * 100);
+      assert.ok(fleetBarHeightPercent(value, max) > fleetBarHeightPercent(value - 1, max));
+      assert.equal(fleetBarHeightPercent(value, max), value / max * 100);
+      assert.equal(fleetBarHeightPercent(value, max, true, 12), fleetBarHeightPercent(value, max), "legacy arguments no longer bend the scale");
     }
   }
-});
-
-test("8, 10 and 12 have visibly different, exactly proportional green bars across different totals", () => {
-  const height = (total, count) => {
-    const tree = FleetSiteBars({site: {equipment: total, breakdown: {equipment: count}}, axisMax: 225, showBreakdown: true, breakdownScaleMax: 12});
-    const bar = all(tree, node => node.type === "i")[0];
-    const segment = all(bar, node => node.props.className?.startsWith("mine-fleet-breakdown-segment"))[0];
-    return parseFloat(bar.props.style.height) * parseFloat(segment.props.style.height) / 100;
-  };
-  const values = [height(142, 8), height(49, 10), height(208, 12)];
-  assert.ok(Math.abs(values[2] / values[0] - 1.5) < 1e-9, "12 is 50% taller than 8");
-  assert.ok(Math.abs(values[1] / values[0] - 1.25) < 1e-9, "10 is 25% taller than 8");
-  for (let i = 1; i < values.length; i++) assert.ok((values[i] - values[i - 1]) * 2 >= 15, "at least 15px apart even in a 200px plot");
-  assert.ok(height(31, 3) > height(52, 2), "the earlier 2-versus-3 fix remains intact");
-});
-
-test("the enlarged band follows the maximum breakdown count, without compressing any green values", () => {
-  for (const peak of [5, 12, 24, 50, 100, 225]) {
-    const step = fleetBarHeightPercent(1, 225, true, peak);
-    for (let count = 1; count <= peak; count++) {
-      assert.ok(Math.abs(fleetBarHeightPercent(count, 225, true, peak) - step * count) < 1e-9, `${count} of ${peak}: every breakdown value is on one linear band`);
-    }
-  }
+  assert.equal(fleetBarHeightPercent(300, 225), 100, "a value above the axis fills the plot rather than overflowing");
 });

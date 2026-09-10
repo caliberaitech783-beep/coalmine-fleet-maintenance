@@ -455,7 +455,7 @@ test("every site equipment and vehicle total opens exactly its registered assets
     tree = view.render(rows);
     const fleetBars = findAll(tree, node => node.props.site?.breakdown && node.props.axisMax);
     assert.ok(fleetBars.length);
-    assert.ok(fleetBars.every(node => node.props.breakdownScaleMax === 8), "all sites share the highest visible breakdown count");
+    assert.ok(fleetBars.every(node => node.props.axisMax === fleetBars[0].props.axisMax && !("breakdownScaleMax" in node.props)), "all sites share one linear axis with no bent breakdown band");
     for (const site of sites.slice(0, 3)) {
       for (const category of ["equipment", "vehicles"]) {
         const clickSite = (isBreakdown) => {

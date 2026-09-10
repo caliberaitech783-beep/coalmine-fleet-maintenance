@@ -72,8 +72,8 @@ test("breakdown mode keeps total counts and green segments on one common scale",
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   const bars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
-  assert.match(bars, /fleetBarHeightPercent\(total, scale, showBreakdown, breakdownScaleMax\)/);
-  assert.match(bars, /fleetBarHeightPercent\(breakdown, scale, showBreakdown, breakdownScaleMax\)/);
+  assert.match(bars, /const totalHeight = fleetBarHeightPercent\(total, scale\);/);
+  assert.match(bars, /const breakdownShare = total \? breakdown \/ total \* 100 : 0;/);
   assert.match(bars, /Math\.max\(1, nonNegativeCount\(axisMax\), total\)/);
   assert.match(bars, /showBreakdown && breakdown > 0/);
   assert.match(bars, /className="mine-fleet-breakdown-count"/);
@@ -166,14 +166,14 @@ test("breakdown segment clicks open only that site and category of off-road asse
   assert.match(source, /assetDrilldown\.startsWith\("offroad-site:"\) \? assetDrilldown\.slice\(13\)\.split\("\|"\)\[0\] : assetDrilldown\.startsWith\("site:"\)/);
 });
 
-test("fleet chart uses the same labelled enlarged scale for its grid and bars", () => {
+test("fleet chart grid and bars share one linear scale with no bent breakdown band", () => {
   assert.match(source, /const fleetChartStep = 25;/);
   assert.match(source, /const fleetChartAxisMax = Math.max\(fleetChartStep, Math.ceil\(fleetChartPeak \/ fleetChartStep\) \* fleetChartStep\);/);
   assert.doesNotMatch(source, /const fleetChartScale = dashboardCountScale/);
-  assert.match(source, /fleetBarHeightPercent\(tick, fleetChartAxisMax, showFleetBreakdowns, fleetBreakdownScaleMax\)/);
-  assert.match(source, /breakdownScaleMax=\{fleetBreakdownScaleMax\}/);
-  assert.match(source, /Breakdown scale: 0–\{fleetBreakdownScaleMax\} enlarged uniformly; totals continue above this range\./);
-  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment \{ min-height: 0; max-height: none; \}/);
+  assert.match(source, /const fleetChartTicks = Array\.from\(\{ length: fleetChartAxisMax \/ fleetChartStep \+ 1 \}, \(_, index\) => index \* fleetChartStep\);/);
+  assert.match(source, /fleetBarHeightPercent\(tick, fleetChartAxisMax\)/);
+  assert.doesNotMatch(source, /fleetBreakdownScaleMax|breakdownScaleMax=|enlarged uniformly|fleet-scale-note/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment \{ min-height: 18px; max-height: 100%; \}/);
 });
 
 test("partial breakdown segments cannot be stretched or clipped differently at different sites", () => {
