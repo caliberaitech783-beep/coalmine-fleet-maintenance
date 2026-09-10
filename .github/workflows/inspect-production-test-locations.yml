@@ -20,6 +20,7 @@ jobs:
           node-version: '22.x'
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm install --no-save --package-lock=false esbuild@0.25.12
       - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
