@@ -317,6 +317,14 @@ Expected health output contains `"status":"ok"` and `"database":"connected"`.
 
 ## 14. Troubleshooting
 
+### Valid login fails with a duplicate session public ID
+
+Reverting the System Administration feature left `auth_sessions.session_public_id` and its unique index in databases where that feature had run. Its old empty-string default makes a second session fail with PostgreSQL `23505` on `auth_sessions_public_id_idx`.
+
+Startup calls `repairLegacySessionDefaults` to set `gen_random_uuid()::text` as the default only when that legacy column exists. Existing sessions, identifiers, permissions, and the unique index are preserved. Fresh databases without the column continue to work. Do not resolve this error by clearing sessions or removing uniqueness.
+
+`test/auth-session-schema.test.mjs` runs a real PostgreSQL regression when `AUTH_SESSION_TEST_DATABASE_URL` is configured (`AUTH_SESSION_TEST_DATABASE_SSL=false` for local PostgreSQL). It uses a temporary table inside a rolled-back transaction, reproduces the legacy failure, and verifies repeat sign-ins, existing-session continuity, and idempotent repair. The Azure build runs it against an isolated PostgreSQL service.
+
 ### Login says the account is duplicated
 
 Make the Login name unique in Users & employees for the selected access type. The server rejects ambiguous matches instead of choosing an account at random.

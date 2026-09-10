@@ -12,11 +12,6 @@ on:
       - "test/**"
   workflow_dispatch:
     inputs:
-      diagnose_login:
-        description: "Read production login error logs without deploying"
-        required: false
-        type: boolean
-        default: false
       report_source_sha:
         description: "Optional immutable report-only commit based on current production"
         required: false
@@ -38,8 +33,21 @@ env:
 
 jobs:
   build:
-    if: inputs.diagnose_login != true
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: session_test
+          POSTGRES_PASSWORD: session_test
+          POSTGRES_DB: session_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U session_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     outputs:
       source_sha: ${{ steps.source.outputs.sha }}
       report_base_sha: ${{ steps.source.outputs.base }}
@@ -82,6 +90,9 @@ jobs:
           node-version: "22.x"
           cache: npm
       - name: Install, test, and build
+        env:
+          AUTH_SESSION_TEST_DATABASE_URL: postgresql://session_test:session_test@localhost:5432/session_test
+          AUTH_SESSION_TEST_DATABASE_SSL: "false"
         run: |
           npm ci
           npm test
@@ -260,122 +271,5 @@ jobs:
         run: az webapp stop --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
 
       - name: Logout from Azure
-        if: always()
-        run: az logout
-
-  diagnose-login:
-    if: inputs.diagnose_login == true
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "22.x"
-      - run: npm ci --ignore-scripts
-      - run: npm install --no-save --package-lock=false esbuild@0.28.2
-      - uses: azure/login@v3
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
-      - name: Read production login error diagnostics
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          import {execFileSync} from 'node:child_process';
-          import {build} from 'esbuild';
-          import {createHash} from 'node:crypto';
-          import {readFileSync} from 'node:fs';
-          const credentials=JSON.parse(execFileSync('az',['webapp','deployment','list-publishing-credentials','--resource-group','coalmine-fleet-maintenance-rg','--name','coalmine-fleet-azure-783','-o','json'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));
-          const scm=new URL(credentials.scmUri).origin;
-          const headers={Authorization:'Basic '+Buffer.from(credentials.publishingUserName+':'+credentials.publishingPassword).toString('base64')};
-          async function get(path){const response=await fetch(scm+path,{headers,signal:AbortSignal.timeout(30000)});if(!response.ok)throw new Error('Log read HTTP '+response.status);return response;}
-          try {
-            const files=await get('/api/vfs/LogFiles/').then(r=>r.json());
-            console.log('Log directory entries:',files.map(f=>({name:f.name,mime:f.mime})));
-            const logs=files.filter(f=>f.name.endsWith('.log')).sort((a,b)=>String(b.mtime).localeCompare(String(a.mtime))).slice(0,8);
-            console.log('Recent application log files:',logs.map(f=>({name:f.name,modified:f.mtime,size:f.size})));
-            let count=0;
-            for(const file of logs){
-              const lines=(await get('/api/vfs/LogFiles/'+encodeURIComponent(file.name)).then(r=>r.text())).split('\n');
-              for(let i=0;i<lines.length;i++){
-                if(!/\[500\] POST \/api\/login\b|(?:TypeError|ReferenceError|error:).*auth_sessions/i.test(lines[i]))continue;
-                count++;
-                console.log(lines[i].slice(0,600));
-                for(const line of lines.slice(i+1,i+10)){if(/\bat |\bcode:|\bcolumn:|\bconstraint:/.test(line))console.log(line.slice(0,350));}
-              }
-            }
-            console.log('Matched login errors:',count);
-            for(const name of ['server.mjs','auth-session.mjs','mobile-access.mjs','admin-access.mjs']){
-              const response=await fetch(scm+'/api/vfs/site/wwwroot/'+name,{headers});
-              if(response.ok)console.log('Deployed source match:',name,createHash('sha256').update(await response.text()).digest('hex')===createHash('sha256').update(readFileSync(name,'utf8')).digest('hex'));
-              else console.log('Source read status:',name,response.status);
-            }
-            const source=`
-          import pg from 'pg';
-          import {randomUUID} from 'node:crypto';
-          import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
-          import {mergePrivilegeRecords} from './privilege-record.mjs';
-          import {createSessionStore} from './auth-session.mjs';
-          import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
-          import {verifySessionSchemaCompatibility} from './test/helpers/session-schema-regression.mjs';
-          async function run(){
-          const {Pool}=pg;
-          const pool=new Pool({connectionString:process.env.DATABASE_URL||process.env.APPSETTING_DATABASE_URL,ssl:{rejectUnauthorized:false},max:1,connectionTimeoutMillis:15000});
-          const client=await pool.connect();
-          console.log(JSON.stringify({stage:'postgres-regression',...await verifySessionSchemaCompatibility(client)}));
-          try {
-            await client.query('BEGIN');
-            await client.query("SET LOCAL lock_timeout = '5s'");
-            await client.query("SET LOCAL statement_timeout = '15s'");
-            await repairLegacySessionDefaults(client);
-            await client.query('COMMIT');
-            console.log(JSON.stringify({stage:'repair-production-default',committed:true}));
-          } catch(error){await client.query('ROLLBACK');client.release();await pool.end();throw error;}
-          let stage='begin';
-          try {
-            await client.query('BEGIN');
-            await client.query("SET LOCAL statement_timeout = '15s'");
-            stage='find-user';
-            const {rows:users}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees'");
-            const candidates=loginRecordCandidates(users,'anoop');
-            console.log(JSON.stringify({stage,candidates:candidates.length}));
-            console.log(JSON.stringify({stage:'recent-login-events',events:(await client.query("SELECT outcome,reason,occurred_at FROM audit_events WHERE actor_login='anoop' AND module='Authentication' ORDER BY occurred_at DESC LIMIT 6")).rows}));
-            for(const row of candidates){
-              const employee=row.record_data;
-              const login=String(employee.login||userLoginCandidates(employee)[0]||'anoop').trim();
-              const identifiers=new Set([...userLoginCandidates(employee),login.toLowerCase(),'anoop']);
-              stage='find-privileges';
-              const {rows:privileges}=await client.query("SELECT record_data FROM master_records WHERE master_name='Privilege'");
-              let privilege={};
-              for(const entry of privileges){const record=entry.record_data||{};if(identifiers.has(String(record.username||'').trim().toLowerCase()))privilege=mergePrivilegeRecords(privilege,record);}
-              stage='resolve-access';
-              const profile=resolveMobileAccess({user:employee,privilege});
-              console.log(JSON.stringify({stage,userType:profile.userType,assignedRole:profile.assignedRole,mustChangePassword:employee.mustChangePassword===true,hasEmployeeName:!!employee.employee}));
-              stage='create-session-rollback-only';
-              await createSessionStore(client).create({token:randomUUID(),role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
-              console.log(JSON.stringify({stage,success:true}));
-            }
-          } catch(error){console.log(JSON.stringify({stage,error:error.message,code:error.code,table:error.table,column:error.column,constraint:error.constraint}));}
-          finally{await client.query('ROLLBACK');client.release();await pool.end();}
-          }
-          run().catch(error=>{console.error('Diagnostic failed:',error.code||error.name);process.exitCode=1;});
-          `;
-            const bundle=await build({stdin:{contents:source,resolveDir:process.cwd()},bundle:true,platform:'node',format:'cjs',target:'node18',external:['pg-native'],write:false,minify:true});
-            const scriptPath='/api/vfs/data/login-diagnostic-20260910.cjs';
-            const upload=await fetch(scm+scriptPath,{method:'PUT',headers:{...headers,'If-Match':'*','Content-Type':'application/octet-stream'},body:bundle.outputFiles[0].text});
-            if(!upload.ok)throw new Error('Diagnostic script upload HTTP '+upload.status);
-            try {
-              const response=await fetch(scm+'/api/command',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({command:'node /home/data/login-diagnostic-20260910.cjs',dir:'/home/site/wwwroot'}),signal:AbortSignal.timeout(60000)});
-              if(!response.ok)throw new Error('Diagnostic command HTTP '+response.status);
-              const result=await response.json();
-              console.log('Session transaction diagnosis (always rolled back):',result.Output);
-              if(result.ExitCode!==0)console.log('Diagnostic runtime error:',String(result.Error).slice(0,1400));
-            } finally {await fetch(scm+scriptPath,{method:'DELETE',headers:{...headers,'If-Match':'*'}});}
-          } catch(error){console.error('Login diagnostics failed:',error.message);process.exitCode=1;}
-
-          NODE
-      - name: Logout
         if: always()
         run: az logout
