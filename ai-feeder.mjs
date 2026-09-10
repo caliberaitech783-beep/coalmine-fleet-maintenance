@@ -1,5 +1,3 @@
-import { calculateBreakdownDaysFromStart } from "./breakdown-duration.mjs";
-
 const HOUR_MS = 60 * 60 * 1000;
 
 export const AI_FEEDER_THRESHOLDS = {
@@ -8,7 +6,6 @@ export const AI_FEEDER_THRESHOLDS = {
   longRunningDays: 3,
   awaitingVerificationHours: 12,
   staleUpdateHours: 24,
-  maxAlerts: 60,
 };
 
 export const AI_FEEDER_ALERT_TYPES = [
@@ -41,16 +38,24 @@ export function alertTypesForRole(role = "") {
 }
 
 export function parseIstTimestamp(value) {
+  const text = String(value || "").trim();
+  const zoned = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i.test(text);
   const match = String(value || "").trim().match(
     /^(\d{4}-\d{2}-\d{2})\D+((?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)$/,
   );
-  if (!match) return Number.NaN;
+  if (!match && !zoned) return Number.NaN;
+  const day = text.slice(0, 10);
+  const calendar = new Date(`${day}T00:00:00Z`);
+  if (!Number.isFinite(calendar.getTime()) || calendar.toISOString().slice(0, 10) !== day) return Number.NaN;
+  if (zoned) return Date.parse(text);
   const time = match[2].length === 5 ? `${match[2]}:00` : match[2];
   return Date.parse(`${match[1]}T${time}+05:30`);
 }
 
 const statusOf = (request) => String(request?.status || "").trim().toLowerCase();
-const isClosed = (request) => statusOf(request) === "closed" || Boolean(String(request?.closedAt || "").trim());
+const isVerified = (request) => Boolean(String(request?.verifiedAt || "").trim()) ||
+  statusOf(request) === "verified" || String(request?.verificationStatus || "").trim().toLowerCase() === "verified";
+const isClosed = (request) => statusOf(request) === "closed" || Boolean(String(request?.closedAt || "").trim()) || isVerified(request);
 const isIdle = (request) => ["idle", "ideal"].includes(statusOf(request));
 const labelFor = (request) =>
   [request?.equipmentGroup || request?.equipment, request?.door].map((part) => String(part || "").trim()).filter(Boolean).join(" · ") ||
@@ -70,7 +75,8 @@ function buildAlerts(requests, nowMs) {
   const alerts = [];
   const add = (request, type, severity, title, detail, atMs) =>
     alerts.push({
-      id: `${type}:${String(request?.ref || labelFor(request))}`,
+      id: `${type}:${request.pulseKey}`,
+      requestKey: request.pulseKey,
       type,
       severity,
       title,
@@ -87,8 +93,10 @@ function buildAlerts(requests, nowMs) {
     const startedAt = parseIstTimestamp(request.start);
     const etcAt = parseIstTimestamp(request.expectedCompletionAt);
     const closedAt = parseIstTimestamp(request.closedAt);
+    const active = !closed && !isIdle(request);
+    if (isVerified(request) || (Number.isFinite(startedAt) && startedAt > nowMs)) continue;
 
-    if (!closed && Number.isFinite(etcAt) && etcAt < nowMs) {
+    if (active && Number.isFinite(etcAt) && etcAt < nowMs) {
       const late = hoursBetween(etcAt, nowMs);
       add(request, "etc-overdue", "critical",
         `${labelFor(request)} has passed its ETC`,
@@ -96,15 +104,15 @@ function buildAlerts(requests, nowMs) {
         etcAt);
     }
 
-    if (!closed && Number.isFinite(etcAt) && etcAt >= nowMs && etcAt - nowMs <= AI_FEEDER_THRESHOLDS.etcDueSoonHours * HOUR_MS) {
+    if (active && Number.isFinite(etcAt) && etcAt >= nowMs && etcAt - nowMs <= AI_FEEDER_THRESHOLDS.etcDueSoonHours * HOUR_MS) {
       add(request, "etc-due-soon", "warning",
         `${labelFor(request)} is due back soon`,
         `ETC is within ${AI_FEEDER_THRESHOLDS.etcDueSoonHours} hours. Confirm the work will finish on time.`,
         etcAt);
     }
 
-    if (!closed) {
-      const days = calculateBreakdownDaysFromStart(request.start, new Date(nowMs));
+    if (active) {
+      const days = Number.isFinite(startedAt) ? Math.floor((nowMs - startedAt) / (24 * HOUR_MS)) : 0;
       if (days >= AI_FEEDER_THRESHOLDS.longRunningDays) {
         add(request, "long-running", "critical",
           `${labelFor(request)} has been down ${days} days`,
@@ -128,7 +136,7 @@ function buildAlerts(requests, nowMs) {
         closedAt);
     }
 
-    if (!closed && Number.isFinite(startedAt) && nowMs - startedAt >= AI_FEEDER_THRESHOLDS.staleUpdateHours * HOUR_MS &&
+    if (active && Number.isFinite(startedAt) && nowMs - startedAt >= AI_FEEDER_THRESHOLDS.staleUpdateHours * HOUR_MS &&
       !String(request.dailyRemarks || "").trim()) {
       add(request, "stale-update", "warning",
         `${labelFor(request)} has no daily update`,
@@ -136,7 +144,7 @@ function buildAlerts(requests, nowMs) {
         startedAt);
     }
 
-    if (!closed && Number.isFinite(startedAt) && nowMs - startedAt <= AI_FEEDER_THRESHOLDS.newRequestHours * HOUR_MS) {
+    if (active && Number.isFinite(startedAt) && nowMs - startedAt <= AI_FEEDER_THRESHOLDS.newRequestHours * HOUR_MS) {
       add(request, "new-request", "info",
         `New request for ${labelFor(request)}`,
         `${String(request.complaint || "").trim() || "No reason recorded"} — raised by ${String(request.owner || request.requesterLogin || "").trim() || "unknown user"}.`,
@@ -146,18 +154,33 @@ function buildAlerts(requests, nowMs) {
   return alerts;
 }
 
+// A request can have several issues, but a repeated API row is still one case.
+// Prefer the newest update when duplicate projections carry timestamps.
+export function uniqueInfoPulseRequests(requests = []) {
+  const rows = new Map();
+  for (const [index, request] of (Array.isArray(requests) ? requests : []).entries()) {
+    if (!request || typeof request !== "object") continue;
+    const pulseKey = request.pulseKey || String(request.ref || request.id || "").trim() || `row:${index}`;
+    const previous = rows.get(pulseKey);
+    const updated = parseIstTimestamp(request.updatedAt);
+    const previousUpdated = parseIstTimestamp(previous?.updatedAt);
+    if (previous && Number.isFinite(previousUpdated) && (!Number.isFinite(updated) || previousUpdated > updated)) continue;
+    rows.set(pulseKey, {...request, pulseKey});
+  }
+  return [...rows.values()];
+}
+
 export function aiFeederAlerts(requests = [], { role = "", now = Date.now() } = {}) {
   const nowMs = now instanceof Date ? now.getTime() : Number(now);
   if (!Number.isFinite(nowMs)) return [];
   const allowed = new Set(alertTypesForRole(role));
-  return buildAlerts(requests, nowMs)
+  return buildAlerts(uniqueInfoPulseRequests(requests), nowMs)
     .filter((alert) => allowed.has(alert.type))
     .sort((left, right) =>
       SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] ||
       right.at - left.at ||
       left.id.localeCompare(right.id),
-    )
-    .slice(0, AI_FEEDER_THRESHOLDS.maxAlerts);
+    );
 }
 
 export function aiFeederSummary(alerts = []) {

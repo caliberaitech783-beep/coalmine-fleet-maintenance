@@ -1,0 +1,88 @@
+.ai-feeder-panel.pulse-panel { width: min(1220px, 100%); max-height: 90dvh; border-radius: 14px; border: 1px solid #dce1ea; color: #1e293b; }
+.pulse-panel > header { padding: 18px 24px; background: #fff; color: #222b40; border-top: 4px solid #78264d; border-bottom: 1px solid #e1e5eb; align-items: center; }
+.pulse-panel .pulse-title { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.pulse-panel h2 { display: flex; align-items: center; gap: 9px; margin: 0; font-size: 22px; letter-spacing: -.4px; }
+.pulse-panel h2 svg { width: 21px; color: #78264d; }
+.pulse-scope { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #536179; }
+.pulse-scope svg { width: 15px; height: 15px; }
+.pulse-panel .ai-feeder-actions button { background: #eef1f6; color: #37445c; min-width: 38px; min-height: 38px; }
+.pulse-panel .ai-feeder-countdown { color: #78264d; background: #f8edf2; border-color: #e7c7d4; font-size: 16px; }
+.pulse-panel .ai-feeder-countdown svg { color: inherit; }
+.pulse-panel .ai-feeder-countdown-fill { background: #78264d14; }
+.pulse-content { display: flex; flex-direction: column; padding: 16px 24px; overflow: auto; min-height: 0; font: 14px/1.45 Manrope, sans-serif; color: #26344a; background: #fff; }
+.pulse-toolbar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.pulse-toolbar label { display: grid; gap: 5px; font-size: 14px; font-weight: 650; color: #46536a; margin: 0; }
+.pulse-toolbar label:first-child { flex: 1; min-width: 200px; max-width: 320px; }
+.pulse-toolbar select, .pulse-toolbar input { width: 100%; min-height: 40px; padding: 8px 10px; background: #fff; color: #26344a; border: 1px solid #c8d0de; border-radius: 6px; font: inherit; box-sizing: border-box; }
+.pulse-toolbar input { min-width: 165px; }
+.pulse-toolbar button, .pulse-back, .pulse-pagination button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 12px; font: inherit; font-weight: 650; border: 1px solid #c8d0de; background: #fff; color: #37445c; border-radius: 6px; }
+.pulse-toolbar .pulse-refresh { margin-left: auto; }
+.pulse-content button:disabled { cursor: default; opacity: .65; }
+.pulse-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: #536179; margin: 10px 0 14px; }
+.pulse-section-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.pulse-section-heading h3 { font-size: 16px; margin: 0; font-weight: 800; }
+.pulse-section-heading h3 span { font-weight: 500; }
+.pulse-case-count { margin-left: auto; white-space: nowrap; font-size: 16px; font-variant-numeric: tabular-nums; }
+.pulse-back { min-height: 34px; padding: 5px 9px; }
+.pulse-table-scroll { overflow: auto; border: 1px solid #dbe1ea; border-radius: 8px; min-height: 120px; scrollbar-gutter: stable; }
+.pulse-content > :not(.pulse-table-scroll) { flex-shrink: 0; }
+.pulse-panel .pulse-table.pulse-summary th, .pulse-panel .pulse-table.pulse-summary td { padding-top: 5px; padding-bottom: 5px; }
+.pulse-panel .pulse-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: auto; margin: 0; font-size: 14px; background: #fff; color: #26344a; }
+.pulse-panel .pulse-table th, .pulse-panel .pulse-table td { padding: 11px 10px; border: 0; border-bottom: 1px solid #e8ecf2; vertical-align: middle; text-align: left; white-space: normal; font-size: 14px; line-height: 1.45; }
+.pulse-panel .pulse-table thead th { position: sticky; top: 0; z-index: 2; background: #f2f4f8; color: #44526a; font-weight: 700; box-shadow: 0 1px #dbe1ea; }
+.pulse-summary { min-width: 980px; }
+.pulse-panel .pulse-summary th:first-child { min-width: 160px; position: sticky; left: 0; background: #fff; z-index: 1; }
+.pulse-panel .pulse-summary thead th:first-child { background: #f2f4f8; z-index: 3; }
+.pulse-panel .pulse-summary td, .pulse-panel .pulse-summary th:not(:first-child) { text-align: right; }
+.pulse-panel .pulse-summary th:not(:first-child) { max-width: 120px; }
+.pulse-panel .pulse-table tfoot th, .pulse-panel .pulse-table tfoot td { position: sticky; bottom: 0; background: #f2f4f8; box-shadow: 0 -1px #cdd5e1; border: 0; z-index: 2; font-weight: 800; }
+.pulse-panel .pulse-summary tfoot th:first-child { background: #f2f4f8; z-index: 3; }
+.pulse-panel .pulse-table tbody tr:hover > td, .pulse-panel .pulse-table tbody tr:hover > th { background: #fafbfe; }
+.pulse-number { min-width: 40px; min-height: 34px; padding: 4px 8px; border: 0; border-radius: 5px; background: transparent; text-align: right; font: 750 16px/1.3 Manrope, sans-serif; font-variant-numeric: tabular-nums; color: #283750; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: #b4bfce; }
+.pulse-number.critical:not(:disabled) { color: #ac233b; background: #fff0f2; text-decoration-color: #dfa2ae; }
+.pulse-number.warning:not(:disabled) { color: #8a530d; }
+.pulse-number.info:not(:disabled) { color: #345fc4; }
+.pulse-number:disabled { color: #8a93a4; text-decoration: none; opacity: 1; }
+.pulse-number:not(:disabled):hover { background: #eaf0fa; }
+.pulse-site-link { border: 0; background: transparent; padding: 4px 0; font: inherit; font-weight: 750; color: #27374f; text-align: left; }
+.pulse-site-link:hover { text-decoration: underline; }
+.pulse-count-note { font-size: 13px; color: #536179; margin: 10px 0 0; }
+.pulse-records { min-width: 970px; }
+.pulse-record-link { display: flex; gap: 10px; justify-content: space-between; align-items: center; width: 100%; border: 0; padding: 0; text-align: left; background: transparent; color: #394675; font: inherit; }
+.pulse-record-link b { display: block; white-space: nowrap; }
+.pulse-record-link small { display: block; margin-top: 4px; font-size: 12px; font-weight: 500; color: #536179; }
+.pulse-record-link svg { flex: none; }
+.pulse-record-link[aria-expanded="true"] svg { transform: rotate(180deg); }
+.pulse-date { display: block; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pulse-date b { display: block; font-weight: 650; }
+.pulse-date span { display: block; color: #536179; }
+.pulse-date-kind { display: block; font-size: 12px; color: #536179; }
+.pulse-panel .pulse-days { text-align: right; font-variant-numeric: tabular-nums; }
+.pulse-issues { display: flex; flex-wrap: wrap; gap: 4px; min-width: 165px; max-width: 250px; }
+.pulse-issues span { padding: 3px 6px; border-radius: 4px; font-size: 12px; font-weight: 650; color: #405779; background: #f0f3f8; }
+.pulse-issues .critical { color: #a6223a; background: #fff0f2; }
+.pulse-issues .warning { color: #835217; background: #fff5e7; }
+.pulse-panel .pulse-table .pulse-record-detail { background: #f7f9fc; padding: 18px; }
+.pulse-record-detail dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 24px; margin: 0; }
+.pulse-record-detail dt { font-size: 13px; color: #536179; }
+.pulse-record-detail dd { margin: 4px 0 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pulse-message, .pulse-panel .pulse-table .pulse-empty { padding: 28px 16px; text-align: center; color: #536179; }
+.pulse-error { background: #fff3f4; color: #a6223a; border-radius: 6px; padding: 12px; margin-bottom: 14px; }
+.pulse-error button { color: inherit; border: 0; background: transparent; text-decoration: underline; font: inherit; }
+.pulse-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-variant-numeric: tabular-nums; }
+.pulse-pagination > div { display: flex; align-items: center; gap: 12px; }
+.pulse-content :is(button, input, select, [tabindex]):focus-visible { outline: 3px solid #617fc0; outline-offset: 2px; }
+@media (max-width: 650px) {
+  .pulse-panel > header { padding: 14px; }
+  .pulse-panel .pulse-title { gap: 5px; flex-direction: column; align-items: flex-start; }
+  .pulse-panel h2 { font-size: 19px; }
+  .pulse-content { padding: 14px; }
+  .pulse-toolbar { gap: 10px; }
+  .pulse-toolbar label:first-child { flex-basis: 100%; max-width: none; }
+  .pulse-toolbar label:not(:first-child) { flex: 1; min-width: 135px; }
+  .pulse-toolbar input { min-width: 0; }
+  .pulse-section-heading { flex-wrap: wrap; }
+  .pulse-section-heading h3 { flex: 1; min-width: 140px; }
+  .pulse-case-count { font-size: 14px; }
+  .pulse-record-detail dl { grid-template-columns: 1fr 1fr; }
+}

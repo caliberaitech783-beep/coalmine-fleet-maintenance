@@ -45,7 +45,8 @@ import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCoun
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
-import { aiFeederAlerts, aiFeederSummary } from "../ai-feeder.mjs";
+import { buildInfoPulseCases } from "../info-pulse-data.mjs";
+import InfoPulseContent from "./info-pulse-content.jsx";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
@@ -149,6 +150,7 @@ import "./sortable-table.css";
 import "./theme.css";
 import "./mobile-workflow.css";
 import "./ai-feeder.css";
+import "./info-pulse-content.css";
 import "./ideal-flow.css";
 import "./idle-status.css";
 import "./daily-updates.css";
@@ -7703,11 +7705,8 @@ function TicketPage({ session }) {
 }
 
 const AI_FEEDER_CLOSE_DELAY_SECONDS = 60;
-const AI_FEEDER_SEVERITY_ICONS = { critical: AlertTriangle, warning: Clock, info: Bell };
-function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogin = false, onClose }) {
+function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh, lockForLogin = false, onClose }) {
   const [seconds, setSeconds] = useState(lockForLogin ? AI_FEEDER_CLOSE_DELAY_SECONDS : 0);
-  const [filter, setFilter] = useState("all");
-  const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
   const canCloseRef = useRef(false);
@@ -7740,7 +7739,7 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
     const closeOnEscape = (event) => {
       if (event.key === "Escape" && canCloseRef.current) closeRef.current();
       if (event.key === "Tab") {
-        const buttons = panelRef.current?.querySelectorAll("button:not(:disabled), [href], [tabindex='0']");
+        const buttons = panelRef.current?.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), [href], [tabindex='0']");
         if (!buttons?.length) return;
         const first = buttons[0], last = buttons[buttons.length - 1];
         if (event.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) { event.preventDefault(); last.focus(); }
@@ -7750,92 +7749,72 @@ function AiFeederPanel({ alerts = [], summary, requests = [], scope, lockForLogi
     document.addEventListener("keydown", closeOnEscape);
     return () => { document.removeEventListener("keydown", closeOnEscape); document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
   }, []);
-  const visibleAlerts = alerts.filter((alert) => filter === "all" || alert.severity === filter);
-  const priority = alerts.find((alert) => alert.severity === "critical") || alerts[0];
-  const criticalPercent = summary.total ? summary.critical / summary.total * 100 : 0;
-  const warningPercent = summary.total ? summary.warning / summary.total * 100 : 0;
-  const headline = summary.critical
-    ? `${summary.critical} critical alert${summary.critical === 1 ? "" : "s"}. Action needed.`
-    : summary.total
-      ? `${summary.total} update${summary.total === 1 ? "" : "s"} from your fleet`
-      : "Nothing needs your attention";
   return createPortal(<div className="ai-feeder-overlay">
-    <div className="ai-feeder-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
+    <div className="ai-feeder-panel pulse-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
-        <div>
-          <div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity /> INFO PULSE</span><span className="ai-feeder-scope" title={scope?.sites?.join(", ") || scope?.label}><MapPin /> {scope?.label || "Assigned location"}</span></div>
-          <h2 id="ai-feeder-title">{headline}</h2>
-          <p>{scope?.kind === "all" ? "All regions at a glance." : "Your permitted locations at a glance."} Review the highest-priority cases first.</p>
-        </div>
+        <div className="pulse-title"><h2 id="ai-feeder-title"><Activity aria-hidden="true" /> Info Pulse</h2><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div>
         <div className="ai-feeder-actions">
           {lockForLogin && <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Close available in ${seconds} seconds`} title={`Close available in ${seconds} seconds`}>
             <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_CLOSE_DELAY_SECONDS * 100}%`}} aria-hidden="true" />
-            <Clock aria-hidden="true" />
-            <b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
+            <Clock aria-hidden="true" /><b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
           </span>}
           {canClose && <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
-      <div className="ai-feeder-overview">
-        <div className="ai-feeder-chart" role="img" aria-label={`${summary.total} alerts: ${summary.critical} critical, ${summary.warning} warning, ${summary.info} informational`} style={{background: summary.total ? `conic-gradient(#dc384b 0% ${criticalPercent}%, #d58a21 ${criticalPercent}% ${criticalPercent + warningPercent}%, #5275da ${criticalPercent + warningPercent}% 100%)` : "#e5eaf2"}}><div><b>{summary.total}</b><small>ALERTS</small></div></div>
-        <div className="ai-feeder-counts" aria-label="Filter alerts by severity">
-          {[["all", "All alerts", summary.total], ["critical", "Critical", summary.critical], ["warning", "Warnings", summary.warning], ["info", "Updates", summary.info]].map(([key, label, count]) => <button type="button" className={`${key}${filter === key ? " selected" : ""}`} key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}><b>{count}</b><span>{label}</span></button>)}
-        </div>
-      </div>
-      <div className="ai-feeder-list">
-        {priority && filter === "all" && <button type="button" className={`ai-feeder-priority ${priority.severity}`} onClick={() => { setExpanded(priority.id); requestAnimationFrame(() => document.getElementById(`feeder-${priority.id}`)?.scrollIntoView({block: "nearest"})); }}>
-          <span className="ai-feeder-priority-icon"><Truck aria-hidden="true" /></span>
-          <span><small>{priority.severity === "critical" ? "PRIORITY ATTENTION" : "NEXT TO REVIEW"}</small><b>{priority.title}</b><span>{priority.detail}</span><em>Review case <ChevronDown aria-hidden="true" /></em></span>
-        </button>}
-        <div className="ai-feeder-list-heading"><b>{filter === "all" ? "Your attention queue" : `${filter === "info" ? "Informational" : filter === "critical" ? "Critical" : "Warning"} alerts`}</b><span>{visibleAlerts.length} alerts · Click to inspect</span></div>
-        {visibleAlerts.length ? visibleAlerts.map((alert) => {
-          const SeverityIcon = AI_FEEDER_SEVERITY_ICONS[alert.severity] || Bell;
-          const request = alert.ref ? requests.find((item) => item.ref === alert.ref) : null;
-          return <article className={`ai-feeder-item ${alert.severity}`} key={alert.id} id={`feeder-${alert.id}`}>
-            <button type="button" className="ai-feeder-case" aria-expanded={expanded === alert.id} aria-controls={`feeder-detail-${alert.id}`} onClick={() => setExpanded(expanded === alert.id ? null : alert.id)}>
-            <SeverityIcon aria-hidden="true" />
-            <div>
-              <span className="ai-feeder-severity">{alert.severity} · {alert.type.replaceAll("-", " ")}</span>
-              <b>{alert.title}</b>
-              <small>{alert.ref ? `${alert.ref} · ` : ""}{alert.site}</small>
-            </div>
-            <ChevronDown className={expanded === alert.id ? "rotated" : ""} aria-hidden="true" />
-            </button>
-            {expanded === alert.id && <div className="ai-feeder-detail" id={`feeder-detail-${alert.id}`}><strong>Recommended next step</strong><p>{alert.detail}</p>{request && <dl>{[["Status", requestStatusLabel(request)], ["Breakdown started", request.start ? formatDisplayDateTime(request.start) : "Not recorded"], ["Expected completion", request.expectedCompletionAt ? formatDisplayDateTime(request.expectedCompletionAt) : "Not recorded"], ["Reported issue", request.complaint], ["Latest remark", request.dailyRemarks]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{String(value || "Not recorded")}</dd></div>)}</dl>}</div>}
-          </article>;
-        }) : <p className="ai-feeder-empty">{summary.total ? "No alerts in this category. Choose another filter." : "All clear. No overdue jobs, idle vehicles or pending verifications right now."}</p>}
-      </div>
-      <footer className="ai-feeder-footer"><span><Activity aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span><span>{lockForLogin && seconds > 0 ? "Closes automatically at 00:00" : "Close anytime"} · Reopen from Info Pulse</span></footer>
+      <InfoPulseContent cases={cases} requests={requests} scope={scope} role={role} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
     </div>
   </div>, document.body);
 }
+
 function AiFeeder({ role = "", session }) {
   const [openMode, setOpenMode] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const [requests, setRequests] = useState([]);
   const [scope, setScope] = useState({kind: "location", label: "Assigned location", sites: []});
+  const [loadState, setLoadState] = useState({token: "", ready: false, updatedAt: 0, error: "", refreshing: true});
+  const refreshRef = useRef(() => {});
   useEffect(() => {
-    if (!session?.token) { setRequests([]); return undefined; }
-    let active = true;
-    const load = () => fetch(`/api/info-pulse?t=${Date.now()}`, {
-      cache: "no-store",
-      headers: {Authorization: `Bearer ${session.token}`},
-    })
-      .then(async (response) => {
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.error || "Could not load Info Pulse");
-        return body;
-      })
-      .then((body) => {
-        if (!active) return;
-        setRequests(requestsVisibleToMisWorkspace(Array.isArray(body.requests) ? body.requests : [], role === "MIS User"));
-        if (body.scope?.label) setScope(body.scope);
-      })
-      .catch((error) => { if (active) console.warn("Info Pulse refresh failed; retaining the last permitted feed.", error); });
     setRequests([]);
+    setScope({kind: "location", label: "Assigned location", sites: []});
+    setLoadState({token: session?.token || "", ready: false, updatedAt: 0, error: "", refreshing: true});
+    if (!session?.token) return undefined;
+    let active = true;
+    let pending = null;
+    const load = () => {
+      if (pending) return pending;
+      setLoadState(current => ({...current, refreshing: true}));
+      pending = fetch(`/api/info-pulse?t=${Date.now()}`, {
+        cache: "no-store", headers: {Authorization: `Bearer ${session.token}`},
+      })
+        .then(async response => {
+          const body = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            if (active && [401, 403].includes(response.status)) {
+              setRequests([]);
+              setScope({kind: "location", label: "Assigned location", sites: []});
+              setLoadState(current => ({...current, ready: false, updatedAt: 0}));
+            }
+            throw new Error(body.error || "Could not load Info Pulse");
+          }
+          if (!Array.isArray(body.requests) || !body.scope?.label) throw new Error("Incomplete Info Pulse response");
+          return body;
+        })
+        .then(body => {
+          if (!active) return;
+          setRequests(requestsVisibleToMisWorkspace(Array.isArray(body.requests) ? body.requests : [], role === "MIS User"));
+          setScope(body.scope);
+          const refreshedAt = Date.now();
+          setNow(refreshedAt);
+          setLoadState({token: session.token, ready: true, updatedAt: refreshedAt, error: "", refreshing: false});
+        })
+        .catch(error => {if (active) setLoadState(current => ({...current, error: error.message, refreshing: false}));})
+        .finally(() => {pending = null;});
+      return pending;
+    };
+    refreshRef.current = load;
     load();
-    const timer = window.setInterval(load, 30000);
-    return () => { active = false; window.clearInterval(timer); };
+    const stop = watchRequestRefresh(load, {intervalMs: 30000});
+    return () => {active = false; stop(); refreshRef.current = () => {};};
   }, [session?.token, role]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
@@ -7848,13 +7827,13 @@ function AiFeeder({ role = "", session }) {
     try { sessionStorage.setItem("aiFeederGreeted", "yes"); } catch { greeted = "yes"; }
     setOpenMode("login");
   }, []);
-  const alerts = useMemo(() => aiFeederAlerts(requests, { role, now }), [requests, role, now]);
-  const summary = aiFeederSummary(alerts);
+  const ready = loadState.token === session?.token && loadState.ready;
+  const cases = useMemo(() => ready ? buildInfoPulseCases(requests, {role, now}) : [], [requests, role, now, ready]);
   return <>
-    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode("manual")} title="Info Pulse" aria-label={`Info Pulse, ${summary.total} alert${summary.total === 1 ? "" : "s"}`}>
-      <Activity /><span>INFO PULSE</span>{summary.total > 0 && <><b className="ai-feeder-trigger-count">{summary.critical || summary.total}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode("manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? cases.length + " cases" : "counts unavailable"}`}>
+      <Activity /><span>INFO PULSE</span>{ready && cases.length > 0 && <><b className="ai-feeder-trigger-count">{cases.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {openMode && <AiFeederPanel alerts={alerts} summary={summary} requests={requests} scope={scope} lockForLogin={openMode === "login"} onClose={() => setOpenMode("")} />}
+    {openMode && <AiFeederPanel cases={cases} requests={ready ? requests : []} scope={scope} role={role} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} lockForLogin={openMode === "login"} onClose={() => setOpenMode("")} />}
   </>;
 }
 

@@ -137,11 +137,13 @@ test("bad input is handled without throwing", () => {
   assert.deepEqual(aiFeederAlerts([{ ref: "REQ-X" }], { role: "Admin", now: "not a time" }), []);
 });
 
-test("the feed is capped so one bad day cannot flood the panel", () => {
-  const requests = Array.from({ length: AI_FEEDER_THRESHOLDS.maxAlerts + 40 }, (unused, index) => ({
+test("the full feed is counted even when more than sixty alerts exist", () => {
+  const requests = Array.from({ length: 100 }, (unused, index) => ({
     ref: `REQ-CAP-${index}`, status: "Open", start: at(4), expectedCompletionAt: ist(at(2)),
   }));
-  assert.equal(aiFeederAlerts(requests, { role: "Admin", now: NOW }).length, AI_FEEDER_THRESHOLDS.maxAlerts);
+  const alerts = aiFeederAlerts(requests, { role: "Admin", now: NOW });
+  assert.equal(alerts.filter(alert => alert.type === 'etc-overdue').length, 100);
+  assert.equal(new Set(alerts.map(alert => alert.ref)).size, 100);
 });
 
 test("Info Pulse request scope follows operational, manager, admin, and Director access", () => {

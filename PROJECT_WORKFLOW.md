@@ -218,6 +218,8 @@ flowchart TD
 
 ## 9. Dashboard and reports
 
+Info Pulse opens as a site-wise case table. Its case total counts each request once; issue columns can overlap and each number opens the exact matching requests, with 25 records per page and no count cap. Site aliases share one row. The optional From/To filters apply inclusively to the request start date in IST; they filter current cases and do not reconstruct historical status. The table starts with all request dates so older unresolved cases remain visible. Drill-downs show door/reference, site, start, ETC or closure, days down, and issue types, with factual request details on expansion. Verified requests and future starts are excluded; idle cases are classified separately from active breakdowns. Existing server-side site scope and role-specific issue visibility remain in force. The feed refreshes on request changes and every 30 seconds, displays its last successful refresh time, and distinguishes loading or failed refreshes from zero cases. The existing login-only one-minute display and manual reopening remain unchanged.
+
 The Super User dashboard is the mining-operations view. It loads Equipment master, Users & employees, Repair type master, and request data, then derives:
 
 - top-row repair-type cards from the configured Repair type master;

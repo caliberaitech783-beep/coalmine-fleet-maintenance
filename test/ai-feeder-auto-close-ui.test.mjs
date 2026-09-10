@@ -42,7 +42,7 @@ function harness() {
   };
   const scope = {requestStatusLabel,React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect,
     Date: {now: () => now}, document, window: {setInterval(callback) {const id = ++nextTimer; timers.set(id, callback); return id;}, clearInterval(id) {timers.delete(id);}},
-    AI_FEEDER_CLOSE_DELAY_SECONDS: 60, AI_FEEDER_SEVERITY_ICONS: {}, createPortal: tree => tree,
+    AI_FEEDER_CLOSE_DELAY_SECONDS: 60, InfoPulseContent: Null, createPortal: tree => tree,
     ...Object.fromEntries(["Activity", "MapPin", "Clock", "X", "Truck", "ChevronDown", "Bell"].map(name => [name, Null])),
   };
   const Component = new Function(...Object.keys(scope), `${code}; return AiFeederPanel;`)(...Object.values(scope));
