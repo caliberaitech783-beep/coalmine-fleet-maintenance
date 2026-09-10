@@ -48,7 +48,7 @@ const requests = Object.freeze([
   Object.freeze({ref: "NEW-CLOSED", door: "V3", chassis: "C3", site: "Sasti OB", category: "Preventive", status: "Closed", start: "2026-09-09 08:00:00", closedAt: "2026-09-09 09:00:00"}),
 ]);
 
-function harness() {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"]} = {}) {
   const slots = [];
   let cursor = 0;
   const useState = (initial) => {
@@ -64,9 +64,11 @@ function harness() {
     React, useState, useEffect() {}, useRef: (initial) => useState(() => ({current: initial}))[0],
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, activeOpenCases, recordBelongsToSite, requestStatusLabel,
     localStorage: {getItem: () => null, setItem() {}},
-    subsidiaryData: [{code: "WCL", sites: ["Sasti OB"]}],
-    useDashboardEquipment: () => ({records: assets, loaded: true, loadError: "", scope: {restrictToScope: true, allowedSites: ["Sasti OB"], allowedRegions: ["WCL"]}}),
+    subsidiaryData: regions,
+    useDashboardEquipment: () => ({records: equipment, loaded: true, loadError: "", scope: {restrictToScope: true, allowedSites, allowedRegions: ["WCL"]}}),
     firstTripTimestamp: (request) => request.firstTripAt || "",
+    formatTwelveHourDateTime: displayDates.formatDisplayDateTime,
+    Status: Null,
   };
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
   return {render(rows = requests) { cursor = 0; return Dashboard({requests: rows}); }};
@@ -177,4 +179,59 @@ test("From and To stay visible above the table without a calendar trigger or pop
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-01");
   assert.equal(findAll(tree, (node) => node.props.className === "dashboard-breakdown-date-modal").length, 0);
   assert.ok(text(byLabel(tree, "Site-wise BD table period")).includes("From: 01-09-2026"));
+});
+
+test("every site equipment and vehicle total opens exactly its registered assets in both chart modes", () => {
+  const sites = [
+    {site: "Sasti OB", equipment: 48, vehicles: 142, equipmentBd: 5, vehiclesBd: 8},
+    {site: "Majri OB", equipment: 3, vehicles: 4, equipmentBd: 1, vehiclesBd: 1},
+    {site: "Jayant OB", equipment: 0, vehicles: 0, equipmentBd: 0, vehiclesBd: 0},
+    {site: "Hidden site", equipment: 2, vehicles: 2, equipmentBd: 0, vehiclesBd: 0},
+  ];
+  const equipment = sites.flatMap((site) => ["equipment", "vehicles"].flatMap((category) => Array.from({length: site[category]}, (_, index) => Object.freeze({
+    id: `${site.site}-${category}-${index}`, door: `${category}-${index}`, chassisNo: `${site.site}-${category}-${index}`,
+    category: category === "equipment" ? (index % 2 ? "Equipments" : " Equipment ") : (index % 2 ? "Vehicles" : " Vehicle "),
+    currentLocation: site.site, status: "Operational", group: "QA",
+  }))));
+  const rows = sites.flatMap((site) => ["equipment", "vehicles"].flatMap((category) => Array.from({length: site[`${category}Bd`]}, (_, index) => Object.freeze({
+    ref: `${site.site}-${category}-${index}`, door: `${category}-${index}`, chassis: `${site.site}-${category}-${index}`,
+    site: site.site, status: "Open", category: "Breakdown", start: "2026-09-01 10:00:00",
+  }))));
+  const allowedSites = sites.slice(0, 3).map(({site}) => site);
+  const targetFor = (category, isBreakdown) => {
+    const column = {classList: {contains: (name) => name === category}};
+    const bar = {closest: () => column};
+    return {closest: (selector) => selector === ".mine-fleet-breakdown-segment" ? (isBreakdown ? bar : null)
+      : selector === ".mine-fleet-bar" ? bar : null};
+  };
+  for (const mode of ["breakdown", "total"]) {
+    const view = harness({equipment, allowedSites, regions: [{code: "WCL", sites: sites.map(({site}) => site)}]});
+    let tree = view.render(rows);
+    findAll(tree, (node) => node.type === "button" && node.props.className === mode && node.props["aria-controls"] === "fleet-region-plot")[0].props.onClick();
+    tree = view.render(rows);
+    for (const site of sites.slice(0, 3)) {
+      for (const category of ["equipment", "vehicles"]) {
+        const clickSite = (isBreakdown) => {
+          const chart = byClass(tree, "mine-fleet-chart-sites");
+          const siteButton = findAll(chart, (node) => node.type === "button" && node.props["aria-label"]?.startsWith(`${site.site}:`))[0];
+          siteButton.props.onClick({detail: 1, target: targetFor(category, isBreakdown)});
+          tree = view.render(rows);
+          return findAll(tree, (node) => node.props.initialSite === site.site && Array.isArray(node.props.rows))[0].props;
+        };
+        const details = clickSite(false);
+        const expectedIds = equipment.filter((row) => row.currentLocation === site.site && row.id.includes(`-${category}-`)).map((row) => row.id);
+        assert.deepEqual(details.rows.map((row) => row.id), expectedIds, `${mode}: ${site.site} ${category}`);
+        assert.equal(details.rows.length, site[category]);
+        assert.equal(details.initialRegion, "WCL");
+        assert.equal(details.requestRecords, false);
+        assert.equal(details.title, `${site.site} · ${category === "vehicles" ? "Vehicle" : "Equipment"} records`);
+        if (mode === "breakdown" && site[`${category}Bd`]) {
+          const breakdown = clickSite(true);
+          assert.equal(breakdown.rows.length, site[`${category}Bd`]);
+          assert.match(breakdown.title, /Breakdown requests$/);
+          assert.ok(breakdown.rows.every((row) => expectedIds.includes(row.id)));
+        }
+      }
+    }
+  }
 });
