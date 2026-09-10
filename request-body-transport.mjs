@@ -1,10 +1,11 @@
 /**
  * Production traffic passes through the Azure Front Door edge firewall, which
  * inspects JSON, form and multipart bodies and rejects any larger than 128 KB
- * with an HTML 403 before the app ever sees the request. Bodies sent as
- * text/plain are not size-checked, so large JSON payloads (meter evidence,
- * trip cards, complaint audio, CSV imports) travel as text/plain and the
- * server parses them as JSON.
+ * with an HTML 403 before the app ever sees the request. The firewall can
+ * also reject small JSON bodies containing a media data URL. Bodies sent as
+ * text/plain avoid both inspections, so JSON payloads with embedded media
+ * (meter evidence, trip cards, complaint audio) and other large JSON bodies
+ * travel as text/plain and the server parses them as JSON.
  *
  * Measured against https://bdms.cmll.in on 2026-09-04: JSON and multipart
  * bodies of 129 KB and above returned an HTML 403 from the edge, 127 KB and
@@ -54,15 +55,21 @@ export function largeJsonBody(body, threshold = LARGE_JSON_BODY_THRESHOLD_BYTES)
   return bodyByteLength(body) > threshold;
 }
 
+/** Returns true when a JSON string contains an embedded supported media data URL. */
+export function embeddedMediaJsonBody(body) {
+  return typeof body === "string"
+    && /"data:(?:image\/|audio\/|video\/|application\/pdf)[^";,]*;base64,/i.test(body);
+}
+
 /**
- * Rewrites a fetch init so an oversized JSON string body is sent as text/plain.
- * Small bodies and non-JSON bodies are returned unchanged.
+ * Rewrites a fetch init so an oversized or embedded-media JSON string body is
+ * sent as text/plain. Small ordinary bodies and non-JSON bodies are unchanged.
  */
 export function edgeSafeJsonInit(init = {}, threshold = LARGE_JSON_BODY_THRESHOLD_BYTES) {
   const body = init?.body;
   if (typeof body !== "string") return init;
   const contentType = readContentType(init.headers).toLowerCase();
   if (!contentType.includes("application/json")) return init;
-  if (!largeJsonBody(body, threshold)) return init;
+  if (!largeJsonBody(body, threshold) && !embeddedMediaJsonBody(body)) return init;
   return { ...init, headers: withContentType(init.headers, LARGE_JSON_CONTENT_TYPE) };
 }
