@@ -114,11 +114,13 @@ test('real daily-update arrays render all reasons and dated history without cras
   assert.ok(!html.includes('[object Object]'));
 });
 
-test('all case cards appear immediately without a repeated site table or priority totals', () => {
+test('all case cards appear immediately below the four count boxes without a repeated site table', () => {
   const app = harness();
   let tree = app.render();
   assert.equal(descendants(tree, node => node.type === 'table').length, 0);
-  assert.equal(descendants(tree, node => node.props.className?.startsWith('pulse-stat ')).length, 0);
+  assert.equal(descendants(tree, node => node.props.className?.startsWith('pulse-stat ')).length, 4);
+  for (const label of ['All cases: 67 cases', 'Critical: 67 cases', 'Warnings: 0 cases', 'Updates: 0 cases']) assert.ok(byLabel(tree, label), label);
+  assert.equal(byLabel(tree, 'All cases: 67 cases').props['aria-pressed'], true);
   assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 25);
   assert.match(text(tree), /Issue \/ complaintHydraulic leak/);
   assert.equal(byLabel(tree, 'Filter issue: All cases').props['aria-pressed'], true);
@@ -226,4 +228,41 @@ test('short stoppages show minutes, exact dates, complaint and missing overdue r
   for (const value of ['Standing since', 'Down for', '16m', 'ETC overdue by', '10m', '11:43:26 AM', 'Air pressure leak', 'Overdue reason', 'Not recorded']) assert.ok(html.includes(value), value);
   assert.ok(!html.includes('0.0'));
   assert.ok(!html.includes('pulse-record-detail'));
+});
+
+test('restored count boxes reconcile unique cases, combine with site and issue filters, and reset', () => {
+  const requests = [
+    {ref: 'A', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00'},
+    {ref: 'B', site: 'Sasti OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No driver'},
+    {ref: 'C', site: 'Majri OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No work'},
+    {ref: 'D', site: 'Majri OB', status: 'Open', start: '2026-09-10 11:00', complaint: 'Air leak'},
+  ];
+  const props = {requests, cases: data.buildInfoPulseCases(requests, {now: NOW})};
+  const app = harness();
+  let tree = app.render(props);
+  for (const label of ['All cases: 4 cases', 'Critical: 1 cases', 'Warnings: 2 cases', 'Updates: 1 cases']) assert.ok(byLabel(tree, label), label);
+  byLabel(tree, 'Warnings: 2 cases').props.onClick();
+  tree = app.render(props);
+  assert.equal(byLabel(tree, 'Warnings: 2 cases').props['aria-pressed'], true);
+  assert.equal(descendants(tree, node => node.type === 'article').length, 2);
+  assert.equal(text(byLabel(tree, 'Filter issue: Idle')), 'Idle2');
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
+  tree = app.render(props);
+  assert.ok(byLabel(tree, 'All cases: 2 cases'));
+  assert.ok(byLabel(tree, 'Critical: 1 cases'));
+  assert.ok(byLabel(tree, 'Warnings: 1 cases'));
+  assert.equal(descendants(tree, node => node.type === 'article').length, 1);
+  byLabel(tree, 'Filter issue: Idle').props.onClick();
+  tree = app.render(props);
+  assert.ok(byLabel(tree, 'All cases: 1 cases'));
+  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites2');
+  byLabel(tree, 'All cases: 1 cases').props.onClick();
+  tree = app.render(props);
+  assert.equal(descendants(tree, node => node.type === 'article').length, 1);
+  assert.equal(byLabel(tree, 'Filter issue: Idle').props['aria-pressed'], true);
+  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
+  tree = app.render(props);
+  assert.equal(byLabel(tree, 'All cases: 4 cases').props['aria-pressed'], true);
+  assert.equal(byLabel(tree, 'Filter site: All sites').props['aria-pressed'], true);
+  assert.equal(descendants(tree, node => node.type === 'article').length, 4);
 });

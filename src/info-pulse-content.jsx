@@ -4,11 +4,12 @@ import {INFO_PULSE_COLUMNS, infoPulseColumns, infoPulseSiteOptions, infoPulseVie
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import {formatDisplayDate, formatDisplayTime, formatDisplayDateTime} from '../date-time-format.mjs';
 import {requestStatusLabel} from './request-status.mjs';
-import {pulseCaseReasons, pulseCaseSeverity} from './info-pulse-reasons.mjs';
+import {pulseCaseReasons, pulseCaseSeverity, pulseSeverityCounts} from './info-pulse-reasons.mjs';
 import {pulseCaseTiming} from './info-pulse-timing.mjs';
 
 const PAGE_SIZE = 25;
 const labels = Object.fromEntries(INFO_PULSE_COLUMNS.map(column => [column.key, column.label]));
+const severityLabels = {all: 'All cases', critical: 'Critical', warning: 'Warnings', info: 'Updates'};
 function RecordDate({value}) {
   return Number.isFinite(parseIstTimestamp(value))
     ? <time className="pulse-date"><b>{formatDisplayDate(value)}</b><span>{formatDisplayTime(value)}</span></time>
@@ -16,13 +17,16 @@ function RecordDate({value}) {
 }
 
 export default function InfoPulseContent({cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh}) {
-  const [filters, setFilters] = useState({site: '', from: '', to: '', type: ''});
+  const [filters, setFilters] = useState({site: '', from: '', to: '', type: '', severity: ''});
   const [expanded, setExpanded] = useState('');
   const [page, setPage] = useState(0);
   const columns = infoPulseColumns(role);
   const sites = useMemo(() => infoPulseSiteOptions(requests, scope?.sites || []), [requests, scope]);
   const summary = useMemo(() => infoPulseView(cases, {...filters, sites}), [cases, filters, sites]);
-  const matching = useMemo(() => infoPulseView(cases, {...filters, site: ''}), [cases, filters]);
+  const severityCounts = useMemo(() => pulseSeverityCounts(summary.rows), [summary]);
+  const priorityCases = useMemo(() => filters.severity ? cases.filter(row => pulseCaseSeverity(row) === filters.severity) : cases, [cases, filters.severity]);
+  const issueSummary = useMemo(() => infoPulseView(priorityCases, filters), [priorityCases, filters]);
+  const matching = useMemo(() => infoPulseView(priorityCases, {...filters, site: ''}), [priorityCases, filters]);
   const siteCounts = useMemo(() => {
     const counts = new Map();
     for (const row of matching.rows) counts.set(row.siteKey, (counts.get(row.siteKey) || 0) + 1);
@@ -44,20 +48,23 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
     <div className="pulse-toolbar">
       <label>Request date from<input type="date" value={filters.from} max={filters.to || undefined} onChange={event => changeFilter('from', event.target.value)} /></label>
       <label>Request date to<input type="date" value={filters.to} min={filters.from || undefined} onChange={event => changeFilter('to', event.target.value)} /></label>
-      {Object.values(filters).some(Boolean) && <button type="button" className="pulse-reset" onClick={() => {setFilters({site: '', from: '', to: '', type: ''}); setExpanded(''); setPage(0);}}>Reset</button>}
+      {Object.values(filters).some(Boolean) && <button type="button" className="pulse-reset" onClick={() => {setFilters({site: '', from: '', to: '', type: '', severity: ''}); setExpanded(''); setPage(0);}}>Reset</button>}
       <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
     </div>
     <div className="pulse-meta"><span>{!filters.from && !filters.to ? 'All request dates' : `${filters.from ? formatDisplayDate(filters.from) : 'Earliest'} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`}</span><span>{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span></div>
     {error && <div className="pulse-message pulse-error" role="alert">{ready ? 'Refresh failed. Showing the last loaded counts.' : 'Could not load site counts.'} <button type="button" disabled={refreshing} onClick={onRefresh}>Retry</button></div>}
     {!ready ? <p className="pulse-message" role="status">{error ? 'Counts unavailable.' : 'Loading site counts…'}</p> : summary.invalidRange ? <p className="pulse-message pulse-error" role="alert">From date must be on or before To date.</p> : <>
+      <div className="pulse-overview" role="group" aria-label="Cases by highest priority">
+        {Object.entries(severityLabels).map(([key, label]) => <button type="button" key={key} className={`pulse-stat ${key}${(filters.severity || 'all') === key ? ' selected' : ''}`} aria-pressed={(filters.severity || 'all') === key} aria-label={`${label}: ${severityCounts[key]} cases`} disabled={key !== 'all' && !severityCounts[key] && filters.severity !== key} onClick={() => changeFilter('severity', key === 'all' ? '' : key)}><span>{label}</span><b>{severityCounts[key]}</b></button>)}
+      </div>
       <div className="pulse-issue-filter" role="group" aria-label="Filter cases by issue">
         {[{key: '', label: 'All cases', tone: 'all'}, ...columns].map(column => {
-          const count = column.key ? summary.totals.counts[column.key] : summary.totals.total;
+          const count = column.key ? issueSummary.totals.counts[column.key] : issueSummary.totals.total;
           return <button type="button" key={column.key} className={`pulse-issue-option ${column.tone}`} aria-pressed={filters.type === column.key} aria-label={`Filter issue: ${column.label}`} disabled={Boolean(column.key) && !count && filters.type !== column.key} onClick={() => changeFilter('type', column.key)}><span>{column.label}</span><b>{count}</b></button>;
         })}
       </div>
-      <div className="pulse-results-line"><h3>{selectedSite} <span>/ {labels[filters.type] || 'All cases'}</span></h3><span role="status">{detail.rows.length} cases</span></div>
-        <div key={`cases:${filters.site}:${filters.from}:${filters.to}:${filters.type}:${currentPage}`} className="pulse-case-list" tabIndex={0} role="region" aria-label="Matching case records">
+      <div className="pulse-results-line"><h3>{selectedSite} <span>/ {[severityLabels[filters.severity], labels[filters.type]].filter(Boolean).join(' · ') || 'All cases'}</span></h3><span role="status">{detail.rows.length} cases</span></div>
+        <div key={`cases:${filters.site}:${filters.from}:${filters.to}:${filters.type}:${filters.severity}:${currentPage}`} className="pulse-case-list" tabIndex={0} role="region" aria-label="Matching case records">
           {rows.length ? rows.map(row => {
               const request = row.request;
               const reasons = pulseCaseReasons(row, filters.type);
