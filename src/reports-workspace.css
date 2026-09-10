@@ -524,3 +524,26 @@
   max-width: 360px;
   line-height: 1.5;
 }
+
+/* Keep each report's real header aligned with its horizontally scrolling rows. */
+@media screen {
+  .generated-report-section .reports-detail-table {
+    max-height: max(240px, calc(100dvh - 220px));
+    overflow: auto;
+    position: relative;
+  }
+  .generated-report-section .report-filter-table {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .generated-report-section .report-filter-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background: #f1f5f9;
+    box-shadow: 0 1px 0 #dce3ec;
+  }
+  :root[data-theme="dark"] .generated-report-section .report-filter-table thead th {
+    background: #17253a;
+  }
+}
