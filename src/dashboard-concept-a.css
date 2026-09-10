@@ -1016,14 +1016,9 @@ button.mine-primary-kpi-card:focus-visible,
   background: color-mix(in srgb, #315fd4 4%, var(--surface));
 }
 .dashboard-breakdown-period-controls > span { display: inline-flex; gap: 4px; }
-.dashboard-breakdown-title { display: flex; align-items: center; gap: 10px; }
-.dashboard-breakdown-title .dashboard-breakdown-calendar { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 7px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); color: var(--mine-text); cursor: pointer; }
-.dashboard-breakdown-calendar svg { width: 18px; height: 18px; }
-.dashboard-breakdown-calendar:focus-visible { outline: 2px solid #315fd4; outline-offset: 2px; }
-.modal.dashboard-breakdown-date-modal { width: min(460px, calc(100vw - 24px)); }
 .dashboard-breakdown-summary-controls { margin: 12px; }
-.dashboard-breakdown-summary-controls label { flex: 1 1 145px; min-width: 0; }
-.dashboard-breakdown-summary-controls small { flex: 1 1 100%; color: var(--muted); }
+.dashboard-breakdown-summary-controls label { flex: 0 1 180px; min-width: 0; }
+.dashboard-breakdown-summary-controls small { flex: 1 1 240px; align-self: center; color: var(--muted); }
 .dashboard-breakdown-summary-controls input { min-width: 0; max-width: 100%; }
 .dashboard-breakdown-table-period { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding: 10px 12px; color: var(--mine-text); border-bottom: 1px solid var(--mine-line); background: color-mix(in srgb, #315fd4 4%, var(--mine-panel)); }
 .dashboard-breakdown-table-period span { white-space: nowrap; }

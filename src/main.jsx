@@ -1093,7 +1093,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
   const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState("");
   const [breakdownSummaryTo, setBreakdownSummaryTo] = useState("");
-  const [breakdownDatePickerOpen, setBreakdownDatePickerOpen] = useState(false);
   const [breakdownDetailSite, setBreakdownDetailSite] = useState("");
   const [breakdownDetailDays, setBreakdownDetailDays] = useState(5);
   const [breakdownDetailFrom, setBreakdownDetailFrom] = useState("");
@@ -1467,12 +1466,18 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         </article>
         <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
-            <div><span className="mine-eyebrow">Fleet operations control</span><div className="dashboard-breakdown-title"><h2>Tracking Vehicle Throughput</h2><button type="button" className="dashboard-breakdown-calendar" aria-label="Select site-wise BD dates" aria-haspopup="dialog" aria-expanded={breakdownDatePickerOpen} title={`Select dates: ${formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey)}`} onClick={() => setBreakdownDatePickerOpen(true)}><CalendarDays aria-hidden="true" /></button></div><p>Site-wise breakdown movement and fleet status in one view.</p></div>
+            <div><span className="mine-eyebrow">Fleet operations control</span><h2>Tracking Vehicle Throughput</h2><p>Site-wise breakdown movement and fleet status in one view.</p></div>
             <div className="mine-maintenance-availability-tabs" role="tablist" aria-label="Tracking vehicle throughput views">
               <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "breakdown"} className={maintenanceAvailabilityTab === "breakdown" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("breakdown")}><Wrench />Site-wise BD Movement</button>
               <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "road"} className={maintenanceAvailabilityTab === "road" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("road")}><Gauge />Availability Count</button>
             </div>
           </header>
+          <div className="dashboard-breakdown-period-controls dashboard-breakdown-summary-controls" role="group" aria-label="Site-wise BD date range">
+            <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
+            <label><span>To date</span><input type="date" aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
+            <button type="button" onClick={() => updateBreakdownSummaryRange("from", "")} disabled={!breakdownSummaryFrom && !breakdownSummaryTo}>Reset dates</button>
+            <small>BD movement includes both dates. {availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : "Availability is live"}.</small>
+          </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
               {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey)}</small></div>)}
@@ -1579,15 +1584,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
         </article>
       </section>
-      {breakdownDatePickerOpen && <Modal className="dashboard-breakdown-date-modal" title="Select date range" close={() => setBreakdownDatePickerOpen(false)}>
-        <div className="dashboard-breakdown-period-controls dashboard-breakdown-summary-controls" role="group" aria-label="Site-wise BD date range">
-          <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
-          <label><span>To date</span><input type="date" aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
-          <small>BD movement includes both dates. {availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : "Availability is live"}.</small>
-          <button type="button" onClick={() => updateBreakdownSummaryRange("from", "")} disabled={!breakdownSummaryFrom && !breakdownSummaryTo}>Reset dates</button>
-          <button type="button" onClick={() => setBreakdownDatePickerOpen(false)}>Done</button>
-        </div>
-      </Modal>}
       {breakdownDetailSite && <Modal className="dashboard-breakdown-movement-modal" title={`${breakdownDetailSite} · Day-wise BD Movement`} close={() => setBreakdownDetailSite("")}><div className="dashboard-breakdown-movement-detail">
         <div className="dashboard-breakdown-period-controls">
           <div className="mine-trend-period" role="group" aria-label="Breakdown movement day range">{[2, 5, 10].map((days) => <button type="button" key={days} className={!validBreakdownDetailRange && breakdownDetailDays === days ? "active" : ""} onClick={() => { setBreakdownDetailDays(days); setBreakdownDetailFrom(""); setBreakdownDetailTo(""); }}>{days} Days</button>)}</div>
