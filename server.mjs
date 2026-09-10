@@ -4,7 +4,10 @@ import {formatDisplayDateTime} from './date-time-format.mjs';
 import pg from 'pg';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {existsSync,readFileSync} from 'node:fs';
+import {createReadStream,createWriteStream,existsSync,promises as fs,readFileSync} from 'node:fs';
+import os from 'node:os';
+import {Transform} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
 import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
 import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
@@ -37,6 +40,8 @@ import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
 import {canonicalSiteName,assignedUserSiteName,userSessionLocationName} from './site-location.mjs';
 import {normalizeSessionMessage,sessionMessageValidationError} from './session-message.mjs';
+import {BACKUP_FORMAT,backupFileName,exportDatabase,readBackupRecords,restoreDatabase} from './database-backup.mjs';
+import {BACKUP_SETTING_KEY,DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './backup-settings.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
@@ -63,6 +68,11 @@ const app=express();
 app.set('trust proxy',true);
 const port=Number(process.env.PORT||3000);
 const root=path.dirname(fileURLToPath(import.meta.url));
+const backupStorageRoot=path.resolve(process.env.BACKUP_STORAGE_ROOT||(
+  process.platform==='win32'?path.join(root,'backups'):'/home/data/bdms-backups'
+));
+const backupImportRoot=path.join(os.tmpdir(),'bdms-backup-imports');
+const pendingBackupImports=new Map();
 const repairTypeDefaults=['Breakdown','Accidental','Preventive','Aggregate Repair','Super Structure','WGM'];
 const staticRoot=existsSync(path.join(root,'dist','index.html'))?path.join(root,'dist'):root;
 const versionFile=path.join(staticRoot,'app-version.txt');
@@ -541,6 +551,27 @@ async function migrate(){
       setting_value JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS backup_runs (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      file_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Running',
+      trigger_type TEXT NOT NULL DEFAULT 'Manual',
+      schedule_slot TEXT,
+      storage_path TEXT NOT NULL DEFAULT '',
+      size_bytes BIGINT NOT NULL DEFAULT 0,
+      checksum TEXT NOT NULL DEFAULT '',
+      table_counts JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by_login TEXT NOT NULL DEFAULT '',
+      created_by_name TEXT NOT NULL DEFAULT '',
+      error_message TEXT NOT NULL DEFAULT '',
+      attempts INTEGER NOT NULL DEFAULT 1,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS backup_runs_started_at_idx ON backup_runs (started_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS backup_runs_schedule_slot_idx
+      ON backup_runs (schedule_slot) WHERE schedule_slot IS NOT NULL;
     CREATE TABLE IF NOT EXISTS whatsapp_alert_history (
       id BIGSERIAL PRIMARY KEY,
       report_type TEXT NOT NULL,
@@ -872,7 +903,154 @@ function requireWhatsAppAdministrator(req,res,next){
 
 function requireAdministrator(req,res,next){
   if(req.session?.role==='super'&&req.session?.permissions?.adminLevel!=='Manager')return next();
-  return res.status(403).json({error:'Only an Admin or Super Admin can manage user sessions.'});
+  return res.status(403).json({error:'Only an Admin or Super Admin can use this administration feature.'});
+}
+
+function backupFolder(settings=DEFAULT_BACKUP_SETTINGS){
+  const folder=path.resolve(backupStorageRoot,normalizeBackupSettings(settings).storageFolder);
+  const rootPrefix=`${backupStorageRoot}${path.sep}`;
+  if(folder!==backupStorageRoot&&!folder.startsWith(rootPrefix))throw Object.assign(new Error('The backup folder must stay inside protected backup storage.'),{status:400});
+  return folder;
+}
+
+async function readBackupSettings(){
+  const {rows}=await pool.query('SELECT setting_value,updated_at FROM app_settings WHERE setting_key=$1',[BACKUP_SETTING_KEY]);
+  return {
+    settings:normalizeBackupSettings(rows[0]?.setting_value||DEFAULT_BACKUP_SETTINGS),
+    updatedAt:rows[0]?.updated_at||null,
+  };
+}
+
+async function sha256File(filePath){
+  const hash=createHash('sha256');
+  for await(const chunk of createReadStream(filePath))hash.update(chunk);
+  return hash.digest('hex');
+}
+
+async function inspectBackupFile(filePath){
+  let header=null;
+  let footer=null;
+  let currentTable='';
+  const actualCounts={};
+  for await(const record of readBackupRecords(filePath)){
+    if(record.type==='header'){
+      if(header)throw new Error('The backup contains more than one header.');
+      if(record.format!==BACKUP_FORMAT)throw new Error('This is not a supported BDMS backup file.');
+      header=record;
+    }else if(record.type==='table'){
+      if(!header)throw new Error('The backup file does not begin with a valid header.');
+      currentTable=String(record.name||'');
+      if(!currentTable)throw new Error('A backup table has no name.');
+      actualCounts[currentTable]=0;
+    }else if(record.type==='row'){
+      if(!currentTable)throw new Error('A backup row appears outside a table.');
+      actualCounts[currentTable]=(actualCounts[currentTable]||0)+1;
+    }else if(record.type==='table-end'){
+      if(String(record.name||'')!==currentTable)throw new Error('A backup table is incomplete.');
+      if(Number(record.rowCount)!==actualCounts[currentTable])throw new Error(`Row count mismatch for ${currentTable}.`);
+      currentTable='';
+    }else if(record.type==='footer')footer=record;
+  }
+  if(!header)throw new Error('The backup file has no valid header.');
+  if(currentTable||!footer)throw new Error('The backup file is incomplete and cannot be restored.');
+  for(const [table,count] of Object.entries(footer.tables||{})){
+    if(Number(count)!==Number(actualCounts[table]||0))throw new Error(`Footer row count mismatch for ${table}.`);
+  }
+  return {
+    format:header.format,
+    version:Number(header.version||1),
+    createdAt:header.createdAt||null,
+    serverVersion:header.serverVersion||'',
+    tables:actualCounts,
+    tableCount:Object.keys(actualCounts).length,
+    totalRows:Object.values(actualCounts).reduce((total,count)=>total+Number(count||0),0),
+  };
+}
+
+async function prunePendingBackupImports(now=Date.now()){
+  for(const [token,pending] of pendingBackupImports){
+    if(pending.expiresAt>=now)continue;
+    pendingBackupImports.delete(token);
+    await fs.rm(pending.filePath,{force:true}).catch(()=>{});
+  }
+}
+
+async function createStoredBackup({triggerType='Manual',actor={},scheduleSlot=null,folderOverride='',fileNameOverride=''}={}){
+  const {settings}=await readBackupSettings();
+  const destination=folderOverride?path.resolve(folderOverride):backupFolder(settings);
+  const rootPrefix=`${backupStorageRoot}${path.sep}`;
+  if(destination!==backupStorageRoot&&!destination.startsWith(rootPrefix))throw Object.assign(new Error('The backup destination is outside protected backup storage.'),{status:400});
+  await fs.mkdir(destination,{recursive:true});
+  const fileName=fileNameOverride||backupFileName(new Date(),{prefix:'BDMS-Full-Backup'});
+  const filePath=path.join(destination,fileName);
+  const insert=await pool.query(`INSERT INTO backup_runs
+    (file_name,status,trigger_type,schedule_slot,storage_path,created_by_login,created_by_name,expires_at)
+    VALUES ($1,'Running',$2,$3,$4,$5,$6,NOW()+($7::text||' days')::interval)
+    ON CONFLICT (schedule_slot) WHERE schedule_slot IS NOT NULL DO UPDATE SET
+      file_name=EXCLUDED.file_name,status='Running',storage_path=EXCLUDED.storage_path,
+      created_by_login=EXCLUDED.created_by_login,created_by_name=EXCLUDED.created_by_name,
+      expires_at=EXCLUDED.expires_at,attempts=backup_runs.attempts+1,error_message='',started_at=NOW(),completed_at=NULL
+    WHERE backup_runs.status='Failed'
+    RETURNING id`,[
+      fileName,triggerType,scheduleSlot,filePath,String(actor.login||''),String(actor.name||triggerType),String(settings.retentionDays)
+    ]);
+  if(!insert.rowCount)return {skipped:true,reason:'This scheduled backup has already completed.'};
+  const id=insert.rows[0].id;
+  const client=await pool.connect();
+  let locked=false;
+  try{
+    const {rows:locks}=await client.query("SELECT pg_try_advisory_lock(hashtext('bdms_backup_operation')) AS locked");
+    locked=Boolean(locks[0]?.locked);
+    if(!locked)throw Object.assign(new Error('Another backup or restore is already running. Try again after it completes.'),{status:409});
+    const result=await exportDatabase({client,output:filePath});
+    const stat=await fs.stat(filePath);
+    const checksum=await sha256File(filePath);
+    await pool.query(`UPDATE backup_runs SET status='Completed',size_bytes=$1,checksum=$2,table_counts=$3::jsonb,completed_at=NOW(),error_message=''
+      WHERE id=$4`,[stat.size,checksum,JSON.stringify(result.tables),id]);
+    return {id,fileName,filePath,sizeBytes:stat.size,checksum,tableCounts:result.tables,status:'Completed'};
+  }catch(error){
+    await fs.rm(filePath,{force:true}).catch(()=>{});
+    await pool.query(`UPDATE backup_runs SET status='Failed',error_message=$1,completed_at=NOW() WHERE id=$2`,[String(error?.message||'Backup failed').slice(0,500),id]).catch(()=>{});
+    throw error;
+  }finally{
+    if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});
+    client.release();
+  }
+}
+
+async function pruneStoredBackups(){
+  const {settings}=await readBackupSettings();
+  const {rows}=await pool.query(`SELECT id,storage_path FROM backup_runs
+    WHERE storage_path<>'' AND trigger_type<>'Manual export' AND status='Completed'
+    ORDER BY completed_at DESC NULLS LAST,started_at DESC`);
+  const expired=rows.slice(settings.maxBackups);
+  const rootPrefix=`${backupStorageRoot}${path.sep}`;
+  for(const row of expired){
+    const target=path.resolve(row.storage_path);
+    if(target.startsWith(rootPrefix))await fs.rm(target,{force:true}).catch(()=>{});
+    await pool.query("UPDATE backup_runs SET status='Expired',storage_path='' WHERE id=$1",[row.id]);
+  }
+  const {rows:dated}=await pool.query(`SELECT id,storage_path FROM backup_runs
+    WHERE storage_path<>'' AND expires_at<NOW()`);
+  for(const row of dated){
+    const target=path.resolve(row.storage_path);
+    if(target.startsWith(rootPrefix))await fs.rm(target,{force:true}).catch(()=>{});
+    await pool.query("UPDATE backup_runs SET status='Expired',storage_path='' WHERE id=$1",[row.id]);
+  }
+}
+
+let scheduledBackupRunning=false;
+async function runScheduledBackup(now=new Date()){
+  if(scheduledBackupRunning||!databaseReady)return {skipped:true,reason:'Backup service is busy.'};
+  const {settings}=await readBackupSettings();
+  if(!scheduledBackupDue(settings,now))return {skipped:true,reason:'No backup is due.'};
+  scheduledBackupRunning=true;
+  try{
+    const slot=indiaBackupSlot(now);
+    const result=await createStoredBackup({triggerType:'Scheduled',scheduleSlot:slot.slotKey,actor:{name:'Automatic schedule'}});
+    await pruneStoredBackups();
+    return result;
+  }finally{scheduledBackupRunning=false}
 }
 
 app.post('/api/logout',requireSession,async(req,res,next)=>{
@@ -1236,6 +1414,135 @@ app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator,asy
     req.audit={eventType:'Security',module:'User sessions',action:'Force close session',targetType:'User session',targetReference:target.rows[0].login||target.rows[0].name||sessionId,changedFields:[]};
     res.status(204).end();
   }catch(error){next(error)}
+});
+
+app.get('/api/backups',requireSuper,requireAdministrator,async(_req,res,next)=>{
+  try{
+    const [{settings,updatedAt},{rows}]=await Promise.all([
+      readBackupSettings(),
+      pool.query(`SELECT id,file_name AS "fileName",status,trigger_type AS "triggerType",size_bytes AS "sizeBytes",
+        checksum,table_counts AS "tableCounts",created_by_name AS "createdBy",error_message AS "errorMessage",
+        started_at AS "startedAt",completed_at AS "completedAt",expires_at AS "expiresAt",storage_path<>'' AS downloadable
+        FROM backup_runs ORDER BY started_at DESC LIMIT 100`),
+    ]);
+    res.set('Cache-Control','no-store');
+    res.json({settings,updatedAt,storageRoot:backupStorageRoot,history:rows});
+  }catch(error){next(error)}
+});
+
+app.put('/api/backups/settings',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const settings=normalizeBackupSettings(req.body||{});
+    await fs.mkdir(backupFolder(settings),{recursive:true});
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[BACKUP_SETTING_KEY,JSON.stringify(settings)]);
+    req.audit={eventType:'Administration',module:'Backup',action:'Update backup schedule',targetType:'Backup settings',targetReference:settings.storageFolder,changedFields:['enabled','scheduleTime','weekdays','storageFolder','retentionDays','maxBackups']};
+    res.json({settings,storageRoot:backupStorageRoot});
+  }catch(error){next(error)}
+});
+
+app.post('/api/backups/run',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const result=await createStoredBackup({triggerType:'Manual schedule',actor:req.session});
+    await pruneStoredBackups();
+    req.audit={eventType:'Administration',module:'Backup',action:'Create stored backup',targetType:'Database backup',targetReference:result.fileName,changedFields:[]};
+    const {filePath:storedPath,...publicResult}=result;
+    res.status(201).json(publicResult);
+  }catch(error){next(error)}
+});
+
+app.post('/api/backups/export',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const folder=path.join(backupStorageRoot,'manual-exports');
+    const result=await createStoredBackup({triggerType:'Manual export',actor:req.session,folderOverride:folder});
+    req.audit={eventType:'Administration',module:'Backup',action:'Export full backup',targetType:'Database backup',targetReference:result.fileName,changedFields:[]};
+    res.set('Cache-Control','no-store');
+    res.set('X-Backup-Checksum',result.checksum);
+    res.download(result.filePath,result.fileName,async(error)=>{
+      await fs.rm(result.filePath,{force:true}).catch(()=>{});
+      await pool.query("UPDATE backup_runs SET storage_path='',status=$1,error_message=$2 WHERE id=$3",[
+        error?'Failed':'Exported',error?String(error.message||'Download interrupted').slice(0,500):'',result.id
+      ]).catch(()=>{});
+      if(error&&!res.headersSent)next(error);
+    });
+  }catch(error){next(error)}
+});
+
+app.get('/api/backups/:backupId/download',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const backupId=String(req.params.backupId||'').trim();
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(backupId))return res.status(400).json({error:'Invalid backup reference.'});
+    const {rows}=await pool.query(`SELECT file_name,storage_path FROM backup_runs WHERE id=$1 AND status='Completed'`,[backupId]);
+    const backup=rows[0];
+    if(!backup?.storage_path)return res.status(404).json({error:'This backup file is no longer available.'});
+    const target=path.resolve(backup.storage_path);
+    if(!target.startsWith(`${backupStorageRoot}${path.sep}`)||!existsSync(target))return res.status(404).json({error:'This backup file is no longer available.'});
+    res.set('Cache-Control','no-store');
+    res.download(target,backup.file_name);
+  }catch(error){next(error)}
+});
+
+app.post('/api/backups/import/inspect',requireSuper,requireTrueSuperAdmin,async(req,res,next)=>{
+  let filePath='';
+  try{
+    await prunePendingBackupImports();
+    const contentLength=Number(req.get('content-length')||0);
+    const maxBytes=2*1024*1024*1024;
+    if(contentLength>maxBytes)return res.status(413).json({error:'Backup files larger than 2 GB must be restored with the server restore script.'});
+    const originalName=String(req.get('x-backup-file-name')||'').replace(/[^a-z0-9._-]+/gi,'-').slice(0,180);
+    if(!originalName.toLowerCase().endsWith('.ndjson.gz'))return res.status(400).json({error:'Select a BDMS .ndjson.gz backup file.'});
+    await fs.mkdir(backupImportRoot,{recursive:true});
+    const token=randomUUID();
+    filePath=path.join(backupImportRoot,`${token}.ndjson.gz`);
+    let received=0;
+    const meter=new Transform({transform(chunk,_encoding,callback){
+      received+=chunk.length;
+      callback(received>maxBytes?Object.assign(new Error('Backup file exceeds the 2 GB upload limit.'),{status:413}):null,chunk);
+    }});
+    await pipeline(req,meter,createWriteStream(filePath));
+    if(!received)throw Object.assign(new Error('The selected backup file is empty.'),{status:400});
+    const [details,checksum]=await Promise.all([inspectBackupFile(filePath),sha256File(filePath)]);
+    const expiresAt=Date.now()+30*60*1000;
+    pendingBackupImports.set(token,{filePath,originalName,login:String(req.session.login||''),expiresAt,details,checksum,sizeBytes:received});
+    req.audit={eventType:'Administration',module:'Backup',action:'Inspect restore backup',targetType:'Database backup',targetReference:originalName,changedFields:[]};
+    res.set('Cache-Control','no-store');
+    res.json({token,fileName:originalName,sizeBytes:received,checksum,expiresAt:new Date(expiresAt).toISOString(),...details});
+  }catch(error){
+    if(filePath)await fs.rm(filePath,{force:true}).catch(()=>{});
+    next(error);
+  }
+});
+
+app.post('/api/backups/import/restore',requireSuper,requireTrueSuperAdmin,async(req,res,next)=>{
+  const token=String(req.body?.token||'').trim();
+  const pending=pendingBackupImports.get(token);
+  try{
+    if(String(req.body?.confirmation||'').trim()!=='RESTORE BDMS')return res.status(400).json({error:'Type RESTORE BDMS exactly to confirm the recovery operation.'});
+    if(!pending||pending.expiresAt<Date.now()||pending.login!==String(req.session.login||''))return res.status(410).json({error:'This inspected backup has expired. Inspect the file again.'});
+    const safety=await createStoredBackup({triggerType:'Pre-restore',actor:req.session,folderOverride:path.join(backupStorageRoot,'pre-restore')});
+    const client=await pool.connect();
+    let restored;
+    let locked=false;
+    try{
+      const {rows:locks}=await client.query("SELECT pg_try_advisory_lock(hashtext('bdms_backup_operation')) AS locked");
+      locked=Boolean(locks[0]?.locked);
+      if(!locked)throw Object.assign(new Error('Another backup or restore is already running. Try again after it completes.'),{status:409});
+      restored=await restoreDatabase({client,input:pending.filePath});
+    }finally{
+      if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});
+      client.release();
+    }
+    pendingBackupImports.delete(token);
+    await fs.rm(pending.filePath,{force:true}).catch(()=>{});
+    req.audit={eventType:'Administration',module:'Backup',action:'Restore full backup',targetType:'Database backup',targetReference:pending.originalName,reason:`Safety backup: ${safety.fileName}`,changedFields:Object.keys(restored.tables||{})};
+    res.json({restored,safetyBackup:{fileName:safety.fileName,checksum:safety.checksum},signInAgain:true});
+  }catch(error){
+    if(pending&&pending.expiresAt<Date.now()){
+      pendingBackupImports.delete(token);
+      await fs.rm(pending.filePath,{force:true}).catch(()=>{});
+    }
+    next(error);
+  }
 });
 
 app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
@@ -3928,6 +4235,9 @@ async function initializeDatabase(){
       void sendScheduledAuditLogExports()
         .then(result=>console.log('Scheduled Audit Trail export check completed.',result))
         .catch(error=>console.error('Scheduled Audit Trail export check failed.',error));
+      void runScheduledBackup()
+        .then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)})
+        .catch(error=>console.error('Scheduled database backup failed.',error));
       void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
       void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
         if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
@@ -3990,6 +4300,12 @@ if(scheduledJobsEnabled){
       .catch(error=>console.error('Scheduled Audit Trail export failed.',error));
   },60*1000);
   auditLogExportTimer.unref?.();
+  const databaseBackupTimer=setInterval(()=>{
+    void runScheduledBackup()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)})
+      .catch(error=>console.error('Scheduled database backup failed.',error));
+  },60*1000);
+  databaseBackupTimer.unref?.();
   const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
   adminLockAuditTimer.unref?.();
 }
@@ -3997,3 +4313,7 @@ const auditRetentionTimer=setInterval(()=>{
   if(databaseReady)void pruneAuditEvents().catch(error=>console.error('Audit Trail retention cleanup failed.',error));
 },60*60*1000);
 auditRetentionTimer.unref?.();
+const backupImportCleanupTimer=setInterval(()=>{
+  void prunePendingBackupImports().catch(error=>console.error('Backup import cleanup failed.',error));
+},10*60*1000);
+backupImportCleanupTimer.unref?.();

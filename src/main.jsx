@@ -11,6 +11,7 @@ import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
+import BackupAdministration from "./backup-administration.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
@@ -144,6 +145,7 @@ import {
   Monitor,
   Smartphone,
   Flag,
+  HardDrive,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -170,6 +172,7 @@ import "./maintenance-mobile-compact.css";
 import "./dashboard-record-browser.css";
 import "./manager-scroll.css";
 import "./user-sessions.css";
+import "./backup-administration.css";
 import "./workspace-readability.css";
 import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
@@ -251,8 +254,13 @@ const nav = [
 ];
 const adminNav = [
   ["User Sessions", UserRound],
+  ["Backup", HardDrive],
+  ["Export Backup", Download],
+  ["Import Backup", Upload],
+  ["Backup Schedule", CalendarDays],
   ["Audit Trail", History],
 ];
+const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
 const masterNav = [
   ["Users & employees", Users],
   ["Equipment master", Truck],
@@ -5045,7 +5053,7 @@ function UserSessionsPage({session}) {
     <div className="user-session-toolbar"><div className="user-session-search"><Search /><input data-smart-search type="search" placeholder="Search user, role, location, device or IP" value={query} onChange={(event)=>setQuery(event.target.value)} /></div><div className="user-session-status" role="group" aria-label="Session status filter">{['All','Online','Inactive'].map(option=><button type="button" key={option} className={status===option?'active':''} aria-pressed={status===option} onClick={()=>setStatus(option)}>{option}</button>)}</div><span className="user-session-visible"><b>{visible.length}</b> visible</span><div className="user-session-actions" ref={setActionsToolbarTarget} /></div>
     {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
     {messageNotice&&<div className="user-session-sent" role="status"><CheckCircle2 /><span>{messageNotice}</span><button type="button" aria-label="Dismiss message confirmation" onClick={()=>setMessageNotice("")}><X /></button></div>}
-    <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Role</th><th>Location</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th><th>Message</th><th>Action</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td></tr>}):<tr><td colSpan="11" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
+    <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="11" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
     <footer className="user-session-note"><ShieldCheck /><span>Force closing a session immediately invalidates only that login. The action and reason are saved in Audit Trail.</span></footer>
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
   </section>;
@@ -8603,6 +8611,7 @@ function App() {
   },[session?.token]);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
+    if(backupAdminPages.has(name))return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
     if(name==="Audit Trail")return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
     if(name==="Admin locks")return adminPermissions.adminLevel==="Super Admin";
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
@@ -8938,6 +8947,8 @@ function App() {
             <AdminLockManagement session={session} />
           ) : active === "User Sessions" ? (
             <UserSessionsPage session={session} />
+          ) : backupAdminPages.has(active) ? (
+            <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}

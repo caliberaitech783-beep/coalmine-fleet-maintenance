@@ -27,6 +27,7 @@ test("the admin UI exposes live status and a protected force-close control", () 
   assert.match(client, /Force close/);
   assert.match(client, /\/api\/session-heartbeat/);
   assert.match(client, /<th>Location<\/th>/);
+  assert.match(client, /<th>User<\/th><th>Status<\/th><th>Message<\/th><th>Action<\/th><th>Role<\/th><th>Location<\/th>/);
   assert.match(client, /row\.location\|\|'Not assigned'/);
   assert.match(client, /matchesSmartSearch\(query,row\.name,row\.login,row\.roleLabel,row\.location/);
 });
