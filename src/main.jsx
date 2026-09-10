@@ -2082,7 +2082,7 @@ const hierarchySiteGroups = subsidiaryData.map((region) => ({code:region.code, n
 const hierarchySiteTitles = hierarchySiteGroups.flatMap((region) => region.sites);
 const hierarchyColumnViewOptions = [
   {key:"A", label:"Designation / level / schedule", shortLabel:"Identity"},
-  {key:"C", label:"Common reports", shortLabel:"Common"},
+  {key:"C", label:"General reports", shortLabel:"General"},
   {key:"P", label:"Production report", shortLabel:"Production"},
   {key:"M", label:"Maintenance reports", shortLabel:"Maintenance"},
   {key:"S", label:"MIS reports", shortLabel:"MIS"},

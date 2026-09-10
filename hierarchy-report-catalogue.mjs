@@ -2,7 +2,7 @@ import {IN_OUT_REPORT_TITLE} from './in-out-report.mjs';
 import {canonicalReportTitle} from './director-report-bundle.mjs';
 
 // The Hierarchy master ticks the same report headings the Reports menu shows:
-// General Report -> Common Report, then Production, Maintenance and MIS.
+// General Report, then Production, Maintenance and MIS.
 // General transfer and movement reports remain separate from the MIS site/day register.
 export const HIERARCHY_REPORTS={
   roadStatus:'Report for On Road / Off Road & Idle',
@@ -28,7 +28,7 @@ export const HIERARCHY_REPORTS={
 };
 
 export const HIERARCHY_REPORT_GROUPS=[
-  {group:'Common Report',viewKey:'C',className:'common',reports:[
+  {group:'General Report',viewKey:'C',className:'common',reports:[
     HIERARCHY_REPORTS.roadStatus,HIERARCHY_REPORTS.vehicleTransfer,HIERARCHY_REPORTS.locationWise,HIERARCHY_REPORTS.recentBreakdown,HIERARCHY_REPORTS.inOut,HIERARCHY_REPORTS.summary,
   ]},
   {group:'Production Report',viewKey:'P',className:'production',reports:[
@@ -43,7 +43,10 @@ export const HIERARCHY_REPORT_GROUPS=[
 ];
 
 export const HIERARCHY_REPORT_TITLES=HIERARCHY_REPORT_GROUPS.flatMap((group)=>group.reports);
-export const HIERARCHY_REPORT_CODES=new Map(HIERARCHY_REPORT_TITLES.map((title,index)=>[title,`R${index+1}`]));
+// Display codes only; stored report titles and visibility keys remain unchanged.
+export const HIERARCHY_REPORT_CODES=new Map(HIERARCHY_REPORT_GROUPS.flatMap(group=>
+  group.reports.map((title,index)=>[title,`${({C:'G',P:'P',M:'M',S:'MS '})[group.viewKey]}${index+1}`])
+));
 
 // Reports that used to be ticked in the Hierarchy master, and the scheduled
 // WhatsApp bundles that still carry them, map onto the catalogue heading that
