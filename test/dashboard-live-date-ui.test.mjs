@@ -11,6 +11,7 @@ import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
 import * as model from "../src/dashboard-drilldown-model.mjs";
 import {equipmentGroupValue, normalizeEquipmentGroup} from "../equipment-group.mjs";
 import {dashboardCountScale} from "../src/dashboard-count-scale.mjs";
+import {fleetBarHeightPercent} from "../src/fleet-bar-scale.mjs";
 import {activeOpenCases} from "../dashboard-open-cases.mjs";
 import {recordBelongsToSite} from "../site-location.mjs";
 import {requestStatusLabel} from "../src/request-status.mjs";
@@ -62,7 +63,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     availabilityRequestsForDate, dashboardFleetSnapshot,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useRef: (initial) => useState(() => ({current: initial}))[0],
-    equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, activeOpenCases, recordBelongsToSite, requestStatusLabel,
+    equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel,
     localStorage: {getItem: () => null, setItem() {}},
     subsidiaryData: regions,
     useDashboardEquipment: () => ({records: equipment, loaded: true, loadError: "", scope: {restrictToScope, allowedSites, allowedRegions: regions.map(({code}) => code)}}),

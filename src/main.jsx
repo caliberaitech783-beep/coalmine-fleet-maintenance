@@ -11,6 +11,7 @@ import UserProfile from "./user-profile.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
+import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
 import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
 import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
@@ -1234,7 +1235,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetChartStep = 25;
   const fleetChartPeak = fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])).reduce((maximum, value) => Math.max(maximum, Number(value) || 0), 0);
   const fleetChartAxisMax = Math.max(fleetChartStep, Math.ceil(fleetChartPeak / fleetChartStep) * fleetChartStep);
-  const fleetChartTicks = Array.from({ length: fleetChartAxisMax / fleetChartStep + 1 }, (_, index) => index * fleetChartStep);
+  const fleetChartTicks = [...new Set([...Array.from({ length: fleetChartAxisMax / fleetChartStep + 1 }, (_, index) => index * fleetChartStep), ...(showFleetBreakdowns ? [5] : [])])].sort((a, b) => a - b);
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
   const requestTrendEndKey = requestTrendTo || dashboardDate || localDateKey(now);
@@ -1450,9 +1451,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
             <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
-          {equipmentLoaded?<><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
+          {equipmentLoaded?<>{showFleetBreakdowns && <p className="mine-fleet-scale-note" id="fleet-scale-note">Scale: 0–5 enlarged for readability; the same scale applies to every bar.</p>}<div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-describedby={showFleetBreakdowns ? "fleet-scale-note" : undefined} aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
-              <div className="mine-fleet-chart-regions" style={{ minWidth: `${fleetRegionInsights.reduce((count, region) => count + Math.max(1, region.sites.length), 0) * 108}px` }}><div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} style={{ bottom: `${tick / fleetChartAxisMax * 100}%` }} />)}</div>{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
+              <div className="mine-fleet-chart-regions" style={{ minWidth: `${fleetRegionInsights.reduce((count, region) => count + Math.max(1, region.sites.length), 0) * 108}px` }}><div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} style={{ bottom: `${fleetBarHeightPercent(tick, fleetChartAxisMax, showFleetBreakdowns)}%` }} />)}</div>{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
                 <div className="mine-fleet-chart-sites">{region.sites.map((site) => <div className="mine-fleet-site-entry" key={site.name}>
                   <button type="button" className="mine-fleet-bars-trigger" onClick={(event) => {
                     const segmentColumn = showFleetBreakdowns && event.detail !== 0 ? event.target.closest(".mine-fleet-breakdown-segment")?.closest(".mine-fleet-bar-column") : null;

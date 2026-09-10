@@ -4,12 +4,14 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
 import { fleetChartCounts } from "../dashboard-equipment-metrics.mjs";
+import { fleetBarHeightPercent } from "../src/fleet-bar-scale.mjs";
 
 const source = readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8")
   .replace('import React from "react";', "")
+  .replace('import { fleetBarHeightPercent } from "./fleet-bar-scale.mjs";', "")
   .replace("export default function FleetSiteBars", "function FleetSiteBars");
 const code = (await transformWithOxc(source, "fleet-site-bars.jsx", { jsx: { runtime: "classic" } })).code;
-const FleetSiteBars = new Function("React", `${code}; return FleetSiteBars;`)(React);
+const FleetSiteBars = new Function("React", "fleetBarHeightPercent", `${code}; return FleetSiteBars;`)(React, fleetBarHeightPercent);
 const all = (tree, predicate) => {
   const result = [];
   const visit = (node) => {
@@ -59,4 +61,33 @@ test("partial breakdown segments are marked so the remaining fleet stays visible
   assert.equal(segments.length, 2);
   assert.ok(segments[0].props.className.includes("partial-segment"));
   assert.ok(!segments[1].props.className.includes("partial-segment"));
+});
+
+test("screenshot regression: 3 of 31 is taller than 2 of 52 on the same chart", () => {
+  const segmentHeight = (total, count) => {
+    const tree = FleetSiteBars({site: {equipment: total, breakdown: {equipment: count}}, axisMax: 225, showBreakdown: true});
+    const bar = all(tree, (node) => node.type === "i")[0];
+    const segment = all(bar, (node) => node.props.className?.startsWith("mine-fleet-breakdown-segment"))[0];
+    return parseFloat(bar.props.style.height) * parseFloat(segment.props.style.height) / 100;
+  };
+  assert.ok(segmentHeight(31, 3) > segmentHeight(52, 2));
+  assert.ok(segmentHeight(31, 3) > 3 / 225 * 100, "small bars are still enlarged");
+  for (const count of [1, 2, 3, 4, 8, 10, 12]) {
+    const expected = fleetBarHeightPercent(count, 225, true);
+    for (const total of [count, 31, 48, 52, 82, 142, 208]) {
+      assert.ok(Math.abs(segmentHeight(total, count) - expected) < 1e-9, `${count} of ${total}`);
+      if (total > count) assert.ok(segmentHeight(total, count) < fleetBarHeightPercent(total, 225, true));
+    }
+  }
+});
+
+test("common chart scale is strictly increasing, keeps zero at zero, and Total mode remains linear", () => {
+  for (const max of [1, 5, 25, 50, 225, 1200]) {
+    assert.equal(fleetBarHeightPercent(0, max, true), 0);
+    assert.equal(fleetBarHeightPercent(max, max, true), 100);
+    for (let value = 1; value <= max; value++) {
+      assert.ok(fleetBarHeightPercent(value, max, true) > fleetBarHeightPercent(value - 1, max, true));
+      assert.equal(fleetBarHeightPercent(value, max, false), value / max * 100);
+    }
+  }
 });

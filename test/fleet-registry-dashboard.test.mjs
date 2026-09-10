@@ -66,13 +66,14 @@ test("dashboard opens in Breakdown fleet mode by default", () => {
   assert.match(source, /const \[fleetChartMode, setFleetChartMode\] = useState\("breakdown"\);/);
 });
 
-test("breakdown mode retains total bar heights and adds green breakdown sections", () => {
+test("breakdown mode keeps total counts and green segments on one common scale", () => {
   assert.match(source, /\.\.\.fleetChartCounts\(records, siteRequests\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   const bars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
-  assert.match(bars, /total \/ scale \* 100/);
+  assert.match(bars, /fleetBarHeightPercent\(total, scale, showBreakdown\)/);
+  assert.match(bars, /fleetBarHeightPercent\(breakdown, scale, showBreakdown\)/);
   assert.match(bars, /Math\.max\(1, nonNegativeCount\(axisMax\), total\)/);
   assert.match(bars, /showBreakdown && breakdown > 0/);
   assert.match(bars, /className="mine-fleet-breakdown-count"/);
@@ -165,13 +166,16 @@ test("breakdown segment clicks open only that site and category of off-road asse
   assert.match(source, /assetDrilldown\.startsWith\("offroad-site:"\) \? assetDrilldown\.slice\(13\)\.split\("\|"\)\[0\] : assetDrilldown\.startsWith\("site:"\)/);
 });
 
-test("fleet chart uses 25-unit grid steps and keeps breakdown segments readable", () => {
+test("fleet chart uses the same labelled enlarged scale for its grid and bars", () => {
   assert.match(source, /const fleetChartStep = 25;/);
   assert.match(source, /const fleetChartAxisMax = Math.max\(fleetChartStep, Math.ceil\(fleetChartPeak \/ fleetChartStep\) \* fleetChartStep\);/);
   assert.doesNotMatch(source, /const fleetChartScale = dashboardCountScale/);
-  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment \{ min-height: min\(30px, 100%\); \}/);
+  assert.match(source, /fleetBarHeightPercent\(tick, fleetChartAxisMax, showFleetBreakdowns\)/);
+  assert.match(source, /Scale: 0–5 enlarged for readability; the same scale applies to every bar\./);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment \{ min-height: 0; max-height: none; \}/);
 });
 
-test("partial breakdown segments leave part of the fleet bar visible", () => {
-  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment\.partial-segment \{ min-height: min\(30px, calc\(100% - 18px\)\); max-height: calc\(100% - 18px\); \}/);
+test("partial breakdown segments cannot be stretched or clipped differently at different sites", () => {
+  assert.doesNotMatch(readabilityCss, /\.mine-fleet-breakdown-segment[^}]*min\(30px/);
+  assert.doesNotMatch(readabilityCss, /\.mine-fleet-breakdown-segment[^}]*calc\(100% - 18px\)/);
 });

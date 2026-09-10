@@ -189,5 +189,5 @@
   .mine-dashboard .mine-site-road-summary { grid-template-columns: minmax(0, 1fr); }
 }
 
-.mine-dashboard .mine-fleet-breakdown-segment { min-height: min(30px, 100%); }
-.mine-dashboard .mine-fleet-breakdown-segment.partial-segment { min-height: min(30px, calc(100% - 18px)); max-height: calc(100% - 18px); }
+.mine-dashboard .mine-fleet-breakdown-segment { min-height: 0; max-height: none; }
+.mine-fleet-scale-note { margin: 0 16px 4px; color: var(--mine-muted); font-size: 12px; text-align: right; }
