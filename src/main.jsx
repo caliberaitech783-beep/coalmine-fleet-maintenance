@@ -5017,6 +5017,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
   ];
+  const idleVehicleColumns = [
+    {...requestColumns.find((column) => column.key === "site"), render: (request) => <b>{request.reportSite || "—"}</b>},
+    ...requestColumns.filter((column) => !["site", "equipment"].includes(column.key)),
+  ];
   const closureColumns = [
     ...requestColumns,
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
@@ -5029,14 +5033,12 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "firstTripAt", label: "First trip time", value: firstTripTimestamp, render: (request) => formatTimestamp(firstTripTimestamp(request))},
   ];
   const fleetColumns = [
-    {key: "equipment", label: "Equipment / vehicle", value: (record) => record.reportEquipment, render: (record) => <b>{record.reportEquipment || "—"}</b>},
+    {key: "location", label: "Location", value: (record) => record.reportSite, render: (record) => <b>{record.reportSite || "—"}</b>},
     {key: "door", label: "Door no.", value: (record) => record.reportDoor},
     {key: "category", label: "Category", value: (record) => record.category || record.group || record.itemName},
     {key: "make", label: "Make", value: (record) => record.reportMake},
     {key: "model", label: "Model", value: (record) => record.reportModel},
-    {key: "location", label: "Location", value: (record) => record.reportSite},
     {key: "roadStatus", label: "Road status", value: (record) => record.reportRoadStatus, render: (record) => <Status>{record.reportRoadStatus}</Status>},
-    {key: "serial", label: "Serial / chassis no.", value: (record) => record.manufacturerSerialNo || record.chassisNo},
   ];
   const transferColumns = [
     {key: "transferNo", label: "Transfer no.", value: (record) => record.transferNo, render: (record) => <b>{record.transferNo || "—"}</b>},
@@ -5061,7 +5063,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "total", label: "Total equipment / vehicle", value: (row) => row.total},
     ], dateValue: () => reportGeneratedAt, emptyMessage: "No location-wise equipment records available", rowKey: (row) => `location-${row.location}`},
     {category: "maintenance", title: "Idle Vehicle Report", description: "Idle breakdown requests and idle fleet records that need follow-up.", rows: idleRequestRows, columns: [
-      ...requestColumns,
+      ...idleVehicleColumns,
       {key: "idleReason", label: "Idle reason", value: (request) => request.idleReason},
       {key: "closedAt", label: "Maintenance close / idle at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
     ], dateValue: (row) => row.closedAt || row.start, emptyMessage: "No idle vehicle records available"},
