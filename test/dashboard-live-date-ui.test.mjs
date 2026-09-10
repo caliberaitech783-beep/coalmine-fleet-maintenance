@@ -286,9 +286,8 @@ test("six-reading Closed and MIS bars match their pending request cards", () => 
   let tree = view.render(rows);
   byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render(rows);
-  assert.ok(byLabel(tree, "Open in Maintenance: 0 requests"));
-  assert.ok(byLabel(tree, "Open in MIS: 1 requests"));
-  byLabel(tree, "Closed: 1 requests").props.onClick();
+  assert.ok(byLabel(tree, "09-09-2026: 0 Open in Maintenance requests"));
+  byLabel(tree, "09-09-2026: 1 Open in MIS requests").props.onClick();
   tree = view.render(rows);
   assert.equal(detailView(tree).rows.length, 1);
   const pending = findAll(tree, (node) => node.type === "button" && text(node).includes("Open in MIS"))[0];
@@ -405,15 +404,17 @@ test("compiled lifecycle places Idle on its actual India event day, not its old 
   let tree = view.render();
   byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
-  assert.ok(byLabel(tree, "Idle Vehicles: 1 requests"));
-  assert.ok(byLabel(tree, "Closed: 1 requests"));
-  assert.ok(byLabel(tree, "Verified: 0 requests"));
-  const graph = findAll(tree, node => node.props?.className === "mine-request-chart-days mine-request-six-readings")[0];
-  assert.equal(findAll(graph, node => node.type === "button").length, 6);
+  assert.ok(byLabel(tree, "09-09-2026: 1 Idle Vehicles requests"));
+  assert.ok(byLabel(tree, "09-09-2026: 1 Closed requests"));
+  assert.ok(byLabel(tree, "09-09-2026: 0 Verified requests"));
+  const graph = findAll(tree, node => node.props?.className === "mine-request-chart-days mine-request-grouped-readings")[0];
+  const groups = findAll(graph, node => node.props?.className === "mine-request-chart-day");
+  assert.ok(groups.length > 1);
+  for (const group of groups) assert.equal(findAll(group, node => node.type === "button").length, 6);
   assert.equal(byLabel(tree, "Request lifecycle custom days").props.value, undefined);
   const withoutIdleTime = requests.map((row) => row.ref === "OLD-IDLE" ? {...row, idealRequestedAt: ""} : row);
   tree = view.render(withoutIdleTime);
-  assert.ok(byLabel(tree, "Idle Vehicles: 0 requests"));
+  assert.ok(byLabel(tree, "09-09-2026: 0 Idle Vehicles requests"));
 });
 
 test("site-wise From/To updates inclusive movement, availability, exports and linked details together", () => {

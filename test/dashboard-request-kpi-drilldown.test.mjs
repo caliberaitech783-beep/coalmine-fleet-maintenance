@@ -11,7 +11,7 @@ test("operational dashboard graphs share the region list browser", () => {
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /key: `group:\$\{group\.label\}`/);
   assert.match(source, /openAssetDrilldown\(`event:\$\{item\.key\}`\)/);
-  assert.match(source, /openAssetDrilldown\(`event:\$\{reading\.key\}`\)/);
+  assert.match(source, /openAssetDrilldown\(`event:\$\{key\}:\$\{day\.date\}`\)/);
   assert.match(source, /<DashboardRecordBrowser key=\{assetDrilldown\} rows=\{assetDrilldownRows\}/);
   assert.doesNotMatch(source, /Step [1-5] · (Select|Full details|Request details)/);
 });

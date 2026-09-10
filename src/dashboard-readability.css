@@ -124,9 +124,8 @@
 .mine-dashboard :is(.mine-request-lifecycle-controls, .mine-trend-controls) label { height: auto; min-height: 44px; }
 .mine-dashboard .mine-request-lifecycle-controls { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; width: min(100%, 540px); }
 .mine-request-lifecycle-end-controls { display: contents; }
-.mine-request-six-readings .mine-request-chart-day { grid-template-rows: minmax(130px, 1fr) 48px; }
-.mine-request-six-readings .mine-request-chart-day > small { white-space: normal; overflow: visible; line-height: 1.2; align-self: center; }
-.mine-request-six-readings .mine-request-chart-day button { width: min(32px, 60%); }
+.mine-dashboard .mine-request-grouped-readings .mine-request-chart-day button { width: 10px; flex: 0 0 10px; }
+.mine-dashboard .mine-request-grouped-readings .mine-request-chart-day button b { font-size: 11px !important; }
 .mine-request-chart-day button.maintenance { background: #8054ce; color: #8054ce; }
 .mine-request-chart-day button.mis { background: #108baa; color: #108baa; }
 .mine-request-lifecycle-controls > .mine-trend-period { grid-area: 1 / 1 / 2 / 3; }

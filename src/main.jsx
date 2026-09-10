@@ -1336,12 +1336,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   const requestLifecycleTrend = requestTrendDateKeys.map((date) => ({
     date,
+    production: requestLifecycleRows.production.filter((record) => requestEventDate(record, "opened") === date).length,
+    mis: maintenanceClosedRows.filter((record) => requestEventDate(record, "closed") === date).length,
     opened: requestLifecycleRows.opened.filter((record) => requestEventDate(record, "opened") === date).length,
     closed: requestLifecycleRows.closed.filter((record) => requestEventDate(record, "closed") === date).length,
     verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
     idle: requestLifecycleRows.idle.filter((record) => requestEventDate(record, "idle") === date).length,
   }));
-  // Fixed six totals share the cards' date/site scope and matching request lists.
+  // Six compact series are grouped by date within the selected site and range.
   const requestLifecycleReadings = [
     { key: "production", color: "opened", label: "Production Request", value: requestLifecycleRows.production.length },
     { key: "closed", color: "closed", label: "Closed", value: maintenanceClosedRows.length },
@@ -1350,7 +1352,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     { key: "opened", color: "maintenance", label: "Open in Maintenance", value: requestLifecycleAvailability.maintenance },
     { key: "closed", color: "mis", label: "Open in MIS", value: requestLifecycleAvailability.mis },
   ];
-  const requestLifecycleScale = dashboardCountScale(requestLifecycleReadings.map((reading) => reading.value));
+  const requestLifecycleScale = dashboardCountScale(requestLifecycleTrend.flatMap((day) => [day.production, day.closed, day.verified, day.idle, day.opened, day.mis]));
   const requestLifecycleMaximum = requestLifecycleScale.maximum;
   const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ");
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
@@ -1438,6 +1440,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       const [, event, date] = key.split(":");
       if (event === "all") return requestAssetRows(allLifecycleRequestRows(requestLifecycleRows, requestEventDate, date));
       // Daily bars count every closure; the undated Closed / Open in MIS cards count only pending verification.
+      if (event === "production" && date) return requestAssetRows(requestLifecycleRows.production.filter((record) => requestEventDate(record, "opened") === date));
+      if (event === "mis") return requestAssetRows(date ? maintenanceClosedRows.filter((record) => requestEventDate(record, "closed") === date) : maintenanceClosedRows);
       const rows = event === "closed" && !date ? maintenanceClosedRows : requestLifecycleRows[event] || [];
       return requestAssetRows(date ? rows.filter((record) => requestEventDate(record, event) === date) : rows);
     }
@@ -1472,7 +1476,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
   const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
-  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
+  const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "mis" ? "Open in MIS" : lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
   const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
@@ -1685,13 +1689,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             {[{ key: "production", className: "opened", label: "Production Request", note: "Production + Maintenance", value: requestLifecycleRows.production.length }, { key: "closed", label: "Closed", note: "Maintenance completed", value: maintenanceClosedRows.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Active in Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.className || item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
-            <div className="mine-request-chart-days mine-request-six-readings" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}>
+            <div className="mine-request-chart-days mine-request-grouped-readings" style={{ gridTemplateColumns: `repeat(${requestLifecycleTrend.length}, minmax(100px, 1fr))` }}>
               <div className="mine-request-chart-grid" aria-hidden="true">{requestLifecycleScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / requestLifecycleMaximum * 100}%` }} />)}</div>
-              {requestLifecycleReadings.map((reading) => <div className="mine-request-chart-day" key={reading.color}>
+              {requestLifecycleTrend.map((day) => <div className="mine-request-chart-day" key={day.date}>
                 <span>
-                  <button type="button" className={reading.color} disabled={!reading.value} style={{ height: `${reading.value ? Math.max(7, (reading.value / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${reading.label}: ${reading.value} requests`} title={`${reading.label}: ${reading.value}`} onClick={() => openAssetDrilldown(`event:${reading.key}`)}><b>{reading.value}</b></button>
+                  {requestLifecycleReadings.map((reading) => { const key = reading.color === "mis" ? "mis" : reading.key; const value = day[key]; return <button type="button" key={reading.color} className={reading.color} disabled={!value} style={{ height: `${value ? Math.max(7, (value / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${formatDisplayDate(day.date)}: ${value} ${reading.label} requests`} title={`${formatDisplayDate(day.date)}: ${reading.label}: ${value}`} onClick={() => openAssetDrilldown(`event:${key}:${day.date}`)}><b>{value || ""}</b></button>; })}
                 </span>
-                <small {...listAction(`event:${reading.key}`, reading.label)}>{reading.label}</small>
+                <small {...listAction(`event:all:${day.date}`, `All lifecycle requests on ${formatDisplayDate(day.date)}`)}>{formatDisplayDate(day.date)}</small>
               </div>)}
             </div>
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
