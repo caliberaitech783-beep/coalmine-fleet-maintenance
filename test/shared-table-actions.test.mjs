@@ -2,11 +2,24 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import React from "react";
-import {tableElements, tableCellText, tableModel, projectTableRow, tableSlots, selectTableRows, dateColumnsFirst} from "../src/table-actions-model.mjs";
+import {tableElements, tableCellText, tableModel, projectTableRow, tableSlots, selectTableRows, dateColumnsFirst, jobReferenceColumnsLast} from "../src/table-actions-model.mjs";
 
 const h = React.createElement;
 const row = (key, ...cells) => h("tr", {key}, cells.map((value, i) => h("td", {key: i}, value)));
 const headers = h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Count")));
+
+test("job references come last outside Reports without changing other columns or values", () => {
+  const labels = ["Actions", "Job reference", "Site", "Started", "Closed", "Ticket reference"];
+  const {columns} = tableModel(h("thead", {}, h("tr", {}, labels.map(label => h("th", {}, label)))));
+  const ordered = jobReferenceColumnsLast(dateColumnsFirst(columns));
+  assert.deepEqual(ordered.map(c => c.label), ["Started", "Closed", "Actions", "Site", "Ticket reference", "Job reference"]);
+  assert.deepEqual(tableSlots(projectTableRow(row("record", ...labels), ordered.map(c => c.index))).map(s => tableCellText(s.cell)), ordered.map(c => c.label));
+  assert.deepEqual(columns.map(c => c.label), labels);
+  const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.doesNotMatch(main, /jobReferenceColumnsLast/);
+  const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
+  assert.match(shared, /jobReferenceColumnsLast\(dateColumnsFirst\(originalColumns\)\)/);
+});
 
 test("status leads, then non-report dates, while remaining columns retain their order", () => {
   const labels = ["Actions", "Status", "Started", "Site", "Closed", "Closed by", "MIS verified at", "First trip time", "Turn around time (TAT)"];

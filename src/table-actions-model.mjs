@@ -60,6 +60,11 @@ export function tableModel(children) {
 }
 
 // Keep original indices so headers, values, filters and exports stay aligned.
+export function jobReferenceColumnsLast(columns) {
+  const isJobReference = (column) => /^job\s+ref(?:erence)?s?\.?$/i.test(column.label.trim());
+  return [...columns.filter((column) => !isJobReference(column)), ...columns.filter(isJobReference)];
+}
+
 export function dateColumnsFirst(columns) {
   const isDate = ({ key, label }) => {
     if (/^(start|end|date|time|occurredAt|createdAt|updatedAt|closedAt|verifiedAt|firstTripAt|acceptedAt|arrivalFlaggedAt|misFlaggedAt)$/.test(key)) return true;
