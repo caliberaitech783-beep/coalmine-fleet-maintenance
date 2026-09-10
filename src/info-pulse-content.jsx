@@ -1,5 +1,5 @@
 import React, {useMemo, useState} from 'react';
-import {ChevronDown, ChevronLeft, ChevronRight, RefreshCw, MapPin, Truck} from 'lucide-react';
+import {ChevronDown, ChevronLeft, ChevronRight, RefreshCw, MapPin, Truck, Info} from 'lucide-react';
 import {INFO_PULSE_COLUMNS, infoPulseColumns, infoPulseSiteOptions, infoPulseView} from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import {formatDisplayDate, formatDisplayTime, formatDisplayDateTime} from '../date-time-format.mjs';
@@ -10,6 +10,15 @@ import {pulseCaseTiming} from './info-pulse-timing.mjs';
 const PAGE_SIZE = 25;
 const labels = Object.fromEntries(INFO_PULSE_COLUMNS.map(column => [column.key, column.label]));
 const severityLabels = {all: 'All cases', critical: 'Critical', warning: 'Warnings', info: 'Updates'};
+const issueHelp = {
+  'etc-overdue': 'Active repair past its expected completion time (ETC).',
+  'long-running': 'Active breakdown for at least 3 days.',
+  'idle-vehicle': 'Request currently marked Idle.',
+  'etc-due-soon': 'Active repair with ETC in the next 2 hours.',
+  'awaiting-verification': 'Repair closed at least 12 hours ago and still awaiting MIS verification.',
+  'stale-update': 'Active request at least 24 hours old with no maintenance remark recorded.',
+  'new-request': 'Active request started within the last 12 hours.',
+};
 function RecordDate({value}) {
   return Number.isFinite(parseIstTimestamp(value))
     ? <time className="pulse-date"><b>{formatDisplayDate(value)}</b><span>{formatDisplayTime(value)}</span></time>
@@ -20,6 +29,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
   const [filters, setFilters] = useState({site: '', from: '', to: '', type: '', severity: ''});
   const [expanded, setExpanded] = useState('');
   const [page, setPage] = useState(0);
+  const [countHelp, setCountHelp] = useState(null);
   const columns = infoPulseColumns(role);
   const sites = useMemo(() => infoPulseSiteOptions(requests, scope?.sites || []), [requests, scope]);
   const summary = useMemo(() => infoPulseView(cases, {...filters, sites}), [cases, filters, sites]);
@@ -38,6 +48,13 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
   const rows = detail.rows.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   const selectedSite = sites.find(site => site.key === filters.site)?.label || 'All sites';
   const changeFilter = (key, value) => {setFilters(current => ({...current, [key]: value})); setExpanded(''); setPage(0);};
+  const showCountHelp = event => {
+    const meta = event.currentTarget.closest('.pulse-meta').getBoundingClientRect();
+    const content = event.currentTarget.closest('.pulse-content').getBoundingClientRect();
+    const below = content.bottom - meta.bottom - 20, above = meta.top - content.top - 20;
+    const placement = below < 220 && above > below ? 'above' : 'below';
+    setCountHelp({placement, maxHeight: Math.max(80, Math.min(440, placement === 'above' ? above : below))});
+  };
   return <div className="pulse-content">
     {ready && !summary.invalidRange && <div className="pulse-site-filter">
       <span className="pulse-site-label" id="pulse-site-label">Site</span>
@@ -51,7 +68,19 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
       {Object.values(filters).some(Boolean) && <button type="button" className="pulse-reset" onClick={() => {setFilters({site: '', from: '', to: '', type: '', severity: ''}); setExpanded(''); setPage(0);}}>Reset</button>}
       <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
     </div>
-    <div className="pulse-meta"><span>{!filters.from && !filters.to ? 'All request dates' : `${filters.from ? formatDisplayDate(filters.from) : 'Earliest'} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`}</span><span>{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span></div>
+    <div className="pulse-meta"><div className="pulse-meta-context"><span>{!filters.from && !filters.to ? 'All request dates' : `${filters.from ? formatDisplayDate(filters.from) : 'Earliest'} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`}</span>
+      <div className="pulse-count-help" onMouseEnter={showCountHelp} onMouseLeave={event => {if (!event.currentTarget.contains(event.currentTarget.ownerDocument.activeElement)) setCountHelp(null);}} onFocus={showCountHelp} onBlur={event => {if (!event.currentTarget.contains(event.relatedTarget)) setCountHelp(null);}} onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); setCountHelp(null);}}}>
+        <button type="button" className="pulse-help-trigger" aria-label="What these counts mean" aria-describedby={countHelp ? 'pulse-count-explanation' : undefined} onClick={showCountHelp}><Info size={15} aria-hidden="true" /></button>
+        {countHelp && <div id="pulse-count-explanation" className="pulse-count-tooltip" role="tooltip" tabIndex={0} data-placement={countHelp.placement} style={{maxHeight: countHelp.maxHeight}}>
+          <b className="pulse-tooltip-title">What these counts mean</b>
+          <p><b>Default:</b> All sites you can access, all request dates and all cases. Date filters use the breakdown start date in IST.</p>
+          <p><b>All cases</b> counts each qualifying request once. Its highest priority decides its box: <b>Critical → Warnings → Updates.</b> The three boxes add up to All cases; site badges show unique matching cases.</p>
+          <dl>{columns.map(column => <div key={column.key}><dt className={column.tone}>{column.label}<small>{severityLabels[column.tone]}</small></dt><dd>{issueHelp[column.key]}</dd></div>)}</dl>
+          <p>Issue counts can overlap: one request may be both overdue and down for 3 days. Verified requests and requests matching none of these checks are excluded. Filters narrow the results.</p>
+          <p>Cards show the site, equipment, status, standing time, ETC, complaint and recorded reasons. Expand a card for daily updates and full details. <b>{PAGE_SIZE} cases per page · IST · Refreshes every 30 seconds.</b></p>
+        </div>}
+      </div>
+    </div><span>{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span></div>
     {error && <div className="pulse-message pulse-error" role="alert">{ready ? 'Refresh failed. Showing the last loaded counts.' : 'Could not load site counts.'} <button type="button" disabled={refreshing} onClick={onRefresh}>Retry</button></div>}
     {!ready ? <p className="pulse-message" role="status">{error ? 'Counts unavailable.' : 'Loading site counts…'}</p> : summary.invalidRange ? <p className="pulse-message pulse-error" role="alert">From date must be on or before To date.</p> : <>
       <div className="pulse-overview" role="group" aria-label="Cases by highest priority">

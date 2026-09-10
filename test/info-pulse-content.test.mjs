@@ -35,7 +35,7 @@ function harness() {
     React, ...data, ...dates, ...reasons, ...timing, requestStatusLabel, parseIstTimestamp,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
     useMemo: callback => callback(),
-    ...Object.fromEntries(['ArrowLeft', 'ChevronDown', 'ChevronLeft', 'ChevronRight', 'RefreshCw', 'MapPin', 'Truck'].map(name => [name, () => null])),
+    ...Object.fromEntries(['ArrowLeft', 'ChevronDown', 'ChevronLeft', 'ChevronRight', 'RefreshCw', 'MapPin', 'Truck', 'Info'].map(name => [name, () => null])),
   };
   const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
   const requests = Array.from({length: 67}, (_, i) => ({ref: `R-${i}`, door: `D-${i}`, site: i < 60 ? 'Sasti OB' : 'Majri OB', status: 'Open', start: i < 60 ? '2026-09-01 12:00' : '2026-09-02 12:00', expectedCompletionAt: '2026-09-03 12:00', complaint: 'Hydraulic leak'}));
