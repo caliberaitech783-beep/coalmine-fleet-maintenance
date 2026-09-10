@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-const workflow=readFileSync(new URL('../.github/workflows/azure-hosting_coalmine-fleet-azure-783.yml',import.meta.url),'utf8');
+const workflow=readFileSync(new URL('../.github/workflows/production-release.yml',import.meta.url),'utf8');
+const planner=readFileSync(new URL('../.github/scripts/release-plan.mjs',import.meta.url),'utf8');
 
 test('staging can disable every scheduled background job',()=>{
   assert.match(server,/DISABLE_SCHEDULED_JOBS/);
@@ -33,14 +34,14 @@ test('deployment validates staging, swaps, and automatically rolls back',()=>{
 
 test('report-only deployments validate an immutable report delta and protect newer production changes',()=>{
   assert.ok(workflow.includes('ref: ${{ inputs.report_source_sha || github.sha }}'));
-  assert.ok(workflow.includes('[[ "$REPORT_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]'));
-  assert.ok(workflow.includes('git merge-base --is-ancestor "$base" "$source_sha"'));
-  assert.ok(workflow.includes('department-reports.mjs|test/department-reports.test.mjs) ;;'));
-  assert.ok(workflow.includes('Report-only release contains an unrelated file: $file'));
+  assert.ok(planner.includes('shaPattern.test(env.REPORT_SOURCE_SHA)'));
+  assert.ok(planner.includes("git('merge-base', '--is-ancestor', base, target)"));
+  assert.ok(planner.includes("['department-reports.mjs', 'test/department-reports.test.mjs']"));
+  assert.ok(planner.includes('Report-only release contains an unrelated file'));
   assert.ok(workflow.includes('npm test'));
-  assert.ok(workflow.includes('APP_VERSION_SOURCE=%s'));
+  assert.ok(workflow.includes('APP_VERSION_SOURCE:'));
   assert.ok(workflow.includes('DEPLOY_SHA: ${{ needs.build.outputs.source_sha }}'));
-  assert.ok(workflow.includes('if [ "$live_sha" != "$REPORT_BASE_SHA" ]; then'));
+  assert.ok(workflow.includes('readHealthyLive(process.env.LIVE_URL)!==process.env.PREVIOUS_SHA'));
   assert.ok(workflow.includes('refusing to replace newer changes'));
 });
 
