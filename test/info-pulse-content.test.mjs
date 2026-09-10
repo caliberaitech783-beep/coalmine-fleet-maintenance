@@ -9,6 +9,7 @@ import {parseIstTimestamp} from '../ai-feeder.mjs';
 import * as dates from '../date-time-format.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import * as reasons from '../src/info-pulse-reasons.mjs';
+import * as timing from '../src/info-pulse-timing.mjs';
 
 const source = readFileSync(new URL('../src/info-pulse-content.jsx', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
@@ -31,7 +32,7 @@ function harness() {
   const slots = [];
   let cursor = 0;
   const bindings = {
-    React, ...data, ...dates, ...reasons, requestStatusLabel, parseIstTimestamp,
+    React, ...data, ...dates, ...reasons, ...timing, requestStatusLabel, parseIstTimestamp,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
     useMemo: callback => callback(),
     ...Object.fromEntries(['ArrowLeft', 'ChevronDown', 'ChevronLeft', 'ChevronRight', 'RefreshCw', 'MapPin', 'Truck'].map(name => [name, () => null])),
@@ -45,9 +46,8 @@ function harness() {
 test('site number opens its exact cases, pages retain all records, and a case reveals details', () => {
   const app = harness();
   let tree = app.render();
-  const count = byLabel(tree, 'Sasti OB: 60 ETC overdue');
-  assert.ok(count);
-  count.props.onClick();
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
+  byLabel(app.render(), 'Filter issue: ETC overdue').props.onClick();
   tree = app.render();
   assert.match(text(tree), /60 cases/);
   assert.match(text(tree), /1–25 of 60 cases/);
@@ -72,16 +72,14 @@ test('date and site controls update totals and drill-down together and reset ret
   inputs[0].props.onChange({target: {value: '2026-09-02'}});
   tree = app.render();
   assert.match(text(tree), /7 cases/);
-  byLabel(tree, 'Total: 7 cases').props.onClick();
-  tree = app.render();
   assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
   descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
   tree = app.render();
-  assert.ok(byLabel(tree, 'Total: 67 cases'));
+  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases67');
   byLabel(tree, 'Filter site: Sasti OB').props.onClick();
   tree = app.render();
-  assert.ok(byLabel(tree, 'Total: 60 cases'));
-  assert.equal(byLabel(tree, 'Majri OB: 7 cases'), undefined);
+  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases60');
+  assert.ok(!text(byLabel(tree, 'Matching case records')).includes('Majri OB'));
 });
 
 test('loading and failures never render a misleading zero and retry is actionable', () => {
@@ -96,7 +94,7 @@ test('loading and failures never render a misleading zero and retry is actionabl
   assert.equal(retries, 1);
   tree = app.render({error: 'offline'});
   assert.match(text(tree), /Showing the last loaded counts/);
-  assert.ok(byLabel(tree, 'Total: 67 cases'));
+  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases67');
 });
 
 test('real daily-update arrays render all reasons and dated history without crashing', () => {
@@ -107,23 +105,23 @@ test('real daily-update arrays render all reasons and dated history without cras
   const props = {requests: [request], cases: data.buildInfoPulseCases([request], {now: NOW})};
   const app = harness();
   let tree = app.render(props);
-  byLabel(tree, 'Total: 1 cases').props.onClick();
-  tree = app.render(props);
   assert.match(renderToStaticMarkup(tree), /Overdue reason/);
   assert.match(renderToStaticMarkup(tree), /Awaiting seal delivery/);
   descendants(tree, node => node.props.className === 'pulse-details-toggle')[0].props.onClick();
   tree = app.render(props);
   const html = renderToStaticMarkup(tree);
-  for (const value of ['All reasons', 'No driver', 'Seal unavailable', 'Recovery truck delayed', 'First trip incomplete', 'Pump replaced', 'Pump tested', 'Pump removed', 'Vendor inspection', 'Workshop team', '09-09-2026']) assert.ok(html.includes(value), value);
+  for (const value of ['Issue / complaint', 'No driver', 'Seal unavailable', 'Recovery truck delayed', 'First trip incomplete', 'Pump replaced', 'Pump tested', 'Pump removed', 'Vendor inspection', 'Workshop team', '09-09-2026']) assert.ok(html.includes(value), value);
   assert.ok(!html.includes('[object Object]'));
 });
 
-test('priority cards count unique cases and open matching records', () => {
+test('all case cards appear immediately without a repeated site table or priority totals', () => {
   const app = harness();
   let tree = app.render();
-  byLabel(tree, 'Critical: 67 cases').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /All sites.*Critical/);
+  assert.equal(descendants(tree, node => node.type === 'table').length, 0);
+  assert.equal(descendants(tree, node => node.props.className?.startsWith('pulse-stat ')).length, 0);
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 25);
+  assert.match(text(tree), /Issue \/ complaintHydraulic leak/);
+  assert.equal(byLabel(tree, 'Filter issue: All cases').props['aria-pressed'], true);
   assert.match(text(tree), /1–25 of 67 cases/);
 });
 
@@ -139,9 +137,9 @@ test('opens on all sites and all dates with exact site badges and no remembered 
   tree = app.render();
   assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
   assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites67');
-  assert.ok(byLabel(tree, 'Total: 60 cases'));
+  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases60');
   byLabel(tree, 'Filter site: All sites').props.onClick();
-  assert.ok(byLabel(app.render(), 'Total: 67 cases'));
+  assert.equal(text(byLabel(app.render(), 'Filter issue: All cases')), 'All cases67');
   byLabel(app.render(), 'Filter site: Majri OB').props.onClick();
   assert.equal(byLabel(harness().render(), 'Filter site: All sites').props['aria-pressed'], true);
 });
@@ -149,7 +147,8 @@ test('opens on all sites and all dates with exact site badges and no remembered 
 test('site tabs retain the issue drill-down, clear pagination, and All sites restores every matching case', () => {
   const app = harness();
   let tree = app.render();
-  byLabel(tree, 'Sasti OB: 60 ETC overdue').props.onClick();
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
+  byLabel(app.render(), 'Filter issue: ETC overdue').props.onClick();
   tree = app.render();
   assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
   byLabel(tree, 'Next cases').props.onClick();
@@ -166,7 +165,7 @@ test('site tabs retain the issue drill-down, clear pagination, and All sites res
   assert.match(text(tree), /1–25 of 67 cases/);
 });
 
-test('site badge counts follow dates and issue or priority, including a site with zero matching cases', () => {
+test('site badges and issue counts follow both filters, including a site with zero matching cases', () => {
   const requests = [
     {ref: 'A', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00'},
     {ref: 'B', site: 'Sasti OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No driver'},
@@ -176,18 +175,18 @@ test('site badge counts follow dates and issue or priority, including a site wit
   const props = {requests, cases: data.buildInfoPulseCases(requests, {now: NOW}), scope: {label: 'All regions', sites: ['Lalpeth OB']}};
   const app = harness();
   let tree = app.render(props);
-  byLabel(tree, 'Warnings: 2 cases').props.onClick();
+  byLabel(tree, 'Filter issue: Idle').props.onClick();
   tree = app.render(props);
   assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites2');
   assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB1');
   assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB1');
   byLabel(tree, 'Filter site: Sasti OB').props.onClick();
   tree = app.render(props);
-  assert.match(text(tree), /Sasti OB.*Warnings/);
+  assert.match(text(tree), /Sasti OB.*Idle/);
   assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 1);
   descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
   tree = app.render(props);
-  byLabel(tree, 'Total: 2 ETC overdue').props.onClick();
+  byLabel(tree, 'Filter issue: ETC overdue').props.onClick();
   tree = app.render(props);
   descendants(tree, node => node.type === 'input')[0].props.onChange({target: {value: '2026-09-02'}});
   tree = app.render(props);
@@ -205,16 +204,26 @@ test('site badge counts follow dates and issue or priority, including a site wit
   assert.ok(text(byLabel(tree, 'Matching case records')).includes('D'));
 });
 
-test('filtered overview totals and priority cards keep the selected site when drilling down', () => {
+test('clearing an issue keeps the selected site and still shows its records', () => {
   const app = harness();
   byLabel(app.render(), 'Filter site: Majri OB').props.onClick();
-  byLabel(app.render(), 'Total: 7 cases').props.onClick();
   let tree = app.render();
   assert.match(text(tree), /Majri OB.*All cases/);
   assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
-  descendants(tree, node => node.props.className === 'pulse-back')[0].props.onClick();
-  byLabel(app.render(), 'Critical: 7 cases').props.onClick();
+  byLabel(tree, 'Filter issue: ETC overdue').props.onClick();
   tree = app.render();
-  assert.match(text(tree), /Majri OB.*Critical/);
+  assert.match(text(tree), /Majri OB.*ETC overdue/);
   assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
+  byLabel(tree, 'Filter issue: All cases').props.onClick();
+  assert.equal(byLabel(app.render(), 'Filter site: Majri OB').props['aria-pressed'], true);
+});
+
+test('short stoppages show minutes, exact dates, complaint and missing overdue reason before expansion', () => {
+  const request = {ref: 'SHORT', door: 'V592-96804', site: 'Dhoptala OB (2nd)', status: 'Open', start: '2026-09-10 11:43:26', expectedCompletionAt: '2026-09-10 11:50:00', complaint: 'Air pressure leak'};
+  const app = harness();
+  const props = {requests: [request], cases: data.buildInfoPulseCases([request], {now: NOW})};
+  const html = renderToStaticMarkup(app.render(props));
+  for (const value of ['Standing since', 'Down for', '16m', 'ETC overdue by', '10m', '11:43:26 AM', 'Air pressure leak', 'Overdue reason', 'Not recorded']) assert.ok(html.includes(value), value);
+  assert.ok(!html.includes('0.0'));
+  assert.ok(!html.includes('pulse-record-detail'));
 });
