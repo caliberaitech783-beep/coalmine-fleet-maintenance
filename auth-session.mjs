@@ -12,12 +12,12 @@ export function createSessionStore(pool, {maxAgeDays = DEFAULT_SESSION_MAX_AGE_D
         [boundedMaxAgeDays]
       ).catch(() => {});
       await pool.query(
-        `INSERT INTO auth_sessions (token, role, employee_name, login_name, user_type, assigned_role, permissions)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+        `INSERT INTO auth_sessions (token, session_public_id, role, employee_name, login_name, user_type, assigned_role, permissions)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
          ON CONFLICT (token) DO UPDATE
          SET role = EXCLUDED.role, employee_name = EXCLUDED.employee_name, login_name = EXCLUDED.login_name,
              user_type = EXCLUDED.user_type, assigned_role = EXCLUDED.assigned_role, permissions = EXCLUDED.permissions`,
-        [token, role, name, login, userType, assignedRole, JSON.stringify(permissions)]
+        [token, token, role, name, login, userType, assignedRole, JSON.stringify(permissions)]
       );
     },
 

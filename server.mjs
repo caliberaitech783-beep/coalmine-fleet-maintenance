@@ -43,7 +43,7 @@ import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage} from './request-conflict.mjs';
-import {auditChangedFields,auditRouteDetails,auditSubmittedFields} from './audit-trail.mjs';
+import {auditChangedFields,auditRouteDetails,auditSafeError,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
@@ -178,12 +178,15 @@ async function appendAuditEvent(req,event={}){
     const session=req.session||{};
     const changes=event.changedFields||auditSubmittedFields(req.body);
     await pool.query(`INSERT INTO audit_events
-      (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,ip_address,device_id,user_agent,session_id)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15)`,[
+      (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,ip_address,device_id,user_agent,session_id,
+       request_method,request_path,status_code,duration_ms,error_code,request_id)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,[
       auditClean(event.eventType||route.eventType,80),auditClean(event.outcome||'Success',30),
       auditClean(event.actorLogin||session.login||req.body?.username,120),auditClean(event.actorName||session.name,160),auditClean(event.actorRole||auditRole(session),100),
       auditClean(event.module||route.module,120),auditClean(event.action||route.action,160),auditClean(event.targetType||'',100),auditClean(event.targetReference||auditTargetReference(req),160),
       auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditIpAddress(req),auditClean(req.get?.(AUDIT_DEVICE_ID_HEADER),80),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
+      auditClean(req.method,12),auditClean(req.path,300),Number(event.statusCode||req.auditStatusCode||0)||null,Math.max(0,Number(event.durationMs||req.auditDurationMs||0))||0,
+      auditClean(event.errorCode||req.auditErrorCode,80),auditClean(req.auditRequestId||req.get?.('x-request-id'),80),
     ]);
   }catch(error){console.error('Audit event could not be recorded:',error.message)}
 }
@@ -396,6 +399,7 @@ async function migrate(){
         ]);
     CREATE TABLE IF NOT EXISTS auth_sessions (
       token UUID PRIMARY KEY,
+      session_public_id TEXT NOT NULL UNIQUE,
       role TEXT NOT NULL,
       employee_name TEXT NOT NULL,
       login_name TEXT NOT NULL DEFAULT '',
@@ -408,6 +412,10 @@ async function migrate(){
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS assigned_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS session_public_id TEXT;
+    UPDATE auth_sessions SET session_public_id=token::text WHERE session_public_id IS NULL OR session_public_id='';
+    ALTER TABLE auth_sessions ALTER COLUMN session_public_id SET NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_public_id_idx ON auth_sessions (session_public_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
     CREATE TABLE IF NOT EXISTS audit_events (
       id BIGSERIAL PRIMARY KEY,
@@ -426,12 +434,25 @@ async function migrate(){
       device_id TEXT NOT NULL DEFAULT '',
       user_agent TEXT NOT NULL DEFAULT '',
       session_id TEXT NOT NULL DEFAULT '',
+      request_method TEXT NOT NULL DEFAULT '',
+      request_path TEXT NOT NULL DEFAULT '',
+      status_code INTEGER,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      error_code TEXT NOT NULL DEFAULT '',
+      request_id TEXT NOT NULL DEFAULT '',
       occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS audit_events_occurred_at_idx ON audit_events (occurred_at DESC);
     ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS device_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS request_method TEXT NOT NULL DEFAULT '';
+    ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS request_path TEXT NOT NULL DEFAULT '';
+    ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS status_code INTEGER;
+    ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS duration_ms INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS error_code TEXT NOT NULL DEFAULT '';
+    ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS request_id TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS audit_events_actor_idx ON audit_events (actor_login, occurred_at DESC);
     CREATE INDEX IF NOT EXISTS audit_events_module_idx ON audit_events (module, occurred_at DESC);
+    CREATE INDEX IF NOT EXISTS audit_events_outcome_idx ON audit_events (outcome, occurred_at DESC);
     CREATE TABLE IF NOT EXISTS password_change_sessions (
       token UUID PRIMARY KEY,
       master_record_id BIGINT NOT NULL REFERENCES master_records(id) ON DELETE CASCADE,
@@ -671,19 +692,22 @@ async function migrate(){
 
 // Large JSON payloads arrive as text/plain: the edge firewall rejects inspected
 // bodies above 128 KB, see request-body-transport.mjs.
-app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
-
 app.use((req,res,next)=>{
-  const auditable=['POST','PUT','PATCH','DELETE'].includes(req.method)&&req.path!=='/api/notifications/read';
-  if(!auditable)return next();
+  if(!req.path.startsWith('/api/')||['/api/health','/api/app-version','/api/audit-events'].includes(req.path))return next();
+  const startedAt=Date.now();
+  req.auditRequestId=auditClean(req.get('x-request-id')||randomUUID(),80);
   const originalJson=res.json.bind(res);
   res.json=(body)=>{
-    if(body?.error)req.auditResponseError=auditClean(body.error,500);
+    if(body?.error&&!req.auditResponseError)req.auditResponseError=auditClean(body.error,500);
     return originalJson(body);
   };
   res.on('finish',()=>{
     if(req.audit===false)return;
     const outcome=res.statusCode>=200&&res.statusCode<400?'Success':'Failed';
+    const auditable=['POST','PUT','PATCH','DELETE'].includes(req.method)||outcome==='Failed'||Boolean(req.audit);
+    if(!auditable)return;
+    req.auditStatusCode=res.statusCode;
+    req.auditDurationMs=Date.now()-startedAt;
     void appendAuditEvent(req,{
       ...(req.audit||{}),
       outcome,
@@ -692,6 +716,10 @@ app.use((req,res,next)=>{
   });
   next();
 });
+
+// Audit interception is registered first so malformed and oversized request
+// bodies are also logged.
+app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
 
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
@@ -793,6 +821,15 @@ function requireWhatsAppAdministrator(req,res,next){
   if(req.session?.role==='super'&&req.session?.permissions?.adminLevel!=='Manager')return next();
   return res.status(403).json({error:'Only an Admin or Super Admin can change Meta WhatsApp settings.'});
 }
+
+app.post('/api/logout',requireSession,async(req,res,next)=>{
+  try{
+    const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
+    req.audit={eventType:'Security',module:'Authentication',action:'Logout',targetType:'User account',targetReference:req.session.login||req.session.name,changedFields:[]};
+    await pool.query('DELETE FROM auth_sessions WHERE token=$1',[token]);
+    res.status(204).end();
+  }catch(error){next(error)}
+});
 
 app.post('/api/login',async(req,res,next)=>{
   try{
@@ -1042,13 +1079,57 @@ app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
     const isAdministrator=req.session.permissions?.adminLevel!=='Manager';
     if(!isAdministrator&&!accessAllows(req.session.permissions?.tabAccess,'Audit Trail')&&!accessAllows(req.session.permissions?.mobileTabAccess,'Audit Trail'))
       return res.status(403).json({error:'You do not have access to the Audit Trail.'});
-    const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||2000));
+    const paged=String(req.query.paged||'').toLowerCase()==='true';
+    const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||1000));
+    const indiaDateKey=(value)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
+    const defaultToDate=indiaDateKey(new Date());
+    const defaultFromDate=indiaDateKey(new Date(Date.now()-9*24*60*60*1000));
+    const requestedFromDate=String(req.query.fromDate||'').trim();
+    const requestedToDate=String(req.query.toDate||'').trim();
+    const fromDate=requestedFromDate||defaultFromDate;
+    const toDate=requestedToDate||defaultToDate;
+    const validDate=(value)=>{
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+      const parsed=new Date(`${value}T00:00:00Z`);
+      return !Number.isNaN(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;
+    };
+    if(!validDate(fromDate)||!validDate(toDate)||fromDate>toDate)return res.status(400).json({error:'Select a valid audit date range.'});
+    const beforeAt=String(req.query.beforeAt||'').trim();
+    const beforeId=Number(req.query.beforeId)||0;
+    const params=[fromDate,toDate];
+    const conditions=[
+      `occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')`,
+      `occurred_at < (($2::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`,
+    ];
+    if(paged&&beforeAt&&beforeId){
+      params.push(beforeAt,beforeId);
+      conditions.push(`(occurred_at,id)<($3::timestamptz,$4::bigint)`);
+    }
+    params.push(paged?limit+1:limit);
+    const limitParameter=`$${params.length}`;
+    const where=`WHERE ${conditions.join(' AND ')}`;
     const {rows}=await pool.query(`SELECT id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
       actor_role AS "actorRole",module,action,target_type AS "targetType",target_reference AS "targetReference",reason,
-      changed_fields AS "changedFields",ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",session_id AS "sessionId",occurred_at AS "occurredAt"
-      FROM audit_events ORDER BY occurred_at DESC LIMIT $1`,[limit]);
+      changed_fields AS "changedFields",ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",session_id AS "sessionId",
+      request_method AS "requestMethod",request_path AS "requestPath",status_code AS "statusCode",duration_ms AS "durationMs",
+      error_code AS "errorCode",request_id AS "requestId",occurred_at AS "occurredAt"
+      FROM audit_events ${where} ORDER BY occurred_at DESC,id DESC LIMIT ${limitParameter}`,params);
     res.set('Cache-Control','no-store');
-    res.json(rows);
+    if(!paged)return res.json(rows);
+    const hasMore=rows.length>limit;
+    const events=rows.slice(0,limit);
+    const last=events.at(-1);
+    let summary=null;
+    if(String(req.query.summary||'').toLowerCase()==='true'){
+      const {rows:summaryRows}=await pool.query(`SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE outcome='Failed')::int AS failed,
+        COUNT(DISTINCT NULLIF(actor_login,''))::int AS users,
+        COUNT(DISTINCT NULLIF(device_id,''))::int AS devices FROM audit_events
+        WHERE occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
+          AND occurred_at < (($2::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`,[fromDate,toDate]);
+      summary=summaryRows[0]||{total:0,failed:0,users:0,devices:0};
+    }
+    res.json({events,summary,range:{fromDate,toDate},hasMore,nextCursor:hasMore&&last?{beforeAt:last.occurredAt,beforeId:last.id}:null});
   }catch(error){next(error)}
 });
 
@@ -3519,6 +3600,13 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
 
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
+app.use((error,req,res,next)=>{
+  const auditedError=auditSafeError(error);
+  req.auditErrorCode=auditedError.code;
+  req.auditResponseError=`${auditedError.code}: ${auditedError.message}`;
+  req.audit={...(req.audit||{}),eventType:req.audit?.eventType||'Error'};
+  next(error);
+});
 // Transient database failures become a 503 with Retry-After so the UI retries
 // silently; route errors that carry a status keep it; anything else is a 500
 // with a message that tells the user what to do next.

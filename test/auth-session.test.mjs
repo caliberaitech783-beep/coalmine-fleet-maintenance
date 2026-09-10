@@ -19,7 +19,8 @@ test("stores login sessions in PostgreSQL", async () => {
   assert.match(calls[0].sql, /DELETE FROM auth_sessions/);
   assert.deepEqual(calls[0].params, [30]);
   assert.match(calls[1].sql, /INSERT INTO auth_sessions/);
-  assert.deepEqual(calls[1].params, ["token-1", "normal", "Anoop Paul", "anoop", "Mobile User", "Production User", '{"createRequests":true}']);
+  assert.match(calls[1].sql, /session_public_id/);
+  assert.deepEqual(calls[1].params, ["token-1", "token-1", "normal", "Anoop Paul", "anoop", "Mobile User", "Production User", '{"createRequests":true}']);
 });
 
 test("loads an existing session from PostgreSQL", async () => {
