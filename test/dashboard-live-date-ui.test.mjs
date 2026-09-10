@@ -18,11 +18,13 @@ import {requestStatusLabel} from "../src/request-status.mjs";
 import {availabilityRequestsForDate} from "../src/dashboard-availability.mjs";
 import {dashboardFleetSnapshot} from "../dashboard-fleet-snapshot.mjs";
 import * as displayDates from "../date-time-format.mjs";
+import {tableModel, tableExportModel} from "../src/table-actions-model.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const componentSource = source.slice(source.indexOf("function Dashboard("), source.indexOf("const PRODUCTION_REQUEST_COLUMNS"));
 const dateSource = source.slice(source.indexOf("function dashboardRecordDate("), source.indexOf("function useDashboardEquipment("));
-const {code} = await transformWithOxc(`${dateSource}\n${componentSource}`, "Dashboard.jsx", {jsx: {runtime: "classic"}});
+const sortingSource = source.slice(source.indexOf('const sortCollator ='), source.indexOf('function SortableHeader('));
+const {code} = await transformWithOxc(`${dateSource}\n${sortingSource}\n${componentSource}`, "Dashboard.jsx", {jsx: {runtime: "classic"}});
 const Null = () => null;
 const componentNames = [...new Set([...componentSource.matchAll(/<([A-Z]\w*)\b/g)].map((match) => match[1]))];
 const text = (node) => Array.isArray(node) ? node.map(text).join("") : React.isValidElement(node)
@@ -62,7 +64,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     ...metrics, ...movement, ...actions, ...dates, ...forecast, ...model, ...displayDates,
     availabilityRequestsForDate, dashboardFleetSnapshot,
     dashboardKpiExportColumns: [],
-    React, useState, useEffect() {}, useRef: (initial) => useState(() => ({current: initial}))[0],
+    React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel,
     localStorage: {getItem: () => null, setItem() {}},
     subsidiaryData: regions,
@@ -87,6 +89,79 @@ const activate = (node) => {
   if (node.props["data-dashboard-list"]) node.props.onKeyDown({key: "Enter", currentTarget: target, target, preventDefault() {}, stopPropagation() {}});
   else node.props.onClick();
 };
+
+test("every day-wise date, metric and percentage opens its exact site/day entries and returns to the table", () => {
+  const rows = [
+    ...Array.from({length: 7}, (_, i) => ({ref: `OPEN-${i}`, site: "Sasti OB", start: "2026-09-05 09:00", status: "Open"})),
+    ...Array.from({length: 14}, (_, i) => ({ref: `IN-${i}`, site: "Sasti OB", start: "2026-09-06 09:00", status: i < 12 ? "Closed" : "Open", closedAt: i < 12 ? "2026-09-06 18:00" : ""})),
+    {ref: "PREVIOUS", site: "Sasti OB", start: "2026-09-01", closedAt: "2026-09-05", status: "Closed"},
+    {ref: "NEXT-DAY", site: "Sasti OB", start: "2026-09-07", closedAt: "2026-09-08", status: "Closed"},
+    {ref: "OTHER-SITE", site: "Majri OB", start: "2026-09-06", status: "Open"},
+  ].map(Object.freeze);
+  const view = harness();
+  let tree = view.render(rows);
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-06"}});
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
+  tree = view.render(rows);
+  byClass(tree, "mine-breakdown-site-row").props.onClick(); tree = view.render(rows);
+  const expectedDays = movement.dailyBreakdownMovement(rows.filter(row => row.site === "Sasti OB"), "2026-09-06", "2026-09-08");
+  assert.equal(expectedDays[0].open, 7);
+  for (const day of expectedDays) {
+    for (const metric of ["all", "open", "incoming", "outgoing", "balance", "percentage"]) {
+      const tableRow = findAll(byClass(tree, "dashboard-breakdown-day-table"), node => node.type === "tr" && node.key === day.date)[0];
+      const cells = findAll(tableRow, node => node.type === "button");
+      cells[["all", "open", "incoming", "outgoing", "balance", "percentage"].indexOf(metric)].props.onClick();
+      tree = view.render(rows);
+      assert.equal(byClass(tree, "dashboard-breakdown-day-table"), undefined, "only one drilldown dialog is open");
+      const expected = actions.movementRequestRows(rows.filter(row => row.site === "Sasti OB"), day.date, day.date, metric === "percentage" ? "balance" : metric);
+      assert.deepEqual(detailView(tree).rows.map(row => row.requestReference), expected.map(row => row.ref), `${day.date} ${metric}`);
+      if (metric !== "all") assert.equal(detailView(tree).rows.length, day[metric === "percentage" ? "balance" : metric]);
+      const modal = byClass(tree, "dashboard-asset-modal");
+      assert.ok(modal.props.title.includes(displayDates.formatDisplayDate(day.date)));
+      assert.ok(modal.props.title.startsWith("Sasti OB"));
+      // Both the explicit Back action and the close/X action restore the same range.
+      if (metric === "percentage") modal.props.close();
+      else button(tree, "Back to day-wise report").props.onClick();
+      tree = view.render(rows);
+      assert.equal(byLabel(tree, "Breakdown movement from date").props.value, "2026-09-06");
+      assert.equal(byLabel(tree, "Breakdown movement to date").props.value, "2026-09-08");
+    }
+  }
+  assert.equal(rows[0].status, "Open");
+});
+
+test("day movement headings and Actions sort dates chronologically and all metrics numerically; exports keep that order", () => {
+  const rows = [
+    ...Array.from({length: 10}, (_, i) => ({ref: `A-${i}`, site: "Sasti OB", start: "2026-08-30", closedAt: "2026-09-01", status: "Closed"})),
+    ...Array.from({length: 2}, (_, i) => ({ref: `B-${i}`, site: "Sasti OB", start: "2026-08-31", closedAt: "2026-09-02", status: "Closed"})),
+  ];
+  const view = harness();
+  let tree = view.render(rows);
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-08-30"}});
+  tree = view.render(rows);
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-02"}});
+  tree = view.render(rows); byClass(tree, "mine-breakdown-site-row").props.onClick(); tree = view.render(rows);
+  const expectedDays = movement.dailyBreakdownMovement(rows, "2026-08-30", "2026-09-02");
+  for (const key of ["date", "open", "incoming", "outgoing", "balance", "percentage"]) {
+    for (const direction of ["asc", "desc"]) {
+      const header = findAll(byClass(tree, "dashboard-breakdown-day-table"), node => node.props.sortKey === key)[0];
+      header.props.onSort(key, direction); tree = view.render(rows);
+      const table = byClass(tree, "dashboard-breakdown-day-table").props.children;
+      const dataRows = findAll(table, node => node.type === "tr" && node.key);
+      const values = dataRows.map(row => expectedDays.find(day => day.date === row.key)[key === "percentage" ? "balance" : key]);
+      const ordered = [...values].sort((a, b) => (key === "date" ? a.localeCompare(b) : a - b) * (direction === "asc" ? 1 : -1));
+      assert.deepEqual(values, ordered, `${key} ${direction}`);
+      const schema = tableModel(table.props.children);
+      const exported = tableExportModel(dataRows, schema.columns, schema.columns.map(column => column.key));
+      assert.deepEqual(exported.rows.map(row => row.key), dataRows.map(row => row.key));
+      assert.ok(table.props.exportTitle.includes("30-08-2026 to 02-09-2026"));
+    }
+    // Clicking the header toggles direction without requesting a sort dialog.
+    const header = findAll(byClass(tree, "dashboard-breakdown-day-table"), node => node.props.sortKey === key)[0];
+    header.props.onSort(key); tree = view.render(rows);
+    assert.equal(findAll(byClass(tree, "dashboard-breakdown-day-table"), node => node.props.sortKey === key)[0].props.sort.direction, "asc");
+  }
+});
 
 test("daily Closed bars include verified closures while pending-MIS cards retain only unverified rows", () => {
   const rows = [

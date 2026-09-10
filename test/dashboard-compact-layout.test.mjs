@@ -52,7 +52,7 @@ test("site breakdown view reconciles one-line site totals and opens day-wise con
 test("day-wise details use a larger table with fleet-impact BD percentage", () => {
   const table = client.indexOf('className="dashboard-breakdown-day-table"');
   assert.ok(table >= 0);
-  assert.match(client, /<th>BD %<\/th>/);
+  assert.match(client, /\["percentage", "BD %"\]/);
   assert.match(client, /day\.balance \/ selectedBreakdownSiteRoad\.total/);
   assert.match(client, /breakdownPercentage\.toFixed\(1\)/);
   assert.doesNotMatch(client, /className="dashboard-breakdown-day-chart"/);

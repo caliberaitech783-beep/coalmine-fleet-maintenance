@@ -1068,6 +1068,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownDetailDays, setBreakdownDetailDays] = useState(5);
   const [breakdownDetailFrom, setBreakdownDetailFrom] = useState("");
   const [breakdownDetailTo, setBreakdownDetailTo] = useState("");
+  const [breakdownDayReturnSite, setBreakdownDayReturnSite] = useState("");
   const [breakdownCustomDays, setBreakdownCustomDays] = useState(7);
   const [roadFocusSite, setRoadFocusSite] = useState("");
   useEffect(() => localStorage.setItem("nerveCenterFleetWatermark", String(showFleetWatermark)), [showFleetWatermark]);
@@ -1171,6 +1172,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailTotals = breakdownMovementForRange(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const breakdownDetailTypeSummary = breakdownTypeShare(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
+  const [sortedBreakdownDetailRows, breakdownDaySort, changeBreakdownDaySort] = useSortableRows(breakdownDetailRows, "date", (day, key) => key === "percentage" ? (selectedBreakdownSiteRoad.total ? day.balance / selectedBreakdownSiteRoad.total * 100 : 0) : day[key]);
   const roadStatusTotal = availabilityKpis.total;
   const roadStatusShare = (value) => roadStatusTotal ? (value / roadStatusTotal) * 100 : 0;
   const utilizationPercent = kpis.total ? Math.round((kpis.onRoad / kpis.total) * 100) : 0;
@@ -1418,6 +1420,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     { section: "Request lifecycle", metric: "Idle", value: requestLifecycleRows.idle.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
   ];
   const openAssetDrilldown = (key) => {
+    setBreakdownDayReturnSite("");
     setAssetDrilldown(key);
   };
   const openRoadAvailabilityForSite = (site) => {
@@ -1431,6 +1434,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     openAssetDrilldown(key);
   };
   const movementKey = (metric = "all", site = "", type = "", start = breakdownSummaryStartKey, end = breakdownSummaryEndKey) => `movement:${metric}|${start}|${end}|${site}|${type}`;
+  const openBreakdownDay = (day, metric) => {
+    setBreakdownDayReturnSite(breakdownDetailSite);
+    setAssetDrilldown(movementKey(metric, breakdownDetailSite, "", day.date, day.date));
+    setBreakdownDetailSite("");
+  };
+  const closeAssetDrilldown = () => {
+    setAssetDrilldown("");
+    if (breakdownDayReturnSite) setBreakdownDetailSite(breakdownDayReturnSite);
+    setBreakdownDayReturnSite("");
+  };
   const listAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded);
   const trendPointAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded, "button", { selector: "i, b, small", backgroundKey: "trend:all" });
   const cardAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, `${label}. Open full list`, equipmentLoaded, "group");
@@ -1608,12 +1621,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <header><div><b>Road Status</b><small>{breakdownDetailSite}</small></div><span>Drill into equipment and vehicles</span></header>
           <div>{[{ key: "onroad", label: "On road", value: selectedBreakdownSiteRoad.onRoad }, { key: "offroad", label: "Off road", value: selectedBreakdownSiteRoad.offRoad }, { key: "idle", label: "Idle", value: selectedBreakdownSiteRoad.idle }].map((item) => <button type="button" key={item.key} onClick={() => openSiteScopedDrilldown(`site-status:${breakdownDetailSite}|${item.key}`)} aria-label={`${item.label}: ${item.value}. Drill into equipment and vehicles.`}><span><b>{item.label}</b><strong>{item.value}</strong></span><i aria-hidden="true"><b style={{ width: `${selectedBreakdownSiteRoad.total ? (item.value / selectedBreakdownSiteRoad.total) * 100 : 0}%` }} /></i><small>of {selectedBreakdownSiteRoad.total} fleet</small></button>)}</div>
         </section>
-        <div className="dashboard-breakdown-day-table"><ActionsTable printTitle={`${breakdownDetailSite} · Day-wise BD Movement`}><thead><tr><th>Date</th><th>BD Open</th><th>BD In</th><th>BD Out</th><th>BD Balance</th><th>BD %</th></tr></thead><tbody>{breakdownDetailRows.length ? breakdownDetailRows.map((day) => {
+        <p className="dashboard-breakdown-day-help">Click a heading to sort. Click a date for that day's movement report, or a number for its entries. BD % opens the closing balance used in the percentage.</p>
+        <div className="dashboard-breakdown-day-table"><ActionsTable printTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`} exportTitle={`${breakdownDetailSite} · Day-wise BD Movement · ${formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}`}><thead><tr>{[["date", "Date"], ["open", "BD Open"], ["incoming", "BD In"], ["outgoing", "BD Out"], ["balance", "BD Balance"], ["percentage", "BD %"]].map(([key, label]) => <SortableHeader key={key} label={label} sortKey={key} sort={breakdownDaySort} onSort={changeBreakdownDaySort} />)}</tr></thead><tbody>{sortedBreakdownDetailRows.length ? sortedBreakdownDetailRows.map((day) => {
           const breakdownPercentage = selectedBreakdownSiteRoad.total ? (day.balance / selectedBreakdownSiteRoad.total) * 100 : 0;
-          return <tr key={day.date}><td><b>{formatDisplayDate(day.date)}</b></td><td>{day.open}</td><td className="incoming">+{day.incoming}</td><td className="outgoing">-{day.outgoing}</td><td className="balance">{day.balance}</td><td className="percentage"><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></td></tr>;
+          const dayLabel = formatDisplayDate(day.date);
+          return <tr key={day.date}><td><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "all")} aria-label={`${breakdownDetailSite} · ${dayLabel}: open day movement report`}><b>{dayLabel}</b></button></td>{[["open", "BD Open", ""], ["incoming", "BD In", "+"], ["outgoing", "BD Out", "-"], ["balance", "BD Balance", ""]].map(([metric, label, prefix]) => <td key={metric} className={metric}><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, metric)} aria-label={`${breakdownDetailSite} · ${dayLabel}: ${label}, ${day[metric]} entries`}>{prefix}{day[metric]}</button></td>)}<td className="percentage"><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "balance")} aria-label={`${breakdownDetailSite} · ${dayLabel}: BD ${breakdownPercentage.toFixed(1)}%, show ${day.balance} balance entries`} title={`BD Balance ${day.balance} ÷ ${selectedBreakdownSiteRoad.total} registered fleet × 100`}><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></button></td></tr>;
         }) : <tr><td colSpan="6">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
       </div></Modal>}
-      {assetDrilldown && <Modal className="dashboard-asset-modal" title={assetDrilldownTitle} close={() => setAssetDrilldown("")}>
+      {assetDrilldown && <Modal className="dashboard-asset-modal" title={assetDrilldownTitle} close={closeAssetDrilldown}>
+        {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
         <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} />
       </Modal>}
       <section className="mine-dashboard-lower-grid">
