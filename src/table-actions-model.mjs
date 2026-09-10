@@ -61,14 +61,17 @@ export function tableModel(children) {
 }
 
 // Keep original indices so headers, values, filters and exports stay aligned.
-export function requestColumnsInWorkflowOrder(columns) {
+export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
   const priorities = ["days of breakdown", "status", "door no.", "site location", "repair category", "reason"];
   const rank = (column) => {
     const label = column.label.trim().toLowerCase();
     const index = priorities.indexOf(label);
     return index < 0 ? priorities.length : index;
   };
-  return jobReferenceColumnsLast(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b)), false));
+  const ordered = jobReferenceColumnsLast(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b)), false));
+  if (!actionsFirst) return ordered;
+  const isActions = (column) => column.label.trim().toLowerCase() === "actions";
+  return [...ordered.filter(isActions), ...ordered.filter((column) => !isActions(column))];
 }
 
 export function jobReferenceColumnsLast(columns) {

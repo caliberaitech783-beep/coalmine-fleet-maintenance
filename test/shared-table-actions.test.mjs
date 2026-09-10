@@ -12,6 +12,10 @@ test("workflow request columns use the requested order with all remaining fields
   const labels = ["Actions", "Job reference", "Equipment group", "Door no.", "Model", "Site location", "Repair category", "Reason", "Status", "Started", "Closed", "Days of breakdown"];
   const {columns} = tableModel(h("thead", {}, h("tr", {}, labels.map(label => h("th", {}, label)))));
   const ordered = requestColumnsInWorkflowOrder(columns);
+  const maintenance = requestColumnsInWorkflowOrder(columns, true);
+  assert.equal(maintenance[0].label, "Actions");
+  assert.deepEqual(maintenance.slice(1), ordered.filter(c => c.label !== "Actions"));
+  assert.deepEqual(tableSlots(projectTableRow(row("maintenance", ...labels), maintenance.map(c => c.index))).map(s => tableCellText(s.cell)), maintenance.map(c => c.label));
   assert.deepEqual(ordered.map(c => c.label), ["Started", "Closed", "Days of breakdown", "Status", "Door no.", "Site location", "Repair category", "Reason", "Actions", "Equipment group", "Model", "Job reference"]);
   assert.deepEqual(tableSlots(projectTableRow(row("record", ...labels), ordered.map(c => c.index))).map(s => tableCellText(s.cell)), ordered.map(c => c.label));
   assert.deepEqual(columns.map(c => c.label), labels);
