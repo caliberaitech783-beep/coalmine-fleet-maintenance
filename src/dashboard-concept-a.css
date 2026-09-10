@@ -1717,7 +1717,7 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-trend-day > span i {
   display: block;
-  width: min(16px, 72%);
+  width: 72%;
   min-height: 0;
   border-radius: 3px 3px 0 0;
   background: #4f86c6;
