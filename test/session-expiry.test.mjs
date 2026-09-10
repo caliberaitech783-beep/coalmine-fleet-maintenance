@@ -17,5 +17,5 @@ test('the UI signs out and returns to the login screen when an API call reports 
   assert.match(ui,/response\.status === 401 && authToken && url\.startsWith\("\/api\/"\) && !url\.startsWith\("\/api\/login"\)/);
   assert.match(ui,/clearStoredSession\(\);\s*window\.location\.replace\(`\/\?\$\{SESSION_EXPIRED_PARAM\}=1`\)/);
   assert.match(ui,/params\.has\(SESSION_EXPIRED_PARAM\)/);
-  assert.match(ui,/Your sign-in expired, usually because the application was updated\. Please sign in again\./);
+  assert.match(ui,/Your session closed after 15 minutes without activity\. Please sign in again\./);
 });

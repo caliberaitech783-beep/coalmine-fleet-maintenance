@@ -12,7 +12,8 @@ export async function verifySessionSchemaCompatibility(client) {
       token UUID PRIMARY KEY, role TEXT NOT NULL, employee_name TEXT NOT NULL,
       login_name TEXT NOT NULL DEFAULT '', user_type TEXT NOT NULL DEFAULT '',
       assigned_role TEXT NOT NULL DEFAULT '', permissions JSONB NOT NULL DEFAULT '{}',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     ) ON COMMIT DROP`);
     const store=createSessionStore(client);
     const account={role:'normal',name:'Regression User',login:'session-regression',userType:'Mobile User',assignedRole:'Production User',permissions:{createRequests:true}};

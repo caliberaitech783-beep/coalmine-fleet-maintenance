@@ -902,7 +902,8 @@ function requireWhatsAppAdministrator(req,res,next){
 }
 
 function requireAdministrator(req,res,next){
-  if(req.session?.role==='super'&&req.session?.permissions?.adminLevel!=='Manager')return next();
+  const adminLevel=String(req.session?.permissions?.adminLevel||'').trim().toLowerCase();
+  if(req.session?.role==='super'&&['admin','super admin'].includes(adminLevel))return next();
   return res.status(403).json({error:'Only an Admin or Super Admin can use this administration feature.'});
 }
 
@@ -1270,9 +1271,7 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
 
 async function readSession(req){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-  const session=await sessionStore.get(token);
-  if(session)await sessionStore.touch(token,sessionActivityDetails(req)).catch(()=>{});
-  return session;
+  return sessionStore.get(token);
 }
 
 function sessionActivityDetails(req){
@@ -1315,7 +1314,13 @@ async function requireSuper(req,res,next){
   }catch(error){next(error)}
 }
 
-app.post('/api/session-heartbeat',requireSession,(_req,res)=>res.status(204).end());
+app.post('/api/session-heartbeat',requireSession,async(req,res,next)=>{
+  try{
+    const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
+    await sessionStore.touch(token,sessionActivityDetails(req));
+    res.status(204).end();
+  }catch(error){next(error)}
+});
 
 app.get('/api/session-messages',requireSession,async(req,res,next)=>{
   try{
@@ -1342,6 +1347,7 @@ app.patch('/api/session-messages/:messageId/dismiss',requireSession,async(req,re
 
 app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
+    await sessionStore.pruneExpired();
     const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
     const {rows}=await pool.query(`SELECT sessions.token,sessions.session_public_id AS "sessionId",sessions.employee_name AS "name",sessions.login_name AS "login",
       COALESCE(NULLIF(sessions.permissions->>'adminLevel',''),NULLIF(sessions.assigned_role,''),NULLIF(sessions.user_type,''),sessions.role) AS "roleLabel",
@@ -1545,11 +1551,8 @@ app.post('/api/backups/import/restore',requireSuper,requireTrueSuperAdmin,async(
   }
 });
 
-app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
+app.get('/api/audit-events',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
-    const isAdministrator=req.session.permissions?.adminLevel!=='Manager';
-    if(!isAdministrator&&!accessAllows(req.session.permissions?.tabAccess,'Audit Trail')&&!accessAllows(req.session.permissions?.mobileTabAccess,'Audit Trail'))
-      return res.status(403).json({error:'You do not have access to the Audit Trail.'});
     const paged=String(req.query.paged||'').toLowerCase()==='true';
     const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||1000));
     const beforeAt=String(req.query.beforeAt||'').trim();
@@ -4210,6 +4213,8 @@ async function initializeDatabase(){
     await migrate();
     databaseReady=true;
     databaseError='';
+    const expiredSessions=await sessionStore.pruneExpired();
+    if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} idle for more than 15 minutes.`);
     const retention=await pruneAuditEvents();
     if(retention.deleted)console.log(`Audit Trail retention removed ${retention.deleted} records older than five days.`);
     console.log('Database initialization completed.');
@@ -4317,3 +4322,7 @@ const backupImportCleanupTimer=setInterval(()=>{
   void prunePendingBackupImports().catch(error=>console.error('Backup import cleanup failed.',error));
 },10*60*1000);
 backupImportCleanupTimer.unref?.();
+const expiredSessionCleanupTimer=setInterval(()=>{
+  if(databaseReady)void sessionStore.pruneExpired().catch(error=>console.error('Idle session cleanup failed.',error));
+},60*1000);
+expiredSessionCleanupTimer.unref?.();

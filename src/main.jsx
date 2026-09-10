@@ -193,6 +193,7 @@ const storedSession = (() => {
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
 const SESSION_EXPIRED_PARAM = "session-expired";
+const SESSION_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const LOGIN_LANDING_PAGE = "Dashboard";
 const DEVICE_ID_STORAGE_KEY = "nerveCenterDeviceId";
 const clientDeviceId = (() => {
@@ -399,7 +400,7 @@ function Login({ onLogin, theme, toggleTheme }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has(SESSION_EXPIRED_PARAM)) {
-      setNotice("Your sign-in expired, usually because the application was updated. Please sign in again.");
+      setNotice("Your session closed after 15 minutes without activity. Please sign in again.");
     } else if (params.has("updated")) {
       setNotice("The application was updated. Please sign in again.");
     } else {
@@ -714,6 +715,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
+  const canViewAdmin=session?.role==="super"&&["admin","super admin"].includes(String(permissions.adminLevel||"").trim().toLowerCase());
   const navigationHidden = collapsedNavigation && !open;
   return (
     <aside id="admin-primary-navigation" className={open ? "open" : ""} aria-label="Primary navigation" aria-hidden={navigationHidden ? true : undefined} inert={navigationHidden ? true : undefined}>
@@ -834,7 +836,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <span className="nav-label">{n}</span>
           </button></div>
         ))}
-        {session?.role === "super" && permissions.adminLevel !== "Manager" && <div className={adminOpen ? "masters-menu open" : "masters-menu"}>
+        {canViewAdmin && <div className={adminOpen ? "masters-menu open" : "masters-menu"}>
           <div className="nav-config-row"><button className={[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? "active" : ""} aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => setAdminOpen((value) => !value)}><ShieldCheck /><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
             {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={active===name?"active":""} onClick={()=>selectPage(name)}><Icon /><span className="nav-label">{name}</span></button></div>)}
@@ -5046,7 +5048,7 @@ function UserSessionsPage({session}) {
     <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See signed-in users, current online activity, and securely close individual sessions.</p></div><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button></header>
     <div className="user-session-summary" aria-label="Session summary">
       <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
-      <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Valid signed-in sessions</p></div></article>
+      <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Closes after 15 minutes idle</p></div></article>
       <article><span className="user-session-kpi-icon users"><Users /></span><div><small>Signed-in users</small><b>{Number(summary.users||0).toLocaleString('en-IN')}</b><p>Unique user accounts</p></div></article>
       <article><span className="user-session-kpi-icon devices"><Smartphone /></span><div><small>Known devices</small><b>{Number(summary.devices||0).toLocaleString('en-IN')}</b><p>Identified app devices</p></div></article>
     </div>
@@ -5054,7 +5056,7 @@ function UserSessionsPage({session}) {
     {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
     {messageNotice&&<div className="user-session-sent" role="status"><CheckCircle2 /><span>{messageNotice}</span><button type="button" aria-label="Dismiss message confirmation" onClick={()=>setMessageNotice("")}><X /></button></div>}
     <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="11" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
-    <footer className="user-session-note"><ShieldCheck /><span>Force closing a session immediately invalidates only that login. The action and reason are saved in Audit Trail.</span></footer>
+    <footer className="user-session-note"><ShieldCheck /><span>Sessions close automatically after 15 minutes without user activity. Force closing immediately invalidates only that login and is saved in Audit Trail.</span></footer>
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
   </section>;
 }
@@ -8604,16 +8606,42 @@ function App() {
   }, [session?.token]);
   useEffect(()=>{
     if(!session?.token)return undefined;
-    const heartbeat=()=>fetch('/api/session-heartbeat',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}}).catch(()=>{});
-    heartbeat();
-    const timer=window.setInterval(heartbeat,45000);
-    return()=>window.clearInterval(timer);
+    let lastActivityAt=Date.now(),lastHeartbeatAt=0,closed=false;
+    const closeIdleSession=()=>{
+      if(closed)return;
+      closed=true;
+      clearStoredSession();
+      window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
+    };
+    const heartbeat=async(force=false)=>{
+      if(closed)return;
+      if(Date.now()-lastActivityAt>=SESSION_IDLE_TIMEOUT_MS)return closeIdleSession();
+      if(!force&&Date.now()-lastHeartbeatAt<30000)return;
+      lastHeartbeatAt=Date.now();
+      try{
+        const response=await fetch('/api/session-heartbeat',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}});
+        if(response.status===401)closeIdleSession();
+      }catch{}
+    };
+    const markActivity=()=>{lastActivityAt=Date.now();void heartbeat();};
+    const activityEvents=['pointerdown','keydown','touchstart','wheel'];
+    activityEvents.forEach((name)=>window.addEventListener(name,markActivity,{passive:true,capture:true}));
+    void heartbeat(true);
+    const timer=window.setInterval(()=>{
+      if(Date.now()-lastActivityAt>=SESSION_IDLE_TIMEOUT_MS)closeIdleSession();
+    },15000);
+    return()=>{
+      window.clearInterval(timer);
+      activityEvents.forEach((name)=>window.removeEventListener(name,markActivity,{capture:true}));
+    };
   },[session?.token]);
+  const isAdministrator=session?.role==='super'&&['admin','super admin'].includes(String(adminPermissions.adminLevel||'').trim().toLowerCase());
+  const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
-    if(name==="User Sessions")return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
-    if(backupAdminPages.has(name))return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
-    if(name==="Audit Trail")return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
-    if(name==="Admin locks")return adminPermissions.adminLevel==="Super Admin";
+    if(name==="User Sessions")return isAdministrator;
+    if(backupAdminPages.has(name))return isAdministrator;
+    if(name==="Audit Trail")return isAdministrator;
+    if(name==="Admin locks")return isAdministrator&&adminPermissions.adminLevel==="Super Admin";
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
@@ -8671,6 +8699,7 @@ function App() {
     };
   }, []);
   const selectMenu = (name) => {
+    if (adminOnlyPages.has(name) && !isAdministrator) return;
     if (session?.role === "super" && !canOpenAdminPage(name)) return;
     if (name === active) return;
     pageHistory.current.push(name);
