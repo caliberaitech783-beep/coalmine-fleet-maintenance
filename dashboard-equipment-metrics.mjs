@@ -208,3 +208,26 @@ export function fleetBreakdownCaseCounts(records = [], requests = []) {
   const vehicles = openCases.filter(isVehicleCase).length;
   return { equipment: openCases.length - vehicles, vehicles, total: openCases.length };
 }
+
+// Fleet lists show the same Status / Started / Days of breakdown columns as
+// request lists: each asset carries its current (not closed) breakdown request,
+// or its live road status when it has none.
+const ROAD_STATUS_LABELS = { onroad: "On road", offroad: "Off road", idle: "Idle", unknown: "Status not set" };
+export function fleetAssetRequestDetails(records = [], requests = []) {
+  const matches = fleetAssetMatcher();
+  const active = requests.filter((request) => normalize(request.status) !== "closed");
+  return records.map((record) => {
+    const current = active.filter((request) => matches(request, record))
+      .sort((left, right) => String(left.start || "").localeCompare(String(right.start || "")))[0];
+    const requestStatus = current
+      ? (String(current.verifiedAt || "").trim() ? "Verified" : String(current.status || "").trim() || "Open")
+      : ROAD_STATUS_LABELS[matchingRoadStatus(record, requests, matches)] || ROAD_STATUS_LABELS.unknown;
+    return {
+      ...record,
+      requestReference: current ? String(current.ref || current.reference || "") : "",
+      requestStatus,
+      requestStart: current?.start || "—",
+      requestClosed: "—",
+    };
+  });
+}

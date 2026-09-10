@@ -371,3 +371,28 @@ test("formatted identifiers still respect site scope and duplicate requests coun
   assert.deepEqual(liveEquipmentMetrics(records, requests), { total: 3, onRoad: 1, offRoad: 1, idle: 1, unknown: 0, availability: 33 });
   assert.deepEqual(fleetChartCounts(records, requests).breakdown, { equipment: 0, vehicles: 1, total: 1 });
 });
+
+test("fleet lists carry each asset's current breakdown request or its live road status", async () => {
+  const { fleetAssetRequestDetails } = await import("../dashboard-equipment-metrics.mjs");
+  const records = [
+    { id: 1, door: "S1 - REG01", chassisNo: "CH-01", category: "Vehicle", currentLocation: "Majri OB" },
+    { id: 2, door: "S2", chassisNo: "CH-02", category: "Equipment", currentLocation: "Majri OB" },
+    { id: 3, door: "S3", chassisNo: "CH-03", category: "Vehicle", currentLocation: "Majri OB" },
+    { id: 4, door: "S4", chassisNo: "CH-04", category: "Vehicle", currentLocation: "Majri OB" },
+  ];
+  const requests = [
+    { ref: "REQ-LATER", door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Accepted", start: "2026-09-10 09:00:00" },
+    { ref: "REQ-FIRST", door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Open", start: "2026-09-09 08:00:00" },
+    { ref: "REQ-IDLE", door: "S2", chassis: "CH02", site: "Majri II", status: "Idle", start: "2026-09-08 07:00:00" },
+    { ref: "REQ-DONE", door: "S3", chassis: "CH03", site: "Majri II", status: "Closed", start: "2026-09-01 07:00:00", closedAt: "2026-09-02 07:00:00" },
+  ];
+  const rows = fleetAssetRequestDetails(records, requests);
+  assert.deepEqual(rows.map(({ requestReference, requestStatus, requestStart, requestClosed }) => [requestReference, requestStatus, requestStart, requestClosed]), [
+    ["REQ-FIRST", "Open", "2026-09-09 08:00:00", "—"],
+    ["REQ-IDLE", "Idle", "2026-09-08 07:00:00", "—"],
+    ["", "On road", "—", "—"],
+    ["", "On road", "—", "—"],
+  ]);
+  assert.deepEqual(rows.map(({ id }) => id), [1, 2, 3, 4], "asset order and identity are preserved");
+  assert.equal(rows[0].chassisNo, "CH-01", "original asset fields stay on the row");
+});

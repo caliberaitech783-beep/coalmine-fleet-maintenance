@@ -20,10 +20,10 @@ test("request lists retain job, equipment, site and lifecycle details", () => {
   assert.match(source, /const equipment = equipmentForRequest\(request\)/);
   assert.match(source, /requestReference: request\.ref \|\| request\.reference/);
   assert.match(source, /requestSite: request\.site \|\| request\.location/);
-  assert.match(browser, /requestRecords && <><th>Job reference<\/th><th>Status<\/th><th>Started<\/th><th>Days of breakdown<\/th><\/>/);
+  assert.match(browser, /\{requestRecords && <th>Job reference<\/th>\}<th>Status<\/th><th>Started<\/th><th>Days of breakdown<\/th><th>Machine \/ Door no\.<\/th>/);
   assert.match(browser, /<th>Serial \/ chassis no\.<\/th>\{requestRecords && <th>Repair category<\/th>\}/);
   assert.match(browser, /formatBreakdownDaysHours\(record\.requestStart, record\.requestClosed, now\)/);
-  assert.match(browser, /<Status>\{record\.requestStatus\}<\/Status>/);
+  assert.match(browser, /<Status>\{record\.requestStatus \|\| "—"\}<\/Status>/);
   assert.match(browser, /lifecycleRecords && <><th>Closed<\/th><th>MIS verified at<\/th><th>First trip time<\/th>/);
 });
 
@@ -37,7 +37,9 @@ test("repair and event chart context stays applied before the list filters", () 
 
 test("the time breakdown opens from the Days of breakdown value in every list, and job references stay plain", () => {
   assert.match(source, /RequestTimelineButton=\{RequestTimelineButton\} timelineToken=\{authToken\} Dialog=\{Modal\} \/>/);
-  assert.match(browser, /<td><b>\{record\.requestReference\}<\/b><\/td>/);
+  assert.match(browser, /\{requestRecords && <td><b>\{record\.requestReference\}<\/b><\/td>\}<td data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}>/);
+  assert.match(source, /const assetDrilldownRows = requestDrilldownKey\(assetDrilldown\) \? rowsForAssetDrilldown\(assetDrilldown\) : fleetAssetRequestDetails\(rowsForAssetDrilldown\(assetDrilldown\), fleetDrilldownRequests\(assetDrilldown\)\)/);
+  assert.match(source, /const requestDrilldownKey = \(key = ""\) => key === "open-cases" \|\| \["site-repair:", "repair:", "status:", "event:", "movement:", "trend:"\]/);
   assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} label=\{label\} \/>/);
   assert.match(browser, /data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}/);
   assert.match(browser, /data-sort-value=\{sortableDate\(record\.requestStart\)\}/);

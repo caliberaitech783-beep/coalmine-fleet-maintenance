@@ -44,7 +44,7 @@ import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../re
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequestDetails, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
@@ -1377,7 +1377,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     }
     return [];
   };
-  const assetDrilldownRows = rowsForAssetDrilldown(assetDrilldown);
+  // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
+  const requestDrilldownKey = (key = "") => key === "open-cases" || ["site-repair:", "repair:", "status:", "event:", "movement:", "trend:"].some((prefix) => key.startsWith(prefix));
+  const fleetDrilldownRequests = (key = "") => ["onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
+  // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
+  const assetDrilldownRows = requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
   const assetDrilldownRegions = availableRegions.map((region) => ({
     ...region,
     sites: region.sites.filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))),
