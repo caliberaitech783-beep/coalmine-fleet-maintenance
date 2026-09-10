@@ -190,3 +190,4 @@
 }
 
 .mine-dashboard .mine-fleet-breakdown-segment { min-height: min(30px, 100%); }
+.mine-dashboard .mine-fleet-breakdown-segment.partial-segment { min-height: min(30px, calc(100% - 18px)); max-height: calc(100% - 18px); }

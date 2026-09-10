@@ -52,3 +52,11 @@ test("empty, non-finite and negative chart inputs never render invalid dimension
     assert.equal(all(tree, (node) => node.props.className?.startsWith("mine-fleet-breakdown-segment")).length, 0);
   }
 });
+
+test("partial breakdown segments are marked so the remaining fleet stays visible", () => {
+  const tree = FleetSiteBars({ site: { equipment: 31, vehicles: 12, breakdown: { equipment: 3, vehicles: 12 } }, axisMax: 225, showBreakdown: true });
+  const segments = all(tree, (node) => node.props.className?.startsWith("mine-fleet-breakdown-segment"));
+  assert.equal(segments.length, 2);
+  assert.ok(segments[0].props.className.includes("partial-segment"));
+  assert.ok(!segments[1].props.className.includes("partial-segment"));
+});

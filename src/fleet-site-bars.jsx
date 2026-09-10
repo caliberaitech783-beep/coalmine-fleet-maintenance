@@ -14,7 +14,7 @@ export default function FleetSiteBars({ site, axisMax, showBreakdown = false }) 
       return <span className={`mine-fleet-bar-column ${key}`} key={key}>
         <i className={`mine-fleet-bar ${key}`} style={{ height: `${total / scale * 100}%` }} title={showBreakdown ? `${label}: ${total} total, ${breakdown} breakdown, ${total - breakdown} remaining` : `${label}: ${total} total`}>
           <b className="mine-fleet-bar-count">{total.toLocaleString()}</b>
-          {showBreakdown && breakdown > 0 && <span className={`mine-fleet-breakdown-segment${breakdown / scale < 0.12 ? " small-segment" : ""}`} style={{ height: `${breakdownShare}%` }}>
+          {showBreakdown && breakdown > 0 && <span className={`mine-fleet-breakdown-segment${breakdown / scale < 0.12 ? " small-segment" : ""}${breakdown < total ? " partial-segment" : ""}`} style={{ height: `${breakdownShare}%` }}>
             <b className="mine-fleet-breakdown-count">{breakdown.toLocaleString()}</b>
           </span>}
         </i>

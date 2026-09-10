@@ -171,3 +171,7 @@ test("fleet chart uses 25-unit grid steps and keeps breakdown segments readable"
   assert.doesNotMatch(source, /const fleetChartScale = dashboardCountScale/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment \{ min-height: min\(30px, 100%\); \}/);
 });
+
+test("partial breakdown segments leave part of the fleet bar visible", () => {
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment\.partial-segment \{ min-height: min\(30px, calc\(100% - 18px\)\); max-height: calc\(100% - 18px\); \}/);
+});
