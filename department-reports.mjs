@@ -20,6 +20,7 @@ const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLoc
 const ref = col('ref', 'Job Reference No');
 const productionLead = [col('status', 'Status', requestStatusLabel), site, ids[0]];
 const complaintColumns = base.slice(4);
+const maintenanceLead = [site, ids[0], base[2], base[3], base[5]];
 const closed = col('closedAt', 'Ticket Closed');
 function breakdownDaysHours(start, now) {
   const elapsed = now.getTime() - indiaDateTimeEpoch(start);
@@ -82,9 +83,10 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
     return {...row,door:row.door || asset?.door,chassisNo:row.chassisNo || row.manufacturerSerialNo || asset?.chassisNo || asset?.manufacturerSerialNo,model:row.model || row.modelNo || asset?.model};
   });
   return [
-    report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Maintenance acceptance to repair closure. TAT = Repair Closed Date & Time minus Maintenance Acceptance Date & Time.', [...base,col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(acceptanceTime(r),r.closedAt)),site,ref], finished, r => r.closedAt),
-    report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open, in-progress and awaiting-parts off-road requests. BD duration shows completed days and hours since production submission.', [...base,col('start','Rep. Started'),col('days','BD Days / Hrs',r => breakdownDaysHours(r.start,now)),site,ref],open),
-    report('maintenance', DEPARTMENT_REPORT_TITLES[2], '24 productive hours per selected day. Partial days use the selected hours. Downtime is clipped to the period; overlapping incidents are counted once.', [...ids,col('equipmentGroup','Equipment group',equipmentGroupValue),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => availabilityPercentage(r.percentage))], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
+    // Maintenance reports lead with Location and Door no.; chassis closes the row.
+    report('maintenance', DEPARTMENT_REPORT_TITLES[0], 'Maintenance acceptance to repair closure. TAT = Repair Closed Date & Time minus Maintenance Acceptance Date & Time.', [...maintenanceLead,col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('closedAt','Rep. Closed'),col('tat','TAT',r => duration(acceptanceTime(r),r.closedAt)),base[4],ref,ids[1]], finished, r => r.closedAt),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[1], 'Open, in-progress and awaiting-parts off-road requests. BD duration shows completed days and hours since production submission.', [...maintenanceLead,col('start','Rep. Started'),col('days','BD Days / Hrs',r => breakdownDaysHours(r.start,now)),base[4],ref,ids[1]],open),
+    report('maintenance', DEPARTMENT_REPORT_TITLES[2], '24 productive hours per selected day. Partial days use the selected hours. Downtime is clipped to the period; overlapping incidents are counted once.', [site,ids[0],col('equipmentGroup','Equipment group',equipmentGroupValue),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => availabilityPercentage(r.percentage)),ids[1]], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
 report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus request closed. Mismatch shows Delay when MIS verification is more than 30 minutes after first trip.', [...base,col('closedAt','Request Closed'),col('firstTrip','First Trip Made',firstTrip),col('difference','Difference',r => duration(r.closedAt,firstTrip(r))),col('mismatch','Mismatch',r => indiaDateTimeEpoch(r.verifiedAt)-indiaDateTimeEpoch(firstTrip(r))>1800000 ? 'Delay' : ''),col('verifiedBy','MIS user'),col('driverName','Driver Name'),site,ref],finished.filter(r => indiaDateTimeEpoch(firstTrip(r))-indiaDateTimeEpoch(r.closedAt)>1800000), firstTrip),
     report('mis', DEPARTMENT_REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification.', [...base,closed,site,ref],requests.filter(r => status(r)==='closed' && !r.verifiedAt).filter(visibleInMisRequests),r => r.closedAt),
     report('mis', DEPARTMENT_REPORT_TITLES[5], 'Elapsed time between ticket closure, actual first trip, and MIS verification.', [...base,closed,col('verifiedAt','MIS verified at'),col('firstTripAt','First trip time',firstTrip),col('difference','Difference',r => duration(r.closedAt,r.verifiedAt)),col('closeToMis','Time taken from ticket close to MIS verification',r => duration(r.closedAt,r.verifiedAt)),col('closeToFirstTrip','Time taken for ticket close to first trip verification',r => duration(r.closedAt,firstTrip(r))),col('firstTripToMis','First trip to MIS verification time taken',r => duration(firstTrip(r),r.verifiedAt)),col('verifiedBy','MIS user'),site,ref],finished.filter(r => r.verifiedAt),r => r.verifiedAt),
@@ -96,13 +98,11 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
     report('production', DEPARTMENT_REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...productionLead,...base.slice(2,4),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),ref,...complaintColumns],requests),
     report('production', DEPARTMENT_REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...productionLead,...base.slice(2,4),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),...complaintColumns,ref],open),
     report('maintenance', DEPARTMENT_REPORT_TITLES[12], 'Vehicle arrival delays reported by maintenance, including the reason for each red flag.', [
-      ref,...base,site,col('status','Request status',requestStatusLabel),col('start','Production date and time'),
-      col('arrivalFlaggedAt','Red flag raised'),col('arrivalFlaggedBy','Flagged by'),
-      col('arrivalFlagRemark','Red flag reason',r => clean(r.arrivalFlagRemark) || 'No remark recorded'),
+      col('status','Request status',requestStatusLabel),...maintenanceLead,col('start','Production date and time'),
+      col('arrivalFlaggedAt','Red flag raised'),
+      {...col('arrivalFlagRemark','Red flag reason',r => clean(r.arrivalFlagRemark) || 'No remark recorded'),wrap:true},
       col('flagWaitingTime','Waiting when flagged',r => duration(r.start,r.acceptedAt && indiaDateTimeEpoch(r.acceptedAt) < indiaDateTimeEpoch(r.arrivalFlaggedAt) ? r.acceptedAt : r.arrivalFlaggedAt)),
-      col('acceptedAt','Vehicle received',r => r.acceptedAt || 'Not reached'),
-      col('arrivalDelay','Arrival delay',r => duration(r.start,r.acceptedAt || now.toISOString())),
-      col('acceptedBy','Received by',r => r.acceptedBy || 'Pending'),
+      ids[1],col('arrivalFlaggedBy','Flagged by'),ref,
     ],requests.filter(r => r.arrivalFlaggedAt),r => r.arrivalFlaggedAt),
     report('mis', DEPARTMENT_REPORT_TITLES[13], 'Issues raised during MIS verification, with remarks and the latest verification status.', [
       ref,...base,site,col('misFlaggedAt','MIS red flag raised'),col('misFlaggedBy','Flagged by'),

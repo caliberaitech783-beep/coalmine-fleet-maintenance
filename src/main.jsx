@@ -2856,7 +2856,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
         <tbody>
           {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
-              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
+              {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" || column.wrap ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
             </tr>
           )) : <tr><td colSpan={displayedColumns.length} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
