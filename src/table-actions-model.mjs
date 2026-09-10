@@ -47,6 +47,12 @@ export function tableModel(children) {
     index,
     header: cell,
     value: (row) => tableCellText(tableSlots(row)[index]?.cell).trim(),
+    // Cells may carry data-sort-value (raw date, minutes, etc.) so sorting is not limited to display text.
+    sortValue: (row) => {
+      const cell = tableSlots(row)[index]?.cell;
+      const raw = cell?.props?.["data-sort-value"];
+      return raw === undefined || raw === null ? tableCellText(cell).trim() : raw;
+    },
   })) : [];
   return { sections, columns };
 }
@@ -58,7 +64,14 @@ export function selectTableRows(rows, columns, filters, sort) {
     return !expected || column.value(row) === (expected === "__empty_table_filter_value__" ? "" : expected);
   }));
   const column = columns.find((item) => item.key === sort.key);
-  return column ? [...filtered].sort((a, b) => collator.compare(column.value(a), column.value(b)) * (sort.direction === "desc" ? -1 : 1)) : filtered;
+  if (!column) return filtered;
+  const sortValue = (row) => column.sortValue ? column.sortValue(row) : column.value(row);
+  const compare = (a, b) => {
+    const left = sortValue(a), right = sortValue(b), leftNumber = Number(left), rightNumber = Number(right);
+    if (left !== "" && right !== "" && Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
+    return collator.compare(String(left), String(right));
+  };
+  return [...filtered].sort((a, b) => compare(a, b) * (sort.direction === "desc" ? -1 : 1));
 }
 
 export function tableExportModel(rows, columns, visibleKeys, filters = {}, sort = { key: "", direction: "asc" }) {

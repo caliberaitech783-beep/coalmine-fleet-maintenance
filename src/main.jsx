@@ -1614,7 +1614,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         }) : <tr><td colSpan="6">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
       </div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={assetDrilldownTitle} close={() => setAssetDrilldown("")}>
-        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} />
+        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} />
       </Modal>}
       <section className="mine-dashboard-lower-grid">
       <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">
@@ -4645,7 +4645,7 @@ function Generic({ name, requests = [] }) {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
-                      <td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td>
+                      <td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} /></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td>
                       <td>{request.start}</td><td><b>{age} {age === 1 ? "day" : "days"}</b></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
@@ -4975,7 +4975,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     ...(column.key === "averageTat" ? { sortValue: (row) => row.averageTatMinutes ?? -1 } : {}),
   }));
   const requestColumns = [
-    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
+    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => request.ref ? <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} /> : <b>—</b>},
     {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
     {key: "door", label: "Door no.", value: (request) => request.reportDoor},
     {key: "make", label: "Make", value: (request) => request.reportMake},

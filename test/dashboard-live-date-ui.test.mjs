@@ -70,6 +70,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     firstTripTimestamp: (request) => request.firstTripAt || "",
     formatTwelveHourDateTime: displayDates.formatDisplayDateTime,
     Status: Null,
+    RequestTimelineButton: Null, authToken: "",
   };
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
   return {render(rows = requests) { cursor = 0; return Dashboard({requests: rows}); }};

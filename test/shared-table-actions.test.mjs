@@ -58,3 +58,23 @@ test("every application table uses shared Actions or the existing Reports Action
   for (const control of ["onColumns", "onFilter", "onSort", "onClearSort", "onReset"]) assert.ok(shared.includes(control));
   assert.match(shared, /resetLabel="Reset table"/);
 });
+
+test("data-sort-value drives sorting so dates and durations order by their raw value", () => {
+  const {columns} = tableModel(headers);
+  const dated = (key, label, raw) => h("tr", {key}, h("td", {key: 0}, label), h("td", {key: 1, "data-sort-value": raw}, "shown"));
+  const rows = [dated("late", "C", "2026-09-10 12:48:06"), dated("early", "A", "2026-09-09 08:00:00"), dated("minutes", "B", 27)];
+  assert.equal(columns[1].sortValue(rows[2]), 27);
+  assert.equal(columns[1].value(rows[2]), "shown");
+  assert.deepEqual(selectTableRows(rows.slice(0, 2), columns, {}, {key: columns[1].key, direction: "asc"}).map(r => r.key), ["early", "late"]);
+  const minutes = [dated("nine", "x", 9), dated("twentyseven", "y", 27), dated("hundred", "z", 100)];
+  assert.deepEqual(selectTableRows(minutes, columns, {}, {key: columns[1].key, direction: "desc"}).map(r => r.key), ["hundred", "twentyseven", "nine"]);
+});
+
+test("plain column headings in shared Actions tables sort on click", () => {
+  const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
+  assert.match(shared, /const sortableHeaderRow = \(row\) =>/);
+  assert.match(shared, /cell\.type !== "th" \|\| !column \|\| span > 1 \|\| cell\.props\.onSort/);
+  assert.match(shared, /className=\{`sort-header\$\{active \? " active" : ""\}`\}/);
+  assert.match(shared, /applySort\(column\.key, active && sort\.direction === "asc" \? "desc" : "asc"\)/);
+  assert.match(shared, /section\.type === "thead"\) sectionRows = sectionRows\.map/);
+});

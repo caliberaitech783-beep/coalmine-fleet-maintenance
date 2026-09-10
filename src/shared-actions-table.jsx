@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
-import { tableElements, tableModel, projectTableRow, selectTableRows, tableExportModel } from "./table-actions-model.mjs";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel } from "./table-actions-model.mjs";
 import "./table-actions.css";
+import "./sortable-table.css";
 
 export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
   const { sections, columns } = tableModel(children);
@@ -42,6 +44,23 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const filterRows = columns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = columns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
   const reset = () => { clearFilters(); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
+  // Plain <th> headings become sort buttons; headers that bring their own sorting (onSort) are left untouched.
+  const sortableHeaderRow = (row) => {
+    const cells = tableElements(row.props.children);
+    let slot = 0;
+    return React.cloneElement(row, {}, cells.map((cell) => {
+      const index = slot, span = Math.max(1, Number(cell.props.colSpan) || 1);
+      slot += span;
+      const column = columns.find((item) => item.index === index);
+      if (cell.type !== "th" || !column || span > 1 || cell.props.onSort || !tableCellText(cell).trim() || column.label === "Actions") return cell;
+      const active = sort.key === column.key;
+      const Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+      return React.cloneElement(cell, { "aria-sort": active ? (sort.direction === "asc" ? "ascending" : "descending") : "none" },
+        <button type="button" className={`sort-header${active ? " active" : ""}`} title={`Sort by ${column.label}`} onClick={() => applySort(column.key, active && sort.direction === "asc" ? "desc" : "asc")}>
+          <span>{cell.props.children}</span><Icon aria-hidden="true" />
+        </button>);
+    }));
+  };
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
       {printData && <ExportMenu printOnly title={printTitle} columns={printData.columns} rows={printData.rows} />}
@@ -57,6 +76,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
     <table {...tableProps}>{sections.map((section) => {
       if (!["thead", "tbody", "tfoot"].includes(section.type)) return section;
       let sectionRows = tableElements(section.props.children);
+      if (section.type === "thead") sectionRows = sectionRows.map((row, position) => position === sectionRows.length - 1 ? sortableHeaderRow(row) : row);
       if (section.type === "tbody") {
         const actual = sectionRows.filter((row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1));
         if (actual.length) {

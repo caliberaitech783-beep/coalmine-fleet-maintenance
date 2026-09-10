@@ -34,3 +34,14 @@ test("repair and event chart context stays applied before the list filters", () 
   assert.match(source, /date \? rows\.filter\(\(record\) => requestEventDate\(record, event\) === date\) : rows/);
   assert.match(source, /requestRecords=\{requestAssetDrilldown\} lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
 });
+
+test("job references open the request timeline from every list, not only the master", () => {
+  assert.match(source, /RequestTimelineButton=\{RequestTimelineButton\} timelineToken=\{authToken\} Dialog=\{Modal\} \/>/);
+  assert.match(browser, /<td><b>\{referenceCell\(record\.requestReference\)\}<\/b><\/td>/);
+  assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} \/>/);
+  assert.match(browser, /data-sort-value=\{sortableDate\(record\.requestStart\)\}/);
+  assert.match(browser, /data-sort-value=\{calculateBreakdownMinutes\(record\.requestStart, record\.requestClosed, now\)\}/);
+  assert.match(source, /<td><RequestTimelineButton reference=\{request\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td><td>\{request\.door\}<\/td>/);
+  assert.match(source, /render: \(request\) => request\.ref \? <RequestTimelineButton reference=\{request\.ref\} token=\{session\?\.token \|\| authToken\} Dialog=\{Modal\} \/> : <b>—<\/b>\}/);
+  assert.doesNotMatch(source, /<td><b>\{request\.ref\}<\/b><\/td>/);
+});

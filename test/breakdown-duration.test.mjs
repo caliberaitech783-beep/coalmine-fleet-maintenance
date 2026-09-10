@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   calculateBreakdownDays,
   calculateBreakdownDaysFromStart,
+  calculateBreakdownMinutes,
   formatBreakdownDaysHours,
 } from "../breakdown-duration.mjs";
 
@@ -45,4 +46,12 @@ test("days of breakdown show completed days, hours and minutes until closure or 
   assert.equal(formatBreakdownDaysHours("2026-09-05 09:00:00", "2026-09-09 08:00:00", now), "3d 23h 0m");
   assert.equal(formatBreakdownDaysHours("2026-09-11 09:00:00", "—", now), "0d 0h 0m");
   assert.equal(formatBreakdownDaysHours("Not available", "—", now), "—");
+});
+
+test("breakdown minutes give a numeric sort value, with unknown starts first", () => {
+  const now = new Date("2026-09-10T07:00:00.000Z"); // 12:30 IST
+
+  assert.equal(calculateBreakdownMinutes("2026-09-10 · 09:00:00", "—", now), 210);
+  assert.equal(calculateBreakdownMinutes("2026-09-05 09:00:00", "2026-09-09 08:00:00", now), 5700);
+  assert.equal(calculateBreakdownMinutes("Not available", "—", now), -1);
 });
