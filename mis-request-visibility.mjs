@@ -5,9 +5,14 @@ export const MIS_HIDDEN_REQUEST_REFERENCES = new Set([
 ]);
 
 export const GLOBALLY_HIDDEN_REQUEST_OWNERS = new Set(["stupal moon"]);
+export const GLOBAL_REQUEST_OWNER_HIDE_CUTOFF = "2026-09-09 18:24:44";
 
 export function requestsVisibleGlobally(rows = []) {
-  return rows.filter((row) => !GLOBALLY_HIDDEN_REQUEST_OWNERS.has(String(row?.owner || row?.requesterName || "").trim().toLowerCase()));
+  return rows.filter((row) => {
+    const owner = String(row?.owner || row?.requesterName || "").trim().toLowerCase();
+    const createdAt = String(row?.createdAt || "").trim().replace("T", " ").slice(0, 19);
+    return !GLOBALLY_HIDDEN_REQUEST_OWNERS.has(owner) || !createdAt || createdAt > GLOBAL_REQUEST_OWNER_HIDE_CUTOFF;
+  });
 }
 
 // Apply the same exclusions to authenticated MIS users and embedded MIS workspaces.

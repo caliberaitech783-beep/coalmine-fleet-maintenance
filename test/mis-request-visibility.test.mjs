@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GLOBALLY_HIDDEN_REQUEST_OWNERS, MIS_HIDDEN_REQUEST_REFERENCES, requestsVisibleGlobally, requestsVisibleToMisWorkspace, requestsVisibleToSession } from "../mis-request-visibility.mjs";
+import { GLOBALLY_HIDDEN_REQUEST_OWNERS, GLOBAL_REQUEST_OWNER_HIDE_CUTOFF, MIS_HIDDEN_REQUEST_REFERENCES, requestsVisibleGlobally, requestsVisibleToMisWorkspace, requestsVisibleToSession } from "../mis-request-visibility.mjs";
 
 const rows = [
   { ref: "REQ-1787994776734" },
@@ -32,8 +32,8 @@ test("an embedded MIS workspace also hides the selected requests for an administ
 
 test("Stupal Moon requests are hidden from every authenticated role", () => {
   const ownerRows = [
-    { ref: "REQ-HIDE-STUPAL", owner: " Stupal Moon " },
-    { ref: "REQ-KEEP-OTHER", owner: "Other User" },
+    { ref: "REQ-HIDE-STUPAL", owner: " Stupal Moon ", createdAt: GLOBAL_REQUEST_OWNER_HIDE_CUTOFF },
+    { ref: "REQ-KEEP-OTHER", owner: "Other User", createdAt: "2026-09-01 10:00:00" },
   ];
   assert.deepEqual([...GLOBALLY_HIDDEN_REQUEST_OWNERS], ["stupal moon"]);
   assert.deepEqual(requestsVisibleGlobally(ownerRows), [ownerRows[1]]);
@@ -44,4 +44,11 @@ test("Stupal Moon requests are hidden from every authenticated role", () => {
     { role: "super", permissions: { adminLevel: "Manager" } },
     { role: "super", permissions: { adminLevel: "Admin" } },
   ]) assert.deepEqual(requestsVisibleToSession(ownerRows, session), [ownerRows[1]]);
+});
+
+test("new Stupal Moon requests remain visible everywhere", () => {
+  const newRequest = { ref: "REQ-NEW-STUPAL", owner: "Stupal Moon", createdAt: "2026-09-09 18:24:45" };
+  const futureRequest = { ref: "REQ-FUTURE-STUPAL", owner: "Stupal Moon", createdAt: "2026-09-10 09:00:00" };
+  const legacyWithoutCreationTime = { ref: "REQ-NO-CREATED-AT", owner: "Stupal Moon" };
+  assert.deepEqual(requestsVisibleGlobally([newRequest, futureRequest, legacyWithoutCreationTime]), [newRequest, futureRequest, legacyWithoutCreationTime]);
 });
