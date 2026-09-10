@@ -31,7 +31,8 @@ import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} 
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
-import {canonicalSiteName} from './site-location.mjs';
+import {canonicalSiteName,assignedUserSiteName} from './site-location.mjs';
+import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
@@ -1696,7 +1697,7 @@ app.get('/api/me/profile',requireSession,async(req,res,next)=>{
       ORDER BY CASE WHEN lower(trim(record_data->>'login'))=$1 THEN 0 ELSE 1 END, created_at DESC
       LIMIT 1`,[login,name]);
     const record=rows[0]?.record_data||{};
-    const location=String(record.site||record.location||record.currentLocation||'').trim();
+    const location=assignedUserSiteName(record);
     const designation=flowDesignationForUser(record,resolveMobileAccess({user:record}));
     res.json({location,managerRegion:record.managerRegion||record.region||'',managerSites:record.managerSites||'',designationKey:designation?.key||''});
   }catch(error){next(error)}
@@ -2803,11 +2804,11 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
     let scopedSite=null,scopedManagerSites=null;
     if(req.session.role==='normal'&&(dashboardScope||req.session.assignedRole==='MIS User'||req.session.assignedRole==='Maintenance User')){
       const operationalUser=await currentUserRecord(req.session);
-      scopedSite=String(operationalUser.site||operationalUser.location||'').trim();
+      scopedSite=assignedUserSiteName(operationalUser);
     }
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
       const manager=await currentUserRecord(req.session);
-      scopedManagerSites=managerReportScope(manager).sites;
+      scopedManagerSites=managerReportScope({...manager,site:assignedUserSiteName(manager)}).sites;
     }
     const {rows}=await pool.query(query);
     const siteVisibleRows=scopedManagerSites!==null
@@ -3451,8 +3452,13 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       id,
       ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
     }));
+    const {rows:activeFleetRequests}=await pool.query(`SELECT equipment_name AS equipment, equipment_group AS "equipmentGroup",
+      door_number AS door, registration_number AS reg, chassis_number AS chassis, site, status, owner_name AS owner,
+      to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
+      FROM maintenance_requests WHERE lower(trim(status)) <> 'closed'`);
+    const fleetSnapshot=dashboardFleetSnapshot(records,activeFleetRequests);
     res.json({
-      records:scopeDashboardEquipmentRecords(records,authorization.session,authorization.user,scope),
+      records:scopeDashboardEquipmentRecords(fleetSnapshot,authorization.session,authorization.user,scope),
       scope,
     });
   }catch(error){next(error)}

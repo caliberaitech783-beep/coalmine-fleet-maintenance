@@ -38,7 +38,7 @@ test("site breakdown view reconciles one-line site totals and opens day-wise con
   assert.match(client, /breakdownMovementForRange/);
   assert.match(client, /dailyBreakdownMovement/);
   assert.match(client, /<span>Site name<\/span><span>BD Open<\/span><span>BD In<\/span><span>BD Out<\/span><span>BD Balance<\/span><span>Availability count impact<\/span>/);
-  assert.match(client, /label: "BD In", value: breakdownMovementTotals\.open \+ breakdownMovementTotals\.incoming, className: "all"/);
+  assert.match(client, /label: "BD In \(opening \+ new\)", value: breakdownMovementTotals\.open \+ breakdownMovementTotals\.incoming, className: "all"/);
   assert.doesNotMatch(client, /label: "BD Open", value: breakdownMovementTotals\.open/);
   assert.match(css, /\.mine-breakdown-movement-kpis\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
   assert.doesNotMatch(client, /<small>\{breakdownSummaryStartKey\} to \{breakdownSummaryEndKey\}<\/small>/);
@@ -73,10 +73,12 @@ test("each site links breakdown movement with its current availability count", (
   assert.match(css, /\.dashboard-breakdown-road-shortcut\s*\{/);
 });
 
-test("the maintenance summary defines all six BD types with intake percentages", () => {
+test("the maintenance type mix explicitly counts only new requests, unlike opening-plus-new top BD In", () => {
   assert.match(client, /breakdownTypeShare\(locationBreakdowns, breakdownSummaryStartKey, breakdownSummaryEndKey\)/);
   assert.match(client, /BD Type Mix/);
-  assert.match(client, /Percentage share of BD In/);
+  assert.match(client, /New requests · all six maintenance types/);
+  assert.match(client, /Percentage share of new BD In/);
+  assert.match(client, /cardAction\(movementKey\("incoming"\), "All BD In types"\)/);
   assert.match(client, /breakdownDetailTypeSummary\.map/);
   assert.match(css, /\.mine-breakdown-type-mix > div\s*\{[\s\S]*?grid-template-columns:\s*repeat\(6/);
 });

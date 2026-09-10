@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { watchVisibleMasterRefresh } from "../src/master-refresh.mjs";
+import { watchRequestRefresh, REQUEST_CHANGE_STORAGE_KEY } from "../src/request-refresh.mjs";
 import { readApiJson } from "../src/api-response.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -13,13 +14,13 @@ const newEquipment = [...oldEquipment, {id: 2, door: "D-02"}];
 function harness(hookName = "useMasterRecords") {
   let cursor = 0, now = 0, timerId = 0;
   const slots = [], effects = new Map(), queued = [], requests = [];
-  const listeners = new Map(), timers = new Map();
+  const listeners = new Map(), timers = new Map(), timeouts = new Map();
   const events = target => ({
     addEventListener(type, fn) {const key = `${target}:${type}`; if (!listeners.has(key)) listeners.set(key, new Set()); listeners.get(key).add(fn);},
     removeEventListener(type, fn) {listeners.get(`${target}:${type}`)?.delete(fn);},
   });
   const document = {...events("document"), visibilityState: "visible"};
-  const fire = (target, type) => [...(listeners.get(`${target}:${type}`) || [])].forEach(fn => fn());
+  const fire = (target, type, event = {}) => [...(listeners.get(`${target}:${type}`) || [])].forEach(fn => fn(event));
   const useState = initial => {
     const index = cursor++;
     if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
@@ -37,8 +38,11 @@ function harness(hookName = "useMasterRecords") {
     authToken: "fixture-account-a", AbortController, performance,
     document, window: {...events("window"), dispatchEvent() {},
       setInterval(fn, duration) {timers.set(++timerId, {fn, duration}); return timerId;},
-      clearInterval(id) {timers.delete(id);}}, CustomEvent: class {},
+      clearInterval(id) {timers.delete(id);},
+      setTimeout(fn, duration) {timeouts.set(++timerId, {fn, duration}); return timerId;},
+      clearTimeout(id) {timeouts.delete(id);}}, CustomEvent: class {},
     watchVisibleMasterRefresh: (refresh, environment) => watchVisibleMasterRefresh(refresh, {...environment, now: () => now}), readApiJson,
+    watchRequestRefresh: (refresh, environment) => watchRequestRefresh(refresh, {...environment, now: () => now}),
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({
       url, options, reject,
       respond(data, ok = true) {resolve({ok, json: async () => data, text: async () => JSON.stringify(data)});},
@@ -46,8 +50,9 @@ function harness(hookName = "useMasterRecords") {
   };
   const api = new Function(...Object.keys(scope), `${hookName === "useMasterRecords" ? hook : dashboardHook}; return {run: ${hookName}, setToken(value) {authToken = value;}};`)(...Object.values(scope));
   return {
-    requests, timers, listeners, setToken: api.setToken,
+    requests, timers, timeouts, listeners, setToken: api.setToken,
     focus() {fire("window", "focus");},
+    storage() {fire("window", "storage", {key: REQUEST_CHANGE_STORAGE_KEY, newValue: "invalidation-only"});},
     visibility(value) {document.visibilityState = value; fire("document", "visibilitychange");},
     tick(milliseconds = 60_000) {now += milliseconds; [...timers.values()].forEach(({fn}) => fn());},
     render(name = "Equipment master") {cursor = 0; return api.run(name);},
@@ -72,7 +77,7 @@ test("refresh replaces a successful empty equipment result with newly added mast
   assert.equal(result[2], true);
 });
 
-for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${hookName}: all mounted role views refresh on focus/visibility and once a minute, never while hidden`, async () => {
+for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${hookName}: mounted role views refresh on focus/visibility and their live polling interval, never while hidden`, async () => {
   const app = harness(hookName);
   const fleetScope = {restrictToScope: true, allowedSites: ["Sasti OB"], allowedRegions: null};
   const response = records => hookName === "useMasterRecords" ? {"Equipment master": records} : {records, scope: fleetScope};
@@ -80,7 +85,7 @@ for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${ho
   app.render(); app.effects();
   app.requests[0].respond(response(oldEquipment)); await settle();
   app.render();
-  assert.deepEqual([...app.timers.values()].map(timer => timer.duration), [60_000]);
+  assert.deepEqual([...app.timers.values()].map(timer => timer.duration), [hookName === "useMasterRecords" ? 60_000 : 10_000]);
   app.visibility("hidden"); app.focus(); app.tick(); app.render(); app.effects();
   assert.equal(app.requests.length, 1);
   app.visibility("visible"); app.focus(); app.render(); app.effects();
@@ -92,9 +97,14 @@ for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${ho
   assert.equal(app.requests.length, 3);
   app.requests[2].reject(new Error("Temporary network error")); await settle();
   assert.deepEqual(records(), newEquipment);
-  assert.equal(hookName === "useMasterRecords" ? app.render()[2] : app.render().loaded, true);
+  if (hookName === "useMasterRecords") assert.equal(app.render()[2], true);
+  else {
+    assert.equal(app.render().loaded, false, "a failed current fleet snapshot must not be presented as confirmed live data");
+    assert.equal(app.render().loadError, "Temporary network error");
+  }
   app.unmount();
   assert.equal(app.timers.size, 0);
+  assert.equal(app.timeouts.size, 0);
   assert.equal([...app.listeners.values()].reduce((sum, set) => sum + set.size, 0), 0);
   app.focus(); app.visibility("visible"); app.tick(); app.render(); app.effects();
   assert.equal(app.requests.length, 3);
@@ -116,6 +126,30 @@ test("dashboard refresh never leaks previous account fleet data or scope", async
   assert.deepEqual(app.render().records, []);
   assert.equal(app.render().scope, null);
   assert.equal(app.render().loaded, false);
+  app.unmount();
+});
+
+test("cross-tab closure refreshes a same-size fleet snapshot and failure recovers on the next poll", async () => {
+  const app = harness("useDashboardEquipment");
+  const scope = {restrictToScope: true, allowedSites: ["Majri OB"], allowedRegions: []};
+  const offroad = [{id: 1, door: "D-01", dashboardRoadStatus: "offroad"}];
+  const onroad = [{...offroad[0], dashboardRoadStatus: "onroad"}];
+  app.render(); app.effects();
+  app.requests[0].respond({records: offroad, scope}); await settle();
+  app.storage();
+  assert.equal(app.requests.length, 2);
+  app.requests[1].respond({records: onroad, scope}); await settle();
+  assert.deepEqual(app.render().records, onroad);
+  app.tick(10_000);
+  app.requests[2].reject(new Error("Temporary network error")); await settle();
+  assert.equal(app.render().loaded, false);
+  app.tick(10_000);
+  app.requests[3].respond({records: onroad, scope}); await settle();
+  assert.equal(app.render().loaded, true);
+  assert.equal(app.render().loadError, "");
+  app.unmount();
+  assert.equal(app.timers.size, 0);
+  assert.equal(app.timeouts.size, 0);
 });
 
 test("failed or malformed refresh retains last successful same-account records and loaded state", async () => {

@@ -18,10 +18,14 @@ test("dashboard region selection exposes its sites and filters every scoped data
   assert.match(source, /selectedSites\.map\(\(site\) => <option key=\{site\} value=\{site\}>\{site\}<\/option>\)/);
 });
 
-test("dashboard date control filters request-based metrics and remains responsive", () => {
+test("dashboard date filters opening-date analysis without filtering live fleet status and remains responsive", () => {
   assert.match(source, /function dashboardRecordDate\(record = \{\}\)/);
   assert.match(source, /const \[dashboardDate, setDashboardDate\] = useState\(""\)/);
-  assert.match(source, /dashboardDate \? locationBreakdowns\.filter\(\(record\) => dashboardRecordDate\(record\) === dashboardDate\) : locationBreakdowns/);
+  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardDate\)/);
+  assert.match(source, /const visibleBreakdowns = historicalRequests\s*\.map/);
+  assert.match(source, /liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
+  assert.match(source, /fleetChartCounts\(visibleEquipment, liveBreakdowns\)/);
+  assert.doesNotMatch(source, /dashboardDate \? locationBreakdowns\.filter/);
   assert.match(source, /<input aria-label="Dashboard date" type="date" value=\{dashboardDate\}/);
   assert.match(source, /\{dashboardDate \? "Filtered" : "Live"\} · \{filteredDateLabel\}/);
   assert.match(styles, /\.mine-head-actions\{[^}]*flex-wrap:wrap/);

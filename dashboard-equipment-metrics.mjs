@@ -1,4 +1,4 @@
-import {canonicalSiteName} from './site-location.mjs';
+import {canonicalSiteName, equipmentSiteName} from './site-location.mjs';
 
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
 
@@ -39,45 +39,126 @@ export function equipmentMetrics(records = []) {
   };
 }
 
-const strongIdentityValues = (record = {}) => [
+const identityValue = (value) => normalize(value).replace(/[^\p{L}\p{N}]+/gu, "");
+const missingIdentityValues = new Set(["na", "notavailable", "notapplicable", "unknown", "none", "null"]);
+const serialIdentityValues = (record = {}) => [
   record.manufacturerSerialNo,
   record.chassisNo,
   record.chassis,
+].map(identityValue).filter((value) => value && !missingIdentityValues.has(value));
+const doorIdentityValues = (record = {}) => [
   record.door,
   record.reg,
   record.registration,
-].map(normalize).filter(Boolean);
+].map(identityValue).filter(Boolean);
+const overlaps = (left, right) => left.some((value) => right.includes(value));
+
+function fleetIdentity(record = {}) {
+  const requestSite = [record.site, record.currentLocation, record.location]
+    .map((value) => String(value ?? "").trim()).find(Boolean) || "";
+  return {
+    requestSite: canonicalSiteName(requestSite),
+    assetSite: canonicalSiteName(equipmentSiteName(record)),
+    serials: serialIdentityValues(record),
+    doors: doorIdentityValues(record),
+    name: identityValue(record.equipmentName),
+    requestedName: identityValue(record.equipmentName || record.equipment),
+    group: identityValue(record.equipmentGroup),
+    groups: new Set([record.equipment, record.equipmentGroup, record.group, record.itemName, record.category].map(identityValue).filter(Boolean)),
+  };
+}
+
+const compatibleSites = (source, target) => !source.requestSite || !target.assetSite || source.requestSite === target.assetSite;
+const individualNameMatches = (source, target) => Boolean(source.requestedName
+  && source.requestedName === target.name
+  && !target.groups.has(source.requestedName)
+  && source.group !== source.requestedName);
+
+function identitiesMatch(source, target) {
+  if (!compatibleSites(source, target)) return false;
+  // Strong identifiers outrank reused door numbers or display labels. Keep
+  // identifier types separate: a door number is not another asset's chassis.
+  if (source.serials.length && target.serials.length) return overlaps(source.serials, target.serials);
+  if (overlaps(source.doors, target.doors)) return true;
+  if ((source.serials.length || source.doors.length) && (target.serials.length || target.doors.length)) return false;
+  return individualNameMatches(source, target);
+}
 
 function fleetAssetMatcher() {
   // Scope the cache to one calculation, so object edits cannot leave stale
   // fleet statuses behind and shared names/sites are normalized only once.
   const cache=new Map();
   const identity=record=>{
-    if(!cache.has(record))cache.set(record,{
-      requestSite:canonicalSiteName(record.site || record.currentLocation || record.location),
-      assetSite:canonicalSiteName(record.currentLocation || record.location || record.site),
-      values:strongIdentityValues(record),
-      name:normalize(record.equipmentName),
-      requestedName:normalize(record.equipmentName || record.equipment),
-      group:normalize(record.equipmentGroup),
-      groups:new Set([record.equipment,record.equipmentGroup,record.group,record.itemName,record.category].map(normalize).filter(Boolean)),
-    });
+    if(!cache.has(record))cache.set(record,fleetIdentity(record));
     return cache.get(record);
   };
   return (request={},equipment={})=>{
-    const source=identity(request),target=identity(equipment);
-    if(source.requestSite && target.assetSite && source.requestSite!==target.assetSite)return false;
-    if(source.values.some(value=>target.values.includes(value)))return true;
-    // A shared model/group/name must not override a different door or chassis.
-    if(source.values.length && target.values.length)return false;
-    if(target.groups.has(source.requestedName)||source.group===source.requestedName)return false;
-    // Legacy rows may identify an individual vehicle by its displayed name.
-    // Equipment Master's `equipment` field is a group, not an asset identifier.
-    return Boolean(source.requestedName && source.requestedName===target.name);
+    return identitiesMatch(identity(request),identity(equipment));
   };
 }
 
+// Build once per snapshot. Candidates are indexes so even repeated/duplicate
+// master rows remain separate records rather than being silently deduplicated.
+export function createFleetAssetResolver(records = []) {
+  const identities = records.map(fleetIdentity);
+  const serialIndex = new Map(), doorIndex = new Map(), nameIndex = new Map();
+  const indexValue = (index, value, rowIndex) => {
+    if (!value) return;
+    if (!index.has(value)) index.set(value, new Set());
+    index.get(value).add(rowIndex);
+  };
+  identities.forEach((identity, rowIndex) => {
+    identity.serials.forEach((value) => indexValue(serialIndex, value, rowIndex));
+    identity.doors.forEach((value) => indexValue(doorIndex, value, rowIndex));
+    indexValue(nameIndex, identity.name, rowIndex);
+  });
+  const indexedRows = (index, values) => new Set(values.flatMap((value) => [...(index.get(value) || [])]));
+  const result = (indexes, reason = "ambiguous") => ({
+    assetIndex: indexes.length === 1 && reason === "matched" ? indexes[0] : null,
+    candidateIndexes: indexes,
+    reason,
+  });
+  return (request = {}, { allowTransferred = false } = {}) => {
+    const source = fleetIdentity(request);
+    const strong = [...indexedRows(serialIndex, source.serials)];
+    const sameSiteStrong = strong.filter((index) => compatibleSites(source, identities[index]));
+    if (sameSiteStrong.length) return result(sameSiteStrong, sameSiteStrong.length === 1 ? "matched" : "ambiguous");
+    // Only a globally unique chassis/serial can carry current availability to
+    // a new master location. Request history and scope remain unchanged.
+    if (allowTransferred && strong.length) return result(strong, strong.length === 1 ? "matched" : "ambiguous");
+    const related = new Set([
+      ...indexedRows(doorIndex, source.doors),
+      ...[...(nameIndex.get(source.requestedName) || [])].filter((index) => individualNameMatches(source, identities[index])),
+    ]);
+    const sameSite = [...related].filter((index) => compatibleSites(source, identities[index]));
+    const matched = sameSite.filter((index) => identitiesMatch(source, identities[index]));
+    if (matched.length) return result(matched, matched.length === 1 ? "matched" : "ambiguous");
+    // A known door/name with contradictory strong identity needs review. It
+    // must not be guessed off-road or silently presented as confidently free.
+    const conflicting = sameSite.filter((index) => source.serials.length && identities[index].serials.length
+      && !overlaps(source.serials, identities[index].serials));
+    return result(conflicting, conflicting.length ? "conflicting" : "unmatched");
+  };
+}
+
+function uniqueFleetAsset(records, request, matches) {
+  let match = null;
+  for (const record of records) {
+    if (!matches(request, record)) continue;
+    if (match !== null) return null;
+    match = record;
+  }
+  return match;
+}
+
+// Enrichment/drilldowns must never pick an arbitrary record from shared names
+// or reused identifiers. An ambiguous match needs review, not a guessed merge.
+export function findFleetAssetForRequest(records = [], request = {}) {
+  return uniqueFleetAsset(records, request, fleetAssetMatcher());
+}
+
 function matchingRoadStatus(record, requests, matches) {
+  if (["onroad", "offroad", "idle", "unknown"].includes(record.dashboardRoadStatus)) return record.dashboardRoadStatus;
   const matchingRequests = requests.filter((request) =>
     normalize(request.status) !== "closed" && matches(request, record));
   if (matchingRequests.some((request) => !["ideal", "idle"].includes(normalize(request.status)))) return "offroad";
@@ -109,10 +190,7 @@ export function liveEquipmentMetrics(records = [], requests = []) {
 
 export function fleetChartCounts(records = [], requests = []) {
   const matches=fleetAssetMatcher();
-  const activeBreakdownRecords = records.filter((record) => requests.some((request) => {
-    const status = normalize(request.status);
-    return status !== "closed" && !["idle", "ideal"].includes(status) && matches(request, record);
-  }));
+  const activeBreakdownRecords = records.filter((record) => matchingRoadStatus(record, requests, matches) === "offroad");
   return {
     ...fleetAssetCounts(records),
     breakdown: fleetAssetCounts(activeBreakdownRecords),
@@ -123,7 +201,7 @@ export function fleetBreakdownCaseCounts(records = [], requests = []) {
   const matches=fleetAssetMatcher();
   const openCases = requests.filter((request) => normalize(request.status) !== "closed");
   const isVehicleCase = (request) => {
-    const asset = records.find((record) => matches(request, record));
+    const asset = uniqueFleetAsset(records, request, matches);
     if (asset) return isVehicleRecord(asset);
     return Boolean(normalize(request.reg || request.registration));
   };

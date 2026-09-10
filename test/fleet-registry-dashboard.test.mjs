@@ -19,13 +19,13 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /fleetRegionInsights\.map/);
   assert.match(source, /region\.sites\.map/);
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
-  assert.match(source, /const openBreakdownCaseCount = visibleBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"\)\.length;/);
-  assert.match(source, /mode === "total" \? assetCounts\.total : openBreakdownCaseCount/);
+  assert.match(source, /const liveBreakdownAssetCount = liveFleetCounts\.breakdown\.total/);
+  assert.match(source, /mode === "total" \? assetCounts\.total : liveBreakdownAssetCount/);
   assert.match(source, /region\.total\.toLocaleString\(\)\} fleet/);
-  assert.match(source, /const siteRequests = visibleBreakdowns\.filter\(\(request\) => recordBelongsToSite\(request, site\)\);/);
-  assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, siteRequests\)/);
-  assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, regionRequests\)/);
-  assert.doesNotMatch(source, /fleetChartCounts\(/);
+  assert.match(source, /const siteRequests = liveBreakdowns\.filter\(\(request\) => recordBelongsToSite\(request, site\)\);/);
+  assert.match(source, /\.\.\.fleetChartCounts\(records, siteRequests\)/);
+  assert.match(source, /\.\.\.fleetChartCounts\(records, regionRequests\)/);
+  assert.doesNotMatch(source, /breakdown: fleetBreakdownCaseCounts\(/);
   assert.match(source, /key\.startsWith\("site:"\)/);
   assert.match(css, /\.mine-fleet-command-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-pie-chart\s*\{/);
@@ -66,12 +66,13 @@ test("dashboard opens in Breakdown fleet mode by default", () => {
 });
 
 test("breakdown mode retains total bar heights and adds green breakdown sections", () => {
-  assert.match(source, /breakdown: fleetBreakdownCaseCounts\(records, siteRequests\)/);
+  assert.match(source, /\.\.\.fleetChartCounts\(records, siteRequests\)/);
   assert.match(source, /setFleetChartMode\(mode\)/);
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   const bars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
-  assert.match(bars, /total \/ axisMax \* 100/);
+  assert.match(bars, /total \/ scale \* 100/);
+  assert.match(bars, /Math\.max\(1, nonNegativeCount\(axisMax\), total\)/);
   assert.match(bars, /showBreakdown && breakdown > 0/);
   assert.match(bars, /className="mine-fleet-breakdown-count"/);
   assert.match(source, /const fleetChartAllKey = showFleetBreakdowns \? "fleet-breakdown:all" : "all"/);

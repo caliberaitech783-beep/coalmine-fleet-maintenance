@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
 import { availabilityRequestsForDate } from "../src/dashboard-availability.mjs";
+import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 
@@ -93,7 +94,7 @@ const text = node => Array.isArray(node) ? node.map(text).join("") : React.isVal
 
 function dashboardSection(date) {
   const scope = {
-    React, availabilityRequestsForDate, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite,
+    React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite,
     locationBreakdowns: requests, dashboardDate: date, visibleEquipment: assets,
     trendAvailableSites: ["Majri OB", "Jayant OB"], roadFocusSite: "", openAssetDrilldown: () => {},
     // The other charts deliberately keep their existing day-of-submission filter.
@@ -131,9 +132,10 @@ test("date changes update the rendered availability cards, every site row and th
   }
 });
 
-test("the existing date filter and other dashboard metric sources remain unchanged", () => {
+test("the date filter affects historical availability while live fleet metrics retain all active requests", () => {
   assert.match(source, /aria-label="Dashboard date"[^>]*onChange=\{\(event\) => setDashboardDate\(event.target.value\)\}/);
-  assert.match(source, /const kpis = liveEquipmentMetrics\(visibleEquipment, visibleBreakdowns\)/);
-  assert.match(source, /return \{ site, \.\.\.liveEquipmentMetrics\(records, visibleBreakdowns\) \}/);
-  assert.match(source, /const siteRequests = visibleBreakdowns.filter/);
+  assert.match(source, /const kpis = liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
+  assert.match(source, /return \{ site, \.\.\.liveEquipmentMetrics\(records, liveBreakdowns\) \}/);
+  assert.match(source, /const siteRequests = liveBreakdowns.filter/);
+  assert.match(source, /dashboardDate \? dashboardFleetSnapshot\(visibleEquipment, availabilityRequests\)/);
 });

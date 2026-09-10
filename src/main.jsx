@@ -11,6 +11,7 @@ import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import { dashboardCountScale } from "./dashboard-count-scale.mjs";
 import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
+import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
@@ -22,6 +23,7 @@ import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
 import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
+import { createDashboardRequestLoader, requestEventDate, splitDashboardRequests } from "./dashboard-request-data.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
@@ -39,7 +41,7 @@ import { olderThanTenDays, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
 import { batchMasterRecords } from "../record-batches.mjs";
 import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, hierarchyScheduleLabel } from "../hierarchy-report-flow.mjs";
-import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetBreakdownCaseCounts, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
@@ -851,11 +853,7 @@ function formatTwelveHourDateTime(value) {
 }
 
 function dashboardRecordDate(record = {}) {
-  for (const value of [record.start, record.startedAt, record.createdAt, record.closedAt, record.verifiedAt]) {
-    const match = String(value || "").match(/^(\d{4}-\d{2}-\d{2})/);
-    if (match) return match[1];
-  }
-  return "";
+  return requestEventDate(record, "opened");
 }
 
 function useDashboardEquipment() {
@@ -865,10 +863,9 @@ function useDashboardEquipment() {
   const [loadError, setLoadError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const loadedFleetScope = useRef({token: authToken, loaded: false});
-  useEffect(() => watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document}), []);
   useEffect(() => {
     let activeRequest = true;
-    const controller = new AbortController();
+    let controller;
     const sameScope = loadedFleetScope.current.token === authToken;
     if (!sameScope) {
       loadedFleetScope.current = {token: authToken, loaded: false};
@@ -876,8 +873,10 @@ function useDashboardEquipment() {
       setScope(null);
     }
     setLoaded(sameScope && loadedFleetScope.current.loaded);
-    setLoadError("");
-    fetch("/api/dashboard/equipment", {
+    const load = async () => {
+    controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    await fetch("/api/dashboard/equipment", {
       cache: "no-store",
       signal: controller.signal,
       headers: {Authorization: `Bearer ${authToken}`},
@@ -895,13 +894,21 @@ function useDashboardEquipment() {
         setRecords(data.records);
         setScope(data.scope);
         setLoaded(true);
+        setLoadError("");
       })
       .catch((error) => {
-        if (activeRequest && error.name !== "AbortError") setLoadError(error.message || "Could not load fleet data.");
-      });
+        if (activeRequest) {
+          loadedFleetScope.current.loaded = false;
+          setLoaded(false);
+          setLoadError(error.name === "AbortError" ? "Live fleet loading timed out. Please retry." : error.message || "Could not load fleet data.");
+        }
+      }).finally(() => window.clearTimeout(timeout));
+    };
+    const stopRefresh = watchRequestRefresh(load, { win: window, doc: document, initial: true });
     return () => {
       activeRequest = false;
-      controller.abort();
+      stopRefresh();
+      controller?.abort();
     };
   }, [loadAttempt, authToken]);
   return {records, scope, loaded, loadError, retry: () => setLoadAttempt((attempt) => attempt + 1)};
@@ -1013,7 +1020,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
   const cards = productionManagerView
     ? [
-        ["Total equipment", fleet.total, "Registered fleet", "all", totalTypes],
+        ["Total equipment", fleet.total, fleet.unknown ? `Registered fleet · ${fleet.unknown} status needs identity review` : "Registered fleet", "all", totalTypes],
         ["On road", fleet.onRoad, "Available for production", "onroad", onRoadTypes],
         ["Off road", fleet.offRoad, "Vehicles with active maintenance requests", "offroad", offRoadTypes],
         ["Idle", fleet.idle, "Operational but currently idle", "idle", idleTypes],
@@ -1109,15 +1116,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const selectedSites = (selectedRegion?.sites || []).filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site)));
   const activeSites = dashboardSite !== "all" ? [dashboardSite] : selectedSites;
   const visibleEquipment = selectedRegion ? scopedEquipment.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedEquipment;
-  const equipmentByReference=new Map();
-  visibleEquipment.forEach((record)=>[record.manufacturerSerialNo,record.chassisNo,record.door,record.reg,record.equipmentName]
-    .map((value)=>String(value||"").trim().toLowerCase()).filter(Boolean).forEach((key)=>equipmentByReference.set(key,record)));
-  const equipmentForRequest = (request = {}) => [request.chassis, request.door, request.equipment]
-    .map((value) => String(value || "").trim().toLowerCase()).filter(Boolean).map((key) => equipmentByReference.get(key)).find(Boolean);
+  const resolveEquipment = createFleetAssetResolver(visibleEquipment);
+  const equipmentForRequest = (request = {}) => {
+    const {assetIndex} = resolveEquipment(request);
+    return assetIndex === null ? undefined : visibleEquipment[assetIndex];
+  };
   const locationBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
-  const visibleBreakdowns = (dashboardDate ? locationBreakdowns.filter((record) => dashboardRecordDate(record) === dashboardDate) : locationBreakdowns)
+  const {liveRequests: liveBreakdowns, historicalRequests} = splitDashboardRequests(locationBreakdowns, dashboardDate);
+  const visibleBreakdowns = historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
-  const openBreakdownCaseCount = visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() !== "closed").length;
+  const liveFleetCounts = fleetChartCounts(visibleEquipment, liveBreakdowns);
+  const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
   const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
@@ -1134,9 +1143,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const actualTrendDays = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "past" });
   const breakdownTrendTotal = actualTrendDays.reduce((total, day) => total + day.count, 0);
   const breakdownTrendAverage = breakdownTrendDays ? (breakdownTrendTotal / breakdownTrendDays).toFixed(1) : "0.0";
-  const kpis = liveEquipmentMetrics(visibleEquipment, visibleBreakdowns);
+  const kpis = liveEquipmentMetrics(visibleEquipment, liveBreakdowns);
   const availabilityRequests = availabilityRequestsForDate(locationBreakdowns, dashboardDate);
-  const availabilityKpis = liveEquipmentMetrics(visibleEquipment, availabilityRequests);
+  // A selected historical day must not reuse today's server-derived status.
+  const availabilityEquipment = dashboardDate ? dashboardFleetSnapshot(visibleEquipment, availabilityRequests) : visibleEquipment;
+  const availabilityKpis = liveEquipmentMetrics(availabilityEquipment, availabilityRequests);
   const breakdownSummaryEndKey = dashboardDate || todayKey;
   const breakdownSummaryStartDate = new Date(`${breakdownSummaryEndKey}T12:00:00`);
   breakdownSummaryStartDate.setDate(breakdownSummaryStartDate.getDate() - 4);
@@ -1154,12 +1165,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownTypeSummary = breakdownTypeShare(locationBreakdowns, breakdownSummaryStartKey, breakdownSummaryEndKey);
   const roadAvailabilityBySite = trendAvailableSites.map((site) => {
     const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
-    return { site, ...liveEquipmentMetrics(records, visibleBreakdowns) };
+    return { site, ...liveEquipmentMetrics(records, liveBreakdowns) };
   });
   const roadAvailabilityBySiteName = new Map(roadAvailabilityBySite.map((site) => [site.site, site]));
   const availabilityCountBySite = trendAvailableSites.map((site) => ({
     site,
-    ...liveEquipmentMetrics(visibleEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
+    ...liveEquipmentMetrics(availabilityEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
   }));
   const selectedBreakdownSiteRequests = breakdownDetailSite
     ? locationBreakdowns.filter((record) => recordBelongsToSite(record, breakdownDetailSite))
@@ -1173,13 +1184,14 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailTotals = breakdownMovementForRange(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const breakdownDetailTypeSummary = breakdownTypeShare(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
-  const roadStatusTotal = availabilityKpis.onRoad + availabilityKpis.offRoad + availabilityKpis.idle;
+  const roadStatusTotal = availabilityKpis.total;
   const roadStatusShare = (value) => roadStatusTotal ? (value / roadStatusTotal) * 100 : 0;
   const utilizationPercent = kpis.total ? Math.round((kpis.onRoad / kpis.total) * 100) : 0;
   const availableFleet = kpis.onRoad + kpis.idle;
   const availabilityPercent = kpis.total ? Math.round((availableFleet / kpis.total) * 100) : 0;
   const openCaseRequests = activeOpenCases(visibleBreakdowns);
   const assetCounts = fleetAssetCounts(visibleEquipment);
+  const unclassifiedAssets = assetCounts.total - assetCounts.equipment - assetCounts.vehicles;
   const summarizeEquipment = (records = [], valueOf = equipmentGroupLabel) => Object.entries(records.reduce((counts, record) => {
     const label = String(valueOf(record) || "Unclassified").trim() || "Unclassified";
     counts[label] = (counts[label] || 0) + 1;
@@ -1198,6 +1210,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const assetCategoryPieSlices = pieSlices([
     { label: "Equipment", total: assetCounts.equipment, key: "equipment", color: "#f04e53" },
     { label: "Vehicles", total: assetCounts.vehicles, key: "vehicle", color: "#522e90" },
+    ...(unclassifiedAssets ? [{label:"Unclassified",total:unclassifiedAssets,key:"unclassified",color:"#64748b"}] : []),
   ]);
   const fleetGroupPieSlices = pieSlices(fleetGroupInsights.map((group) => ({ ...group, key: `group:${group.label}` })));
   const fleetHierarchyCategories = [
@@ -1222,12 +1235,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         .filter((site) => dashboardSite === "all" || site === dashboardSite)
         .map((site) => {
           const records = scopedEquipment.filter((record) => recordBelongsToSite(record, site));
-          const siteRequests = visibleBreakdowns.filter((request) => recordBelongsToSite(request, site));
-          return { name: site, ...fleetAssetCounts(records), breakdown: fleetBreakdownCaseCounts(records, siteRequests) };
+          const siteRequests = liveBreakdowns.filter((request) => recordBelongsToSite(request, site));
+          return { name: site, ...fleetChartCounts(records, siteRequests) };
         });
       const records = scopedEquipment.filter((record) => sites.some((site) => recordBelongsToSite(record, site.name)));
-      const regionRequests = visibleBreakdowns.filter((request) => sites.some((site) => recordBelongsToSite(request, site.name)));
-      return { ...region, sites, ...fleetAssetCounts(records), breakdown: fleetBreakdownCaseCounts(records, regionRequests) };
+      const regionRequests = liveBreakdowns.filter((request) => sites.some((site) => recordBelongsToSite(request, site.name)));
+      return { ...region, sites, ...fleetChartCounts(records, regionRequests) };
     });
   const showFleetBreakdowns = fleetChartMode === "breakdown";
   const fleetChartAllKey = showFleetBreakdowns ? "fleet-breakdown:all" : "all";
@@ -1236,12 +1249,6 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetChartTicks = fleetChartScale.ticks;
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
-  const dateKey = (value) => String(value || "").match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || "";
-  const requestEventDate = (record, event) => event === "opened"
-    ? dateKey(record.start) || dateKey(record.startedAt) || dateKey(record.createdAt)
-    : event === "closed" ? dateKey(record.closedAt)
-      : event === "verified" ? dateKey(record.verifiedAt)
-        : dateKey(record.closedAt) || dateKey(record.start);
   const requestTrendEndKey = requestTrendTo || dashboardDate || localDateKey(now);
   const requestTrendEarliest = new Date(`${requestTrendEndKey}T12:00:00`);
   requestTrendEarliest.setDate(requestTrendEarliest.getDate() - 365);
@@ -1302,19 +1309,19 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const rowsForAssetDrilldown = (key = "") => {
     if (key.startsWith("fleet-breakdown:") || key.startsWith("offroad-site:")) {
       const region = key.startsWith("fleet-breakdown:region:") ? availableRegions.find((item) => item.code === key.slice(23)) : null;
-      const selectedRequests = fleetBreakdownRequests(visibleEquipment, visibleBreakdowns, {
-        site: key.startsWith("offroad-site:") ? key.slice(13) : "",
-        sites: key.startsWith("fleet-breakdown:region:") ? region?.sites || [] : undefined,
-        category: key === "fleet-breakdown:equipment" ? "Equipment" : key === "fleet-breakdown:vehicles" ? "Vehicles" : "",
-      });
-      return requestAssetRows(selectedRequests).map((row, index) => ({ ...row, category: fleetBreakdownCategory(visibleEquipment, selectedRequests[index]) }));
+      return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, liveBreakdowns) === "offroad"
+        && (!key.startsWith("offroad-site:") || recordBelongsToSite(record, key.slice(13)))
+        && (!key.startsWith("fleet-breakdown:region:") || region?.sites.some((site) => recordBelongsToSite(record, site)))
+        && (key !== "fleet-breakdown:equipment" || ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()))
+        && (key !== "fleet-breakdown:vehicles" || ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase())));
     }
     if (!key || key === "all" || key === "road-availability") return visibleEquipment;
+    if (key === "unclassified") return visibleEquipment.filter((record) => !["equipment","equipments","vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase()));
     if (key === "equipment") return visibleEquipment.filter((record) => ["equipment","equipments"].includes(String(record.category || "").trim().toLowerCase()));
     if (key === "vehicle") return visibleEquipment.filter((record) => ["vehicle","vehicles"].includes(String(record.category || "").trim().toLowerCase()));
-    if (key === "available") return visibleEquipment.filter((record) => ["onroad", "idle"].includes(liveEquipmentRoadStatus(record, visibleBreakdowns)));
-    if (key === "unavailable") return visibleEquipment.filter((record) => !["onroad", "idle"].includes(liveEquipmentRoadStatus(record, visibleBreakdowns)));
-    if (["onroad","offroad","idle","unknown"].includes(key)) return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, availabilityRequests) === key);
+    if (key === "available") return visibleEquipment.filter((record) => ["onroad", "idle"].includes(liveEquipmentRoadStatus(record, liveBreakdowns)));
+    if (key === "unavailable") return visibleEquipment.filter((record) => !["onroad", "idle"].includes(liveEquipmentRoadStatus(record, liveBreakdowns)));
+    if (["onroad","offroad","idle","unknown"].includes(key)) return availabilityEquipment.filter((record) => liveEquipmentRoadStatus(record, availabilityRequests) === key);
     if (key.startsWith("region:")) {
       const region = availableRegions.find((item) => item.code === key.slice(7));
       return region ? visibleEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))) : [];
@@ -1329,8 +1336,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     }
     if (key.startsWith("site-status:")) {
       const [site, status] = key.slice(12).split("|");
-      const atSite = visibleEquipment.filter((record) => recordBelongsToSite(record, site));
-      return status === "all" ? atSite : atSite.filter((record) => liveEquipmentRoadStatus(record, visibleBreakdowns) === status);
+      const atSite = availabilityEquipment.filter((record) => recordBelongsToSite(record, site));
+      return status === "all" ? atSite : atSite.filter((record) => liveEquipmentRoadStatus(record, availabilityRequests) === status);
     }
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
@@ -1371,7 +1378,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const initialDrilldownSite = siteScopedSite || movementDrilldownParts[3] || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13) : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
   const initialDrilldownRegion = assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) : assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
-  const requestAssetDrilldown = fleetBreakdownDrilldown || assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
+  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
   const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
@@ -1433,7 +1440,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-heading">
               <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown(fleetChartAllKey)}><h2>Total Fleet</h2></button>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : openBreakdownCaseCount).toLocaleString() : "—"}</b></button>)}
+                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" title="Live vehicle counts; activity dates do not remove active breakdowns" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : liveBreakdownAssetCount).toLocaleString() : "—"}</b></button>)}
               </div>
             </div>
             <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
@@ -1460,10 +1467,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </header>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
-              {[{ label: "BD In", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey)}</small></div>)}
+              {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey)}</small></div>)}
             </div>
             <section {...cardAction(movementKey("incoming"), "All BD In types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
-              <header><div><b>BD Type Mix</b><small>All six maintenance types</small></div><span>Percentage share of BD In</span></header>
+              <header><div><b>BD Type Mix</b><small>New requests · all six maintenance types</small></div><span>Percentage share of new BD In</span></header>
               <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("incoming", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
@@ -8043,7 +8050,10 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
   const [userReportCategory, setUserReportCategory] = useState("general");
-  const [dashboardRequests,setDashboardRequests]=useState(requests);
+  const [dashboardState,setDashboardState]=useState({token:"",records:[],loaded:false,error:"",updatedAt:0});
+  const dashboardLoader=useRef(null);
+  const dashboardRequests=embedded ? requests : dashboardState.records;
+  const dashboardRequestsReady=embedded || (dashboardState.token === session?.token && dashboardState.loaded && !dashboardState.error);
   const [createdRequestRef, setCreatedRequestRef] = useState("");
   useEffect(() => {
     if (!createdRequestRef) return undefined;
@@ -8083,14 +8093,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [repairTypeRecords, , repairTypesLoaded, , , , , refreshRepairTypes] = useMasterRecords("Repair type master");
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
-    let active=true;
-    const controller = new AbortController();
-    fetch(`/api/requests?scope=dashboard&t=${Date.now()}`,{cache:"no-store",signal:controller.signal,headers:{Authorization:`Bearer ${session?.token||authToken}`}})
-      .then(async(response)=>{const body=await response.json().catch(()=>([]));if(!response.ok)throw new Error(body.error||"Could not load dashboard requests");return body})
-      .then((rows)=>{if(active)setDashboardRequests(rows)})
-      .catch((error)=>{if(error.name!=="AbortError")console.error(error)});
-    return()=>{active=false;controller.abort()};
-  },[session?.token,requests]);
+    if (embedded) return undefined;
+    const loader=createDashboardRequestLoader({onState:setDashboardState});
+    dashboardLoader.current=loader;
+    const stop=watchRequestRefresh(()=>loader.load(session?.token||authToken),{win:window,doc:document,initial:true});
+    return()=>{stop();loader.cancel();dashboardLoader.current=null;};
+  },[session?.token,session?.assignedRole,embedded]);
   useEffect(() => {
     let active = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session?.token || authToken}`}})
@@ -8162,7 +8170,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&<Dashboard requests={misDashboardRequests} theme={theme} />}
+      {!embedded&&section==="dashboard"&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
       {!embedded&&section==="reports"&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>

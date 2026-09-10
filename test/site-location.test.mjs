@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canonicalSiteName, recordBelongsToSite, recordsForSite } from "../site-location.mjs";
+import { assignedUserSiteName, canonicalSiteName, equipmentSiteName, recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 
 test("legacy WCL locations match their renamed dashboard sites", () => {
   assert.equal(canonicalSiteName("Sasti II"), canonicalSiteName("Sasti OB"));
@@ -58,4 +58,30 @@ test("mobile equipment options include only records at the user's current site",
     [1, 3],
   );
   assert.deepEqual(recordsForSite(records, ""), []);
+});
+
+test("Majri dotted OB is a known alias without guessing a second site", () => {
+  assert.equal(canonicalSiteName(" Majri O.B. "), "majri ob");
+  assert.equal(canonicalSiteName("MAJRI O. B."), "majri ob");
+  assert.notEqual(canonicalSiteName("Majri OB (2nd)"), "majri ob");
+  assert.notEqual(canonicalSiteName("Majri 2nd"), "majri ob");
+});
+
+test("equipment site selection consistently prefers current location then legacy location", () => {
+  const equipment = {currentLocation: "Majri OB", location: "Sasti OB", site: "Jayant OB"};
+  assert.equal(equipmentSiteName(equipment), "Majri OB");
+  assert.equal(recordBelongsToSite(equipment, "Majri"), true);
+  assert.equal(recordBelongsToSite(equipment, "Sasti OB"), false);
+  assert.equal(equipmentSiteName({...equipment, currentLocation: "  "}), "Sasti OB");
+  assert.equal(equipmentSiteName({currentLocation: "", location: "\t", site: "Majri II"}), "Majri II");
+  assert.equal(equipmentSiteName(null), "");
+  assert.equal(recordBelongsToSite({}, ""), false);
+  assert.equal(canonicalSiteName(null), "");
+});
+
+test("user site assignment is site-first and falls back past whitespace-only fields", () => {
+  assert.equal(assignedUserSiteName({site: "Majri OB", location: "Sasti OB", currentLocation: "Jayant OB"}), "Majri OB");
+  assert.equal(assignedUserSiteName({site: " ", location: "Sasti OB", currentLocation: "Jayant OB"}), "Sasti OB");
+  assert.equal(assignedUserSiteName({site: "", location: "\t", currentLocation: " Majri II "}), "Majri II");
+  assert.equal(assignedUserSiteName(null), "");
 });

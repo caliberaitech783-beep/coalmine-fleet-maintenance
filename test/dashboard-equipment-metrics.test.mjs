@@ -6,6 +6,7 @@ import {
   fleetAssetCounts,
   fleetBreakdownCaseCounts,
   fleetChartCounts,
+  findFleetAssetForRequest,
   liveEquipmentMetrics,
   liveEquipmentRoadStatus,
 } from "../dashboard-equipment-metrics.mjs";
@@ -308,4 +309,65 @@ test("fleet breakdown case counts count open requests, not matched assets", () =
   ];
   assert.deepEqual(fleetBreakdownCaseCounts(records, requests), { equipment: 3, vehicles: 2, total: 5 });
   assert.deepEqual(fleetBreakdownCaseCounts(), { equipment: 0, vehicles: 0, total: 0 });
+});
+
+test("Majri asset identity accepts harmless spacing and punctuation in door and chassis references", () => {
+  const asset = Object.freeze({ door: "S1 - MH34BZ1234", chassisNo: "CH-001 / A", equipmentName: "S1 - MH34BZ1234", category: "Vehicle", currentLocation: "Majri OB", status: "Idle" });
+  for (const request of [
+    { door: "s1-mh34bz1234", site: "Majri", status: "Open" },
+    { chassis: "ch001a", door: "S1 MH34BZ1234", site: "Majri II", status: "In progress" },
+    { chassis: "CH 001-A", site: "Majri OB", status: "Awaiting parts" },
+  ]) {
+    assert.equal(findFleetAssetForRequest([asset], request), asset);
+    assert.equal(liveEquipmentRoadStatus(asset, [request]), "offroad");
+    assert.deepEqual(fleetChartCounts([asset], [request]).breakdown, { equipment: 0, vehicles: 1, total: 1 });
+  }
+  assert.equal(liveEquipmentRoadStatus(asset, [{ door: "S1MH34BZ1234", site: "Majri", status: "Idle" }]), "idle");
+  assert.equal(liveEquipmentRoadStatus(asset, [{ door: "S1MH34BZ1234", site: "Majri", status: "Closed" }]), "onroad");
+});
+
+test("conflicting chassis identities cannot match vehicles sharing the same door or display name", () => {
+  const records = [
+    { door: "D1", chassisNo: "CH-001", equipmentName: "Dumper", category: "Vehicle", currentLocation: "Majri OB" },
+    { door: "D1", chassisNo: "CH-002", equipmentName: "Dumper", category: "Vehicle", currentLocation: "Majri OB" },
+  ];
+  const request = { door: "D1", chassis: "CH002", equipment: "Dumper", site: "Majri", status: "Open" };
+  assert.equal(findFleetAssetForRequest(records, request), records[1]);
+  assert.deepEqual(records.map((record) => liveEquipmentRoadStatus(record, [request])), ["onroad", "offroad"]);
+  assert.deepEqual(fleetChartCounts(records, [request]).breakdown, { equipment: 0, vehicles: 1, total: 1 });
+  assert.equal(findFleetAssetForRequest(records, { ...request, chassis: "CH999" }), null);
+});
+
+test("serial and chassis identity has priority over an outdated door label, but identifier types are not interchangeable", () => {
+  const asset = { door: "D1", manufacturerSerialNo: "SN-123", category: "Equipment", currentLocation: "Majri OB" };
+  assert.equal(liveEquipmentRoadStatus(asset, [{ door: "OLD-D1", chassis: "SN123", site: "Majri OB", status: "Open" }]), "offroad");
+  assert.equal(liveEquipmentRoadStatus(asset, [{ door: "SN123", site: "Majri OB", status: "Open" }]), "onroad");
+  assert.equal(liveEquipmentRoadStatus(asset, [{ door: "D1", chassis: "SN999", site: "Majri OB", status: "Open" }]), "onroad");
+});
+
+test("unique request enrichment refuses ambiguous identifiers and shared group labels without altering the fleet", () => {
+  const records = [
+    Object.freeze({ id: 1, door: "D1", equipmentName: "Dumper", equipment: "TIPPERS", currentLocation: "Majri OB" }),
+    Object.freeze({ id: 2, door: "D1", equipmentName: "Dumper", equipment: "TIPPERS", currentLocation: "Majri OB" }),
+  ];
+  assert.equal(findFleetAssetForRequest(records, { door: "D1", site: "Majri", status: "Open" }), null);
+  assert.equal(findFleetAssetForRequest(records, { equipment: "Dumper", site: "Majri", status: "Open" }), null);
+  assert.equal(findFleetAssetForRequest(records, { equipment: "TIPPERS", site: "Majri", status: "Open" }), null);
+  assert.equal(fleetAssetCounts(records).total, 2);
+  assert.deepEqual(records.map(({ id }) => id), [1, 2]);
+});
+
+test("formatted identifiers still respect site scope and duplicate requests count each physical master row only once", () => {
+  const records = [
+    { door: "S1 - REG01", chassisNo: "CH-01", category: "Vehicle", currentLocation: "Majri OB" },
+    { door: "S1 - REG01", chassisNo: "CH-02", category: "Vehicle", currentLocation: "Sasti OB" },
+    { door: "S2", chassisNo: "CH-03", category: "Equipment", currentLocation: "Majri OB" },
+  ];
+  const requests = [
+    { door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Open" },
+    { door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Awaiting parts" },
+    { door: "S2", chassis: "CH03", site: "Majri II", status: "Idle" },
+  ];
+  assert.deepEqual(liveEquipmentMetrics(records, requests), { total: 3, onRoad: 1, offRoad: 1, idle: 1, unknown: 0, availability: 33 });
+  assert.deepEqual(fleetChartCounts(records, requests).breakdown, { equipment: 0, vehicles: 1, total: 1 });
 });

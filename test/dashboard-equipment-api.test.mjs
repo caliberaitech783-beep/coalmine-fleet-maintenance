@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from '../dashboard-equipment-access.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
+import {recordsForSite} from '../site-location.mjs';
 
 const equipment=[
   {id:1,equipmentName:'EX-1',currentLocation:'SASTI II'},
@@ -74,6 +75,56 @@ test('dashboard scope metadata describes manager and administrator visibility at
   );
 });
 
+test('scoped API and dashboard use identical equipment location precedence',()=>{
+  const records=[
+    {id:1,currentLocation:'Majri OB',location:'Sasti OB',site:'Jayant OB'},
+    {id:2,currentLocation:'',location:'Majri OB',site:'Sasti OB'},
+    {id:3,currentLocation:' ',location:'Sasti OB',site:'Majri OB'},
+    {id:4,currentLocation:'',location:'',site:'Majri O.B.'},
+  ];
+  const scoped=scopeDashboardEquipmentRecords(records,{role:'normal',assignedRole:'MIS User'},{site:'Majri OB'});
+  assert.deepEqual(scoped.map(row=>row.id),[1,2,4]);
+  assert.deepEqual(scoped,recordsForSite(records,'Majri OB'));
+  assert.deepEqual(recordsForSite(scoped,'Majri OB'),scoped);
+});
+
+test('explicit manager sites determine region metadata without widening the permitted sites',()=>{
+  const session={role:'super',permissions:{adminLevel:'Manager'}};
+  const user={managerRegion:'NCL',managerSites:'Majri O.B.'};
+  assert.deepEqual(dashboardEquipmentScope(session,user),{
+    restrictToScope:true,allowedSites:['majri ob'],allowedRegions:['WCL'],
+  });
+  assert.deepEqual(scopeDashboardEquipmentRecords(equipment,session,user).map(row=>row.id),[2]);
+  assert.deepEqual(dashboardEquipmentScope(session,{managerRegion:'WCL',managerSites:'Majri OB | Jayant OB'}),{
+    restrictToScope:true,allowedSites:['majri ob','jayant ob'],allowedRegions:['WCL','NCL'],
+  });
+  assert.deepEqual(dashboardEquipmentScope(session,{managerRegion:'NCL',managerSites:'Unrecognised site'}),{
+    restrictToScope:true,allowedSites:['unrecognised site'],allowedRegions:[],
+  });
+  assert.deepEqual(scopeDashboardEquipmentRecords(equipment,session,{managerRegion:'NCL',managerSites:'Unrecognised site'}),[]);
+});
+
+test('operational and manager assignment fallbacks accept currentLocation without expanding scope',()=>{
+  const user={site:' ',location:'\t',currentLocation:'Majri II'};
+  const operational={role:'normal',assignedRole:'Maintenance User'};
+  assert.deepEqual(dashboardEquipmentScope(operational,user),{
+    restrictToScope:true,allowedSites:['majri ob'],allowedRegions:[],
+  });
+  assert.deepEqual(scopeDashboardEquipmentRecords(equipment,operational,user).map(row=>row.id),[2]);
+  assert.deepEqual(dashboardEquipmentScope({role:'super',permissions:{adminLevel:'Manager'}},user),{
+    restrictToScope:true,allowedSites:['majri ob'],allowedRegions:['WCL'],
+  });
+});
+
+test('unrestricted All region scope is not accidentally narrowed by additional region metadata',()=>{
+  const session={role:'super',permissions:{adminLevel:'Manager'}};
+  const user={managerRegion:'All | WCL'};
+  assert.deepEqual(dashboardEquipmentScope(session,user),{
+    restrictToScope:false,allowedSites:null,allowedRegions:[],
+  });
+  assert.deepEqual(scopeDashboardEquipmentRecords(equipment,session,user),equipment);
+});
+
 test('dashboard identity lookup never falls back to a same-name explicit account',()=>{
   const renamed={login:'new-login',employee:'Same Employee'};
   assert.equal(
@@ -121,7 +172,8 @@ test('dashboard equipment API is authenticated, uncached, scoped, and always ret
   assert.match(route,/dashboardEquipmentScopeIsUsable\(scope\)/);
   assert.match(route,/res\.status\(409\)/);
   assert.match(route,/WHERE master_name='Equipment master'/);
-  assert.match(route,/scopeDashboardEquipmentRecords\(records,authorization\.session,authorization\.user,scope\)/);
+  assert.match(route,/dashboardFleetSnapshot\(records,activeFleetRequests\)/);
+  assert.match(route,/scopeDashboardEquipmentRecords\(fleetSnapshot,authorization\.session,authorization\.user,scope\)/);
   assert.match(route,/res\.json\(\{[\s\S]*records:/);
   assert.doesNotMatch(route,/masterAccess|mobileMasterAccess/);
 });

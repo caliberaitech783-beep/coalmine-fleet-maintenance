@@ -21,9 +21,13 @@ test("Breakdown Master status tabs select and filter the table", () => {
 
 test("same-count request updates refresh the operational dashboard data", () => {
   const normal = source.slice(source.indexOf("function Normal("), source.indexOf("function App("));
-  assert.match(normal, /const controller = new AbortController\(\)/);
-  assert.match(normal, /signal:controller\.signal/);
-  assert.match(normal, /\},\[session\?\.token,requests\]\)/);
+  const loader = readFileSync(new URL("../src/dashboard-request-data.mjs", import.meta.url), "utf8");
+  const refresh = readFileSync(new URL("../src/request-refresh.mjs", import.meta.url), "utf8");
+  assert.match(normal, /createDashboardRequestLoader\(\{onState:setDashboardState\}\)/);
+  assert.match(normal, /watchRequestRefresh\(\(\)=>loader\.load/);
+  assert.match(normal, /stop\(\);loader\.cancel\(\)/);
+  assert.match(loader, /signal: controller\.signal/);
+  assert.match(refresh, /win\.addEventListener\(REQUEST_CHANGE_EVENT, revalidate\)/);
   assert.doesNotMatch(normal, /\},\[session\?\.token,requests\.length\]\)/);
 });
 

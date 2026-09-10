@@ -6,14 +6,14 @@ test("manager requests, equipment, and dashboard metrics are scoped to selected 
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const source=fs.readFileSync(new URL("../src/main.jsx",import.meta.url),"utf8");
   const styles=fs.readFileSync(new URL("../src/style.css",import.meta.url),"utf8");
-  assert.match(server,/adminLevel==='Manager'[\s\S]*scopedManagerSites=managerReportScope\(manager\)\.sites/);
+  assert.match(server,/adminLevel==='Manager'[\s\S]*scopedManagerSites=managerReportScope\(\{\.\.\.manager,site:assignedUserSiteName\(manager\)\}\)\.sites/);
   assert.match(server,/rows\.filter\(\(row\)=>reportScopeIncludesSite\(\{sites:scopedManagerSites\},row\.site\)\)/);
   assert.match(server,/managerRecord&&row\.master_name==='Equipment master'/);
   assert.match(server,/managerScope=managerRecord\?managerReportScope\(managerRecord\):null/);
   assert.match(server,/equipmentSite=canonicalSiteName\(record\.currentLocation\|\|record\.site\|\|record\.location\|\|''\)/);
   assert.match(source,/function ManagerDashboard\(\{ managerRole, managerRoles = \[\], managerLocation/);
   assert.match(source,/const siteEquipment = equipmentRecords;/);
-  assert.match(server,/scopeDashboardEquipmentRecords\(records,authorization\.session,authorization\.user,scope\)/);
+  assert.match(server,/scopeDashboardEquipmentRecords\(fleetSnapshot,authorization\.session,authorization\.user,scope\)/);
   assert.match(source,/const fleet = liveEquipmentMetrics\(siteEquipment, requestRows\)/);
   assert.match(source,/siteEquipment\.filter\(\(record\)=>liveEquipmentRoadStatus\(record,requestRows\)==="idle"\)/);
   assert.doesNotMatch(source,/offRoadKeys = new Set\(openRequests/);

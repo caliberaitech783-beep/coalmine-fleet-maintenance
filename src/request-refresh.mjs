@@ -1,7 +1,10 @@
 export const REQUEST_CHANGE_STORAGE_KEY = "bdms:requests:changed";
+export const REQUEST_CHANGE_EVENT = "bdms:requests-changed";
 
 // Invalidate other tabs without copying records, account identifiers or credentials.
 export function notifyRequestChange(win = globalThis.window) {
+  // Revalidate other data consumers in this tab as well as other signed-in tabs.
+  try { win.dispatchEvent(new win.Event(REQUEST_CHANGE_EVENT)); } catch {}
   try {
     win.localStorage.setItem(REQUEST_CHANGE_STORAGE_KEY, `${Date.now()}:${Math.random().toString(36).slice(2)}`);
     return true;
@@ -65,6 +68,7 @@ export function watchRequestRefresh(refresh, {
   for (const name of resumeEvents) win.addEventListener(name, resume);
   doc.addEventListener("visibilitychange", visibilityChanged);
   win.addEventListener("storage", changedElsewhere);
+  win.addEventListener(REQUEST_CHANGE_EVENT, revalidate);
   const timer = win.setInterval(() => { void revalidate(); }, intervalMs);
   if (initial) void revalidate();
   return () => {
@@ -73,6 +77,7 @@ export function watchRequestRefresh(refresh, {
     for (const name of resumeEvents) win.removeEventListener(name, resume);
     doc.removeEventListener("visibilitychange", visibilityChanged);
     win.removeEventListener("storage", changedElsewhere);
+    win.removeEventListener(REQUEST_CHANGE_EVENT, revalidate);
     win.clearInterval(timer);
   };
 }

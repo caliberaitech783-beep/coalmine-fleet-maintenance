@@ -3,6 +3,7 @@ const SITE_ALIASES = new Map([
   ["sasti", "sasti ob"],
   ["majri", "majri ob"],
   ["majri ii", "majri ob"],
+  ["majri o b", "majri ob"],
   ["dhoptala ii", "dhoptala ob 2nd"],
   ["dhoptala ob", "dhoptala ob 2nd"],
   ["gauri pauni", "gauri pauni ob 2nd"],
@@ -16,7 +17,7 @@ const SITE_ALIASES = new Map([
 ]);
 
 export function canonicalSiteName(value = "") {
-  const normalized = String(value)
+  const normalized = String(value ?? "")
     .trim()
     .toLowerCase()
     .replace(/\(\s*2nd\s*\)/g, " 2nd")
@@ -26,11 +27,21 @@ export function canonicalSiteName(value = "") {
   return SITE_ALIASES.get(normalized) || normalized;
 }
 
+const firstSiteValue = (...values) => values.map((value) => String(value ?? "").trim()).find(Boolean) || "";
+
+// Equipment follows its current master location. User assignment is a separate,
+// site-first concept; neither helper changes the stored source fields.
+export function equipmentSiteName(record = {}) {
+  return firstSiteValue(record?.currentLocation, record?.location, record?.site);
+}
+
+export function assignedUserSiteName(user = {}) {
+  return firstSiteValue(user?.site, user?.location, user?.currentLocation);
+}
+
 export function recordBelongsToSite(record, site) {
-  return (
-    canonicalSiteName(record?.currentLocation || record?.location || record?.site) ===
-    canonicalSiteName(site)
-  );
+  const selectedSite = canonicalSiteName(site);
+  return Boolean(selectedSite) && canonicalSiteName(equipmentSiteName(record)) === selectedSite;
 }
 
 export function recordsForSite(records = [], site = "") {

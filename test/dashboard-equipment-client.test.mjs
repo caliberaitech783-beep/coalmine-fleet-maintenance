@@ -10,9 +10,13 @@ test("dashboards load fleet records through the dedicated read-only endpoint",()
   const hook=source.slice(source.indexOf("function useDashboardEquipment"),source.indexOf("function FleetDataState"));
   assert.match(hook,/fetch\("\/api\/dashboard\/equipment"/);
   assert.match(hook,/cache: "no-store"/);
-  assert.match(hook,/const controller = new AbortController\(\)/);
+  assert.match(hook,/let controller;/);
+  assert.match(hook,/controller = new AbortController\(\)/);
   assert.match(hook,/signal: controller\.signal/);
   assert.match(hook,/controller\.abort\(\)/);
+  assert.match(hook,/watchRequestRefresh\(load, \{ win: window, doc: document, initial: true \}\)/);
+  assert.match(hook,/stopRefresh\(\);\s*controller\?\.abort\(\)/);
+  assert.match(hook,/window\.setTimeout\(\(\) => controller\.abort\(\), 15_000\)/);
   assert.match(hook,/if \(!Array\.isArray\(data\.records\)\) throw new Error/);
   assert.match(hook,/typeof data\.scope\.restrictToScope !== "boolean"/);
   assert.match(hook,/data\.scope\.allowedSites !== null && !Array\.isArray/);
@@ -73,6 +77,8 @@ test("a failed profile request cannot turn an otherwise valid fleet response int
   assert.match(app,/fetch\("\/api\/me\/profile"[\s\S]*\.catch\(\(\) => \{\}\)/);
   assert.match(app,/<Dashboard goto=\{selectMenu\}[\s\S]*requests=\{requests\} theme=\{theme\} \/>/);
   assert.match(normal,/<Dashboard requests=\{misDashboardRequests\} theme=\{theme\} \/>/);
+  assert.match(normal,/dashboardRequestsReady\s*\? <Dashboard/);
+  assert.match(app,/requestsLoaded\s*&&\s*!requestsError\s*\? <Dashboard/);
   assert.doesNotMatch(app,/profileManagerSites|allowedSites=\{|allowedRegions=\{|restrictToScope=/);
   assert.doesNotMatch(normal,/allowedSites=\{|allowedRegions=\{|restrictToScope/);
   assert.match(dashboard,/const scopedBreakdowns=equipmentLoaded\?/);

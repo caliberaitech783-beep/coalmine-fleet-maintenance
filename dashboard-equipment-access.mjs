@@ -1,6 +1,6 @@
 import {accessAllows} from './admin-access.mjs';
-import {canonicalSiteName} from './site-location.mjs';
-import {managerRegionSelection,managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
+import {assignedUserSiteName,canonicalSiteName,equipmentSiteName} from './site-location.mjs';
+import {REGION_DATA,managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
 
 const OPERATIONAL_DASHBOARD_ROLES=new Set(['Production User','Maintenance User','MIS User']);
 
@@ -45,12 +45,16 @@ export function canReadDashboardEquipment(session={}){
 
 export function dashboardEquipmentScope(session={},user={}){
   if(session.role==='normal'){
-    const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation||'');
+    const assignedSite=canonicalSiteName(assignedUserSiteName(user));
     return {restrictToScope:true,allowedSites:assignedSite?[assignedSite]:[],allowedRegions:[]};
   }
   if(session.role==='super'&&session.permissions?.adminLevel==='Manager'){
-    const reportScope=managerReportScope(user);
-    const allowedRegions=managerRegionSelection(user.managerRegion||user.region).filter((region)=>region!=='All');
+    const reportScope=managerReportScope({...user,site:assignedUserSiteName(user)});
+    // Region metadata must describe the resolved site scope, not contradict an
+    // explicit site assignment with an older managerRegion field.
+    const allowedRegions=Array.isArray(reportScope.sites)
+      ? REGION_DATA.filter(region=>region.sites.some(site=>reportScopeIncludesSite(reportScope,site))).map(region=>region.code)
+      : [];
     return {
       restrictToScope:Array.isArray(reportScope.sites),
       allowedSites:reportScope.sites,
@@ -69,6 +73,6 @@ export function scopeDashboardEquipmentRecords(records=[],session={},user={},res
   const safeRecords=Array.isArray(records)?records:[];
   const scope=resolvedScope||dashboardEquipmentScope(session,user);
   if(scope.restrictToScope)
-    return safeRecords.filter((record)=>reportScopeIncludesSite({sites:scope.allowedSites},record.currentLocation||record.site||record.location||''));
+    return safeRecords.filter((record)=>reportScopeIncludesSite({sites:scope.allowedSites},equipmentSiteName(record)));
   return safeRecords;
 }
