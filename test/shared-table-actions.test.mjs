@@ -8,11 +8,11 @@ const h = React.createElement;
 const row = (key, ...cells) => h("tr", {key}, cells.map((value, i) => h("td", {key: i}, value)));
 const headers = h("thead", {}, h("tr", {}, h("th", {}, "Name"), h("th", {}, "Count")));
 
-test("non-report dates lead while values and remaining columns retain their order", () => {
+test("status leads, then non-report dates, while remaining columns retain their order", () => {
   const labels = ["Actions", "Status", "Started", "Site", "Closed", "Closed by", "MIS verified at", "First trip time", "Turn around time (TAT)"];
   const {columns} = tableModel(h("thead", {}, h("tr", {}, labels.map(label => h("th", {}, label)))));
   const ordered = dateColumnsFirst(columns);
-  assert.deepEqual(ordered.map(c => c.label), ["Started", "Closed", "MIS verified at", "First trip time", "Actions", "Status", "Site", "Closed by", "Turn around time (TAT)"]);
+  assert.deepEqual(ordered.map(c => c.label), ["Status", "Started", "Closed", "MIS verified at", "First trip time", "Actions", "Site", "Closed by", "Turn around time (TAT)"]);
   assert.deepEqual(tableSlots(projectTableRow(row("record", ...labels), ordered.map(c => c.index))).map(s => tableCellText(s.cell)), ordered.map(c => c.label));
   assert.deepEqual(columns.map(c => c.label), labels);
   const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -117,10 +117,29 @@ test("date range filters apply to shared Actions tables using the raw sort value
 test("date column headings open only From / To date pickers", () => {
   const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(main, /dateColumn = looksLikeDateColumn\(values\)/);
-  assert.match(main, /\{dateColumn \? <div className="column-filter-range" role="group"/, "date columns open only the From / To pickers");
+  assert.match(main, / : dateColumn \? <div className="column-filter-range" role="group"/, "date columns open only the From / To pickers");
   assert.doesNotMatch(main, /rangeOpen|Filter by date range/);
   assert.match(main, /<label><span>From<\/span><input type="date" autoFocus value=\{dateRange\.from\}/);
   assert.match(main, /<label><span>To<\/span><input type="date" value=\{dateRange\.to\}/);
   assert.match(main, /const range = parseDateRange\(selected\);\s*if \(range\) return matchesDateRange\(value, range\);/);
   assert.match(main, /parseDateRange\(filters\[column\.key\]\) && <option value=\{filters\[column\.key\]\}>/);
+});
+
+test("rows without a value sort last in both directions", () => {
+  const {columns} = tableModel(headers);
+  const rows = [row("dash", "A", "—"), row("late", "B", "2026-09-10 16:00:32"), row("blank", "C", ""), row("early", "D", "2026-09-09 08:00:00")];
+  assert.deepEqual(selectTableRows(rows, columns, {}, {key: columns[1].key, direction: "asc"}).map(r => r.key), ["early", "late", "dash", "blank"]);
+  assert.deepEqual(selectTableRows(rows, columns, {}, {key: columns[1].key, direction: "desc"}).map(r => r.key), ["late", "early", "dash", "blank"]);
+});
+
+test("Total Fleet lists sort Started oldest-to-latest from the heading instead of picking dates", () => {
+  const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
+  const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const browser = fs.readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8");
+  assert.match(shared, /dateSortOnly=\{cell\.props\["data-filter-mode"\] === "date-sort"\}/);
+  assert.match(browser, /<th data-filter-mode=\{requestRecords \? undefined : "date-sort"\}>Started<\/th>/);
+  assert.match(main, /dateSortOnly = false,/);
+  assert.match(main, /\{dateSortOnly \? <div className="column-filter-sort duration-sort-options"/);
+  assert.match(main, /<span>Oldest to latest<\/span>/);
+  assert.match(main, /<span>Latest to oldest<\/span>/);
 });

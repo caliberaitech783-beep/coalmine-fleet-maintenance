@@ -2208,6 +2208,7 @@ function FilterableHeader({
   filterValue = "",
   onFilterChange,
   durationSortOnly = isDurationColumn(label, sortKey),
+  dateSortOnly = false,
 }) {
   const [valueSearch, setValueSearch] = useState("");
   const triggerRef = useRef(null);
@@ -2269,7 +2270,11 @@ function FilterableHeader({
               <X aria-hidden="true" />
             </button>
           </div>
-          {dateColumn ? <div className="column-filter-range" role="group" aria-label={`${label} date range`}>
+          {dateSortOnly ? <div className="column-filter-sort duration-sort-options" aria-label={`Sort ${label}`}>
+            <button type="button" className={active && sort.direction === "asc" ? "active" : ""} aria-pressed={active && sort.direction === "asc"} onClick={() => chooseDurationSort("asc")}><ArrowUp /><span>Oldest to latest</span></button>
+            <button type="button" className={active && sort.direction === "desc" ? "active" : ""} aria-pressed={active && sort.direction === "desc"} onClick={() => chooseDurationSort("desc")}><ArrowDown /><span>Latest to oldest</span></button>
+            <button type="button" onClick={() => chooseDurationSort("")}><X /><span>Clear sort</span></button>
+          </div> : dateColumn ? <div className="column-filter-range" role="group" aria-label={`${label} date range`}>
             <label><span>From</span><input type="date" autoFocus value={dateRange.from} max={dateRange.to || undefined} onChange={(event) => onFilterChange(encodeDateRange(event.target.value, dateRange.to))} /></label>
             <label><span>To</span><input type="date" value={dateRange.to} min={dateRange.from || undefined} onChange={(event) => onFilterChange(encodeDateRange(dateRange.from, event.target.value))} /></label>
           </div> : durationSortOnly ? <div className="column-filter-sort duration-sort-options" aria-label={`Sort ${label}`}>

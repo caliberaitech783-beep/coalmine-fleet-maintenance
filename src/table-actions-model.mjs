@@ -69,7 +69,13 @@ export function dateColumnsFirst(columns) {
       || /^(started|closed|accepted|created|updated|ticket created|vehicle received|red flag raised)$/.test(text)
       || /\b(at|on)$/.test(text);
   };
-  return [...columns.filter(isDate), ...columns.filter((column) => !isDate(column))];
+  // Status leads every record table, then the date and time columns, then everything else in source order.
+  const isStatus = ({ key, label }) => /^status$/i.test(String(key).replace(/^\d+:/, "")) || label.trim().toLowerCase() === "status";
+  return [
+    ...columns.filter(isStatus),
+    ...columns.filter((column) => !isStatus(column) && isDate(column)),
+    ...columns.filter((column) => !isStatus(column) && !isDate(column)),
+  ];
 }
 
 export function selectTableRows(rows, columns, filters, sort) {
@@ -90,7 +96,14 @@ export function selectTableRows(rows, columns, filters, sort) {
     if (left !== "" && right !== "" && Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;
     return collator.compare(String(left), String(right));
   };
-  return [...filtered].sort((a, b) => compare(a, b) * (sort.direction === "desc" ? -1 : 1));
+  // Rows without a value ("—" or blank) stay at the bottom whichever way the column is sorted.
+  const isEmpty = (value) => value == null || String(value).trim() === "" || String(value).trim() === "—";
+  return [...filtered].sort((a, b) => {
+    const leftEmpty = isEmpty(sortValue(a)), rightEmpty = isEmpty(sortValue(b));
+    if (leftEmpty !== rightEmpty) return leftEmpty ? 1 : -1;
+    if (leftEmpty && rightEmpty) return 0;
+    return compare(a, b) * (sort.direction === "desc" ? -1 : 1);
+  });
 }
 
 export function tableExportModel(rows, columns, visibleKeys, filters = {}, sort = { key: "", direction: "asc" }) {

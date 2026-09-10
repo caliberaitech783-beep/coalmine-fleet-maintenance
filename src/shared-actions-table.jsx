@@ -74,7 +74,8 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
       if (FilterableHeader) {
         return <FilterableHeader key={cell.key ?? column.key} label={column.label} sortKey={column.key} sort={sort} onSort={applySort}
           open={openFilter === column.key} onToggle={(key) => setOpenFilter((current) => current === key ? null : key)}
-          values={columnValues[column.key] || []} filterValue={filters[column.key] || ""} onFilterChange={(value) => updateFilter(column.key, value)} />;
+          values={columnValues[column.key] || []} filterValue={filters[column.key] || ""} onFilterChange={(value) => updateFilter(column.key, value)}
+          dateSortOnly={cell.props["data-filter-mode"] === "date-sort"} />;
       }
       const Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
       return React.cloneElement(cell, { "aria-sort": active ? (sort.direction === "asc" ? "ascending" : "descending") : "none" },

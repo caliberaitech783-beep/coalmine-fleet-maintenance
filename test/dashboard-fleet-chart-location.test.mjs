@@ -44,7 +44,7 @@ test("site fleet tables omit only the redundant column and retain counts, record
   assert.equal(hidden, original.replace("<th>Current location</th>", "").replace("<td>Majri OB</td>", ""));
   assert.ok(hidden.includes("1 of 1 records"));
   assert.ok(hidden.includes('data-export-title="Majri OB · Vehicle records · WCL"'));
-  assert.equal((hidden.match(/<th>/g) || []).length, 8);
+  assert.equal((hidden.match(/<th[ >]/g) || []).length, 8);
   assert.equal((hidden.match(/<td[ >]/g) || []).length, 8);
 });
 
@@ -52,7 +52,7 @@ test("other request drilldowns retain Request site even if the fleet-only option
   const html = render({ requestRecords: true, hideCurrentLocation: true });
   assert.ok(html.includes("<th>Request site</th>"));
   assert.ok(html.includes("<td>Majri OB</td>"));
-  assert.equal((html.match(/<th>/g) || []).length, 11);
+  assert.equal((html.match(/<th[ >]/g) || []).length, 11);
 });
 
 test("empty site fleet lists span exactly their visible columns", () => {
