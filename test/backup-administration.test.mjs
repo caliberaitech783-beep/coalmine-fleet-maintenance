@@ -35,3 +35,9 @@ test('manual export asks for a computer location and scheduled backup uses prote
   assert.match(server,/const backupStorageRoot=path\.resolve/);
   assert.match(server,/runScheduledBackup/);
 });
+
+test('backup history never presents failed or running jobs as zero-byte recovery files',()=>{
+  assert.match(client,/if\(row\.status==='Running'\)return 'Writing\.\.\.'/);
+  assert.match(client,/if\(row\.status==='Failed'\)return 'No file'/);
+  assert.match(client,/Backup failed:/);
+});

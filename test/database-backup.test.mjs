@@ -5,6 +5,7 @@ import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {
   BACKUP_FORMAT,
+  BACKUP_FETCH_SIZE,
   COLUMN_LIST_SQL,
   FOREIGN_KEY_SQL,
   SEQUENCE_EXISTS_SQL,
@@ -24,7 +25,8 @@ import {
   readBackupRecords,
   redactDatabaseUrl,
   resolveDatabaseUrl,
-  restoreDatabase
+  restoreDatabase,
+  streamQueryRows
 } from '../database-backup.mjs';
 
 test('quotes identifiers safely',()=>{
@@ -101,6 +103,28 @@ test('encodes and decodes newline-delimited records',()=>{
   assert.equal(line,'{"type":"row","values":["1",null,"{\\"a\\":1}"]}\n');
   assert.deepEqual(decodeRecord(line),{type:'row',values:['1',null,'{"a":1}']});
   assert.equal(decodeRecord('   '),null);
+});
+
+test('streams large table reads through bounded cursor batches',async()=>{
+  const statements=[];
+  let fetch=0;
+  const client={
+    async query(query){
+      statements.push(query);
+      const text=typeof query==='string'?query:query.text;
+      if(text.startsWith('FETCH FORWARD')){
+        fetch+=1;
+        return {rows:fetch===1?[[1],[2]]:fetch===2?[[3]]:[]};
+      }
+      return {rows:[]};
+    }
+  };
+  const rows=[];
+  for await(const row of streamQueryRows(client,'SELECT id FROM "large_table"'))rows.push(row);
+  assert.deepEqual(rows,[[1],[2],[3]]);
+  assert.match(statements[0],/^DECLARE "bdms_backup_[^"]+" NO SCROLL CURSOR FOR SELECT id FROM "large_table"$/);
+  assert.equal(statements.filter(statement=>(typeof statement==='string'?statement:statement.text).startsWith(`FETCH FORWARD ${BACKUP_FETCH_SIZE}`)).length,3);
+  assert.match(statements.at(-1),/^CLOSE "bdms_backup_[^"]+"$/);
 });
 
 const sampleData={

@@ -12,6 +12,17 @@ const formatBytes=(bytes)=>{
   if(value<1024**3)return `${(value/1024**2).toFixed(1)} MB`;
   return `${(value/1024**3).toFixed(2)} GB`;
 };
+const backupSize=(row)=>{
+  if(row.status==='Running')return 'Writing...';
+  if(row.status==='Failed')return 'No file';
+  return formatBytes(row.sizeBytes);
+};
+const backupDetail=(row)=>{
+  if(row.checksum)return `SHA-256 ${row.checksum.slice(0,16)}…`;
+  if(row.errorMessage)return `Backup failed: ${row.errorMessage}`;
+  if(row.status==='Running')return 'The recovery file is being created.';
+  return 'No recovery file is available.';
+};
 const displayDateTime=(value)=>value?new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true}).format(new Date(value)).replace(',','').replaceAll('/','-').replace(/\b(am|pm)\b/i,(period)=>period.toUpperCase()):'—';
 const displayScheduleTime=(value)=>{
   const [hour24,minute]=String(value||'02:00').split(':').map(Number);
@@ -60,7 +71,7 @@ function ScheduleTime({value,onChange}){
 function BackupHistory({history,onDownload,busy}){
   return <div className="backup-history-wrap">
     <table className="backup-history-table"><thead><tr><th>Date & time</th><th>Backup file</th><th>Type</th><th>Status</th><th>Size</th><th>Created by</th><th>Recovery file</th></tr></thead>
-      <tbody>{history.length?history.map(row=><tr key={row.id}><td>{displayDateTime(row.completedAt||row.startedAt)}</td><td><b>{row.fileName}</b><small>{row.checksum?`SHA-256 ${row.checksum.slice(0,16)}…`:row.errorMessage||'Preparing checksum'}</small></td><td>{row.triggerType}</td><td><span className={`backup-state ${String(row.status).toLowerCase()}`}>{row.status}</span></td><td>{formatBytes(row.sizeBytes)}</td><td>{row.createdBy||'System'}</td><td>{row.downloadable?<button type="button" className="backup-icon-action" title="Download backup" aria-label={`Download ${row.fileName}`} disabled={busy} onClick={()=>onDownload(row)}><Download /></button>:<span className="backup-unavailable">—</span>}</td></tr>):<tr><td colSpan="7" className="backup-empty">No backup runs have been recorded yet.</td></tr>}</tbody>
+      <tbody>{history.length?history.map(row=><tr key={row.id}><td>{displayDateTime(row.completedAt||row.startedAt)}</td><td><b>{row.fileName}</b><small className={row.errorMessage?'backup-run-error':''}>{backupDetail(row)}</small></td><td>{row.triggerType}</td><td><span className={`backup-state ${String(row.status).toLowerCase()}`}>{row.status}</span></td><td><b className={`backup-size ${String(row.status).toLowerCase()}`}>{backupSize(row)}</b></td><td>{row.createdBy||'System'}</td><td>{row.downloadable?<button type="button" className="backup-icon-action" title="Download backup" aria-label={`Download ${row.fileName}`} disabled={busy} onClick={()=>onDownload(row)}><Download /></button>:<span className="backup-unavailable">—</span>}</td></tr>):<tr><td colSpan="7" className="backup-empty">No backup runs have been recorded yet.</td></tr>}</tbody>
     </table>
   </div>;
 }

@@ -1,6 +1,7 @@
 import {createReadStream,createWriteStream} from 'node:fs';
 import {once} from 'node:events';
 import readline from 'node:readline';
+import {pipeline} from 'node:stream/promises';
 import {createGunzip,createGzip} from 'node:zlib';
 import pg from 'pg';
 
@@ -14,6 +15,7 @@ export const BACKUP_FORMAT='BDMS PostgreSQL table backup';
 export const BACKUP_VERSION=1;
 export const MAX_QUERY_PARAMETERS=30000;
 export const MAX_ROWS_PER_INSERT=500;
+export const BACKUP_FETCH_SIZE=250;
 export const INDIA_TIME_ZONE='Asia/Kolkata';
 
 export const TABLE_LIST_SQL=`SELECT c.relname AS name
@@ -155,29 +157,21 @@ export function createClient(databaseUrl,{ssl=true}={}){
   });
 }
 
-export async function* streamQueryRows(client,sql){
-  const query=new pg.Query({text:sql,rowMode:'array'});
-  let queue=[];
-  let head=0;
-  let finished=false;
-  let failure=null;
-  let wake=null;
-  const notify=()=>{if(wake){const resume=wake;wake=null;resume();}};
-  query.on('row',row=>{queue.push(row);notify();});
-  query.on('end',()=>{finished=true;notify();});
-  query.on('error',error=>{failure=error;finished=true;notify();});
-  client.query(query);
-  while(true){
-    if(head<queue.length){
-      const row=queue[head];
-      head+=1;
-      if(head===queue.length){queue=[];head=0;}
-      yield row;
-      continue;
+let cursorSequence=0;
+
+export async function* streamQueryRows(client,sql,{batchSize=BACKUP_FETCH_SIZE}={}){
+  const size=Math.max(1,Math.min(5000,Math.trunc(Number(batchSize)||BACKUP_FETCH_SIZE)));
+  const cursor=quoteIdentifier(`bdms_backup_${process.pid}_${Date.now()}_${cursorSequence+=1}`);
+  await client.query(`DECLARE ${cursor} NO SCROLL CURSOR FOR ${sql}`);
+  try{
+    while(true){
+      const result=await client.query({text:`FETCH FORWARD ${size} FROM ${cursor}`,rowMode:'array'});
+      const rows=result.rows||[];
+      if(!rows.length)return;
+      for(const row of rows)yield row;
     }
-    if(failure)throw failure;
-    if(finished)return;
-    await new Promise(resolve=>{wake=resolve;});
+  }finally{
+    await client.query(`CLOSE ${cursor}`).catch(()=>{});
   }
 }
 
@@ -185,7 +179,7 @@ export async function exportDatabase({client,output,log=()=>{},streamRows=stream
   if(!output)throw new Error('An output path is required');
   const file=createWriteStream(output);
   const gzip=createGzip({level:6});
-  gzip.pipe(file);
+  const completion=pipeline(gzip,file);
   const write=async(record)=>{if(!gzip.write(encodeRecord(record)))await once(gzip,'drain');};
   const counts={};
   let sequenceCount=0;
@@ -223,12 +217,12 @@ export async function exportDatabase({client,output,log=()=>{},streamRows=stream
     await client.query('COMMIT');
   }catch(error){
     await client.query('ROLLBACK').catch(()=>{});
-    gzip.destroy();
-    file.destroy();
+    gzip.destroy(error);
+    await completion.catch(()=>{});
     throw error;
   }
   gzip.end();
-  await once(file,'close');
+  await completion;
   return {tables:counts,sequences:sequenceCount,output};
 }
 
