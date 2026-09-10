@@ -67,7 +67,7 @@ export function requestColumnsInWorkflowOrder(columns) {
     const index = priorities.indexOf(label);
     return index < 0 ? priorities.length : index;
   };
-  return jobReferenceColumnsLast(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b))));
+  return jobReferenceColumnsLast(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b)), false));
 }
 
 export function jobReferenceColumnsLast(columns) {
@@ -75,7 +75,7 @@ export function jobReferenceColumnsLast(columns) {
   return [...columns.filter((column) => !isJobReference(column)), ...columns.filter(isJobReference)];
 }
 
-export function dateColumnsFirst(columns) {
+export function dateColumnsFirst(columns, statusFirst = true) {
   const isDate = ({ key, label }) => {
     if (/^(start|end|date|time|occurredAt|createdAt|updatedAt|closedAt|verifiedAt|firstTripAt|acceptedAt|arrivalFlaggedAt|misFlaggedAt)$/.test(key)) return true;
     const text = label.trim().toLowerCase();
@@ -85,7 +85,7 @@ export function dateColumnsFirst(columns) {
       || /\b(at|on)$/.test(text);
   };
   // Status leads every record table, then the date and time columns, then everything else in source order.
-  const isStatus = ({ key, label }) => /^status$/i.test(String(key).replace(/^\d+:/, "")) || label.trim().toLowerCase() === "status";
+  const isStatus = ({ key, label }) => statusFirst && (/^status$/i.test(String(key).replace(/^\d+:/, "")) || label.trim().toLowerCase() === "status");
   return [
     ...columns.filter(isStatus),
     ...columns.filter((column) => !isStatus(column) && isDate(column)),
