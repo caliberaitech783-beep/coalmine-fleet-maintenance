@@ -84,7 +84,7 @@ export function dateColumnsFirst(columns, statusFirst = true) {
       || /^(started|closed|accepted|created|updated|ticket created|vehicle received|red flag raised)$/.test(text)
       || /\b(at|on)$/.test(text);
   };
-  // Status leads every record table, then the date and time columns, then everything else in source order.
+  // General tables lead with status; workflow tables opt into dates first and their own field order.
   const isStatus = ({ key, label }) => statusFirst && (/^status$/i.test(String(key).replace(/^\d+:/, "")) || label.trim().toLowerCase() === "status");
   return [
     ...columns.filter(isStatus),
