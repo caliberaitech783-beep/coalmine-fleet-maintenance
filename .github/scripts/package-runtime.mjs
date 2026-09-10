@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { runtimeSourceFiles } from './runtime-source.mjs';
 
 export function includedRuntimePath(file) {
   if (/^(\.git\/|\.github\/|test\/|docs\/|src\/|public\/|dist\/|node_modules\/|\.oracle-wallet\/)/.test(file)) return false;
@@ -16,7 +17,8 @@ export function prepareRuntimePackage({ cwd, destination, tracked }) {
     if (!existsSync(path.join(cwd, required))) throw new Error(`Required runtime input missing: ${required}`);
   }
   mkdirSync(destination, { recursive: true });
-  for (const file of tracked.filter(includedRuntimePath)) {
+  const runtimeFiles = runtimeSourceFiles(cwd);
+  for (const file of tracked.filter(file => includedRuntimePath(file) || runtimeFiles.has(file))) {
     if (path.isAbsolute(file) || file.split(/[\\/]/).includes('..')) throw new Error('Invalid package path.');
     const target = path.join(destination, file);
     mkdirSync(path.dirname(target), { recursive: true });
@@ -44,5 +46,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const tracked = execFileSync('git', ['ls-files', '-z'], { cwd, encoding: 'utf8' }).split('\0').filter(Boolean);
   prepareRuntimePackage({ cwd, destination: stage, tracked });
   execFileSync('zip', ['-q', '-r', output, '.'], { cwd: stage, stdio: 'inherit' });
-  console.log('Packaged built frontend, runtime files, report assets, and installed dependencies; excluded source UI, tests, docs, workflows and local secrets.');
+  console.log('Packaged built frontend, runtime and shared Node modules, report assets, and dependencies; excluded browser-only source, tests, docs, workflows and local secrets.');
 }

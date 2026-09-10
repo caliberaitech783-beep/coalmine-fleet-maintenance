@@ -7,6 +7,7 @@ import path from 'node:path';
 import { classifyChanges, decideRelease, readHealthyLive, validateReportDelta } from '../.github/scripts/release-plan.mjs';
 import { eligibleArtifact, findRollbackArtifact } from '../.github/scripts/rollback-artifact.mjs';
 import { includedRuntimePath, prepareRuntimePackage } from '../.github/scripts/package-runtime.mjs';
+import { runtimeSourceFiles } from '../.github/scripts/runtime-source.mjs';
 
 const commits = Array.from({ length: 7 }, (_, i) => String(i + 1).repeat(40));
 const [base, one, two, three, four, five] = commits;
@@ -44,6 +45,13 @@ test('report-only releases keep the narrow immutable-delta boundary', () => {
   assert.throws(() => validateReportDelta(['department-reports.mjs', 'server.mjs']), /unrelated/);
   assert.throws(() => validateReportDelta([]), /no changes/);
 });
+test('shared server imports under src take the backend lane and remain in runtime packages', () => {
+  const runtimeFiles = runtimeSourceFiles(new URL('..', import.meta.url).pathname.replace(/^\/(.:)/, '$1').replaceAll('%20', ' '));
+  assert.ok(runtimeFiles.has('src/request-status.mjs'));
+  assert.ok(runtimeFiles.has('src/mis-history.mjs'));
+  assert.equal(classifyChanges(['src/request-status.mjs'], runtimeFiles), 'backend');
+  assert.equal(classifyChanges(['src/main.jsx'], runtimeFiles), 'ui');
+});
 test('live baseline requires database, scheduler state and exact identity', async () => {
   const healthy = { status: 'ok', database: 'connected', scheduledJobsEnabled: true, commit: base };
   const fetcher = health => async () => ({ ok: true, json: async () => health });
@@ -73,11 +81,12 @@ test('package includes application and report assets but excludes source UI, tes
   const root = mkdtempSync(path.join(tmpdir(), 'bdms-package-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const source = path.join(root, 'source');
-  const files = ['server.mjs', 'package.json', 'package-lock.json', 'DEPLOYMENT_SHA', 'dist/index.html', 'dist/app-version.txt', 'dist/.openai/hosting.json', 'node_modules/example/index.js', 'assets/fonts/font.ttf', 'src/main.jsx', '.env', '.github/workflows/test.yml', 'test/example.mjs'];
+  const files = ['server.mjs', 'src/shared.mjs', 'package.json', 'package-lock.json', 'DEPLOYMENT_SHA', 'dist/index.html', 'dist/app-version.txt', 'dist/.openai/hosting.json', 'node_modules/example/index.js', 'assets/fonts/font.ttf', 'src/main.jsx', '.env', '.github/workflows/test.yml', 'test/example.mjs'];
   for (const file of files) { mkdirSync(path.dirname(path.join(source, file)), { recursive: true }); writeFileSync(path.join(source, file), file); }
+  writeFileSync(path.join(source, 'server.mjs'), 'import "./src/shared.mjs";');
   const destination = path.join(root, 'runtime');
   prepareRuntimePackage({ cwd: source, destination, tracked: files });
-  for (const file of ['server.mjs', 'assets/fonts/font.ttf', 'dist/index.html', 'node_modules/example/index.js', 'DEPLOYMENT_SHA']) assert.ok(existsSync(path.join(destination, file)));
+  for (const file of ['server.mjs', 'src/shared.mjs', 'assets/fonts/font.ttf', 'dist/index.html', 'node_modules/example/index.js', 'DEPLOYMENT_SHA']) assert.ok(existsSync(path.join(destination, file)));
   for (const file of ['.env', 'src/main.jsx', '.github', 'test', 'dist/.openai']) assert.equal(existsSync(path.join(destination, file)), false);
   assert.throws(() => prepareRuntimePackage({ cwd: source, destination, tracked: files }), /already exist/);
   assert.equal(includedRuntimePath('.env.production'), false);

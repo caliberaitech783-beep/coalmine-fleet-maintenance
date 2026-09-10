@@ -82,6 +82,27 @@ jobs:
           npm run build
           printf '%s' "$APP_VERSION_SOURCE" > DEPLOYMENT_SHA
           node .github/scripts/package-runtime.mjs "$RUNNER_TEMP/node-app.zip"
+      - name: Smoke-test the packaged application against the isolated database
+        if: steps.plan.outputs.mode != 'none'
+        env:
+          EXPECTED_SHA: ${{ steps.plan.outputs.target }}
+          DATABASE_URL: postgresql://session_test:session_test@localhost:5432/session_test
+          PGSSLMODE: disable
+          DISABLE_SCHEDULED_JOBS: "true"
+          PORT: "3137"
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/package-smoke"
+          unzip -q "$RUNNER_TEMP/node-app.zip" -d "$RUNNER_TEMP/package-smoke"
+          cd "$RUNNER_TEMP/package-smoke"
+          node server.mjs > "$RUNNER_TEMP/package-smoke.log" 2>&1 &
+          smoke_pid=$!
+          trap 'kill "$smoke_pid" 2>/dev/null || true' EXIT
+          if ! bash "$GITHUB_WORKSPACE/.github/scripts/verify-release.sh" http://127.0.0.1:3137 "$EXPECTED_SHA" false 12; then
+            cat "$RUNNER_TEMP/package-smoke.log"
+            exit 1
+          fi
       - uses: actions/upload-artifact@v6
         if: steps.plan.outputs.mode != 'none'
         with:

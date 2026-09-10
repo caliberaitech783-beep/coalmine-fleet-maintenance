@@ -1,18 +1,20 @@
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
+import { runtimeSourceFiles } from './runtime-source.mjs';
 
 export const productionBranch = 'azure-hosting-1.0';
 const shaPattern = /^[0-9a-f]{40}$/;
 
 // Unknown files deliberately take the staged backend lane. Never classify just
 // the last pushed commit: a pending backend change may precede a UI change.
-export function classifyChanges(files) {
+export function classifyChanges(files, runtimeFiles = new Set()) {
   let mode = 'none';
   for (const file of files) {
     // Packaging changes alter the deployed runtime even if application source
     // did not change, so validate them through staging (including first cutover).
     if (file === '.github/scripts/package-runtime.mjs') return 'backend';
+    if (runtimeFiles.has(file)) return 'backend';
     if (/^(test\/|docs\/|\.github\/)/.test(file) || /^(README\.md|PROJECT_WORKFLOW\.md|AGENTS\.md|\.gitignore)$/.test(file)) continue;
     if (/^(src\/|public\/|index\.html$)/.test(file)) {
       if (mode === 'none') mode = 'ui';
@@ -21,7 +23,7 @@ export function classifyChanges(files) {
   return mode;
 }
 
-export function decideRelease({ target, live, head, ancestor, files, force = false }) {
+export function decideRelease({ target, live, head, ancestor, files, runtimeFiles, force = false }) {
   for (const sha of [target, live, head]) if (!shaPattern.test(sha || '')) throw new Error('Missing or invalid release identity; refusing deployment.');
   if (target === live && !force) return { mode: 'none', reason: 'Already live' };
   if (target !== live && ancestor(target, live)) return { mode: 'none', reason: 'Production already contains this release' };
@@ -30,7 +32,7 @@ export function decideRelease({ target, live, head, ancestor, files, force = fal
     if (ancestor(target, head)) return { mode: 'none', reason: 'Superseded by a newer cumulative production-branch revision' };
     throw new Error('Candidate is not on the production branch.');
   }
-  const mode = force ? 'backend' : classifyChanges(files);
+  const mode = force ? 'backend' : classifyChanges(files, runtimeFiles);
   return { mode, reason: mode === 'none' ? 'No application changes since live production' : `${mode} changes since live production` };
 }
 
@@ -68,7 +70,7 @@ export async function resolvePlan(env = process.env) {
   try { git('cat-file', '-e', `${live}^{commit}`); }
   catch { git('fetch', '--no-tags', 'origin', live); }
   const files = git('diff', '--name-only', '--no-renames', live, target).split('\n').filter(Boolean);
-  const plan = decideRelease({ target, live, head, ancestor: isAncestor, files, force: env.FORCE_DEPLOY === 'true' });
+  const plan = decideRelease({ target, live, head, ancestor: isAncestor, files, runtimeFiles: runtimeSourceFiles(process.cwd()), force: env.FORCE_DEPLOY === 'true' });
   if (env.REPORT_SOURCE_SHA && plan.mode !== 'none') validateReportDelta(files);
   return { ...plan, target, live, changedFiles: files.length };
 }
