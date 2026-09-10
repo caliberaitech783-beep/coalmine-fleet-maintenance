@@ -164,3 +164,10 @@ test("breakdown segment clicks open only that site and category of off-road asse
   assert.match(source, /key !== "fleet-breakdown:vehicles" && offroadCategory !== "vehicles"/);
   assert.match(source, /assetDrilldown\.startsWith\("offroad-site:"\) \? assetDrilldown\.slice\(13\)\.split\("\|"\)\[0\] : assetDrilldown\.startsWith\("site:"\)/);
 });
+
+test("fleet chart uses 25-unit grid steps and keeps breakdown segments readable", () => {
+  assert.match(source, /const fleetChartStep = 25;/);
+  assert.match(source, /const fleetChartAxisMax = Math.max\(fleetChartStep, Math.ceil\(fleetChartPeak \/ fleetChartStep\) \* fleetChartStep\);/);
+  assert.doesNotMatch(source, /const fleetChartScale = dashboardCountScale/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment \{ min-height: min\(30px, 100%\); \}/);
+});

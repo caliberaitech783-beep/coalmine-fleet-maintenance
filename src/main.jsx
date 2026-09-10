@@ -1254,9 +1254,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     });
   const showFleetBreakdowns = fleetChartMode === "breakdown";
   const fleetChartAllKey = showFleetBreakdowns ? "fleet-breakdown:all" : "all";
-  const fleetChartScale = dashboardCountScale(fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])));
-  const fleetChartAxisMax = fleetChartScale.maximum;
-  const fleetChartTicks = fleetChartScale.ticks;
+  // The fleet chart uses fixed 25-unit grid steps so bars and breakdown segments stay tall.
+  const fleetChartStep = 25;
+  const fleetChartPeak = fleetRegionInsights.flatMap((region) => region.sites.flatMap((site) => [site.equipment, site.vehicles])).reduce((maximum, value) => Math.max(maximum, Number(value) || 0), 0);
+  const fleetChartAxisMax = Math.max(fleetChartStep, Math.ceil(fleetChartPeak / fleetChartStep) * fleetChartStep);
+  const fleetChartTicks = Array.from({ length: fleetChartAxisMax / fleetChartStep + 1 }, (_, index) => index * fleetChartStep);
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
   const requestTrendEndKey = requestTrendTo || dashboardDate || localDateKey(now);

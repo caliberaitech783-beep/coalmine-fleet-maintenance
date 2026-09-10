@@ -188,3 +188,5 @@
 @media (max-width: 500px) {
   .mine-dashboard .mine-site-road-summary { grid-template-columns: minmax(0, 1fr); }
 }
+
+.mine-dashboard .mine-fleet-breakdown-segment { min-height: min(30px, 100%); }
