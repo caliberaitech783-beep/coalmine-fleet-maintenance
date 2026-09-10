@@ -49,6 +49,7 @@ import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflow
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
+import {serverErrorHandler} from './server-error-response.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -89,6 +90,12 @@ const pool=new Pool({
   idleTimeoutMillis:30000,
   connectionTimeoutMillis:10000
 });
+// An idle pooled client that loses its connection (PostgreSQL restart, slot
+// swap, network blip) emits 'error' on the pool. Without a listener Node
+// treats that as an unhandled 'error' event and exits the whole process,
+// which is what turned a momentary database hiccup into a site-wide outage.
+pool.on('error',error=>console.error('PostgreSQL pool connection error (will reconnect on next query).',error));
+process.on('unhandledRejection',(reason)=>console.error('Unhandled promise rejection (kept the server running).',reason));
 const sessionStore=createSessionStore(pool);
 let databaseReady=false;
 let databaseError='Database initialization is pending.';
@@ -3508,11 +3515,10 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
 
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
-app.use((error,_req,res,_next)=>{
-  console.error(error);
-  if(error?.type==='entity.too.large')return res.status(413).json({error:'The CSV is too large to import. Split it into smaller files.'});
-  res.status(500).json({error:'Server error'});
-});
+// Transient database failures become a 503 with Retry-After so the UI retries
+// silently; route errors that carry a status keep it; anything else is a 500
+// with a message that tells the user what to do next.
+app.use(serverErrorHandler());
 
 app.listen(port,()=>console.log(`Nerve Center listening on port ${port}`));
 

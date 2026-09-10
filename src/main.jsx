@@ -72,6 +72,7 @@ import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
+import {fetchWithTransientRetry} from "./api-transient-retry.mjs";
 import {requestsVisibleToMisWorkspace} from "../mis-request-visibility.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
 import RequestTimelineButton from "./request-timeline.jsx";
@@ -224,7 +225,12 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
     // The edge firewall rejects JSON bodies above 128 KB with an HTML 403, so
     // oversized payloads (meter evidence, trip cards, audio) go as text/plain.
     if (url.startsWith("/api/")) requestInit = edgeSafeJsonInit(requestInit);
-    const response = await nativeFetch(input, requestInit);
+    // While a deployment restarts the app the gateway answers 502/503/504 for
+    // a few seconds. Read-only API calls wait and retry instead of showing an
+    // error; writes are never replayed because the server may have applied them.
+    const response = await fetchWithTransientRetry(nativeFetch, input, requestInit, {
+      onRetry: ({attempt, reason, status}) => console.warn(`Retrying ${url} after a transient ${reason === "status" ? `HTTP ${status}` : "network failure"} (attempt ${attempt + 1}).`),
+    });
     if (response.status === 401 && authToken && url.startsWith("/api/") && !url.startsWith("/api/login")) {
       clearStoredSession();
       window.location.replace(`/?${SESSION_EXPIRED_PARAM}=1`);
