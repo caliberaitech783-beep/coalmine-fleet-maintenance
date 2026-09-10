@@ -52,6 +52,55 @@ const requests = Object.freeze([
   Object.freeze({ref: "NEW-CLOSED", door: "V3", chassis: "C3", site: "Sasti OB", category: "Preventive", status: "Closed", start: "2026-09-09 08:00:00", closedAt: "2026-09-09 09:00:00"}),
 ]);
 
+const todayKey = new Date().toLocaleDateString("en-CA");
+const liveAvailabilityCaption = `All timeAvailability: live · ${displayDates.formatDisplayDate(todayKey)}`;
+
+test("dashboard date defaults to today as the live view and only an earlier day filters", () => {
+  const view = harness();
+  let tree = view.render();
+  assert.equal(byLabel(tree, "Dashboard date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard date").props.max, todayKey);
+  assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
+  assert.ok(button(tree, "BD (%) 33.3"), "site summary shows BD balance as a share of total fleet");
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render();
+  assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Filtered · "));
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: todayKey}});
+  tree = view.render();
+  assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
+});
+
+test("availability count keeps its own date, shows it on both tables and resets to today", () => {
+  const view = harness();
+  let tree = view.render();
+  assert.equal(byLabel(tree, "Availability count date").props.value, todayKey);
+  assert.equal(text(byLabel(tree, "Site-wise BD table period")), liveAvailabilityCaption);
+  assert.equal(button(tree, "Reset dates").props.disabled, true);
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
+  tree = view.render();
+  // The BD range no longer moves availability.
+  assert.equal(byLabel(tree, "Availability count date").props.value, todayKey);
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /1 on road, 1 off road and 1 idle/);
+  assert.equal(text(byLabel(tree, "Site-wise BD table period")), `From: 08-09-2026To: 08-09-2026Availability: live · ${displayDates.formatDisplayDate(todayKey)}`);
+  byLabel(tree, "Availability count date").props.onChange({target: {value: "2026-09-08"}});
+  tree = view.render();
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /1 on road, 2 off road and 0 idle/);
+  assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 08-09-2026To: 08-09-2026Availability as of 08-09-2026");
+  assert.ok(text(byLabel(tree, "Site-wise breakdown opening, inward, outward and balance")).includes("Availability count impact08-09-2026"));
+  byLabel(tree, "Availability count date").props.onChange({target: {value: "9999-12-31"}});
+  tree = view.render();
+  assert.equal(byLabel(tree, "Availability count date").props.value, "2026-09-08");
+  button(tree, "Availability Count").props.onClick();
+  tree = view.render();
+  assert.equal(text(byLabel(tree, "Availability table period")), "From: 08-09-2026To: 08-09-2026Availability as of 08-09-2026");
+  button(tree, "Reset dates").props.onClick();
+  tree = view.render();
+  assert.equal(byLabel(tree, "Availability count date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "");
+  assert.equal(text(byLabel(tree, "Availability table period")), liveAvailabilityCaption);
+  assert.equal(button(tree, "Reset dates").props.disabled, true);
+});
+
 function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}} = {}) {
   const slots = [];
   let cursor = 0;
@@ -376,6 +425,8 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   tree = view.render();
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
   tree = view.render();
+  byLabel(tree, "Availability count date").props.onChange({target: {value: "2026-09-08"}});
+  tree = view.render();
   const site = byClass(tree, "mine-breakdown-site-row");
   assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
   assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
@@ -438,7 +489,7 @@ test("throughput defaults to all time and clearing either date or Reset restores
   const assertAllTime = () => {
     assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "");
     assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "");
-    assert.equal(text(byLabel(tree, "Site-wise BD table period")), "All timeAvailability: live");
+    assert.equal(text(byLabel(tree, "Site-wise BD table period")), liveAvailabilityCaption);
     assert.equal(button(tree, "Reset dates").props.disabled, true);
     assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 4 in, 2 out, 2 balance/);
     const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
@@ -467,7 +518,7 @@ test("throughput defaults to all time and clearing either date or Reset restores
     tree = view.render(rows);
     assertAllTime();
     button(tree, "Availability Count").props.onClick(); tree = view.render(rows);
-    assert.equal(text(byLabel(tree, "Availability table period")), "All timeAvailability: live");
+    assert.equal(text(byLabel(tree, "Availability table period")), liveAvailabilityCaption);
     assert.ok(byLabel(tree, "Sasti OB: 1 on road, 1 off road and 1 idle. Open fleet details."));
     button(tree, "Site-wise BD Movement").props.onClick(); tree = view.render(rows);
   }

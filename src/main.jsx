@@ -1086,7 +1086,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
-  const [dashboardDate, setDashboardDate] = useState("");
+  const [dashboardDate, setDashboardDate] = useState(() => localDateKey(new Date()));
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState("");
@@ -1102,6 +1102,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
   const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState("");
   const [breakdownSummaryTo, setBreakdownSummaryTo] = useState("");
+  const [availabilityAsOf, setAvailabilityAsOf] = useState(() => localDateKey(new Date()));
   const [throughputRegion, setThroughputRegion] = useState("all");
   const [throughputSite, setThroughputSite] = useState("all");
   const [breakdownDetailSite, setBreakdownDetailSite] = useState("");
@@ -1116,6 +1117,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const now = new Date();
   const todayKey = localDateKey(now);
   const dateLabel = formatDisplayDate(now);
+  // Today is the live view; only an earlier date filters the opening-date analysis.
+  const dashboardDateFilter = dashboardDate && dashboardDate !== todayKey ? dashboardDate : "";
   const filteredDateLabel = dashboardDate ? formatDisplayDate(dashboardDate) : dateLabel;
   const normalizedAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
   const normalizedAllowedRegions=Array.isArray(equipmentScope?.allowedRegions)?equipmentScope.allowedRegions.filter((region)=>region&&region!=="All"):null;
@@ -1136,7 +1139,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return assetIndex === null ? undefined : visibleEquipment[assetIndex];
   };
   const locationBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
-  const {liveRequests: liveBreakdowns, historicalRequests} = splitDashboardRequests(locationBreakdowns, dashboardDate);
+  const {liveRequests: liveBreakdowns, historicalRequests} = splitDashboardRequests(locationBreakdowns, dashboardDateFilter);
   const visibleBreakdowns = historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
   const liveFleetCounts = fleetChartCounts(visibleEquipment, liveBreakdowns);
@@ -1181,7 +1184,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const throughputRequests = locationBreakdowns.filter(inThroughputScope);
   const throughputEquipment = visibleEquipment.filter(inThroughputScope);
   const throughputScopeLabel = activeThroughputSite !== "all" ? activeThroughputSite : selectedThroughputRegion?.code || (dashboardSite !== "all" ? dashboardSite : selectedRegion?.code) || "All regions";
-  const availabilityDate = breakdownSummaryTo === todayKey ? "" : breakdownSummaryTo;
+  // Availability has its own date; today (or no date) is the live fleet status.
+  const availabilityDate = availabilityAsOf === todayKey ? "" : availabilityAsOf;
+  const availabilityDateLabel = formatDisplayDate(availabilityDate || todayKey);
+  const availabilityStatusLabel = availabilityDate ? `Availability as of ${availabilityDateLabel}` : dashboardReconnecting ? "Availability: last checked data" : `Availability: live · ${availabilityDateLabel}`;
   const availabilityRequests = availabilityRequestsForDate(throughputRequests, availabilityDate);
   // A selected historical day must not reuse today's server-derived status.
   const availabilityEquipment = availabilityDate ? dashboardFleetSnapshot(throughputEquipment, availabilityRequests) : throughputEquipment;
@@ -1189,6 +1195,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownSummaryEndKey = breakdownSummaryTo;
   const breakdownSummaryStartKey = breakdownSummaryFrom;
   const breakdownSummaryPeriodLabel = breakdownSummaryFrom ? formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey) : "All time";
+  const updateAvailabilityDate = (value) => {
+    if (!value) { setAvailabilityAsOf(todayKey); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > todayKey) return;
+    setAvailabilityAsOf(value);
+  };
   const updateBreakdownSummaryRange = (bound, value) => {
     if (!value) { setBreakdownSummaryFrom(""); setBreakdownSummaryTo(""); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > todayKey) return;
@@ -1527,7 +1538,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}`}>
       <header className="mine-dashboard-head">
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
-        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
+        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} max={todayKey} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardDateFilter ? "Filtered" : "Live"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
       </header>
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
@@ -1550,7 +1561,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                     const totalColumn = event.target.closest(".mine-fleet-bar")?.closest(".mine-fleet-bar-column");
                     openAssetDrilldown(segmentColumn ? `offroad-site:${site.name}|${segmentColumn.classList.contains("vehicles") ? "vehicles" : "equipment"}` : totalColumn ? `site-total:${site.name}|${totalColumn.classList.contains("vehicles") ? "vehicles" : "equipment"}` : `${fleetChartMode === "total" ? "site" : "offroad-site"}:${site.name}`);
                   }} aria-label={showFleetBreakdowns ? `${site.name}: ${site.equipment} equipment (${site.breakdown.equipment} breakdown) and ${site.vehicles} vehicles (${site.breakdown.vehicles} breakdown)` : `${site.name}: ${site.equipment} equipment and ${site.vehicles} vehicles`}><FleetSiteBars site={site} axisMax={fleetChartAxisMax} showBreakdown={showFleetBreakdowns} /></button>
-                  <small className="mine-fleet-site-summary"><b>{site.name}</b><button type="button" onClick={() => openAssetDrilldown(`offroad-site:${site.name}`)}>BD Balance {site.breakdown.total.toLocaleString()}</button><button type="button" onClick={() => openAssetDrilldown(`site:${site.name}`)}>Total Fleet {site.total.toLocaleString()}</button></small>
+                  <small className="mine-fleet-site-summary"><b>{site.name}</b><button type="button" onClick={() => openAssetDrilldown(`offroad-site:${site.name}`)}>BD Balance {site.breakdown.total.toLocaleString()}</button><button type="button" onClick={() => openAssetDrilldown(`site:${site.name}`)}>Total Fleet {site.total.toLocaleString()}</button><button type="button" className="bd-percent" title={`BD Balance ${site.breakdown.total} of ${site.total} total fleet`} onClick={() => openAssetDrilldown(`offroad-site:${site.name}`)}>BD (%) {(site.total ? site.breakdown.total / site.total * 100 : 0).toFixed(1)}</button></small>
                 </div>)}</div>
                 <footer {...listAction(showFleetBreakdowns ? `fleet-breakdown:region:${region.code}` : `region:${region.code}`, `All ${region.code} ${showFleetBreakdowns ? "breakdown requests" : "fleet records"}`)}><b>{region.code}</b><span>{region.total.toLocaleString()} fleet</span></footer>
               </section>)}</div>
@@ -1571,8 +1582,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             {selectedThroughputRegion && <label><span>Site</span><select aria-label="Vehicle throughput site" value={activeThroughputSite} onChange={(event) => { setThroughputSite(event.target.value); setRoadFocusSite(""); }}><option value="all">All sites</option>{throughputSiteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}
             <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><input type="date" aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
-            <button type="button" onClick={() => updateBreakdownSummaryRange("from", "")} disabled={!breakdownSummaryFrom && !breakdownSummaryTo}>Reset dates</button>
-            <small>{breakdownSummaryFrom ? "BD movement includes both dates." : "All time · Select a date to filter."} {availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : dashboardReconnecting ? "Availability: last checked data" : equipmentLoaded ? "Availability is live" : "Availability pending"}.</small>
+            <label className="dashboard-availability-date"><span>Availability date</span><input type="date" aria-label="Availability count date" value={availabilityAsOf} max={todayKey} onChange={(event) => updateAvailabilityDate(event.target.value)} /></label>
+            <button type="button" onClick={() => { updateBreakdownSummaryRange("from", ""); updateAvailabilityDate(""); }} disabled={!breakdownSummaryFrom && !breakdownSummaryTo && !availabilityDate}>Reset dates</button>
+            <small>{breakdownSummaryFrom ? "BD movement includes both dates." : "All time · Select a date to filter."} {availabilityDate ? `Availability as of ${availabilityDateLabel}` : dashboardReconnecting ? "Availability: last checked data" : equipmentLoaded ? `Availability is live · ${availabilityDateLabel}` : "Availability pending"}.</small>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
@@ -1583,8 +1595,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("incoming", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
-              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Site-wise BD table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : dashboardReconnecting ? "Availability: last checked data" : "Availability: live"}</small></div>
-              <div className="mine-breakdown-site-head" role="row"><span>Site name</span><span>BD Open</span><span>BD In</span><span>BD Out</span><span>BD Balance</span><span>Availability count impact</span><span aria-hidden="true" /></div>
+              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Site-wise BD table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityStatusLabel}</small></div>
+              <div className="mine-breakdown-site-head" role="row"><span>Site name</span><span>BD Open</span><span>BD In</span><span>BD Out</span><span>BD Balance</span><span>Availability count impact<small>{availabilityDateLabel}</small></span><span aria-hidden="true" /></div>
               <div className="mine-breakdown-site-body">
                 {breakdownSiteSummary.length ? breakdownSiteSummary.map((site) => {
                   const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
@@ -1603,7 +1615,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><small>Idle</small><strong>{availabilityKpis.idle.toLocaleString()}</strong></span></button>
             </div>
             <div className="mine-road-site-table" role="table" aria-label="Site-wise availability count">
-              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Availability table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : dashboardReconnecting ? "Availability: last checked data" : "Availability: live"}</small></div>
+              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Availability table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityStatusLabel}</small></div>
               <div className="mine-road-site-head" role="row"><span>Site name</span><span>Total fleet</span><span>On road</span><span>Off road</span><span>Idle</span><span>Availability</span><span>Status distribution</span><span aria-hidden="true" /></div>
               <div className="mine-road-site-body">{availabilityCountBySite.length ? availabilityCountBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site-status:${site.site}|all`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
                 <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric total"><b>{site.total}</b></span><span className="metric onroad"><b>{site.onRoad}</b></span><span className="metric offroad"><b>{site.offRoad}</b></span><span className="metric idle"><b>{site.idle}</b></span><span className="availability"><b>{site.availability}%</b></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${site.total ? (site.onRoad / site.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${site.total ? (site.offRoad / site.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${site.total ? (site.idle / site.total) * 100 : 0}%` }} /></span><ChevronRight />

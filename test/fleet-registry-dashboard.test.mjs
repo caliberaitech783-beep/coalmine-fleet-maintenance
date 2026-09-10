@@ -85,13 +85,18 @@ test("breakdown mode keeps total counts and green segments on one common scale",
 test("Total Fleet uses the approved taller card and wider site bars", () => {
   assert.match(css, /\.mine-dashboard-feature-row \.mine-fleet-chart-layout\s*\{[^}]*min-height:\s*281px;[^}]*height:\s*326px/);
   assert.match(css, /\.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(34px, 2\.2vw, 42px\)/);
-  assert.match(readabilityCss, /\.mine-dashboard-feature-row \.mine-fleet-chart-layout\s*\{[^}]*height:\s*390px;[^}]*min-height:\s*360px/);
+  assert.match(readabilityCss, /\.mine-dashboard-feature-row \.mine-fleet-chart-layout\s*\{[^}]*height:\s*408px;[^}]*min-height:\s*378px/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(44px, 3vw, 58px\)/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-count\s*\{[^}]*font-size:\s*18px !important/);
   assert.match(source, /<small className="mine-fleet-site-summary"><b>\{site\.name\}<\/b>/);
   assert.match(source, /openAssetDrilldown\(`offroad-site:\$\{site\.name\}`\)\}>BD Balance \{site\.breakdown\.total\.toLocaleString\(\)\}<\/button>/);
   assert.match(source, /const fleetBreakdownDrilldownTitle = .*\}BD Balance`/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)\}>Total Fleet \{site\.total\.toLocaleString\(\)\}<\/button>/);
+  // BD (%) is the site BD balance share of its total fleet, one decimal like the day-wise table.
+  assert.match(source, /className="bd-percent".*?>BD \(%\) \{\(site\.total \? site\.breakdown\.total \/ site\.total \* 100 : 0\)\.toFixed\(1\)\}<\/button><\/small>/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-site-entry \{ grid-template-rows: minmax\(0, 1fr\) 104px; \}/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-chart-legend \{[^}]*font-size: 14px !important;[^}]*font-weight: 800;/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-chart-legend i \{ width: 14px; height: 14px;/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-site-summary button\s*\{/);
 });
 

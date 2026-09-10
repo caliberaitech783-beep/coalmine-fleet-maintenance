@@ -20,14 +20,16 @@ test("dashboard region selection exposes its sites and filters every scoped data
 
 test("dashboard date filters opening-date analysis without filtering live fleet status and remains responsive", () => {
   assert.match(source, /function dashboardRecordDate\(record = \{\}\)/);
-  assert.match(source, /const \[dashboardDate, setDashboardDate\] = useState\(""\)/);
-  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardDate\)/);
+  // The top date defaults to today; today keeps the live view and only an earlier day filters.
+  assert.match(source, /const \[dashboardDate, setDashboardDate\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
+  assert.match(source, /const dashboardDateFilter = dashboardDate && dashboardDate !== todayKey \? dashboardDate : ""/);
+  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardDateFilter\)/);
   assert.match(source, /const visibleBreakdowns = historicalRequests\s*\.map/);
   assert.match(source, /liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
   assert.match(source, /fleetChartCounts\(visibleEquipment, liveBreakdowns\)/);
   assert.doesNotMatch(source, /dashboardDate \? locationBreakdowns\.filter/);
-  assert.match(source, /<input aria-label="Dashboard date" type="date" value=\{dashboardDate\}/);
-  assert.match(source, /dashboardReconnecting \? "Reconnecting" : dashboardDate \? "Filtered" : "Live"\} · \{filteredDateLabel\}/);
+  assert.match(source, /<input aria-label="Dashboard date" type="date" value=\{dashboardDate\} max=\{todayKey\}/);
+  assert.match(source, /dashboardReconnecting \? "Reconnecting" : dashboardDateFilter \? "Filtered" : "Live"\} · \{filteredDateLabel\}/);
   assert.match(styles, /\.mine-head-actions\{[^}]*flex-wrap:wrap/);
   assert.match(styles, /\.mine-site-filter select\{min-width:165px\}/);
   assert.match(styles, /@media\(max-width:700px\)[\s\S]*\.mine-head-actions\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
