@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { auditChangedFields, auditRouteDetails, auditSafeError, auditSubmittedFields } from "../audit-trail.mjs";
+import { auditChangedFields, auditRouteDetails, auditSafeError, auditShouldRecord, auditSubmittedFields } from "../audit-trail.mjs";
 
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -25,6 +25,7 @@ test("audit field summaries show changes without exposing credentials or media",
 
 test("audit routes classify security, master, workflow, and CRM activity", () => {
   assert.equal(auditRouteDetails("POST", "/api/login").eventType, "Security");
+  assert.equal(auditRouteDetails("DELETE", "/api/user-sessions/example-session").action, "Force close session");
   assert.equal(auditRouteDetails("PUT", "/api/masters/Users%20%26%20employees/1").module, "Users & employees");
   assert.equal(auditRouteDetails("DELETE", "/api/requests/REQ-1").action, "Delete request");
   assert.equal(auditRouteDetails("PATCH", "/api/tickets/TIC-1").eventType, "CRM");
@@ -39,6 +40,23 @@ test("audit errors retain diagnostic context without exposing credentials", () =
   });
 });
 
+test("audit capture keeps administration and direct record changes out of routine workflow", () => {
+  assert.equal(auditShouldRecord("POST", "/api/login"), true);
+  assert.equal(auditShouldRecord("DELETE", "/api/user-sessions/example-session"), true);
+  assert.equal(auditShouldRecord("GET", "/api/user-sessions"), false);
+  assert.equal(auditShouldRecord("POST", "/api/masters/Users%20%26%20employees"), true);
+  assert.equal(auditShouldRecord("PUT", "/api/masters/Users%20%26%20employees/1"), true);
+  assert.equal(auditShouldRecord("DELETE", "/api/masters/Users%20%26%20employees/1"), true);
+  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1"), true);
+  assert.equal(auditShouldRecord("DELETE", "/api/requests/REQ-1"), true);
+  assert.equal(auditShouldRecord("POST", "/api/requests"), false);
+  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1/close"), false);
+  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1/verify"), false);
+  assert.equal(auditShouldRecord("POST", "/api/requests/REQ-1/daily-remarks"), false);
+  assert.equal(auditShouldRecord("PATCH", "/api/tickets/TIC-1"), false);
+  assert.equal(auditShouldRecord("POST", "/api/reports/send"), false);
+});
+
 test("server persists append-only audit events and exposes the detailed report", () => {
   assert.match(server, /CREATE TABLE IF NOT EXISTS audit_events/);
   assert.match(server, /res\.on\('finish',[\s\S]*appendAuditEvent/);
@@ -49,14 +67,16 @@ test("server persists append-only audit events and exposes the detailed report",
   assert.match(server, /duration_ms INTEGER NOT NULL DEFAULT 0/);
   assert.match(server, /error_code TEXT NOT NULL DEFAULT ''/);
   assert.match(server, /app\.post\('\/api\/logout',requireSession/);
-  assert.match(server, /outcome==='Failed'\|\|Boolean\(req\.audit\)/);
+  assert.match(server, /auditShouldRecord\(req\.method,req\.path\)/);
+  assert.match(server, /AUDIT_VISIBLE_SCOPE_SQL/);
+  assert.match(server, /event_type NOT IN \('Workflow','Workflow timeline'\)/);
+  assert.match(server, /action IN \('Edit request','Delete request'\)/);
   assert.match(server, /auditSafeError\(error\)/);
   assert.match(server, /req\.get\?\.\(AUDIT_DEVICE_ID_HEADER\)/);
   assert.match(server, /action:profile\.sessionRole==='super'\?'Administrator login':'User login'/);
   assert.match(server, /app\.get\('\/api\/audit-events',requireSuper/);
-  assert.match(server, /Date\.now\(\)-9\*24\*60\*60\*1000/);
-  assert.match(server, /occurred_at >= \(\$1::date::timestamp AT TIME ZONE 'Asia\/Kolkata'\)/);
-  assert.match(server, /occurred_at < \(\(\$2::date \+ 1\)::timestamp AT TIME ZONE 'Asia\/Kolkata'\)/);
+  assert.match(server, /occurred_at >= NOW\(\)-INTERVAL '5 days'/);
+  assert.match(server, /DELETE FROM audit_events WHERE occurred_at<NOW\(\)-INTERVAL '5 days'/);
   assert.match(server, /action:'Administrator password change'/);
   assert.match(client, /function AuditTrailPage/);
   for (const column of ["Date & time", "Event", "User / login", "Role", "Module", "Action", "Target / record", "Outcome", "Reason / details", "Changes", "IP address", "App Device ID", "Device type", "Platform", "Browser", "Session ID"])
@@ -64,10 +84,11 @@ test("server persists append-only audit events and exposes the detailed report",
   assert.match(client, /headers\.set\("X-BDMS-Device-ID", clientDeviceId\)/);
   assert.match(client, /label="Device"[\s\S]*label="Platform"/);
   assert.match(client, /Load older audit records/);
-  assert.match(client, /auditDefaultDateRange/);
-  assert.match(client, /Last 10 days/);
-  assert.match(client, /params\.set\("fromDate",fromDate\)/);
-  assert.match(client, /params\.set\("toDate",toDate\)/);
+  assert.doesNotMatch(client, /auditDefaultDateRange/);
+  assert.doesNotMatch(client, /Last 10 days/);
+  assert.doesNotMatch(client, /params\.set\("fromDate",fromDate\)/);
+  assert.doesNotMatch(client, /params\.set\("toDate",toDate\)/);
+  assert.match(client, /recordDateFilter=\{false\}/);
   assert.match(client, /HTTP status/);
   assert.match(client, /Error code/);
   assert.match(client, /className="toolbar-actions-end"><div className="master-actions-slot"[\s\S]*?<TableParameterFilter/);

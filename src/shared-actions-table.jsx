@@ -62,9 +62,9 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = columns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = columns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
-  const reset = () => { clearFilters(); recordDateFilter?.onChange(""); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
+  const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
   const dateColumn = primaryRecordDateColumn(columns);
-  const dateControl = recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
+  const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
   const dateRangeControl = dateControl && <RecordDateRange {...dateControl} />;
   // Plain <th> headings become sort-and-filter headers (or sort buttons when no FilterableHeader is supplied);
   // headers that bring their own sorting (onSort) are left untouched.

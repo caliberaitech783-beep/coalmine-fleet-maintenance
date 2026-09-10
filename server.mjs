@@ -25,6 +25,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
+import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
 import {hierarchyAccessAllowsReport} from './hierarchy-report-catalogue.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
@@ -43,7 +44,7 @@ import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage} from './request-conflict.mjs';
-import {auditChangedFields,auditRouteDetails,auditSafeError,auditSubmittedFields} from './audit-trail.mjs';
+import {auditChangedFields,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
@@ -171,6 +172,21 @@ const auditSessionId=(req)=>{
 const auditRole=(session={})=>auditClean(session.permissions?.adminLevel||session.assignedRole||session.userType||session.role||'Unauthenticated',100);
 const auditTargetReference=(req)=>auditClean(req.params?.reference||req.params?.id||req.body?.reference||req.body?.username||'',160);
 const auditIpAddress=(req)=>auditClean(String(req.headers?.['x-forwarded-for']||'').split(',')[0]||req.ip||req.socket?.remoteAddress,100);
+const AUDIT_VISIBLE_SCOPE_SQL=`(
+  event_type NOT IN ('Workflow','Workflow timeline') AND (
+  event_type IN ('Security','Master data')
+  OR action IN ('Edit request','Delete request')
+  OR request_path IN ('/api/login','/api/logout')
+  OR request_path LIKE '/api/password-reset%'
+  OR request_path LIKE '/api/change-initial-password%'
+  OR request_path LIKE '/api/masters/%'
+  OR (request_path LIKE '/api/requests/%' AND request_path NOT LIKE '/api/requests/%/%' AND request_method IN ('PUT','PATCH','DELETE'))
+))`;
+const AUDIT_EVENT_PROJECTION=`id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
+  actor_role AS "actorRole",module,action,target_type AS "targetType",target_reference AS "targetReference",reason,
+  changed_fields AS "changedFields",ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",session_id AS "sessionId",
+  request_method AS "requestMethod",request_path AS "requestPath",status_code AS "statusCode",duration_ms AS "durationMs",
+  error_code AS "errorCode",request_id AS "requestId",occurred_at AS "occurredAt"`;
 
 async function appendAuditEvent(req,event={}){
   try{
@@ -411,7 +427,16 @@ async function migrate(){
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS assigned_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS session_public_id TEXT NOT NULL DEFAULT gen_random_uuid()::text;
+    ALTER TABLE auth_sessions ALTER COLUMN session_public_id SET DEFAULT gen_random_uuid()::text;
+    UPDATE auth_sessions SET session_public_id=gen_random_uuid()::text WHERE session_public_id='';
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS ip_address TEXT NOT NULL DEFAULT '';
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS device_id TEXT NOT NULL DEFAULT '';
+    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_agent TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_public_id_idx ON auth_sessions (session_public_id);
+    CREATE INDEX IF NOT EXISTS auth_sessions_last_seen_idx ON auth_sessions (last_seen_at DESC);
     CREATE TABLE IF NOT EXISTS audit_events (
       id BIGSERIAL PRIMARY KEY,
       event_type TEXT NOT NULL DEFAULT 'Activity',
@@ -448,6 +473,21 @@ async function migrate(){
     CREATE INDEX IF NOT EXISTS audit_events_actor_idx ON audit_events (actor_login, occurred_at DESC);
     CREATE INDEX IF NOT EXISTS audit_events_module_idx ON audit_events (module, occurred_at DESC);
     CREATE INDEX IF NOT EXISTS audit_events_outcome_idx ON audit_events (outcome, occurred_at DESC);
+    CREATE TABLE IF NOT EXISTS audit_log_export_runs (
+      slot_key TEXT PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'Sending',
+      attempts INTEGER NOT NULL DEFAULT 1,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS audit_log_export_deliveries (
+      slot_key TEXT NOT NULL REFERENCES audit_log_export_runs(slot_key) ON DELETE CASCADE,
+      recipient_key TEXT NOT NULL,
+      channel TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'Sending',
+      attempts INTEGER NOT NULL DEFAULT 1,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (slot_key,recipient_key,channel)
+    );
     CREATE TABLE IF NOT EXISTS password_change_sessions (
       token UUID PRIMARY KEY,
       master_record_id BIGINT NOT NULL REFERENCES master_records(id) ON DELETE CASCADE,
@@ -699,8 +739,7 @@ app.use((req,res,next)=>{
   res.on('finish',()=>{
     if(req.audit===false)return;
     const outcome=res.statusCode>=200&&res.statusCode<400?'Success':'Failed';
-    const auditable=['POST','PUT','PATCH','DELETE'].includes(req.method)||outcome==='Failed'||Boolean(req.audit);
-    if(!auditable)return;
+    if(!auditShouldRecord(req.method,req.path))return;
     req.auditStatusCode=res.statusCode;
     req.auditDurationMs=Date.now()-startedAt;
     void appendAuditEvent(req,{
@@ -815,6 +854,11 @@ function requireTrueSuperAdmin(req,res,next){
 function requireWhatsAppAdministrator(req,res,next){
   if(req.session?.role==='super'&&req.session?.permissions?.adminLevel!=='Manager')return next();
   return res.status(403).json({error:'Only an Admin or Super Admin can change Meta WhatsApp settings.'});
+}
+
+function requireAdministrator(req,res,next){
+  if(req.session?.role==='super'&&req.session?.permissions?.adminLevel!=='Manager')return next();
+  return res.status(403).json({error:'Only an Admin or Super Admin can manage user sessions.'});
 }
 
 app.post('/api/logout',requireSession,async(req,res,next)=>{
@@ -1034,7 +1078,17 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
 
 async function readSession(req){
   const token=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');
-  return sessionStore.get(token);
+  const session=await sessionStore.get(token);
+  if(session)await sessionStore.touch(token,sessionActivityDetails(req)).catch(()=>{});
+  return session;
+}
+
+function sessionActivityDetails(req){
+  return {
+    ipAddress:auditIpAddress(req),
+    deviceId:auditClean(req.get?.(AUDIT_DEVICE_ID_HEADER),80),
+    userAgent:auditClean(req.get?.('user-agent'),500),
+  };
 }
 
 async function requireSession(req,res,next){
@@ -1069,6 +1123,51 @@ async function requireSuper(req,res,next){
   }catch(error){next(error)}
 }
 
+app.post('/api/session-heartbeat',requireSession,(_req,res)=>res.status(204).end());
+
+app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
+    const {rows}=await pool.query(`SELECT token,session_public_id AS "sessionId",employee_name AS "name",login_name AS "login",
+      COALESCE(NULLIF(permissions->>'adminLevel',''),NULLIF(assigned_role,''),NULLIF(user_type,''),role) AS "roleLabel",
+      user_type AS "userType",assigned_role AS "assignedRole",created_at AS "createdAt",last_seen_at AS "lastSeenAt",
+      ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent"
+      FROM auth_sessions
+      WHERE created_at>NOW()-INTERVAL '30 days'
+      ORDER BY last_seen_at DESC,created_at DESC`);
+    const now=Date.now();
+    const sessions=rows.map(({token,...row})=>({
+      ...row,
+      current:token===currentToken,
+      online:now-new Date(row.lastSeenAt||row.createdAt).getTime()<=120000,
+    }));
+    res.set('Cache-Control','no-store');
+    res.json({
+      sessions,
+      summary:{
+        active:sessions.length,
+        online:sessions.filter(session=>session.online).length,
+        users:new Set(sessions.map(session=>String(session.login||session.name).toLowerCase()).filter(Boolean)).size,
+        devices:new Set(sessions.map(session=>session.deviceId).filter(Boolean)).size,
+      },
+    });
+  }catch(error){next(error)}
+});
+
+app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const sessionId=String(req.params.sessionId||'').trim();
+    const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
+    const target=await pool.query(`SELECT token,employee_name AS name,login_name AS login
+      FROM auth_sessions WHERE session_public_id=$1`,[sessionId]);
+    if(!target.rows.length)return res.status(404).json({error:'This session is no longer active.'});
+    if(target.rows[0].token===currentToken)return res.status(400).json({error:'Your current session cannot be force closed from this page. Use Sign out instead.'});
+    await pool.query('DELETE FROM auth_sessions WHERE session_public_id=$1',[sessionId]);
+    req.audit={eventType:'Security',module:'User sessions',action:'Force close session',targetType:'User session',targetReference:target.rows[0].login||target.rows[0].name||sessionId,changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+
 app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
   try{
     const isAdministrator=req.session.permissions?.adminLevel!=='Manager';
@@ -1076,38 +1175,21 @@ app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
       return res.status(403).json({error:'You do not have access to the Audit Trail.'});
     const paged=String(req.query.paged||'').toLowerCase()==='true';
     const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||1000));
-    const indiaDateKey=(value)=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(value);
-    const defaultToDate=indiaDateKey(new Date());
-    const defaultFromDate=indiaDateKey(new Date(Date.now()-9*24*60*60*1000));
-    const requestedFromDate=String(req.query.fromDate||'').trim();
-    const requestedToDate=String(req.query.toDate||'').trim();
-    const fromDate=requestedFromDate||defaultFromDate;
-    const toDate=requestedToDate||defaultToDate;
-    const validDate=(value)=>{
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
-      const parsed=new Date(`${value}T00:00:00Z`);
-      return !Number.isNaN(parsed.getTime())&&parsed.toISOString().slice(0,10)===value;
-    };
-    if(!validDate(fromDate)||!validDate(toDate)||fromDate>toDate)return res.status(400).json({error:'Select a valid audit date range.'});
     const beforeAt=String(req.query.beforeAt||'').trim();
     const beforeId=Number(req.query.beforeId)||0;
-    const params=[fromDate,toDate];
+    const params=[];
     const conditions=[
-      `occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')`,
-      `occurred_at < (($2::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`,
+      `occurred_at >= NOW()-INTERVAL '5 days'`,
+      AUDIT_VISIBLE_SCOPE_SQL,
     ];
     if(paged&&beforeAt&&beforeId){
       params.push(beforeAt,beforeId);
-      conditions.push(`(occurred_at,id)<($3::timestamptz,$4::bigint)`);
+      conditions.push(`(occurred_at,id)<($1::timestamptz,$2::bigint)`);
     }
     params.push(paged?limit+1:limit);
     const limitParameter=`$${params.length}`;
     const where=`WHERE ${conditions.join(' AND ')}`;
-    const {rows}=await pool.query(`SELECT id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
-      actor_role AS "actorRole",module,action,target_type AS "targetType",target_reference AS "targetReference",reason,
-      changed_fields AS "changedFields",ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",session_id AS "sessionId",
-      request_method AS "requestMethod",request_path AS "requestPath",status_code AS "statusCode",duration_ms AS "durationMs",
-      error_code AS "errorCode",request_id AS "requestId",occurred_at AS "occurredAt"
+    const {rows}=await pool.query(`SELECT ${AUDIT_EVENT_PROJECTION}
       FROM audit_events ${where} ORDER BY occurred_at DESC,id DESC LIMIT ${limitParameter}`,params);
     res.set('Cache-Control','no-store');
     if(!paged)return res.json(rows);
@@ -1120,11 +1202,11 @@ app.get('/api/audit-events',requireSuper,async(req,res,next)=>{
         COUNT(*) FILTER (WHERE outcome='Failed')::int AS failed,
         COUNT(DISTINCT NULLIF(actor_login,''))::int AS users,
         COUNT(DISTINCT NULLIF(device_id,''))::int AS devices FROM audit_events
-        WHERE occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
-          AND occurred_at < (($2::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')`,[fromDate,toDate]);
+        WHERE occurred_at >= NOW()-INTERVAL '5 days'
+          AND ${AUDIT_VISIBLE_SCOPE_SQL}`);
       summary=summaryRows[0]||{total:0,failed:0,users:0,devices:0};
     }
-    res.json({events,summary,range:{fromDate,toDate},hasMore,nextCursor:hasMore&&last?{beforeAt:last.occurredAt,beforeId:last.id}:null});
+    res.json({events,summary,range:{days:5},hasMore,nextCursor:hasMore&&last?{beforeAt:last.occurredAt,beforeId:last.id}:null});
   }catch(error){next(error)}
 });
 
@@ -3593,6 +3675,143 @@ app.delete('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+const AUDIT_EXPORT_COLUMNS=[
+  {label:'Date & time',key:'occurredAt'},
+  {label:'Event',key:'eventType'},
+  {label:'User',key:'actorName'},
+  {label:'Login',key:'actorLogin'},
+  {label:'Role',key:'actorRole'},
+  {label:'Module',key:'module'},
+  {label:'Action',key:'action'},
+  {label:'Target type',key:'targetType'},
+  {label:'Target / record',key:'targetReference'},
+  {label:'Outcome',key:'outcome'},
+  {label:'HTTP status',key:'statusCode'},
+  {label:'Reason / details',key:'reason'},
+  {label:'Changes',key:'changedFields'},
+  {label:'IP address',key:'ipAddress'},
+  {label:'Device ID',key:'deviceId'},
+  {label:'Session ID',key:'sessionId'},
+];
+
+function auditExportCell(event,key){
+  if(key==='occurredAt')return formatDisplayDateTime(event.occurredAt);
+  if(key==='changedFields')return Array.isArray(event.changedFields)&&event.changedFields.length?JSON.stringify(event.changedFields):'';
+  return event[key]??'';
+}
+
+async function pruneAuditEvents(){
+  if(!databaseReady)return {skipped:true};
+  const result=await pool.query(`DELETE FROM audit_events WHERE occurred_at<NOW()-INTERVAL '5 days'`);
+  return {deleted:result.rowCount||0};
+}
+
+let auditLogExportRunning=false;
+async function sendScheduledAuditLogExports(now=new Date()){
+  if(!databaseReady||auditLogExportRunning)return {skipped:true};
+  const slotKey=auditLogExportSlot(now);
+  const {rows:currentRows}=await pool.query(`SELECT status,attempts,updated_at FROM audit_log_export_runs WHERE slot_key=$1`,[slotKey]);
+  const current=currentRows[0];
+  if(current?.status?.startsWith('Sent'))return {skipped:true,reason:'already sent',slotKey};
+  if(current?.status==='Sending'&&Date.now()-new Date(current.updated_at).getTime()<10*60*1000)return {skipped:true,reason:'already running',slotKey};
+  if(Number(current?.attempts||0)>=3)return {skipped:true,reason:'retry limit reached',slotKey};
+  if(!current){
+    const {rows:lastRows}=await pool.query(`SELECT updated_at FROM audit_log_export_runs WHERE status LIKE 'Sent%' ORDER BY updated_at DESC LIMIT 1`);
+    if(!auditLogExportDue(now,lastRows[0]?.updated_at))return {skipped:true,reason:'outside five-day schedule'};
+  }
+  const claim=await pool.query(`INSERT INTO audit_log_export_runs (slot_key,status,attempts,updated_at)
+    VALUES ($1,'Sending',1,NOW())
+    ON CONFLICT (slot_key) DO UPDATE SET status='Sending',attempts=audit_log_export_runs.attempts+1,updated_at=NOW()
+      WHERE audit_log_export_runs.status LIKE 'Failed%' OR (audit_log_export_runs.status='Sending' AND audit_log_export_runs.updated_at<NOW()-INTERVAL '10 minutes')
+    RETURNING attempts`,[slotKey]);
+  if(!claim.rowCount)return {skipped:true,reason:'already claimed',slotKey};
+  auditLogExportRunning=true;
+  let status='Failed - export did not complete';
+  try{
+    const [{rows:eventRows},{rows:userRows}]=await Promise.all([
+      pool.query(`SELECT ${AUDIT_EVENT_PROJECTION} FROM audit_events WHERE occurred_at>=NOW()-INTERVAL '5 days' AND ${AUDIT_VISIBLE_SCOPE_SQL} ORDER BY occurred_at DESC,id DESC LIMIT 5000`),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+    ]);
+    const recipients=userRows.map(({record_data})=>record_data||{}).map((user)=>({user,profile:resolveMobileAccess({user})}))
+      .filter(({profile})=>profile.sessionRole==='super'&&['Admin','Super Admin'].includes(profile.permissions?.adminLevel))
+      .map(({user})=>({
+        login:String(user.login||'').trim().toLowerCase(),
+        name:String(user.employee||user.name||user.login||'Administrator').trim(),
+        email:String(user.email||user.mail||user.emailId||'').trim(),
+        phone:String(user.phone||user.phoneNo||user.phoneNumber||'').trim(),
+      }));
+    if(!recipients.length)throw new Error('No Admin or Super Admin recipients are configured.');
+    const workbook=buildXlsxWorkbookBuffer('Nerve Center Audit Trail',AUDIT_EXPORT_COLUMNS,eventRows.map((event)=>AUDIT_EXPORT_COLUMNS.map(({key})=>auditExportCell(event,key))));
+    const shortCode=randomUUID().replace(/-/g,'').slice(0,16);
+    const filename=`BDMS-Audit-Trail-${slotKey}.xlsx`;
+    await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+    await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at)
+      VALUES ($1,$2,$3,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$4,NOW()+INTERVAL '30 days')`,
+      [randomUUID(),shortCode,filename,workbook]);
+    const url=`${publicBaseUrl()}/r/${shortCode}`;
+    const whatsappEnv=await metaWhatsAppRuntimeEnv();
+    let emailSent=0,whatsappSent=0,deliveryFailures=0;
+    const deliveredEmails=new Set(),deliveredPhones=new Set();
+    for(const recipient of recipients){
+      if(recipient.email&&!deliveredEmails.has(recipient.email.toLowerCase())){
+        const emailKey=recipient.email.toLowerCase();
+        deliveredEmails.add(emailKey);
+        const delivery=await pool.query(`INSERT INTO audit_log_export_deliveries (slot_key,recipient_key,channel,status,attempts,updated_at)
+          VALUES ($1,$2,'Email','Sending',1,NOW())
+          ON CONFLICT (slot_key,recipient_key,channel) DO UPDATE SET status='Sending',attempts=audit_log_export_deliveries.attempts+1,updated_at=NOW()
+            WHERE audit_log_export_deliveries.status LIKE 'Failed%' AND audit_log_export_deliveries.attempts<3
+          RETURNING attempts`,[slotKey,emailKey]);
+        if(delivery.rowCount){
+          let deliveryStatus='Sent';
+          try{
+            const result=await sendAuditLogExportEmail({to:recipient.email,url,generatedAt:now,rowCount:eventRows.length});
+            if(result.sent)emailSent++;else throw new Error(result.reason||'Email was not sent.');
+          }catch(error){deliveryFailures++;deliveryStatus=`Failed - ${String(error?.message||'Email delivery error').slice(0,160)}`;console.error(`Audit Trail email failed for ${recipient.login||recipient.email}:`,error.message)}
+          await pool.query(`UPDATE audit_log_export_deliveries SET status=$1,updated_at=NOW() WHERE slot_key=$2 AND recipient_key=$3 AND channel='Email'`,[deliveryStatus,slotKey,emailKey]);
+        }
+      }
+      const normalizedPhone=recipient.phone.replace(/\D/g,'');
+      if(normalizedPhone&&!deliveredPhones.has(normalizedPhone)){
+        deliveredPhones.add(normalizedPhone);
+        const delivery=await pool.query(`INSERT INTO audit_log_export_deliveries (slot_key,recipient_key,channel,status,attempts,updated_at)
+          VALUES ($1,$2,'WhatsApp','Sending',1,NOW())
+          ON CONFLICT (slot_key,recipient_key,channel) DO UPDATE SET status='Sending',attempts=audit_log_export_deliveries.attempts+1,updated_at=NOW()
+            WHERE audit_log_export_deliveries.status LIKE 'Failed%' AND audit_log_export_deliveries.attempts<3
+          RETURNING attempts`,[slotKey,normalizedPhone]);
+        if(delivery.rowCount){
+          let deliveryStatus='Sent';
+          try{
+            await sendMetaWhatsAppTemplate({
+              to:recipient.phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',
+              parameters:[`Nerve Center Audit Trail export. Latest five days: ${eventRows.length.toLocaleString('en-IN')} records. Excel: ${url}. Link expires in 30 days.`],
+            },{env:whatsappEnv});
+            whatsappSent++;
+          }catch(error){deliveryFailures++;deliveryStatus=`Failed - ${String(error?.message||'WhatsApp delivery error').slice(0,160)}`;console.error(`Audit Trail WhatsApp failed for ${recipient.login||recipient.phone}:`,error.message)}
+          await Promise.all([
+            pool.query(`UPDATE audit_log_export_deliveries SET status=$1,updated_at=NOW() WHERE slot_key=$2 AND recipient_key=$3 AND channel='WhatsApp'`,[deliveryStatus,slotKey,normalizedPhone]),
+            pool.query(`INSERT INTO whatsapp_alert_history
+              (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+              ['Audit Trail export','Latest five days',slotKey,recipient.name,recipient.phone,deliveryStatus]),
+          ]);
+        }
+      }
+    }
+    const {rows:deliveryRows}=await pool.query(`SELECT
+      COUNT(*) FILTER (WHERE status='Sent')::int AS sent,
+      COUNT(*) FILTER (WHERE status LIKE 'Failed%')::int AS failed
+      FROM audit_log_export_deliveries WHERE slot_key=$1`,[slotKey]);
+    if(!Number(deliveryRows[0]?.sent))throw new Error('No configured Admin email or WhatsApp recipient could be reached.');
+    deliveryFailures=Number(deliveryRows[0]?.failed||deliveryFailures);
+    status=deliveryFailures?`Failed - ${deliveryFailures} delivery channel(s) failed`:`Sent - email ${emailSent}, WhatsApp ${whatsappSent}`;
+    await pool.query(`UPDATE audit_log_export_runs SET status=$1,updated_at=NOW() WHERE slot_key=$2`,[status,slotKey]);
+    return {slotKey,status,rowCount:eventRows.length,url,emailSent,whatsappSent,deliveryFailures};
+  }catch(error){
+    status=`Failed - ${String(error?.message||'Audit Trail export error').slice(0,180)}`;
+    await pool.query(`UPDATE audit_log_export_runs SET status=$1,updated_at=NOW() WHERE slot_key=$2`,[status,slotKey]).catch(()=>{});
+    throw error;
+  }finally{auditLogExportRunning=false}
+}
+
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
 app.use((error,req,res,next)=>{
@@ -3614,6 +3833,8 @@ async function initializeDatabase(){
     await migrate();
     databaseReady=true;
     databaseError='';
+    const retention=await pruneAuditEvents();
+    if(retention.deleted)console.log(`Audit Trail retention removed ${retention.deleted} records older than five days.`);
     console.log('Database initialization completed.');
     if(scheduledJobsEnabled){
       if(oracleConfigured)void syncTemporaryRequestDrivers()
@@ -3634,6 +3855,9 @@ async function initializeDatabase(){
       void sendScheduledWorkflowWhatsAppReminders()
         .then(result=>console.log('Scheduled workflow WhatsApp reminder check completed.',result))
         .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
+      void sendScheduledAuditLogExports()
+        .then(result=>console.log('Scheduled Audit Trail export check completed.',result))
+        .catch(error=>console.error('Scheduled Audit Trail export check failed.',error));
       void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
       void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
         if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return submitMetaWhatsAppTemplates({env:whatsappEnv})
@@ -3690,6 +3914,16 @@ if(scheduledJobsEnabled){
       .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
   },60*1000);
   workflowReminderTimer.unref?.();
+  const auditLogExportTimer=setInterval(()=>{
+    void sendScheduledAuditLogExports()
+      .then(result=>{if(!result?.skipped)console.log('Scheduled Audit Trail export completed.',result)})
+      .catch(error=>console.error('Scheduled Audit Trail export failed.',error));
+  },60*1000);
+  auditLogExportTimer.unref?.();
   const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
   adminLockAuditTimer.unref?.();
 }
+const auditRetentionTimer=setInterval(()=>{
+  if(databaseReady)void pruneAuditEvents().catch(error=>console.error('Audit Trail retention cleanup failed.',error));
+},60*60*1000);
+auditRetentionTimer.unref?.();

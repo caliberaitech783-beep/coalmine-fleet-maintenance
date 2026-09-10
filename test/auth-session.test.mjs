@@ -57,3 +57,23 @@ test("does not query PostgreSQL when no token is supplied", async () => {
 
   assert.equal(await store.get(""), null);
 });
+
+test("records session activity without changing the session token", async () => {
+  const calls = [];
+  const store = createSessionStore({
+    async query(sql, params) {
+      calls.push({sql, params});
+      return {rows: []};
+    }
+  });
+
+  await store.touch("token-3", {
+    ipAddress: "10.0.0.8",
+    deviceId: "BDMS-DEVICE01",
+    userAgent: "Test Browser",
+  });
+
+  assert.match(calls[0].sql, /UPDATE auth_sessions/);
+  assert.match(calls[0].sql, /last_seen_at = NOW\(\)/);
+  assert.deepEqual(calls[0].params, ["token-3", "10.0.0.8", "BDMS-DEVICE01", "Test Browser"]);
+});

@@ -96,6 +96,7 @@ test("every application table uses shared Actions or the existing Reports Action
   const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
   for (const control of ["onColumns", "onFilter", "onSort", "onClearSort", "onReset"]) assert.ok(shared.includes(control));
   assert.match(shared, /resetLabel="Reset table"/);
+  assert.match(shared, /recordDateFilter===false \? null/);
 });
 
 test("data-sort-value drives sorting so dates and durations order by their raw value", () => {

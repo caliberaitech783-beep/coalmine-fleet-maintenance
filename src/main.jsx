@@ -169,6 +169,7 @@ import "./mobile-compat.css";
 import "./maintenance-mobile-compact.css";
 import "./dashboard-record-browser.css";
 import "./manager-scroll.css";
+import "./user-sessions.css";
 import "./workspace-readability.css";
 import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
@@ -247,6 +248,9 @@ const nav = [
   ["Dashboard", LayoutDashboard],
   ["Tickets", Ticket],
   ["Reports", FileBarChart],
+];
+const adminNav = [
+  ["User Sessions", UserRound],
   ["Audit Trail", History],
 ];
 const masterNav = [
@@ -647,6 +651,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
   useEffect(() => {
@@ -667,6 +672,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setWhatsappOpen(false);
     setWorkspacesOpen(false);
     setReportsOpen(false);
+    setAdminOpen(false);
   };
   const selectPage = (page) => {
     closeMenus();
@@ -689,7 +695,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   }, [active]);
   const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
   const visibleMasterNav = masterNav.filter(([name]) => masterAccessAllows(viewPermissions, name));
-  const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+  const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => name !== "Meta API setup" || permissions.adminLevel !== "Manager").filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
@@ -820,7 +826,13 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <span className="nav-label">{n}</span>
           </button></div>
         ))}
-        {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button className={active === "Admin locks" ? "active" : ""} onClick={() => selectPage("Admin locks")}><ShieldCheck /><span className="nav-label">Admin locks</span></button></div>}
+        {session?.role === "super" && permissions.adminLevel !== "Manager" && <div className={adminOpen ? "masters-menu open" : "masters-menu"}>
+          <div className="nav-config-row"><button className={[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? "active" : ""} aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => setAdminOpen((value) => !value)}><ShieldCheck /><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
+          <div className="masters-dropdown admin-dropdown" role="menu">
+            {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={active===name?"active":""} onClick={()=>selectPage(name)}><Icon /><span className="nav-label">{name}</span></button></div>)}
+            {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={active === "Admin locks" ? "active" : ""} onClick={() => selectPage("Admin locks")}><ShieldCheck /><span className="nav-label">Admin locks</span></button></div>}
+          </div>
+        </div>}
       </nav>
       <div className="user">
         <span className="header-user-copy">
@@ -4802,10 +4814,6 @@ const auditDeviceTypeOptions = [
   {value:"Mobile", label:"Mobile", icon:Smartphone},
 ];
 const auditPlatformOptions = ["All", "Windows", "macOS", "Android", "iOS", "Linux"];
-const auditDefaultDateRange = () => {
-  const dateKey = (value) => new Intl.DateTimeFormat("en-CA", {timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(value);
-  return {fromDate:dateKey(new Date(Date.now() - 9 * 86400000)),toDate:dateKey(new Date())};
-};
 function AuditToggleGroup({label, value, options, onChange}) {
   return <div className="audit-toggle-group"><span>{label}</span><div className="audit-toggle-track" role="group" aria-label={`${label} filter`}>{options.map((option) => {
     const item = typeof option === "string" ? {value:option,label:option,icon:null} : option;
@@ -4815,9 +4823,8 @@ function AuditToggleGroup({label, value, options, onChange}) {
 }
 
 function AuditTrailPage({ session }) {
-  const defaultRange = useMemo(auditDefaultDateRange, []);
   const auditLoadSequence = useRef(0);
-  const [events, setEvents] = useState([]), [summary, setSummary] = useState(null), [nextCursor, setNextCursor] = useState(null), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [fromDate, setFromDate] = useState(defaultRange.fromDate), [toDate, setToDate] = useState(defaultRange.toDate), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  const [events, setEvents] = useState([]), [summary, setSummary] = useState(null), [nextCursor, setNextCursor] = useState(null), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const load = async ({append=false} = {}) => {
     const loadSequence = append ? auditLoadSequence.current : ++auditLoadSequence.current;
     if (append) setLoadingMore(true);
@@ -4830,8 +4837,6 @@ function AuditTrailPage({ session }) {
     }
     try {
       const params = new URLSearchParams({paged:"true",limit:"1000"});
-      params.set("fromDate",fromDate);
-      params.set("toDate",toDate);
       if (!append) params.set("summary","true");
       if (append && nextCursor) { params.set("beforeAt",nextCursor.beforeAt); params.set("beforeId",String(nextCursor.beforeId)); }
       const response = await fetch(`/api/audit-events?${params}`, {cache:"no-store", headers:{Authorization:`Bearer ${session?.token || authToken}`}});
@@ -4846,7 +4851,7 @@ function AuditTrailPage({ session }) {
     } catch (error) { if (loadSequence === auditLoadSequence.current) alert(error.message); }
     finally { if (loadSequence === auditLoadSequence.current) {setLoading(false);setLoadingMore(false);} }
   };
-  useEffect(() => { if (fromDate && toDate && fromDate <= toDate) load(); }, [session?.token,fromDate,toDate]);
+  useEffect(() => { load(); }, [session?.token]);
   const valueFor = (event, key) => {
     if (["deviceType", "platform", "browser"].includes(key)) {
       const device = auditDeviceDetails(event.userAgent);
@@ -4893,12 +4898,81 @@ function AuditTrailPage({ session }) {
   const exportColumns = columns.map(([key, label]) => ({label, value:(event) => valueFor(event, key)}));
   const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
   return <section className="panel pagepanel generic audit-page">
-    <header><div><h1>Audit Trail</h1><p>Append-only activity, changes, deletions, security events, and application errors for every user</p></div><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></header>
+    <header><div><h1>Audit Trail</h1><p>Latest five days of administrative additions, user edits and deletions, and account security activity</p></div><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></header>
     <div className="audit-summary"><span><b>{Number(summary?.total ?? events.length).toLocaleString("en-IN")}</b> recorded events</span><span><b>{Number(summary?.failed ?? events.filter((event) => event.outcome === "Failed").length).toLocaleString("en-IN")}</b> failed actions</span><span><b>{Number(summary?.users ?? new Set(events.map((event) => event.actorLogin).filter(Boolean)).size).toLocaleString("en-IN")}</b> users</span><span><b>{Number(summary?.devices ?? new Set(events.map((event) => event.deviceId).filter(Boolean)).size).toLocaleString("en-IN")}</b> devices</span></div>
     <div className="audit-device-filter-band"><AuditToggleGroup label="Device" value={deviceType} options={auditDeviceTypeOptions} onChange={setDeviceType} /><AuditToggleGroup label="Platform" value={platform} options={auditPlatformOptions} onChange={setPlatform} /><span className="audit-visible-count"><b>{rows.length.toLocaleString("en-IN")}</b> visible · {events.length.toLocaleString("en-IN")} loaded</span></div>
-    <div className="toolbar audit-toolbar"><div><Search /><input data-smart-search type="search" placeholder="Search audit trail" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="audit-date-range" aria-label="Audit date range"><label><span>From date</span><input type="date" value={fromDate} max={toDate || defaultRange.toDate} onChange={(event) => {if(event.target.value)setFromDate(event.target.value);}} /></label><label><span>To date</span><input type="date" value={toDate} min={fromDate || undefined} max={defaultRange.toDate} onChange={(event) => {if(event.target.value)setToDate(event.target.value);}} /></label><button type="button" className="secondary" onClick={() => {setFromDate(defaultRange.fromDate);setToDate(defaultRange.toDate);}}>Last 10 days</button></div><div className="toolbar-actions-end"><div className="master-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={events} filters={filters} onFilterChange={updateFilter} onClearFilters={() => {setFilters({});setDeviceType("All");setPlatform("All");}} /><ExportMenu title="Audit Trail" columns={exportColumns} rows={rows} /></div></div>
-    <div className="emptytable master-table-scroll audit-table-wrap" onClick={() => setOpenFilter(null)}><ActionsTable className="audit-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr>{columns.map(([key,label]) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(field) => setOpenFilter((current) => current === field ? null : field)} values={[...new Set(events.map((event) => valueFor(event,key)))].sort((a,b) => sortCollator.compare(a,b))} filterValue={filters[key] || ""} onFilterChange={(value) => updateFilter(key,value)} />)}</tr></thead><tbody>{rows.length ? rows.map((event) => <tr key={event.id}><td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td><td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td><td>{event.statusCode || "—"}</td><td><code>{event.requestMethod || "—"}</code></td><td className="audit-wrap-cell">{event.requestPath || "—"}</td><td>{valueFor(event,"durationMs")}</td><td><code>{event.errorCode || "—"}</code></td><td><code>{event.requestId || "—"}</code></td><td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td><code>{event.deviceId || "—"}</code></td><td><span className={`audit-device-badge ${valueFor(event,"deviceType").toLowerCase()}`}>{valueFor(event,"deviceType")}</span></td><td>{valueFor(event,"platform")}</td><td title={event.userAgent || ""}>{valueFor(event,"browser")}</td><td><code>{event.sessionId || "—"}</code></td></tr>) : <tr><td colSpan={columns.length} className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody></ActionsTable></div>
+    <div className="toolbar audit-toolbar"><div><Search /><input data-smart-search type="search" placeholder="Search audit trail" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="toolbar-actions-end"><div className="master-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={events} filters={filters} onFilterChange={updateFilter} onClearFilters={() => {setFilters({});setDeviceType("All");setPlatform("All");}} /><ExportMenu title="Audit Trail" columns={exportColumns} rows={rows} /></div></div>
+    <div className="emptytable master-table-scroll audit-table-wrap" onClick={() => setOpenFilter(null)}><ActionsTable className="audit-table" toolbarTarget={actionsToolbarTarget} toolbarPortal recordDateFilter={false}><thead><tr>{columns.map(([key,label]) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(field) => setOpenFilter((current) => current === field ? null : field)} values={[...new Set(events.map((event) => valueFor(event,key)))].sort((a,b) => sortCollator.compare(a,b))} filterValue={filters[key] || ""} onFilterChange={(value) => updateFilter(key,value)} />)}</tr></thead><tbody>{rows.length ? rows.map((event) => <tr key={event.id}><td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td><td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td><td>{event.statusCode || "—"}</td><td><code>{event.requestMethod || "—"}</code></td><td className="audit-wrap-cell">{event.requestPath || "—"}</td><td>{valueFor(event,"durationMs")}</td><td><code>{event.errorCode || "—"}</code></td><td><code>{event.requestId || "—"}</code></td><td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td><code>{event.deviceId || "—"}</code></td><td><span className={`audit-device-badge ${valueFor(event,"deviceType").toLowerCase()}`}>{valueFor(event,"deviceType")}</span></td><td>{valueFor(event,"platform")}</td><td title={event.userAgent || ""}>{valueFor(event,"browser")}</td><td><code>{event.sessionId || "—"}</code></td></tr>) : <tr><td colSpan={columns.length} className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody></ActionsTable></div>
     {hasMore && <div className="audit-history-actions"><button type="button" className="secondary" onClick={() => load({append:true})} disabled={loadingMore}>{loadingMore ? "Loading older records..." : "Load older audit records"}</button></div>}
+  </section>;
+}
+
+function sessionAgeLabel(value) {
+  const elapsed = Math.max(0, Date.now() - new Date(value).getTime());
+  const minutes = Math.floor(elapsed / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ${minutes % 60} min`;
+  return `${Math.floor(hours / 24)} day${hours < 48 ? "" : "s"}`;
+}
+
+function UserSessionsPage({session}) {
+  const [sessions,setSessions]=useState([]);
+  const [summary,setSummary]=useState({active:0,online:0,users:0,devices:0});
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  const [query,setQuery]=useState("");
+  const [status,setStatus]=useState("All");
+  const [closingId,setClosingId]=useState("");
+  const [actionsToolbarTarget,setActionsToolbarTarget]=useState(null);
+  const load=async({quiet=false}={})=>{
+    if(!quiet)setLoading(true);
+    try{
+      const response=await fetch('/api/user-sessions',{cache:'no-store',headers:{Authorization:`Bearer ${session?.token||authToken}`}});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'Could not load user sessions.');
+      setSessions(Array.isArray(result.sessions)?result.sessions:[]);
+      setSummary(result.summary||{active:0,online:0,users:0,devices:0});
+      setError("");
+    }catch(loadError){setError(loadError.message||'Could not load user sessions.');}
+    finally{if(!quiet)setLoading(false);}
+  };
+  useEffect(()=>{
+    load();
+    const timer=window.setInterval(()=>load({quiet:true}),15000);
+    return()=>window.clearInterval(timer);
+  },[session?.token]);
+  const forceClose=async(row)=>{
+    if(row.current)return;
+    const reason=window.prompt(`Enter the reason for force closing ${row.name||row.login}'s session:`,"");
+    if(reason===null)return;
+    if(!reason.trim())return window.alert('A reason is required for the Audit Trail.');
+    setClosingId(row.sessionId);
+    try{
+      const response=await fetch(`/api/user-sessions/${encodeURIComponent(row.sessionId)}`,{method:'DELETE',headers:{Authorization:`Bearer ${session?.token||authToken}`,'X-Audit-Reason':reason.trim()}});
+      if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||'Could not force close the session.');}
+      await load({quiet:true});
+    }catch(closeError){window.alert(closeError.message);}
+    finally{setClosingId("");}
+  };
+  const visible=sessions.filter((row)=>{
+    const device=auditDeviceDetails(row.userAgent);
+    return (status==='All'||(status==='Online'&&row.online)||(status==='Inactive'&&!row.online))
+      && matchesSmartSearch(query,row.name,row.login,row.roleLabel,row.ipAddress,row.deviceId,device.type,device.platform,device.browser);
+  });
+  return <section className="panel pagepanel user-sessions-page">
+    <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See signed-in users, current online activity, and securely close individual sessions.</p></div><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button></header>
+    <div className="user-session-summary" aria-label="Session summary">
+      <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
+      <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Valid signed-in sessions</p></div></article>
+      <article><span className="user-session-kpi-icon users"><Users /></span><div><small>Signed-in users</small><b>{Number(summary.users||0).toLocaleString('en-IN')}</b><p>Unique user accounts</p></div></article>
+      <article><span className="user-session-kpi-icon devices"><Smartphone /></span><div><small>Known devices</small><b>{Number(summary.devices||0).toLocaleString('en-IN')}</b><p>Identified app devices</p></div></article>
+    </div>
+    <div className="user-session-toolbar"><div className="user-session-search"><Search /><input data-smart-search type="search" placeholder="Search user, role, device or IP" value={query} onChange={(event)=>setQuery(event.target.value)} /></div><div className="user-session-status" role="group" aria-label="Session status filter">{['All','Online','Inactive'].map(option=><button type="button" key={option} className={status===option?'active':''} aria-pressed={status===option} onClick={()=>setStatus(option)}>{option}</button>)}</div><span className="user-session-visible"><b>{visible.length}</b> visible</span><div className="user-session-actions" ref={setActionsToolbarTarget} /></div>
+    {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
+    <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Role</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th><th>Action</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td></tr>}):<tr><td colSpan="9" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
+    <footer className="user-session-note"><ShieldCheck /><span>Force closing a session immediately invalidates only that login. The action and reason are saved in Audit Trail.</span></footer>
   </section>;
 }
 function reportCategoryIdsForUser(permissions = {}, session = {}) {
@@ -8445,7 +8519,16 @@ function App() {
       .catch(() => {});
     return () => { activeRequest = false; };
   }, [session?.token]);
+  useEffect(()=>{
+    if(!session?.token)return undefined;
+    const heartbeat=()=>fetch('/api/session-heartbeat',{method:'POST',headers:{Authorization:`Bearer ${session.token}`}}).catch(()=>{});
+    heartbeat();
+    const timer=window.setInterval(heartbeat,45000);
+    return()=>window.clearInterval(timer);
+  },[session?.token]);
   const canOpenAdminPage = (name) => {
+    if(name==="User Sessions")return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
+    if(name==="Audit Trail")return session?.role==='super'&&adminPermissions.adminLevel!=="Manager";
     if(name==="Admin locks")return adminPermissions.adminLevel==="Super Admin";
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
@@ -8453,7 +8536,7 @@ function App() {
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name);
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
-    const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
+    const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
@@ -8775,6 +8858,8 @@ function App() {
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (
             <AdminLockManagement session={session} />
+          ) : active === "User Sessions" ? (
+            <UserSessionsPage session={session} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}

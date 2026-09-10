@@ -75,10 +75,27 @@ export function auditRouteDetails(method = "", path = "") {
   if (route.startsWith("/api/whatsapp")) return { module: "WhatsApp Integration", eventType: "Integration", action: verb === "PUT" ? "Update Meta settings" : verb === "POST" ? "Send or register WhatsApp message" : "View WhatsApp settings" };
   if (route.includes("navigation-settings")) return { module: "Access control", eventType: "Configuration", action: verb === "GET" ? "View navigation settings" : "Update navigation settings" };
   if (route.includes("admin-locks")) return { module: "Authentication", eventType: "Security", action: verb === "GET" ? "View administrator locks" : "Unlock administrator accounts" };
+  if (route.startsWith("/api/user-sessions")) return { module: "User sessions", eventType: "Security", action: verb === "DELETE" ? "Force close session" : "View user sessions" };
   if (route.startsWith("/api/oracle")) return { module: "Oracle synchronization", eventType: "Integration", action: verb === "GET" ? "View Oracle data" : "Synchronize master data" };
   if (route.startsWith("/api/exports")) return { module: "Reports", eventType: "Report", action: "Generate report" };
   if (route.startsWith("/api/reports")) return { module: "Reports", eventType: "Report", action: verb === "GET" ? "View report data" : "Generate or send report" };
   const segment = decodeURIComponent(route.split("/")[2] || "Application").replace(/[-_]+/g, " ");
   const action = verb === "POST" ? "Create or run" : verb === "PUT" || verb === "PATCH" ? "Edit or update" : verb === "DELETE" ? "Delete" : "View";
   return { module: segment.replace(/\b\w/g, (letter) => letter.toUpperCase()), eventType: "Activity", action: `${action}: ${route}` };
+}
+
+export function auditShouldRecord(method = "", path = "") {
+  const verb = String(method).toUpperCase();
+  const route = String(path).replace(/\/+$/, "") || "/";
+  const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
+
+  if (["/api/login", "/api/logout"].includes(route)) return mutating;
+  if (route.includes("password-reset") || route.includes("change-initial-password")) return mutating;
+  if (route.startsWith("/api/masters/")) return mutating;
+  if (route.startsWith("/api/user-sessions/")) return verb === "DELETE";
+
+  // Keep deliberate record corrections and deletions, but exclude request
+  // creation and lifecycle steps such as close, verify, remarks and approvals.
+  if (/^\/api\/requests\/[^/]+$/.test(route)) return ["PUT", "PATCH", "DELETE"].includes(verb);
+  return false;
 }
