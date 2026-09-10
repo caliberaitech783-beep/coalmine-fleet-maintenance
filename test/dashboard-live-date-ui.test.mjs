@@ -57,6 +57,25 @@ const todayLabel = displayDates.formatDisplayDate(todayKey);
 const liveAvailabilityCaption = `All timeAvailability: live · ${todayLabel}`;
 const todayCaption = `From: ${todayLabel}To: ${todayLabel}Availability: live · ${todayLabel}`;
 
+test("BD In components appear only for default today and return on reset", () => {
+  const rows = [
+    {ref: "OPENING", site: "Sasti OB", status: "Open", start: "2020-01-01 09:00", category: "Breakdown"},
+    {ref: "NEW", site: "Sasti OB", status: "Open", start: `${todayKey} 09:00`, category: "Breakdown"},
+  ];
+  const view = harness();
+  let tree = view.render(rows);
+  assert.match(text(byLabel(tree, "BD In opening and new counts")), /Opening: 1 \+ New: 1/);
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render(rows);
+  assert.equal(byLabel(tree, "BD In opening and new counts"), undefined);
+  button(tree, "Reset dates").props.onClick();
+  tree = view.render(rows);
+  assert.ok(byLabel(tree, "BD In opening and new counts"));
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: todayKey}});
+  tree = view.render(rows);
+  assert.equal(byLabel(tree, "BD In opening and new counts"), undefined);
+});
+
 test("dashboard date defaults to today as the live view and only an earlier day filters", () => {
   const view = harness();
   let tree = view.render();

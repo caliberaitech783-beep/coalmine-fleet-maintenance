@@ -1103,6 +1103,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   // Every dashboard date filter starts on today; clearing a date shows all time.
   const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState(() => localDateKey(new Date()));
   const [breakdownSummaryTo, setBreakdownSummaryTo] = useState(() => localDateKey(new Date()));
+  const [breakdownSummaryManual, setBreakdownSummaryManual] = useState(false);
   const [throughputRegion, setThroughputRegion] = useState("all");
   const [throughputSite, setThroughputSite] = useState("all");
   const [breakdownDetailSite, setBreakdownDetailSite] = useState("");
@@ -1196,8 +1197,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownSummaryStartKey = breakdownSummaryFrom;
   const breakdownSummaryPeriodLabel = breakdownSummaryFrom ? formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey) : "All time";
   const breakdownSummaryIsToday = breakdownSummaryFrom === todayKey && breakdownSummaryTo === todayKey;
-  const resetBreakdownSummaryRange = () => { setBreakdownSummaryFrom(todayKey); setBreakdownSummaryTo(todayKey); };
+  const resetBreakdownSummaryRange = () => { setBreakdownSummaryManual(false); setBreakdownSummaryFrom(todayKey); setBreakdownSummaryTo(todayKey); };
   const updateBreakdownSummaryRange = (bound, value) => {
+    setBreakdownSummaryManual(true);
     if (!value) { setBreakdownSummaryFrom(""); setBreakdownSummaryTo(""); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > todayKey) return;
     // The first selection is one day; subsequent changes can extend the range.
@@ -1584,12 +1586,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             {selectedThroughputRegion && <label><span>Site</span><select aria-label="Vehicle throughput site" value={activeThroughputSite} onChange={(event) => { setThroughputSite(event.target.value); setRoadFocusSite(""); }}><option value="all">All sites</option>{throughputSiteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}
             <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><input type="date" aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
-            <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday}>Reset dates</button>
+            <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday && !breakdownSummaryManual}>Reset dates</button>
             <small>{breakdownSummaryFrom ? "BD movement includes both dates." : "All time · Select a date to filter."} {availabilityDate ? `Availability as of ${availabilityDateLabel}` : dashboardReconnecting ? "Availability: last checked data" : equipmentLoaded ? `Availability is live · ${availabilityDateLabel}` : "Availability pending"}.</small>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
-              {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{breakdownSummaryPeriodLabel}</small></div>)}
+              {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownMovementTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{breakdownSummaryPeriodLabel}</small></div>)}
             </div>
             <section {...cardAction(movementKey("incoming"), "All BD In types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
               <header><div><b>BD Type Mix</b><small>New requests · all six maintenance types</small></div><span>Percentage share of new BD In</span></header>
