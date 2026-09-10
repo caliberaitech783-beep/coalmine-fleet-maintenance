@@ -72,7 +72,7 @@ test("legacy timestamps and incomplete history do not fabricate dated requests",
 // Evaluate the dashboard's actual calculations and render its unchanged JSX
 // section, so a disconnected date prop or a card using the old totals fails.
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-const calculations = source.slice(source.indexOf("  const availabilityRequests ="), source.indexOf("  const breakdownSummaryEndKey ="));
+const calculations = source.slice(source.indexOf("  const availabilityDate ="), source.indexOf("  const breakdownSummaryEndKey ="));
 const siteCalculation = source.match(/  const availabilityCountBySite = [\s\S]*?\n  \}\)\);/)[0];
 const viewStart = source.indexOf('<div className="mine-site-road-view">');
 const view = source.slice(viewStart, source.indexOf(" : <FleetDataState", viewStart));
@@ -95,7 +95,7 @@ const text = node => Array.isArray(node) ? node.map(text).join("") : React.isVal
 function dashboardSection(date) {
   const scope = {
     React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite,
-    locationBreakdowns: requests, dashboardDate: date, visibleEquipment: assets,
+    locationBreakdowns: requests, dashboardDate: date, breakdownSummaryTo: "", todayKey: "2026-09-10", visibleEquipment: assets,
     trendAvailableSites: ["Majri OB", "Jayant OB"], roadFocusSite: "", openAssetDrilldown: () => {},
     // The other charts deliberately keep their existing day-of-submission filter.
     visibleBreakdowns: [], kpis: { onRoad: 999, offRoad: 999, idle: 999, availability: 999 },
@@ -135,7 +135,7 @@ test("date changes update the rendered availability cards, every site row and th
 test("the date filter affects historical availability while live fleet metrics retain all active requests", () => {
   assert.match(source, /aria-label="Dashboard date"[^>]*onChange=\{\(event\) => setDashboardDate\(event.target.value\)\}/);
   assert.match(source, /const kpis = liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
-  assert.match(source, /return \{ site, \.\.\.liveEquipmentMetrics\(records, liveBreakdowns\) \}/);
+  assert.match(source, /new Map\(availabilityCountBySite.map/);
   assert.match(source, /const siteRequests = liveBreakdowns.filter/);
-  assert.match(source, /dashboardDate \? dashboardFleetSnapshot\(visibleEquipment, availabilityRequests\)/);
+  assert.match(source, /availabilityDate \? dashboardFleetSnapshot\(visibleEquipment, availabilityRequests\)/);
 });

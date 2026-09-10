@@ -1016,6 +1016,9 @@ button.mine-primary-kpi-card:focus-visible,
   background: color-mix(in srgb, #315fd4 4%, var(--surface));
 }
 .dashboard-breakdown-period-controls > span { display: inline-flex; gap: 4px; }
+.dashboard-breakdown-summary-controls { margin: 12px; }
+.dashboard-breakdown-summary-controls small { flex: 1 1 240px; align-self: center; color: var(--muted); }
+.dashboard-breakdown-summary-controls input { min-width: 0; max-width: 100%; }
 .dashboard-breakdown-period-controls button,
 .dashboard-breakdown-apply { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font-weight: 800; }
 .dashboard-breakdown-period-controls button.active { border-color: #522e90; background: #522e90; color: #fff; }

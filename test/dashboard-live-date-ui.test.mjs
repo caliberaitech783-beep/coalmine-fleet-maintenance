@@ -101,3 +101,65 @@ test("compiled lifecycle places Idle on its actual India event day, not its old 
   tree = view.render(withoutIdleTime);
   assert.ok(byLabel(tree, "09-09-2026: 0 idle requests"));
 });
+
+test("site-wise From/To updates inclusive movement, availability, exports and linked details together", () => {
+  const view = harness();
+  let tree = view.render();
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render();
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render();
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
+  tree = view.render();
+  const site = byClass(tree, "mine-breakdown-site-row");
+  assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
+  assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
+  assert.ok(text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of 08-09-2026"));
+  const exported = findAll(tree, (node) => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
+  const incoming = exported.find((row) => row.section === "Breakdown movement" && row.metric === "BD In");
+  assert.equal(incoming.value, 2);
+  assert.equal(incoming.scope, displayDates.formatDisplayDateRange("2026-09-01", "2026-09-08"));
+  assert.match(exported.find((row) => row.section === "Site summary").details, /Off road 2; Idle 0/);
+  site.props.onClick();
+  tree = view.render();
+  assert.equal(byLabel(tree, "Breakdown movement from date").props.value, "2026-09-01");
+  assert.equal(byLabel(tree, "Breakdown movement to date").props.value, "2026-09-08");
+  button(tree, "Availability Count").props.onClick();
+  tree = view.render();
+  assert.ok(byLabel(tree, "Sasti OB: 1 on road, 2 off road and 0 idle. Open fleet details."));
+  // The independent top-level date and live fleet chart are not changed.
+  assert.equal(byLabel(tree, "Dashboard date").props.value, "2026-09-09");
+  const breakdown = findAll(tree, (node) => node.type === "button" && node.props.className === "breakdown" && node.props["aria-controls"] === "fleet-region-plot")[0];
+  assert.equal(text(breakdown), "Breakdown 1");
+});
+
+test("site-wise range allows one day, keeps dates ordered, rejects future dates and resets", () => {
+  const view = harness();
+  let tree = view.render();
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render();
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render();
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 2 balance/);
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-01");
+  assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-01");
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-09");
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "9999-12-31"}});
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-09");
+  button(tree, "Reset dates").props.onClick();
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-05");
+  assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-09");
+  assert.equal(button(tree, "Reset dates").props.disabled, true);
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render();
+  byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: ""}});
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-05");
+});
