@@ -38,9 +38,12 @@ test('approved columns and unverified queue match MIS requests',()=>{
   const requests=[{ref:'a',status:'Closed',closedAt:'2026-09-08 10:00'}, {ref:'b',status:'Closed',closedAt:'2026-09-08 10:00',verifiedAt:'2026-09-08 11:00'}, {ref:'c',status:'Open'}, {ref:'d',status:'Closed',closedBy:'sanskar manohare'}];
   const reports=buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-08'});
   assert.deepEqual(reports.find(r=>r.title==='Unverified Cases').rows,requests.filter(r=>r.status==='Closed'&&!r.verifiedAt).filter(visibleInMisRequests));
-  assert.equal(reports.find(r=>r.title==='Total Request Submitted Report').columns.at(-1).label,'Location');
+  assert.deepEqual(reports.find(r=>r.title==='Total Request Submitted Report').columns.map(c=>c.key),['status','site','door','equipmentGroup','model','complaint','category','ref']);
   const columns=reports.find(r=>r.title.includes('Ticket Acceptance')).columns;
   assert.equal(columns[columns.findIndex(c=>c.key==='acceptedAt')-1].key,'submittedAt');
+  assert.deepEqual(columns.map(c=>c.key),['status','site','door','equipmentGroup','model','submittedAt','acceptedAt','difference','acceptedBy','ref','complaint','category']);
+  assert.deepEqual(reports.find(r=>r.title==='Maintenance Status Pending').columns.map(c=>c.key),['status','site','door','equipmentGroup','model','acceptedAt','delay','remark','complaint','category','ref']);
+  for(const title of ['Total Request Submitted Report','Ticket Acceptance from Maintenance (Timelinewise)','Maintenance Status Pending'])assert.ok(!reports.find(r=>r.title===title).columns.some(c=>/chassis/i.test(c.label)),`${title} has no chassis column`);
   assert.equal(reports[0].columns.find(c=>c.key==='acceptedAt').label,'Maintenance Acceptance Date & Time');
 });
 

@@ -18,6 +18,8 @@ const ids = [col('door', 'Door no.', r => r.reportDoor || r.door), col('chassis'
 const base = [...ids, col('equipmentGroup', 'Equipment group', equipmentGroupValue), col('model', 'Model', r => r.reportModel || r.model), col('complaint', 'Reason/Complaint'), col('category', 'Repair category')];
 const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
 const ref = col('ref', 'Job Reference No');
+const productionLead = [col('status', 'Status', requestStatusLabel), site, ids[0]];
+const complaintColumns = base.slice(4);
 const closed = col('closedAt', 'Ticket Closed');
 function breakdownDaysHours(start, now) {
   const elapsed = now.getTime() - indiaDateTimeEpoch(start);
@@ -89,9 +91,10 @@ report('mis', DEPARTMENT_REPORT_TITLES[3], 'Difference is first trip minus reque
     report('mis', DEPARTMENT_REPORT_TITLES[6], 'Transfer history led by door number.', [ids[0],col('model','Model',r => r.model || r.modelNo),col('source','From location'),col('destination','To location'),col('transferNo','Transfer no.'),col('transferDate','Transfer date')],transferRecords,r => r.transferDate),
     report('mis', DEPARTMENT_REPORT_TITLES[7], 'Current equipment and vehicle master records.', [...ids,col('equipmentName','Equipment / vehicle'),col('model','Model'),col('make','Make'),col('itemSpecification','Item specification name'),site],equipmentRecords,() => now.toISOString()),
     report('mis', DEPARTMENT_REPORT_TITLES[8], IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_COLUMNS,buildInOutReportRows(requests,{today:now}),r => r.date),
-    report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...base,col('status','Status',requestStatusLabel),ref,site],requests),
-    report('production', DEPARTMENT_REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...base,col('status','Status',requestStatusLabel),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),site,ref],requests),
-    report('production', DEPARTMENT_REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...base,col('status','Status',requestStatusLabel),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),ref],open),
+    // Production reports lead with Status, Location and Door no.; chassis is omitted.
+    report('production', DEPARTMENT_REPORT_TITLES[9], 'Submitted requests across all statuses.', [...productionLead,...base.slice(2,4),...complaintColumns,ref],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...productionLead,...base.slice(2,4),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),ref,...complaintColumns],requests),
+    report('production', DEPARTMENT_REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...productionLead,...base.slice(2,4),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),...complaintColumns,ref],open),
     report('maintenance', DEPARTMENT_REPORT_TITLES[12], 'Vehicle arrival delays reported by maintenance, including the reason for each red flag.', [
       ref,...base,site,col('status','Request status',requestStatusLabel),col('start','Production date and time'),
       col('arrivalFlaggedAt','Red flag raised'),col('arrivalFlaggedBy','Flagged by'),
