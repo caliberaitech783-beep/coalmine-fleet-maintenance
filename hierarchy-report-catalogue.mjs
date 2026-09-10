@@ -1,4 +1,3 @@
-import {DEPARTMENT_REPORT_TITLES} from './department-reports.mjs';
 import {IN_OUT_REPORT_TITLE} from './in-out-report.mjs';
 import {canonicalReportTitle} from './director-report-bundle.mjs';
 
@@ -11,20 +10,21 @@ export const HIERARCHY_REPORTS={
   locationWise:'Total Equipment / Vehicle Location Wise',
   recentBreakdown:'Recent Breakdown Cases',
   inOut:IN_OUT_REPORT_TITLE,
-  summary:DEPARTMENT_REPORT_TITLES[13],
-  totalSubmitted:DEPARTMENT_REPORT_TITLES[8],
-  ticketAcceptance:DEPARTMENT_REPORT_TITLES[9],
-  maintenancePending:DEPARTMENT_REPORT_TITLES[10],
-  repairTat:DEPARTMENT_REPORT_TITLES[0],
-  openOffRoad:DEPARTMENT_REPORT_TITLES[1],
-  availability:DEPARTMENT_REPORT_TITLES[2],
-  arrivalRedFlag:DEPARTMENT_REPORT_TITLES[11],
-  mismatch30:DEPARTMENT_REPORT_TITLES[3],
-  unverified:DEPARTMENT_REPORT_TITLES[4],
-  misVerificationTime:DEPARTMENT_REPORT_TITLES[5],
-  totalFleet:DEPARTMENT_REPORT_TITLES[6],
-  misInOut:DEPARTMENT_REPORT_TITLES[7],
-  misRedFlag:DEPARTMENT_REPORT_TITLES[12],
+  // Department headings are spelled out so a reordered DEPARTMENT_REPORT_TITLES cannot shift a tick onto another report.
+  summary:'Summary Report',
+  totalSubmitted:'Total Request Submitted Report',
+  ticketAcceptance:'Ticket Acceptance from Maintenance (Timelinewise)',
+  maintenancePending:'Maintenance Status Pending',
+  repairTat:'Turn Around Time for Repair',
+  openOffRoad:'Open Off road Cases',
+  availability:'Availability Report',
+  arrivalRedFlag:'Vehicle Arrival Red Flag Report',
+  mismatch30:'30 Min. Mismatch',
+  unverified:'Unverified Cases',
+  misVerificationTime:'MIS Turn Around Time',
+  totalFleet:'Total Fleet',
+  misInOut:'Total In and out count report',
+  misRedFlag:'MIS Red Flag Report',
 };
 
 export const HIERARCHY_REPORT_GROUPS=[
@@ -59,7 +59,6 @@ export const LEGACY_HIERARCHY_REPORT_EQUIVALENTS=new Map([
   ['Event close Report - Maint. Closing to MIS Verif.',HIERARCHY_REPORTS.misVerificationTime],
   ['Idle with PM verif.',HIERARCHY_REPORTS.openOffRoad],
   ['On Road with first trip veri.',HIERARCHY_REPORTS.mismatch30],
-  [DEPARTMENT_REPORT_TITLES[8],HIERARCHY_REPORTS.inOut],
 ]);
 
 export function hierarchyReportEquivalent(title){

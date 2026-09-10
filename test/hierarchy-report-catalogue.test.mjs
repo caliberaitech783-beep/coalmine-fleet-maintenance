@@ -14,8 +14,8 @@ test('hierarchy report groups carry the Reports menu headings in menu order',()=
   assert.deepEqual(byGroup.M,['Turn Around Time for Repair','Open Off road Cases','Availability Report','Vehicle Arrival Red Flag Report']);
   assert.deepEqual(byGroup.S,['30 Min. Mismatch','Unverified Cases','MIS Turn Around Time','Total Fleet','Total In and out count report','MIS Red Flag Report']);
   assert.equal(new Set(HIERARCHY_REPORT_TITLES).size,HIERARCHY_REPORT_TITLES.length,'each heading is ticked once');
-  for(const title of DEPARTMENT_REPORT_TITLES.filter(title=>title!==DEPARTMENT_REPORT_TITLES[8]))assert.ok(HIERARCHY_REPORT_TITLES.includes(title),`${title} is selectable in the hierarchy master`);
-  assert.equal(hierarchyReportEquivalent(DEPARTMENT_REPORT_TITLES[8]),IN_OUT_REPORT_TITLE,'the MIS In and Out entry maps onto the Common In and Out tick');
+  for(const title of DEPARTMENT_REPORT_TITLES)assert.ok(HIERARCHY_REPORT_TITLES.includes(title),`${title} is selectable in the hierarchy master`);
+  for(const title of [...byGroup.P,...byGroup.M,...byGroup.S,'Summary Report'])assert.ok(DEPARTMENT_REPORT_TITLES.includes(title),`${title} still exists in the department report list`);
   assert.equal(HIERARCHY_REPORT_CODES.get(HIERARCHY_REPORT_TITLES[0]),'R1');
   assert.equal(HIERARCHY_REPORT_CODES.get(HIERARCHY_REPORT_TITLES.at(-1)),`R${HIERARCHY_REPORT_TITLES.length}`);
   for(const title of HIERARCHY_REPORT_TITLES)assert.ok(DIRECTOR_REPORT_TITLES.includes(title),`${title} can be built for WhatsApp delivery`);
