@@ -318,10 +318,21 @@ jobs:
           import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
           import {mergePrivilegeRecords} from './privilege-record.mjs';
           import {createSessionStore} from './auth-session.mjs';
+          import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
+          import {verifySessionSchemaCompatibility} from './test/helpers/session-schema-regression.mjs';
           async function run(){
           const {Pool}=pg;
           const pool=new Pool({connectionString:process.env.DATABASE_URL||process.env.APPSETTING_DATABASE_URL,ssl:{rejectUnauthorized:false},max:1,connectionTimeoutMillis:15000});
           const client=await pool.connect();
+          console.log(JSON.stringify({stage:'postgres-regression',...await verifySessionSchemaCompatibility(client)}));
+          try {
+            await client.query('BEGIN');
+            await client.query("SET LOCAL lock_timeout = '5s'");
+            await client.query("SET LOCAL statement_timeout = '15s'");
+            await repairLegacySessionDefaults(client);
+            await client.query('COMMIT');
+            console.log(JSON.stringify({stage:'repair-production-default',committed:true}));
+          } catch(error){await client.query('ROLLBACK');client.release();await pool.end();throw error;}
           let stage='begin';
           try {
             await client.query('BEGIN');

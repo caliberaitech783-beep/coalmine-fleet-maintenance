@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {existsSync,readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
+import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
@@ -573,6 +574,7 @@ async function migrate(){
     CREATE OR REPLACE TRIGGER crm_notification_inserted AFTER INSERT ON crm_notifications
       FOR EACH ROW EXECUTE FUNCTION signal_crm_notification();
   `);
+  await repairLegacySessionDefaults(pool);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
