@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { classifyChanges, decideRelease, readHealthyLive, validateReportDelta } from '../.github/scripts/release-plan.mjs';
 import { eligibleArtifact, findRollbackArtifact } from '../.github/scripts/rollback-artifact.mjs';
 import { includedRuntimePath, prepareRuntimePackage } from '../.github/scripts/package-runtime.mjs';
@@ -46,7 +47,7 @@ test('report-only releases keep the narrow immutable-delta boundary', () => {
   assert.throws(() => validateReportDelta([]), /no changes/);
 });
 test('shared server imports under src take the backend lane and remain in runtime packages', () => {
-  const runtimeFiles = runtimeSourceFiles(new URL('..', import.meta.url).pathname.replace(/^\/(.:)/, '$1').replaceAll('%20', ' '));
+  const runtimeFiles = runtimeSourceFiles(fileURLToPath(new URL('..', import.meta.url)));
   assert.ok(runtimeFiles.has('src/request-status.mjs'));
   assert.ok(runtimeFiles.has('src/mis-history.mjs'));
   assert.equal(classifyChanges(['src/request-status.mjs'], runtimeFiles), 'backend');

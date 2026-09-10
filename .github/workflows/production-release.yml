@@ -86,7 +86,7 @@ jobs:
         if: steps.plan.outputs.mode != 'none'
         env:
           EXPECTED_SHA: ${{ steps.plan.outputs.target }}
-          DATABASE_URL: postgresql://session_test:session_test@localhost:5432/session_test
+          DATABASE_URL: postgresql://session_test:session_test@localhost:5432/session_test?sslmode=disable
           PGSSLMODE: disable
           DISABLE_SCHEDULED_JOBS: "true"
           PORT: "3137"
