@@ -1340,7 +1340,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
     idle: requestLifecycleRows.idle.filter((record) => requestEventDate(record, "idle") === date).length,
   }));
-  // Six compact series are grouped by date within the selected site and range.
+  // Keep all six compact series together for each date in the selected site and range.
   const requestLifecycleReadings = [
     { key: "production", color: "opened", label: "Production Request", value: requestLifecycleRows.production.length },
     { key: "closed", color: "closed", label: "Closed", value: maintenanceClosedRows.length },
