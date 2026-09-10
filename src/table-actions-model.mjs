@@ -58,6 +58,19 @@ export function tableModel(children) {
   return { sections, columns };
 }
 
+// Keep original indices so headers, values, filters and exports stay aligned.
+export function dateColumnsFirst(columns) {
+  const isDate = ({ key, label }) => {
+    if (/^(start|end|date|time|occurredAt|createdAt|updatedAt|closedAt|verifiedAt|firstTripAt|acceptedAt|arrivalFlaggedAt|misFlaggedAt)$/.test(key)) return true;
+    const text = label.trim().toLowerCase();
+    if (/\b(by|duration|waiting|delay|turn ?around|tat)\b/.test(text)) return false;
+    return /\b(date|time|timestamp)\b/.test(text)
+      || /^(started|closed|accepted|created|updated|ticket created|vehicle received|red flag raised)$/.test(text)
+      || /\b(at|on)$/.test(text);
+  };
+  return [...columns.filter(isDate), ...columns.filter((column) => !isDate(column))];
+}
+
 export function selectTableRows(rows, columns, filters, sort) {
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
   const filtered = rows.filter((row) => columns.every((column) => {

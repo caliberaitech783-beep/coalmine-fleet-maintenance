@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel } from "./table-actions-model.mjs";
+import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst } from "./table-actions-model.mjs";
 import "./table-actions.css";
 import "./sortable-table.css";
 
 export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
-  const { sections, columns } = tableModel(children);
+  const { sections, columns: originalColumns } = tableModel(children);
+  const columns = dateColumnsFirst(originalColumns);
   const schema = columns.map((column) => column.key).join("|");
   return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }} />;
 }
