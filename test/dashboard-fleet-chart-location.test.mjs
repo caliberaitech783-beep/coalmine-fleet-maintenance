@@ -61,6 +61,7 @@ test("empty site fleet lists span exactly their visible columns", () => {
   assert.ok(render({ rows: [], hideCurrentLocation: true }).includes('colSpan="8"'));
   assert.ok(render({ rows: [] }).includes('colSpan="9"'));
   assert.ok(render({ rows: [], requestRecords: true, lifecycleRecords: true, hideCurrentLocation: true }).includes('colSpan="14"'));
+  assert.ok(render({ rows: [], requestRecords: true, showBdClosingTime: true }).includes('colSpan="12"'));
 });
 
 test("every equipment and vehicle site bar hides category in both fleet and breakdown views", () => {

@@ -20,7 +20,7 @@ test("request lists retain job, equipment, site and lifecycle details", () => {
   assert.match(source, /const equipment = equipmentForRequest\(request\)/);
   assert.match(source, /requestReference: request\.ref \|\| request\.reference/);
   assert.match(source, /requestSite: request\.site \|\| request\.location/);
-  assert.match(browser, /\{requestRecords && <th>Job reference<\/th>\}<th>Status<\/th><th data-filter-mode=\{requestRecords \? undefined : "date-sort"\}>Started<\/th><th>Days of breakdown<\/th><th>Machine \/ Door no\.<\/th>/);
+  assert.match(browser, /\{requestRecords && <th>Job reference<\/th>\}<th>Status<\/th><th data-filter-mode=\{requestRecords \? undefined : "date-sort"\}>Started<\/th>\{showBdClosingTime && <th>BD closing time<\/th>\}<th>Days of breakdown<\/th><th>Machine \/ Door no\.<\/th>/);
   assert.match(browser, /<th>Serial \/ chassis no\.<\/th>\{requestRecords && <th>Repair category<\/th>\}/);
   assert.match(browser, /formatBreakdownDaysHours\(record\.requestStart, record\.requestClosed, now\)/);
   assert.match(browser, /<Status>\{record\.requestStatus \|\| "—"\}<\/Status>/);
