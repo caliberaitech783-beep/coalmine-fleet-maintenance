@@ -228,7 +228,7 @@ test("day movement headings and Actions sort dates chronologically and all metri
   }
 });
 
-test("daily Closed bars include verified closures while pending-MIS cards retain only unverified rows", () => {
+test("six-reading Closed and MIS bars match their pending request cards", () => {
   const rows = [
     {ref: "PENDING", site: "Sasti OB", status: "Closed", category: "Breakdown", start: "2026-09-08 09:00", closedAt: "2026-09-09 10:00"},
     {ref: "VERIFIED", site: "Sasti OB", status: "Closed", category: "Breakdown", start: "2026-09-08 09:00", closedAt: "2026-09-09 11:00", verifiedAt: "2026-09-09T12:00:00Z"},
@@ -237,9 +237,11 @@ test("daily Closed bars include verified closures while pending-MIS cards retain
   let tree = view.render(rows);
   byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render(rows);
-  byLabel(tree, "09-09-2026: 2 closed requests").props.onClick();
+  assert.ok(byLabel(tree, "Open in Maintenance: 0 requests"));
+  assert.ok(byLabel(tree, "Open in MIS: 1 requests"));
+  byLabel(tree, "Closed: 1 requests").props.onClick();
   tree = view.render(rows);
-  assert.equal(detailView(tree).rows.length, 2);
+  assert.equal(detailView(tree).rows.length, 1);
   const pending = findAll(tree, (node) => node.type === "button" && text(node).includes("Open in MIS"))[0];
   assert.match(text(pending), /1$/);
   pending.props.onClick();
@@ -354,13 +356,15 @@ test("compiled lifecycle places Idle on its actual India event day, not its old 
   let tree = view.render();
   byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
-  assert.ok(byLabel(tree, "09-09-2026: 1 idle requests"));
-  assert.ok(byLabel(tree, "08-09-2026: 0 idle requests"));
-  assert.ok(byLabel(tree, "09-09-2026: 1 closed requests"));
-  assert.ok(byLabel(tree, "09-09-2026: 0 verified requests"));
+  assert.ok(byLabel(tree, "Idle Vehicles: 1 requests"));
+  assert.ok(byLabel(tree, "Closed: 1 requests"));
+  assert.ok(byLabel(tree, "Verified: 0 requests"));
+  const graph = findAll(tree, node => node.props?.className === "mine-request-chart-days mine-request-six-readings")[0];
+  assert.equal(findAll(graph, node => node.type === "button").length, 6);
+  assert.equal(byLabel(tree, "Request lifecycle custom days").props.value, undefined);
   const withoutIdleTime = requests.map((row) => row.ref === "OLD-IDLE" ? {...row, idealRequestedAt: ""} : row);
   tree = view.render(withoutIdleTime);
-  assert.ok(byLabel(tree, "09-09-2026: 0 idle requests"));
+  assert.ok(byLabel(tree, "Idle Vehicles: 0 requests"));
 });
 
 test("site-wise From/To updates inclusive movement, availability, exports and linked details together", () => {

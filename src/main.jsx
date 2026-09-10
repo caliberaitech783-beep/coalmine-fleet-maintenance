@@ -1330,7 +1330,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
     idle: requestLifecycleRows.idle.filter((record) => requestEventDate(record, "idle") === date).length,
   }));
-  const requestLifecycleScale = dashboardCountScale(requestLifecycleTrend.flatMap((day) => [day.opened, day.closed, day.verified, day.idle]));
+  const requestLifecycleReadings = [
+    { key: "production", color: "opened", label: "Production Request", value: requestLifecycleRows.production.length },
+    { key: "closed", color: "closed", label: "Closed", value: maintenanceClosedRows.length },
+    { key: "verified", color: "verified", label: "Verified", value: requestLifecycleRows.verified.length },
+    { key: "idle", color: "idle", label: "Idle Vehicles", value: requestLifecycleRows.idle.length },
+    { key: "opened", color: "maintenance", label: "Open in Maintenance", value: requestLifecycleAvailability.maintenance },
+    { key: "closed", color: "mis", label: "Open in MIS", value: requestLifecycleAvailability.mis },
+  ];
+  const requestLifecycleScale = dashboardCountScale(requestLifecycleReadings.map((reading) => reading.value));
   const requestLifecycleMaximum = requestLifecycleScale.maximum;
   const requestLifecycleRangeLabel = formatDisplayDateRange(safeTrendStartKey, requestTrendEndKey, " - ");
   const requestAssetRows = (requestRows = []) => requestRows.map((request, index) => {
@@ -1652,7 +1660,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div><span className="mine-eyebrow">Workflow throughput</span><h2>Request Lifecycle</h2><p>{requestLifecycleRangeLabel}</p></div>
             <div className="mine-request-lifecycle-controls">
               <div className="mine-trend-period" role="group" aria-label="Request lifecycle period">{[7, 14, 30].map((days) => <button type="button" key={days} className={!requestTrendFrom && !requestTrendTo && requestTrendDays === days ? "active" : ""} onClick={() => { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); }}>{days}D</button>)}</div>
-              <label className="mine-lifecycle-custom"><span>Custom</span><input type="number" aria-label="Request lifecycle custom days" min="1" max="365" placeholder="Days" value={requestTrendFrom || requestTrendTo ? "" : requestTrendDays} onChange={(event) => { const days = Number(event.target.value); if (Number.isInteger(days) && days >= 1 && days <= 365) { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); } }} /></label>
+              <label className="mine-lifecycle-custom"><span>Custom</span><input type="number" aria-label="Request lifecycle custom days" min="1" max="365" placeholder="Days" defaultValue="" onChange={(event) => { const days = Number(event.target.value); if (Number.isInteger(days) && days >= 1 && days <= 365) { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); } }} /></label>
               <label><span>From</span><input type="date" aria-label="Request lifecycle from date" value={requestTrendFrom} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
               <div className="mine-request-lifecycle-end-controls">
                 <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
@@ -1664,13 +1672,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             {[{ key: "production", className: "opened", label: "Production Request", note: "Production + Maintenance", value: requestLifecycleRows.production.length }, { key: "closed", label: "Closed", note: "Maintenance completed", value: maintenanceClosedRows.length }, { key: "verified", label: "Verified", note: "MIS verified", value: requestLifecycleRows.verified.length }, { key: "idle", label: "Idle Vehicles", note: "Available, not working", value: requestLifecycleRows.idle.length }, { key: "maintenance", label: "Open in Maint", note: "Active in Maintenance", value: requestLifecycleAvailability.maintenance }, { key: "mis", label: "Open in MIS", note: "Closed - Verified", value: requestLifecycleAvailability.mis }].map((item) => <button type="button" key={item.key} className={item.className || item.key} onClick={() => item.key === "maintenance" ? openAssetDrilldown("event:opened") : item.key === "mis" ? openAssetDrilldown("event:closed") : openAssetDrilldown(`event:${item.key}`)}><i /><span><b>{item.label}</b><small>{item.note}</small></span><strong>{item.value.toLocaleString()}</strong></button>)}
           </div>
           <div className="mine-request-lifecycle-chart" aria-label={`Request lifecycle chart from ${safeTrendStartKey} to ${requestTrendEndKey}`}>
-            <div className="mine-request-chart-days" style={{ gridTemplateColumns: `repeat(${Math.max(1, requestLifecycleTrend.length)}, minmax(28px, 1fr))`, minWidth: `${Math.max(100, requestLifecycleTrend.length * 34)}px` }}>
+            <div className="mine-request-chart-days mine-request-six-readings" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }}>
               <div className="mine-request-chart-grid" aria-hidden="true">{requestLifecycleScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / requestLifecycleMaximum * 100}%` }} />)}</div>
-              {requestLifecycleTrend.map((day, index) => <div className="mine-request-chart-day" key={day.date}>
+              {requestLifecycleReadings.map((reading) => <div className="mine-request-chart-day" key={reading.color}>
                 <span>
-                  {(["opened", "closed", "verified", "idle"]).map((event) => <button type="button" key={event} className={event} disabled={!day[event]} style={{ height: `${day[event] ? Math.max(7, (day[event] / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${formatDisplayDate(day.date)}: ${day[event]} ${event} requests`} title={`${formatDisplayDate(day.date)}: ${day[event]} ${event}`} onClick={() => openAssetDrilldown(`event:${event}:${day.date}`)}><b>{day[event] || ""}</b></button>)}
+                  <button type="button" className={reading.color} disabled={!reading.value} style={{ height: `${reading.value ? Math.max(7, (reading.value / requestLifecycleMaximum) * 100) : 2}%` }} aria-label={`${reading.label}: ${reading.value} requests`} title={`${reading.label}: ${reading.value}`} onClick={() => openAssetDrilldown(`event:${reading.key}`)}><b>{reading.value}</b></button>
                 </span>
-                <small {...listAction(`event:all:${day.date}`, `All lifecycle requests on ${formatDisplayDate(day.date)}`)}>{requestLifecycleTrend.length <= 14 || index === 0 || index === requestLifecycleTrend.length - 1 || index % 5 === 0 ? formatDisplayDate(day.date) : ""}</small>
+                <small {...listAction(`event:${reading.key}`, reading.label)}>{reading.label}</small>
               </div>)}
             </div>
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
