@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { changeDrilldownFilter, drilldownView, equipmentCategoryLabel, equipmentGroupLabel, equipmentMachineLabel } from "./dashboard-drilldown-model.mjs";
+import { formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 
 const categoryName = (value) => value === "Total vehicles" ? "Vehicles" : value === "Total equipment" ? "Equipment" : value;
 
@@ -71,7 +72,14 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
   const listRef = useRef(null);
   // Every new selection shows its fleet list from the top, not where the previous list was scrolled.
   useEffect(() => { if (listRef.current) listRef.current.scrollTop = 0; }, [tableKey]);
-  const columnCount = 6 + (requestRecords ? 4 : 0) + (lifecycleRecords ? 3 : 0);
+  const columnCount = 6 + (requestRecords ? 5 : 0) + (lifecycleRecords ? 3 : 0);
+  // Open requests keep counting: refresh the days-of-breakdown clock every minute.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    if (!requestRecords) return undefined;
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, [requestRecords]);
   const reset = () => { setFilters({ region: view.selection.region }); setOpenedLevel(0); };
   return <div className="dashboard-record-browser">
     <div className="dashboard-record-controls">
@@ -91,10 +99,10 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
       <div className="dashboard-record-summary"><h4>{view.selection.region || "Fleet"} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
       <div className="dashboard-asset-list" ref={listRef}>
         <ActionsTable key={tableKey} exportTitle={`${title} · ${view.selection.region || "Fleet"}`} printTitle={`${title} · ${view.selection.region || "Fleet"}`}>
-          <thead><tr>{requestRecords && <th>Job reference</th>}<th>Machine / Door no.</th><th>Equipment category</th><th>Equipment group</th><th>Model</th><th>{requestRecords ? "Request site" : "Current location"}</th><th>Serial / chassis no.</th>{requestRecords && <><th>Repair category</th><th>Status</th><th>Started</th></>}{lifecycleRecords && <><th>Closed</th><th>MIS verified at</th><th>First trip time</th></>}</tr></thead>
+          <thead><tr>{requestRecords && <><th>Job reference</th><th>Status</th><th>Started</th><th>Days of breakdown</th></>}<th>Machine / Door no.</th><th>Equipment category</th><th>Equipment group</th><th>Model</th><th>{requestRecords ? "Request site" : "Current location"}</th><th>Serial / chassis no.</th>{requestRecords && <th>Repair category</th>}{lifecycleRecords && <><th>Closed</th><th>MIS verified at</th><th>First trip time</th></>}</tr></thead>
           <tbody>{view.rows.length ? view.rows.map((record, index) => <tr key={record.id || `${record.equipmentName}-${index}`}>
-            {requestRecords && <td><b>{record.requestReference}</b></td>}<td>{equipmentMachineLabel(record)}</td><td>{categoryName(equipmentCategoryLabel(record))}</td><td>{equipmentGroupLabel(record)}</td><td>{record.model || "—"}</td><td>{record.requestSite || record.currentLocation || record.location || record.site || "—"}</td><td>{record.manufacturerSerialNo || record.chassisNo || "—"}</td>
-            {requestRecords && <><td>{record.repairCategory}</td><td><Status>{record.requestStatus}</Status></td><td>{formatDate(record.requestStart)}</td></>}{lifecycleRecords && <><td>{formatDate(record.requestClosed)}</td><td>{formatDate(record.requestVerified, true)}</td><td>{formatDate(record.requestFirstTrip, true)}</td></>}
+            {requestRecords && <><td><b>{record.requestReference}</b></td><td><Status>{record.requestStatus}</Status></td><td>{formatDate(record.requestStart)}</td><td><b>{formatBreakdownDaysHours(record.requestStart, record.requestClosed, now)}</b></td></>}<td>{equipmentMachineLabel(record)}</td><td>{categoryName(equipmentCategoryLabel(record))}</td><td>{equipmentGroupLabel(record)}</td><td>{record.model || "—"}</td><td>{record.requestSite || record.currentLocation || record.location || record.site || "—"}</td><td>{record.manufacturerSerialNo || record.chassisNo || "—"}</td>
+            {requestRecords && <td>{record.repairCategory}</td>}{lifecycleRecords && <><td>{formatDate(record.requestClosed)}</td><td>{formatDate(record.requestVerified, true)}</td><td>{formatDate(record.requestFirstTrip, true)}</td></>}
           </tr>) : <tr><td colSpan={columnCount}><div className="dashboard-record-empty"><b>No matching {requestRecords ? "requests" : "fleet records"}</b><span>{view.selection.region ? `No records for ${view.selection.region} in this chart selection.` : "No regions available in your current scope."}</span></div></td></tr>}</tbody>
         </ActionsTable>
       </div>
