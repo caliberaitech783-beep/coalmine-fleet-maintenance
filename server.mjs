@@ -27,7 +27,7 @@ import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
-import {metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
+import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
@@ -52,6 +52,10 @@ import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-vi
 
 const {Pool}=pg;
 const app=express();
+// Azure Front Door / App Service terminate TLS and proxy to Node. Without this
+// every visitor shares the proxy's address, so per-IP limits (password reset
+// OTP requests) fired for the whole site instead of one user.
+app.set('trust proxy',true);
 const port=Number(process.env.PORT||3000);
 const root=path.dirname(fileURLToPath(import.meta.url));
 const repairTypeDefaults=['Breakdown','Accidental','Preventive','Aggregate Repair','Super Structure','WGM'];
@@ -843,6 +847,15 @@ app.post('/api/login',async(req,res,next)=>{
 
 const passwordResetRequestMessage='If the user name has a registered mobile number, a 6-digit OTP has been sent by WhatsApp.';
 const passwordResetPhone=(record={})=>String(record.phone||record.phoneNo||record.phoneNumber||'').trim();
+const passwordResetDeliveryError='The OTP could not be delivered to your registered WhatsApp number. Ask an administrator to check WhatsApp Integration > alert history.';
+const passwordResetPausedError='WhatsApp OTP delivery is switched off in Report settings. Ask an administrator to turn on WhatsApp delivery and the "Password reset OTPs" switch.';
+async function recordPasswordResetDelivery({username='',user={},phone='',status=''}){
+  try{
+    await pool.query(`INSERT INTO whatsapp_alert_history
+      (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
+      ['Password reset OTP',String(username||'').slice(0,120),'',String(user.employee||user.name||user.login||username||'').slice(0,120),String(phone||'').slice(0,40),String(status||'').slice(0,300)]);
+  }catch(error){console.error('Could not record password reset OTP delivery:',error.message)}
+}
 
 app.post('/api/password-reset/request',async(req,res,next)=>{
   try{
@@ -855,16 +868,22 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
     const loginRows=loginRecordCandidates(userRows,username);
     const exactRows=loginRows.filter(row=>String(row.record_data.login||'').trim().toLowerCase()===username);
     const candidates=exactRows.length?exactRows:loginRows;
-    if(candidates.length!==1||!passwordResetPhone(candidates[0].record_data))
+    if(candidates.length!==1||!passwordResetPhone(candidates[0].record_data)){
+      await recordPasswordResetDelivery({username,user:candidates[0]?.record_data||{},
+        status:candidates.length===0?'Skipped - no user with this user name':candidates.length>1?`Skipped - ${candidates.length} users match this user name`:'Skipped - phone number missing'});
       return res.status(202).json({message:passwordResetRequestMessage,resetToken:fallbackToken});
+    }
 
     const user=candidates[0],requestedIp=String(req.ip||req.socket?.remoteAddress||'').slice(0,100);
     const {rows:limits}=await pool.query(`SELECT
       COUNT(*) FILTER (WHERE master_record_id=$1 AND created_at>NOW()-INTERVAL '1 hour')::int AS account_requests,
       COUNT(*) FILTER (WHERE requested_ip=$2 AND requested_ip<>'' AND created_at>NOW()-INTERVAL '1 hour')::int AS ip_requests
       FROM password_reset_sessions`,[user.id,requestedIp]);
-    if(Number(limits[0]?.account_requests||0)>=PASSWORD_RESET_MAX_REQUESTS_PER_HOUR||Number(limits[0]?.ip_requests||0)>=20)
+    if(Number(limits[0]?.account_requests||0)>=PASSWORD_RESET_MAX_REQUESTS_PER_HOUR||Number(limits[0]?.ip_requests||0)>=20){
+      await recordPasswordResetDelivery({username,user:user.record_data,phone:passwordResetPhone(user.record_data),
+        status:`Skipped - rate limit (${limits[0]?.account_requests||0} requests for this account, ${limits[0]?.ip_requests||0} from ${requestedIp||'unknown IP'} in the last hour)`});
       return res.status(202).json({message:passwordResetRequestMessage,resetToken:fallbackToken});
+    }
 
     const resetToken=randomUUID(),otp=generatePasswordResetOtp();
     await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE master_record_id=$1 AND used_at IS NULL',[user.id]);
@@ -875,16 +894,26 @@ app.post('/api/password-reset/request',async(req,res,next)=>{
       ]);
     const phone=passwordResetPhone(user.record_data);
     const whatsappEnv=await metaWhatsAppRuntimeEnv();
+    let status='Sent',paused=false;
     try{
       await sendMetaWhatsAppTemplate({to:phone,templateKey:'passwordResetOtp',parameters:[otp]},{env:whatsappEnv});
     }catch(templateError){
       console.warn('Password reset OTP template unavailable; using WhatsApp text fallback:',templateError.message);
-      try{await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv})}
-      catch(deliveryError){
+      try{
+        if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
+        await sendMetaWhatsAppText({to:phone,purpose:'passwordResetOtp',message:`Nerve Center password reset OTP: ${otp}. It expires in ${PASSWORD_RESET_OTP_TTL_MINUTES} minutes. Do not share this code.`},{env:whatsappEnv});
+        // Meta accepts free-form text but only delivers it inside an open 24-hour
+        // conversation, so flag it clearly instead of reporting a plain "Sent".
+        status=`Sent as plain text (delivered only if the user messaged the business number in the last 24 hours). Template failed: ${templateError.message}`;
+      }catch(deliveryError){
         await pool.query('UPDATE password_reset_sessions SET used_at=NOW() WHERE token=$1',[resetToken]);
         console.error('Password reset OTP delivery failed:',deliveryError.message);
+        paused=deliveryError.code==='WHATSAPP_POLICY_PAUSED';
+        status=paused?'Failed - paused by Report settings':`Failed - ${deliveryError.message} (template: ${templateError.message})`;
       }
     }
+    await recordPasswordResetDelivery({username,user:user.record_data,phone,status});
+    if(status.startsWith('Failed'))return res.status(paused?409:502).json({error:paused?passwordResetPausedError:passwordResetDeliveryError});
     res.status(202).json({message:passwordResetRequestMessage,resetToken});
   }catch(error){next(error)}
 });
@@ -1199,8 +1228,25 @@ app.get('/api/health',async(_req,res)=>{
   }
 });
 
+async function passwordResetTemplateStatus(env){
+  const templateName=META_WORKFLOW_TEMPLATES.passwordResetOtp.name;
+  const reportSettings=env.WHATSAPP_REPORT_SETTINGS||normalizeWhatsAppReportSettings();
+  if(env.META_WHATSAPP_DELIVERY_PAUSED==='true'||!whatsappPurposeEnabled(reportSettings,'passwordResetOtp'))
+    return {name:templateName,status:'PAUSED',detail:'Switched off in Report settings. Turn on WhatsApp delivery and "Password reset OTPs".'};
+  if(!env.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return {name:templateName,status:'UNKNOWN',detail:'Add the WhatsApp Business Account ID to check template approval.'};
+  try{
+    const templates=await metaWhatsAppTemplateStatuses({env});
+    const template=templates.find((item)=>item.name===templateName);
+    return template?{name:templateName,status:String(template.status||'UNKNOWN'),detail:''}
+      :{name:templateName,status:'MISSING',detail:'Template not found in Meta. Save the settings again to submit it.'};
+  }catch(error){return {name:templateName,status:'UNKNOWN',detail:String(error?.message||'Template lookup failed.').slice(0,200)}}
+}
+
 app.get('/api/whatsapp/status',requireSuper,async(_req,res)=>{
-  try{res.json({...await metaWhatsAppStatus({env:await metaWhatsAppRuntimeEnv()}),settings:await publicWhatsAppSettings()})}
+  try{
+    const env=await metaWhatsAppRuntimeEnv();
+    res.json({...await metaWhatsAppStatus({env}),otpTemplate:await passwordResetTemplateStatus(env),settings:await publicWhatsAppSettings()});
+  }
   catch(error){res.status(503).json({configured:true,connected:false,error:error instanceof Error?error.message:'Meta WhatsApp connection failed.'})}
 });
 

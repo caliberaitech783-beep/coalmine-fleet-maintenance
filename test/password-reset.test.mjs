@@ -42,6 +42,11 @@ test("server stores only hashed OTPs and enforces expiry, attempts, rate limits,
   assert.match(requestRoute, /passwordResetRequestMessage,resetToken:fallbackToken/);
   assert.match(requestRoute, /UPDATE password_reset_sessions SET used_at=NOW\(\) WHERE master_record_id=\$1 AND used_at IS NULL/);
   assert.match(requestRoute, /Cache-Control','no-store/);
+  assert.match(source, /app\.set\('trust proxy',true\)/);
+  assert.match(requestRoute, /recordPasswordResetDelivery\(\{username,user:user\.record_data,phone,status\}\)/);
+  assert.match(requestRoute, /status\.startsWith\('Failed'\)\)return res\.status\(paused\?409:502\)/);
+  assert.match(requestRoute, /Skipped - rate limit/);
+  assert.match(requestRoute, /Failed - paused by Report settings/);
   assert.match(confirmRoute, /PASSWORD_RESET_MAX_ATTEMPTS/);
   assert.match(confirmRoute, /verifyPassword\(otp,reset\.otp_hash\)/);
   assert.match(confirmRoute, /DELETE FROM auth_sessions WHERE lower\(login_name\)=\$1/);

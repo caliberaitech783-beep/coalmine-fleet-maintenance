@@ -6000,6 +6000,7 @@ function MetaWhatsAppSetup() {
       <div><span>Quality</span><strong>{connection?.qualityRating || "--"}</strong><small>Meta phone quality rating</small></div>
       <div><span>Recipients ready</span><strong>{readyRecipients}</strong><small>Users with a valid mobile number</small></div>
       <div><span>Mobile missing</span><strong>{missingRecipients}</strong><small>Complete in Users & employees</small></div>
+      <div><span>OTP template</span><strong>{connection?.otpTemplate?.status || "--"}</strong><small>{connection?.otpTemplate?.detail || (connection?.otpTemplate?.status === "APPROVED" ? "Password reset OTPs deliver by template" : "Password reset OTPs need an APPROVED template")}</small></div>
     </div>
     <form className="meta-whatsapp-form" onSubmit={saveSettings}>
       <div className="meta-whatsapp-form-heading"><div><h2>Provider credentials</h2><p>Credentials are encrypted in transit and secrets are never returned to this page.</p></div><ShieldCheck /></div>
