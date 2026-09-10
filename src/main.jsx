@@ -46,7 +46,7 @@ import { defaultHierarchyReportScheduleSettings, HIERARCHY_REPORT_DESIGNATIONS, 
 import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetChartCounts, createFleetAssetResolver, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
-import { buildBreakdownTrend, localDateKey } from "./dashboard-breakdown-forecast.mjs";
+import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { buildInfoPulseCases } from "../info-pulse-data.mjs";
 import InfoPulseContent from "./info-pulse-content.jsx";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
@@ -1088,6 +1088,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
   const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState("");
+  const [breakdownTrendFrom, setBreakdownTrendFrom] = useState("");
+  const [breakdownTrendRangeError, setBreakdownTrendRangeError] = useState("");
   const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
@@ -1143,12 +1145,26 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return counts;
   }, {});
   const breakdownTrendAnchorKey = breakdownTrendAnchor || dashboardDate || todayKey;
-  const breakdownTrend = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "past" });
+  const breakdownTrendStartDate = new Date(`${breakdownTrendAnchorKey}T12:00:00`);
+  breakdownTrendStartDate.setDate(breakdownTrendStartDate.getDate() - breakdownTrendDays + 1);
+  const breakdownTrendStartKey = breakdownTrendFrom || localDateKey(breakdownTrendStartDate);
+  const updateBreakdownTrendRange = (bound, value) => {
+    if (!value) { setBreakdownTrendFrom(""); setBreakdownTrendAnchor(""); setBreakdownTrendRangeError(""); return; }
+    const from = bound === "from" ? value : (value < breakdownTrendStartKey ? value : breakdownTrendStartKey);
+    const to = bound === "to" ? value : (value > breakdownTrendAnchorKey ? value : breakdownTrendAnchorKey);
+    if (to > todayKey || !recordedBreakdownRangeLength(from, to)) {
+      setBreakdownTrendRangeError("Select valid dates, no later than today, within a period of 10 years.");
+      return;
+    }
+    setBreakdownTrendFrom(from); setBreakdownTrendAnchor(to); setBreakdownTrendRangeError("");
+  };
+  const breakdownTrend = buildRecordedBreakdownTrend({ counts: breakdownDateCounts, startDate: breakdownTrendStartKey, endDate: breakdownTrendAnchorKey });
   const breakdownTrendScale = dashboardCountScale(breakdownTrend.map((day) => day.count));
   const maxBreakdownTrend = breakdownTrendScale.maximum;
-  const actualTrendDays = buildBreakdownTrend({ counts: breakdownDateCounts, anchorDate: breakdownTrendAnchorKey, days: breakdownTrendDays, view: "past" });
+  const actualTrendDays = breakdownTrend;
+  const breakdownTrendPeriodDays = actualTrendDays.length;
   const breakdownTrendTotal = actualTrendDays.reduce((total, day) => total + day.count, 0);
-  const breakdownTrendAverage = breakdownTrendDays ? (breakdownTrendTotal / breakdownTrendDays).toFixed(1) : "0.0";
+  const breakdownTrendAverage = breakdownTrendPeriodDays ? (breakdownTrendTotal / breakdownTrendPeriodDays).toFixed(1) : "0.0";
   const kpis = liveEquipmentMetrics(visibleEquipment, liveBreakdowns);
   const availabilityDate = breakdownSummaryTo ? (breakdownSummaryTo === todayKey ? "" : breakdownSummaryTo) : dashboardDate;
   const availabilityRequests = availabilityRequestsForDate(locationBreakdowns, availabilityDate);
@@ -1633,10 +1649,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       <section className="mine-dashboard-lower-grid">
       <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">
-        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><label className="mine-trend-anchor"><CalendarDays /><input aria-label="Breakdown trend anchor day" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => setBreakdownTrendAnchor(event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendDays === days ? "active" : ""} onClick={() => setBreakdownTrendDays(days)}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button></div></header>
+        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><label className="mine-trend-anchor"><span>From</span><input aria-label="Breakdown trend from date" type="date" max={todayKey} value={breakdownTrendStartKey} onChange={(event) => updateBreakdownTrendRange("from", event.target.value)} /></label><label className="mine-trend-anchor"><span>To</span><input aria-label="Breakdown trend to date" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => updateBreakdownTrendRange("to", event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendPeriodDays === days ? "active" : ""} onClick={() => { setBreakdownTrendDays(days); setBreakdownTrendFrom(""); setBreakdownTrendRangeError(""); }}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button></div>{breakdownTrendRangeError && <small role="alert">{breakdownTrendRangeError}</small>}</header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
-          <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>Past {breakdownTrendDays} days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
-          <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b>Selected day: {formatDisplayDate(breakdownTrendAnchorKey)}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendDays <= 14 || index % 5 === 0 || day.anchor ? formatDisplayDate(day.date) : ""}</small></div>)}</div></div></section>
+          <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendPeriodDays} selected days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
+          <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b aria-label="Breakdown trend selected period">From: {formatDisplayDate(breakdownTrendStartKey)} · To: {formatDisplayDate(breakdownTrendAnchorKey)}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendPeriodDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendPeriodDays <= 14 || index % 5 === 0 || day.anchor ? formatDisplayDate(day.date) : ""}</small></div>)}</div></div></section>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-breakdown-trend-state" />}
       </section>
       <article {...cardAction("all", "Overall Fleet Performance")} className="mine-panel mine-fleet-performance" aria-label="Overall utilization and availability">

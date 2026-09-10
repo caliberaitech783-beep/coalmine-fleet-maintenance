@@ -181,6 +181,56 @@ test("From and To stay visible above the table without a calendar trigger or pop
   assert.ok(text(byLabel(tree, "Site-wise BD table period")).includes("From: 01-09-2026"));
 });
 
+test("Breakdown Trend From/To keeps bars, counts, average and View all on the same inclusive period", () => {
+  const view = harness();
+  const rows = [...requests, {ref: "AFTER-RANGE", door: "V1", chassis: "C1", site: "Sasti OB", status: "Open", start: "2026-09-10 09:00:00"},
+    {ref: "OTHER-SITE", door: "V1", site: "Majri OB", status: "Open", start: "2026-09-01 09:00:00"}];
+  let tree = view.render(rows);
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render(rows);
+  byLabel(tree, "Breakdown trend from date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render(rows);
+  assert.equal(text(byLabel(tree, "Breakdown trend selected period")), "From: 01-09-2026 · To: 09-09-2026");
+  assert.equal(text(byClass(tree, "mine-trend-summary")), "Recorded39 selected daysDaily baseline0.3Recorded per day");
+  assert.ok(byLabel(tree, "9 day recorded breakdown chart"));
+  assert.ok(byLabel(tree, "01-09-2026: 2 recorded breakdown requests"));
+  assert.ok(byLabel(tree, "02-09-2026: 0 recorded breakdown requests"));
+  assert.ok(byLabel(tree, "09-09-2026: 1 recorded breakdown requests"));
+  button(byClass(tree, "mine-panel mine-breakdown-trend"), "View all").props.onClick();
+  tree = view.render(rows);
+  let details = findAll(tree, (node) => node.props.requestRecords === true && Array.isArray(node.props.rows))[0].props;
+  assert.deepEqual(details.rows.map((row) => row.requestReference), ["OLD-OPEN", "OLD-IDLE", "NEW-CLOSED"]);
+  assert.ok(details.title.includes(displayDates.formatDisplayDateRange("2026-09-01", "2026-09-09")));
+  const day = byLabel(tree, "01-09-2026: 2 recorded breakdown requests");
+  const target = {};
+  day.props.onKeyDown({key: "Enter", currentTarget: target, target, preventDefault() {}, stopPropagation() {}});
+  tree = view.render(rows);
+  details = findAll(tree, (node) => node.props.requestRecords === true && Array.isArray(node.props.rows))[0].props;
+  assert.deepEqual(details.rows.map((row) => row.requestReference), ["OLD-OPEN", "OLD-IDLE"]);
+  byLabel(tree, "Breakdown trend to date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render(rows);
+  assert.ok(byLabel(tree, "1 day recorded breakdown chart"));
+  assert.equal(text(byClass(tree, "mine-trend-summary")), "Recorded21 selected daysDaily baseline2.0Recorded per day");
+  byLabel(tree, "Breakdown trend from date").props.onChange({target: {value: "2026-08-01"}});
+  tree = view.render(rows);
+  byLabel(tree, "Breakdown trend to date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render(rows);
+  assert.ok(byLabel(tree, "40 day recorded breakdown chart"));
+  button(byLabel(tree, "Breakdown trend period"), "14D").props.onClick();
+  tree = view.render(rows);
+  assert.equal(byLabel(tree, "Breakdown trend from date").props.value, "2026-08-27");
+  assert.equal(byLabel(tree, "Breakdown trend to date").props.value, "2026-09-09");
+  assert.ok(byLabel(tree, "14 day recorded breakdown chart"));
+  byLabel(tree, "Breakdown trend to date").props.onChange({target: {value: "9999-12-31"}});
+  tree = view.render(rows);
+  assert.equal(byLabel(tree, "Breakdown trend to date").props.value, "2026-09-09");
+  assert.ok(findAll(tree, (node) => node.props.role === "alert").length);
+  byLabel(tree, "Breakdown trend to date").props.onChange({target: {value: ""}});
+  tree = view.render(rows);
+  assert.equal(findAll(tree, (node) => node.props.role === "alert").length, 0);
+  assert.equal(byLabel(tree, "Dashboard date").props.value, "2026-09-09");
+});
+
 test("every site equipment and vehicle total opens exactly its registered assets in both chart modes", () => {
   const sites = [
     {site: "Sasti OB", equipment: 48, vehicles: 142, equipmentBd: 5, vehiclesBd: 8},

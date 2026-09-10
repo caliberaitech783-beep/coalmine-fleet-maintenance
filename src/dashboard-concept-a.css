@@ -1556,6 +1556,8 @@ button.mine-primary-kpi-card:focus-visible,
   font-weight: 750;
 }
 .mine-trend-anchor { min-width: 125px !important; }
+.mine-trend-controls .mine-trend-anchor { flex: 0 1 210px; min-width: 185px !important; }
+.mine-trend-anchor > span { font-weight: 800; color: var(--mine-text); white-space: nowrap; }
 .mine-trend-anchor input {
   min-width: 0;
   width: 100%;

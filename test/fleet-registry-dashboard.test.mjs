@@ -143,7 +143,7 @@ test("breakdown trend chart drops the forecast legend, view toggle and wording",
   assert.doesNotMatch(source, /className="mine-trend-view" role="group"/);
   assert.doesNotMatch(source, /weekday-weighted upcoming estimates/);
   assert.doesNotMatch(source, /actual and forecast breakdown chart/);
-  assert.match(source, /<i className="actual" \/>Actual<\/span><b>Selected day:/);
+  assert.match(source, /<i className="actual" \/>Actual<\/span><b aria-label="Breakdown trend selected period">From:/);
   assert.match(source, /day recorded breakdown chart`\}/);
 });
 

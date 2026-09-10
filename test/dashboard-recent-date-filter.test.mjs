@@ -12,7 +12,8 @@ test("dashboard replaces recent cases with a site-wise selectable breakdown tren
   assert.match(source, /\[breakdownTrendSite, setBreakdownTrendSite\] = useState\("all"\)/);
   // The Past/Both/Upcoming forecast view toggle was removed; the chart only shows recorded days.
   assert.doesNotMatch(source, /breakdownTrendView/);
-  assert.match(source, /aria-label="Breakdown trend anchor day"/);
+  assert.match(source, /aria-label="Breakdown trend from date"/);
+  assert.match(source, /aria-label="Breakdown trend to date"/);
   assert.doesNotMatch(source, /aria-label="Breakdown trend view"/);
   assert.match(source, /Overall Utilization/);
   assert.match(source, /Overall Availability/);

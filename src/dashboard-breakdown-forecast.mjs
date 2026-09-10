@@ -14,6 +14,27 @@ const offsetDateKey = (dateKey, days) => {
 
 const mean = (values) => values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
 
+export function recordedBreakdownRangeLength(startDate, endDate) {
+  const epoch = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return NaN;
+    const time = Date.parse(`${value}T00:00:00Z`);
+    return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value ? time : NaN;
+  };
+  const days = (epoch(endDate) - epoch(startDate)) / 86400000 + 1;
+  // Protect the daily chart from accidental multi-century input while allowing
+  // ordinary multi-year history. Invalid ranges never silently become 7 days.
+  return Number.isInteger(days) && days > 0 && days <= 3660 ? days : 0;
+}
+
+export function buildRecordedBreakdownTrend({ counts = {}, startDate, endDate } = {}) {
+  const days = recordedBreakdownRangeLength(startDate, endDate);
+  return Array.from({ length: days }, (_, index) => {
+    const date = offsetDateKey(startDate, index);
+    const count = Number(counts[date]);
+    return { date, count: Number.isFinite(count) ? Math.max(0, count) : 0, kind: "actual", anchor: date === endDate };
+  });
+}
+
 export function buildBreakdownTrend({ counts = {}, anchorDate, days = 7, view = "both" } = {}) {
   const period = clampDays(days);
   const anchor = localDateKey(anchorDate || new Date());
