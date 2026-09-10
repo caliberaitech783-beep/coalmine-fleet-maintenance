@@ -1,4 +1,5 @@
 import { requestStatusLabel } from "./request-status.mjs";
+import { TIME_24H_PATTERN } from "../request-time.mjs";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";

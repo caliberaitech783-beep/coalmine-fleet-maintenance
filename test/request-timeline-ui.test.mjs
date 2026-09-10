@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import React from "react";
+import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { transformWithOxc } from "vite";
 import {formatTimelineDuration, requestTimelineEvents, requestTimelineDurations, buildRequestTimelineChanges} from "../request-timeline.mjs";
 import * as equipment from "../request-equipment.mjs";
@@ -62,7 +63,7 @@ function harness(name, extra = {}) {
     requestStartParts: () => ({date: "2026-09-08", time: "12:00:00"}), requestMeterTypeForRequest: () => "KMR",
     useMasterRecords: () => [[]], normalizeEquipmentGroup: value => value,
     formatTwelveHourDateTime: value => value || "Not recorded", delayedReasonRequired: () => false,
-    arrivalRedFlagRequired: () => false, TIME_24H_PATTERN: ".*", readMeterEvidence: async () => "fixture",
+    arrivalRedFlagRequired: () => false, TIME_24H_PATTERN, readMeterEvidence: async () => "fixture",
     FormData: class {constructor(values) {this.values = values;} get(key) {return this.values[key] ?? "";}},
     URL: {createObjectURL: () => "fixture:preview", revokeObjectURL() {}},
     FileReader: class {readAsDataURL() {this.result = "data:image/png;base64,dGVzdA=="; this.onload();}},
@@ -249,6 +250,19 @@ for (const name of ["RequestEditForm", "CloseRequestForm"]) test(`${name} retain
   await submit(tree, submitValues({closingDate: "2026-09-08", closingTime: "12:00:00", maintenanceWork: "Test maintenance"}));
   assert.match(alerts(app.render()), /Timeline ordering is invalid/);
   assert.equal(button(app.render(), "Cancel").props.disabled, false);
+});
+
+test("MIS first-trip conditional time field imports its real validator and toggles without crashing", () => {
+  assert.match(main, /import\s*\{\s*TIME_24H_PATTERN\s*\}\s*from\s*["']\.\.\/request-time\.mjs["']/);
+  const app = harness("VerifyRequestForm");
+  let tree = app.render({request: {...request, meterType: "HMR"}, close() {}, onSave: async () => {}});
+  assert.equal(field(tree, "firstTripTime"), undefined);
+  all(tree, node => node.type === "input" && node.props.type === "checkbox")[0].props.onChange({target: {checked: true}});
+  tree = app.render();
+  assert.equal(field(tree, "firstTripTime").props.pattern, TIME_24H_PATTERN);
+  assert.equal(field(tree, "firstTripDate").props.required, true);
+  all(tree, node => node.type === "input" && node.props.type === "checkbox")[0].props.onChange({target: {checked: false}});
+  assert.equal(field(app.render(), "firstTripTime"), undefined);
 });
 
 test("MIS verification attachment validation and API rejection remain inline and preserve entered first-trip data", async () => {
