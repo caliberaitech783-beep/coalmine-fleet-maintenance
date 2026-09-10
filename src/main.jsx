@@ -40,7 +40,7 @@ import { delayedReasonRequired } from "../delayed-reason.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
-import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
+import { IN_OUT_REPORT_TITLE } from "../in-out-report.mjs";
 import { buildDepartmentReports } from "../department-reports.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
@@ -5055,13 +5055,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const recentBreakdownRows = [...reportRequests]
     .sort((a, b) => (new Date(String(b.start || b.closedAt || b.verifiedAt || 0).replace(" ", "T")).getTime() || 0) - (new Date(String(a.start || a.closedAt || a.verifiedAt || 0).replace(" ", "T")).getTime() || 0))
     .slice(0, 250);
-  const inOutRows = useMemo(() => buildInOutReportRows(reportRequests), [reportRequests]);
-  const inOutColumns = IN_OUT_REPORT_COLUMNS.map((column) => ({
-    ...column,
-    ...(column.key === "date" ? { value: (row) => formatDisplayDate(row.date), sortValue: (row) => row.date, render: (row) => <b>{formatDisplayDate(row.date)}</b> } : {}),
-    ...(column.key === "net" ? { sortValue: (row) => row.net, render: (row) => <strong className={`in-out-net${row.net > 0 ? " positive" : row.net < 0 ? " negative" : ""}`}>{signedCount(row.net)}</strong> } : {}),
-    ...(column.key === "averageTat" ? { sortValue: (row) => row.averageTatMinutes ?? -1 } : {}),
-  }));
   const requestColumns = [
     {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
     {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
@@ -5136,7 +5129,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {key: "closedAt", label: "Maintenance close / idle at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
     ], dateValue: (row) => row.closedAt || row.start, emptyMessage: "No idle vehicle records available"},
     {category: "general", title: "Recent Breakdown Cases", description: "Latest breakdown cases by recorded workflow timestamp. Status shows Pending when maintenance has not accepted an open request within 24 hours; TAT is closed at minus opened at.", rows: recentBreakdownRows, columns: recentBreakdownColumns, dateValue: (row) => row.start || row.closedAt || row.verifiedAt, emptyMessage: "No recent breakdown cases available"},
-    {category: "general", title: IN_OUT_REPORT_TITLE, description: IN_OUT_REPORT_DESCRIPTION, rows: inOutRows, columns: inOutColumns, dateValue: (row) => row.date, emptyMessage: "No in and out movement recorded yet", rowKey: (row) => `in-out-${row.date}`},
     {category: "production", title: "Off Road to MIS Veri.", description: "Elapsed time from Production off-road marking to MIS verification.", rows: elapsedRows.filter((row) => row.start && row.verifiedAt), columns: [
       ...misColumns,
       {key: "prodToMis", label: "Prod to MIS verification", value: (request) => elapsedLabel(request.start, request.verifiedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.verifiedAt), render: (request) => <strong>{elapsedLabel(request.start, request.verifiedAt)}</strong>},

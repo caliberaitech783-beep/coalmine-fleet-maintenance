@@ -9,7 +9,8 @@ import {IN_OUT_REPORT_TITLE} from '../in-out-report.mjs';
 test('hierarchy report groups carry the Reports menu headings in menu order',()=>{
   assert.deepEqual(HIERARCHY_REPORT_GROUPS.map(group=>[group.group,group.viewKey]),[['General Report','C'],['Production Report','P'],['Maintenance Report','M'],['MIS Report','S']]);
   const byGroup=Object.fromEntries(HIERARCHY_REPORT_GROUPS.map(group=>[group.viewKey,group.reports]));
-  assert.deepEqual(byGroup.C,['Report for On Road / Off Road & Idle','Vehicle Transfer Report','Total Equipment / Vehicle Location Wise','Recent Breakdown Cases',IN_OUT_REPORT_TITLE,'Summary Report']);
+  assert.deepEqual(byGroup.C,['Report for On Road / Off Road & Idle','Vehicle Transfer Report','Total Equipment / Vehicle Location Wise','Recent Breakdown Cases','Summary Report']);
+  assert.equal(hierarchyReportEquivalent(IN_OUT_REPORT_TITLE),'Total In and out count report','the removed General In and Out tick follows the MIS in/out register');
   assert.deepEqual(byGroup.P,['Total Request Submitted Report','Ticket Acceptance from Maintenance (Timelinewise)','Maintenance Status Pending']);
   assert.deepEqual(byGroup.M,['Turn Around Time for Repair','Open Off road Cases','Availability Report','Vehicle Arrival Red Flag Report']);
   assert.deepEqual(byGroup.S,['30 Min. Mismatch','Unverified Cases','MIS Turn Around Time','Total Fleet','Total In and out count report','MIS Red Flag Report']);

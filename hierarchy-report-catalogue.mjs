@@ -29,7 +29,7 @@ export const HIERARCHY_REPORTS={
 
 export const HIERARCHY_REPORT_GROUPS=[
   {group:'General Report',viewKey:'C',className:'common',reports:[
-    HIERARCHY_REPORTS.roadStatus,HIERARCHY_REPORTS.vehicleTransfer,HIERARCHY_REPORTS.locationWise,HIERARCHY_REPORTS.recentBreakdown,HIERARCHY_REPORTS.inOut,HIERARCHY_REPORTS.summary,
+    HIERARCHY_REPORTS.roadStatus,HIERARCHY_REPORTS.vehicleTransfer,HIERARCHY_REPORTS.locationWise,HIERARCHY_REPORTS.recentBreakdown,HIERARCHY_REPORTS.summary,
   ]},
   {group:'Production Report',viewKey:'P',className:'production',reports:[
     HIERARCHY_REPORTS.totalSubmitted,HIERARCHY_REPORTS.ticketAcceptance,HIERARCHY_REPORTS.maintenancePending,
@@ -62,6 +62,8 @@ export const LEGACY_HIERARCHY_REPORT_EQUIVALENTS=new Map([
   ['Event close Report - Maint. Closing to MIS Verif.',HIERARCHY_REPORTS.misVerificationTime],
   ['Idle with PM verif.',HIERARCHY_REPORTS.openOffRoad],
   ['On Road with first trip veri.',HIERARCHY_REPORTS.mismatch30],
+  // The General In and Out Report left the Reports menu; its tick and scheduled bundle follow the MIS in/out register.
+  [HIERARCHY_REPORTS.inOut,HIERARCHY_REPORTS.misInOut],
 ]);
 
 export function hierarchyReportEquivalent(title){

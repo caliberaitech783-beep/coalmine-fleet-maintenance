@@ -140,9 +140,7 @@ test('In and Out report ships in the director bundle and the General Report tab'
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/reports-workspace.css',import.meta.url),'utf8');
   assert.match(source,/from "\.\.\/in-out-report\.mjs"/);
-  assert.match(source,/category: "general", title: IN_OUT_REPORT_TITLE/);
-  assert.match(source,/buildInOutReportRows\(reportRequests\)/);
-  assert.match(source,/rowKey: \(row\) => `in-out-\$\{row\.date\}`/);
+  assert.doesNotMatch(source,/category: "general", title: IN_OUT_REPORT_TITLE/,"the In and Out Report is no longer listed under General Report");
   assert.doesNotMatch(source,/InOutReportSummary/);
   assert.match(styles,/\.in-out-net\.positive/);
 });
