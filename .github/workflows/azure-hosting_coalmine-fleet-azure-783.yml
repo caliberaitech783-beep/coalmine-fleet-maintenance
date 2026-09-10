@@ -284,6 +284,7 @@ jobs:
           async function get(path){const response=await fetch(scm+path,{headers,signal:AbortSignal.timeout(30000)});if(!response.ok)throw new Error('Log read HTTP '+response.status);return response;}
           try {
             const files=await get('/api/vfs/LogFiles/').then(r=>r.json());
+            console.log('Log directory entries:',files.map(f=>({name:f.name,mime:f.mime})));
             const logs=files.filter(f=>f.name.endsWith('.log')).sort((a,b)=>String(b.mtime).localeCompare(String(a.mtime))).slice(0,8);
             console.log('Recent application log files:',logs.map(f=>({name:f.name,modified:f.mtime,size:f.size})));
             let count=0;
@@ -297,6 +298,52 @@ jobs:
               }
             }
             console.log('Matched login errors:',count);
+            const source=`
+          import {createRequire} from 'node:module';
+          import {pathToFileURL} from 'node:url';
+          const require=createRequire('/home/site/wwwroot/server.mjs');
+          const {Pool}=require('pg');
+          const pool=new Pool({connectionString:process.env.DATABASE_URL||process.env.APPSETTING_DATABASE_URL,ssl:{rejectUnauthorized:false},max:1,connectionTimeoutMillis:15000});
+          const client=await pool.connect();
+          let stage='begin';
+          try {
+            await client.query('BEGIN');
+            await client.query("SET LOCAL statement_timeout = '15s'");
+            const {loginRecordCandidates,resolveMobileAccess,userLoginCandidates}=await import(pathToFileURL('/home/site/wwwroot/mobile-access.mjs'));
+            const {mergePrivilegeRecords}=await import(pathToFileURL('/home/site/wwwroot/privilege-record.mjs'));
+            const {createSessionStore}=await import(pathToFileURL('/home/site/wwwroot/auth-session.mjs'));
+            stage='find-user';
+            const {rows:users}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees'");
+            const candidates=loginRecordCandidates(users,'anoop');
+            console.log(JSON.stringify({stage,candidates:candidates.length}));
+            for(const row of candidates){
+              const employee=row.record_data;
+              const login=String(employee.login||userLoginCandidates(employee)[0]||'anoop').trim();
+              const identifiers=new Set([...userLoginCandidates(employee),login.toLowerCase(),'anoop']);
+              stage='find-privileges';
+              const {rows:privileges}=await client.query("SELECT record_data FROM master_records WHERE master_name='Privilege'");
+              let privilege={};
+              for(const entry of privileges){const record=entry.record_data||{};if(identifiers.has(String(record.username||'').trim().toLowerCase()))privilege=mergePrivilegeRecords(privilege,record);}
+              stage='resolve-access';
+              const profile=resolveMobileAccess({user:employee,privilege});
+              console.log(JSON.stringify({stage,userType:profile.userType,assignedRole:profile.assignedRole,mustChangePassword:employee.mustChangePassword===true,hasEmployeeName:!!employee.employee}));
+              stage='create-session-rollback-only';
+              await createSessionStore(client).create({token:'login-diagnostic-rollback-'+Date.now(),role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+              console.log(JSON.stringify({stage,success:true}));
+            }
+          } catch(error){console.log(JSON.stringify({stage,error:error.message,code:error.code,table:error.table,column:error.column,constraint:error.constraint}));}
+          finally{await client.query('ROLLBACK');client.release();await pool.end();}
+          `;
+            const scriptPath='/api/vfs/data/login-diagnostic-20260910.mjs';
+            const upload=await fetch(scm+scriptPath,{method:'PUT',headers:{...headers,'If-Match':'*','Content-Type':'application/octet-stream'},body:source});
+            if(!upload.ok)throw new Error('Diagnostic script upload HTTP '+upload.status);
+            try {
+              const response=await fetch(scm+'/api/command',{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({command:'node /home/data/login-diagnostic-20260910.mjs',dir:'/home/site/wwwroot'}),signal:AbortSignal.timeout(60000)});
+              if(!response.ok)throw new Error('Diagnostic command HTTP '+response.status);
+              const result=await response.json();
+              console.log('Session transaction diagnosis (always rolled back):',result.Output);
+              if(result.ExitCode!==0)console.log('Diagnostic runtime error:',String(result.Error).slice(0,1400));
+            } finally {await fetch(scm+scriptPath,{method:'DELETE',headers:{...headers,'If-Match':'*'}});}
           } catch(error){console.error('Login diagnostics failed:',error.message);process.exitCode=1;}
 
           NODE
