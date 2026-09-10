@@ -157,20 +157,18 @@ test('report master reads use current authorization and site scope without grant
   assert.doesNotMatch(route,/UPDATE |INSERT INTO |DELETE FROM /);
 });
 
-test('arrival reports measure delay through receipt, keep remarks and filter by flag date',()=>{
+test('arrival reports retain waiting-at-flag time, remarks and flag date without removed receipt columns',()=>{
   const pending=Object.freeze({ref:'pending',start:'2026-09-07 08:00',arrivalFlaggedAt:'2026-09-07 10:00',arrivalFlaggedBy:'Maintenance inspector',arrivalFlagRemark:'Waiting for recovery'});
   const received=Object.freeze({...pending,ref:'received',acceptedAt:'2026-09-07 11:00',acceptedBy:'Receiver'});
   const report=build([pending,received,{ref:'not-flagged'}]).find(r=>r.title==='Vehicle Arrival Red Flag Report');
   assert.equal(report.category,'maintenance');
   assert.deepEqual(report.rows,[pending,received]);
-  assert.equal(cell(report,'arrivalDelay',pending),'4h 0m');
-  assert.equal(cell(report,'arrivalDelay',received),'3h 0m');
+  assert.ok(!report.columns.some(column=>['arrivalDelay','acceptedAt','acceptedBy','complaint'].includes(column.key)));
   assert.equal(cell(report,'flagWaitingTime',pending),'2h 0m');
+  assert.equal(cell(report,'flagWaitingTime',received),'2h 0m');
   const retrospective={...received,arrivalFlaggedAt:'2026-09-08 15:00'};
   assert.equal(cell(report,'flagWaitingTime',retrospective),'3h 0m');
-  assert.equal(cell(report,'arrivalDelay',retrospective),'3h 0m');
   assert.equal(cell(report,'arrivalFlagRemark',pending),'Waiting for recovery');
-  assert.equal(cell(report,'acceptedAt',pending),'Not reached');
   assert.equal(report.dateValue(pending),pending.arrivalFlaggedAt);
 });
 
