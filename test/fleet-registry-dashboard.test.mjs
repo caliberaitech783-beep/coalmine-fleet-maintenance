@@ -54,7 +54,7 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /const fleetChartAxisMax =/);
   assert.match(source, /fleetChartTicks\.map/);
   assert.match(source, /fleetRegionInsights\.map\(\(region\) => <section/);
-  assert.match(source, /region\.sites\.map\(\(site\) => <button/);
+  assert.match(source, /region\.sites\.map\(\(site\) => <div className="mine-fleet-site-entry"/);
   assert.match(source, /<FleetSiteBars site=\{site\} axisMax=\{fleetChartAxisMax\} showBreakdown=\{showFleetBreakdowns\}/);
   assert.match(source, /className="mine-fleet-chart-toggle"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
@@ -87,7 +87,10 @@ test("Total Fleet uses the approved taller card and wider site bars", () => {
   assert.match(readabilityCss, /\.mine-dashboard-feature-row \.mine-fleet-chart-layout\s*\{[^}]*height:\s*390px;[^}]*min-height:\s*360px/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(44px, 3vw, 58px\)/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-count\s*\{[^}]*font-size:\s*18px !important/);
-  assert.match(source, /className="mine-fleet-site-summary"[^>]*><b>\{site\.name\}<\/b><span>Total BD \{site\.breakdown\.total\.toLocaleString\(\)\} · Total Fleet \{site\.total\.toLocaleString\(\)\}<\/span>/);
+  assert.match(source, /<small className="mine-fleet-site-summary"><b>\{site\.name\}<\/b>/);
+  assert.match(source, /openAssetDrilldown\(`offroad-site:\$\{site\.name\}`\)\}>Total BD \{site\.breakdown\.total\.toLocaleString\(\)\}<\/button>/);
+  assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)\}>Total Fleet \{site\.total\.toLocaleString\(\)\}<\/button>/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-site-summary button\s*\{/);
 });
 
 test("Total Fleet provides a persistent Caliber watermark option", () => {
