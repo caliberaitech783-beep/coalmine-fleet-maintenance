@@ -1,6 +1,6 @@
 import { requestStatusLabel } from "./request-status.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
-import { notificationText } from "../notification-text.mjs";
+import { notificationParts, notificationSiteOptions, filterNotificationsBySite } from "../notification-text.mjs";
 import { createNotificationTracker, createNotificationSound } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
@@ -7959,6 +7959,11 @@ function NotificationEntryDialog({ state, onClose }) {
   </Modal>, document.body);
 }
 
+function NotificationMessage({ item }) {
+  const {site, door, details} = notificationParts(item);
+  return <span className="notification-message"><strong className="notification-site">Site: {site}</strong><span className="notification-details">{[door ? `Door No. ${door}` : "", details].filter(Boolean).join(" — ")}</span></span>;
+}
+
 function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef }) {
   useEffect(() => {
     const id = String(item.id);
@@ -7969,10 +7974,11 @@ function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef }) 
     const timer = window.setTimeout(() => onDismiss(id), 15000);
     return () => window.clearTimeout(timer);
   }, [item.id]);
-  return <div className="incoming-notification" role="status" aria-live="polite"><button className="incoming-notification-link" type="button" onClick={() => { onDismiss(String(item.id)); void onOpen(item); }}><Bell /><span><b>New notification</b><span>{notificationText(item)}</span><small>Click for more details.</small></span></button><button type="button" className="incoming-notification-close" aria-label="Dismiss notification" onClick={() => onDismiss(String(item.id))}><X /></button></div>;
+  return <div className="incoming-notification" role="status" aria-live="polite"><button className="incoming-notification-link" type="button" onClick={() => { onDismiss(String(item.id)); void onOpen(item); }}><Bell /><span><b>New notification</b><NotificationMessage item={item} /><small>Click for more details.</small></span></button><button type="button" className="incoming-notification-close" aria-label="Dismiss notification" onClick={() => onDismiss(String(item.id))}><X /></button></div>;
 }
 
 function NotificationBell({ session, onOpenEntry }) {
+  const [siteFilter, setSiteFilter] = useState("");
   const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const soundRef = useRef(null), playedRef = useRef(new Set());
@@ -7986,7 +7992,7 @@ function NotificationBell({ session, onOpenEntry }) {
     const sound = createNotificationSound();
     soundRef.current = sound;
     playedRef.current = new Set();
-    setItems([]); setAlerts([]); setOpen(false);
+    setItems([]); setAlerts([]); setOpen(false); setSiteFilter("");
     let known = null, timer;
     const load = async () => {
       // Bound requests during rolling upgrades when an older backend may not
@@ -8035,6 +8041,8 @@ function NotificationBell({ session, onOpenEntry }) {
     };
   }, [open]);
   const unread = items.filter((item) => !item.isRead).length;
+  const siteOptions = notificationSiteOptions(items, siteFilter);
+  const visibleItems = filterNotificationsBySite(items, siteFilter);
   const toggle = async () => {
     const next = !open; setOpen(next);
     if (next && unread) {
@@ -8097,7 +8105,11 @@ function NotificationBell({ session, onOpenEntry }) {
   return <>
     <div className="notification-center" ref={centerRef}>
       <button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>
-      {open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><span>{notificationText(item)}</span><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>No notifications yet.</p>}</div></div>}
+      {open && <div className="notification-popover" role="dialog" aria-label="Notifications">
+        <header><b>Notifications</b><div><span>{visibleItems.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header>
+        <label className="notification-site-filter">Filter by site<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}><option value="">All sites</option>{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
+        <div className="notification-list">{visibleItems.length ? visibleItems.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><NotificationMessage item={item} /><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>{siteFilter ? "No notifications for this site." : "No notifications yet."}</p>}</div>
+      </div>}
     </div>
     {alerts.length > 0 && createPortal(<div className="incoming-notification-stack" aria-label="New notifications">{alerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} />)}</div>, document.body)}
     <NotificationEntryDialog state={entryState} onClose={closeEntry} />

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {readFileSync} from 'node:fs';
-import {notificationText} from '../notification-text.mjs';
+import {notificationText, notificationParts, notificationSiteOptions, filterNotificationsBySite} from '../notification-text.mjs';
 import {createNotificationFeed} from '../notification-feed.mjs';
 import {createNotificationTracker, createNotificationSound} from '../src/notification-alerts.mjs';
 
@@ -12,7 +12,7 @@ test('legacy opened/closed messages put site and one door before retained detail
     const text = notificationText({message});
     assert.ok(text.startsWith('Site: Majri OB — Door No. E32-MH34BZ2802 — Request REQ-1'));
     assert.equal(text.split('E32-MH34BZ2802').length - 1, 1);
-    assert.match(text, /Chassis: MC2DALRC0NH003558/);
+    assert.doesNotMatch(text, /Chassis|MC2DALRC0NH003558/);
     assert.match(text, /11:15:23 AM/);
     assert.match(text, /User: Example/);
   }
@@ -37,7 +37,7 @@ test('all event messages receive the same structured site/door prefix', () => {
 test('a numeric door never corrupts timestamps, durations or other location details', () => {
   const text=notificationText({site:'Majri OB',door:'24',message:'Request REQ-1 closed for 24 | Door: 24 | Chassis: 12324. Closed: 12:24:00 PM. Work: 24 hours. Location: Workshop. User: Example.'});
   assert.match(text,/Site: Majri OB — Door No\. 24 — Request REQ-1 closed/);
-  assert.match(text,/Chassis: 12324/);
+  assert.doesNotMatch(text,/Chassis: 12324/);
   assert.match(text,/12:24:00 PM/);
   assert.match(text,/Work: 24 hours/);
   assert.match(text,/Location: Workshop/);
@@ -54,6 +54,33 @@ test('first response and refreshed history are silent; new IDs alert only once',
   assert.deepEqual(track([]), []);
   assert.deepEqual(track([fresh,old]), []);
   assert.deepEqual(createNotificationTracker()([fresh,old]), []); // page refresh
+});
+
+test('site filtering handles all sites, legacy messages, missing sites and casing without changing alerts', () => {
+  const items=[{id:1,site:'Majri OB',message:'Verified.'},{id:2,site:'Sasti OB',message:'Opened.'},{id:3,site:'majri ob',message:'Closed.'},{id:4,message:'Request opened. Location: Sasti OB. User: Example.'},{id:5,message:'Reminder.'}];
+  assert.deepEqual(notificationSiteOptions(items),['Majri OB','Not recorded','Sasti OB']);
+  assert.equal(filterNotificationsBySite(items),items);
+  assert.deepEqual(filterNotificationsBySite(items,' MAJRI  OB ').map(item=>item.id),[1,3]);
+  assert.deepEqual(filterNotificationsBySite(items,'Sasti OB').map(item=>item.id),[2,4]);
+  assert.deepEqual(filterNotificationsBySite(items,'Not recorded').map(item=>item.id),[5]);
+  assert.deepEqual(notificationSiteOptions([], 'Majri OB'),['Majri OB']);
+  assert.deepEqual(filterNotificationsBySite(items,'Other site'),[]);
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.match(source,/visibleItems\.map\(\(item\)/);
+  assert.match(source,/alerts\.map\(\(item\)/);
+  assert.match(source,/className="notification-site"/);
+  assert.match(source,/Filter by site<select value=\{siteFilter\}/);
+  assert.equal(source.match(/<NotificationMessage item=\{item\}/g)?.length,2);
+});
+
+test('chassis labels are removed without losing following fields', () => {
+  for(const label of ['Chassis','Chassis No.','Chassis Number']) {
+    const parts=notificationParts({site:'Majri OB',door:'24',message:`Request closed. ${label}: YV2XBG99. Breakdown: Breakdown. Date & time: 10-09-2026 12:15:13 PM. User: Example.`});
+    assert.doesNotMatch(parts.details,/Chassis|YV2XBG99/);
+    assert.match(parts.details,/Breakdown: Breakdown/);
+    assert.match(parts.details,/12:15:13 PM/);
+    assert.match(parts.details,/User: Example/);
+  }
 });
 
 test('an initially empty inbox alerts for every new type, oldest first', () => {
