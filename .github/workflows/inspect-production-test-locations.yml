@@ -20,7 +20,7 @@ jobs:
           node-version: '22.x'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm install --no-save --package-lock=false esbuild@0.25.12
+      - run: npm install --no-save --package-lock=false esbuild@0.28.2
       - uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
@@ -50,8 +50,8 @@ jobs:
             const connectionString=process.env.DATABASE_URL||process.env.APPSETTING_DATABASE_URL;
             if(!connectionString)throw new Error('Database configuration unavailable');
             const pool=new pg.Pool({connectionString,ssl:{rejectUnauthorized:false},connectionTimeoutMillis:15000,max:1});
-            try {
             const client=await pool.connect();
+            try {
             await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
             const report={capturedAt:new Date().toISOString()};
             report.sites=(await client.query(`SELECT site,count(*)::int AS requests,count(*) FILTER (WHERE verified_at IS NULL)::int AS unverified FROM maintenance_requests GROUP BY site ORDER BY site`)).rows;
@@ -60,9 +60,9 @@ jobs:
             report.candidateMasters=(await client.query("SELECT id,master_name,record_data-'passwordHash'-'password'-'temporaryPassword' AS record_data,created_at FROM master_records WHERE record_data::text ~* '(qa[ _-]*bdms|dummy|synthetic|(^|[ _-])test[ _-]|audit[ _-])' ORDER BY id LIMIT 500")).rows;
             report.candidateRequests=(await client.query("SELECT reference,site,door_number,equipment_name,chassis_number,registration_number,complaint,owner_name,requester_login,status,started_at,created_at,verified_at FROM maintenance_requests WHERE concat_ws(' ',site,reference,door_number,equipment_name,complaint) ~* '(^|[ _-])(qa|test|dummy|demo|synthetic|audit)([ _-]|$)' ORDER BY created_at LIMIT 500")).rows;
             report.originEvents=(await client.query("SELECT id,actor_login,actor_name,module,action,target_reference,reason,changed_fields,occurred_at FROM audit_events WHERE changed_fields::text ~* 'qa[ _-]*bdms|9F27B4C1' OR target_reference=ANY($1::text[]) ORDER BY occurred_at LIMIT 100",[report.candidateRequests.map(row=>row.reference)])).rows;
-            await client.query('ROLLBACK');client.release();
+            await client.query('ROLLBACK');
             return report;
-            } finally {await pool.end();}
+            } finally {client.release();await pool.end();}
           }
           function encryptReport(report, publicKey) {
             const key=randomBytes(32),iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);
@@ -74,8 +74,12 @@ jobs:
             const scm=new URL(credentials.scmUri).origin;
             const source=["import pg from 'pg';", "import {createCipheriv,publicEncrypt,randomBytes} from 'node:crypto';",inspectDatabase.toString(),encryptReport.toString(),`inspectDatabase().then(report=>console.log(encryptReport(report,${JSON.stringify(publicKey)}))).catch(error=>{console.error('Remote inspection failed ('+(error.code||error.name)+')');process.exitCode=1;});`].join('\n');
             const bundle=await build({stdin:{contents:source,resolveDir:process.cwd()},bundle:true,platform:'node',format:'cjs',target:'node16',external:['pg-native'],write:false,minify:true});
-            const command='node -e "eval(Buffer.from(\''+Buffer.from(bundle.outputFiles[0].text).toString('base64')+'\',\'base64\').toString())"';
-            const response=await fetch(scm+'/api/command',{method:'POST',headers:{Authorization:'Basic '+Buffer.from(credentials.publishingUserName+':'+credentials.publishingPassword).toString('base64'),'Content-Type':'application/json'},body:JSON.stringify({command,dir:'/home/site/wwwroot'}),signal:AbortSignal.timeout(180000)});
+            const auth={Authorization:'Basic '+Buffer.from(credentials.publishingUserName+':'+credentials.publishingPassword).toString('base64')};
+            const scriptPath='/api/vfs/data/qa-location-inspection.cjs';
+            const upload=await fetch(scm+scriptPath,{method:'PUT',headers:{...auth,'If-Match':'*','Content-Type':'application/octet-stream'},body:bundle.outputFiles[0].text});
+            if(!upload.ok)throw Object.assign(new Error('Inspection upload failed'),{code:`UPLOAD_${upload.status}`});
+            const response=await fetch(scm+'/api/command',{method:'POST',headers:{...auth,'Content-Type':'application/json'},body:JSON.stringify({command:'node /home/data/qa-location-inspection.cjs',dir:'/home/site/wwwroot'}),signal:AbortSignal.timeout(180000)});
+            await fetch(scm+scriptPath,{method:'DELETE',headers:{...auth,'If-Match':'*'}});
             if(!response.ok)throw Object.assign(new Error('Remote command failed'),{code:`HTTP_${response.status}`});
             const result=await response.json();
             if(result.ExitCode!==0)throw Object.assign(new Error('Remote inspection failed'),{code:'REMOTE_'+String(result.Error||'FAILED').replace(/[^A-Za-z0-9_(). -]/g,'').slice(0,120)});
