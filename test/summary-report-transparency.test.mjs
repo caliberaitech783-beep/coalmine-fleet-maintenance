@@ -18,8 +18,8 @@ test('observed R1 and R4 timings exclude duplicate maintenance time and show eve
     assert.equal(value(report,row,'ref'),row.ref);
     for(const key of ['acceptedAt','closedAt','firstTripAt','verifiedAt'])assert.equal(value(report,row,key),row[key]);
   }
-  const verificationReport=buildDepartmentReports({requests:[r4]}).find(report=>report.title==='Time Taken for MIS Verification');
-  assert.equal(value(verificationReport,r4,'difference'),'3m','existing closure-to-verification report is not redefined as the47s verification lag');
+  const verificationReport=buildDepartmentReports({requests:[r4]}).find(report=>report.title==='MIS Turn Around Time');
+  assert.equal(value(verificationReport,r4,'closeToMis'),'3m','closure-to-verification duration remains separate from the 47s verification lag');
 });
 
 test('missing, impossible and reversed event stamps remain explicit instead of becoming zero',()=>{

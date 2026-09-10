@@ -2178,6 +2178,7 @@ function FilterableHeader({
   onFilterChange,
   durationSortOnly = isDurationColumn(label, sortKey),
   dateSortOnly = false,
+  wrapHeader = false,
 }) {
   const [valueSearch, setValueSearch] = useState("");
   const triggerRef = useRef(null);
@@ -2219,7 +2220,7 @@ function FilterableHeader({
     };
   }, [open]);
   return (
-    <th className={`column-filter-header ${open ? "open" : ""}`} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
+    <th className={`column-filter-header ${open ? "open" : ""} ${wrapHeader ? "report-wrap-header" : ""}`} aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}>
       <button
         ref={triggerRef}
         className={`sort-header ${active ? "active" : ""} ${filterValue ? "filtered" : ""}`}
@@ -2816,6 +2817,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
           <FilterableHeader
             key={column.key}
             durationSortOnly={false}
+            wrapHeader={column.wrapHeader}
             label={column.label}
             sortKey={column.key}
             sort={sort}

@@ -358,3 +358,6 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
 .notification-popover .notification-list>button>small,.incoming-notification-link small{font-size:14px!important;line-height:1.5!important}
 .notification-popover .notification-site-filter,.notification-popover header>div>span,.notification-popover .notification-list>p{font-size:14px!important}
 .notification-popover .notification-site-filter select{font-size:16px!important}
+/* Opt-in wrapping for MIS report headings, without changing other tables. */
+th.report-wrap-header .sort-header{white-space:normal;min-width:110px;max-width:240px;align-items:center}
+th.report-wrap-header .sort-header>span{white-space:normal;overflow-wrap:break-word}

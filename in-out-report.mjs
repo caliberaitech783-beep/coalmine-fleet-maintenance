@@ -189,3 +189,21 @@ export const IN_OUT_REPORT_COLUMNS=[
   {key:'inLocations',label:'In by location',value:(row)=>row.inLocations},
   {key:'outLocations',label:'Out by location',value:(row)=>row.outLocations},
 ];
+
+// MIS uses a separate location/day register; the General report stays unchanged.
+export const MIS_IN_OUT_REPORT_DESCRIPTION='Daily opened and closed counts for each location, including net movement and the workshop balance at day end.';
+export const MIS_IN_OUT_REPORT_COLUMNS=[
+  {key:'site',label:'Location',value:row=>row.site},
+  ...['date','opened','closed','net','pendingClose','verified','idle','pendingVerification','averageTat'].map(key=>IN_OUT_REPORT_COLUMNS.find(column=>column.key===key)),
+].map(column=>({...column,wrap:true,wrapHeader:true}));
+
+export function buildSiteInOutReportRows(requests=[],options={}) {
+  const sites=new Map();
+  for(const request of requests) {
+    const site=siteLabel(request);
+    if(!sites.has(site)) sites.set(site,[]);
+    sites.get(site).push(request);
+  }
+  return [...sites].flatMap(([site,records])=>buildInOutReportRows(records,options).map(row=>({...row,site})))
+    .sort((a,b)=>b.date.localeCompare(a.date)||a.site.localeCompare(b.site));
+}

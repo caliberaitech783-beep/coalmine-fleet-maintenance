@@ -36,7 +36,7 @@ test('history displays saved first trip independently, preserves seconds and sup
 });
 
 test('department reports and all director exports retain separate verification and first trip columns', () => {
-  const report = buildDepartmentReports({requests:[request]}).find(r => r.title === 'Time Taken for MIS Verification');
+  const report = buildDepartmentReports({requests:[request]}).find(r => r.title === 'MIS Turn Around Time');
   const value = key => report.columns.find(c => c.key === key).value(request);
   assert.equal(value('verifiedAt'), request.verifiedAt);
   assert.equal(value('firstTripAt'), request.firstTripAt);

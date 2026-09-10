@@ -23,7 +23,7 @@ test('every lifecycle phase appears in the appropriate reports regardless of emp
   const refs=title=>reports.find(report=>report.title===title).rows.map(row=>row.ref);
   for(const title of ['Open Off road Cases','Maintenance Status Pending'])assert.deepEqual(refs(title),['OPEN','ACCEPTED','PARTS','CANCEL-IDLE']);
   assert.deepEqual(refs('Unverified Cases'),['CLOSED','MANAGER-APPROVED']);
-  assert.deepEqual(refs('Time Taken for MIS Verification'),['VERIFIED']);
+  assert.deepEqual(refs('MIS Turn Around Time'),['VERIFIED']);
   assert.deepEqual(refs('Summary Report'),['VERIFIED']);
   assert.deepEqual(refs('Vehicle Arrival Red Flag Report'),['VERIFIED']);
   assert.deepEqual(refs('MIS Red Flag Report'),['VERIFIED']);

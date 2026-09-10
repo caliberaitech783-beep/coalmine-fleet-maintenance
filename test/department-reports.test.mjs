@@ -17,7 +17,7 @@ test('open off-road BD duration includes days and hours from production submissi
 
 test('MIS verification durations distinguish closure, actual first trip, and verification',()=>{
   const row={closedAt:'2026-09-08 10:00',firstTripAt:'2026-09-08 11:30',verifiedAt:'2026-09-08 12:00'};
-  const report=build([row,{...row,verifiedAt:''}]).find(r=>r.title==='Time Taken for MIS Verification');
+  const report=build([row,{...row,verifiedAt:''}]).find(r=>r.title==='MIS Turn Around Time');
   assert.equal(report.rows.length,1);
   assert.equal(cell(report,'closeToMis'),'2h 0m');
   assert.equal(cell(report,'closeToFirstTrip'),'1h 30m');
@@ -70,11 +70,9 @@ test('department reports include the two red flag reports alongside existing rep
   const reports=build([]);
   assert.deepEqual(reports.map(r=>r.title),DEPARTMENT_REPORT_TITLES);
   assert.equal(reports.filter(r=>r.category==='maintenance').length,4);
-  assert.equal(reports.filter(r=>r.category==='mis').length,7);
+  assert.equal(reports.filter(r=>r.category==='mis').length,6);
   assert.equal(reports.filter(r=>r.category==='production').length,3);
-  const transfer=reports.find(r=>r.title==='Vehicle Transfer Report');
-  assert.deepEqual(transfer.columns.map(c=>c.key),['door','model','source','destination','transferNo','transferDate']);
-  assert.equal(transfer.columns.filter(c=>/chassis|equipment/i.test(c.label)).length,0);
+  assert.ok(!reports.some(r=>r.title==='Vehicle Transfer Report'));
 });
 test('pending includes all open and in-progress requests regardless of remarks',()=>{
   const report=build([
@@ -178,6 +176,6 @@ test('MIS report retains saved concerns after verification with the same reason 
   assert.equal(report.category,'mis');
   assert.deepEqual(report.rows,[flagged]);
   assert.equal(cell(report,'misFlagRemark'),'Incorrect reading');
-  assert.equal(cell(report,'verificationStatus'),'Verified');
+  assert.ok(!report.columns.some(c=>c.key==='verificationStatus'));
   assert.equal(report.dateValue(flagged),flagged.misFlaggedAt);
 });
