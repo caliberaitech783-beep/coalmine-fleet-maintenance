@@ -59,6 +59,7 @@ export const LEGACY_HIERARCHY_REPORT_EQUIVALENTS=new Map([
   ['Event close Report - Maint. Closing to MIS Verif.',HIERARCHY_REPORTS.misVerificationTime],
   ['Idle with PM verif.',HIERARCHY_REPORTS.openOffRoad],
   ['On Road with first trip veri.',HIERARCHY_REPORTS.mismatch30],
+  [DEPARTMENT_REPORT_TITLES[8],HIERARCHY_REPORTS.inOut],
 ]);
 
 export function hierarchyReportEquivalent(title){
