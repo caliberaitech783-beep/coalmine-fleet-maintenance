@@ -1066,6 +1066,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
   const [requestTrendFrom, setRequestTrendFrom] = useState("");
+  const [requestTrendRegion, setRequestTrendRegion] = useState("all");
   const [requestTrendTo, setRequestTrendTo] = useState("");
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
   const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState("");
@@ -1258,6 +1259,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   for (const cursor = new Date(`${safeTrendStartKey}T12:00:00`), end = new Date(`${requestTrendEndKey}T12:00:00`); cursor <= end && requestTrendDateKeys.length < 366; cursor.setDate(cursor.getDate() + 1)) {
     requestTrendDateKeys.push(localDateKey(cursor));
   }
+  const requestLifecycleRegions = selectedRegion ? [selectedRegion] : availableRegions;
+  const requestLifecycleRegion = requestLifecycleRegions.find((region) => region.code === requestTrendRegion);
   const requestLifecycleRows = {
     production: locationBreakdowns.filter((record) => ["production user", "maintenance user"].includes(String(record.requesterRole || "").trim().toLowerCase()) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
     opened: locationBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() !== "closed" && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
@@ -1265,6 +1268,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     verified: locationBreakdowns.filter((record) => requestEventDate(record, "verified") >= safeTrendStartKey && requestEventDate(record, "verified") <= requestTrendEndKey),
     idle: locationBreakdowns.filter((record) => ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "idle") >= safeTrendStartKey && requestEventDate(record, "idle") <= requestTrendEndKey),
   };
+  if (requestLifecycleRegion) {
+    for (const metric of Object.keys(requestLifecycleRows)) {
+      requestLifecycleRows[metric] = requestLifecycleRows[metric].filter((record) => requestLifecycleRegion.sites.some((site) => recordBelongsToSite(record, site)));
+    }
+  }
   const maintenanceClosedRows = requestLifecycleRows.closed.filter((record) => !requestEventDate(record, "verified"));
   const requestLifecycleAvailability = {
     maintenance: requestLifecycleRows.opened.length,
@@ -1588,7 +1596,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-request-lifecycle-controls">
               <div className="mine-trend-period" role="group" aria-label="Request lifecycle period">{[7, 14, 30].map((days) => <button type="button" key={days} className={!requestTrendFrom && !requestTrendTo && requestTrendDays === days ? "active" : ""} onClick={() => { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); }}>{days}D</button>)}</div>
               <label><span>From</span><input type="date" aria-label="Request lifecycle from date" value={requestTrendFrom} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
-              <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
+              <div className="mine-request-lifecycle-end-controls">
+                <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
+                <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>
+              </div>
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">

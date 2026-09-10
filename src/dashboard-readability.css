@@ -118,6 +118,9 @@
 .mine-dashboard .mine-request-lifecycle-summary button :is(span, b, small) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.35; }
 .mine-dashboard .mine-request-lifecycle-summary button strong { grid-column: 2; justify-self: start; }
 .mine-dashboard :is(.mine-request-lifecycle-controls, .mine-trend-controls) label { height: auto; min-height: 44px; }
+.mine-request-lifecycle-end-controls { display: flex; flex: 1 1 100%; justify-content: flex-end; gap: 6px; min-width: 0; }
+.mine-dashboard .mine-request-lifecycle-end-controls label { flex: 0 1 190px; min-width: 0; grid-template-columns: auto minmax(0, 1fr); }
+.mine-request-lifecycle-end-controls select { min-width: 0; width: 100%; border: 0; background: transparent; color: var(--mine-text); font-family: inherit; font-weight: 750; }
 .mine-dashboard .mine-trend-period { grid-template-columns: repeat(3, 44px); }
 .mine-dashboard :is(.mine-trend-period, .mine-trend-view) button,
 .mine-dashboard .mine-trend-view-all { height: auto; min-height: 42px; }

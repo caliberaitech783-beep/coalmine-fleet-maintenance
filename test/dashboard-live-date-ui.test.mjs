@@ -90,6 +90,39 @@ const activate = (node) => {
   else node.props.onClick();
 };
 
+test("lifecycle region filters its cards and linked rows independently of the dashboard", () => {
+  const equipment = [...assets, {id: 4, door: "N1", category: "Vehicle", currentLocation: "Jayant OB", status: "Operational"}];
+  const rows = [
+    {ref: "WCL-OPEN", site: "Sasti OB", door: "V1", status: "Open"},
+    {ref: "WCL-CLOSED", site: "Sasti OB", door: "V3", status: "Closed", closedAt: "2026-09-09 12:00:00"},
+    {ref: "NCL-OPEN", site: "Jayant OB", door: "N1", status: "Open"},
+    {ref: "NCL-CLOSED", site: "Jayant OB", status: "Closed", closedAt: "2026-09-09 12:00:00"},
+  ].map((row) => ({...row, requesterRole: "Production User", start: "2026-09-09 08:00:00", category: "Breakdown"}));
+  const view = harness({equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: [], restrictToScope: false});
+  let tree = view.render(rows);
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render(rows);
+  const controls = byClass(tree, "mine-request-lifecycle-end-controls");
+  assert.ok(byLabel(controls, "Request lifecycle to date"));
+  assert.ok(byLabel(controls, "Request lifecycle region"));
+  for (const region of ["NCL", "WCL", "all"]) {
+    byLabel(tree, "Request lifecycle region").props.onChange({target: {value: region}});
+    tree = view.render(rows);
+    assert.equal(byLabel(tree, "Region").props.value, "all");
+    const summary = byClass(tree, "mine-request-lifecycle-summary");
+    activate(byClass(summary, "opened"));
+    tree = view.render(rows);
+    const expected = rows.filter((row) => region === "all" || row.ref.startsWith(region)).map((row) => row.ref);
+    assert.deepEqual(detailView(tree).rows.map((row) => row.requestReference), expected);
+    activate(byClass(byClass(tree, "mine-request-lifecycle-summary"), "closed"));
+    tree = view.render(rows);
+    assert.deepEqual(detailView(tree).rows.map((row) => row.requestReference), expected.filter((ref) => ref.endsWith("CLOSED")));
+  }
+  byLabel(tree, "Region").props.onChange({target: {value: "WCL"}});
+  tree = view.render(rows);
+  assert.deepEqual(findAll(byLabel(tree, "Request lifecycle region"), (node) => node.type === "option").map((node) => node.props.value), ["all", "WCL"]);
+});
+
 test("every day-wise date, metric and percentage opens its exact site/day entries and returns to the table", () => {
   const rows = [
     ...Array.from({length: 7}, (_, i) => ({ref: `OPEN-${i}`, site: "Sasti OB", start: "2026-09-05 09:00", status: "Open"})),
