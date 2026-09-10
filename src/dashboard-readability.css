@@ -118,13 +118,15 @@
 .mine-dashboard .mine-request-lifecycle-summary button :is(span, b, small) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.35; }
 .mine-dashboard .mine-request-lifecycle-summary button strong { grid-column: 2; justify-self: start; }
 .mine-dashboard :is(.mine-request-lifecycle-controls, .mine-trend-controls) label { height: auto; min-height: 44px; }
-.mine-dashboard .mine-request-lifecycle-controls { display: grid; grid-template-columns: auto minmax(110px, 1fr) auto; gap: 6px; }
+.mine-dashboard .mine-request-lifecycle-controls { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; width: min(100%, 540px); }
 .mine-request-lifecycle-end-controls { display: contents; }
-.mine-request-lifecycle-controls > .mine-trend-period { grid-area: 1 / 1; }
-.mine-request-lifecycle-end-controls label:last-child { grid-area: 1 / 2; }
-.mine-request-lifecycle-controls > .mine-lifecycle-custom { grid-area: 1 / 3; padding: 5px 8px; font-size: 12px; min-height: 32px; border: 1px solid var(--mine-border); border-radius: 6px; background: transparent; color: var(--mine-text); cursor: pointer; }
-.mine-request-lifecycle-controls > label { grid-area: 2 / 1; }
-.mine-request-lifecycle-end-controls label:first-child { grid-area: 2 / 2 / 3 / 4; }
+.mine-request-lifecycle-controls > .mine-trend-period { grid-area: 1 / 1 / 2 / 3; }
+.mine-request-lifecycle-end-controls label:last-child { grid-area: 1 / 4 / 2 / 7; }
+.mine-dashboard .mine-request-lifecycle-controls > .mine-lifecycle-custom { grid-area: 1 / 3 / 2 / 4; min-width: 0; padding: 4px; grid-template-columns: 1fr; }
+.mine-lifecycle-custom input { width: 100%; min-width: 0; }
+.mine-request-lifecycle-controls > label:not(.mine-lifecycle-custom) { grid-area: 2 / 1 / 3 / 4; }
+.mine-request-lifecycle-end-controls label:first-child { grid-area: 2 / 4 / 3 / 7; }
+.mine-dashboard .mine-request-lifecycle-controls > label:not(.mine-lifecycle-custom), .mine-dashboard .mine-request-lifecycle-end-controls label:first-child { width: 100%; min-width: 0; box-sizing: border-box; grid-template-columns: auto minmax(0, 1fr); }
 .mine-dashboard .mine-request-lifecycle-end-controls label { flex: 0 1 190px; min-width: 0; grid-template-columns: auto minmax(0, 1fr); }
 .mine-request-lifecycle-end-controls select { min-width: 0; width: 100%; border: 0; background: transparent; color: var(--mine-text); font-family: inherit; font-weight: 750; }
 .mine-dashboard .mine-trend-period { grid-template-columns: repeat(3, 44px); }
