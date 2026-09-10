@@ -12,6 +12,11 @@ on:
       - "test/**"
   workflow_dispatch:
     inputs:
+      diagnose_login:
+        description: "Read production login error logs without deploying"
+        required: false
+        type: boolean
+        default: false
       report_source_sha:
         description: "Optional immutable report-only commit based on current production"
         required: false
@@ -33,6 +38,7 @@ env:
 
 jobs:
   build:
+    if: inputs.diagnose_login != true
     runs-on: ubuntu-latest
     outputs:
       source_sha: ${{ steps.source.outputs.sha }}
@@ -292,7 +298,7 @@ jobs:
             }
             console.log('Matched login errors:',count);
           } catch(error){console.error('Login diagnostics failed:',error.message);process.exitCode=1;}
-          
+
           NODE
       - name: Logout
         if: always()
