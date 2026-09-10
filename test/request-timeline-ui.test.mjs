@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { transformWithOxc } from "vite";
-import {formatTimelineDuration, requestTimelineEvents, requestTimelineDurations, buildRequestTimelineChanges} from "../request-timeline.mjs";
+import {formatTimelineDuration, parseRequestTimelineTimestamp, requestTimelineEvents, requestTimelineDurations, buildRequestTimelineChanges} from "../request-timeline.mjs";
 import * as equipment from "../request-equipment.mjs";
 
 const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export (?:default )?function /g, "function ");
@@ -54,7 +54,7 @@ function harness(name, extra = {}) {
   const scope = {requestStatusLabel,
     ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
-    formatTimelineDuration, AbortController,
+    formatTimelineDuration, parseRequestTimelineTimestamp, AbortController,
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({url, options, reject,
       respond(data, ok = true) {resolve({ok, json: async () => data});},
       malformed() {resolve({ok: true, json: async () => {throw new Error("Bad JSON");}});},
@@ -171,7 +171,7 @@ test("timeline view distinguishes recorded sources and never invents legacy acto
   const stage = key => articles.find(article => text(all(article, node => node.type === "h4")[0]) === events.find(event => event.event === key).label);
   assert.match(text(stage("acceptedAt")), /System recorded.*QA Recorded Actor/);
   assert.match(text(stage("firstTripAt")), /Form supplied.*QA Recorded Actor/);
-  assert.match(text(stage("start")), /Source not recorded \(legacy\).*Recorded byNot recorded.*Saved atNot recorded/);
+  assert.match(text(stage("start")), /Source not recorded \(legacy\).*Timestamp audit authorNot recorded.*Timestamp audit saved atNot recorded/);
   assert.match(text(stage("acceptedAt")), /10:10:00 IST/);
   assert.match(text(tree), /does not independently prove/);
   assert.match(text(tree), /Older changes cannot be reconstructed/);
@@ -208,6 +208,47 @@ test("timeline renders genuine zero separately from missing or negative duration
 const editProps = (extra = {}) => ({request: {ref: "QA-EDIT", start: "2026-09-08 10:00:00", acceptedAt: "2026-09-08 10:10:00", expectedCompletionAt: "2026-09-08 12:00:17", category: "Breakdown", complaint: "Fixture only", ...extra}, close() {}, onSave: async () => {}, repairTypesLoaded: true, repairTypeRecords: [{id: 1, repairType: "Breakdown"}]});
 const submitValues = (extra = {}) => ({category: "Breakdown", complaint: "Fixture only", expectedCompletionAt: "2026-09-08T12:00", ...extra});
 const submit = (tree, values) => form(tree).props.onSubmit({preventDefault() {}, currentTarget: values});
+
+test("legacy creator and daily updates are visible without inventing acceptance or audit provenance", () => {
+  const legacy = {ref:"LEGACY-TIMELINE",start:"2026-09-04T12:01:22Z",owner:"ASHISH KUMAR RAY",requesterLogin:"production-fixture",status:"Open",acceptedAt:null,
+    dailyRemarks:[{createdAt:"2026-09-06 01:34",authorName:"AVADH KISHORE TIWARI",authorLogin:"maintenance-fixture",remark:"Air Compressor Removed",delayReason:"Air Compressor Clutch Kit Not Available"}]};
+  const original = structuredClone(legacy);
+  const events = requestTimelineEvents(legacy);
+  const tree = harness("RequestTimelineView").render({data:body(legacy.ref,{request:legacy,events,durations:requestTimelineDurations(legacy)})});
+  const articles = all(all(tree,node=>node.props.className === "request-timeline-events")[0],node=>node.type === "article");
+  assert.match(text(articles[0]),/Request created byASHISH KUMAR RAY \(production-fixture\)/);
+  assert.match(text(articles[0]),/Timestamp audit authorNot recorded/);
+  assert.match(text(articles[0]),/Name saved on the request; timestamp-audit details are not recorded/);
+  assert.match(text(articles[1]),/No separate acceptance time is recorded/);
+  assert.match(text(articles[1]),/does not mean the vehicle never reached maintenance/);
+  assert.doesNotMatch(text(articles[1]),/AVADH|ASHISH|System recorded/);
+  const updates = text(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
+  assert.match(updates,/06 Sept 2026, 01:34:00 IST/);
+  assert.match(updates,/Update recorded byAVADH KISHORE TIWARI \(maintenance-fixture\)/);
+  assert.match(updates,/Work reportedAir Compressor Removed/);
+  assert.match(updates,/Reason for delayAir Compressor Clutch Kit Not Available/);
+  assert.match(text(tree),/not arrival waiting time or confirmed hands-on repair time/);
+  assert.equal(events.find(event=>event.event === "acceptedAt").eventAt,null);
+  assert.deepEqual(legacy,original);
+});
+
+test("saved workflow attribution stays distinct from the timestamp correction author", () => {
+  const changed = {...request,owner:"Original requester",acceptedBy:"Receiving person"};
+  const events = requestTimelineEvents(changed).map(event=>event.event === "acceptedAt" ? {...event,actorName:"Correction author",source:"user"} : event);
+  const tree = harness("RequestTimelineView").render({data:body(request.ref,{request:changed,events})});
+  assert.match(text(tree),/Accepted by \(request record\)Receiving person.*Timestamp audit authorCorrection author/);
+  assert.doesNotMatch(text(tree),/does not mean the vehicle never reached/);
+  assert.match(text(tree),/No daily maintenance updates are recorded/);
+});
+
+test("updates show saved remarks newest first, with missing fields left unknown", () => {
+  const changed = {...request,dailyRemarks:[{createdAt:"2026-09-05 01:34",remark:"Older update"},{createdAt:"2026-09-06 01:34",remark:"Newer update"}]};
+  const tree = harness("RequestTimelineView").render({data:body(request.ref,{request:changed})});
+  const updates = all(all(tree,node=>node.props.className === "request-timeline-updates")[0],node=>node.type === "li");
+  assert.match(text(updates[0]),/Newer update/);
+  assert.match(text(updates[1]),/Older update/);
+  assert.match(text(updates[0]),/Update recorded byNot recorded.*Reason for delayNot recorded/);
+});
 
 test("editing unchanged ETC preserves minute display without a correction prompt; changing it requires reason", async () => {
   const saved = [];

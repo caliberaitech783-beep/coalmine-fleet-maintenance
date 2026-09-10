@@ -2489,7 +2489,8 @@ app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>
     const history=records.flatMap(row=>Array.isArray(row.changed_fields)?row.changed_fields:[]).filter(item=>item?.requestId===String(request.timelineRequestId)&&REQUEST_TIMELINE_FIELDS.includes(item?.event)).map(item=>({event:item.event,oldValue:parseRequestTimelineTimestamp(item.oldValue)?.toISOString()??null,newValue:parseRequestTimelineTimestamp(item.newValue)?.toISOString()??null,source:['system','user'].includes(item.source)?item.source:'unknown',recordedAt:parseRequestTimelineTimestamp(item.recordedAt)?.toISOString()??null,actorLogin:String(item.actorLogin||''),actorName:String(item.actorName||''),reason:String(item.reason||''),correction:item.correction===true}));
     res.set('Cache-Control','no-store');
     const {timelineRequestId,timelineRecordedAt,...visibleRequest}=request;
-    res.json({reference,request:visibleRequest,events:requestTimelineEvents(request,history),history,durations:requestTimelineDurations(request)});
+    const [requestWithRemarks]=await attachDailyRemarks([visibleRequest]);
+    res.json({reference,request:requestWithRemarks,events:requestTimelineEvents(request,history),history,durations:requestTimelineDurations(request)});
   }catch(error){next(error)}
 });
 

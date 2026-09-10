@@ -21,7 +21,7 @@ const maintenance={role:'normal',assignedRole:'Maintenance User',name:'Fixture m
 const mis={role:'normal',assignedRole:'MIS User',name:'Fixture MIS',login:'mis',permissions:{verifyRequests:true}};
 const current=row=>({...structuredClone(row),timelineRecordedAt:now});
 
-function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={site:'Sasti OB'},auditFailure=false,history=[],noAccount=false}={}){
+function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={site:'Sasti OB'},auditFailure=false,history=[],remarks=[],noAccount=false}={}){
   let saved=structuredClone(row),audits=structuredClone(history),snapshot,registered,tx=false,released=false;
   const queries=[];
   const client={async query(sql,args=[]){
@@ -29,6 +29,10 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     if(sql==='BEGIN'){assert.equal(tx,false);tx=true;snapshot={saved:structuredClone(saved),audits:structuredClone(audits)};return {rows:[]};}
     if(sql==='COMMIT'){tx=false;return {rows:[]};}
     if(sql==='ROLLBACK'){saved=snapshot.saved;audits=snapshot.audits;tx=false;return {rows:[]};}
+    if(sql.includes('FROM maintenance_daily_remarks')){
+      assert.deepEqual(Array.from(args[0]),[saved.ref]);
+      return {rows:structuredClone(remarks)};
+    }
     if(sql.startsWith('SELECT changed_fields')){
       assert.ok(sql.includes('changed_fields @> $2::jsonb'),'history is bound to immutable row ID');
       assert.equal(JSON.parse(args[1])[0].requestId,String(saved.timelineRequestId));
@@ -71,7 +75,8 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],addTicketNotificationsBestEffort:async()=>{},
     requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',workflowRequestLink:()=>'',publicBaseUrl:()=>'',console:{error(){}},
   };
-  runInNewContext(`${common}\n${routes[kind]||''}`,context);
+  const remarksHelper=slice('async function attachDailyRemarks(', 'async function requestWorkflowWhatsAppLogins(');
+  runInNewContext(`${remarksHelper}\n${common}\n${routes[kind]||''}`,context);
   return {queries,get saved(){return saved;},get audits(){return audits;},get released(){return released;},async call(body={}){
     const req={session,params:{reference:'REQ-TIMELINE'},body:{complaint:'Original complaint',expectedCompletionAt:'2026-09-08T18:30',meterType:'HMR',closingDate:'2026-09-08',closingTime:'17:00:00',maintenanceWork:'Fixture work',status:'Closed',firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:00:00',firstTripCardImage:'fixture',closingMeterReading:'123',...body}};
     const res={statusCode:200,headers:{},set(key,value){this.headers[key]=value;},status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
@@ -170,7 +175,7 @@ test('timeline endpoint rechecks current account, role, ownership and assigned s
     {session:{role:'normal',assignedRole:'Unknown',login:'x',permissions:{}},status:403},
     {session:{role:'super',permissions:{adminLevel:'Manager'}},user:{managerSites:'Jayant OB'},status:403},
   ];
-  for(const options of cases){const app=harness('timeline',options);assert.equal((await app.call()).status,options.status);assert.equal(app.queries.some(row=>row.sql.startsWith('SELECT changed_fields')),false);}
+  for(const options of cases){const app=harness('timeline',options);assert.equal((await app.call()).status,options.status);assert.equal(app.queries.some(row=>row.sql.startsWith('SELECT changed_fields')||row.sql.includes('FROM maintenance_daily_remarks')),false);}
   for(const options of [{},{session:mis},{session:{role:'normal',assignedRole:'Production User',login:'production'}},{session:{role:'super',permissions:{adminLevel:'Manager'}},user:{managerSites:'Sasti OB'}},{session:{role:'super',permissions:{adminLevel:'Admin'}},user:{}}])assert.equal((await harness('timeline',options).call()).status,200);
 });
 
@@ -181,4 +186,22 @@ test('timeline exposes only safe history bound to the current immutable request,
   assert.equal(result.body.history.length,1);assert.equal(result.body.history[0].actorName,'Saved actor');
   assert.equal(result.body.events.find(row=>row.event==='acceptedAt').source,'system');assert.equal(result.body.events.find(row=>row.event==='start').source,'unknown');
   const serialized=JSON.stringify(result.body);for(const secret of ['ip_address','device_id','session_id','Old private actor','requestId','timelineRequestId'])assert.equal(serialized.includes(secret),false);
+});
+
+test('timeline includes saved creator and scoped maintenance remarks without changing timestamps or writing audit history',async()=>{
+  const row={...active,owner:'Original production author',acceptedAt:null,acceptanceRequired:false};
+  const remarks=[{requestReference:row.ref,createdAt:'2026-09-06 01:34',authorName:'Maintenance author',authorLogin:'maintenance',remark:'Air Compressor Removed',delayReason:'Air Compressor Clutch Kit Not Available'},
+    {requestReference:'OTHER-REQUEST',authorName:'Other request author',remark:'Must not leak'}];
+  const app=harness('timeline',{row,remarks});
+  const result=await app.call();
+  assert.equal(result.status,200);
+  assert.equal(result.body.request.owner,row.owner);
+  assert.equal(result.body.request.dailyRemarks.length,1);
+  assert.equal(result.body.request.dailyRemarks[0].authorName,'Maintenance author');
+  assert.equal(result.body.events.find(event=>event.event==='acceptedAt').eventAt,null);
+  assert.equal(result.body.events.find(event=>event.event==='start').actorName,'');
+  assert.equal(result.body.durations.waiting,null);
+  assert.equal(result.body.history.length,0);
+  assert.deepEqual(app.saved,row);
+  assert.equal(app.queries.every(({sql})=>sql.startsWith('SELECT ')),true);
 });

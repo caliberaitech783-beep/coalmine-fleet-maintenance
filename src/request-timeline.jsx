@@ -1,11 +1,20 @@
 import React, {useEffect, useState} from "react";
-import {formatTimelineDuration} from "../request-timeline.mjs";
+import {formatTimelineDuration,parseRequestTimelineTimestamp} from "../request-timeline.mjs";
 import "./request-timeline.css";
 
 const clock = new Intl.DateTimeFormat("en-IN", {timeZone:"Asia/Kolkata", day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false});
-const stamp = value => value && Number.isFinite(Date.parse(value)) ? `${clock.format(new Date(value))} IST` : "Not recorded";
+const stamp = value => {
+  const parsed = parseRequestTimelineTimestamp(value);
+  return parsed ? `${clock.format(parsed)} IST` : "Not recorded";
+};
 const sourceLabel = source => source === "system" ? "System recorded" : source === "user" ? "Form supplied" : "Source not recorded (legacy)";
 const actorLabel = event => event.actorName && event.actorLogin ? `${event.actorName} (${event.actorLogin})` : event.actorName || event.actorLogin || "Not recorded";
+const requestActor = (event,request) => {
+  if (event === "start" && (request.owner || request.requesterLogin)) return ["Request created by", actorLabel({actorName:request.owner,actorLogin:request.requesterLogin})];
+  const fields = {acceptedAt:["Accepted by (request record)","acceptedBy"],closedAt:["Closed by (request record)","closedBy"],firstTripAt:["First trip entered by (request record)","firstTripBy"],verifiedAt:["Verified by (request record)","verifiedBy"],idealRequestedAt:["Idle requested by (request record)","idealRequestedBy"],idealApprovedAt:["On-road approved by (request record)","idealApprovedBy"],inProgressAt:["In progress recorded by (request record)","inProgressBy"]};
+  const field = fields[event];
+  return field && request[field[1]] ? [field[0],request[field[1]]] : null;
+};
 const stageDefinitions = [
   ["waiting", "Waiting for arrival", "start", "acceptedAt"],
   ["maintenance", "Maintenance interval", "acceptedAt", "closedAt"],
@@ -19,6 +28,8 @@ export function RequestTimelineView({data}) {
   const events = Array.isArray(data.events) ? data.events : [];
   const history = Array.isArray(data.history) ? data.history : [];
   const byEvent = new Map(events.map(event => [event.event,event]));
+  const request = data.request || {};
+  const remarks = (Array.isArray(request.dailyRemarks) ? request.dailyRemarks : []).filter(Boolean).slice().sort((a,b) => (parseRequestTimelineTimestamp(b.createdAt)?.getTime() || 0) - (parseRequestTimelineTimestamp(a.createdAt)?.getTime() || 0));
   const idleApproval = Boolean(data.request?.idealApprovedAt || data.request?.idealApprovedBy);
   return <div className="request-timeline-content">
     <p>Each duration uses the two recorded event times shown below. The three workflow stages do not overlap. Verification is shown separately, not added to the total.</p>
@@ -31,16 +42,30 @@ export function RequestTimelineView({data}) {
       </article>)}
     </div>
     <p className="request-timeline-note">“Not recorded” means an endpoint is missing, invalid or out of order—not zero time. Recording a time does not independently prove when the event happened. Use the existing red flag if the entry is incorrect.</p>
+    <p>Days of breakdown measures elapsed time from submission to recorded closure, or to now while still open. It is not arrival waiting time or confirmed hands-on repair time.</p>
     <h3>Timestamp sources</h3>
     <div className="request-timeline-events">
-      {events.filter(event => event.eventAt || ["start","acceptedAt","closedAt","firstTripAt","verifiedAt"].includes(event.event)).map(event => <article key={event.event}>
+      {events.filter(event => event.eventAt || ["start","acceptedAt","closedAt","firstTripAt","verifiedAt"].includes(event.event)).map(event => {
+        const attribution = requestActor(event.event,request);
+        return <article key={event.event}>
         <h4>{event.label}</h4><b>{stamp(event.eventAt)}</b>
-        <dl><div><dt>Source</dt><dd>{event.eventAt ? sourceLabel(event.source) : "Not recorded"}</dd></div>
-          <div><dt>Recorded by</dt><dd>{actorLabel(event)}</dd></div>
-          <div><dt>Saved at</dt><dd>{stamp(event.recordedAt)}</dd></div></dl>
+        <dl>{attribution && <div><dt>{attribution[0]}</dt><dd>{attribution[1]}</dd></div>}
+          <div><dt>Timestamp source</dt><dd>{event.eventAt ? sourceLabel(event.source) : "Not recorded"}</dd></div>
+          <div><dt>Timestamp audit author</dt><dd>{actorLabel(event)}</dd></div>
+          <div><dt>Timestamp audit saved at</dt><dd>{stamp(event.recordedAt)}</dd></div></dl>
+        {attribution && !event.actorName && !event.actorLogin && <p className="request-timeline-record-note">Name saved on the request; timestamp-audit details are not recorded.</p>}
+        {event.event === "acceptedAt" && !event.eventAt && <p className="request-timeline-record-note">No separate acceptance time is recorded. This does not mean the vehicle never reached maintenance.{remarks.length > 0 && " Maintenance updates are recorded below, but they do not establish the exact arrival time."}</p>}
         {event.reason && <p>Reason: {event.reason}</p>}
-      </article>)}
+      </article>;})}
     </div>
+    <h3>Recorded maintenance updates</h3>
+    <p>These are saved work and delay remarks, separate from acceptance, closure and timestamp-audit history. An update’s date is not an inferred arrival time.</p>
+    {remarks.length ? <ol className="request-timeline-updates">{remarks.map((entry,index) => <li key={`${entry.createdAt}-${index}`}>
+      <time>{stamp(entry.createdAt)}</time>
+      <dl><div><dt>Update recorded by</dt><dd>{actorLabel({actorName:entry.authorName,actorLogin:entry.authorLogin})}</dd></div>
+        <div><dt>Work reported</dt><dd>{entry.remark || "Not recorded"}</dd></div>
+        <div><dt>Reason for delay</dt><dd>{entry.delayReason || "Not recorded"}</dd></div></dl>
+    </li>)}</ol> : <p>No daily maintenance updates are recorded for this entry.</p>}
     <h3>Recorded changes and corrections</h3>
     <p>History starts when timestamp tracking was enabled. Older changes cannot be reconstructed from missing evidence. Existing timestamp-edit permissions are unchanged.</p>
     {history.length ? <ol className="request-timeline-history">{history.map((entry,index) => <li key={`${entry.event}-${entry.recordedAt}-${index}`}>

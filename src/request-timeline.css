@@ -18,4 +18,10 @@
 .request-timeline-history { padding-inline-start:22px; }
 .request-timeline-history li { padding:10px 0; border-bottom:1px solid #b7bed0; }
 .request-timeline-history p { margin:6px 0 0; }
+.request-timeline-record-note { font-size:.95em; color:#52617a; margin:10px 0 0 !important; }
+.request-timeline-updates { list-style:none; padding:0; display:grid; gap:12px; }
+.request-timeline-updates li { border:1px solid #b7bed0; border-radius:10px; padding:14px; min-width:0; }
+.request-timeline-updates time,.request-timeline-updates dt { font-weight:600; }
+.request-timeline-updates dl { margin:10px 0 0; }
+.request-timeline-updates dd { margin:0 0 8px; white-space:pre-wrap; }
 @media(max-width:640px) { .request-timeline-stages,.request-timeline-events { grid-template-columns:minmax(0,1fr); } .request-timeline-content { padding:12px; } }
