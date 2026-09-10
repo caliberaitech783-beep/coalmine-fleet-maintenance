@@ -119,6 +119,7 @@ test('UI wires all toasts to exact-entry navigation and sounds outside state upd
   assert.match(source,/playedRef\.current\.has\(id\)/);
   assert.match(source,/soundRef\.current\?\.play\(\)/);
   assert.match(source,/const fresh = track\(next\)/);
+  assert.match(source,/let delay = 1000/);
   assert.match(source,/if \(controller.signal.aborted\) return/);
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(server,/AFTER INSERT ON crm_notifications/);

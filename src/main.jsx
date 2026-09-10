@@ -7974,7 +7974,9 @@ function NotificationBell({ session, onOpenEntry }) {
     setItems([]); setAlerts([]); setOpen(false);
     let known = null, timer;
     const load = async () => {
-      let delay = 0;
+      // Bound requests during rolling upgrades when an older backend may not
+      // understand long polling yet. Received events still alert immediately.
+      let delay = 1000;
       try {
         const query = known === null ? "" : `?wait=1&known=${encodeURIComponent(known)}`;
         const response = await fetch(`/api/notifications${query}`, {
