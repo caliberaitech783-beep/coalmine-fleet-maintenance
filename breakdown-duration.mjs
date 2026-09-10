@@ -51,7 +51,7 @@ function indiaDateTimeEpoch(value) {
   return Date.parse(`${parts.date}T${parts.time}+05:30`);
 }
 
-// Days and hours a request has been in breakdown: from its start until it was
+// Days, hours and minutes a request has been in breakdown: from its start until it was
 // closed, or until now while it is still open. Mirrors the "BD Days / Hrs"
 // department report format.
 export function formatBreakdownDaysHours(startValue, endValue, now = new Date()) {
@@ -62,6 +62,7 @@ export function formatBreakdownDaysHours(startValue, endValue, now = new Date())
       ? closedAt
       : now instanceof Date ? now.getTime() : new Date(now).getTime();
   if (!Number.isFinite(finishedAt)) return "—";
-  const hours = Math.floor(Math.max(0, finishedAt - startedAt) / (60 * 60 * 1000));
-  return `${Math.floor(hours / 24)}d ${hours % 24}h`;
+  const minutes = Math.floor(Math.max(0, finishedAt - startedAt) / (60 * 1000)),
+    hours = Math.floor(minutes / 60);
+  return `${Math.floor(hours / 24)}d ${hours % 24}h ${minutes % 60}m`;
 }

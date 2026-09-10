@@ -37,12 +37,12 @@ test("request start values support saved and newly submitted formats", () => {
   assert.equal(calculateBreakdownDaysFromStart("Not available", now), 0);
 });
 
-test("days of breakdown show completed days and hours until closure or now", () => {
+test("days of breakdown show completed days, hours and minutes until closure or now", () => {
   const now = new Date("2026-09-10T07:00:00.000Z"); // 12:30 IST
 
-  assert.equal(formatBreakdownDaysHours("2026-09-10 · 09:00:00", "—", now), "0d 3h");
-  assert.equal(formatBreakdownDaysHours("2026-09-07 10:15", undefined, now), "3d 2h");
-  assert.equal(formatBreakdownDaysHours("2026-09-05 09:00:00", "2026-09-09 08:00:00", now), "3d 23h");
-  assert.equal(formatBreakdownDaysHours("2026-09-11 09:00:00", "—", now), "0d 0h");
+  assert.equal(formatBreakdownDaysHours("2026-09-10 · 09:00:00", "—", now), "0d 3h 30m");
+  assert.equal(formatBreakdownDaysHours("2026-09-07 10:15", undefined, now), "3d 2h 15m");
+  assert.equal(formatBreakdownDaysHours("2026-09-05 09:00:00", "2026-09-09 08:00:00", now), "3d 23h 0m");
+  assert.equal(formatBreakdownDaysHours("2026-09-11 09:00:00", "—", now), "0d 0h 0m");
   assert.equal(formatBreakdownDaysHours("Not available", "—", now), "—");
 });
