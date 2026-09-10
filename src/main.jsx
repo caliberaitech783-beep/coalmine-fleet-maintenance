@@ -1100,9 +1100,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [requestTrendRegion, setRequestTrendRegion] = useState("all");
   const [requestTrendTo, setRequestTrendTo] = useState("");
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
-  const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState("");
-  const [breakdownSummaryTo, setBreakdownSummaryTo] = useState("");
-  const [availabilityAsOf, setAvailabilityAsOf] = useState(() => localDateKey(new Date()));
+  // Every dashboard date filter starts on today; clearing a date shows all time.
+  const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState(() => localDateKey(new Date()));
+  const [breakdownSummaryTo, setBreakdownSummaryTo] = useState(() => localDateKey(new Date()));
   const [throughputRegion, setThroughputRegion] = useState("all");
   const [throughputSite, setThroughputSite] = useState("all");
   const [breakdownDetailSite, setBreakdownDetailSite] = useState("");
@@ -1184,8 +1184,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const throughputRequests = locationBreakdowns.filter(inThroughputScope);
   const throughputEquipment = visibleEquipment.filter(inThroughputScope);
   const throughputScopeLabel = activeThroughputSite !== "all" ? activeThroughputSite : selectedThroughputRegion?.code || (dashboardSite !== "all" ? dashboardSite : selectedRegion?.code) || "All regions";
-  // Availability has its own date; today (or no date) is the live fleet status.
-  const availabilityDate = availabilityAsOf === todayKey ? "" : availabilityAsOf;
+  // Availability follows the site-wise To date; today (or no date) is the live fleet status.
+  const availabilityDate = breakdownSummaryTo === todayKey ? "" : breakdownSummaryTo;
   const availabilityDateLabel = formatDisplayDate(availabilityDate || todayKey);
   const availabilityStatusLabel = availabilityDate ? `Availability as of ${availabilityDateLabel}` : dashboardReconnecting ? "Availability: last checked data" : `Availability: live · ${availabilityDateLabel}`;
   const availabilityRequests = availabilityRequestsForDate(throughputRequests, availabilityDate);
@@ -1195,11 +1195,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownSummaryEndKey = breakdownSummaryTo;
   const breakdownSummaryStartKey = breakdownSummaryFrom;
   const breakdownSummaryPeriodLabel = breakdownSummaryFrom ? formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey) : "All time";
-  const updateAvailabilityDate = (value) => {
-    if (!value) { setAvailabilityAsOf(todayKey); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > todayKey) return;
-    setAvailabilityAsOf(value);
-  };
+  const breakdownSummaryIsToday = breakdownSummaryFrom === todayKey && breakdownSummaryTo === todayKey;
+  const resetBreakdownSummaryRange = () => { setBreakdownSummaryFrom(todayKey); setBreakdownSummaryTo(todayKey); };
   const updateBreakdownSummaryRange = (bound, value) => {
     if (!value) { setBreakdownSummaryFrom(""); setBreakdownSummaryTo(""); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > todayKey) return;
@@ -1587,8 +1584,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             {selectedThroughputRegion && <label><span>Site</span><select aria-label="Vehicle throughput site" value={activeThroughputSite} onChange={(event) => { setThroughputSite(event.target.value); setRoadFocusSite(""); }}><option value="all">All sites</option>{throughputSiteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}
             <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><input type="date" aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
-            <label className="dashboard-availability-date"><span>Availability date</span><input type="date" aria-label="Availability count date" value={availabilityAsOf} max={todayKey} onChange={(event) => updateAvailabilityDate(event.target.value)} /></label>
-            <button type="button" onClick={() => { updateBreakdownSummaryRange("from", ""); updateAvailabilityDate(""); }} disabled={!breakdownSummaryFrom && !breakdownSummaryTo && !availabilityDate}>Reset dates</button>
+            <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday}>Reset dates</button>
             <small>{breakdownSummaryFrom ? "BD movement includes both dates." : "All time · Select a date to filter."} {availabilityDate ? `Availability as of ${availabilityDateLabel}` : dashboardReconnecting ? "Availability: last checked data" : equipmentLoaded ? `Availability is live · ${availabilityDateLabel}` : "Availability pending"}.</small>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
@@ -1678,9 +1674,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-request-lifecycle-controls">
               <div className="mine-trend-period" role="group" aria-label="Request lifecycle period">{[7, 14, 30].map((days) => <button type="button" key={days} className={!requestTrendFrom && !requestTrendTo && requestTrendDays === days ? "active" : ""} onClick={() => { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); }}>{days}D</button>)}</div>
               <label className="mine-lifecycle-custom"><span>Custom</span><input type="number" aria-label="Request lifecycle custom days" min="1" max="365" placeholder="Days" defaultValue="" onChange={(event) => { const days = Number(event.target.value); if (Number.isInteger(days) && days >= 1 && days <= 365) { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); } }} /></label>
-              <label><span>From</span><input type="date" aria-label="Request lifecycle from date" value={requestTrendFrom} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
+              <label><span>From</span><input type="date" aria-label="Request lifecycle from date" value={requestTrendFrom || safeTrendStartKey} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
               <div className="mine-request-lifecycle-end-controls">
-                <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
+                <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo || requestTrendEndKey} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
                 <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion || requestLifecycleSite ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <optgroup key={region.code} label={region.code}><option value={region.code}>{region.code}</option>{region.sites.map((site) => <option key={site} value={`site:${site}`}>{site}</option>)}</optgroup>)}</select></label>
               </div>
             </div>
