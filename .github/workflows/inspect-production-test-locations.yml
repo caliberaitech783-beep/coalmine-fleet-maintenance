@@ -1,0 +1,75 @@
+name: Inspect production test locations (encrypted report)
+
+on:
+  push:
+    branches: [azure-hosting-1.0]
+    paths: [.github/workflows/inspect-production-test-locations.yml]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.x'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
+      - name: Read location inventory without publishing production records
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          import {execFileSync} from 'node:child_process';
+          import {createCipheriv,publicEncrypt,randomBytes} from 'node:crypto';
+          import {writeFileSync} from 'node:fs';
+          const publicKey = `-----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAjqwmsVTocI0CbWmGra5H
+          FRNbL5gAn2SeE8sfythno0e3JwdDQqq0u50dXoyXfm6qByFQMCy2A3Bv2DF0vwdb
+          RTruQVCSBvlHkUamWWPDrNsSKywgzC04ae6zL2vDknq2Ai/UPw3idC6gSedVKvzo
+          VMTyBL6hClViM7nc18y2NYp+DvBwcvHlM/j954KCYlncY6TsfvlccVGGFM3bRuvC
+          gGHHt7Tu2lFRmGtyZz1204+GU2Qx5hZhJe0rVFOCiTao3M6lXk+U/ZnUm05ag1v5
+          TiPpqUFYt/qI9LzM8Nbop3rYulXoT3wZABTnFGMa43TvG1tJL3DlvEsBgFXB3DCi
+          st0YbNQEX0Gt6TPePRDMDgj9txK+Lz8/3imMIRBcCCCGlB9scPXbzykCYnvK++E3
+          iedC9Hmxlnvd4JuZSdfEQVnJBIyNOqRffCkQ1E0azwSbe1WS+QW4A7d6WtScaCAB
+          etNzN0Xh5ETu/8S+k6DkOpu5DnLj0rx1eHW12WHQihqvAgMBAAE=
+          -----END PUBLIC KEY-----`;
+          let pool;
+          try {
+            const connectionString=execFileSync('az',['webapp','config','appsettings','list','--resource-group','coalmine-fleet-maintenance-rg','--name','coalmine-fleet-azure-783','--query',"[?name=='DATABASE_URL'].value | [0]",'-o','tsv'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
+            if(!connectionString)throw new Error('Database configuration unavailable');
+            pool=new pg.Pool({connectionString,ssl:{rejectUnauthorized:false},connectionTimeoutMillis:15000,max:1});
+            const client=await pool.connect();
+            await client.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+            const report={capturedAt:new Date().toISOString()};
+            report.sites=(await client.query(`SELECT site,count(*)::int AS requests,count(*) FILTER (WHERE verified_at IS NULL)::int AS unverified FROM maintenance_requests GROUP BY site ORDER BY site`)).rows;
+            report.masterTypes=(await client.query('SELECT master_name,count(*)::int AS records FROM master_records GROUP BY master_name ORDER BY master_name')).rows;
+            report.locationMasters=(await client.query("SELECT id,master_name,record_data,created_at FROM master_records WHERE master_name ~* '(site|location|region)' ORDER BY id")).rows;
+            report.candidateMasters=(await client.query("SELECT id,master_name,record_data-'passwordHash'-'password'-'temporaryPassword' AS record_data,created_at FROM master_records WHERE record_data::text ~* '(qa[ _-]*bdms|dummy|synthetic|(^|[ _-])test[ _-]|audit[ _-])' ORDER BY id LIMIT 500")).rows;
+            report.candidateRequests=(await client.query("SELECT reference,site,door_number,equipment_name,chassis_number,registration_number,complaint,owner_name,requester_login,status,started_at,created_at,verified_at FROM maintenance_requests WHERE concat_ws(' ',site,reference,door_number,equipment_name,complaint) ~* '(^|[ _-])(qa|test|dummy|demo|synthetic|audit)([ _-]|$)' ORDER BY created_at LIMIT 500")).rows;
+            report.originEvents=(await client.query("SELECT id,actor_login,actor_name,module,action,target_reference,reason,changed_fields,occurred_at FROM audit_events WHERE changed_fields::text ~* 'qa[ _-]*bdms|9F27B4C1' OR target_reference=ANY($1::text[]) ORDER BY occurred_at LIMIT 100",[report.candidateRequests.map(row=>row.reference)])).rows;
+            await client.query('ROLLBACK');client.release();
+            const key=randomBytes(32),iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);
+            const encrypted=Buffer.concat([cipher.update(JSON.stringify(report),'utf8'),cipher.final()]);
+            writeFileSync('qa-site-report.enc.json',JSON.stringify({key:publicEncrypt({key:publicKey,oaepHash:'sha256'},key).toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:encrypted.toString('base64')}));
+            console.log('Encrypted read-only location report prepared. No records were changed.');
+          } catch(error) { console.error(`Inspection failed (${error.code || error.name || 'unknown'}). No production data printed.`);process.exitCode=1; }
+          finally {if(pool)await pool.end();}
+          NODE
+      - uses: actions/upload-artifact@v6
+        with:
+          name: qa-site-inspection-${{ github.run_id }}
+          path: qa-site-report.enc.json
+          retention-days: 3
+      - if: always()
+        run: az logout
