@@ -683,6 +683,14 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-request-lifecycle-state { min-height: 314px; }
 .dashboard-breakdown-trend-state { min-height: 319px; }
 .manager-fleet-data-state { min-height: 64px; margin: 0; }
+.dashboard-connection-notice { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; min-width: 0; padding: 12px 16px; margin: 10px 0; border: 1px solid #d8a346; border-radius: 8px; background: color-mix(in srgb, #d8a346 12%, var(--mine-panel, var(--panel, #fff))); color: var(--mine-text, var(--ink, #263447)); }
+.dashboard-connection-notice > svg { width: 22px; height: 22px; flex: 0 0 auto; color: #af7515; }
+.dashboard-connection-notice > div { display: grid; gap: 4px; flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.dashboard-connection-notice strong { font-size: 15px; line-height: 1.4; }
+.dashboard-connection-notice span { font-size: 13px; line-height: 1.4; }
+.dashboard-connection-notice > button { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 12px; border: 1px solid #d8a346; border-radius: 6px; color: inherit; background: transparent; white-space: nowrap; }
+.dashboard-connection-notice > button svg { width: 16px; height: 16px; }
+.dashboard-connection-notice > button:focus-visible { outline: 2px solid #315fd4; outline-offset: 2px; }
 .mine-dashboard-feature-row > .mine-feature-road-availability {
   grid-column: span 1;
   align-self: stretch;

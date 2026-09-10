@@ -52,7 +52,7 @@ const requests = Object.freeze([
   Object.freeze({ref: "NEW-CLOSED", door: "V3", chassis: "C3", site: "Sasti OB", category: "Preventive", status: "Closed", start: "2026-09-09 08:00:00", closedAt: "2026-09-09 09:00:00"}),
 ]);
 
-function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true} = {}) {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}} = {}) {
   const slots = [];
   let cursor = 0;
   const useState = (initial) => {
@@ -70,15 +70,43 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, fleetBarHeightPercent, activeOpenCases, recordBelongsToSite, requestStatusLabel,
     localStorage: {getItem: () => null, setItem() {}},
     subsidiaryData: regions,
-    useDashboardEquipment: () => ({records: equipment, loaded: true, loadError: "", scope: {restrictToScope, allowedSites, allowedRegions: regions.map(({code}) => code)}}),
+    useDashboardEquipment: () => ({records: equipment, loaded: true, loadError: "", scope: {restrictToScope, allowedSites, allowedRegions: regions.map(({code}) => code)}, ...equipmentState}),
     firstTripTimestamp: (request) => request.firstTripAt || "",
     formatTwelveHourDateTime: displayDates.formatDisplayDateTime,
     Status: Null,
     RequestTimelineButton: Null, authToken: "",
   };
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
-  return {render(rows = requests) { cursor = 0; return Dashboard({requests: rows}); }};
+  return {render(rows = requests, props = {}) { cursor = 0; return Dashboard({requests: rows, ...props}); }};
 }
+
+for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} failure keeps cards, filters and drilldown mounted without a Live label`, () => {
+  const equipmentState = {updatedAt: 1788854300000};
+  const view = harness({equipmentState});
+  const props = {requestsUpdatedAt: 1788854400000};
+  let tree = view.render(requests, props);
+  byLabel(tree, "Region").props.onChange({target: {value: "WCL"}});
+  tree = view.render(requests, props);
+  byClass(tree, "mine-fleet-chart-title").props.onClick();
+  tree = view.render(requests, props);
+  const originalRows = detailView(tree).rows;
+  assert.match(text(byClass(tree, "mine-updated")), /Live/);
+  if (resource === "equipment") equipmentState.loadError = "Network unavailable";
+  const failureProps = {...props, requestsError: resource === "requests" ? "Network unavailable" : ""};
+  tree = view.render(requests, failureProps);
+  assert.equal(byLabel(tree, "Region").props.value, "WCL");
+  assert.deepEqual(detailView(tree).rows, originalRows);
+  assert.ok(byClass(tree, "mine-fleet-chart-plot"));
+  assert.match(text(byClass(tree, "mine-updated")), /Reconnecting/);
+  assert.doesNotMatch(text(tree), /\blive\b/i);
+  const notice = findAll(tree, (node) => typeof node.props.retry === "function" && node.props.updatedAt)[0];
+  assert.equal(notice.props.updatedAt, equipmentState.updatedAt);
+  equipmentState.loadError = "";
+  tree = view.render(requests, props);
+  assert.match(text(byClass(tree, "mine-updated")), /Live/);
+  assert.deepEqual(detailView(tree).rows, originalRows);
+  assert.equal(findAll(tree, (node) => typeof node.props.retry === "function" && node.props.updatedAt).length, 0);
+});
 
 // Check the actual final browser filtering, not just the Dashboard's input props.
 const detailView = (tree) => {

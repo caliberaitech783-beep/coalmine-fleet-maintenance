@@ -16,6 +16,7 @@ const Null = () => null;
 const BreakdownTable = () => null;
 const RequestDataState = () => null;
 const FleetDataState = () => null;
+const DashboardConnectionNotice = () => null;
 const ManagerIdleConfirmation = () => null;
 const all = (tree, predicate) => {
   const result = [];
@@ -53,7 +54,7 @@ function managerHarness(equipment, equipmentState = {}) {
     recordBelongsToSite, managerRoleSelection, visibleInMisRequests, visibleInMisHistory,
     equipmentGroupLabel: (row) => row.group || row.category || "Unspecified",
     useDashboardEquipment: () => ({ records: equipment, loaded: true, scope: { restrictToScope: true, allowedSites: ["Sasti OB"] }, ...equipmentState }),
-    preventTableAutoScroll: () => {}, BreakdownTable, RequestDataState, FleetDataState, ManagerIdleConfirmation,
+    preventTableAutoScroll: () => {}, BreakdownTable, RequestDataState, FleetDataState, ManagerIdleConfirmation, ConnectionRecoveryNotice: DashboardConnectionNotice,
     ShieldCheck: Null,
   };
   const component = new Function(...Object.keys(scope), `${managerCode}; return ManagerDashboard;`)(...Object.values(scope));
@@ -116,9 +117,7 @@ test("MIS Manager separates pending and verified counts without moving open or I
 
 for (const [label, equipmentState, requestProps] of [
   ["initial request load", {}, { requestsLoaded: false }],
-  ["request refresh failure", {}, { requestsError: "Network unavailable" }],
   ["initial equipment load", { loaded: false }, {}],
-  ["equipment refresh failure", { loadError: "Network unavailable" }, {}],
 ]) test(`manager does not display misleading counts or actionable stale rows during ${label}`, () => {
   const app = managerHarness(equipment, equipmentState);
   const tree = app.render({ managerRole: "Production Manager", requests: [open, idle, closed], ...requestProps });
@@ -133,11 +132,37 @@ for (const [label, equipmentState, requestProps] of [
 test("manager restores current counts and table after a request error clears", () => {
   const app = managerHarness(equipment);
   const props = { managerRole: "Production Manager", requests: [open, idle, closed] };
-  assert.equal(table(app.render({ ...props, requestsError: "Offline" })), undefined);
+  const disconnected = app.render({ ...props, requestsError: "Offline" });
+  assert.deepEqual(cards(disconnected).map(({ value }) => value), ["3", "1", "1", "1"]);
+  assert.ok(table(disconnected));
+  assert.equal(all(disconnected, (node) => node.type === DashboardConnectionNotice).length, 1);
+  assert.equal(all(disconnected, (node) => node.props.className === "manager-live-status").length, 0);
   const tree = app.render({ ...props, requestsError: "" });
   assert.deepEqual(cards(tree).map(({ value }) => value), ["3", "1", "1", "1"]);
   assert.deepEqual(table(tree).props.rows.map(({ ref }) => ref), ["OPEN", "IDLE"]);
+  assert.equal(all(tree, (node) => node.type === DashboardConnectionNotice).length, 0);
+  assert.equal(all(tree, (node) => node.props.className === "manager-live-status").length, 1);
 });
+
+for (const role of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) {
+  for (const resource of ["requests", "equipment"]) test(`${role}: ${resource} reconnect retains counts and prevents stale approvals`, () => {
+    const equipmentState = {updatedAt: 1788854300000};
+    const app = managerHarness(equipment, equipmentState);
+    const props = {managerRole: role, requests: [open, idle, closed], onApproveIdeal() {}, onCancelIdeal() {}};
+    const before = app.render(props);
+    button(before, "Idle approvals (1)").props.onClick();
+    if (resource === "equipment") equipmentState.loadError = "Network unavailable";
+    const after = app.render({...props, requestsError: resource === "requests" ? "Network unavailable" : ""});
+    assert.deepEqual(cards(after).map(({value}) => value), cards(before).map(({value}) => value));
+    assert.equal(table(after).props.rows.length, 1);
+    assert.equal(table(after).props.onApproveIdeal, null);
+    assert.equal(table(after).props.onCancelIdeal, null);
+    assert.equal(all(after, (node) => node.type === ManagerIdleConfirmation).length, 0);
+    assert.equal(all(after, (node) => node.props.className === "manager-live-status").length, 0);
+    assert.equal(all(after, (node) => node.type === DashboardConnectionNotice)[0].props.updatedAt, equipmentState.updatedAt);
+    assert.doesNotMatch(text(after), /Live fleet/);
+  });
+}
 
 for (const role of ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"]) test(`${role}: loading guards preserve the authorised Idle approval and cancellation actions`, () => {
   const app = managerHarness(equipment);

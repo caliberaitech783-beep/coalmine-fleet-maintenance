@@ -11,7 +11,7 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.equal(assignedUserSiteName({site:" ",location:"",currentLocation:"Sasti OB"}),"Sasti OB");
   assert.equal(assignedUserSiteName({site:"Majri OB",location:"Sasti OB"}),"Majri OB");
   assert.match(source,/createDashboardRequestLoader\(\{onState:setDashboardState\}\)/);
-  assert.match(source,/dashboardState\.token === session\?\.token && dashboardState\.loaded && !dashboardState\.error/);
+  assert.match(source,/dashboardState\.token === session\?\.token && dashboardState\.loaded\)/);
   assert.match(source,/dashboardRequestsReady \? <Dashboard requests=\{misDashboardRequests\}/);
   assert.match(source,/loader\.cancel\(\)/);
   assert.match(server,/rows\.filter\(\(row\)=>canonicalSiteName\(row\.site\)===canonicalSiteName\(scopedSite\)\)/);

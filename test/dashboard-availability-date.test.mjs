@@ -95,6 +95,7 @@ const text = node => Array.isArray(node) ? node.map(text).join("") : React.isVal
 
 function dashboardSection(date) {
   const scope = {
+    dashboardReconnecting: false,
     React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite,
     throughputRequests: requests, dashboardDate: "2026-01-01", breakdownSummaryFrom: date, breakdownSummaryTo: date, todayKey: "2026-09-10", throughputEquipment: assets,
     breakdownSummaryStartKey: "2026-09-01", breakdownSummaryEndKey: date || "2026-09-10", formatDisplayDate,

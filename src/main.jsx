@@ -852,6 +852,7 @@ function useDashboardEquipment() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [updatedAt, setUpdatedAt] = useState(0);
   const loadedFleetScope = useRef({token: authToken, loaded: false});
   useEffect(() => {
     let activeRequest = true;
@@ -861,6 +862,8 @@ function useDashboardEquipment() {
       loadedFleetScope.current = {token: authToken, loaded: false};
       setRecords([]);
       setScope(null);
+      setUpdatedAt(0);
+      setLoadError("");
     }
     setLoaded(sameScope && loadedFleetScope.current.loaded);
     const load = async () => {
@@ -871,7 +874,10 @@ function useDashboardEquipment() {
       signal: controller.signal,
       headers: {Authorization: `Bearer ${authToken}`},
     })
-      .then((response) => readApiJson(response, "Could not load fleet data."))
+      .then((response) => {
+        if ([401, 403].includes(response.status)) throw Object.assign(new Error("Sign in again or check your dashboard access."), {status: response.status});
+        return readApiJson(response, "Could not load fleet data.");
+      })
       .then((data) => {
         if (!Array.isArray(data.records)) throw new Error("Fleet data response was invalid. Please retry.");
         if (!data.scope || typeof data.scope !== "object" || Array.isArray(data.scope)
@@ -885,11 +891,17 @@ function useDashboardEquipment() {
         setScope(data.scope);
         setLoaded(true);
         setLoadError("");
+        setUpdatedAt(Date.now());
       })
       .catch((error) => {
         if (activeRequest) {
-          loadedFleetScope.current.loaded = false;
-          setLoaded(false);
+          if ([401, 403].includes(error.status)) {
+            loadedFleetScope.current.loaded = false;
+            setRecords([]);
+            setScope(null);
+            setUpdatedAt(0);
+          }
+          setLoaded(loadedFleetScope.current.loaded);
           setLoadError(error.name === "AbortError" ? "Live fleet loading timed out. Please retry." : error.message || "Could not load fleet data.");
         }
       }).finally(() => window.clearTimeout(timeout));
@@ -901,7 +913,8 @@ function useDashboardEquipment() {
       controller?.abort();
     };
   }, [loadAttempt, authToken]);
-  return {records, scope, loaded, loadError, retry: () => setLoadAttempt((attempt) => attempt + 1)};
+  const sameSession = loadedFleetScope.current.token === authToken;
+  return {records: sameSession ? records : [], scope: sameSession ? scope : null, loaded: sameSession && loaded, loadError: sameSession ? loadError : "", updatedAt: sameSession ? updatedAt : 0, retry: () => setLoadAttempt((attempt) => attempt + 1)};
 }
 
 function FleetDataState({ error = "", retry, className = "" }) {
@@ -970,13 +983,24 @@ function RequestDataState({ error, retry }) {
   </div>;
 }
 
+function ConnectionRecoveryNotice({ updatedAt = 0, retry }) {
+  const timestamp = updatedAt ? formatDisplayDateTime(new Date(updatedAt)) : "not yet confirmed";
+  return <div className="dashboard-connection-notice" role="status" aria-live="polite">
+    <AlertTriangle aria-hidden="true" />
+    <div><strong>Reconnecting · Last updated {timestamp}</strong><span>Showing last successfully loaded data. Retrying automatically.</span></div>
+    <button type="button" onClick={() => { void Promise.resolve().then(() => retry?.()).catch(() => {}); }}><RotateCcw /> Retry now</button>
+  </div>;
+}
+
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
   const [idleConfirmation, setIdleConfirmation] = useState(null);
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
-  const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
-  const managerDataReady = equipmentLoaded && requestsLoaded && !equipmentLoadError && !requestsError;
+  const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
+  const managerDataReady = equipmentLoaded && requestsLoaded;
+  const managerReconnecting = managerDataReady && Boolean(equipmentLoadError || requestsError);
+  const managerUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   // The dedicated endpoint has already applied the manager's current server-side scope.
   const siteEquipment = equipmentRecords;
   const managerAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
@@ -1025,7 +1049,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const visibleDetailRows=queueTab==="ideal"?idealRows:activeManagerRole==="Maintenance Manager"&&queueTab==="active"?visibleActiveRows:detailRows;
   const title = activeManagerRole || "Manager";
   const description = productionManagerView
-    ? `Live fleet availability for ${managerLocation || "the assigned sites"}.`
+    ? `${managerReconnecting ? "Last checked" : managerDataReady ? "Live" : "Loading"} fleet availability for ${managerLocation || "the assigned sites"}.`
     : activeManagerRole === "Maintenance Manager"
       ? "Site equipment, maintenance intake, remaining workload, and completed equipment."
       : "Location-wise verified requests and first-trip status.";
@@ -1039,21 +1063,24 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" />}</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
-    {(!equipmentLoaded||equipmentLoadError)&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
-    {(!requestsLoaded||requestsError)&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
-    {managerDataReady && <p className="manager-live-status">Live status · Updated {new Date(requestsUpdatedAt).toLocaleTimeString("en-IN")} · Refreshes every 10 seconds and when you return to this tab.</p>}
+    {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
+    {!requestsLoaded&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
+    {managerReconnecting && <ConnectionRecoveryNotice updatedAt={managerUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
+    {managerDataReady && !managerReconnecting && <p className="manager-live-status">Live status · Updated {new Date(managerUpdatedAt).toLocaleTimeString("en-IN")} · Refreshes every 10 seconds and when you return to this tab.</p>}
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && managerDataReady && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter||!managerDataReady} aria-busy={!managerDataReady}>
       <span>{label}</span><strong>{managerDataReady?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&managerDataReady && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({managerDataReady?idealRows.length:"—"})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
     {managerDataReady && <>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
     </>}
-    {managerDataReady && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
+    {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
 }
-function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], theme = "light" }) {
-  const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,retry:retryEquipmentLoad}=useDashboardEquipment();
+function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
+  const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
+  const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
+  const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
@@ -1490,15 +1517,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}`}>
       <header className="mine-dashboard-head">
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
-        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
+        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardDate ? "Filtered" : "Live"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
       </header>
+      {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article {...cardAction(fleetChartAllKey, showFleetBreakdowns ? "Breakdown fleet" : "Total Fleet")} className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
           <header>
             <div className="mine-fleet-chart-heading">
               <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown(fleetChartAllKey)}><h2>Total Fleet</h2></button>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" title="Live vehicle counts; activity dates do not remove active breakdowns" onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : liveBreakdownAssetCount).toLocaleString() : "—"}</b></button>)}
+                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" title={`${dashboardReconnecting ? "Last checked" : "Current"} vehicle counts; activity dates do not remove active breakdowns`} onClick={() => setFleetChartMode(mode)}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : liveBreakdownAssetCount).toLocaleString() : "—"}</b></button>)}
               </div>
             </div>
             <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
@@ -1534,7 +1562,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><input type="date" aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
             <button type="button" onClick={() => updateBreakdownSummaryRange("from", "")} disabled={!breakdownSummaryFrom && !breakdownSummaryTo}>Reset dates</button>
-            <small>{breakdownSummaryFrom ? "BD movement includes both dates." : "All time · Select a date to filter."} {availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : "Availability is live"}.</small>
+            <small>{breakdownSummaryFrom ? "BD movement includes both dates." : "All time · Select a date to filter."} {availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : dashboardReconnecting ? "Availability: last checked data" : equipmentLoaded ? "Availability is live" : "Availability pending"}.</small>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
@@ -1545,7 +1573,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("incoming", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
-              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Site-wise BD table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : "Availability: live"}</small></div>
+              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Site-wise BD table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : dashboardReconnecting ? "Availability: last checked data" : "Availability: live"}</small></div>
               <div className="mine-breakdown-site-head" role="row"><span>Site name</span><span>BD Open</span><span>BD In</span><span>BD Out</span><span>BD Balance</span><span>Availability count impact</span><span aria-hidden="true" /></div>
               <div className="mine-breakdown-site-body">
                 {breakdownSiteSummary.length ? breakdownSiteSummary.map((site) => {
@@ -1565,7 +1593,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><small>Idle</small><strong>{availabilityKpis.idle.toLocaleString()}</strong></span></button>
             </div>
             <div className="mine-road-site-table" role="table" aria-label="Site-wise availability count">
-              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Availability table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : "Availability: live"}</small></div>
+              <div className="dashboard-breakdown-table-period" role="caption" aria-label="Availability table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityDate ? `Availability as of ${formatDisplayDate(availabilityDate)}` : dashboardReconnecting ? "Availability: last checked data" : "Availability: live"}</small></div>
               <div className="mine-road-site-head" role="row"><span>Site name</span><span>Total fleet</span><span>On road</span><span>Off road</span><span>Idle</span><span>Availability</span><span>Status distribution</span><span aria-hidden="true" /></div>
               <div className="mine-road-site-body">{availabilityCountBySite.length ? availabilityCountBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site-status:${site.site}|all`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
                 <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric total"><b>{site.total}</b></span><span className="metric onroad"><b>{site.onRoad}</b></span><span className="metric offroad"><b>{site.offRoad}</b></span><span className="metric idle"><b>{site.idle}</b></span><span className="availability"><b>{site.availability}%</b></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${site.total ? (site.onRoad / site.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${site.total ? (site.offRoad / site.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${site.total ? (site.idle / site.total) * 100 : 0}%` }} /></span><ChevronRight />
@@ -8195,7 +8223,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [dashboardState,setDashboardState]=useState({token:"",records:[],loaded:false,error:"",updatedAt:0});
   const dashboardLoader=useRef(null);
   const dashboardRequests=embedded ? requests : dashboardState.records;
-  const dashboardRequestsReady=embedded || (dashboardState.token === session?.token && dashboardState.loaded && !dashboardState.error);
+  const dashboardRequestsReady=embedded || (dashboardState.token === session?.token && dashboardState.loaded);
   const [createdRequestRef, setCreatedRequestRef] = useState("");
   useEffect(() => {
     if (!createdRequestRef) return undefined;
@@ -8312,7 +8340,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><AiFeeder role={mobileRole} session={session} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
+      {!embedded&&section==="dashboard"&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardState.error} requestsUpdatedAt={dashboardState.updatedAt} onRefreshRequests={()=>dashboardLoader.current?.load(session?.token)} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
       {!embedded&&section==="reports"&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
       {(embedded||section==="profile")&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
@@ -8506,7 +8534,7 @@ function App() {
         signal: controller.signal,
         headers: { Authorization: `Bearer ${session.token}` },
       });
-      if (!response.ok) throw new Error("Could not load requests");
+      if (!response.ok) throw Object.assign(new Error([401, 403].includes(response.status) ? "Sign in again or check your dashboard access." : "Could not load requests"), {status: response.status});
       const data = await response.json();
       if (!Array.isArray(data)) throw new Error("Invalid request data received");
       if (loadSequence === requestLoadSequence.current) {
@@ -8516,7 +8544,12 @@ function App() {
       return data;
     } catch (error) {
       if (loadSequence === requestLoadSequence.current) {
-        setRequestState((current) => ({ ...current, token: session.token, error: error.message || "Could not load requests" }));
+        if ([401, 403].includes(error.status)) {
+          setRequests([]);
+          setRequestState({token: session.token, loaded: false, updatedAt: 0, error: error.message});
+        } else {
+          setRequestState((current) => ({ ...current, token: session.token, error: error.message || "Could not load requests" }));
+        }
       }
       throw error;
     } finally {
@@ -8704,7 +8737,7 @@ function App() {
         </div>
         <div className="body">
           {active === "Dashboard" ? (
-            requestsLoaded && !requestsError ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
+            requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
           ) : active === "Manager Profile" ? (
             <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} />
           ) : active === "Tickets" ? (

@@ -27,7 +27,7 @@ test("dashboard date filters opening-date analysis without filtering live fleet 
   assert.match(source, /fleetChartCounts\(visibleEquipment, liveBreakdowns\)/);
   assert.doesNotMatch(source, /dashboardDate \? locationBreakdowns\.filter/);
   assert.match(source, /<input aria-label="Dashboard date" type="date" value=\{dashboardDate\}/);
-  assert.match(source, /\{dashboardDate \? "Filtered" : "Live"\} · \{filteredDateLabel\}/);
+  assert.match(source, /dashboardReconnecting \? "Reconnecting" : dashboardDate \? "Filtered" : "Live"\} · \{filteredDateLabel\}/);
   assert.match(styles, /\.mine-head-actions\{[^}]*flex-wrap:wrap/);
   assert.match(styles, /\.mine-site-filter select\{min-width:165px\}/);
   assert.match(styles, /@media\(max-width:700px\)[\s\S]*\.mine-head-actions\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);

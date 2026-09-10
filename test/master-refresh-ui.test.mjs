@@ -45,7 +45,7 @@ function harness(hookName = "useMasterRecords") {
     watchRequestRefresh: (refresh, environment) => watchRequestRefresh(refresh, {...environment, now: () => now}),
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({
       url, options, reject,
-      respond(data, ok = true) {resolve({ok, json: async () => data, text: async () => JSON.stringify(data)});},
+      respond(data, ok = true, status = ok ? 200 : 503) {resolve({ok, status, json: async () => data, text: async () => JSON.stringify(data)});},
     })),
   };
   const api = new Function(...Object.keys(scope), `${hookName === "useMasterRecords" ? hook : dashboardHook}; return {run: ${hookName}, setToken(value) {authToken = value;}};`)(...Object.values(scope));
@@ -99,7 +99,7 @@ for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${ho
   assert.deepEqual(records(), newEquipment);
   if (hookName === "useMasterRecords") assert.equal(app.render()[2], true);
   else {
-    assert.equal(app.render().loaded, false, "a failed current fleet snapshot must not be presented as confirmed live data");
+    assert.equal(app.render().loaded, true, "a failed refresh retains the last confirmed snapshot with a reconnecting error");
     assert.equal(app.render().loadError, "Temporary network error");
   }
   app.unmount();
@@ -142,7 +142,8 @@ test("cross-tab closure refreshes a same-size fleet snapshot and failure recover
   assert.deepEqual(app.render().records, onroad);
   app.tick(10_000);
   app.requests[2].reject(new Error("Temporary network error")); await settle();
-  assert.equal(app.render().loaded, false);
+  assert.equal(app.render().loaded, true);
+  assert.equal(app.render().loadError, "Temporary network error");
   app.tick(10_000);
   app.requests[3].respond({records: onroad, scope}); await settle();
   assert.equal(app.render().loaded, true);
@@ -150,6 +151,49 @@ test("cross-tab closure refreshes a same-size fleet snapshot and failure recover
   app.unmount();
   assert.equal(app.timers.size, 0);
   assert.equal(app.timeouts.size, 0);
+});
+
+test("fleet refresh retains its timestamp through errors and retries until success", async () => {
+  const app = harness("useDashboardEquipment");
+  const scope = {restrictToScope: true, allowedSites: ["Majri OB"], allowedRegions: []};
+  app.render(); app.effects();
+  app.requests[0].respond({records: oldEquipment, scope}); await settle();
+  const checked = app.render().updatedAt;
+  assert.ok(checked > 0);
+  app.tick(10_000);
+  app.requests[1].reject(new Error("Offline")); await settle();
+  assert.equal(app.render().updatedAt, checked);
+  assert.deepEqual(app.render().records, oldEquipment);
+  app.render().retry(); app.render(); app.effects();
+  assert.equal(app.render().loaded, true);
+  assert.equal(app.render().loadError, "Offline", "retry alone must not restore Live");
+  app.requests[2].respond({records: newEquipment, scope}); await settle();
+  assert.equal(app.render().loadError, "");
+  assert.ok(app.render().updatedAt >= checked);
+  app.unmount();
+});
+
+for (const status of [401, 403]) test(`fleet HTTP ${status} clears cached records and scope`, async () => {
+  const app = harness("useDashboardEquipment");
+  app.render(); app.effects();
+  app.requests[0].respond({records: oldEquipment, scope: {restrictToScope: true, allowedSites: ["Majri OB"], allowedRegions: []}}); await settle();
+  app.tick(10_000);
+  app.requests[1].respond("not JSON", false, status); await settle();
+  assert.equal(app.render().loaded, false);
+  assert.equal(app.render().updatedAt, 0);
+  assert.deepEqual(app.render().records, []);
+  assert.equal(app.render().scope, null);
+  app.unmount();
+});
+
+test("initial fleet failure has no snapshot and is not fabricated as a zero fleet", async () => {
+  const app = harness("useDashboardEquipment");
+  app.render(); app.effects();
+  app.requests[0].reject(new Error("Offline")); await settle();
+  assert.equal(app.render().loaded, false);
+  assert.equal(app.render().updatedAt, 0);
+  assert.equal(app.render().loadError, "Offline");
+  app.unmount();
 });
 
 test("failed or malformed refresh retains last successful same-account records and loaded state", async () => {
