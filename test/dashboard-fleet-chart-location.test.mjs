@@ -8,6 +8,7 @@ import * as model from "../src/dashboard-drilldown-model.mjs";
 import { REGION_DATA } from "../region-scope.mjs";
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "../src/request-status.mjs";
+import { filterRecordsByDate } from "../src/record-date-range.mjs";
 
 const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const expression = main.match(/const hideFleetChartLocation = (.+);/)[1];
@@ -17,7 +18,7 @@ const hideCategoryFor = new Function("assetDrilldown", `return ${categoryExpress
 const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
 const { code } = await transformWithOxc(source, "record-browser.jsx", { jsx: { runtime: "classic" } });
-const bindings = { React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
+const bindings = { React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
   useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
   ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null };
 const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));

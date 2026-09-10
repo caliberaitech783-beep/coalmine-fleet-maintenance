@@ -1,5 +1,6 @@
 import React from "react";
 import { matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
+import { recordDateKey } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
 
 export function tableElements(children) {
@@ -99,7 +100,7 @@ export function selectTableRows(rows, columns, filters, sort) {
     const expected = filters[column.key];
     if (!expected) return true;
     const range = parseDateRange(expected);
-    if (range) return matchesDateRange(column.sortValue ? column.sortValue(row) : column.value(row), range) || matchesDateRange(column.value(row), range);
+    if (range) return matchesDateRange(recordDateKey(column.sortValue?.(row)) || recordDateKey(column.value(row)), range);
     return column.value(row) === (expected === "__empty_table_filter_value__" ? "" : expected);
   }));
   const column = columns.find((item) => item.key === sort.key);

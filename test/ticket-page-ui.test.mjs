@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
 import { watchVisibleMasterRefresh } from "../src/master-refresh.mjs";
+import { filterRecordsByDate } from "../src/record-date-range.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const componentSource = source.slice(source.indexOf("function TicketPage("), source.indexOf("function AiFeederPanel("));
@@ -53,7 +54,7 @@ function harness(session = production) {
     }
   };
   const scope = {
-    React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0],
+    React, useState, useEffect, filterRecordsByDate, useRef: value => useState(() => ({current: value}))[0],
     document, window: {...events("window"),
       setInterval(fn, duration) {timers.set(++timerId, {fn, duration}); return timerId;},
       clearInterval(id) {timers.delete(id);}},

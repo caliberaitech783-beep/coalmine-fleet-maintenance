@@ -1,19 +1,21 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import RecordDateRange from "./record-date-range.jsx";
+import { primaryRecordDateColumn } from "./record-date-range.mjs";
 import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder } from "./table-actions-model.mjs";
 import "./table-actions.css";
 import "./sortable-table.css";
 
-export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
+export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, tableProps }} />;
 }
 
-function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }) {
+function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, tableProps }) {
   const [visible, setVisible] = useState(columns.map((column) => column.key));
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "", direction: "asc" });
@@ -60,7 +62,10 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = columns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = columns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
-  const reset = () => { clearFilters(); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
+  const reset = () => { clearFilters(); recordDateFilter?.onChange(""); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
+  const dateColumn = primaryRecordDateColumn(columns);
+  const dateControl = recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
+  const dateRangeControl = dateControl && <RecordDateRange {...dateControl} />;
   // Plain <th> headings become sort-and-filter headers (or sort buttons when no FilterableHeader is supplied);
   // headers that bring their own sorting (onSort) are left untouched.
   const sortableHeaderRow = (row) => {
@@ -87,8 +92,10 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   };
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
+      {printData && dateRangeControl}
       {printData && <ExportMenu printOnly title={printTitle} columns={printData.columns} rows={printData.rows} />}
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} />
+      {!printData && dateRangeControl}
       {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} />}
       {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
       {dialog === "sort" && <SortDialog columns={columns} sort={sort.key ? sort : externalSort || sort} onApply={applySort} onClose={() => setDialog("")} />}

@@ -8,6 +8,7 @@ import * as model from "../src/dashboard-drilldown-model.mjs";
 import {REGION_DATA} from "../region-scope.mjs";
 import {calculateBreakdownMinutes, formatBreakdownDaysHours} from "../breakdown-duration.mjs";
 import {requestStatusSortRank} from "../src/request-status.mjs";
+import {filterRecordsByDate} from "../src/record-date-range.mjs";
 import {formatDisplayDateTime} from "../date-time-format.mjs";
 import {tableModel, dateColumnsFirst, tableExportModel} from "../src/table-actions-model.mjs";
 
@@ -20,7 +21,7 @@ const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) =
 test("BD Out closing times, table order, counts and exports stay consistent through region filtering and reset", () => {
   const slots = [];
   let cursor = 0;
-  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
+  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === "function" ? initial() : initial; return [slots[slot], (next) => {slots[slot] = typeof next === "function" ? next(slots[slot]) : next;}];},
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
   const Component = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
@@ -53,6 +54,19 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
   descendants(tree, (node) => node.props.role === "tab" && node.props.id === "test-records-unmapped")[0].props.onClick();
   tree = render(); verify(tree, 6, "Other / unassigned");
   descendants(tree, (node) => node.props.className === "dashboard-record-reset")[0].props.onClick();
+  tree = render(); verify(tree, 475, "All regions");
+  // Date filtering happens before the region/site counts and before Print/Export receive rows.
+  rows[0].requestStart = "2026-09-09 23:59:59";
+  rows[474].requestStart = "—";
+  descendants(tree, (node) => node.type === props.ActionsTable)[0].props.recordDateFilter.onChange("__date_range__:2026-09-10|2026-09-10");
+  tree = render();
+  let datedTable = descendants(tree, (node) => node.type === props.ActionsTable)[0];
+  assert.equal(descendants(datedTable, node => node.type === "tr").length - 1, 473);
+  assert.match(renderToStaticMarkup(tree), /473 of 473 records/);
+  datedTable.props.recordDateFilter.onChange("__date_range__:2026-09-12|2026-09-12");
+  tree = render();
+  assert.match(renderToStaticMarkup(tree), /0 of 0 records/);
+  descendants(tree, (node) => node.type === props.ActionsTable)[0].props.recordDateFilter.onChange("");
   tree = render(); verify(tree, 475, "All regions");
   props.showBdClosingTime = false;
   assert.doesNotMatch(renderToStaticMarkup(render()), /<th>BD closing time<\/th>/);

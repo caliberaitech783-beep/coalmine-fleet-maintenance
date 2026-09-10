@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { changeDrilldownFilter, drilldownView, equipmentCategoryLabel, equipmentGroupLabel, equipmentMachineLabel } from "./dashboard-drilldown-model.mjs";
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "./request-status.mjs";
+import { filterRecordsByDate } from "./record-date-range.mjs";
 
 const categoryName = (value) => value === "Total vehicles" ? "Vehicles" : value === "Total equipment" ? "Equipment" : value;
 
@@ -53,7 +54,9 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
 export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, showBdClosingTime = false, ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
-  const view = drilldownView(rows, regions, filters, { rowsAreScoped });
+  const [recordDateRange, setRecordDateRange] = useState("");
+  const datedRows = filterRecordsByDate(rows, recordDateRange, (record) => record.requestStart);
+  const view = drilldownView(datedRows, regions, filters, { rowsAreScoped });
   const id = useId();
   const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);
@@ -83,7 +86,7 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, [requestRecords]);
-  const reset = () => { setFilters({}); setOpenedLevel(0); };
+  const reset = () => { setFilters({}); setOpenedLevel(0); setRecordDateRange(""); };
   const sortableDate = (value) => (value && value !== "—" ? String(value) : "");
   // The time breakdown opens from the Days of breakdown value; the job reference stays plain text.
   const breakdownCell = (record) => {
@@ -99,7 +102,7 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
           {view.regions.map((region, index) => <button key={region.code} type="button" role="tab" id={`${id}-${region.code}`} aria-selected={view.selection.region === region.code} aria-controls={`${id}-records`} tabIndex={view.selection.region === region.code ? 0 : -1}
             onClick={() => choose("region", region.code)} onKeyDown={(event) => moveBetweenTabs(event, index, view.regions.map((item) => ({ value: item.code })), (next) => choose("region", next), '[role="tab"]')}><span>{region.label}</span><b>{region.rows.length.toLocaleString()}</b></button>)}
         </div>
-        <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!activeFilterCount && visibleLevel <= selectedLevel}><RotateCcw size={14} />Reset selection</button>
+        <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!recordDateRange && !activeFilterCount && visibleLevel <= selectedLevel}><RotateCcw size={14} />Reset selection</button>
       </div>
       {visibleLevel === 0 && <p className="dashboard-record-hierarchy-hint">No regions available in your current scope.</p>}
       <div className="dashboard-record-hierarchy">
@@ -109,7 +112,7 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={view.selection.region ? `${id}-${view.selection.region}` : undefined}>
       <div className="dashboard-record-summary"><h4>{view.regionLabel} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
       <div className="dashboard-asset-list" ref={listRef}>
-        <ActionsTable key={tableKey} exportTitle={`${title} · ${view.regionLabel}`} printTitle={`${title} · ${view.regionLabel}`}>
+        <ActionsTable key={tableKey} exportTitle={`${title} · ${view.regionLabel}`} printTitle={`${title} · ${view.regionLabel}`} recordDateFilter={{ label: "Started", value: recordDateRange, onChange: setRecordDateRange }}>
           <thead><tr>{requestRecords && <th>Job reference</th>}<th>Status</th><th data-filter-mode={requestRecords ? undefined : "date-sort"}>Started</th>{showBdClosingTime && <th>BD closing time</th>}<th>Days of breakdown</th><th>Machine / Door no.</th>{showCategoryColumn && <th>Equipment category</th>}<th>Equipment group</th><th>Model</th>{showLocationColumn && <th>{requestRecords ? "Request site" : "Current location"}</th>}<th>Serial / chassis no.</th>{requestRecords && <th>Repair category</th>}{lifecycleRecords && <><th>Closed</th><th>MIS verified at</th><th>First trip time</th></>}</tr></thead>
           <tbody>{view.rows.length ? view.rows.map((record, index) => <tr key={record.id || `${record.equipmentName}-${index}`}>
             {requestRecords && <td><b>{record.requestReference}</b></td>}<td data-sort-value={requestStatusSortRank(record.requestStatus)}><Status>{record.requestStatus || "—"}</Status></td><td data-sort-value={sortableDate(record.requestStart)}>{formatDate(record.requestStart)}</td>{showBdClosingTime && <td data-sort-value={sortableDate(record.requestClosed)}>{sortableDate(record.requestClosed) ? formatDate(record.requestClosed) : "Not recorded"}</td>}<td data-sort-value={calculateBreakdownMinutes(record.requestStart, record.requestClosed, now)}>{breakdownCell(record)}</td><td>{equipmentMachineLabel(record)}</td>{showCategoryColumn && <td>{categoryName(equipmentCategoryLabel(record))}</td>}<td>{equipmentGroupLabel(record)}</td><td>{record.model || "—"}</td>{showLocationColumn && <td>{record.requestSite || record.currentLocation || record.location || record.site || "—"}</td>}<td>{record.manufacturerSerialNo || record.chassisNo || "—"}</td>

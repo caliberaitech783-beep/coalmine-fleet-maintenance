@@ -26,5 +26,5 @@ test("Actions sits immediately before Filter across master and workspace toolbar
 test("Tickets render the shared Actions control inside the category bar before the count", () => {
   const tickets = source.slice(source.indexOf("function TicketPage("), source.indexOf("const AI_FEEDER_AUTO_CLOSE_SECONDS"));
   assert.match(tickets, /className="ticket-toolbar-controls"[\s\S]*Category[\s\S]*className="master-actions-slot"[\s\S]*tickets\.length/);
-  assert.match(tickets, /<ActionsTable toolbarTarget=\{actionsToolbarTarget\} toolbarPortal>/);
+  assert.match(tickets, /<ActionsTable[^>]*recordDateFilter=\{\{[^\n]*toolbarTarget=\{actionsToolbarTarget\} toolbarPortal>/);
 });
