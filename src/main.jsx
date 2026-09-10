@@ -4917,6 +4917,77 @@ function sessionAgeLabel(value) {
   return `${Math.floor(hours / 24)} day${hours < 48 ? "" : "s"}`;
 }
 
+function SessionMessageComposer({row,session,onClose,onSent}) {
+  const [message,setMessage]=useState("");
+  const [sending,setSending]=useState(false);
+  const [error,setError]=useState("");
+  const submit=async(event)=>{
+    event.preventDefault();
+    const text=message.trim();
+    if(!text)return setError("Write a message before sending.");
+    setSending(true);
+    try{
+      const response=await fetch(`/api/user-sessions/${encodeURIComponent(row.sessionId)}/messages`,{
+        method:'POST',headers:{Authorization:`Bearer ${session?.token||authToken}`,'Content-Type':'application/json'},body:JSON.stringify({message:text}),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'Could not send the session message.');
+      onSent?.(row);
+    }catch(sendError){setError(sendError.message||'Could not send the session message.');}
+    finally{setSending(false);}
+  };
+  return <Modal title={`Message · ${row.name||row.login||'Active user'}`} close={sending?()=>{}:onClose} className="session-message-compose-modal">
+    <form className="session-message-compose" onSubmit={submit}>
+      <div className="session-message-recipient"><span><UserRound /></span><div><small>Send to active session</small><b>{row.name||'Unknown user'}</b><p>{row.login||'No login name'} · {row.location||'Not assigned'}</p></div><i>Online</i></div>
+      <label><span>Short message</span><textarea autoFocus rows="5" maxLength="500" value={message} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a clear message for this user..." /></label>
+      <div className="session-message-compose-meta"><span>{message.length} / 500 characters</span>{error&&<b role="alert">{error}</b>}</div>
+      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||!message.trim()}><Send />{sending?'Sending...':'Send message'}</button></footer>
+    </form>
+  </Modal>;
+}
+
+function SessionMessageInbox({session}) {
+  const [messages,setMessages]=useState([]);
+  const [closingId,setClosingId]=useState("");
+  const [error,setError]=useState("");
+  useEffect(()=>{
+    if(!session?.token){setMessages([]);return undefined;}
+    const controller=new AbortController();
+    let timer;
+    const load=async()=>{
+      try{
+        const response=await fetch('/api/session-messages',{cache:'no-store',signal:controller.signal,headers:{Authorization:`Bearer ${session.token}`}});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Could not check session messages.');
+        if(!controller.signal.aborted)setMessages(Array.isArray(result.messages)?result.messages:[]);
+      }catch(loadError){if(loadError.name!=='AbortError')console.warn('Session message check failed.',loadError);}
+      finally{if(!controller.signal.aborted)timer=window.setTimeout(load,3000);}
+    };
+    void load();
+    return()=>{controller.abort();window.clearTimeout(timer);};
+  },[session?.token]);
+  const current=messages[0];
+  if(!current)return null;
+  const dismiss=async()=>{
+    setClosingId(String(current.id));setError("");
+    try{
+      const response=await fetch(`/api/session-messages/${encodeURIComponent(current.id)}/dismiss`,{method:'PATCH',headers:{Authorization:`Bearer ${session.token}`}});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'Could not close the message.');
+      setMessages((items)=>items.filter((item)=>String(item.id)!==String(current.id)));
+    }catch(closeError){setError(closeError.message||'Could not close the message. Please try again.');}
+    finally{setClosingId("");}
+  };
+  return createPortal(<div className="session-message-inbox-overlay">
+    <section className="session-message-inbox" role="alertdialog" aria-modal="true" aria-labelledby="session-message-title" aria-describedby="session-message-body">
+      <header><span><MessageCircle /></span><div><small>Direct message</small><h2 id="session-message-title">Message from {current.senderName||current.senderLogin||'Administrator'}</h2></div>{messages.length>1&&<b>{messages.length} messages</b>}</header>
+      <div className="session-message-inbox-body"><p id="session-message-body">{current.message}</p><small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
+      {error&&<div className="session-message-inbox-error" role="alert"><AlertTriangle />{error}</div>}
+      <footer><span>This message will remain open until you close it.</span><button type="button" onClick={dismiss} disabled={closingId===String(current.id)}><X />{closingId===String(current.id)?'Closing...':'Close message'}</button></footer>
+    </section>
+  </div>,document.body);
+}
+
 function UserSessionsPage({session}) {
   const [sessions,setSessions]=useState([]);
   const [summary,setSummary]=useState({active:0,online:0,users:0,devices:0});
@@ -4925,6 +4996,8 @@ function UserSessionsPage({session}) {
   const [query,setQuery]=useState("");
   const [status,setStatus]=useState("All");
   const [closingId,setClosingId]=useState("");
+  const [messageTarget,setMessageTarget]=useState(null);
+  const [messageNotice,setMessageNotice]=useState("");
   const [actionsToolbarTarget,setActionsToolbarTarget]=useState(null);
   const load=async({quiet=false}={})=>{
     if(!quiet)setLoading(true);
@@ -4971,8 +5044,10 @@ function UserSessionsPage({session}) {
     </div>
     <div className="user-session-toolbar"><div className="user-session-search"><Search /><input data-smart-search type="search" placeholder="Search user, role, location, device or IP" value={query} onChange={(event)=>setQuery(event.target.value)} /></div><div className="user-session-status" role="group" aria-label="Session status filter">{['All','Online','Inactive'].map(option=><button type="button" key={option} className={status===option?'active':''} aria-pressed={status===option} onClick={()=>setStatus(option)}>{option}</button>)}</div><span className="user-session-visible"><b>{visible.length}</b> visible</span><div className="user-session-actions" ref={setActionsToolbarTarget} /></div>
     {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
-    <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Role</th><th>Location</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th><th>Action</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td></tr>}):<tr><td colSpan="10" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
+    {messageNotice&&<div className="user-session-sent" role="status"><CheckCircle2 /><span>{messageNotice}</span><button type="button" aria-label="Dismiss message confirmation" onClick={()=>setMessageNotice("")}><X /></button></div>}
+    <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Role</th><th>Location</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th><th>Message</th><th>Action</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td></tr>}):<tr><td colSpan="11" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
     <footer className="user-session-note"><ShieldCheck /><span>Force closing a session immediately invalidates only that login. The action and reason are saved in Audit Trail.</span></footer>
+    {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
   </section>;
 }
 function reportCategoryIdsForUser(permissions = {}, session = {}) {
@@ -8786,17 +8861,20 @@ function App() {
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.role === "normal")
     return (
-      <Normal
-        requests={requests}
-        onCreate={addRequest}
-        onUpdateRequest={updateRequest}
-        onDeleteRequest={deleteRequest}
-        onAddDailyRemark={addDailyRemark}
-        session={session}
-        logout={logout}
-        theme={theme}
-        toggleTheme={toggleTheme}
-      />
+      <>
+        <Normal
+          requests={requests}
+          onCreate={addRequest}
+          onUpdateRequest={updateRequest}
+          onDeleteRequest={deleteRequest}
+          onAddDailyRemark={addDailyRemark}
+          session={session}
+          logout={logout}
+          theme={theme}
+          toggleTheme={toggleTheme}
+        />
+        <SessionMessageInbox session={session} />
+      </>
     );
   return (
     <div className="app">
@@ -8905,6 +8983,7 @@ function App() {
           <b>Data loaded. Time taken: {loadTime.toFixed(1)} sec.</b>
         </div>
       )}
+      <SessionMessageInbox session={session} />
     </div>
   );
 }

@@ -36,6 +36,7 @@ import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-templat
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
 import {canonicalSiteName,assignedUserSiteName,userSessionLocationName} from './site-location.mjs';
+import {normalizeSessionMessage,sessionMessageValidationError} from './session-message.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
@@ -437,6 +438,19 @@ async function migrate(){
     CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
     CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_public_id_idx ON auth_sessions (session_public_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_last_seen_idx ON auth_sessions (last_seen_at DESC);
+    CREATE TABLE IF NOT EXISTS session_messages (
+      id BIGSERIAL PRIMARY KEY,
+      target_session_public_id TEXT NOT NULL,
+      target_login TEXT NOT NULL DEFAULT '',
+      target_name TEXT NOT NULL DEFAULT '',
+      sender_login TEXT NOT NULL DEFAULT '',
+      sender_name TEXT NOT NULL DEFAULT '',
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      dismissed_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS session_messages_target_idx ON session_messages (target_session_public_id, dismissed_at, created_at);
+    CREATE INDEX IF NOT EXISTS session_messages_created_idx ON session_messages (created_at DESC);
     CREATE TABLE IF NOT EXISTS audit_events (
       id BIGSERIAL PRIMARY KEY,
       event_type TEXT NOT NULL DEFAULT 'Activity',
@@ -1125,6 +1139,29 @@ async function requireSuper(req,res,next){
 
 app.post('/api/session-heartbeat',requireSession,(_req,res)=>res.status(204).end());
 
+app.get('/api/session-messages',requireSession,async(req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT id,message,sender_name AS "senderName",sender_login AS "senderLogin",created_at AS "createdAt"
+      FROM session_messages
+      WHERE target_session_public_id=$1 AND dismissed_at IS NULL
+      ORDER BY created_at ASC,id ASC`,[req.session.sessionId]);
+    res.set('Cache-Control','no-store');
+    res.json({messages:rows});
+  }catch(error){next(error)}
+});
+
+app.patch('/api/session-messages/:messageId/dismiss',requireSession,async(req,res,next)=>{
+  try{
+    const messageId=Number(req.params.messageId);
+    if(!Number.isSafeInteger(messageId)||messageId<1)return res.status(400).json({error:'Invalid session message.'});
+    const result=await pool.query(`UPDATE session_messages SET dismissed_at=NOW()
+      WHERE id=$1 AND target_session_public_id=$2 AND dismissed_at IS NULL RETURNING id`,[messageId,req.session.sessionId]);
+    if(!result.rowCount)return res.status(404).json({error:'This message is no longer active.'});
+    req.audit={eventType:'Security',module:'User sessions',action:'Close session message',targetType:'Session message',targetReference:String(messageId),changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+
 app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
@@ -1161,6 +1198,29 @@ app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,nex
         devices:new Set(sessions.map(session=>session.deviceId).filter(Boolean)).size,
       },
     });
+  }catch(error){next(error)}
+});
+
+app.post('/api/user-sessions/:sessionId/messages',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const sessionId=String(req.params.sessionId||'').trim();
+    const message=normalizeSessionMessage(req.body?.message);
+    const validationError=sessionMessageValidationError(req.body?.message);
+    if(validationError)return res.status(400).json({error:validationError});
+    const {rows:targets}=await pool.query(`SELECT session_public_id AS "sessionId",employee_name AS "name",login_name AS "login",
+      last_seen_at>NOW()-INTERVAL '2 minutes' AS online
+      FROM auth_sessions WHERE session_public_id=$1 AND created_at>NOW()-INTERVAL '30 days'`,[sessionId]);
+    const target=targets[0];
+    if(!target)return res.status(404).json({error:'This session is no longer active.'});
+    if(!target.online)return res.status(409).json({error:'Messages can only be sent to a user who is online.'});
+    const {rows}=await pool.query(`INSERT INTO session_messages
+      (target_session_public_id,target_login,target_name,sender_login,sender_name,message)
+      VALUES ($1,$2,$3,$4,$5,$6)
+      RETURNING id,created_at AS "createdAt"`,[
+        target.sessionId,target.login,target.name,String(req.session.login||''),String(req.session.name||''),message
+      ]);
+    req.audit={eventType:'Security',module:'User sessions',action:'Send session message',targetType:'User session',targetReference:target.login||target.name||sessionId,reason:`Administrative message (${message.length} characters)`,changedFields:[]};
+    res.status(201).json({id:rows[0].id,createdAt:rows[0].createdAt});
   }catch(error){next(error)}
 });
 

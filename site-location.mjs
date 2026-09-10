@@ -40,6 +40,14 @@ export function assignedUserSiteName(user = {}) {
 }
 
 export function userSessionLocationName(user = {}, roleLabel = "") {
+  const accessLevel = firstSiteValue(roleLabel, user?.adminLevel, user?.permissions?.adminLevel).toLowerCase();
+  const designation = [user?.designation, user?.role, user?.assignedRole, user?.userGroup, user?.department, user?.managerRole]
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map((value) => String(value ?? "").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" ");
+  if (["admin", "super admin"].includes(accessLevel) || designation.includes("director")) return "All locations";
+
   const assignedSite = assignedUserSiteName(user);
   if (assignedSite) return assignedSite;
 
@@ -51,10 +59,7 @@ export function userSessionLocationName(user = {}, roleLabel = "") {
   const region = firstSiteValue(user?.managerRegion, user?.region);
   if (region && region.toLowerCase() !== "all") return `${region} region`;
 
-  const accessLevel = firstSiteValue(roleLabel, user?.adminLevel, user?.permissions?.adminLevel).toLowerCase();
-  return region.toLowerCase() === "all" || ["admin", "super admin"].includes(accessLevel)
-    ? "All locations"
-    : "Not assigned";
+  return region.toLowerCase() === "all" ? "All locations" : "Not assigned";
 }
 
 export function recordBelongsToSite(record, site) {

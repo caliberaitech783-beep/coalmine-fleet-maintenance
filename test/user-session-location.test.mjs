@@ -10,3 +10,10 @@ test("user session location follows assigned site, manager scope, and admin acce
   assert.equal(userSessionLocationName({managerRegion:"All"},"Super Admin"),"All locations");
   assert.equal(userSessionLocationName({},"Maintenance User"),"Not assigned");
 });
+
+test("administrators and Directors always show all locations", () => {
+  assert.equal(userSessionLocationName({site:"Sasti OB",adminLevel:"Admin"},"Admin"),"All locations");
+  assert.equal(userSessionLocationName({site:"Majri OB",adminLevel:"Super Admin"},"Super Admin"),"All locations");
+  assert.equal(userSessionLocationName({site:"Lalpeth OB",designation:"Director's"},"Manager"),"All locations");
+  assert.equal(userSessionLocationName({site:"Dhoptala OB (2nd)",managerRole:"Director"},"Manager"),"All locations");
+});
