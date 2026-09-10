@@ -56,7 +56,7 @@ test("the time breakdown opens from the Days of breakdown value in every list, a
 test("status columns sort in lifecycle order and duration columns sort by elapsed time", () => {
   assert.match(source, /key === "status" \? requestStatusSortRank\(requestStatusLabel\(row\)\) : key === "hours" \? durationLabelMinutes\(row\.hours\)/);
   assert.match(source, /key === "status" \? requestStatusSortRank\(statusLabel\(row\)\)/);
-  assert.match(source, /key === "breakdownDays" \? calculateBreakdownDaysFromStart\(row\.start, now\)/);
+  assert.match(source, /key === "breakdownDays" \? calculateBreakdownMinutes\(row\.start, row\.closedAt, now\)/);
   assert.match(source, /key === "acceptedTime" \? \(elapsedMilliseconds\(row\.start, row\.acceptedAt\) \?\? -1\)/);
   assert.match(source, /sortValue: \(request\) => requestStatusSortRank\(reportRequestStatus\(request\)\)/);
 });

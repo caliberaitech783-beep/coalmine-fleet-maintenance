@@ -8,6 +8,8 @@ import { matchesSmartSearch } from '../smart-search.mjs';
 import * as acceptance from '../request-acceptance.mjs';
 import {requestStatusLabel, requestStatusSortRank} from '../src/request-status.mjs';
 import {requestMeterReadings, requestMeterReadingLabel} from '../request-equipment.mjs';
+import {isDurationColumn, compareDurationValues} from '../src/duration-sort.mjs';
+import {calculateBreakdownMinutes} from '../breakdown-duration.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const component = source.slice(source.indexOf('function Status('), source.indexOf('function ThemeToggle('))
@@ -42,6 +44,7 @@ function harness(name = 'MobileWorkflowTable') {
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
   const scope = {
+    isDurationColumn, compareDurationValues, calculateBreakdownMinutes,
     requestMeterReadings, requestMeterReadingLabel,
     React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(),
     ...acceptance, requestStatusLabel, requestStatusSortRank, durationLabelMinutes: () => -1, elapsedMilliseconds: () => null, parseDateRange: () => null, matchesDateRange: () => false, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,

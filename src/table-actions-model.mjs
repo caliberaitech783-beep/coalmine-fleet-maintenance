@@ -1,5 +1,6 @@
 import React from "react";
 import { matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
+import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
 
 export function tableElements(children) {
   return React.Children.toArray(children).flatMap((child) =>
@@ -83,6 +84,7 @@ export function selectTableRows(rows, columns, filters, sort) {
   const column = columns.find((item) => item.key === sort.key);
   if (!column) return filtered;
   const sortValue = (row) => column.sortValue ? column.sortValue(row) : column.value(row);
+  if (isDurationColumn(column.label, column.key)) return [...filtered].sort((a, b) => compareDurationValues(sortValue(a), sortValue(b), sort.direction));
   const compare = (a, b) => {
     const left = sortValue(a), right = sortValue(b), leftNumber = Number(left), rightNumber = Number(right);
     if (left !== "" && right !== "" && Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber;

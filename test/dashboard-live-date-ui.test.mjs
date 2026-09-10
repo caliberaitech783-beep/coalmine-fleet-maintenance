@@ -19,6 +19,7 @@ import {availabilityRequestsForDate} from "../src/dashboard-availability.mjs";
 import {dashboardFleetSnapshot} from "../dashboard-fleet-snapshot.mjs";
 import * as displayDates from "../date-time-format.mjs";
 import {tableModel, tableExportModel} from "../src/table-actions-model.mjs";
+import {isDurationColumn, compareDurationValues} from "../src/duration-sort.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const componentSource = source.slice(source.indexOf("function Dashboard("), source.indexOf("const PRODUCTION_REQUEST_COLUMNS"));
@@ -60,6 +61,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
+    isDurationColumn, compareDurationValues,
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
     ...metrics, ...movement, ...actions, ...dates, ...forecast, ...model, ...displayDates,
     availabilityRequestsForDate, dashboardFleetSnapshot,

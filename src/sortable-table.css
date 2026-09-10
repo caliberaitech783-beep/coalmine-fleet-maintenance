@@ -59,6 +59,9 @@
 .column-filter-sort button{width:26px;height:25px;border:1px solid #dfe5ef;background:#fff;border-radius:4px;display:grid;place-items:center;color:#6a7890;padding:0}
 .column-filter-sort button:hover,.column-filter-sort button.active{background:#edf3ff;border-color:#a9bdec;color:#2458d3}
 .column-filter-sort svg{width:13px;height:13px}
+.column-filter-sort.duration-sort-options{flex-direction:column;border-bottom:0;padding-bottom:0;margin-bottom:0}
+.column-filter-sort.duration-sort-options button{width:100%;height:auto;min-height:40px;display:flex;align-items:center;justify-content:flex-start;gap:8px;padding:10px;text-align:left;font:inherit;line-height:1.4;white-space:normal}
+.column-filter-sort.duration-sort-options svg{flex:0 0 16px;width:16px;height:16px}
 .column-filter-search{display:flex;align-items:center;gap:5px;border:1px solid #dfe5ef;border-radius:4px;padding:5px 6px;margin-bottom:5px;background:#fff}
 .column-filter-search svg{width:13px;height:13px;color:#8b98ac;flex:0 0 auto}
 .column-filter-search input{width:100%;min-width:0;border:0;outline:0;padding:0;font-size:10px;color:#34425a;background:transparent}
