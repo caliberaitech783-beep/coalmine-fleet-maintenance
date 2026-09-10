@@ -399,7 +399,6 @@ async function migrate(){
         ]);
     CREATE TABLE IF NOT EXISTS auth_sessions (
       token UUID PRIMARY KEY,
-      session_public_id TEXT NOT NULL UNIQUE,
       role TEXT NOT NULL,
       employee_name TEXT NOT NULL,
       login_name TEXT NOT NULL DEFAULT '',
@@ -412,10 +411,6 @@ async function migrate(){
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS assigned_role TEXT NOT NULL DEFAULT '';
     ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
-    ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS session_public_id TEXT;
-    UPDATE auth_sessions SET session_public_id=token::text WHERE session_public_id IS NULL OR session_public_id='';
-    ALTER TABLE auth_sessions ALTER COLUMN session_public_id SET NOT NULL;
-    CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_public_id_idx ON auth_sessions (session_public_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
     CREATE TABLE IF NOT EXISTS audit_events (
       id BIGSERIAL PRIMARY KEY,
