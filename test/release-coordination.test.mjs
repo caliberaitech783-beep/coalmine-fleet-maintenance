@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classifyChanges, decideRelease, readHealthyLive, validateReportDelta } from '../.github/scripts/release-plan.mjs';
-import { eligibleArtifact, findRollbackArtifact } from '../.github/scripts/rollback-artifact.mjs';
+import { eligibleArtifact, findRollbackArtifact, hasVerifiedPromotion } from '../.github/scripts/rollback-artifact.mjs';
 import { includedRuntimePath, prepareRuntimePackage } from '../.github/scripts/package-runtime.mjs';
 import { runtimeSourceFiles } from '../.github/scripts/runtime-source.mjs';
 
@@ -65,6 +65,7 @@ test('live baseline requires database, scheduler state and exact identity', asyn
 
 const artifact = { id: 10, name: `bdms-release-${base}`, expired: false, workflow_run: { id: 20, head_sha: base } };
 const successfulRun = { id: 20, head_sha: base, status: 'completed', conclusion: 'success', event: 'push', head_branch: 'azure-hosting-1.0', path: '.github/workflows/production-release.yml' };
+const promotedJobs = [{ status: 'completed', conclusion: 'success', steps: [{ name: 'Publish and verify UI package', status: 'completed', conclusion: 'success' }] }];
 test('rollback is a retained successful production-source artifact, not an arbitrary previous commit', () => {
   assert.equal(eligibleArtifact(artifact, successfulRun, base), true);
   for (const update of [{ conclusion: 'failure' }, { status: 'in_progress' }, { event: 'pull_request' }, { head_branch: 'feature/test' }, { path: 'other.yml' }, { head_sha: one }]) assert.equal(eligibleArtifact(artifact, { ...successfulRun, ...update }, base), false);
@@ -74,9 +75,16 @@ test('missing or inaccessible rollback cannot silently allow an unprotected UI d
   const env = { LIVE_SHA: base, GITHUB_REPOSITORY: 'example/repo', GH_TOKEN: 'test' };
   const none = await findRollbackArtifact(env, async () => ({ ok: true, json: async () => ({ artifacts: [] }) }));
   assert.equal(none.mode, 'backend');
-  const retained = await findRollbackArtifact(env, async url => ({ ok: true, json: async () => url.includes('/artifacts?') ? { artifacts: [artifact] } : successfulRun }));
+  const retained = await findRollbackArtifact(env, async url => ({ ok: true, json: async () => url.includes('/artifacts?') ? { artifacts: [artifact] } : url.includes('/jobs?') ? { jobs: promotedJobs } : successfulRun }));
   assert.deepEqual(retained, { mode: 'ui', artifact_id: 10, run_id: 20 });
   await assert.rejects(findRollbackArtifact(env, async () => ({ ok: false, status: 403 })), /403/);
+});
+test('validation-only and superseded builds are not treated as the actual deployed rollback artifact', async () => {
+  assert.equal(hasVerifiedPromotion(promotedJobs), true);
+  assert.equal(hasVerifiedPromotion([{ status: 'completed', conclusion: 'skipped' }]), false);
+  assert.equal(hasVerifiedPromotion([{ status: 'completed', conclusion: 'success', steps: [{ name: 'Publish and verify UI package', status: 'completed', conclusion: 'skipped' }] }]), false);
+  const result = await findRollbackArtifact({ LIVE_SHA: base, GITHUB_REPOSITORY: 'example/repo', GH_TOKEN: 'test' }, async url => ({ ok: true, json: async () => url.includes('/artifacts?') ? { artifacts: [artifact] } : url.includes('/jobs?') ? { jobs: [] } : successfulRun }));
+  assert.equal(result.mode, 'backend');
 });
 test('package includes application and report assets but excludes source UI, tests and local secrets', t => {
   const root = mkdtempSync(path.join(tmpdir(), 'bdms-package-test-'));

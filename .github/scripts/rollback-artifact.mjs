@@ -9,6 +9,16 @@ export function eligibleArtifact(artifact, run, live) {
     && ['.github/workflows/production-release.yml', '.github/workflows/fast-ui-deploy.yml', '.github/workflows/azure-hosting_coalmine-fleet-azure-783.yml'].includes(run.path);
 }
 
+export function hasVerifiedPromotion(jobs) {
+  const steps = new Set([
+    'Publish and verify UI package',
+    'Swap staging into production with automatic rollback',
+    'Deploy complete UI package and health-check production',
+  ]);
+  return jobs.some(job => job.status === 'completed' && job.conclusion === 'success'
+    && job.steps?.some(step => steps.has(step.name) && step.status === 'completed' && step.conclusion === 'success'));
+}
+
 export async function findRollbackArtifact(env = process.env, fetcher = fetch) {
   if (!/^[0-9a-f]{40}$/.test(env.LIVE_SHA || '')) throw new Error('Invalid rollback identity.');
   const api = `${env.GITHUB_API_URL || 'https://api.github.com'}/repos/${env.GITHUB_REPOSITORY}`;
@@ -26,7 +36,11 @@ export async function findRollbackArtifact(env = process.env, fetcher = fetch) {
     for (const artifact of artifacts) {
       if (artifact.name !== name || artifact.expired || artifact.workflow_run?.head_sha !== env.LIVE_SHA) continue;
       const run = await get(`/actions/runs/${artifact.workflow_run.id}`);
-      if (eligibleArtifact(artifact, run, env.LIVE_SHA)) return { mode: 'ui', artifact_id: artifact.id, run_id: run.id };
+      if (!eligibleArtifact(artifact, run, env.LIVE_SHA)) continue;
+      const { jobs = [] } = await get(`/actions/runs/${run.id}/jobs?per_page=100`);
+      // A validation-only or superseded run can succeed for this exact SHA
+      // without ever publishing its artifact. Reuse only an actual promotion.
+      if (hasVerifiedPromotion(jobs)) return { mode: 'ui', artifact_id: artifact.id, run_id: run.id };
     }
   }
   return { mode: 'backend', reason: 'No retained successful live artifact; use staging and slot rollback instead.' };
