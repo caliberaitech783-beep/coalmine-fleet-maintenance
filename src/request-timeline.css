@@ -1,7 +1,7 @@
 .request-timeline-link { color:#5b3d9b; font:inherit; font-weight:700; text-decoration:underline; text-decoration-style:dotted; text-underline-offset:4px; background:transparent; border:0; padding:4px 0; cursor:pointer; white-space:nowrap; }
 .request-timeline-link:hover { color:#3f2a70; text-decoration-style:solid; }
 .request-timeline-link:focus-visible { outline:2px solid #6942a3; outline-offset:3px; }
-.request-timeline-content { padding:20px; line-height:1.5; overflow-wrap:anywhere; }
+.request-timeline-content { padding:20px; line-height:1.5; overflow-wrap:anywhere; white-space:normal; text-align:left; }
 .request-timeline-content p { margin:0 0 16px; }
 .request-timeline-content h3 { margin:18px 0 10px; font-size:1.1em; }
 .request-timeline-stages,.request-timeline-events { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }

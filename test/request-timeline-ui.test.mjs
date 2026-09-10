@@ -11,6 +11,11 @@ import * as equipment from "../request-equipment.mjs";
 const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export (?:default )?function /g, "function ");
 const code = (await transformWithOxc(source, "request-timeline.jsx", {jsx: {runtime: "classic"}})).code;
 const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+test("time breakdown wraps explanations instead of inheriting table-cell nowrap", () => {
+  const css = readFileSync(new URL("../src/request-timeline.css", import.meta.url), "utf8");
+  assert.match(css,/\.request-timeline-content\s*\{[^}]*white-space:normal/);
+  assert.match(css,/\.request-timeline-updates dd\s*\{[^}]*white-space:pre-wrap/);
+});
 const formCode = {};
 for (const [name, end] of [["RequestEditForm", "CloseRequestForm"], ["CloseRequestForm", "VerifyRequestForm"], ["VerifyRequestForm", "TicketCreateForm"]]) {
   const helpers = main.slice(main.indexOf('function MeterReadingFields('), main.indexOf('function RequestEditForm('));
