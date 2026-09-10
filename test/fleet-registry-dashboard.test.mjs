@@ -89,7 +89,8 @@ test("Total Fleet uses the approved taller card and wider site bars", () => {
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(44px, 3vw, 58px\)/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-count\s*\{[^}]*font-size:\s*18px !important/);
   assert.match(source, /<small className="mine-fleet-site-summary"><b>\{site\.name\}<\/b>/);
-  assert.match(source, /openAssetDrilldown\(`offroad-site:\$\{site\.name\}`\)\}>Total BD \{site\.breakdown\.total\.toLocaleString\(\)\}<\/button>/);
+  assert.match(source, /openAssetDrilldown\(`offroad-site:\$\{site\.name\}`\)\}>BD Balance \{site\.breakdown\.total\.toLocaleString\(\)\}<\/button>/);
+  assert.match(source, /const fleetBreakdownDrilldownTitle = .*\}BD Balance`/);
   assert.match(source, /openAssetDrilldown\(`site:\$\{site\.name\}`\)\}>Total Fleet \{site\.total\.toLocaleString\(\)\}<\/button>/);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-site-summary button\s*\{/);
 });
