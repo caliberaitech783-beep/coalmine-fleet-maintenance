@@ -626,7 +626,7 @@ test("every site equipment and vehicle total opens exactly its registered assets
         if (mode === "breakdown" && site[`${category}Bd`]) {
           const breakdown = clickSite(true);
           assert.equal(breakdown.rows.length, site[`${category}Bd`]);
-          assert.match(breakdown.title, /Breakdown requests$/);
+          assert.match(breakdown.title, /BD Balance$/);
           assert.ok(breakdown.rows.every((row) => expectedIds.includes(row.id)));
         }
       }

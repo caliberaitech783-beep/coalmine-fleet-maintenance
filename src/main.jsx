@@ -1430,6 +1430,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
     : "";
   const fleetBreakdownDrilldownTitle = fleetBreakdownDrilldown ? `${assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] + " · " + (assetDrilldown.endsWith("|vehicles") ? "Vehicles · " : assetDrilldown.endsWith("|equipment") ? "Equipment · " : "") : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) + " · " : assetDrilldown === "fleet-breakdown:equipment" ? "Equipment · " : assetDrilldown === "fleet-breakdown:vehicles" ? "Vehicles · " : ""}BD Balance` : "";
+  // BD Balance names the existing fleet breakdown drilldown; its scope stays unchanged.
   const siteTotalDrilldownTitle = assetDrilldown.startsWith("category-group:")
     ? `${assetDrilldown.slice(15).split("|").slice(1).join("|")} · ${assetDrilldown.startsWith("category-group:vehicle|") ? "Vehicles" : "Equipment"}`
     : siteTotalDrilldownParts.length ? `${siteTotalDrilldownParts[0]} · ${siteTotalDrilldownParts[1] === "vehicles" ? "Vehicle" : "Equipment"} records` : "";
