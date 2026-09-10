@@ -35,13 +35,26 @@ test("repair and event chart context stays applied before the list filters", () 
   assert.match(source, /requestRecords=\{requestAssetDrilldown\} lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
 });
 
-test("job references open the request timeline from every list, not only the master", () => {
+test("the time breakdown opens from the Days of breakdown value in every list, and job references stay plain", () => {
   assert.match(source, /RequestTimelineButton=\{RequestTimelineButton\} timelineToken=\{authToken\} Dialog=\{Modal\} \/>/);
-  assert.match(browser, /<td><b>\{referenceCell\(record\.requestReference\)\}<\/b><\/td>/);
-  assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} \/>/);
+  assert.match(browser, /<td><b>\{record\.requestReference\}<\/b><\/td>/);
+  assert.match(browser, /<RequestTimelineButton reference=\{reference\} token=\{timelineToken\} Dialog=\{Dialog\} label=\{label\} \/>/);
+  assert.match(browser, /data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}/);
   assert.match(browser, /data-sort-value=\{sortableDate\(record\.requestStart\)\}/);
-  assert.match(browser, /data-sort-value=\{calculateBreakdownMinutes\(record\.requestStart, record\.requestClosed, now\)\}/);
-  assert.match(source, /<td><RequestTimelineButton reference=\{request\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td><td>\{request\.door\}<\/td>/);
-  assert.match(source, /render: \(request\) => request\.ref \? <RequestTimelineButton reference=\{request\.ref\} token=\{session\?\.token \|\| authToken\} Dialog=\{Modal\} \/> : <b>—<\/b>\}/);
-  assert.doesNotMatch(source, /<td><b>\{request\.ref\}<\/b><\/td>/);
+  assert.match(browser, /data-sort-value=\{calculateBreakdownMinutes\(record\.requestStart, record\.requestClosed, now\)\}>\{breakdownCell\(record\)\}/);
+  assert.match(source, /case "ref": return <td><b>\{r\.ref\}<\/b><\/td>;/);
+  assert.match(source, /case "breakdownDays": return <td><RequestTimelineButton reference=\{r\.ref\} token=\{authToken\} Dialog=\{Modal\} label=/);
+  assert.match(source, /<td><b>\{request\.ref\}<\/b><\/td><td>\{request\.door\}<\/td>/);
+  assert.match(source, /<td><RequestTimelineButton reference=\{request\.ref\} token=\{authToken\} Dialog=\{Modal\} label=\{`\$\{age\} \$\{age === 1 \? "day" : "days"\}`\} \/><\/td>/);
+  assert.match(source, /columns=\{withTimelineLinks\(selectedReport\.columns, session\?\.token \|\| authToken\)\}/);
+  assert.match(source, /const timeKey = \["days", "tat", "hours"\]\.find/);
+  assert.doesNotMatch(source, /<td><RequestTimelineButton reference=\{(r|row|request)\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td>/);
+});
+
+test("status columns sort in lifecycle order and duration columns sort by elapsed time", () => {
+  assert.match(source, /key === "status" \? requestStatusSortRank\(requestStatusLabel\(row\)\) : key === "hours" \? durationLabelMinutes\(row\.hours\)/);
+  assert.match(source, /key === "status" \? requestStatusSortRank\(statusLabel\(row\)\)/);
+  assert.match(source, /key === "breakdownDays" \? calculateBreakdownDaysFromStart\(row\.start, now\)/);
+  assert.match(source, /key === "acceptedTime" \? \(elapsedMilliseconds\(row\.start, row\.acceptedAt\) \?\? -1\)/);
+  assert.match(source, /sortValue: \(request\) => requestStatusSortRank\(reportRequestStatus\(request\)\)/);
 });

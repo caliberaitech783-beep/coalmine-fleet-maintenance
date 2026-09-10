@@ -55,3 +55,13 @@ test("breakdown minutes give a numeric sort value, with unknown starts first", (
   assert.equal(calculateBreakdownMinutes("2026-09-05 09:00:00", "2026-09-09 08:00:00", now), 5700);
   assert.equal(calculateBreakdownMinutes("Not available", "—", now), -1);
 });
+
+test("duration labels convert to minutes for sorting, with dashes first", async () => {
+  const {durationLabelMinutes} = await import("../breakdown-duration.mjs");
+
+  assert.equal(durationLabelMinutes("3d 2h 15m"), 4455);
+  assert.equal(durationLabelMinutes("0h 27m"), 27);
+  assert.equal(durationLabelMinutes("45m"), 45);
+  assert.equal(durationLabelMinutes("—"), -1);
+  assert.equal(durationLabelMinutes(""), -1);
+});

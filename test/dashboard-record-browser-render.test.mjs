@@ -7,6 +7,7 @@ import {transformWithOxc} from "vite";
 import * as model from "../src/dashboard-drilldown-model.mjs";
 import {REGION_DATA} from "../region-scope.mjs";
 import {calculateBreakdownMinutes, formatBreakdownDaysHours} from "../breakdown-duration.mjs";
+import {requestStatusSortRank} from "../src/request-status.mjs";
 
 const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
@@ -17,7 +18,7 @@ const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) =
 test("rendered table, region tabs, site totals and export scope stay consistent through filtering and reset", () => {
   const slots = [];
   let cursor = 0;
-  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
+  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === "function" ? initial() : initial; return [slots[slot], (next) => {slots[slot] = typeof next === "function" ? next(slots[slot]) : next;}];},
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
   const Component = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));

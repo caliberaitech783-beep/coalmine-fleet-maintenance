@@ -72,3 +72,11 @@ export function formatBreakdownDaysHours(startValue, endValue, now = new Date())
   const hours = Math.floor(minutes / 60);
   return `${Math.floor(hours / 24)}d ${hours % 24}h ${minutes % 60}m`;
 }
+
+// Minutes represented by a "Xd Yh Zm" style label, or -1 when it holds no duration (e.g. "—").
+export function durationLabelMinutes(label) {
+  const text = String(label || "").trim();
+  const days = text.match(/(\d+)\s*d\b/), hours = text.match(/(\d+)\s*h\b/), minutes = text.match(/(\d+)\s*m\b/);
+  if (!days && !hours && !minutes) return -1;
+  return (days ? Number(days[1]) * 1440 : 0) + (hours ? Number(hours[1]) * 60 : 0) + (minutes ? Number(minutes[1]) : 0);
+}

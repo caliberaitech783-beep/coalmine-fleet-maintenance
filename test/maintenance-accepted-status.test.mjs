@@ -6,7 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { transformWithOxc } from 'vite';
 import { matchesSmartSearch } from '../smart-search.mjs';
 import * as acceptance from '../request-acceptance.mjs';
-import {requestStatusLabel} from '../src/request-status.mjs';
+import {requestStatusLabel, requestStatusSortRank} from '../src/request-status.mjs';
 import {requestMeterReadings, requestMeterReadingLabel} from '../request-equipment.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
@@ -44,7 +44,7 @@ function harness(name = 'MobileWorkflowTable') {
   const scope = {
     requestMeterReadings, requestMeterReadingLabel,
     React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(),
-    ...acceptance, requestStatusLabel, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,
+    ...acceptance, requestStatusLabel, requestStatusSortRank, durationLabelMinutes: () => -1, elapsedMilliseconds: () => null, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,
     ActionsTable: ({ children }) => React.createElement('table', {}, children), MaintenanceRemarks: Null, Modal: Null,
     RequestTimelineButton: ({ reference }) => React.createElement('b', {}, reference), authToken: 'fixture',
     formatTwelveHourDateTime: value => value || '—', normalizeEquipmentGroup: value => value,
@@ -153,7 +153,7 @@ test('search, status filter, column filter, sorting, print and export agree with
   tree = app.render(props);
   all(tree, node => node.type === FilterableHeader && node.props.sortKey === 'status')[0].props.onSort('status', 'asc');
   tree = app.render(props);
-  assert.deepEqual(rowKeys(tree), ['REQ-RECEIVED', 'REQ-WORKING', 'REQ-CLOSED', 'REQ-IDLE', 'REQ-LEGACY', 'REQ-NEW']);
+  assert.deepEqual(rowKeys(tree), ['REQ-NEW', 'REQ-RECEIVED', 'REQ-WORKING', 'REQ-LEGACY', 'REQ-IDLE', 'REQ-CLOSED']); // lifecycle order: Open, Accepted, In progress, Idle, Closed
 });
 
 test('edit and daily-update actions still receive the original request with its stored status', () => {

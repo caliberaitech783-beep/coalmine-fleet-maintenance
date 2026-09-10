@@ -1,4 +1,4 @@
-import { requestStatusLabel } from "./request-status.mjs";
+import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite } from "../notification-text.mjs";
 import { createNotificationTracker, createNotificationSound } from "./notification-alerts.mjs";
@@ -32,7 +32,7 @@ import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime } from "../date-time-format.mjs";
-import { calculateBreakdownDaysFromStart } from "../breakdown-duration.mjs";
+import { calculateBreakdownDaysFromStart, durationLabelMinutes } from "../breakdown-duration.mjs";
 import { delayedReasonRequired } from "../delayed-reason.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
@@ -1665,7 +1665,7 @@ const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "break
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal } = {}) {
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
-    case "ref": return <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} /></td>;
+    case "ref": return <td><b>{r.ref}</b></td>;
     case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
     case "door": return <td>{r.door}</td>;
     case "make": return <td>{r.make || "—"}</td>;
@@ -1675,7 +1675,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "createdBy": return <td>{r.owner || r.requesterLogin || "—"}</td>;
     case "closedBy": return <td>{r.closedBy || "—"}</td>;
     case "chassis": return <td>{r.chassis || "—"}</td>;
-    case "breakdownDays": return <td><b>{r.breakdownDays} {r.breakdownDays === 1 ? "day" : "days"}</b></td>;
+    case "breakdownDays": return <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={`${r.breakdownDays} ${r.breakdownDays === 1 ? "day" : "days"}`} /></td>;
     case "category": return <td>{r.category}</td>;
     case "start": return <td>{formatTwelveHourDateTime(r.start)}</td>;
     case "hours": return <td>{r.hours}</td>;
@@ -1734,7 +1734,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       },
     })),
     searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model) && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
-    [sortedRows, sort, changeSort] = useSortableRows(searchedRows, "", (row, key) => key === "status" ? requestStatusLabel(row) : row[key]);
+    [sortedRows, sort, changeSort] = useSortableRows(searchedRows, "", (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;
@@ -1769,9 +1769,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
               <tr key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
                 {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction, onApproveIdeal, onCancelIdeal })}</React.Fragment>) : <>
                 {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
-                <td>
-                  <RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} />
-                </td>
+                <td><b>{r.ref}</b></td>
                 <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
                 <td>{r.door}</td>
                 {showMakeModel && <><td>{r.make || "—"}</td><td>{r.model || "—"}</td></>}
@@ -1782,14 +1780,10 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 {showClosedBy && <td>{r.closedBy || "—"}</td>}
                 {showAudio && <td>{r.chassis || "—"}</td>}
-                {showBreakdownDays && (
-                  <td>
-                    <b>{r.breakdownDays} {r.breakdownDays === 1 ? "day" : "days"}</b>
-                  </td>
-                )}
+                {showBreakdownDays && <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={`${r.breakdownDays} ${r.breakdownDays === 1 ? "day" : "days"}`} /></td>}
                 <td>{r.category}</td>
                 <td>{formatTwelveHourDateTime(r.start)}</td>
-                <td>{r.hours}</td>
+                <td>{showBreakdownDays ? r.hours : <RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={r.hours || "—"} />}</td>
                 <td>
                   <Status>{requestStatusLabel(r)}</Status>
                 </td>
@@ -4668,8 +4662,8 @@ function Generic({ name, requests = [] }) {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
-                      <td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} /></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td>
-                      <td>{request.start}</td><td><b>{age} {age === 1 ? "day" : "days"}</b></td><td><Status>{requestStatusLabel(request)}</Status></td>
+                      <td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td>
+                      <td>{request.start}</td><td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} label={`${age} ${age === 1 ? "day" : "days"}`} /></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
                 }) : <tr><td colSpan="7" className="empty-state">No service or maintenance requests available</td></tr>}
@@ -4893,6 +4887,14 @@ function ReportSection({ title, description, category = "general", icon: ReportI
     </div>
   );
 }
+// The request time breakdown opens from the time column (BD days, TAT or downtime); only when a report has none does it stay on the job reference.
+function withTimelineLinks(columns, token) {
+  const timeKey = ["days", "tat", "hours"].find((key) => columns.some((column) => column.key === key));
+  const target = timeKey || "ref";
+  return columns.map((column) => column.key === target
+    ? { ...column, render: (row) => <RequestTimelineButton reference={row.ref} token={token} Dialog={Modal} label={timeKey ? String(column.value?.(row) ?? row[column.key] ?? "—") : undefined} /> }
+    : column);
+}
 function ReportsPage({ requests = [], activeReportCategory = "general", setActiveReportCategory = () => {}, permissions = {}, session = {} }) {
   const [reportMasterData,setReportMasterData] = useState({equipmentRecords:[],transferRecords:[],loading:true,error:""});
   const {equipmentRecords,transferRecords} = reportMasterData;
@@ -5004,14 +5006,14 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     ...(column.key === "averageTat" ? { sortValue: (row) => row.averageTatMinutes ?? -1 } : {}),
   }));
   const requestColumns = [
-    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => request.ref ? <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} /> : <b>—</b>},
+    {key: "reference", label: "Job reference", value: (request) => request.ref, render: (request) => <b>{request.ref || "—"}</b>},
     {key: "equipment", label: "Equipment / vehicle", value: (request) => request.reportEquipment},
     {key: "door", label: "Door no.", value: (request) => request.reportDoor},
     {key: "make", label: "Make", value: (request) => request.reportMake},
     {key: "model", label: "Model", value: (request) => request.reportModel},
     {key: "site", label: "Location", value: (request) => request.reportSite},
     {key: "category", label: "Category", value: (request) => request.equipmentGroup || request.category || request.type},
-    {key: "status", label: "Status", value: reportRequestStatus, render: (request) => <Status>{reportRequestStatus(request)}</Status>},
+    {key: "status", label: "Status", value: reportRequestStatus, sortValue: (request) => requestStatusSortRank(reportRequestStatus(request)), render: (request) => <Status>{reportRequestStatus(request)}</Status>},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
   ];
@@ -5054,7 +5056,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "model", label: "Model", value: (request) => request.reportModel},
     {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
     {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
-    {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
+    {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} label={elapsedLabel(request.start, request.closedAt)} />},
     {key: "reference", label: "Job reference", value: (request) => request.ref},
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
@@ -5084,7 +5086,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     ], dateValue: (row) => row.verifiedAt, emptyMessage: "No Production to MIS verification timings available"},
     {category: "maintenance", title: "Off Road to Maint. Close", description: "Turnaround time from Production opening to Maintenance close.", rows: elapsedRows.filter((row) => row.start && row.closedAt), columns: [
       ...closureColumns,
-      {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <strong>{elapsedLabel(request.start, request.closedAt)}</strong>},
+      {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} label={elapsedLabel(request.start, request.closedAt)} />},
     ], dateValue: (row) => row.closedAt, emptyMessage: "No Production-open to Maintenance-close timings available"},
     {category: "maintenance", title: "Event close Report - Maint. Closing to MIS Verif.", description: "Elapsed time from Maintenance close to MIS verification.", rows: elapsedRows.filter((row) => row.closedAt && row.verifiedAt), columns: [
       ...misColumns,
@@ -5397,7 +5399,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           category={selectedReport.category}
           icon={activeCategory.icon}
           rows={selectedReportRows}
-          columns={selectedReport.columns.map(column => column.key === "ref" ? {...column, render: row => <RequestTimelineButton reference={row.ref} token={session?.token || authToken} Dialog={Modal} />} : column)}
+          columns={withTimelineLinks(selectedReport.columns, session?.token || authToken)}
           emptyMessage={selectedReport.emptyMessage}
           rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
           rowClassName={selectedReport.rowClassName}
@@ -7149,7 +7151,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy, ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
     return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
-  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, "", (row, key) => key === "status" ? statusLabel(row) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : row[key]);
+  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, "", (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "breakdownDays" ? calculateBreakdownDaysFromStart(row.start, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;
@@ -7203,7 +7205,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
-              <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} /></td>
+              <td><b>{row.ref}</b></td>
               <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
@@ -7217,7 +7219,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               {showClosedAt && <td>{formatTwelveHourDateTime(row.closedAt)}</td>}
               {showArrivalFlagData && <><td>{formatTwelveHourDateTime(row.arrivalFlaggedAt)}</td><td>{row.arrivalFlaggedBy || "—"}</td><td><b>{elapsedLabel(row.start, row.arrivalFlaggedAt)}</b></td><td>{row.acceptedAt ? formatTwelveHourDateTime(row.acceptedAt) : <span className="arrival-not-reached">Not reached</span>}</td><td><b>{elapsedLabel(row.start, row.acceptedAt || new Date(now))}</b></td><td>{row.acceptedBy || "Pending"}</td></>}
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
-              <td><b>{days} {days === 1 ? "day" : "days"}</b></td>
+              <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} label={`${days} ${days === 1 ? "day" : "days"}`} /></td>
               <td><MaintenanceRemarks remarks={row.dailyRemarks} /></td>
               {showMeterData && <><td><b>{requestMeterReadingLabel(row, "opening")}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadingLabel(row, "closing")}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
               {showTripCard && <td><TripCardCell request={row} /></td>}

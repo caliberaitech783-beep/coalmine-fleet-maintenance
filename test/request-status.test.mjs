@@ -29,3 +29,13 @@ test('department and scheduled director reports export Verified for verified req
     }
   }
 });
+
+test('status sort rank follows the request lifecycle rather than the alphabet', async () => {
+  const {requestStatusSortRank} = await import('../src/request-status.mjs');
+  const ordered = ['Open', 'Pending', 'Accepted', 'In progress', 'Awaiting parts', 'Idle', 'Closed', 'Verified'];
+  const ranks = ordered.map(requestStatusSortRank);
+  assert.deepEqual([...ranks].sort((a, b) => a - b), ranks);
+  assert.equal(requestStatusSortRank('ideal'), requestStatusSortRank('Idle'));
+  assert.ok(requestStatusSortRank('Something new') > requestStatusSortRank('Verified'));
+  assert.ok(requestStatusSortRank('Open') < requestStatusSortRank('Idle'));
+});

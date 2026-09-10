@@ -76,6 +76,6 @@ export default function RequestTimelineButton({reference,token,Dialog,label}) {
   const [open,setOpen] = useState(false);
   useEffect(() => setOpen(false),[reference,token]);
   if (!reference) return null;
-  return <><button type="button" className="request-timeline-link" aria-label={`View time breakdown for ${reference}`} onClick={() => setOpen(true)}>{label || reference}</button>
+  return <><button type="button" className="request-timeline-link" title="View time breakdown" aria-label={`View time breakdown for ${reference}`} onClick={() => setOpen(true)}>{label || reference}</button>
     {open && <Dialog title={`Time breakdown · ${reference}`} close={() => setOpen(false)}><RequestTimelineContent reference={reference} token={token} /></Dialog>}</>;
 }
