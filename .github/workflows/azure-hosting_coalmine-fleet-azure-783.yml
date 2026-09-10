@@ -285,6 +285,8 @@ jobs:
           node --input-type=module <<'NODE'
           import {execFileSync} from 'node:child_process';
           import {build} from 'esbuild';
+          import {createHash} from 'node:crypto';
+          import {readFileSync} from 'node:fs';
           const credentials=JSON.parse(execFileSync('az',['webapp','deployment','list-publishing-credentials','--resource-group','coalmine-fleet-maintenance-rg','--name','coalmine-fleet-azure-783','-o','json'],{encoding:'utf8',stdio:['ignore','pipe','pipe']}));
           const scm=new URL(credentials.scmUri).origin;
           const headers={Authorization:'Basic '+Buffer.from(credentials.publishingUserName+':'+credentials.publishingPassword).toString('base64')};
@@ -305,8 +307,14 @@ jobs:
               }
             }
             console.log('Matched login errors:',count);
+            for(const name of ['server.mjs','auth-session.mjs','mobile-access.mjs','admin-access.mjs']){
+              const response=await fetch(scm+'/api/vfs/site/wwwroot/'+name,{headers});
+              if(response.ok)console.log('Deployed source match:',name,createHash('sha256').update(await response.text()).digest('hex')===createHash('sha256').update(readFileSync(name,'utf8')).digest('hex'));
+              else console.log('Source read status:',name,response.status);
+            }
             const source=`
           import pg from 'pg';
+          import {randomUUID} from 'node:crypto';
           import {loginRecordCandidates,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
           import {mergePrivilegeRecords} from './privilege-record.mjs';
           import {createSessionStore} from './auth-session.mjs';
@@ -322,6 +330,7 @@ jobs:
             const {rows:users}=await client.query("SELECT id,record_data FROM master_records WHERE master_name='Users & employees'");
             const candidates=loginRecordCandidates(users,'anoop');
             console.log(JSON.stringify({stage,candidates:candidates.length}));
+            console.log(JSON.stringify({stage:'recent-login-events',events:(await client.query("SELECT outcome,reason,occurred_at FROM audit_events WHERE actor_login='anoop' AND module='Authentication' ORDER BY occurred_at DESC LIMIT 6")).rows}));
             for(const row of candidates){
               const employee=row.record_data;
               const login=String(employee.login||userLoginCandidates(employee)[0]||'anoop').trim();
@@ -334,7 +343,7 @@ jobs:
               const profile=resolveMobileAccess({user:employee,privilege});
               console.log(JSON.stringify({stage,userType:profile.userType,assignedRole:profile.assignedRole,mustChangePassword:employee.mustChangePassword===true,hasEmployeeName:!!employee.employee}));
               stage='create-session-rollback-only';
-              await createSessionStore(client).create({token:'login-diagnostic-rollback-'+Date.now(),role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+              await createSessionStore(client).create({token:randomUUID(),role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
               console.log(JSON.stringify({stage,success:true}));
             }
           } catch(error){console.log(JSON.stringify({stage,error:error.message,code:error.code,table:error.table,column:error.column,constraint:error.constraint}));}
