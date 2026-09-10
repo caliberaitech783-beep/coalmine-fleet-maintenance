@@ -38,10 +38,9 @@ test("desktop and mobile menu selections remain independent per user",()=>{
 });
 
 test("every main header has a conditional submenu allowlist", () => {
-  assert.deepEqual(Object.keys(ADMIN_SUBMENU_OPTIONS), ["Dashboard", "Masters", "WhatsApp Integration", "Reports", "System Administration", "Tickets"]);
+  assert.deepEqual(Object.keys(ADMIN_SUBMENU_OPTIONS), ["Dashboard", "Masters", "WhatsApp Integration", "Reports", "Audit Trail", "Tickets"]);
   assert.ok(Object.values(ADMIN_SUBMENU_OPTIONS).every(({field, options}) => field && options.length));
   assert.deepEqual(ADMIN_SUBMENU_OPTIONS.Reports.options, ["Reports", "General Report", "Production report", "Maintenance report", "MIS Report"]);
-  assert.ok(ADMIN_SUBMENU_OPTIONS["System Administration"].options.includes("Audit Trail"));
 });
 
 test("new administrators receive only explicitly selected masters and tabs", () => {
@@ -50,8 +49,7 @@ test("new administrators receive only explicitly selected masters and tabs", () 
     tabAccess: "Audit Trail",
   });
   assert.deepEqual(permissions.masterAccess, ["Equipment master", "Region master"]);
-  assert.deepEqual(permissions.tabAccess, ["System Administration"]);
-  assert.deepEqual(permissions.systemAdminAccess, ["Audit Trail"]);
+  assert.deepEqual(permissions.tabAccess, ["Audit Trail"]);
   assert.equal(accessAllows(permissions.masterAccess, "OEM master"), false);
   assert.equal(ADMIN_MASTER_OPTIONS.includes("Privilege"), false);
 });

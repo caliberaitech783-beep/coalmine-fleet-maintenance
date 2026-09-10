@@ -16,17 +16,6 @@ export const MOBILE_NAVIGATION_ITEMS = [
   "Daily OEM report",
   "WhatsApp alert history",
   "Reports",
-  "System Administration",
-  "Daily Backup",
-  "Backup History",
-  "Export Backup",
-  "Create Schedule Backup",
-  "Backup Settings",
-  "Storage and Retention",
-  "Backup Activity Logs",
-  "Login Sessions",
-  "Login History",
-  "Device Access",
   "Audit Trail",
 ];
 

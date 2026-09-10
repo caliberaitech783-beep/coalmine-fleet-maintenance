@@ -67,7 +67,6 @@ import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAl
 import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, sitesForManagerRegions} from "../region-scope.mjs";
 import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
-import {SYSTEM_ADMINISTRATION_OPTIONS} from "../system-administration.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
@@ -139,7 +138,6 @@ import {
   Monitor,
   Smartphone,
   Flag,
-  HardDrive,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -160,7 +158,6 @@ import "./dashboard-concept-a.css";
 import "./brand-theme.css";
 import "./report-schedule-polish.css";
 import "./reports-workspace.css";
-import "./system-administration.css";
 import "./meta-whatsapp-setup.css";
 import "./mobile-compat.css";
 import "./maintenance-mobile-compact.css";
@@ -169,7 +166,6 @@ import "./manager-scroll.css";
 import "./workspace-readability.css";
 import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
-import SystemAdministrationPage, {RemoteSupportConsent} from "./system-administration.jsx";
 
 const vehicles = [];
 const breakdowns = [];
@@ -240,6 +236,7 @@ const nav = [
   ["Dashboard", LayoutDashboard],
   ["Tickets", Ticket],
   ["Reports", FileBarChart],
+  ["Audit Trail", History],
 ];
 const masterNav = [
   ["Users & employees", Users],
@@ -639,7 +636,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
-  const [systemAdministrationOpen, setSystemAdministrationOpen] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
   useEffect(() => {
@@ -660,7 +656,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setWhatsappOpen(false);
     setWorkspacesOpen(false);
     setReportsOpen(false);
-    setSystemAdministrationOpen(false);
   };
   const selectPage = (page) => {
     closeMenus();
@@ -683,7 +678,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   }, [active]);
   const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
   const visibleMasterNav = masterNav.filter(([name]) => masterAccessAllows(viewPermissions, name));
-  const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
+  const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
   const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => name !== "Meta API setup" || permissions.adminLevel !== "Manager").filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
@@ -693,9 +688,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const configuredReportNav = departmentReportNav.filter((category) => reportAccessAllows(viewPermissions.reportAccess, category.label));
   const visibleReportNav = configuredReportNav.length ? configuredReportNav : departmentReportNav;
   const canViewReports = visibleReportNav.length > 0;
-  const availableSystemAdministrationNav = typeof systemAdministrationNav === "undefined" ? [] : systemAdministrationNav;
-  const visibleSystemAdministrationNav = availableSystemAdministrationNav.filter(([name]) => accessAllows(viewPermissions.systemAdminAccess, name));
-  const canViewSystemAdministration = permissions.adminLevel !== "Manager" && accessAllows(viewPermissions.tabAccess, "System Administration") && visibleSystemAdministrationNav.length > 0;
   const managerProfileLabel=permissions.managerRoles?.length===1?permissions.managerRoles[0]:"Manager Profile";
   const navigationHidden = collapsedNavigation && !open;
   return (
@@ -806,21 +798,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
                 <span className="nav-label">{category.label}</span>
               </button></div>
             ))}
-          </div>
-        </div>}
-        {canViewSystemAdministration && <div className={systemAdministrationOpen ? "masters-menu open" : "masters-menu"}>
-          <div className="nav-config-row"><button
-            className={SYSTEM_ADMINISTRATION_OPTIONS.includes(active) ? "active" : ""}
-            aria-haspopup="menu"
-            aria-expanded={systemAdministrationOpen}
-            onClick={() => setSystemAdministrationOpen((value) => !value)}
-          >
-            <Settings />
-            <span className="nav-label">System Administration</span>
-            <ChevronDown className="masters-chevron" />
-          </button></div>
-          <div className="masters-dropdown system-administration-dropdown" role="menu">
-            {visibleSystemAdministrationNav.map(([name, Icon]) => <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={() => selectPage(name)}><Icon/><span className="nav-label">{name}</span></button></div>)}
           </div>
         </div>}
         {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports").map(([n, I]) => (
@@ -938,19 +915,6 @@ const dashboardKpiExportColumns = [
   { label: "Value", value: (row) => row.value },
   { label: "Location / Period", value: (row) => row.scope },
   { label: "Details", value: (row) => row.details },
-];
-const systemAdministrationNav = [
-  ["Daily Backup", HardDrive],
-  ["Backup History", History],
-  ["Export Backup", Download],
-  ["Create Schedule Backup", CalendarDays],
-  ["Backup Settings", Settings],
-  ["Storage and Retention", HardDrive],
-  ["Backup Activity Logs", Activity],
-  ["Login Sessions", UserRound],
-  ["Login History", History],
-  ["Device Access", Monitor],
-  ["Audit Trail", ShieldCheck],
 ];
 const masterDateFields = new Set(["acquisitionDate", "transferDate", "lastMaintenanceDate"]);
 const masterDateTimeFields = new Set(["start", "createdAt", "updatedAt", "closedAt", "verifiedAt"]);
@@ -8335,9 +8299,8 @@ function App() {
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name);
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
-    if (SYSTEM_ADMINISTRATION_OPTIONS.includes(name)) return adminPermissions.adminLevel !== "Manager" && accessAllows(activeNavigationPermissions.tabAccess, "System Administration") && accessAllows(activeNavigationPermissions.systemAdminAccess, name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
-    const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
+    const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess", "Audit Trail": "auditAccess"};
     return accessAllows(activeNavigationPermissions.tabAccess, name) && accessAllows(activeNavigationPermissions[directMenuAccess[name]], name);
   };
   const firstAccessibleAdminPage = () => {
@@ -8345,7 +8308,6 @@ function App() {
     const firstMaster = masterNav.find(([name]) => canOpenAdminPage(name))?.[0];
     if (firstMaster) return firstMaster;
     if (accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration")) return whatsappNav.find(([name]) => (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.whatsappAccess, name))?.[0];
-    if (accessAllows(activeNavigationPermissions.tabAccess, "System Administration")) return systemAdministrationNav.find(([name]) => canOpenAdminPage(name))?.[0];
     return nav.find(([name]) => canOpenAdminPage(name))?.[0] || "Dashboard";
   };
   const selectedOperationalRole = operationalWorkspaceNav.find(([name]) => name === active)?.[2];
@@ -8493,7 +8455,6 @@ function App() {
       selectMenu("Breakdown master");
     },
     logout = () => {
-      void fetch("/api/logout", {method:"POST", headers:{Authorization:`Bearer ${session?.token || authToken}`}}).catch(() => {});
       clearStoredSession();
       setSession(null);
     },
@@ -8580,7 +8541,7 @@ function App() {
   };
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.role === "normal")
-    return (<>
+    return (
       <Normal
         requests={requests}
         onCreate={addRequest}
@@ -8592,8 +8553,7 @@ function App() {
         theme={theme}
         toggleTheme={toggleTheme}
       />
-      <RemoteSupportConsent session={session}/>
-    </>);
+    );
   return (
     <div className="app">
       <Side
@@ -8672,8 +8632,8 @@ function App() {
             <WhatsAppAlertHistory />
               ) : active === "Reports" ? (
                 <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
-              ) : SYSTEM_ADMINISTRATION_OPTIONS.includes(active) ? (
-                <SystemAdministrationPage section={active} session={session} auditTrail={<AuditTrailPage session={session} />} />
+              ) : active === "Audit Trail" ? (
+                <AuditTrailPage session={session} />
               ) : operationalSession ? (
               <Normal
                   embedded
@@ -8699,7 +8659,6 @@ function App() {
           <b>Data loaded. Time taken: {loadTime.toFixed(1)} sec.</b>
         </div>
       )}
-      <RemoteSupportConsent session={session}/>
     </div>
   );
 }
