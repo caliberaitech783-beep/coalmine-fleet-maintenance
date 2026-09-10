@@ -164,6 +164,10 @@
   width: 17px;
 }
 
+.ai-feeder-countdown { display: grid; gap: 2px; text-align: center; color: #fff; }
+.ai-feeder-countdown small { font-size: 12px; white-space: nowrap; }
+.ai-feeder-countdown b { font-size: 22px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+
 .ai-feeder-counts {
   display: flex;
   gap: 8px;

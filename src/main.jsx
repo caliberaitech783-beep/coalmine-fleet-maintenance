@@ -1735,7 +1735,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><label className="mine-trend-anchor"><span>From</span><input aria-label="Breakdown trend from date" type="date" max={todayKey} value={breakdownTrendStartKey} onChange={(event) => updateBreakdownTrendRange("from", event.target.value)} /></label><label className="mine-trend-anchor"><span>To</span><input aria-label="Breakdown trend to date" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => updateBreakdownTrendRange("to", event.target.value)} /></label><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendPeriodDays === days ? "active" : ""} onClick={() => { setBreakdownTrendDays(days); setBreakdownTrendFrom(""); setBreakdownTrendRangeError(""); }}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button></div>{breakdownTrendRangeError && <small role="alert">{breakdownTrendRangeError}</small>}</header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
           <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendPeriodDays} selected days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>
-          <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b aria-label="Breakdown trend selected period">From: {formatDisplayDate(breakdownTrendStartKey)} · To: {formatDisplayDate(breakdownTrendAnchorKey)}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendPeriodDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><b>{day.count}</b><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }} /></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendPeriodDays <= 14 || index % 5 === 0 || day.anchor ? formatDisplayDate(day.date) : ""}</small></div>)}</div></div></section>
+          <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b aria-label="Breakdown trend selected period">From: {formatDisplayDate(breakdownTrendStartKey)} · To: {formatDisplayDate(breakdownTrendAnchorKey)}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendPeriodDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }}><b>{day.count}</b></i></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendPeriodDays <= 14 || index % 5 === 0 || day.anchor ? formatDisplayDate(day.date) : ""}</small></div>)}</div></div></section>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-breakdown-trend-state" />}
       </section>
       <article {...cardAction("all", "Overall Fleet Performance")} className="mine-panel mine-fleet-performance" aria-label="Overall utilization and availability">
@@ -7801,10 +7801,21 @@ function TicketPage({ session }) {
   </section>;
 }
 
-function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh, onClose }) {
+function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
   const panelRef = useRef(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(() => Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
   const closeRef = useRef(onClose);
-  closeRef.current = onClose;
+  closeRef.current = () => { if (Date.now() >= closeAvailableAt) onClose(); };
+  useEffect(() => {
+    const updateCountdown = () => setRemainingSeconds(Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
+    updateCountdown();
+    if (Date.now() >= closeAvailableAt) return undefined;
+    const timer = window.setInterval(() => {
+      updateCountdown();
+      if (Date.now() >= closeAvailableAt) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [closeAvailableAt]);
   useEffect(() => {
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
@@ -7828,7 +7839,8 @@ function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt,
       <header>
         <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Site-wise overview</h2></div>
         <div className="ai-feeder-actions">
-          <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>
+          {closeAvailableAt > 0 && <span className="ai-feeder-countdown" role="timer" aria-live="off" aria-label={remainingSeconds > 0 ? "Time until Info Pulse can be closed" : "Info Pulse can now be closed"}><small>{remainingSeconds > 0 ? "Close available in" : "You can close"}</small><b>{String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}</b></span>}
+          {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
       <InfoPulseContent cases={cases} requests={requests} scope={scope} role={role} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
@@ -7838,6 +7850,7 @@ function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt,
 
 function AiFeeder({ role = "", session }) {
   const [openMode, setOpenMode] = useState("");
+  const [loginCloseAvailableAt, setLoginCloseAvailableAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [requests, setRequests] = useState([]);
   const [scope, setScope] = useState({kind: "location", label: "Assigned location", sites: []});
@@ -7891,19 +7904,30 @@ function AiFeeder({ role = "", session }) {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    let greeted = "yes";
-    try { greeted = sessionStorage.getItem("aiFeederGreeted") || ""; } catch { greeted = "yes"; }
+    if (!session?.token) { setOpenMode(""); return; }
+    let greeted = "";
+    try { greeted = sessionStorage.getItem("aiFeederGreeted") || ""; } catch {}
     if (greeted === "yes") return;
-    try { sessionStorage.setItem("aiFeederGreeted", "yes"); } catch { greeted = "yes"; }
+    const savedDeadline = Number(greeted);
+    const deadline = Number.isFinite(savedDeadline) && savedDeadline > 0 ? savedDeadline : Date.now() + 60000;
+    try { sessionStorage.setItem("aiFeederGreeted", String(deadline)); } catch {}
+    setLoginCloseAvailableAt(deadline);
     setOpenMode("login");
-  }, []);
+  }, [session?.token]);
+  const closePanel = () => {
+    if (openMode === "login") {
+      if (Date.now() < loginCloseAvailableAt) return;
+      try { sessionStorage.setItem("aiFeederGreeted", "yes"); } catch {}
+    }
+    setOpenMode("");
+  };
   const ready = loadState.token === session?.token && loadState.ready;
   const cases = useMemo(() => ready ? buildInfoPulseCases(requests, {role, now}) : [], [requests, role, now, ready]);
   return <>
-    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode("manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? cases.length + " cases" : "counts unavailable"}`}>
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? cases.length + " cases" : "counts unavailable"}`}>
       <Activity /><span>INFO PULSE</span>{ready && cases.length > 0 && <><b className="ai-feeder-trigger-count">{cases.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {openMode && <AiFeederPanel cases={cases} requests={ready ? requests : []} scope={scope} role={role} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={() => setOpenMode("")} />}
+    {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} cases={cases} requests={ready ? requests : []} scope={scope} role={role} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
   </>;
 }
 
@@ -8619,6 +8643,7 @@ function App() {
       notifyRequestChange(window);
     };
   const completeLogin = (nextSession) => {
+    try { sessionStorage.removeItem("aiFeederGreeted"); } catch {}
     setActive(LOGIN_LANDING_PAGE);
     pageHistory.current = [LOGIN_LANDING_PAGE];
     setCanGoBack(false);
