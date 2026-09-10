@@ -1,4 +1,5 @@
 import React from "react";
+import { matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 
 export function tableElements(children) {
   return React.Children.toArray(children).flatMap((child) =>
@@ -61,7 +62,10 @@ export function selectTableRows(rows, columns, filters, sort) {
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
   const filtered = rows.filter((row) => columns.every((column) => {
     const expected = filters[column.key];
-    return !expected || column.value(row) === (expected === "__empty_table_filter_value__" ? "" : expected);
+    if (!expected) return true;
+    const range = parseDateRange(expected);
+    if (range) return matchesDateRange(column.sortValue ? column.sortValue(row) : column.value(row), range) || matchesDateRange(column.value(row), range);
+    return column.value(row) === (expected === "__empty_table_filter_value__" ? "" : expected);
   }));
   const column = columns.find((item) => item.key === sort.key);
   if (!column) return filtered;

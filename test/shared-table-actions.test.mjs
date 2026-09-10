@@ -90,3 +90,23 @@ test("plain column headings in shared Actions tables open a sort-and-filter popo
   assert.match(shared, /values=\{columnValues\[column\.key\] \|\| \[\]\} filterValue=\{filters\[column\.key\] \|\| ""\} onFilterChange=\{\(value\) => updateFilter\(column\.key, value\)\}/);
   assert.match(shared, /dataRows\.map\(\(row\) => column\.value\(row\)\)\.filter\(Boolean\)/, "filter values come from the full unfiltered table");
 });
+
+test("date range filters apply to shared Actions tables using the raw sort value or displayed date", () => {
+  const {columns} = tableModel(headers);
+  const dated = (key, shown, raw) => h("tr", {key}, h("td", {key: 0}, key), h("td", {key: 1, ...(raw ? {"data-sort-value": raw} : {})}, shown));
+  const rows = [dated("a", "09-09-2026 10:15:29 AM", "2026-09-09 10:15:29"), dated("b", "10-09-2026 01:33:53 PM", "2026-09-10 13:33:53"), dated("c", "11-09-2026 02:01:06 PM"), dated("d", "—")];
+  const range = "__date_range__:2026-09-10|2026-09-11";
+  assert.deepEqual(selectTableRows(rows, columns, {[columns[1].key]: range}, {}).map(r => r.key), ["b", "c"]);
+  assert.deepEqual(selectTableRows(rows, columns, {[columns[1].key]: "__date_range__:|2026-09-09"}, {}).map(r => r.key), ["a"]);
+  assert.deepEqual(selectTableRows(rows, columns, {[columns[1].key]: "10-09-2026 01:33:53 PM"}, {}).map(r => r.key), ["b"], "exact value filters still work");
+});
+
+test("column filter popovers offer From / To date pickers on date columns", () => {
+  const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(main, /dateColumn = looksLikeDateColumn\(values\)/);
+  assert.match(main, /title="Filter by date range"[^>]*><CalendarDays \/><\/button>/);
+  assert.match(main, /<label><span>From<\/span><input type="date" value=\{dateRange\.from\}/);
+  assert.match(main, /<label><span>To<\/span><input type="date" value=\{dateRange\.to\}/);
+  assert.match(main, /const range = parseDateRange\(selected\);\s*if \(range\) return matchesDateRange\(value, range\);/);
+  assert.match(main, /parseDateRange\(filters\[column\.key\]\) && <option value=\{filters\[column\.key\]\}>/);
+});

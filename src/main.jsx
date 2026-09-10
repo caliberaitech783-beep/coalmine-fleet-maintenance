@@ -1,4 +1,5 @@
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
+import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite } from "../notification-text.mjs";
 import { createNotificationTracker, createNotificationSound } from "./notification-alerts.mjs";
@@ -2205,13 +2206,18 @@ function FilterableHeader({
   onFilterChange,
 }) {
   const [valueSearch, setValueSearch] = useState("");
+  const [rangeOpen, setRangeOpen] = useState(false);
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const active = sort.key === sortKey,
     Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown,
-    visibleValues = values.filter((value) => matchesSmartSearch(valueSearch, value));
+    visibleValues = values.filter((value) => matchesSmartSearch(valueSearch, value)),
+    // Date columns get a calendar: From / To pickers that filter the column by day.
+    dateColumn = looksLikeDateColumn(values),
+    dateRange = parseDateRange(filterValue) || { from: "", to: "" };
   useEffect(() => {
     if (!open) setValueSearch("");
+    else setRangeOpen(Boolean(parseDateRange(filterValue)));
   }, [open]);
   useEffect(() => {
     if (!open) return undefined;
@@ -2260,7 +2266,12 @@ function FilterableHeader({
             <button type="button" className={active && sort.direction === "asc" ? "active" : ""} onClick={() => onSort(sortKey, "asc")} title="Sort ascending"><ArrowUp /></button>
             <button type="button" className={active && sort.direction === "desc" ? "active" : ""} onClick={() => onSort(sortKey, "desc")} title="Sort descending"><ArrowDown /></button>
             <button type="button" onClick={() => onFilterChange("")} title="Clear this filter"><X /></button>
+            {dateColumn && <button type="button" className={rangeOpen || parseDateRange(filterValue) ? "active" : ""} onClick={() => setRangeOpen((current) => !current)} title="Filter by date range" aria-label={`Filter ${label} by date range`} aria-expanded={rangeOpen}><CalendarDays /></button>}
           </div>
+          {dateColumn && rangeOpen && <div className="column-filter-range" role="group" aria-label={`${label} date range`}>
+            <label><span>From</span><input type="date" value={dateRange.from} max={dateRange.to || undefined} onChange={(event) => onFilterChange(encodeDateRange(event.target.value, dateRange.to))} /></label>
+            <label><span>To</span><input type="date" value={dateRange.to} min={dateRange.from || undefined} onChange={(event) => onFilterChange(encodeDateRange(dateRange.from, event.target.value))} /></label>
+          </div>}
           <label className="column-filter-search">
             <Search aria-hidden="true" />
             <input data-smart-search autoFocus value={valueSearch} onChange={(event) => setValueSearch(event.target.value)} placeholder="Filter..." />
@@ -2290,6 +2301,8 @@ function tableRowMatchesFilters(row, columns, filters) {
     const selected = filters[column.key];
     if (!selected) return true;
     const value = tableFilterText(column.value?.(row));
+    const range = parseDateRange(selected);
+    if (range) return matchesDateRange(value, range);
     return selected === EMPTY_TABLE_FILTER_VALUE ? !value : value === selected;
   });
 }
@@ -2347,6 +2360,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
         {columns.map((column) => (
           <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
             <option value="">All {column.label}</option>
+            {parseDateRange(filters[column.key]) && <option value={filters[column.key]}>{describeDateRange(parseDateRange(filters[column.key]))}</option>}
             {columnValues[column.key].map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
           </select></label>
         ))}
