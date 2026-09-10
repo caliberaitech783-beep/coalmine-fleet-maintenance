@@ -6,7 +6,7 @@ import { transformWithOxc } from "vite";
 import { watchVisibleMasterRefresh } from "../src/master-refresh.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-const componentSource = source.slice(source.indexOf("function TicketPage("), source.indexOf("const AI_FEEDER_CLOSE_DELAY_SECONDS"));
+const componentSource = source.slice(source.indexOf("function TicketPage("), source.indexOf("function AiFeederPanel("));
 const code = (await transformWithOxc(componentSource, "TicketPage.jsx", {jsx: {runtime: "classic"}})).code;
 const Null = () => null;
 const TicketCreateForm = () => null, TicketResolutionForm = () => null, ExportMenu = () => null;

@@ -7809,40 +7809,17 @@ function TicketPage({ session }) {
   </section>;
 }
 
-const AI_FEEDER_CLOSE_DELAY_SECONDS = 60;
-function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh, lockForLogin = false, onClose }) {
-  const [seconds, setSeconds] = useState(lockForLogin ? AI_FEEDER_CLOSE_DELAY_SECONDS : 0);
+function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh, onClose }) {
   const panelRef = useRef(null);
   const closeRef = useRef(onClose);
-  const canCloseRef = useRef(false);
   closeRef.current = onClose;
-  const canClose = !lockForLogin || seconds === 0;
-  canCloseRef.current = canClose;
-  useEffect(() => {
-    if (!lockForLogin) return undefined;
-    let finished = false;
-    const deadline = Date.now() + AI_FEEDER_CLOSE_DELAY_SECONDS * 1000;
-    const tick = () => {
-      if (finished) return;
-      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-      setSeconds(remaining);
-      if (remaining === 0) {
-        finished = true;
-        window.clearInterval(timer);
-        closeRef.current();
-      }
-    };
-    const timer = window.setInterval(tick, 1000);
-    document.addEventListener("visibilitychange", tick);
-    return () => { finished = true; window.clearInterval(timer); document.removeEventListener("visibilitychange", tick); };
-  }, [lockForLogin]);
   useEffect(() => {
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     panelRef.current?.focus();
     const closeOnEscape = (event) => {
-      if (event.key === "Escape" && canCloseRef.current) closeRef.current();
+      if (event.key === "Escape") closeRef.current();
       if (event.key === "Tab") {
         const buttons = panelRef.current?.querySelectorAll("button:not(:disabled), input:not(:disabled), select:not(:disabled), [href], [tabindex='0']");
         if (!buttons?.length) return;
@@ -7859,11 +7836,7 @@ function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt,
       <header>
         <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Site-wise overview</h2></div>
         <div className="ai-feeder-actions">
-          {lockForLogin && <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Close available in ${seconds} seconds`} title={`Close available in ${seconds} seconds`}>
-            <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_CLOSE_DELAY_SECONDS * 100}%`}} aria-hidden="true" />
-            <Clock aria-hidden="true" /><b>00:{String(Math.max(0, seconds)).padStart(2, "0")}</b>
-          </span>}
-          {canClose && <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>}
+          <button type="button" onClick={onClose} aria-label="Close Info Pulse"><X /></button>
         </div>
       </header>
       <InfoPulseContent cases={cases} requests={requests} scope={scope} role={role} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
@@ -7938,7 +7911,7 @@ function AiFeeder({ role = "", session }) {
     <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode("manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? cases.length + " cases" : "counts unavailable"}`}>
       <Activity /><span>INFO PULSE</span>{ready && cases.length > 0 && <><b className="ai-feeder-trigger-count">{cases.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {openMode && <AiFeederPanel cases={cases} requests={ready ? requests : []} scope={scope} role={role} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} lockForLogin={openMode === "login"} onClose={() => setOpenMode("")} />}
+    {openMode && <AiFeederPanel cases={cases} requests={ready ? requests : []} scope={scope} role={role} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={() => setOpenMode("")} />}
   </>;
 }
 

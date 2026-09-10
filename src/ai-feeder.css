@@ -146,51 +146,6 @@
   flex: none;
 }
 
-/* Matches the header clock chip, and its fill drains as the seconds run out. */
-.ai-feeder-countdown {
-  position: relative;
-  overflow: hidden;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.44em;
-  padding: 9px 14px;
-  border: 1px solid #ffffff3d;
-  border-radius: 8px;
-  background: #ffffff14;
-  color: #fff;
-  font: 900 clamp(15px, 1.2vw, 20px)/1 Manrope, sans-serif;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.ai-feeder-countdown-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  background: #ffffff2b;
-  transition: width 1s linear;
-}
-
-.ai-feeder-countdown svg {
-  position: relative;
-  width: 1em;
-  height: 1em;
-  color: #ffd8a8;
-}
-
-.ai-feeder-countdown b {
-  position: relative;
-  font: inherit;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ai-feeder-countdown-fill {
-    transition: none;
-  }
-}
-
 .ai-feeder-actions button {
   border: 0;
   background: #ffffff26;
@@ -336,7 +291,6 @@
 .ai-feeder-panel button:focus-visible { outline: 3px solid #6585ee; outline-offset: 3px; }
 .ai-feeder-trigger { background: #6f3cb112; border: 1px solid #8051bd40; }
 .ai-feeder-trigger-count { border-radius: 6px; background: #b32742; color: white; padding: 3px 6px; font-size: 11px; }
-.ai-feeder-countdown.ending { border-color: #ffc0c0; background: #aa183d; }
 .ai-feeder-overview { display: flex; align-items: center; gap: 24px; padding: 22px 28px; flex: none; border-bottom: 1px solid #e8ecf3; }
 .ai-feeder-chart { width: 100px; height: 100px; border-radius: 50%; padding: 9px; flex: none; box-sizing: border-box; }
 .ai-feeder-chart > div { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; border-radius: 50%; background: white; }

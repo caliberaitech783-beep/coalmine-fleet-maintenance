@@ -75,6 +75,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
           <b className="pulse-tooltip-title">What these counts mean</b>
           <p><b>Default:</b> All sites you can access, all request dates and all cases. Date filters use the breakdown start date in IST.</p>
           <p><b>All cases</b> counts each qualifying request once. Its highest priority decides its box: <b>Critical → Warnings → Updates.</b> The three boxes add up to All cases; site badges show unique matching cases.</p>
+          <p><b>Case order:</b> Critical first, longest ETC overdue first. Other critical cases follow by longest standing time, then warnings and updates.</p>
           <dl>{columns.map(column => <div key={column.key}><dt className={column.tone}>{column.label}<small>{severityLabels[column.tone]}</small></dt><dd>{issueHelp[column.key]}</dd></div>)}</dl>
           <p>Issue counts can overlap: one request may be both overdue and down for 3 days. Verified requests and requests matching none of these checks are excluded. Filters narrow the results.</p>
           <p>Cards show the site, equipment, status, standing time, ETC, complaint and recorded reasons. Expand a card for daily updates and full details. <b>{PAGE_SIZE} cases per page · IST · Refreshes every 30 seconds.</b></p>

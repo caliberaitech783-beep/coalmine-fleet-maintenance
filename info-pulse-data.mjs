@@ -22,6 +22,25 @@ export function infoPulseDate(value) {
   return Number.isFinite(ms) ? new Date(ms + 330 * 60_000).toISOString().slice(0, 10) : '';
 }
 
+const severityOrder = {critical: 0, warning: 1, info: 2};
+function compareCasePriority(left, right) {
+  const priority = row => Math.min(...row.issues.map(issue => severityOrder[issue.severity] ?? 3));
+  const leftPriority = priority(left), rightPriority = priority(right);
+  if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+  // Preserve the existing warning/update order. Critical cases use the overdue
+  // issue itself, so another issue on the same request cannot promote a newer ETC.
+  if (leftPriority !== severityOrder.critical) return 0;
+  const leftOverdue = left.issues.find(issue => issue.type === 'etc-overdue');
+  const rightOverdue = right.issues.find(issue => issue.type === 'etc-overdue');
+  if (Boolean(leftOverdue) !== Boolean(rightOverdue)) return leftOverdue ? -1 : 1;
+  if (leftOverdue && rightOverdue && leftOverdue.at !== rightOverdue.at) return leftOverdue.at - rightOverdue.at;
+  const standingSince = row => {
+    const timestamp = parseIstTimestamp(row.request.start);
+    return Number.isFinite(timestamp) ? timestamp : Infinity;
+  };
+  return standingSince(left) - standingSince(right) || left.key.localeCompare(right.key);
+}
+
 export function buildInfoPulseCases(requests = [], options = {}) {
   const records = uniqueInfoPulseRequests(requests);
   const byKey = new Map(records.map(request => [request.pulseKey, request]));
@@ -39,7 +58,7 @@ export function buildInfoPulseCases(requests = [], options = {}) {
     });
     cases.get(issue.requestKey).issues.push(issue);
   }
-  return [...cases.values()];
+  return [...cases.values()].sort(compareCasePriority);
 }
 
 export function infoPulseSiteOptions(requests = [], assignedSites = []) {

@@ -175,7 +175,7 @@ test("Info Pulse fails closed when an operational user has no assigned location"
   assert.deepEqual(scopeInfoPulseRequests([{ref:"REQ-1",site:"Sasti OB"}],scope),[]);
 });
 
-test("Info Pulse locks only its automatic post-login display", () => {
+test("Info Pulse auto-opens once after login and stays manually dismissible while data refreshes", () => {
   const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("../src/ai-feeder.css", import.meta.url), "utf8");
   const serverSource = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
@@ -189,15 +189,15 @@ test("Info Pulse locks only its automatic post-login display", () => {
   assert.match(serverSource, /scopeInfoPulseRequests\(rows,scope\)/);
   // Auto-opens once per sign in, not on every re-render or refresh.
   assert.match(mainSource, /sessionStorage\.getItem\("aiFeederGreeted"\)/);
-  assert.match(mainSource, /AI_FEEDER_CLOSE_DELAY_SECONDS = 60/);
-  assert.match(mainSource, /lockForLogin \? AI_FEEDER_CLOSE_DELAY_SECONDS : 0/);
-  assert.match(mainSource, /window\.setInterval\(tick, 1000\)/);
-  assert.match(mainSource, /if \(remaining === 0\) \{\s*finished = true;\s*window\.clearInterval\(timer\);\s*closeRef\.current\(\);/);
-  assert.match(mainSource, /canClose && <button type="button" onClick=\{onClose\} aria-label="Close Info Pulse"/);
-  assert.match(mainSource, /event\.key === "Escape" && canCloseRef\.current/);
+  const panel = mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder("));
+  assert.doesNotMatch(panel, /setInterval|setTimeout|lockForLogin|countdown|canClose/);
+  assert.match(panel, /<button type="button" onClick=\{onClose\} aria-label="Close Info Pulse"/);
+  assert.match(panel, /if \(event\.key === "Escape"\) closeRef\.current\(\)/);
+  assert.match(mainSource, /watchRequestRefresh\(load, \{intervalMs: 30000\}\)/);
+  assert.match(mainSource, /window\.setInterval\(\(\) => setNow\(Date\.now\(\)\), 60000\)/);
   assert.match(mainSource, /setOpenMode\("login"\)/);
   assert.match(mainSource, /onClick=\{\(\) => setOpenMode\("manual"\)\}/);
-  assert.match(mainSource, /lockForLogin=\{openMode === "login"\}/);
+  assert.doesNotMatch(mainSource, /lockForLogin|AI_FEEDER_CLOSE_DELAY_SECONDS/);
   assert.doesNotMatch(mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder(")), /setPaused|onMouseEnter|onMouseLeave/);
   assert.match(mainSource, /INFO PULSE<\/span>/);
   assert.match(styles, /\.ai-feeder-trigger\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*800;/s);
@@ -207,9 +207,5 @@ test("Info Pulse locks only its automatic post-login display", () => {
   assert.equal(mainSource.match(/<AiFeeder\b/g)?.length, 2);
   assert.equal(mainSource.match(/<AiFeeder[^>]*session=\{session\}/g)?.length, 2);
   assert.match(styles, /@keyframes ai-feeder-blink/);
-  // The countdown is a clock-style chip whose fill drains as the seconds run out.
-  assert.match(mainSource, /className="ai-feeder-countdown-fill"/);
-  assert.match(mainSource, /00:\{String\(Math\.max\(0, seconds\)\)\.padStart\(2, "0"\)\}/);
-  assert.doesNotMatch(mainSource, /ai-feeder-countdown-value/);
-  assert.match(styles, /\.ai-feeder-countdown-fill\s*\{[^}]*transition:\s*width 1s linear/s);
+  assert.doesNotMatch(styles, /ai-feeder-countdown/);
 });

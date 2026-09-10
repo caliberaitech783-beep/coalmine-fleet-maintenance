@@ -42,7 +42,7 @@ function harness() {
   };
   const scope = {requestStatusLabel,React, useState, useRef: value => useState(() => ({current: value}))[0], useEffect,
     Date: {now: () => now}, document, window: {setInterval(callback) {const id = ++nextTimer; timers.set(id, callback); return id;}, clearInterval(id) {timers.delete(id);}},
-    AI_FEEDER_CLOSE_DELAY_SECONDS: 60, InfoPulseContent: Null, createPortal: tree => tree,
+    InfoPulseContent: Null, createPortal: tree => tree,
     ...Object.fromEntries(["Activity", "MapPin", "Clock", "X", "Truck", "ChevronDown", "Bell"].map(name => [name, Null])),
   };
   const Component = new Function(...Object.keys(scope), `${code}; return AiFeederPanel;`)(...Object.values(scope));
@@ -55,35 +55,40 @@ function harness() {
   };
 }
 
-test("login-only Info Pulse blocks early dismissal and automatically closes exactly at one minute", () => {
+test("Info Pulse has an immediate Close button and remains open after the former login deadline", () => {
   const app = harness();
   let closes = 0;
-  const props = {lockForLogin: true, onClose: () => {closes++;}};
-  assert.equal(closeButton(app.render(props)), undefined);
-  app.dispatch("keydown", {key: "Escape"});
+  const props = {onClose: () => {closes++;}};
+  const tree = app.render(props);
+  assert.ok(closeButton(tree));
+  assert.equal(descendants(tree, node => node.props.role === "timer").length, 0);
+  assert.equal(app.timers.size, 0);
   app.advance(59_999);
   assert.equal(closes, 0);
-  assert.equal(closeButton(app.render(props)), undefined);
+  assert.ok(closeButton(app.render(props)));
   app.advance(1);
-  assert.equal(closes, 1);
+  assert.equal(closes, 0);
   assert.equal(app.timers.size, 0);
   app.dispatch("visibilitychange");
   app.dispatch("visibilitychange");
-  app.advance(60_000);
-  assert.equal(closes, 1);
+  app.advance(3_600_000);
+  assert.equal(closes, 0);
   app.unmount();
   assert.equal(app.document.body.style.overflow, "auto");
 });
 
-test("backgrounded login panel catches up on return and calls the latest close handler once", () => {
+test("backgrounding and refreshed data never dismiss the panel; Escape uses the latest handler", () => {
   const app = harness();
   let stale = 0, current = 0;
-  app.render({lockForLogin: true, onClose: () => {stale++;}});
+  app.render({ready: false, onClose: () => {stale++;}});
   app.advance(30_000);
-  app.render({lockForLogin: true, onClose: () => {current++;}});
+  app.render({ready: true, cases: [{key: 'refreshed'}], updatedAt: 30_000, onClose: () => {current++;}});
   app.advance(45_000, {tick: false});
   app.dispatch("visibilitychange");
   app.dispatch("visibilitychange");
+  assert.equal(stale, 0);
+  assert.equal(current, 0);
+  app.dispatch("keydown", {key: "Escape"});
   assert.equal(stale, 0);
   assert.equal(current, 1);
   app.unmount();
@@ -93,7 +98,7 @@ test("manual reopening is immediately dismissible and never schedules an automat
   for (const method of ["button", "Escape"]) {
     const app = harness();
     let closes = 0;
-    const props = {lockForLogin: false, onClose: () => {closes++;}};
+    const props = {onClose: () => {closes++;}};
     const tree = app.render(props);
     assert.ok(closeButton(tree));
     assert.equal(descendants(tree, node => node.props.role === "timer").length, 0);
@@ -108,17 +113,19 @@ test("manual reopening is immediately dismissible and never schedules an automat
   }
 });
 
-test("switching to manual mode or unmounting cancels the former login timer", () => {
+test("unmount restores scrolling and focus and removes the dismissal listener", () => {
   const app = harness();
   let closes = 0;
-  const onClose = () => {closes++;};
-  app.render({lockForLogin: true, onClose});
-  app.advance(10_000);
-  const tree = app.render({lockForLogin: false, onClose});
-  assert.ok(closeButton(tree));
+  let focusRestored = 0;
+  app.document.activeElement = {focus() {focusRestored++;}};
+  app.render({onClose: () => {closes++;}});
+  assert.equal(app.document.body.style.overflow, "hidden");
+  app.unmount();
+  assert.equal(app.document.body.style.overflow, "auto");
+  assert.equal(focusRestored, 1);
   assert.equal(app.timers.size, 0);
   app.advance(90_000);
   app.dispatch("visibilitychange");
+  app.dispatch("keydown", {key: "Escape"});
   assert.equal(closes, 0);
-  app.unmount();
 });

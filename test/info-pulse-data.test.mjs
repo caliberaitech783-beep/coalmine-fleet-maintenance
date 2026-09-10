@@ -8,6 +8,52 @@ const NOW = Date.parse('2026-09-10T12:00:00+05:30');
 const base = {status: 'Open', site: 'Sasti OB', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-08 12:00'};
 const build = rows => buildInfoPulseCases(rows, {role: 'Admin', now: NOW});
 
+test('critical cases put the longest ETC overdue first using exact timestamps across multiple issues', () => {
+  const records = [
+    {...base, ref: 'new', start: '2026-09-10 11:00', expectedCompletionAt: ''},
+    {...base, ref: 'idle', status: 'Idle', start: '2026-08-01 12:00'},
+    {...base, ref: 'longest-standing', start: '2026-08-01 12:00', expectedCompletionAt: ''},
+    {...base, ref: 'shorter-standing', start: '2026-08-15 12:00', expectedCompletionAt: 'invalid'},
+    {...base, ref: 'recent-overdue', start: '2026-08-01 12:00', expectedCompletionAt: '2026-09-10 11:59:59'},
+    {...base, ref: 'old-overdue', expectedCompletionAt: '2026-09-02 12:00'},
+    {...base, ref: 'old-overdue-one-second-more', expectedCompletionAt: '2026-09-02T06:29:59Z'},
+    {...base, ref: 'longest-overdue', start: '2026-08-20 12:00', expectedCompletionAt: '2026-09-01 12:00'},
+  ];
+  const cases = build(records);
+  assert.deepEqual(cases.map(row => row.key), [
+    'longest-overdue', 'old-overdue-one-second-more', 'old-overdue', 'recent-overdue',
+    'longest-standing', 'shorter-standing', 'idle', 'new',
+  ]);
+  assert.ok(cases[0].issues.some(issue => issue.type === 'long-running'));
+  assert.equal(infoPulseView(cases).totals.total, records.length);
+  assert.equal(infoPulseView(cases).totals.counts['etc-overdue'], 4);
+  assert.deepEqual(build([...records].reverse()).map(row => row.key), cases.map(row => row.key));
+});
+
+test('equal overdue times use longest standing then a stable case key, with unknown starts last', () => {
+  const records = [
+    {...base, ref: 'missing-start', start: ''},
+    {...base, ref: 'invalid-start', start: 'invalid'},
+    {...base, ref: 'b'}, {...base, ref: 'a'},
+    {...base, ref: 'older', start: '2026-08-01 12:00'},
+  ];
+  const expected = ['older', 'a', 'b', 'invalid-start', 'missing-start'];
+  assert.deepEqual(build(records).map(row => row.key), expected);
+  assert.deepEqual(build([...records].reverse()).map(row => row.key), expected);
+});
+
+test('overdue ordering survives site/date/issue filters, refreshes and page boundaries', () => {
+  const records = Array.from({length: 60}, (_, i) => ({...base, ref: `R-${i}`, site: i % 2 ? 'Sasti OB' : 'Majri OB',
+    expectedCompletionAt: new Date(NOW - (i + 1) * 60_000).toISOString()}));
+  const cases = build(records);
+  const rows = infoPulseView(cases, {site: 'Sasti OB', from: '2026-09-01', to: '2026-09-01', type: 'etc-overdue'}).rows;
+  const expected = Array.from({length: 30}, (_, i) => `R-${59 - i * 2}`);
+  assert.deepEqual(rows.slice(0, 25).map(row => row.key), expected.slice(0, 25));
+  assert.deepEqual(rows.slice(25).map(row => row.key), expected.slice(25));
+  const refreshed = buildInfoPulseCases([...records].reverse(), {role: 'Admin', now: NOW + 60_000});
+  assert.deepEqual(refreshed.map(row => row.key), cases.map(row => row.key));
+});
+
 test('site totals reconcile to unique requests and every issue drill-down beyond sixty', () => {
   const records = Array.from({length: 147}, (_, i) => ({...base, ref: `R-${i}`, door: `D-${i}`, site: i % 3 === 0 ? 'MAJRI II' : i % 2 ? 'SASTI II' : 'Sasti OB'}));
   const cases = build([...records, records[10]]);

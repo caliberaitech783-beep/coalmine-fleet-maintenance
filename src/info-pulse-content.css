@@ -6,9 +6,6 @@
 .pulse-scope { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #536179; }
 .pulse-scope svg { width: 15px; height: 15px; }
 .pulse-panel .ai-feeder-actions button { background: #eef1f6; color: #37445c; min-width: 38px; min-height: 38px; }
-.pulse-panel .ai-feeder-countdown { color: #78264d; background: #f8edf2; border-color: #e7c7d4; font-size: 16px; }
-.pulse-panel .ai-feeder-countdown svg { color: inherit; }
-.pulse-panel .ai-feeder-countdown-fill { background: #78264d14; }
 .pulse-content { display: flex; flex-direction: column; padding: 16px 24px; overflow: auto; min-height: 0; font: 14px/1.45 Manrope, sans-serif; color: #26344a; background: #fff; }
 .pulse-toolbar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .pulse-toolbar label { display: grid; gap: 5px; font-size: 14px; font-weight: 650; color: #46536a; margin: 0; }
@@ -80,8 +77,6 @@
 .pulse-panel .ai-feeder-kicker { font-size: 12px; letter-spacing: 1.2px; color: #fff; }
 .pulse-panel .pulse-scope { padding: 4px 10px; background: #ffffff16; border: 1px solid #ffffff4d; border-radius: 20px; font-size: 13px; color: #fff; }
 .pulse-panel .ai-feeder-actions button { background: #ffffff26; color: #fff; border-radius: 10px; }
-.pulse-panel .ai-feeder-countdown { color: #fff; background: #ffffff16; border-color: #ffffff45; }
-.pulse-panel .ai-feeder-countdown-fill { background: #ffffff24; }
 .pulse-content { padding: 20px 28px; background: #f7f8fc; }
 .pulse-site-filter { display: grid; grid-template-columns: 54px minmax(0, 1fr); align-items: center; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #e5ddee; }
 .pulse-site-label { display: flex; align-items: center; gap: 10px; color: #7b7087; font-size: 14px; font-weight: 750; }
