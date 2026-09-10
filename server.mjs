@@ -50,7 +50,7 @@ import {buildTableExportPdf} from './table-export-pdf.mjs';
 import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage} from './request-conflict.mjs';
-import {auditChangedFields,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
+import {auditChangedFields,auditDateRange,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
@@ -185,12 +185,13 @@ const auditTargetReference=(req)=>auditClean(req.params?.reference||req.params?.
 const auditIpAddress=(req)=>auditClean(String(req.headers?.['x-forwarded-for']||'').split(',')[0]||req.ip||req.socket?.remoteAddress,100);
 const AUDIT_VISIBLE_SCOPE_SQL=`(
   event_type NOT IN ('Workflow','Workflow timeline') AND (
-  event_type IN ('Security','Master data')
+  event_type IN ('Security','Master data','Administration')
   OR action IN ('Edit request','Delete request')
   OR request_path IN ('/api/login','/api/logout')
   OR request_path LIKE '/api/password-reset%'
   OR request_path LIKE '/api/change-initial-password%'
   OR request_path LIKE '/api/masters/%'
+  OR request_path LIKE '/api/backups/%'
   OR (request_path LIKE '/api/requests/%' AND request_path NOT LIKE '/api/requests/%/%' AND request_method IN ('PUT','PATCH','DELETE'))
 ))`;
 const AUDIT_EVENT_PROJECTION=`id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
@@ -216,6 +217,18 @@ async function appendAuditEvent(req,event={}){
       auditClean(event.errorCode||req.auditErrorCode,80),auditClean(req.auditRequestId||req.get?.('x-request-id'),80),
     ]);
   }catch(error){console.error('Audit event could not be recorded:',error.message)}
+}
+
+async function appendScheduledBackupAudit(event={}){
+  const request={
+    method:'SYSTEM',path:'/system/backups/scheduled',headers:{},body:{},params:{},
+    session:{login:'system',name:'Automatic schedule',assignedRole:'System'},socket:{},get:()=>'',
+  };
+  await appendAuditEvent(request,{
+    eventType:'Administration',module:'Backup',action:'Create scheduled backup',
+    targetType:'Database backup',actorLogin:'system',actorName:'Automatic schedule',actorRole:'System',
+    changedFields:[],...event,
+  });
 }
 
 async function publicWhatsAppSettings(){
@@ -1050,7 +1063,12 @@ async function runScheduledBackup(now=new Date()){
     const slot=indiaBackupSlot(now);
     const result=await createStoredBackup({triggerType:'Scheduled',scheduleSlot:slot.slotKey,actor:{name:'Automatic schedule'}});
     await pruneStoredBackups();
+    if(!result.skipped)await appendScheduledBackupAudit({targetReference:result.fileName,reason:`Completed ${result.sizeBytes} bytes; SHA-256 ${result.checksum}`});
     return result;
+  }catch(error){
+    const safe=auditSafeError(error);
+    await appendScheduledBackupAudit({outcome:'Failed',reason:safe.message,errorCode:safe.code});
+    throw error;
   }finally{scheduledBackupRunning=false}
 }
 
@@ -1451,7 +1469,7 @@ app.post('/api/backups/run',requireSuper,requireAdministrator,async(req,res,next
   try{
     const result=await createStoredBackup({triggerType:'Manual schedule',actor:req.session});
     await pruneStoredBackups();
-    req.audit={eventType:'Administration',module:'Backup',action:'Create stored backup',targetType:'Database backup',targetReference:result.fileName,changedFields:[]};
+    req.audit={eventType:'Administration',module:'Backup',action:'Create stored backup',targetType:'Database backup',targetReference:result.fileName,reason:`Completed ${result.sizeBytes} bytes; SHA-256 ${result.checksum}`,changedFields:[]};
     const {filePath:storedPath,...publicResult}=result;
     res.status(201).json(publicResult);
   }catch(error){next(error)}
@@ -1461,7 +1479,7 @@ app.post('/api/backups/export',requireSuper,requireAdministrator,async(req,res,n
   try{
     const folder=path.join(backupStorageRoot,'manual-exports');
     const result=await createStoredBackup({triggerType:'Manual export',actor:req.session,folderOverride:folder});
-    req.audit={eventType:'Administration',module:'Backup',action:'Export full backup',targetType:'Database backup',targetReference:result.fileName,changedFields:[]};
+    req.audit={eventType:'Administration',module:'Backup',action:'Export full backup',targetType:'Database backup',targetReference:result.fileName,reason:`Exported ${result.sizeBytes} bytes; SHA-256 ${result.checksum}`,changedFields:[]};
     res.set('Cache-Control','no-store');
     res.set('X-Backup-Checksum',result.checksum);
     res.download(result.filePath,result.fileName,async(error)=>{
@@ -1483,6 +1501,7 @@ app.get('/api/backups/:backupId/download',requireSuper,requireAdministrator,asyn
     if(!backup?.storage_path)return res.status(404).json({error:'This backup file is no longer available.'});
     const target=path.resolve(backup.storage_path);
     if(!target.startsWith(`${backupStorageRoot}${path.sep}`)||!existsSync(target))return res.status(404).json({error:'This backup file is no longer available.'});
+    req.audit={eventType:'Administration',module:'Backup',action:'Download stored backup',targetType:'Database backup',targetReference:backup.file_name,changedFields:[]};
     res.set('Cache-Control','no-store');
     res.download(target,backup.file_name);
   }catch(error){next(error)}
@@ -1510,7 +1529,7 @@ app.post('/api/backups/import/inspect',requireSuper,requireTrueSuperAdmin,async(
     const [details,checksum]=await Promise.all([inspectBackupFile(filePath),sha256File(filePath)]);
     const expiresAt=Date.now()+30*60*1000;
     pendingBackupImports.set(token,{filePath,originalName,login:String(req.session.login||''),expiresAt,details,checksum,sizeBytes:received});
-    req.audit={eventType:'Administration',module:'Backup',action:'Inspect restore backup',targetType:'Database backup',targetReference:originalName,changedFields:[]};
+    req.audit={eventType:'Administration',module:'Backup',action:'Inspect imported backup',targetType:'Database backup',targetReference:originalName,reason:`Verified ${received} bytes; SHA-256 ${checksum}`,changedFields:[]};
     res.set('Cache-Control','no-store');
     res.json({token,fileName:originalName,sizeBytes:received,checksum,expiresAt:new Date(expiresAt).toISOString(),...details});
   }catch(error){
@@ -1540,7 +1559,7 @@ app.post('/api/backups/import/restore',requireSuper,requireTrueSuperAdmin,async(
     }
     pendingBackupImports.delete(token);
     await fs.rm(pending.filePath,{force:true}).catch(()=>{});
-    req.audit={eventType:'Administration',module:'Backup',action:'Restore full backup',targetType:'Database backup',targetReference:pending.originalName,reason:`Safety backup: ${safety.fileName}`,changedFields:Object.keys(restored.tables||{})};
+    req.audit={eventType:'Administration',module:'Backup',action:'Restore imported backup',targetType:'Database backup',targetReference:pending.originalName,reason:`Safety backup: ${safety.fileName}`,changedFields:Object.keys(restored.tables||{})};
     res.json({restored,safetyBackup:{fileName:safety.fileName,checksum:safety.checksum},signInAgain:true});
   }catch(error){
     if(pending&&pending.expiresAt<Date.now()){
@@ -1557,14 +1576,16 @@ app.get('/api/audit-events',requireSuper,requireAdministrator,async(req,res,next
     const limit=Math.min(5000,Math.max(1,Number(req.query.limit)||1000));
     const beforeAt=String(req.query.beforeAt||'').trim();
     const beforeId=Number(req.query.beforeId)||0;
-    const params=[];
+    const {fromDate,toDate}=auditDateRange(req.query);
+    const params=[fromDate,toDate];
     const conditions=[
-      `occurred_at >= NOW()-INTERVAL '5 days'`,
+      `occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')`,
+      `occurred_at < ((($2::date+1)::timestamp) AT TIME ZONE 'Asia/Kolkata')`,
       AUDIT_VISIBLE_SCOPE_SQL,
     ];
     if(paged&&beforeAt&&beforeId){
       params.push(beforeAt,beforeId);
-      conditions.push(`(occurred_at,id)<($1::timestamptz,$2::bigint)`);
+      conditions.push(`(occurred_at,id)<($${params.length-1}::timestamptz,$${params.length}::bigint)`);
     }
     params.push(paged?limit+1:limit);
     const limitParameter=`$${params.length}`;
@@ -1582,11 +1603,12 @@ app.get('/api/audit-events',requireSuper,requireAdministrator,async(req,res,next
         COUNT(*) FILTER (WHERE outcome='Failed')::int AS failed,
         COUNT(DISTINCT NULLIF(actor_login,''))::int AS users,
         COUNT(DISTINCT NULLIF(device_id,''))::int AS devices FROM audit_events
-        WHERE occurred_at >= NOW()-INTERVAL '5 days'
-          AND ${AUDIT_VISIBLE_SCOPE_SQL}`);
+        WHERE occurred_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
+          AND occurred_at < ((($2::date+1)::timestamp) AT TIME ZONE 'Asia/Kolkata')
+          AND ${AUDIT_VISIBLE_SCOPE_SQL}`,[fromDate,toDate]);
       summary=summaryRows[0]||{total:0,failed:0,users:0,devices:0};
     }
-    res.json({events,summary,range:{days:5},hasMore,nextCursor:hasMore&&last?{beforeAt:last.occurredAt,beforeId:last.id}:null});
+    res.json({events,summary,range:{fromDate,toDate},hasMore,nextCursor:hasMore&&last?{beforeAt:last.occurredAt,beforeId:last.id}:null});
   }catch(error){next(error)}
 });
 

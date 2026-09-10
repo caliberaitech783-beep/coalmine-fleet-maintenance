@@ -1,5 +1,31 @@
 const SENSITIVE_FIELD = /(password|hash|token|secret|otp|audio|image|attachment|file_data|accessToken|authorization|cookie)/i;
 
+export function auditIndiaDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone:"Asia/Kolkata", year:"numeric", month:"2-digit", day:"2-digit",
+  }).formatToParts(date).map((part) => [part.type,part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function validDateKey(value) {
+  const text = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+  const [year,month,day] = text.split("-").map(Number);
+  const date = new Date(Date.UTC(year,month - 1,day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+export function auditDateRange(query = {}, now = new Date()) {
+  const today = auditIndiaDateKey(now);
+  const fromDate = String(query.fromDate || today).trim();
+  const toDate = String(query.toDate || today).trim();
+  if (!validDateKey(fromDate) || !validDateKey(toDate)) throw Object.assign(new Error("Select valid From and To dates."), {status:400});
+  if (fromDate > toDate) throw Object.assign(new Error("From date cannot be after To date."), {status:400});
+  return {fromDate,toDate};
+}
+
 const auditText = (value, limit = 240) => String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
 
 function auditObject(value, depth = 0) {
@@ -76,6 +102,16 @@ export function auditRouteDetails(method = "", path = "") {
   if (route.includes("navigation-settings")) return { module: "Access control", eventType: "Configuration", action: verb === "GET" ? "View navigation settings" : "Update navigation settings" };
   if (route.includes("admin-locks")) return { module: "Authentication", eventType: "Security", action: verb === "GET" ? "View administrator locks" : "Unlock administrator accounts" };
   if (route.startsWith("/api/user-sessions")) return { module: "User sessions", eventType: "Security", action: verb === "DELETE" ? "Force close session" : "View user sessions" };
+  if (route.startsWith("/api/backups")) {
+    const action = route.endsWith("/settings") ? (verb === "GET" ? "View backup schedule" : "Update backup schedule")
+      : route.endsWith("/run") ? "Create stored backup"
+      : route.endsWith("/export") ? "Export full backup"
+      : route.endsWith("/import/inspect") ? "Inspect imported backup"
+      : route.endsWith("/import/restore") ? "Restore imported backup"
+      : route.endsWith("/download") ? "Download stored backup"
+      : "View backup history";
+    return {module:"Backup",eventType:"Administration",action};
+  }
   if (route.startsWith("/api/oracle")) return { module: "Oracle synchronization", eventType: "Integration", action: verb === "GET" ? "View Oracle data" : "Synchronize master data" };
   if (route.startsWith("/api/exports")) return { module: "Reports", eventType: "Report", action: "Generate report" };
   if (route.startsWith("/api/reports")) return { module: "Reports", eventType: "Report", action: verb === "GET" ? "View report data" : "Generate or send report" };
@@ -93,6 +129,7 @@ export function auditShouldRecord(method = "", path = "") {
   if (route.includes("password-reset") || route.includes("change-initial-password")) return mutating;
   if (route.startsWith("/api/masters/")) return mutating;
   if (route.startsWith("/api/user-sessions/")) return verb === "DELETE";
+  if (route.startsWith("/api/backups/")) return ["GET","POST","PUT","PATCH","DELETE"].includes(verb);
 
   // Keep deliberate record corrections and deletions, but exclude request
   // creation and lifecycle steps such as close, verify, remarks and approvals.
