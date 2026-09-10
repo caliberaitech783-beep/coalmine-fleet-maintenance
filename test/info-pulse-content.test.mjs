@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
 import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
 import {transformWithOxc} from 'vite';
 import * as data from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import * as dates from '../date-time-format.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
+import * as reasons from '../src/info-pulse-reasons.mjs';
 
 const source = readFileSync(new URL('../src/info-pulse-content.jsx', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
@@ -29,10 +31,10 @@ function harness() {
   const slots = [];
   let cursor = 0;
   const bindings = {
-    React, ...data, ...dates, requestStatusLabel, parseIstTimestamp,
+    React, ...data, ...dates, ...reasons, requestStatusLabel, parseIstTimestamp,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
     useMemo: callback => callback(),
-    ...Object.fromEntries(['ArrowLeft', 'ChevronDown', 'ChevronLeft', 'ChevronRight', 'RefreshCw'].map(name => [name, () => null])),
+    ...Object.fromEntries(['ArrowLeft', 'ChevronDown', 'ChevronLeft', 'ChevronRight', 'RefreshCw', 'MapPin', 'Truck'].map(name => [name, () => null])),
   };
   const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
   const requests = Array.from({length: 67}, (_, i) => ({ref: `R-${i}`, door: `D-${i}`, site: i < 60 ? 'Sasti OB' : 'Majri OB', status: 'Open', start: i < 60 ? '2026-09-01 12:00' : '2026-09-02 12:00', expectedCompletionAt: '2026-09-03 12:00', complaint: 'Hydraulic leak'}));
@@ -95,4 +97,32 @@ test('loading and failures never render a misleading zero and retry is actionabl
   tree = app.render({error: 'offline'});
   assert.match(text(tree), /Showing the last loaded counts/);
   assert.ok(byLabel(tree, 'Total: 67 cases'));
+});
+
+test('real daily-update arrays render all reasons and dated history without crashing', () => {
+  const request = {ref: 'R-REASONS', door: 'E02-123', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-05 12:00', complaint: 'Hydraulic leak', idleReason: 'No driver', delayedReason: 'Seal unavailable', arrivalFlagRemark: 'Recovery truck delayed', misFlagRemark: 'First trip incomplete', maintenanceWork: 'Pump replaced', dailyRemarks: [
+    {createdAt: '2026-09-09 12:30', authorName: 'Workshop team', remark: 'Pump tested', delayReason: 'Awaiting seal delivery'},
+    {createdAt: '2026-09-08 10:00', authorName: 'Site team', remark: 'Pump removed', delayReason: 'Vendor inspection'},
+  ]};
+  const props = {requests: [request], cases: data.buildInfoPulseCases([request], {now: NOW})};
+  const app = harness();
+  let tree = app.render(props);
+  byLabel(tree, 'Total: 1 cases').props.onClick();
+  tree = app.render(props);
+  assert.match(renderToStaticMarkup(tree), /Overdue reason/);
+  assert.match(renderToStaticMarkup(tree), /Awaiting seal delivery/);
+  descendants(tree, node => node.props.className === 'pulse-details-toggle')[0].props.onClick();
+  tree = app.render(props);
+  const html = renderToStaticMarkup(tree);
+  for (const value of ['All reasons', 'No driver', 'Seal unavailable', 'Recovery truck delayed', 'First trip incomplete', 'Pump replaced', 'Pump tested', 'Pump removed', 'Vendor inspection', 'Workshop team', '09-09-2026']) assert.ok(html.includes(value), value);
+  assert.ok(!html.includes('[object Object]'));
+});
+
+test('priority cards count unique cases and open matching records', () => {
+  const app = harness();
+  let tree = app.render();
+  byLabel(tree, 'Critical: 67 cases').props.onClick();
+  tree = app.render();
+  assert.match(text(tree), /All sites.*Critical/);
+  assert.match(text(tree), /1–25 of 67 cases/);
 });

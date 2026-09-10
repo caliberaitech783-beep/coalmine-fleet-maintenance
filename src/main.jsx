@@ -7754,7 +7754,7 @@ function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt,
   return createPortal(<div className="ai-feeder-overlay">
     <div className="ai-feeder-panel pulse-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
-        <div className="pulse-title"><h2 id="ai-feeder-title"><Activity aria-hidden="true" /> Info Pulse</h2><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div>
+        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Site-wise overview</h2></div>
         <div className="ai-feeder-actions">
           {lockForLogin && <span className={`ai-feeder-countdown${seconds <= 10 ? " ending" : ""}`} role="timer" aria-label={`Close available in ${seconds} seconds`} title={`Close available in ${seconds} seconds`}>
             <span className="ai-feeder-countdown-fill" style={{width: `${Math.max(0, seconds) / AI_FEEDER_CLOSE_DELAY_SECONDS * 100}%`}} aria-hidden="true" />
