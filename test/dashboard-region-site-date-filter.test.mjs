@@ -20,16 +20,22 @@ test("dashboard region selection exposes its sites and filters every scoped data
 
 test("dashboard date filters opening-date analysis without filtering live fleet status and remains responsive", () => {
   assert.match(source, /function dashboardRecordDate\(record = \{\}\)/);
-  // The top date defaults to today; today keeps the live view and only an earlier day filters.
-  assert.match(source, /const \[dashboardDate, setDashboardDate\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
-  assert.match(source, /const dashboardDateFilter = dashboardDate && dashboardDate !== todayKey \? dashboardDate : ""/);
-  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardDateFilter\)/);
+  // The top From/To range defaults to today on both ends and is applied to opening-date analysis.
+  assert.match(source, /const \[dashboardFrom, setDashboardFrom\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
+  assert.match(source, /const \[dashboardTo, setDashboardTo\] = useState\(\(\) => localDateKey\(new Date\(\)\)\)/);
+  assert.match(source, /const dashboardIsLive = !dashboardTo \|\| dashboardTo === todayKey/);
+  assert.match(source, /const \{liveRequests: liveBreakdowns, historicalRequests\} = splitDashboardRequests\(locationBreakdowns, dashboardFrom, dashboardTo\)/);
   assert.match(source, /const visibleBreakdowns = historicalRequests\s*\.map/);
   assert.match(source, /liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
   assert.match(source, /fleetChartCounts\(visibleEquipment, liveBreakdowns\)/);
   assert.doesNotMatch(source, /dashboardDate \? locationBreakdowns\.filter/);
-  assert.match(source, /<input aria-label="Dashboard date" type="date" value=\{dashboardDate\} max=\{todayKey\}/);
-  assert.match(source, /dashboardReconnecting \? "Reconnecting" : dashboardDateFilter \? "Filtered" : "Live"\} · \{filteredDateLabel\}/);
+  assert.match(source, /<input aria-label="Dashboard from date" type="date" value=\{dashboardFrom\} max=\{dashboardTo \|\| todayKey\}/);
+  assert.match(source, /<input aria-label="Dashboard to date" type="date" value=\{dashboardTo\} min=\{dashboardFrom \|\| undefined\} max=\{todayKey\}/);
+  assert.match(source, /dashboardReconnecting \? "Reconnecting" : dashboardIsLive \? "Live" : "Filtered"\} · \{filteredDateLabel\}/);
+  // Every other From/To pair also starts on today.
+  for (const name of ["breakdownTrendAnchor", "breakdownTrendFrom", "requestTrendFrom", "requestTrendTo", "breakdownSummaryFrom", "breakdownSummaryTo"]) {
+    assert.match(source, new RegExp(`const \\[${name}, set\\w+\\] = useState\\(\\(\\) => localDateKey\\(new Date\\(\\)\\)\\)`), name);
+  }
   assert.match(styles, /\.mine-head-actions\{[^}]*flex-wrap:wrap/);
   assert.match(styles, /\.mine-site-filter select\{min-width:165px\}/);
   assert.match(styles, /@media\(max-width:700px\)[\s\S]*\.mine-head-actions\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);

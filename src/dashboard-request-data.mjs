@@ -30,14 +30,18 @@ export function requestEventDate(record = {}, event) {
 
 // Call with rows already restricted to the authorised location/region. A
 // selected opening day affects historical request analysis, not live status.
-export function splitDashboardRequests(scopedRows = [], selectedOpeningDate = "") {
+// An optional end date makes the selection an inclusive opening-date range.
+export function splitDashboardRequests(scopedRows = [], selectedOpeningDate = "", selectedEndDate = selectedOpeningDate) {
   if (!Array.isArray(scopedRows)) throw new TypeError("Dashboard requests must be an array.");
   const selection = String(selectedOpeningDate ?? "").trim();
-  const selectedDay = /^\d{4}-\d{2}-\d{2}$/.test(selection) ? requestDateKey(selection) : "";
+  const endSelection = String(selectedEndDate ?? "").trim() || selection;
+  const dayKey = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? requestDateKey(value) : "";
+  const startDay = dayKey(selection);
+  const endDay = dayKey(endSelection);
   return {
     liveRequests: [...scopedRows],
-    historicalRequests: !selection ? [...scopedRows] : selectedDay
-      ? scopedRows.filter((record) => requestEventDate(record, "opened") === selectedDay)
+    historicalRequests: !selection ? [...scopedRows] : startDay && endDay && startDay <= endDay
+      ? scopedRows.filter((record) => { const opened = requestEventDate(record, "opened"); return opened >= startDay && opened <= endDay; })
       : [],
   };
 }

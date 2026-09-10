@@ -1086,19 +1086,20 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [assetDrilldown, setAssetDrilldown] = useState("");
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
-  const [dashboardDate, setDashboardDate] = useState(() => localDateKey(new Date()));
+  const [dashboardFrom, setDashboardFrom] = useState(() => localDateKey(new Date()));
+  const [dashboardTo, setDashboardTo] = useState(() => localDateKey(new Date()));
   const [breakdownTrendDays, setBreakdownTrendDays] = useState(7);
   const [breakdownTrendSite, setBreakdownTrendSite] = useState("all");
-  const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState("");
-  const [breakdownTrendFrom, setBreakdownTrendFrom] = useState("");
+  const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState(() => localDateKey(new Date()));
+  const [breakdownTrendFrom, setBreakdownTrendFrom] = useState(() => localDateKey(new Date()));
   const [breakdownTrendRangeError, setBreakdownTrendRangeError] = useState("");
   const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
-  const [requestTrendFrom, setRequestTrendFrom] = useState("");
+  const [requestTrendFrom, setRequestTrendFrom] = useState(() => localDateKey(new Date()));
   const [requestTrendRegion, setRequestTrendRegion] = useState("all");
-  const [requestTrendTo, setRequestTrendTo] = useState("");
+  const [requestTrendTo, setRequestTrendTo] = useState(() => localDateKey(new Date()));
   const [maintenanceAvailabilityTab, setMaintenanceAvailabilityTab] = useState("breakdown");
   // Every dashboard date filter starts on today; clearing a date shows all time.
   const [breakdownSummaryFrom, setBreakdownSummaryFrom] = useState(() => localDateKey(new Date()));
@@ -1117,10 +1118,16 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   useEffect(() => localStorage.setItem("nerveCenterFleetIntelligenceView", fleetIntelligenceView), [fleetIntelligenceView]);
   const now = new Date();
   const todayKey = localDateKey(now);
-  const dateLabel = formatDisplayDate(now);
-  // Today is the live view; only an earlier date filters the opening-date analysis.
-  const dashboardDateFilter = dashboardDate && dashboardDate !== todayKey ? dashboardDate : "";
-  const filteredDateLabel = dashboardDate ? formatDisplayDate(dashboardDate) : dateLabel;
+  // The top From/To range scopes opening-date analysis; a range ending today is the live view.
+  const dashboardRangeActive = Boolean(dashboardFrom && dashboardTo);
+  const dashboardIsLive = !dashboardTo || dashboardTo === todayKey;
+  const filteredDateLabel = !dashboardRangeActive ? "All time" : dashboardFrom === dashboardTo ? formatDisplayDate(dashboardTo) : formatDisplayDateRange(dashboardFrom, dashboardTo);
+  const updateDashboardRange = (bound, value) => {
+    if (!value) { setDashboardFrom(""); setDashboardTo(""); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > todayKey) return;
+    setDashboardFrom((from) => bound === "from" || !from || value < from ? value : from);
+    setDashboardTo((to) => bound === "to" || !to || value > to ? value : to);
+  };
   const normalizedAllowedSites=Array.isArray(equipmentScope?.allowedSites)?equipmentScope.allowedSites.filter(Boolean):null;
   const normalizedAllowedRegions=Array.isArray(equipmentScope?.allowedRegions)?equipmentScope.allowedRegions.filter((region)=>region&&region!=="All"):null;
   const restrictToScope=equipmentScope?.restrictToScope===true;
@@ -1140,7 +1147,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return assetIndex === null ? undefined : visibleEquipment[assetIndex];
   };
   const locationBreakdowns = selectedRegion ? scopedBreakdowns.filter((record) => activeSites.some((site) => recordBelongsToSite(record, site))) : scopedBreakdowns;
-  const {liveRequests: liveBreakdowns, historicalRequests} = splitDashboardRequests(locationBreakdowns, dashboardDateFilter);
+  const {liveRequests: liveBreakdowns, historicalRequests} = splitDashboardRequests(locationBreakdowns, dashboardFrom, dashboardTo);
   const visibleBreakdowns = historicalRequests
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
   const liveFleetCounts = fleetChartCounts(visibleEquipment, liveBreakdowns);
@@ -1154,7 +1161,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (date) counts[date] = (counts[date] || 0) + 1;
     return counts;
   }, {});
-  const breakdownTrendAnchorKey = breakdownTrendAnchor || dashboardDate || todayKey;
+  const breakdownTrendAnchorKey = breakdownTrendAnchor || dashboardTo || todayKey;
   const breakdownTrendStartDate = new Date(`${breakdownTrendAnchorKey}T12:00:00`);
   breakdownTrendStartDate.setDate(breakdownTrendStartDate.getDate() - breakdownTrendDays + 1);
   const breakdownTrendStartKey = breakdownTrendFrom || localDateKey(breakdownTrendStartDate);
@@ -1222,7 +1229,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ? throughputRequests.filter((record) => recordBelongsToSite(record, breakdownDetailSite))
     : [];
   const validBreakdownDetailRange = breakdownDetailFrom && breakdownDetailTo && breakdownDetailFrom <= breakdownDetailTo;
-  const breakdownDetailEndKey = validBreakdownDetailRange ? breakdownDetailTo : dashboardDate || todayKey;
+  const breakdownDetailEndKey = validBreakdownDetailRange ? breakdownDetailTo : dashboardTo || todayKey;
   const breakdownDetailStartDate = new Date(`${breakdownDetailEndKey}T12:00:00`);
   breakdownDetailStartDate.setDate(breakdownDetailStartDate.getDate() - (Math.max(1, breakdownDetailDays) - 1));
   const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
@@ -1298,7 +1305,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const fleetChartTicks = Array.from({ length: fleetChartAxisMax / fleetChartStep + 1 }, (_, index) => index * fleetChartStep);
   const equipmentShare = assetCounts.total ? Math.round((assetCounts.equipment / assetCounts.total) * 100) : 0;
   const vehicleShare = assetCounts.total ? Math.round((assetCounts.vehicles / assetCounts.total) * 100) : 0;
-  const requestTrendEndKey = requestTrendTo || dashboardDate || localDateKey(now);
+  const requestTrendEndKey = requestTrendTo || dashboardTo || localDateKey(now);
   const requestTrendEarliest = new Date(`${requestTrendEndKey}T12:00:00`);
   requestTrendEarliest.setDate(requestTrendEarliest.getDate() - 365);
   const requestTrendEarliestKey = localDateKey(requestTrendEarliest);
@@ -1542,7 +1549,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}`}>
       <header className="mine-dashboard-head">
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
-        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>Date</span><input aria-label="Dashboard date" type="date" value={dashboardDate} max={todayKey} onChange={(event) => setDashboardDate(event.target.value)} /></label><span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardDateFilter ? "Filtered" : "Live"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
+        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>From</span><input aria-label="Dashboard from date" type="date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><input aria-label="Dashboard to date" type="date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label><span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
       </header>
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">

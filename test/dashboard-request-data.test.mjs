@@ -82,6 +82,22 @@ test("opening uses a recorded start, legacy startedAt or createdAt without synth
   assert.equal(requestEventDate({}, "opened"), "");
 });
 
+test("an opening From/To range keeps every request opened on or between both days", () => {
+  const rows = [
+    {ref: "BEFORE", start: "2026-09-01 09:00:00"},
+    {ref: "FIRST", start: "2026-09-08 09:00:00"},
+    {ref: "MIDDLE", start: "2026-09-09T10:00:00+05:30"},
+    {ref: "LAST", start: "2026-09-10 23:30:00"},
+    {ref: "AFTER", start: "2026-09-11 00:10:00"},
+  ];
+  assert.deepEqual(splitDashboardRequests(rows, "2026-09-08", "2026-09-10").historicalRequests.map((row) => row.ref), ["FIRST", "MIDDLE", "LAST"]);
+  assert.deepEqual(splitDashboardRequests(rows, "2026-09-09", "2026-09-09").historicalRequests.map((row) => row.ref), ["MIDDLE"]);
+  assert.deepEqual(splitDashboardRequests(rows, "2026-09-10", "2026-09-08").historicalRequests, []);
+  assert.deepEqual(splitDashboardRequests(rows, "2026-09-08", "invalid").historicalRequests, []);
+  assert.deepEqual(splitDashboardRequests(rows, "2026-09-08", "").historicalRequests.map((row) => row.ref), ["FIRST"]);
+  assert.deepEqual(splitDashboardRequests(rows, "", "2026-09-08").historicalRequests, rows);
+});
+
 test("historical opening filter compares India date, not an ISO string prefix", () => {
   const row = {ref: "UTC", start: "2026-09-08T19:00:00Z"};
   assert.deepEqual(splitDashboardRequests([row], "2026-09-09").historicalRequests, [row]);

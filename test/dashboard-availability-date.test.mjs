@@ -136,7 +136,7 @@ test("date changes update the rendered availability cards, every site row and th
 });
 
 test("the date filter affects historical availability while live fleet metrics retain all active requests", () => {
-  assert.match(source, /aria-label="Dashboard date"[^>]*onChange=\{\(event\) => setDashboardDate\(event.target.value\)\}/);
+  assert.match(source, /aria-label="Dashboard to date"[^>]*onChange=\{\(event\) => updateDashboardRange\("to", event.target.value\)\}/);
   assert.match(source, /const kpis = liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
   assert.match(source, /new Map\(availabilityCountBySite.map/);
   assert.match(source, /const siteRequests = liveBreakdowns.filter/);

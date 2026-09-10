@@ -56,6 +56,19 @@ const todayKey = new Date().toLocaleDateString("en-CA");
 const todayLabel = displayDates.formatDisplayDate(todayKey);
 const liveAvailabilityCaption = `All timeAvailability: live · ${todayLabel}`;
 const todayCaption = `From: ${todayLabel}To: ${todayLabel}Availability: live · ${todayLabel}`;
+// Set the top From and To to one day, re-rendering between the two inputs.
+const setDashboardDate = (view, value, rows) => {
+  let tree = view.render(rows);
+  byLabel(tree, "Dashboard from date").props.onChange({target: {value}});
+  tree = view.render(rows);
+  byLabel(tree, "Dashboard to date").props.onChange({target: {value}});
+  return view.render(rows);
+};
+const setLifecycleFrom = (view, value, rows) => {
+  const tree = view.render(rows);
+  byLabel(tree, "Request lifecycle from date").props.onChange({target: {value}});
+  return view.render(rows);
+};
 
 test("BD In components appear only for default today and return on reset", () => {
   const rows = [
@@ -76,18 +89,29 @@ test("BD In components appear only for default today and return on reset", () =>
   assert.equal(byLabel(tree, "BD In opening and new counts"), undefined);
 });
 
-test("dashboard date defaults to today as the live view and only an earlier day filters", () => {
+test("dashboard From/To default to today as the live view and only an earlier range filters", () => {
   const view = harness();
   let tree = view.render();
-  assert.equal(byLabel(tree, "Dashboard date").props.value, todayKey);
-  assert.equal(byLabel(tree, "Dashboard date").props.max, todayKey);
+  assert.equal(byLabel(tree, "Dashboard from date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard to date").props.max, todayKey);
+  assert.ok(text(byClass(tree, "mine-updated")).endsWith(` · ${todayLabel}`));
+  // Today's range is applied: only requests opened today count as historical analysis.
+  byLabel(tree, "Dashboard from date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render();
+  assert.equal(byLabel(tree, "Dashboard from date").props.value, "2026-09-01");
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
+  assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
+  assert.ok(text(byClass(tree, "mine-updated")).includes(displayDates.formatDisplayDateRange("2026-09-01", todayKey)));
+  byLabel(tree, "Dashboard to date").props.onChange({target: {value: "9999-12-31"}});
+  tree = view.render();
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
+  tree = setDashboardDate(view, todayKey);
   assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
   assert.ok(button(tree, "BD (%) 33.3"), "site summary shows BD balance as a share of total fleet");
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
-  tree = view.render();
+  tree = setDashboardDate(view, "2026-09-09");
   assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Filtered · "));
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: todayKey}});
-  tree = view.render();
+  tree = setDashboardDate(view, todayKey);
   assert.ok(text(byClass(tree, "mine-updated")).startsWith(" Live · "));
 });
 
@@ -96,9 +120,14 @@ test("every dashboard date filter starts on today, availability follows the To d
   let tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, todayKey);
   assert.equal(byLabel(tree, "Site-wise BD to date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard from date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Breakdown trend from date").props.value, todayKey);
   assert.equal(byLabel(tree, "Breakdown trend to date").props.value, todayKey);
+  assert.ok(byLabel(tree, "1 day recorded breakdown chart"));
+  assert.equal(byLabel(tree, "Request lifecycle from date").props.value, todayKey);
   assert.equal(byLabel(tree, "Request lifecycle to date").props.value, todayKey);
-  assert.ok(byLabel(tree, "Request lifecycle from date").props.value < todayKey);
+  assert.ok(findAll(tree, (node) => node.type === "p" && text(node) === displayDates.formatDisplayDateRange(todayKey, todayKey, " - ")).length, "lifecycle range shows today only");
   assert.equal(text(byLabel(tree, "Site-wise BD table period")), todayCaption);
   assert.ok(text(byLabel(tree, "Site-wise breakdown opening, inward, outward and balance")).includes(`Availability count impact${todayLabel}`));
   assert.ok(!findAll(tree, (node) => node.props["aria-label"] === "Availability count date").length, "no separate availability date input");
@@ -199,8 +228,8 @@ test("lifecycle region filters its cards and linked rows independently of the da
   ].map((row) => ({...row, requesterRole: "Production User", start: "2026-09-09 08:00:00", category: "Breakdown"}));
   const view = harness({equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: [], restrictToScope: false});
   let tree = view.render(rows);
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
-  tree = view.render(rows);
+  tree = setDashboardDate(view, "2026-09-09", rows);
+  tree = setLifecycleFrom(view, "2026-09-01", rows);
   const controls = byClass(tree, "mine-request-lifecycle-end-controls");
   assert.ok(byLabel(controls, "Request lifecycle to date"));
   assert.ok(byLabel(controls, "Request lifecycle region"));
@@ -304,8 +333,8 @@ test("six-reading Closed and MIS bars match their pending request cards", () => 
   ];
   const view = harness();
   let tree = view.render(rows);
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
-  tree = view.render(rows);
+  tree = setDashboardDate(view, "2026-09-09", rows);
+  tree = setLifecycleFrom(view, "2026-09-01", rows);
   assert.ok(byLabel(tree, "09-09-2026: 0 Open in Maintenance requests"));
   byLabel(tree, "09-09-2026: 1 Open in MIS requests").props.onClick();
   tree = view.render(rows);
@@ -350,7 +379,7 @@ test("movement cards and new-intake type counts preserve all counted requests, i
   const rows = [...requests, {ref: "UNMAPPED", site: "Former workshop", status: "Open", start: "2026-09-09", category: "Breakdown"}];
   const view = harness({allowedSites: [], restrictToScope: false});
   let tree = view.render(rows);
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}}); tree = view.render(rows);
+  tree = setDashboardDate(view, "2026-09-09", rows);
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}}); tree = view.render(rows);
   const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), (node) => node.props["data-dashboard-list"]);
   for (const card of cards) {
@@ -406,8 +435,7 @@ test("all-region drilldown still excludes records outside a restricted user's as
 test("compiled Dashboard retains older open and Idle assets in live status after selecting an opening date", () => {
   const view = harness();
   let tree = view.render();
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
-  tree = view.render();
+  tree = setDashboardDate(view, "2026-09-09");
   button(tree, "Availability Count").props.onClick();
   tree = view.render();
   assert.ok(byLabel(tree, "Sasti OB: 1 on road, 1 off road and 1 idle. Open fleet details."));
@@ -422,8 +450,8 @@ test("compiled Dashboard retains older open and Idle assets in live status after
 test("compiled lifecycle places Idle on its actual India event day, not its old opening date", () => {
   const view = harness();
   let tree = view.render();
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
-  tree = view.render();
+  tree = setDashboardDate(view, "2026-09-09");
+  tree = setLifecycleFrom(view, "2026-09-01");
   assert.ok(byLabel(tree, "09-09-2026: 1 Idle Vehicles requests"));
   assert.ok(byLabel(tree, "09-09-2026: 1 Closed requests"));
   assert.ok(byLabel(tree, "09-09-2026: 0 Verified requests"));
@@ -440,8 +468,7 @@ test("compiled lifecycle places Idle on its actual India event day, not its old 
 test("site-wise From/To updates inclusive movement, availability, exports and linked details together", () => {
   const view = harness();
   let tree = view.render();
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
-  tree = view.render();
+  tree = setDashboardDate(view, "2026-09-09");
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render();
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
@@ -465,7 +492,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   assert.ok(byLabel(tree, "Sasti OB: 1 on road, 2 off road and 0 idle. Open fleet details."));
   assert.equal(text(byLabel(tree, "Availability table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
   // The independent top-level date and live fleet chart are not changed.
-  assert.equal(byLabel(tree, "Dashboard date").props.value, "2026-09-09");
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, "2026-09-09");
   const breakdown = findAll(tree, (node) => node.type === "button" && node.props.className === "breakdown" && node.props["aria-controls"] === "fleet-region-plot")[0];
   assert.equal(text(breakdown), "Breakdown 1");
 });
@@ -473,8 +500,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
 test("site-wise range allows one day, keeps dates ordered, rejects future dates and resets", () => {
   const view = harness();
   let tree = view.render();
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
-  tree = view.render();
+  tree = setDashboardDate(view, "2026-09-09");
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
   assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 2 balance/);
@@ -534,8 +560,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
   };
   assertToday();
   // A different chart's date must not reinstate a hidden filter when this one clears.
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-08-01"}});
-  tree = view.render(rows);
+  tree = setDashboardDate(view, "2026-08-01", rows);
   for (const clear of ["from", "to"]) {
     byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-09"}});
     tree = view.render(rows);
@@ -644,7 +669,8 @@ test("Breakdown Trend From/To keeps bars, counts, average and View all on the sa
   const rows = [...requests, {ref: "AFTER-RANGE", door: "V1", chassis: "C1", site: "Sasti OB", status: "Open", start: "2026-09-10 09:00:00"},
     {ref: "OTHER-SITE", door: "V1", site: "Majri OB", status: "Open", start: "2026-09-01 09:00:00"}];
   let tree = view.render(rows);
-  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  tree = setDashboardDate(view, "2026-09-09", rows);
+  byLabel(tree, "Breakdown trend to date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render(rows);
   byLabel(tree, "Breakdown trend from date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render(rows);
@@ -686,7 +712,7 @@ test("Breakdown Trend From/To keeps bars, counts, average and View all on the sa
   byLabel(tree, "Breakdown trend to date").props.onChange({target: {value: ""}});
   tree = view.render(rows);
   assert.equal(findAll(tree, (node) => node.props.role === "alert").length, 0);
-  assert.equal(byLabel(tree, "Dashboard date").props.value, "2026-09-09");
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, "2026-09-09");
 });
 
 test("every site equipment and vehicle total opens exactly its registered assets in both chart modes", () => {
