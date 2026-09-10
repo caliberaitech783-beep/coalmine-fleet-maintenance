@@ -127,7 +127,7 @@ test("request lifecycle offers preset and custom date controls", () => {
 });
 
 test("request lifecycle graph uses separate brand-colored bars", () => {
-  assert.match(client, /\["opened", "closed", "verified", "idle"\]/);
+  for (const color of ["opened", "closed", "verified", "idle", "maintenance", "mis"]) assert.ok(client.includes(`color: "${color}"`));
   assert.match(css, /button\.opened\s*\{\s*background:\s*#315fd4/);
   assert.match(css, /button\.closed\s*\{\s*background:\s*#f04e53/);
   assert.match(css, /button\.verified\s*\{\s*background:\s*#26956f/);

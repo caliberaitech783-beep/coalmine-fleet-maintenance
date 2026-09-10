@@ -1341,6 +1341,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     verified: requestLifecycleRows.verified.filter((record) => requestEventDate(record, "verified") === date).length,
     idle: requestLifecycleRows.idle.filter((record) => requestEventDate(record, "idle") === date).length,
   }));
+  // Fixed six totals share the cards' date/site scope and matching request lists.
   const requestLifecycleReadings = [
     { key: "production", color: "opened", label: "Production Request", value: requestLifecycleRows.production.length },
     { key: "closed", color: "closed", label: "Closed", value: maintenanceClosedRows.length },
