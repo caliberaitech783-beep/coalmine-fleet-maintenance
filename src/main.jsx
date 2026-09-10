@@ -1651,6 +1651,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div><span className="mine-eyebrow">Workflow throughput</span><h2>Request Lifecycle</h2><p>{requestLifecycleRangeLabel}</p></div>
             <div className="mine-request-lifecycle-controls">
               <div className="mine-trend-period" role="group" aria-label="Request lifecycle period">{[7, 14, 30].map((days) => <button type="button" key={days} className={!requestTrendFrom && !requestTrendTo && requestTrendDays === days ? "active" : ""} onClick={() => { setRequestTrendDays(days); setRequestTrendFrom(""); setRequestTrendTo(""); }}>{days}D</button>)}</div>
+              <button type="button" className="mine-lifecycle-custom" onClick={(event) => { setRequestTrendFrom(safeTrendStartKey); setRequestTrendTo(requestTrendEndKey); event.currentTarget.parentElement.querySelector('input[type="date"]')?.focus(); }}>Custom</button>
               <label><span>From</span><input type="date" aria-label="Request lifecycle from date" value={requestTrendFrom} min={requestTrendEarliestKey} max={requestTrendTo || requestTrendEndKey} onChange={(event) => setRequestTrendFrom(event.target.value)} /></label>
               <div className="mine-request-lifecycle-end-controls">
                 <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
