@@ -4,8 +4,8 @@
 .dashboard-record-controls, .dashboard-record-results { border: 1px solid var(--line, #dde6f2); border-radius: 12px; background: var(--panel, #fff); overflow: hidden; }
 .dashboard-record-results { display: flex; flex-direction: column; min-height: 0; }
 .dashboard-record-controls { padding: 16px; max-height: 46dvh; overflow-y: auto; scrollbar-width: thin; }
-.dashboard-record-topline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.dashboard-record-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid #522e901a; border-radius: 11px; background: #522e9008; }
+.dashboard-record-topline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.dashboard-record-tabs { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 4px; padding: 4px; border: 1px solid #522e901a; border-radius: 11px; background: #522e9008; }
 .dashboard-record-tabs button { display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 132px; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 8px; background: transparent; color: var(--ink, #142943); font: 800 13px Manrope, sans-serif; cursor: pointer; }
 .dashboard-record-tabs button b { padding: 3px 8px; border-radius: 5px; background: #522e900d; font-size: 12px; }
 .dashboard-record-tabs button[aria-selected="true"] { background: var(--record-purple); color: #fff; box-shadow: 0 2px 5px #522e9026; }

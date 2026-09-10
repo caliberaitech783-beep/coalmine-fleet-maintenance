@@ -49,10 +49,10 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   </div>;
 }
 
-export default function DashboardRecordBrowser({ rows, regions, title = "Chart records", initialRegion = "", initialSite = "", requestRecords = false, lifecycleRecords = false, ActionsTable, Status, formatDate }) {
+export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", requestRecords = false, lifecycleRecords = false, ActionsTable, Status, formatDate }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
-  const view = drilldownView(rows, regions, filters);
+  const view = drilldownView(rows, regions, filters, { rowsAreScoped });
   const id = useId();
   const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);
@@ -62,7 +62,7 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
     setFilters(changeDrilldownFilter(view.selection, name, value));
     setOpenedLevel(Math.min(levels.indexOf(name) + 1, levels.length - 1));
   };
-  const activeFilterCount = ["site", "category", "group"].filter((name) => view.selection[name]).length;
+  const activeFilterCount = ["region", "site", "category", "group"].filter((name) => view.selection[name] && view.selection[name] !== "all").length;
   const fields = [
     ["site", "Site", "All sites"],
     ["category", "Equipment / Vehicle", "All equipment & vehicles"],
@@ -80,13 +80,13 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, [requestRecords]);
-  const reset = () => { setFilters({ region: view.selection.region }); setOpenedLevel(0); };
+  const reset = () => { setFilters({}); setOpenedLevel(0); };
   return <div className="dashboard-record-browser">
     <div className="dashboard-record-controls">
       <div className="dashboard-record-topline">
         <div className="dashboard-record-tabs" role="tablist" aria-label="Chart records by region">
           {view.regions.map((region, index) => <button key={region.code} type="button" role="tab" id={`${id}-${region.code}`} aria-selected={view.selection.region === region.code} aria-controls={`${id}-records`} tabIndex={view.selection.region === region.code ? 0 : -1}
-            onClick={() => choose("region", region.code)} onKeyDown={(event) => moveBetweenTabs(event, index, view.regions.map((item) => ({ value: item.code })), (next) => choose("region", next), '[role="tab"]')}><span>{region.code}</span><b>{region.rows.length.toLocaleString()}</b></button>)}
+            onClick={() => choose("region", region.code)} onKeyDown={(event) => moveBetweenTabs(event, index, view.regions.map((item) => ({ value: item.code })), (next) => choose("region", next), '[role="tab"]')}><span>{region.label}</span><b>{region.rows.length.toLocaleString()}</b></button>)}
         </div>
         <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!activeFilterCount && visibleLevel <= selectedLevel}><RotateCcw size={14} />Reset selection</button>
       </div>
@@ -96,14 +96,14 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
       </div>
     </div>
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={view.selection.region ? `${id}-${view.selection.region}` : undefined}>
-      <div className="dashboard-record-summary"><h4>{view.selection.region || "Fleet"} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
+      <div className="dashboard-record-summary"><h4>{view.regionLabel} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
       <div className="dashboard-asset-list" ref={listRef}>
-        <ActionsTable key={tableKey} exportTitle={`${title} · ${view.selection.region || "Fleet"}`} printTitle={`${title} · ${view.selection.region || "Fleet"}`}>
+        <ActionsTable key={tableKey} exportTitle={`${title} · ${view.regionLabel}`} printTitle={`${title} · ${view.regionLabel}`}>
           <thead><tr>{requestRecords && <><th>Job reference</th><th>Status</th><th>Started</th><th>Days of breakdown</th></>}<th>Machine / Door no.</th><th>Equipment category</th><th>Equipment group</th><th>Model</th><th>{requestRecords ? "Request site" : "Current location"}</th><th>Serial / chassis no.</th>{requestRecords && <th>Repair category</th>}{lifecycleRecords && <><th>Closed</th><th>MIS verified at</th><th>First trip time</th></>}</tr></thead>
           <tbody>{view.rows.length ? view.rows.map((record, index) => <tr key={record.id || `${record.equipmentName}-${index}`}>
             {requestRecords && <><td><b>{record.requestReference}</b></td><td><Status>{record.requestStatus}</Status></td><td>{formatDate(record.requestStart)}</td><td><b>{formatBreakdownDaysHours(record.requestStart, record.requestClosed, now)}</b></td></>}<td>{equipmentMachineLabel(record)}</td><td>{categoryName(equipmentCategoryLabel(record))}</td><td>{equipmentGroupLabel(record)}</td><td>{record.model || "—"}</td><td>{record.requestSite || record.currentLocation || record.location || record.site || "—"}</td><td>{record.manufacturerSerialNo || record.chassisNo || "—"}</td>
             {requestRecords && <td>{record.repairCategory}</td>}{lifecycleRecords && <><td>{formatDate(record.requestClosed)}</td><td>{formatDate(record.requestVerified, true)}</td><td>{formatDate(record.requestFirstTrip, true)}</td></>}
-          </tr>) : <tr><td colSpan={columnCount}><div className="dashboard-record-empty"><b>No matching {requestRecords ? "requests" : "fleet records"}</b><span>{view.selection.region ? `No records for ${view.selection.region} in this chart selection.` : "No regions available in your current scope."}</span></div></td></tr>}</tbody>
+          </tr>) : <tr><td colSpan={columnCount}><div className="dashboard-record-empty"><b>No matching {requestRecords ? "requests" : "fleet records"}</b><span>{view.selection.region ? `No records for ${view.regionLabel} in this chart selection.` : "No regions available in your current scope."}</span></div></td></tr>}</tbody>
         </ActionsTable>
       </div>
     </div>

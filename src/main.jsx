@@ -1186,12 +1186,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     const siteRequests = locationBreakdowns.filter((record) => recordBelongsToSite(record, site));
     return { site, ...breakdownMovementForRange(siteRequests, breakdownSummaryStartKey, breakdownSummaryEndKey) };
   });
-  const breakdownMovementTotals = breakdownSiteSummary.reduce((totals, site) => ({
-    open: totals.open + site.open,
-    incoming: totals.incoming + site.incoming,
-    outgoing: totals.outgoing + site.outgoing,
-    balance: totals.balance + site.balance,
-  }), { open: 0, incoming: 0, outgoing: 0, balance: 0 });
+  // Match the linked request list, including authorized historical/unassigned sites.
+  const breakdownMovementTotals = breakdownMovementForRange(locationBreakdowns, breakdownSummaryStartKey, breakdownSummaryEndKey);
   const breakdownTypeSummary = breakdownTypeShare(locationBreakdowns, breakdownSummaryStartKey, breakdownSummaryEndKey);
   const availabilityCountBySite = trendAvailableSites.map((site) => ({
     site,
@@ -1247,7 +1243,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     visibleEquipment.filter((record) => equipmentCategoryLabel(record) === category.category),
   ).map(([label, total], index) => ({
     key: `${category.key}:${label}`,
-    drilldownKey: `group:${label}`,
+    drilldownKey: `category-group:${category.key}|${label}`,
     label,
     total,
     category: category.label,
@@ -1362,6 +1358,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       return region ? visibleEquipment.filter((record) => region.sites.some((site) => recordBelongsToSite(record, site))) : [];
     }
     if (key.startsWith("site:")) return visibleEquipment.filter((record) => recordBelongsToSite(record, key.slice(5)));
+    if (key.startsWith("category-group:")) {
+      const [category, ...group] = key.slice(15).split("|");
+      return visibleEquipment.filter((record) => equipmentCategoryLabel(record) === (category === "vehicle" ? "Total vehicles" : "Total equipment")
+        && equipmentGroupLabel(record) === group.join("|"));
+    }
     if (key.startsWith("group:")) return visibleEquipment.filter((record) => equipmentGroupLabel(record) === key.slice(6));
     // Site is already known from the panel that opened this, so these keys carry it.
     if (key.startsWith("site-repair:")) {
@@ -1389,7 +1390,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (key.startsWith("event:")) {
       const [, event, date] = key.split(":");
       if (event === "all") return requestAssetRows(allLifecycleRequestRows(requestLifecycleRows, requestEventDate, date));
-      const rows = event === "closed" ? maintenanceClosedRows : requestLifecycleRows[event] || [];
+      // Daily bars count every closure; the undated Closed / Open in MIS cards count only pending verification.
+      const rows = event === "closed" && !date ? maintenanceClosedRows : requestLifecycleRows[event] || [];
       return requestAssetRows(date ? rows.filter((record) => requestEventDate(record, event) === date) : rows);
     }
     return [];
@@ -1424,7 +1426,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
     : "";
   const fleetBreakdownDrilldownTitle = fleetBreakdownDrilldown ? `${assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] + " · " + (assetDrilldown.endsWith("|vehicles") ? "Vehicles · " : assetDrilldown.endsWith("|equipment") ? "Equipment · " : "") : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) + " · " : assetDrilldown === "fleet-breakdown:equipment" ? "Equipment · " : assetDrilldown === "fleet-breakdown:vehicles" ? "Vehicles · " : ""}Breakdown requests` : "";
-  const siteTotalDrilldownTitle = siteTotalDrilldownParts.length ? `${siteTotalDrilldownParts[0]} · ${siteTotalDrilldownParts[1] === "vehicles" ? "Vehicle" : "Equipment"} records` : "";
+  const siteTotalDrilldownTitle = assetDrilldown.startsWith("category-group:")
+    ? `${assetDrilldown.slice(15).split("|").slice(1).join("|")} · ${assetDrilldown.startsWith("category-group:vehicle|") ? "Vehicles" : "Equipment"}`
+    : siteTotalDrilldownParts.length ? `${siteTotalDrilldownParts[0]} · ${siteTotalDrilldownParts[1] === "vehicles" ? "Vehicle" : "Equipment"} records` : "";
   const assetDrilldownTitle = siteTotalDrilldownTitle || fleetBreakdownDrilldownTitle || movementDrilldownTitle || trendDrilldownTitle || (assetDrilldown === "unavailable" ? "Unavailable fleet" : siteScopedDrilldown ? `${siteScopedSite} · ${siteScopedFocusLabel}` : assetDrilldown.startsWith("offroad-site:") ? `${assetDrilldown.slice(13)} off-road equipment and vehicles` : assetDrilldown === "equipment" ? "Total equipment" : assetDrilldown === "vehicle" ? "Total vehicles" : assetDrilldown === "road-availability" ? "Availability Count" : assetDrilldown === "available" ? "Available fleet" : assetDrilldown === "onroad" ? "On road equipment" : assetDrilldown === "offroad" ? "Off road equipment" : assetDrilldown === "idle" ? "Idle equipment" : assetDrilldown === "unknown" ? "Status not set" : assetDrilldown === "open-cases" ? "Open cases" : assetDrilldown.startsWith("event:") ? `${lifecycleDrilldownLabel}${lifecycleDrilldownParts[2] ? ` · ${formatDisplayDate(lifecycleDrilldownParts[2])}` : ""}` : assetDrilldown.startsWith("repair:") ? `${assetDrilldown.slice(7)} cases` : assetDrilldown.startsWith("status:") ? `${assetDrilldown.slice(7)} workload` : assetDrilldown.startsWith("region:") ? `${assetDrilldown.slice(7)} equipment` : assetDrilldown.startsWith("site:") ? `${assetDrilldown.slice(5)} equipment` : assetDrilldown.startsWith("group:") ? assetDrilldown.slice(6) : "Total equipment and vehicles");
   const dashboardScopeLabel = dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || (restrictToScope ? "All assigned locations" : "All regions");
   const dashboardPeriodLabel = formatDisplayDateRange(breakdownSummaryStartKey, breakdownSummaryEndKey);
@@ -1645,7 +1649,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         }) : <tr><td colSpan="6">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
       </div></Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" title={assetDrilldownTitle} close={() => setAssetDrilldown("")}>
-        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} />
+        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} />
       </Modal>}
       <section className="mine-dashboard-lower-grid">
       <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">
@@ -6782,18 +6786,14 @@ function RegionMasterPage({ records = [], requests = [], onAdd, onDeleteAll, got
     const metrics = liveEquipmentMetrics(siteRecords, siteRequests);
     return { total: siteRecords.length, onRoad: metrics.onRoad, offRoad: metrics.offRoad, idle: metrics.idle };
   };
-  const regionTotals = (activeRegion?.sitesList || []).reduce((totals, site) => {
-    const metrics = siteMetrics(site);
-    return {
-      total: totals.total + metrics.total,
-      onRoad: totals.onRoad + metrics.onRoad,
-      offRoad: totals.offRoad + metrics.offRoad,
-      idle: totals.idle + metrics.idle,
-    };
-  }, { total: 0, onRoad: 0, offRoad: 0, idle: 0 });
+  const regionEquipment = equipmentRecords.filter((record) => (activeRegion?.sitesList || []).some((site) => recordBelongsToSite(record, site)));
+  const regionTotals = liveEquipmentMetrics(regionEquipment, requests);
   const selectedSiteMetrics = activeSite ? siteMetrics(activeSite) : { total: 0, onRoad: 0, offRoad: 0, idle: 0 };
   const openEquipment = (road = "all", site = activeSite) => {
     if (site && gotoEquipment) gotoEquipment(road, site);
+  };
+  const openRegionEquipment = (road) => {
+    if (activeRegion?.sitesList.length && gotoEquipment) gotoEquipment(road, "", "all", activeRegion.sitesList);
   };
   return (
     <section className="region-master-page panel pagepanel">
@@ -6824,10 +6824,10 @@ function RegionMasterPage({ records = [], requests = [], onAdd, onDeleteAll, got
               <p>{activeRegion.state || "State not assigned"} · {activeRegion.sitesList.length} sites</p>
             </div>
             <div className="region-summary-strip">
-              <button type="button" onClick={() => openEquipment("all")}><strong>{regionTotals.total}</strong><span>Total</span></button>
-              <button type="button" onClick={() => openEquipment("onroad")}><strong>{regionTotals.onRoad}</strong><span>On Road</span></button>
-              <button type="button" onClick={() => openEquipment("offroad")}><strong>{regionTotals.offRoad}</strong><span>Off Road</span></button>
-              <button type="button" onClick={() => openEquipment("idle")}><strong>{regionTotals.idle}</strong><span>Idle</span></button>
+              <button type="button" onClick={() => openRegionEquipment("all")}><strong>{regionTotals.total}</strong><span>Total</span></button>
+              <button type="button" onClick={() => openRegionEquipment("onroad")}><strong>{regionTotals.onRoad}</strong><span>On Road</span></button>
+              <button type="button" onClick={() => openRegionEquipment("offroad")}><strong>{regionTotals.offRoad}</strong><span>Off Road</span></button>
+              <button type="button" onClick={() => openRegionEquipment("idle")}><strong>{regionTotals.idle}</strong><span>Idle</span></button>
             </div>
           </div>
           <div className="region-site-tabs" role="tablist" aria-label={`${activeRegion.code} site tabs`}>
@@ -8289,6 +8289,7 @@ function App() {
     [active, setActive] = useState(LOGIN_LANDING_PAGE),
     [equipmentFilter, setEquipmentFilter] = useState("all"),
     [equipmentLocation, setEquipmentLocation] = useState(""),
+    [equipmentLocations, setEquipmentLocations] = useState([]),
     [equipmentCategory, setEquipmentCategory] = useState("all"),
     [breakdownFleetFilter, setBreakdownFleetFilter] = useState(""),
     [breakdownFleetSites, setBreakdownFleetSites] = useState([]),
@@ -8479,10 +8480,11 @@ function App() {
       stopRefresh();
     };
   }, [session?.token]);
-  const gotoEquipment = (filter = "all", location = "", category = "all") => {
+  const gotoEquipment = (filter = "all", location = "", category = "all", locations = []) => {
       setEquipmentFilter(filter);
       setEquipmentLocation(location);
       setEquipmentCategory(category);
+      setEquipmentLocations(locations);
       selectMenu("Equipment master");
     },
     gotoBreakdownFleet = (filter, sites = []) => {
@@ -8569,6 +8571,7 @@ function App() {
     setEquipmentFilter("all");
     setEquipmentLocation("");
     setEquipmentCategory("all");
+    setEquipmentLocations([]);
     setBreakdownFleetFilter("");
     setBreakdownFleetSites([]);
     setActiveReportCategory("general");
@@ -8602,6 +8605,8 @@ function App() {
           if (page === "Equipment master") {
             setEquipmentFilter("all");
             setEquipmentLocation("");
+            setEquipmentCategory("all");
+            setEquipmentLocations([]);
           }
           setMenu(false);
         }}
@@ -8654,6 +8659,7 @@ function App() {
               initialFilter={equipmentFilter}
               initialLocation={equipmentLocation}
               initialCategory={equipmentCategory}
+              allowedLocations={equipmentLocations}
               statusRequests={requests}
             />
           ) : active === "Breakdown master" ? (

@@ -48,7 +48,7 @@ const requests = Object.freeze([
   Object.freeze({ref: "NEW-CLOSED", door: "V3", chassis: "C3", site: "Sasti OB", category: "Preventive", status: "Closed", start: "2026-09-09 08:00:00", closedAt: "2026-09-09 09:00:00"}),
 ]);
 
-function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"]} = {}) {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true} = {}) {
   const slots = [];
   let cursor = 0;
   const useState = (initial) => {
@@ -65,7 +65,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     equipmentGroupValue, normalizeEquipmentGroup, dashboardCountScale, activeOpenCases, recordBelongsToSite, requestStatusLabel,
     localStorage: {getItem: () => null, setItem() {}},
     subsidiaryData: regions,
-    useDashboardEquipment: () => ({records: equipment, loaded: true, loadError: "", scope: {restrictToScope: true, allowedSites, allowedRegions: ["WCL"]}}),
+    useDashboardEquipment: () => ({records: equipment, loaded: true, loadError: "", scope: {restrictToScope, allowedSites, allowedRegions: regions.map(({code}) => code)}}),
     firstTripTimestamp: (request) => request.firstTripAt || "",
     formatTwelveHourDateTime: displayDates.formatDisplayDateTime,
     Status: Null,
@@ -73,6 +73,123 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
   return {render(rows = requests) { cursor = 0; return Dashboard({requests: rows}); }};
 }
+
+// Check the actual final browser filtering, not just the Dashboard's input props.
+const detailView = (tree) => {
+  const props = findAll(tree, (node) => Array.isArray(node.props.rows) && Array.isArray(node.props.regions))[0].props;
+  return model.drilldownView(props.rows, props.regions, {region: props.initialRegion, site: props.initialSite}, {rowsAreScoped: props.rowsAreScoped});
+};
+
+const activate = (node) => {
+  const target = {};
+  if (node.props["data-dashboard-list"]) node.props.onKeyDown({key: "Enter", currentTarget: target, target, preventDefault() {}, stopPropagation() {}});
+  else node.props.onClick();
+};
+
+test("daily Closed bars include verified closures while pending-MIS cards retain only unverified rows", () => {
+  const rows = [
+    {ref: "PENDING", site: "Sasti OB", status: "Closed", category: "Breakdown", start: "2026-09-08 09:00", closedAt: "2026-09-09 10:00"},
+    {ref: "VERIFIED", site: "Sasti OB", status: "Closed", category: "Breakdown", start: "2026-09-08 09:00", closedAt: "2026-09-09 11:00", verifiedAt: "2026-09-09T12:00:00Z"},
+  ];
+  const view = harness();
+  let tree = view.render(rows);
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  tree = view.render(rows);
+  byLabel(tree, "09-09-2026: 2 closed requests").props.onClick();
+  tree = view.render(rows);
+  assert.equal(detailView(tree).rows.length, 2);
+  const pending = findAll(tree, (node) => node.type === "button" && text(node).includes("Open in MIS"))[0];
+  assert.match(text(pending), /1$/);
+  pending.props.onClick();
+  tree = view.render(rows);
+  assert.deepEqual(detailView(tree).rows.map(({requestReference}) => requestReference), ["PENDING"]);
+});
+
+test("fleet category, group, status and breakdown counts match final lists across two regions and unknown sites", () => {
+  const equipment = [
+    ...assets,
+    {id: 4, door: "E4", category: "Equipment", group: "TIPPER", currentLocation: "Jayant OB", status: "Operational"},
+    {id: 5, door: "E5", category: "Equipment", group: "TIPPER", currentLocation: "Former workshop", status: "Operational"},
+  ];
+  const view = harness({equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: [], restrictToScope: false});
+  let tree = view.render();
+  // The same group name in equipment and vehicles must not combine category slices.
+  for (const cls of ["mine-hierarchy-categories", "mine-hierarchy-groups"]) {
+    const cards = findAll(byClass(tree, cls), (node) => node.type === "button");
+    for (const card of cards) {
+      const expected = Number(text(findAll(card, (node) => node.type === "strong")[0]));
+      activate(card); tree = view.render();
+      assert.equal(detailView(tree).rows.length, expected, text(card));
+    }
+  }
+  button(tree, "Availability Count").props.onClick(); tree = view.render();
+  for (const cls of ["onroad", "offroad", "idle"]) {
+    const card = byClass(byClass(tree, "mine-site-road-summary"), cls);
+    const expected = Number(text(findAll(card, (node) => node.type === "strong")[0]));
+    activate(card); tree = view.render();
+    assert.equal(detailView(tree).rows.length, expected, cls);
+  }
+  const allFleet = byClass(tree, "mine-view-full-fleet");
+  activate(allFleet); tree = view.render();
+  assert.equal(detailView(tree).rows.length, equipment.length);
+});
+
+test("movement cards and new-intake type counts preserve all counted requests, including uncatalogued sites", () => {
+  const rows = [...requests, {ref: "UNMAPPED", site: "Former workshop", status: "Open", start: "2026-09-09", category: "Breakdown"}];
+  const view = harness({allowedSites: [], restrictToScope: false});
+  let tree = view.render(rows);
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}}); tree = view.render(rows);
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}}); tree = view.render(rows);
+  const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), (node) => node.props["data-dashboard-list"]);
+  for (const card of cards) {
+    const expected = Number(text(findAll(card, (node) => node.type === "strong")[0]));
+    activate(card); tree = view.render(rows);
+    assert.equal(detailView(tree).rows.length, expected, text(card));
+  }
+  const types = findAll(byLabel(tree, "Breakdown type percentage of BD In"), (node) => node.type === "article");
+  for (const card of types) {
+    const expected = Number(text(findAll(card, (node) => node.type === "small")[0]).match(/^\d+/)[0]);
+    activate(card); tree = view.render(rows);
+    assert.equal(detailView(tree).rows.length, expected, text(card));
+  }
+});
+
+test("actual Recorded total and each daily bar open all 475 requests including six unmapped sites", () => {
+  const rows = Array.from({length: 475}, (_, index) => ({ref: `REGRESSION-${index}`, site: index < 469 ? "Sasti OB" : "Retired workshop",
+    start: `2026-09-${String(4 + index % 7).padStart(2, "0")} 09:00:00`, status: "Open", category: "Breakdown"}));
+  const view = harness({allowedSites: [], restrictToScope: false});
+  let tree = view.render(rows);
+  byLabel(tree, "Breakdown trend to date").props.onChange({target: {value: "2026-09-10"}});
+  tree = view.render(rows);
+  byLabel(tree, "Breakdown trend from date").props.onChange({target: {value: "2026-09-04"}});
+  tree = view.render(rows);
+  assert.match(text(byClass(tree, "mine-trend-summary")), /Recorded475/);
+  const card = findAll(byClass(tree, "mine-trend-summary"), (node) => node.props["data-dashboard-list"] === "trend:all")[0];
+  const target = {};
+  card.props.onKeyDown({key: "Enter", currentTarget: target, target, preventDefault() {}, stopPropagation() {}});
+  tree = view.render(rows);
+  assert.equal(detailView(tree).rows.length, 475);
+  for (let day = 4; day <= 10; day++) {
+    const date = `2026-09-${String(day).padStart(2, "0")}`;
+    const expected = rows.filter((row) => row.start.startsWith(date)).length;
+    const bar = byLabel(tree, `${displayDates.formatDisplayDate(date)}: ${expected} recorded breakdown requests`);
+    bar.props.onKeyDown({key: "Enter", currentTarget: target, target, preventDefault() {}, stopPropagation() {}});
+    tree = view.render(rows);
+    assert.equal(detailView(tree).rows.length, expected);
+  }
+});
+
+test("all-region drilldown still excludes records outside a restricted user's assigned site", () => {
+  const view = harness();
+  const rows = [...requests, {ref: "HIDDEN", site: "Majri OB", start: "2026-09-09", status: "Open"},
+    {ref: "UNASSIGNED", site: "Former workshop", start: "2026-09-09", status: "Open"}];
+  let tree = view.render(rows);
+  byLabel(tree, "Breakdown trend from date").props.onChange({target: {value: "2026-09-01"}});
+  tree = view.render(rows);
+  button(byClass(tree, "mine-panel mine-breakdown-trend"), "View all").props.onClick();
+  tree = view.render(rows);
+  assert.deepEqual(detailView(tree).rows.map(({requestReference}) => requestReference), requests.map(({ref}) => ref));
+});
 
 test("compiled Dashboard retains older open and Idle assets in live status after selecting an opening date", () => {
   const view = harness();
@@ -272,6 +389,7 @@ test("every site equipment and vehicle total opens exactly its registered assets
         const expectedIds = equipment.filter((row) => row.currentLocation === site.site && row.id.includes(`-${category}-`)).map((row) => row.id);
         assert.deepEqual(details.rows.map((row) => row.id), expectedIds, `${mode}: ${site.site} ${category}`);
         assert.equal(details.rows.length, site[category]);
+        assert.equal(detailView(tree).rows.length, site[category]);
         assert.equal(details.initialRegion, "WCL");
         assert.equal(details.requestRecords, false);
         assert.equal(details.title, `${site.site} · ${category === "vehicles" ? "Vehicle" : "Equipment"} records`);

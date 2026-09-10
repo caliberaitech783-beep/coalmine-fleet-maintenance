@@ -13,12 +13,12 @@ const rows = [
 const ids = (view) => view.rows.map(({ id }) => id);
 const values = (options) => options.map(({ value }) => value);
 
-test("opening a chart immediately lists every record for the initial region", () => {
+test("opening a chart lists the complete count across regions until a region is chosen", () => {
   const view = drilldownView(rows, REGION_DATA);
-  assert.deepEqual(view.regions.map(({ code, rows }) => [code, rows.length]), [["WCL", 3], ["NCL", 1]]);
-  assert.deepEqual(ids(view), [1, 2, 3]);
-  assert.deepEqual(values(view.options.site), ["Sasti OB", "Majri OB"]);
-  assert.equal(view.regionTotal, 3);
+  assert.deepEqual(view.regions.map(({ code, rows }) => [code, rows.length]), [["all", 4], ["WCL", 3], ["NCL", 1]]);
+  assert.deepEqual(ids(view), [1, 2, 3, 4]);
+  assert.deepEqual(values(view.options.site), ["Jayant OB", "Majri OB", "Sasti OB"]);
+  assert.equal(view.regionTotal, 4);
   assert.deepEqual(ids(drilldownView(rows, REGION_DATA, { region: "NCL" })), [4]);
 });
 
@@ -48,9 +48,9 @@ test("changing a parent resets all descendants without clearing its parents", ()
   assert.deepEqual(values(view.options.site), ["Jayant OB"]);
 });
 
-test("empty regions stay selectable and default opening prefers a populated region", () => {
+test("empty regions stay selectable without hiding records on default opening", () => {
   const nclOnly = rows.slice(3);
-  assert.equal(drilldownView(nclOnly, REGION_DATA).selection.region, "NCL");
+  assert.equal(drilldownView(nclOnly, REGION_DATA).selection.region, "all");
   const empty = drilldownView(nclOnly, REGION_DATA, { region: "WCL" });
   assert.equal(empty.selection.region, "WCL");
   assert.deepEqual(ids(empty), []);
@@ -66,10 +66,42 @@ test("a changed data set clears invalid filters and keeps every remaining region
 test("region and site access scope cannot be broadened by filter selection", () => {
   const scope = [{ code: "WCL", sites: ["Sasti OB"] }];
   const view = drilldownView(rows, scope, { region: "NCL", site: "Jayant OB" });
-  assert.deepEqual(view.regions.map(({ code }) => code), ["WCL"]);
+  assert.deepEqual(view.regions.map(({ code }) => code), ["all", "WCL"]);
   assert.deepEqual(ids(view), [1, 2]);
   assert.deepEqual(values(view.options.site), ["Sasti OB"]);
   assert.deepEqual(ids(drilldownView(rows, [])), []);
+});
+
+test("475 already-authorized requests remain 475 including six outside the current site catalogue", () => {
+  const requests = Array.from({ length: 475 }, (_, id) => ({ id,
+    requestSite: id < 469 ? "Sasti OB" : id < 472 ? "Former workshop" : "",
+    currentLocation: "Jayant OB", requestReference: `JOB-${id}`,
+  }));
+  const scoped = { rowsAreScoped: true };
+  const view = drilldownView(requests, REGION_DATA, {}, scoped);
+  assert.equal(view.rows.length, 475);
+  assert.equal(view.regionTotal, 475);
+  assert.equal(view.regions.find(({ code }) => code === "WCL").rows.length, 469);
+  assert.equal(view.regions.find(({ code }) => code === "unmapped").rows.length, 6);
+  assert.equal(view.options.site.reduce((sum, site) => sum + site.count, 0), 475);
+  assert.equal(drilldownView(requests, REGION_DATA, { region: "unmapped", site: "Site not recorded" }, scoped).rows.length, 3);
+  assert.equal(drilldownView(requests, REGION_DATA, { region: "unmapped", site: "Former workshop" }, scoped).rows.length, 3);
+  assert.deepEqual(drilldownView(requests, [], {}, scoped).rows, requests);
+  // Raw, unscoped callers still fail closed outside their permitted sites.
+  assert.equal(drilldownView(requests, REGION_DATA).rows.length, 469);
+});
+
+test("region and site buckets partition rows once even with duplicate site aliases", () => {
+  const regions = [{code: "WCL", sites: ["Sasti OB", "SASTI II"]}, {code: "NCL", sites: ["Sasti OB", "Jayant OB"]}];
+  const view = drilldownView(rows, regions, {}, {rowsAreScoped: true});
+  assert.equal(view.rows.length, rows.length);
+  assert.equal(view.regions.filter(({code}) => code !== "all").reduce((sum, region) => sum + region.rows.length, 0), rows.length);
+  assert.equal(view.options.site.reduce((sum, site) => sum + site.count, 0), rows.length);
+  for (const region of view.regions) {
+    const detail = drilldownView(rows, regions, {region: region.code}, {rowsAreScoped: true});
+    assert.equal(detail.rows.length, region.rows.length);
+    for (const site of detail.options.site) assert.equal(drilldownView(rows, regions, {region: region.code, site: site.value}, {rowsAreScoped: true}).rows.length, site.count);
+  }
 });
 
 test("request rows stay under their request site even if the equipment has moved", () => {

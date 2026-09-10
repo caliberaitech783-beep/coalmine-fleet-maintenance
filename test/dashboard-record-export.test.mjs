@@ -33,7 +33,7 @@ test("chart detail lists opt into the existing PDF, Excel and Print menu", () =>
   const shared = readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
   assert.match(main, /FilterDialog=\{TableParameterFilter\} ExportMenu=\{ExportMenu\}/);
   assert.match(main, /title=\{assetDrilldownTitle\} initialRegion=/);
-  assert.match(browser, /exportTitle=\{`\$\{title\} · \$\{view\.selection\.region \|\| "Fleet"\}`\}/);
+  assert.match(browser, /exportTitle=\{`\$\{title\} · \$\{view\.regionLabel\}`\}/);
   assert.match(shared, /ExportMenu && exportTitle \? tableExportModel\(dataRows, columns, visible, localFilters, sort\) : null/);
   assert.match(shared, /<ExportMenu title=\{exportTitle\} columns=\{exportData\.columns\} rows=\{exportData\.rows\}/);
 });
