@@ -1019,7 +1019,8 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-breakdown-summary-controls { margin: 12px; }
 .dashboard-breakdown-summary-controls label { flex: 0 1 180px; min-width: 0; }
 .dashboard-breakdown-summary-controls small { flex: 1 1 240px; align-self: center; color: var(--muted); }
-.dashboard-breakdown-summary-controls input { min-width: 0; max-width: 100%; }
+.dashboard-breakdown-summary-controls input,
+.dashboard-breakdown-summary-controls select { min-width: 0; max-width: 100%; }
 .dashboard-breakdown-table-period { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; padding: 10px 12px; color: var(--mine-text); border-bottom: 1px solid var(--mine-line); background: color-mix(in srgb, #315fd4 4%, var(--mine-panel)); }
 .dashboard-breakdown-table-period span { white-space: nowrap; }
 .dashboard-breakdown-table-period small { color: var(--mine-muted); }
@@ -1027,7 +1028,8 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-breakdown-apply { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); font-weight: 800; }
 .dashboard-breakdown-period-controls button.active { border-color: #522e90; background: #522e90; color: #fff; }
 .dashboard-breakdown-period-controls label { display: grid; gap: 3px; color: var(--muted); font-weight: 750; }
-.dashboard-breakdown-period-controls input { min-height: 34px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); }
+.dashboard-breakdown-period-controls input,
+.dashboard-breakdown-period-controls select { min-height: 34px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--ink); }
 .dashboard-breakdown-custom-days { display: inline-flex !important; align-items: end; gap: 5px !important; }
 .dashboard-breakdown-custom-days input { width: 76px; }
 .dashboard-breakdown-apply { color: #315fd4 !important; cursor: pointer; }

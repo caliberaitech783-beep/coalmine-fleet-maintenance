@@ -75,6 +75,18 @@ test("type mix details match period intake and normalized repair types", () => {
   assert.deepEqual(ids(movementRequestRows(records, "2026-09-03", "2026-09-04", "incoming", "Preventive")), [4]);
 });
 
+test("all-time drilldowns include older closures and match each summary and type count", () => {
+  const allRecords = [...records, { id: 6, status: "Open", category: "Breakdown" }, { id: 7, status: "Closed", category: "PM" }];
+  const totals = breakdownMovementForRange(allRecords);
+  for (const metric of ["open", "incoming", "outgoing", "balance"]) {
+    assert.equal(movementRequestRows(allRecords, "", "", metric).length, totals[metric]);
+  }
+  assert.deepEqual(ids(movementRequestRows(allRecords, "", "")), ids(allRecords));
+  for (const type of breakdownTypeShare(allRecords)) {
+    assert.equal(movementRequestRows(allRecords, "", "", "incoming", type.label).length, type.count);
+  }
+});
+
 test("full lifecycle list includes each request once, matching the chosen event date", () => {
   const events = { opened: [records[0], records[1]], closed: [records[1], records[3]], verified: [records[3]], idle: [] };
   const dateOf = (record, event) => event === "opened" ? record.start : record.closedAt;

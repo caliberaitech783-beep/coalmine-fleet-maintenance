@@ -30,6 +30,25 @@ test("invalid ranges return an empty result", () => {
   assert.deepEqual(dailyBreakdownMovement(records, "", "2026-09-04"), []);
 });
 
+test("empty dates include the full history and legacy undated requests", () => {
+  assert.deepEqual(breakdownMovementForRange([
+    ...records,
+    { start: "2024-01-01", closedAt: "2024-01-02", status: "Closed" },
+    { status: "Open" },
+    { status: "Closed" },
+  ]), { open: 0, incoming: 7, outgoing: 4, balance: 3 });
+  assert.deepEqual(breakdownMovementForRange([]), { open: 0, incoming: 0, outgoing: 0, balance: 0 });
+  const types = breakdownTypeShare([{ start: "2024-01-01", category: "PM" }, { category: "Breakdown" }]);
+  assert.equal(types.find(({label}) => label === "Preventive").percentage, 50);
+  assert.equal(types.find(({label}) => label === "Breakdown").count, 1);
+});
+
+test("day-wise full history does not silently stop after one year", () => {
+  const days = dailyBreakdownMovement([{ start: "2025-02-01", status: "Open" }], "2024-01-01", "2025-02-01");
+  assert.equal(days.length, 398);
+  assert.deepEqual(days.at(-1), { date: "2025-02-01", open: 0, incoming: 1, outgoing: 0, balance: 1 });
+});
+
 test("breakdown type share defines all six types as a percentage of period intake", () => {
   const rows = [
     { start: "2026-09-01", category: "Breakdown" },

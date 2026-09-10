@@ -74,7 +74,7 @@ test("each site links breakdown movement with its current availability count", (
 });
 
 test("the maintenance type mix explicitly counts only new requests, unlike opening-plus-new top BD In", () => {
-  assert.match(client, /breakdownTypeShare\(locationBreakdowns, breakdownSummaryStartKey, breakdownSummaryEndKey\)/);
+  assert.match(client, /breakdownTypeShare\(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey\)/);
   assert.match(client, /BD Type Mix/);
   assert.match(client, /New requests · all six maintenance types/);
   assert.match(client, /Percentage share of new BD In/);

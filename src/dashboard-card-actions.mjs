@@ -1,4 +1,4 @@
-import { breakdownOpenedDate, breakdownClosedDate, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
+import { matchesBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 
 const controls = 'button, a, input, select, textarea, label, summary, [role="button"], [role="tab"], [role="checkbox"], [role="switch"], [contenteditable="true"]';
 
@@ -31,16 +31,8 @@ export function dashboardListTrigger(open, key, label, enabled = true, role = "b
 }
 
 export function movementRequestRows(records, start, end, metric = "all", type = "") {
-  if (!start || !end || start > end) return [];
-  return records.filter((record) => {
-    const opened = breakdownOpenedDate(record), closed = breakdownClosedDate(record);
-    if (!opened || (type && normalizedBreakdownType(record.category || record.repairType || record.type) !== type)) return false;
-    if (metric === "open") return opened < start && (!closed || closed >= start);
-    if (metric === "incoming") return opened >= start && opened <= end;
-    if (metric === "outgoing") return closed >= start && closed <= end;
-    if (metric === "balance") return opened <= end && (!closed || closed > end);
-    return metric === "all" && opened <= end && (!closed || closed >= start);
-  });
+  return records.filter((record) => matchesBreakdownMovement(record, start, end, metric)
+    && (!type || normalizedBreakdownType(record.category || record.repairType || record.type) === type));
 }
 
 export function allLifecycleRequestRows(events, dateOf, date = "") {

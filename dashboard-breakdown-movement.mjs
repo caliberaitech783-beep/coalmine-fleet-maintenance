@@ -25,18 +25,27 @@ export function breakdownClosedDate(record = {}) {
     : "";
 }
 
+// Empty bounds mean all time. Share the predicate with linked request lists so
+// every metric opens exactly the requests it counts, including legacy history.
+export function matchesBreakdownMovement(record, start = "", end = "", metric = "all") {
+  if (start && end && start > end) return false;
+  const opened = breakdownOpenedDate(record), closed = breakdownClosedDate(record);
+  if (!start && !end) {
+    const completed = Boolean(closed) || String(record.status || "").trim().toLowerCase() === "closed";
+    return metric === "open" ? false : metric === "outgoing" ? completed : metric === "balance" ? !completed : ["all", "incoming"].includes(metric);
+  }
+  if (!opened) return false;
+  if (metric === "open") return Boolean(start) && opened < start && (!closed || closed >= start);
+  if (metric === "incoming") return (!start || opened >= start) && (!end || opened <= end);
+  if (metric === "outgoing") return Boolean(closed) && (!start || closed >= start) && (!end || closed <= end);
+  if (metric === "balance") return (!end || opened <= end) && (!closed || (Boolean(end) && closed > end));
+  return metric === "all" && (!end || opened <= end) && (!closed || !start || closed >= start);
+}
+
 export function breakdownMovementForRange(records = [], startDate = "", endDate = "") {
-  if (!startDate || !endDate || startDate > endDate) return { open: 0, incoming: 0, outgoing: 0, balance: 0 };
-
-  const dated = records.map((record) => ({
-    opened: breakdownOpenedDate(record),
-    closed: breakdownClosedDate(record),
-  })).filter((record) => record.opened);
-  const open = dated.filter((record) => record.opened < startDate && (!record.closed || record.closed >= startDate)).length;
-  const incoming = dated.filter((record) => record.opened >= startDate && record.opened <= endDate).length;
-  const outgoing = dated.filter((record) => record.closed >= startDate && record.closed <= endDate).length;
-
-  return { open, incoming, outgoing, balance: Math.max(0, open + incoming - outgoing) };
+  return Object.fromEntries(["open", "incoming", "outgoing", "balance"].map((metric) => [
+    metric, records.filter((record) => matchesBreakdownMovement(record, startDate, endDate, metric)).length,
+  ]));
 }
 
 export function dailyBreakdownMovement(records = [], startDate = "", endDate = "") {
@@ -44,7 +53,7 @@ export function dailyBreakdownMovement(records = [], startDate = "", endDate = "
   const rows = [];
   const cursor = new Date(`${startDate}T12:00:00`);
   const end = new Date(`${endDate}T12:00:00`);
-  while (cursor <= end && rows.length < 366) {
+  while (cursor <= end) {
     const date = [cursor.getFullYear(), String(cursor.getMonth() + 1).padStart(2, "0"), String(cursor.getDate()).padStart(2, "0")].join("-");
     rows.push({ date, ...breakdownMovementForRange(records, date, date) });
     cursor.setDate(cursor.getDate() + 1);
@@ -53,10 +62,7 @@ export function dailyBreakdownMovement(records = [], startDate = "", endDate = "
 }
 
 export function breakdownTypeShare(records = [], startDate = "", endDate = "") {
-  const incoming = records.filter((record) => {
-    const opened = breakdownOpenedDate(record);
-    return opened && opened >= startDate && opened <= endDate;
-  });
+  const incoming = records.filter((record) => matchesBreakdownMovement(record, startDate, endDate, "incoming"));
   const total = incoming.length;
   const counts = incoming.reduce((result, record) => {
     const label = normalizedBreakdownType(record.category || record.repairType || record.type);

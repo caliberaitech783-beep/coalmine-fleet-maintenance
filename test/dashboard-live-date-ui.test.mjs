@@ -387,14 +387,127 @@ test("site-wise range allows one day, keeps dates ordered, rejects future dates 
   assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-09");
   button(tree, "Reset dates").props.onClick();
   tree = view.render();
-  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-05");
-  assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-09");
+  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "");
+  assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "");
   assert.equal(button(tree, "Reset dates").props.disabled, true);
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render();
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: ""}});
   tree = view.render();
-  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-05");
+  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "");
+});
+
+test("throughput defaults to all time and clearing either date or Reset restores every metric", () => {
+  const rows = [...requests, {ref: "OLD-CLOSED", site: "Sasti OB", start: "2024-01-01", closedAt: "2024-02-01", category: "WGM", status: "Closed"}];
+  const view = harness();
+  let tree = view.render(rows);
+  const assertAllTime = () => {
+    assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "");
+    assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "");
+    assert.equal(text(byLabel(tree, "Site-wise BD table period")), "All timeAvailability: live");
+    assert.equal(button(tree, "Reset dates").props.disabled, true);
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 4 in, 2 out, 2 balance/);
+    const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
+    assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [4, 2, 2]);
+    for (const card of cards) {
+      activate(card); tree = view.render(rows);
+      assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
+      assert.match(byClass(tree, "dashboard-asset-modal").props.title, /All time/);
+    }
+    const types = findAll(byLabel(tree, "Breakdown type percentage of BD In"), node => node.type === "article");
+    assert.ok(types.some(card => text(card).includes("WGM25%1 request")));
+    const exported = findAll(tree, node => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
+    assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, "All time");
+  };
+  assertAllTime();
+  // A different chart's date must not reinstate a hidden filter when this one clears.
+  byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-08-01"}});
+  tree = view.render(rows);
+  for (const clear of ["from", "to", "reset"]) {
+    byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-09"}});
+    tree = view.render(rows);
+    assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-09");
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 2 balance/);
+    if (clear === "reset") button(tree, "Reset dates").props.onClick();
+    else byLabel(tree, `Site-wise BD ${clear} date`).props.onChange({target: {value: ""}});
+    tree = view.render(rows);
+    assertAllTime();
+    button(tree, "Availability Count").props.onClick(); tree = view.render(rows);
+    assert.equal(text(byLabel(tree, "Availability table period")), "All timeAvailability: live");
+    assert.ok(byLabel(tree, "Sasti OB: 1 on road, 1 off road and 1 idle. Open fleet details."));
+    button(tree, "Site-wise BD Movement").props.onClick(); tree = view.render(rows);
+  }
+  byClass(tree, "mine-breakdown-site-row").props.onClick(); tree = view.render(rows);
+  assert.equal(byLabel(tree, "Breakdown movement from date").props.value, "2024-01-01");
+});
+
+test("throughput region and dependent site filters scope cards, types, tables, exports and linked lists", () => {
+  const equipment = [...assets,
+    {id: 4, door: "M1", currentLocation: "Majri OB", category: "Vehicle"},
+    {id: 5, door: "N1", currentLocation: "Jayant OB", category: "Vehicle"},
+  ];
+  const rows = [...requests,
+    {ref: "MAJRI", door: "M1", site: "Majri OB", start: "2026-09-09", status: "Open", category: "WGM"},
+    {ref: "JAYANT", door: "N1", site: "Jayant OB", start: "2026-09-09", status: "Closed", closedAt: "2026-09-09", category: "Accidental"},
+  ];
+  const regions = [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}, {code: "NCL", sites: ["Jayant OB"]}];
+  const view = harness({equipment, regions, allowedSites: [], restrictToScope: false});
+  let tree = view.render(rows);
+  assert.equal(byLabel(tree, "Vehicle throughput region").props.value, "all");
+  assert.equal(byLabel(tree, "Vehicle throughput site"), undefined);
+  const change = (label, value) => { byLabel(tree, label).props.onChange({target: {value}}); tree = view.render(rows); };
+  change("Vehicle throughput region", "WCL");
+  assert.deepEqual(findAll(byLabel(tree, "Vehicle throughput site"), node => node.type === "option").map(node => node.props.value), ["all", "Sasti OB", "Majri OB"]);
+  for (const site of ["all", "Majri OB", "Sasti OB"]) {
+    change("Vehicle throughput site", site);
+    const selectedRows = rows.filter(row => site === "all" ? row.site !== "Jayant OB" : row.site === site);
+    const selectedAssets = equipment.filter(row => site === "all" ? row.currentLocation !== "Jayant OB" : row.currentLocation === site);
+    for (const day of ["", "2026-09-09"]) {
+      change("Site-wise BD from date", day);
+      const totals = movement.breakdownMovementForRange(selectedRows, day, day);
+      const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
+      assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [totals.open + totals.incoming, totals.outgoing, totals.balance]);
+      for (const card of cards) {
+        activate(card); tree = view.render(rows);
+        assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
+        assert.ok(detailView(tree).rows.every(row => selectedRows.some(request => request.ref === row.requestReference)));
+      }
+      for (const type of findAll(byLabel(tree, "Breakdown type percentage of BD In"), node => node.type === "article")) {
+        activate(type); tree = view.render(rows);
+        assert.equal(detailView(tree).rows.length, Number(text(findAll(type, node => node.type === "small")[0]).match(/^\d+/)[0]));
+      }
+      const siteRows = findAll(tree, node => node.props.className === "mine-breakdown-site-row");
+      assert.equal(siteRows.length, site === "all" ? 2 : 1);
+      const exported = findAll(tree, node => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
+      assert.equal(exported.find(row => row.section === "Breakdown movement").details, site === "all" ? "WCL" : site);
+      button(tree, "Availability Count").props.onClick(); tree = view.render(rows);
+      const snapshotRequests = availabilityRequestsForDate(selectedRows, day);
+      const snapshotEquipment = day ? dashboardFleetSnapshot(selectedAssets, snapshotRequests) : selectedAssets;
+      const expected = metrics.liveEquipmentMetrics(snapshotEquipment, snapshotRequests);
+      const summary = byClass(tree, "mine-site-road-summary");
+      for (const [cls, count] of [["availability", expected.total], ["onroad", expected.onRoad], ["offroad", expected.offRoad], ["idle", expected.idle]]) {
+        const card = byClass(summary, cls);
+        assert.equal(Number(text(findAll(card, node => node.type === "strong")[0])), count);
+        activate(card); tree = view.render(rows);
+        assert.equal(detailView(tree).rows.length, count);
+      }
+      assert.equal(findAll(tree, node => node.props.className?.startsWith("mine-road-site-row")).length, siteRows.length);
+      button(tree, "Site-wise BD Movement").props.onClick(); tree = view.render(rows);
+    }
+  }
+  change("Vehicle throughput region", "NCL");
+  assert.equal(byLabel(tree, "Vehicle throughput site").props.value, "all");
+  assert.deepEqual(findAll(byLabel(tree, "Vehicle throughput site"), node => node.type === "option").map(node => node.props.value), ["all", "Jayant OB"]);
+  change("Vehicle throughput region", "all");
+  assert.equal(byLabel(tree, "Vehicle throughput site"), undefined);
+  assert.equal(findAll(tree, node => node.props.className === "mine-breakdown-site-row").length, 3);
+  assert.equal(byLabel(tree, "Region").props.value, "all", "panel filters leave the other charts' scope unchanged");
+  const restricted = harness({equipment, regions, allowedSites: ["Sasti OB"], restrictToScope: true});
+  let restrictedTree = restricted.render(rows);
+  assert.deepEqual(findAll(byLabel(restrictedTree, "Vehicle throughput region"), node => node.type === "option").map(node => node.props.value), ["all", "WCL"]);
+  byLabel(restrictedTree, "Vehicle throughput region").props.onChange({target: {value: "WCL"}});
+  restrictedTree = restricted.render(rows);
+  assert.deepEqual(findAll(byLabel(restrictedTree, "Vehicle throughput site"), node => node.type === "option").map(node => node.props.value), ["all", "Sasti OB"]);
 });
 
 test("From and To stay visible above the table without a calendar trigger or popup", () => {

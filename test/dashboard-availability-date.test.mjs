@@ -96,9 +96,9 @@ const text = node => Array.isArray(node) ? node.map(text).join("") : React.isVal
 function dashboardSection(date) {
   const scope = {
     React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite,
-    locationBreakdowns: requests, dashboardDate: date, breakdownSummaryTo: "", todayKey: "2026-09-10", visibleEquipment: assets,
+    throughputRequests: requests, dashboardDate: "2026-01-01", breakdownSummaryFrom: date, breakdownSummaryTo: date, todayKey: "2026-09-10", throughputEquipment: assets,
     breakdownSummaryStartKey: "2026-09-01", breakdownSummaryEndKey: date || "2026-09-10", formatDisplayDate,
-    trendAvailableSites: ["Majri OB", "Jayant OB"], roadFocusSite: "", openAssetDrilldown: () => {},
+    throughputSites: ["Majri OB", "Jayant OB"], roadFocusSite: "", openAssetDrilldown: () => {},
     // The other charts deliberately keep their existing day-of-submission filter.
     visibleBreakdowns: [], kpis: { onRoad: 999, offRoad: 999, idle: 999, availability: 999 },
     CheckCircle2: () => null, AlertTriangle: () => null, Clock: () => null, MapPin: () => null, ChevronRight: () => null,
@@ -139,5 +139,5 @@ test("the date filter affects historical availability while live fleet metrics r
   assert.match(source, /const kpis = liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
   assert.match(source, /new Map\(availabilityCountBySite.map/);
   assert.match(source, /const siteRequests = liveBreakdowns.filter/);
-  assert.match(source, /availabilityDate \? dashboardFleetSnapshot\(visibleEquipment, availabilityRequests\)/);
+  assert.match(source, /availabilityDate \? dashboardFleetSnapshot\(throughputEquipment, availabilityRequests\)/);
 });
