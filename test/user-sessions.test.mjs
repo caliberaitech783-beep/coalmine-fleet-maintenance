@@ -9,10 +9,12 @@ test("user-session administration is restricted, token-safe, and auditable", () 
   assert.match(server, /app\.get\('\/api\/user-sessions',requireSuper,requireAdministrator/);
   assert.match(server, /app\.delete\('\/api\/user-sessions\/:sessionId',requireSuper,requireAdministrator/);
   assert.match(server, /permissions\?\.adminLevel!==\'Manager\'/);
-  assert.match(server, /const sessions=rows\.map\(\(\{token,\.\.\.row\}\)/);
+  assert.match(server, /const sessions=rows\.map\(\(\{token,userRecord,\.\.\.row\}\)/);
   assert.match(server, /current:token===currentToken/);
   assert.match(server, /Your current session cannot be force closed/);
   assert.match(server, /action:'Force close session'/);
+  assert.match(server, /LEFT JOIN LATERAL \([\s\S]*master_name='Users & employees'/);
+  assert.match(server, /location:userSessionLocationName\(userRecord\|\|\{\},row\.roleLabel\)/);
 });
 
 test("the admin UI exposes live status and a protected force-close control", () => {
@@ -24,4 +26,7 @@ test("the admin UI exposes live status and a protected force-close control", () 
   assert.match(client, /Current session/);
   assert.match(client, /Force close/);
   assert.match(client, /\/api\/session-heartbeat/);
+  assert.match(client, /<th>Location<\/th>/);
+  assert.match(client, /row\.location\|\|'Not assigned'/);
+  assert.match(client, /matchesSmartSearch\(query,row\.name,row\.login,row\.roleLabel,row\.location/);
 });

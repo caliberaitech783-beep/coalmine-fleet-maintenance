@@ -35,7 +35,7 @@ import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} 
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
-import {canonicalSiteName,assignedUserSiteName} from './site-location.mjs';
+import {canonicalSiteName,assignedUserSiteName,userSessionLocationName} from './site-location.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
 import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
@@ -1128,16 +1128,26 @@ app.post('/api/session-heartbeat',requireSession,(_req,res)=>res.status(204).end
 app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
-    const {rows}=await pool.query(`SELECT token,session_public_id AS "sessionId",employee_name AS "name",login_name AS "login",
-      COALESCE(NULLIF(permissions->>'adminLevel',''),NULLIF(assigned_role,''),NULLIF(user_type,''),role) AS "roleLabel",
-      user_type AS "userType",assigned_role AS "assignedRole",created_at AS "createdAt",last_seen_at AS "lastSeenAt",
-      ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent"
-      FROM auth_sessions
-      WHERE created_at>NOW()-INTERVAL '30 days'
-      ORDER BY last_seen_at DESC,created_at DESC`);
+    const {rows}=await pool.query(`SELECT sessions.token,sessions.session_public_id AS "sessionId",sessions.employee_name AS "name",sessions.login_name AS "login",
+      COALESCE(NULLIF(sessions.permissions->>'adminLevel',''),NULLIF(sessions.assigned_role,''),NULLIF(sessions.user_type,''),sessions.role) AS "roleLabel",
+      sessions.user_type AS "userType",sessions.assigned_role AS "assignedRole",sessions.created_at AS "createdAt",sessions.last_seen_at AS "lastSeenAt",
+      sessions.ip_address AS "ipAddress",sessions.device_id AS "deviceId",sessions.user_agent AS "userAgent",user_master.record_data AS "userRecord"
+      FROM auth_sessions AS sessions
+      LEFT JOIN LATERAL (
+        SELECT users.record_data
+        FROM master_records AS users
+        WHERE users.master_name='Users & employees'
+          AND ((sessions.login_name<>'' AND lower(trim(users.record_data->>'login'))=lower(trim(sessions.login_name)))
+            OR (sessions.employee_name<>'' AND lower(trim(users.record_data->>'employee'))=lower(trim(sessions.employee_name))))
+        ORDER BY CASE WHEN lower(trim(users.record_data->>'login'))=lower(trim(sessions.login_name)) THEN 0 ELSE 1 END,users.created_at DESC
+        LIMIT 1
+      ) AS user_master ON TRUE
+      WHERE sessions.created_at>NOW()-INTERVAL '30 days'
+      ORDER BY sessions.last_seen_at DESC,sessions.created_at DESC`);
     const now=Date.now();
-    const sessions=rows.map(({token,...row})=>({
+    const sessions=rows.map(({token,userRecord,...row})=>({
       ...row,
+      location:userSessionLocationName(userRecord||{},row.roleLabel),
       current:token===currentToken,
       online:now-new Date(row.lastSeenAt||row.createdAt).getTime()<=120000,
     }));

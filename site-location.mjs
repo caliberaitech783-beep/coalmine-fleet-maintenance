@@ -39,6 +39,24 @@ export function assignedUserSiteName(user = {}) {
   return firstSiteValue(user?.site, user?.location, user?.currentLocation);
 }
 
+export function userSessionLocationName(user = {}, roleLabel = "") {
+  const assignedSite = assignedUserSiteName(user);
+  if (assignedSite) return assignedSite;
+
+  const managerSites = (Array.isArray(user?.managerSites) ? user.managerSites : String(user?.managerSites ?? "").split("|"))
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+  if (managerSites.length) return managerSites.join(" | ");
+
+  const region = firstSiteValue(user?.managerRegion, user?.region);
+  if (region && region.toLowerCase() !== "all") return `${region} region`;
+
+  const accessLevel = firstSiteValue(roleLabel, user?.adminLevel, user?.permissions?.adminLevel).toLowerCase();
+  return region.toLowerCase() === "all" || ["admin", "super admin"].includes(accessLevel)
+    ? "All locations"
+    : "Not assigned";
+}
+
 export function recordBelongsToSite(record, site) {
   const selectedSite = canonicalSiteName(site);
   return Boolean(selectedSite) && canonicalSiteName(equipmentSiteName(record)) === selectedSite;
