@@ -1,21 +1,31 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel } from "./table-actions-model.mjs";
 import "./table-actions.css";
 import "./sortable-table.css";
 
-export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
+export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, ...tableProps }) {
   const { sections, columns } = tableModel(children);
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }} />;
 }
 
-function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }) {
+function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, tableProps }) {
   const [visible, setVisible] = useState(columns.map((column) => column.key));
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "", direction: "asc" });
   const [dialog, setDialog] = useState("");
+  // Which plain column heading currently shows its sort-and-filter popover.
+  const [openFilter, setOpenFilter] = useState(null);
+  useEffect(() => {
+    if (!openFilter) return undefined;
+    const closeFilter = (event) => {
+      if (!event.target.closest?.(".column-filter-header, .column-filter-popover")) setOpenFilter(null);
+    };
+    document.addEventListener("pointerdown", closeFilter);
+    return () => document.removeEventListener("pointerdown", closeFilter);
+  }, [openFilter]);
   const indices = visible.map((key) => columns.find((column) => column.key === key)?.index).filter((index) => index !== undefined);
   const rows = sections.filter((section) => section.type === "tbody").flatMap((section) => tableElements(section.props.children));
   const dataRows = rows.filter((row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1));
@@ -38,13 +48,19 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
     setDialog("");
   };
   const localFilters = Object.fromEntries(columns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]]));
+  // Distinct values per column for the heading filter popovers, taken from the full (unfiltered) table.
+  const columnValues = useMemo(() => {
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+    return Object.fromEntries(columns.map((column) => [column.key, [...new Set(dataRows.map((row) => column.value(row)).filter(Boolean))].sort((a, b) => collator.compare(a, b))]));
+  }, [columns, dataRows]);
   const exportData = ExportMenu && exportTitle ? tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
   const printData = ExportMenu && printTitle ? exportData || tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = columns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = columns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
   const reset = () => { clearFilters(); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
-  // Plain <th> headings become sort buttons; headers that bring their own sorting (onSort) are left untouched.
+  // Plain <th> headings become sort-and-filter headers (or sort buttons when no FilterableHeader is supplied);
+  // headers that bring their own sorting (onSort) are left untouched.
   const sortableHeaderRow = (row) => {
     const cells = tableElements(row.props.children);
     let slot = 0;
@@ -54,6 +70,11 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
       const column = columns.find((item) => item.index === index);
       if (cell.type !== "th" || !column || span > 1 || cell.props.onSort || !tableCellText(cell).trim() || column.label === "Actions") return cell;
       const active = sort.key === column.key;
+      if (FilterableHeader) {
+        return <FilterableHeader key={cell.key ?? column.key} label={column.label} sortKey={column.key} sort={sort} onSort={applySort}
+          open={openFilter === column.key} onToggle={(key) => setOpenFilter((current) => current === key ? null : key)}
+          values={columnValues[column.key] || []} filterValue={filters[column.key] || ""} onFilterChange={(value) => updateFilter(column.key, value)} />;
+      }
       const Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
       return React.cloneElement(cell, { "aria-sort": active ? (sort.direction === "asc" ? "ascending" : "descending") : "none" },
         <button type="button" className={`sort-header${active ? " active" : ""}`} title={`Sort by ${column.label}`} onClick={() => applySort(column.key, active && sort.direction === "asc" ? "desc" : "asc")}>

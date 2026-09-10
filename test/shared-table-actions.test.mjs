@@ -78,3 +78,15 @@ test("plain column headings in shared Actions tables sort on click", () => {
   assert.match(shared, /applySort\(column\.key, active && sort\.direction === "asc" \? "desc" : "asc"\)/);
   assert.match(shared, /section\.type === "thead"\) sectionRows = sectionRows\.map/);
 });
+
+test("plain column headings in shared Actions tables open a sort-and-filter popover", () => {
+  const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
+  const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(main, /<SharedActionsTable \{\.\.\.props\}[^\n]*FilterableHeader=\{FilterableHeader\} \/>/);
+  assert.match(shared, /FilterableHeader = null/);
+  assert.match(shared, /const \[openFilter, setOpenFilter\] = useState\(null\);/);
+  assert.match(shared, /event\.target\.closest\?\.\("\.column-filter-header, \.column-filter-popover"\)/);
+  assert.match(shared, /<FilterableHeader key=\{cell\.key \?\? column\.key\} label=\{column\.label\} sortKey=\{column\.key\} sort=\{sort\} onSort=\{applySort\}/);
+  assert.match(shared, /values=\{columnValues\[column\.key\] \|\| \[\]\} filterValue=\{filters\[column\.key\] \|\| ""\} onFilterChange=\{\(value\) => updateFilter\(column\.key, value\)\}/);
+  assert.match(shared, /dataRows\.map\(\(row\) => column\.value\(row\)\)\.filter\(Boolean\)/, "filter values come from the full unfiltered table");
+});

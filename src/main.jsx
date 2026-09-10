@@ -2735,7 +2735,7 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
   </div>;
 }
 function ActionsTable(props) {
-  return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} />;
+  return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
 function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false }) {
   const [columnFilters, setColumnFilters] = useState({});
