@@ -114,11 +114,12 @@ test("date range filters apply to shared Actions tables using the raw sort value
   assert.deepEqual(selectTableRows(rows, columns, {[columns[1].key]: "10-09-2026 01:33:53 PM"}, {}).map(r => r.key), ["b"], "exact value filters still work");
 });
 
-test("column filter popovers offer From / To date pickers on date columns", () => {
+test("date column headings open only From / To date pickers", () => {
   const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(main, /dateColumn = looksLikeDateColumn\(values\)/);
-  assert.match(main, /title="Filter by date range"[^>]*><CalendarDays \/><\/button>/);
-  assert.match(main, /<label><span>From<\/span><input type="date" value=\{dateRange\.from\}/);
+  assert.match(main, /\{dateColumn \? <div className="column-filter-range" role="group"/, "date columns open only the From / To pickers");
+  assert.doesNotMatch(main, /rangeOpen|Filter by date range/);
+  assert.match(main, /<label><span>From<\/span><input type="date" autoFocus value=\{dateRange\.from\}/);
   assert.match(main, /<label><span>To<\/span><input type="date" value=\{dateRange\.to\}/);
   assert.match(main, /const range = parseDateRange\(selected\);\s*if \(range\) return matchesDateRange\(value, range\);/);
   assert.match(main, /parseDateRange\(filters\[column\.key\]\) && <option value=\{filters\[column\.key\]\}>/);

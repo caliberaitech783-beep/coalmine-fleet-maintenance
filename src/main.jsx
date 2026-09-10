@@ -2209,13 +2209,12 @@ function FilterableHeader({
   durationSortOnly = isDurationColumn(label, sortKey),
 }) {
   const [valueSearch, setValueSearch] = useState("");
-  const [rangeOpen, setRangeOpen] = useState(false);
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const active = sort.key === sortKey,
     Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown,
     visibleValues = values.filter((value) => matchesSmartSearch(valueSearch, value)),
-    // Date columns get a calendar: From / To pickers that filter the column by day.
+    // Date columns open only From / To pickers that filter the column by day.
     dateColumn = looksLikeDateColumn(values),
     dateRange = parseDateRange(filterValue) || { from: "", to: "" };
   const chooseDurationSort = (direction) => {
@@ -2225,7 +2224,6 @@ function FilterableHeader({
   };
   useEffect(() => {
     if (!open) setValueSearch("");
-    else setRangeOpen(Boolean(parseDateRange(filterValue)));
   }, [open]);
   useEffect(() => {
     if (!open) return undefined;
@@ -2270,7 +2268,10 @@ function FilterableHeader({
               <X aria-hidden="true" />
             </button>
           </div>
-          {durationSortOnly ? <div className="column-filter-sort duration-sort-options" aria-label={`Sort ${label}`}>
+          {dateColumn ? <div className="column-filter-range" role="group" aria-label={`${label} date range`}>
+            <label><span>From</span><input type="date" autoFocus value={dateRange.from} max={dateRange.to || undefined} onChange={(event) => onFilterChange(encodeDateRange(event.target.value, dateRange.to))} /></label>
+            <label><span>To</span><input type="date" value={dateRange.to} min={dateRange.from || undefined} onChange={(event) => onFilterChange(encodeDateRange(dateRange.from, event.target.value))} /></label>
+          </div> : durationSortOnly ? <div className="column-filter-sort duration-sort-options" aria-label={`Sort ${label}`}>
             <button type="button" className={active && sort.direction === "asc" ? "active" : ""} aria-pressed={active && sort.direction === "asc"} onClick={() => chooseDurationSort("asc")}><ArrowUp /><span>Lowest to highest time taken</span></button>
             <button type="button" className={active && sort.direction === "desc" ? "active" : ""} aria-pressed={active && sort.direction === "desc"} onClick={() => chooseDurationSort("desc")}><ArrowDown /><span>Highest to lowest time taken</span></button>
             <button type="button" onClick={() => chooseDurationSort("")}><X /><span>Clear sort</span></button>
@@ -2278,12 +2279,7 @@ function FilterableHeader({
             <button type="button" className={active && sort.direction === "asc" ? "active" : ""} onClick={() => onSort(sortKey, "asc")} title="Sort ascending"><ArrowUp /></button>
             <button type="button" className={active && sort.direction === "desc" ? "active" : ""} onClick={() => onSort(sortKey, "desc")} title="Sort descending"><ArrowDown /></button>
             <button type="button" onClick={() => onFilterChange("")} title="Clear this filter"><X /></button>
-            {dateColumn && <button type="button" className={rangeOpen || parseDateRange(filterValue) ? "active" : ""} onClick={() => setRangeOpen((current) => !current)} title="Filter by date range" aria-label={`Filter ${label} by date range`} aria-expanded={rangeOpen}><CalendarDays /></button>}
           </div>
-          {dateColumn && rangeOpen && <div className="column-filter-range" role="group" aria-label={`${label} date range`}>
-            <label><span>From</span><input type="date" value={dateRange.from} max={dateRange.to || undefined} onChange={(event) => onFilterChange(encodeDateRange(event.target.value, dateRange.to))} /></label>
-            <label><span>To</span><input type="date" value={dateRange.to} min={dateRange.from || undefined} onChange={(event) => onFilterChange(encodeDateRange(dateRange.from, event.target.value))} /></label>
-          </div>}
           <label className="column-filter-search">
             <Search aria-hidden="true" />
             <input data-smart-search autoFocus value={valueSearch} onChange={(event) => setValueSearch(event.target.value)} placeholder="Filter..." />
