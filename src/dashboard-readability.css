@@ -68,13 +68,17 @@
 .mine-dashboard .mine-breakdown-road-impact > em { white-space: normal; }
 
 /* A chart needs space for the larger labels, not a taller empty plotting area. */
-.mine-dashboard-feature-row .mine-fleet-chart-layout { height: 300px; min-height: 270px; }
+.mine-dashboard-feature-row .mine-fleet-chart-layout { height: 390px; min-height: 360px; }
 .mine-dashboard .mine-fleet-chart-regions > section { grid-template-rows: minmax(0, 1fr) 46px; }
-.mine-dashboard .mine-fleet-chart-sites button { grid-template-rows: minmax(0, 1fr) 52px; }
+.mine-dashboard .mine-fleet-chart-sites button { grid-template-rows: minmax(0, 1fr) 70px; }
 .mine-dashboard .mine-fleet-chart-sites small { font-size: 15px !important; line-height: 1.3; padding: 0 6px; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
-.mine-dashboard .mine-fleet-chart-grid { bottom: 116px; }
+.mine-dashboard .mine-fleet-site-summary { display: grid; align-content: start; gap: 3px; }
+.mine-dashboard .mine-fleet-site-summary b { font-size: 16px; line-height: 1.2; }
+.mine-dashboard .mine-fleet-site-summary span { color: var(--mine-muted); font-size: 12px; font-weight: 750; line-height: 1.2; }
+.mine-dashboard .mine-fleet-chart-grid { bottom: 134px; }
+.mine-dashboard .mine-fleet-bar-column { width: clamp(44px, 3vw, 58px); }
 .mine-dashboard .mine-fleet-bar-count { font-size: 18px !important; white-space: nowrap; }
-.mine-dashboard .mine-fleet-breakdown-count { font-size: 14px !important; line-height: 1.2; }
+.mine-dashboard .mine-fleet-breakdown-count { min-width: 24px; font-size: 18px !important; line-height: 1.25; }
 .mine-dashboard .mine-fleet-chart-regions footer { flex-wrap: wrap; gap: 4px 10px; padding: 4px; }
 .mine-dashboard .mine-fleet-chart-regions footer b { font-size: 19px !important; }
 .mine-dashboard .mine-fleet-chart-toggle button { min-height: 44px; padding: 10px 14px; }

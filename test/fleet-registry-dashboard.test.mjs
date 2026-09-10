@@ -4,6 +4,7 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
+const readabilityCss = fs.readFileSync(new URL("../src/dashboard-readability.css", import.meta.url), "utf8");
 
 test("fleet intelligence connects category and group drilldowns without a region-site subpanel", () => {
   assert.match(source, /className="mine-panel mine-fleet-command"/);
@@ -83,6 +84,10 @@ test("breakdown mode retains total bar heights and adds green breakdown sections
 test("Total Fleet uses the approved taller card and wider site bars", () => {
   assert.match(css, /\.mine-dashboard-feature-row \.mine-fleet-chart-layout\s*\{[^}]*min-height:\s*281px;[^}]*height:\s*326px/);
   assert.match(css, /\.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(34px, 2\.2vw, 42px\)/);
+  assert.match(readabilityCss, /\.mine-dashboard-feature-row \.mine-fleet-chart-layout\s*\{[^}]*height:\s*390px;[^}]*min-height:\s*360px/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-bar-column\s*\{[^}]*width:\s*clamp\(44px, 3vw, 58px\)/);
+  assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-count\s*\{[^}]*font-size:\s*18px !important/);
+  assert.match(source, /className="mine-fleet-site-summary"[^>]*><b>\{site\.name\}<\/b><span>Total BD \{site\.breakdown\.total\.toLocaleString\(\)\} · Total Fleet \{site\.total\.toLocaleString\(\)\}<\/span>/);
 });
 
 test("Total Fleet provides a persistent Caliber watermark option", () => {
