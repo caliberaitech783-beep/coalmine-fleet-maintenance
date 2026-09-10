@@ -12,7 +12,7 @@ test('hierarchy report groups carry the Reports menu headings in menu order',()=
   assert.deepEqual(byGroup.C,['Report for On Road / Off Road & Idle','Vehicle Transfer Report','Total Equipment / Vehicle Location Wise','Recent Breakdown Cases',IN_OUT_REPORT_TITLE,'Summary Report']);
   assert.deepEqual(byGroup.P,['Total Request Submitted Report','Ticket Acceptance from Maintenance (Timelinewise)','Maintenance Status Pending']);
   assert.deepEqual(byGroup.M,['Turn Around Time for Repair','Open Off road Cases','Availability Report','Vehicle Arrival Red Flag Report']);
-  assert.deepEqual(byGroup.S,['30 Min. Mismatch','Unverified Cases','Time Taken for MIS Verification','Total Fleet','MIS Red Flag Report']);
+  assert.deepEqual(byGroup.S,['30 Min. Mismatch','Unverified Cases','MIS Turn Around Time','Total Fleet','Total In and out count report','MIS Red Flag Report']);
   assert.equal(new Set(HIERARCHY_REPORT_TITLES).size,HIERARCHY_REPORT_TITLES.length,'each heading is ticked once');
   for(const title of DEPARTMENT_REPORT_TITLES)assert.ok(HIERARCHY_REPORT_TITLES.includes(title),`${title} is selectable in the hierarchy master`);
   assert.equal(HIERARCHY_REPORT_CODES.get(HIERARCHY_REPORT_TITLES[0]),'R1');

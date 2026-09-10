@@ -4,27 +4,27 @@ import {canonicalReportTitle} from './director-report-bundle.mjs';
 
 // The Hierarchy master ticks the same report headings the Reports menu shows:
 // General Report -> Common Report, then Production, Maintenance and MIS.
-// Vehicle Transfer Report and In and Out appear in both General and MIS on the
-// Reports page; they are ticked once here, under Common Report.
+// General transfer and movement reports remain separate from the MIS site/day register.
 export const HIERARCHY_REPORTS={
   roadStatus:'Report for On Road / Off Road & Idle',
   vehicleTransfer:'Vehicle Transfer Report',
   locationWise:'Total Equipment / Vehicle Location Wise',
   recentBreakdown:'Recent Breakdown Cases',
   inOut:IN_OUT_REPORT_TITLE,
-  summary:DEPARTMENT_REPORT_TITLES[14],
-  totalSubmitted:DEPARTMENT_REPORT_TITLES[9],
-  ticketAcceptance:DEPARTMENT_REPORT_TITLES[10],
-  maintenancePending:DEPARTMENT_REPORT_TITLES[11],
+  summary:DEPARTMENT_REPORT_TITLES[13],
+  totalSubmitted:DEPARTMENT_REPORT_TITLES[8],
+  ticketAcceptance:DEPARTMENT_REPORT_TITLES[9],
+  maintenancePending:DEPARTMENT_REPORT_TITLES[10],
   repairTat:DEPARTMENT_REPORT_TITLES[0],
   openOffRoad:DEPARTMENT_REPORT_TITLES[1],
   availability:DEPARTMENT_REPORT_TITLES[2],
-  arrivalRedFlag:DEPARTMENT_REPORT_TITLES[12],
+  arrivalRedFlag:DEPARTMENT_REPORT_TITLES[11],
   mismatch30:DEPARTMENT_REPORT_TITLES[3],
   unverified:DEPARTMENT_REPORT_TITLES[4],
   misVerificationTime:DEPARTMENT_REPORT_TITLES[5],
-  totalFleet:DEPARTMENT_REPORT_TITLES[7],
-  misRedFlag:DEPARTMENT_REPORT_TITLES[13],
+  totalFleet:DEPARTMENT_REPORT_TITLES[6],
+  misInOut:DEPARTMENT_REPORT_TITLES[7],
+  misRedFlag:DEPARTMENT_REPORT_TITLES[12],
 };
 
 export const HIERARCHY_REPORT_GROUPS=[
@@ -38,7 +38,7 @@ export const HIERARCHY_REPORT_GROUPS=[
     HIERARCHY_REPORTS.repairTat,HIERARCHY_REPORTS.openOffRoad,HIERARCHY_REPORTS.availability,HIERARCHY_REPORTS.arrivalRedFlag,
   ]},
   {group:'MIS Report',viewKey:'S',className:'mis',reports:[
-    HIERARCHY_REPORTS.mismatch30,HIERARCHY_REPORTS.unverified,HIERARCHY_REPORTS.misVerificationTime,HIERARCHY_REPORTS.totalFleet,HIERARCHY_REPORTS.misRedFlag,
+    HIERARCHY_REPORTS.mismatch30,HIERARCHY_REPORTS.unverified,HIERARCHY_REPORTS.misVerificationTime,HIERARCHY_REPORTS.totalFleet,HIERARCHY_REPORTS.misInOut,HIERARCHY_REPORTS.misRedFlag,
   ]},
 ];
 
@@ -49,6 +49,7 @@ export const HIERARCHY_REPORT_CODES=new Map(HIERARCHY_REPORT_TITLES.map((title,i
 // WhatsApp bundles that still carry them, map onto the catalogue heading that
 // covers the same cases so existing ticks keep meaning what they meant.
 export const LEGACY_HIERARCHY_REPORT_EQUIVALENTS=new Map([
+  ['Time Taken for MIS Verification',HIERARCHY_REPORTS.misVerificationTime],
   ['Location wise opened BD',HIERARCHY_REPORTS.totalSubmitted],
   ['Location wise closing BD',HIERARCHY_REPORTS.repairTat],
   ['MIS Verification Report',HIERARCHY_REPORTS.misVerificationTime],

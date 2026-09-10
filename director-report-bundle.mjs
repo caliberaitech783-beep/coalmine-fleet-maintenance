@@ -29,6 +29,7 @@ export const DIRECTOR_REPORT_TITLES=[
 ];
 
 export const LEGACY_REPORT_TITLE_ALIASES=new Map([
+  ['Time Taken for MIS Verification','MIS Turn Around Time'],
   ['Location wise Open BD report with Category (Prod)',DIRECTOR_REPORT_TITLES[0]],
   ['Location wise Closing BD report with Category (Maint.)',DIRECTOR_REPORT_TITLES[1]],
   ['MIS Verification Report (MIS)',DIRECTOR_REPORT_TITLES[2]],
