@@ -91,3 +91,26 @@ test("common chart scale is strictly increasing, keeps zero at zero, and Total m
     }
   }
 });
+
+test("8, 10 and 12 have visibly different, exactly proportional green bars across different totals", () => {
+  const height = (total, count) => {
+    const tree = FleetSiteBars({site: {equipment: total, breakdown: {equipment: count}}, axisMax: 225, showBreakdown: true, breakdownScaleMax: 12});
+    const bar = all(tree, node => node.type === "i")[0];
+    const segment = all(bar, node => node.props.className?.startsWith("mine-fleet-breakdown-segment"))[0];
+    return parseFloat(bar.props.style.height) * parseFloat(segment.props.style.height) / 100;
+  };
+  const values = [height(142, 8), height(49, 10), height(208, 12)];
+  assert.ok(Math.abs(values[2] / values[0] - 1.5) < 1e-9, "12 is 50% taller than 8");
+  assert.ok(Math.abs(values[1] / values[0] - 1.25) < 1e-9, "10 is 25% taller than 8");
+  for (let i = 1; i < values.length; i++) assert.ok((values[i] - values[i - 1]) * 2 >= 15, "at least 15px apart even in a 200px plot");
+  assert.ok(height(31, 3) > height(52, 2), "the earlier 2-versus-3 fix remains intact");
+});
+
+test("the enlarged band follows the maximum breakdown count, without compressing any green values", () => {
+  for (const peak of [5, 12, 24, 50, 100, 225]) {
+    const step = fleetBarHeightPercent(1, 225, true, peak);
+    for (let count = 1; count <= peak; count++) {
+      assert.ok(Math.abs(fleetBarHeightPercent(count, 225, true, peak) - step * count) < 1e-9, `${count} of ${peak}: every breakdown value is on one linear band`);
+    }
+  }
+});

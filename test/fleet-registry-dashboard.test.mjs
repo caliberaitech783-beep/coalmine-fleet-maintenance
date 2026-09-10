@@ -72,8 +72,8 @@ test("breakdown mode keeps total counts and green segments on one common scale",
   assert.match(css, /\.mine-fleet-breakdown-segment\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   assert.match(css, /\.mine-fleet-chart-legend i\.breakdown\s*\{[^}]*background: var\(--fleet-breakdown\);/);
   const bars = fs.readFileSync(new URL("../src/fleet-site-bars.jsx", import.meta.url), "utf8");
-  assert.match(bars, /fleetBarHeightPercent\(total, scale, showBreakdown\)/);
-  assert.match(bars, /fleetBarHeightPercent\(breakdown, scale, showBreakdown\)/);
+  assert.match(bars, /fleetBarHeightPercent\(total, scale, showBreakdown, breakdownScaleMax\)/);
+  assert.match(bars, /fleetBarHeightPercent\(breakdown, scale, showBreakdown, breakdownScaleMax\)/);
   assert.match(bars, /Math\.max\(1, nonNegativeCount\(axisMax\), total\)/);
   assert.match(bars, /showBreakdown && breakdown > 0/);
   assert.match(bars, /className="mine-fleet-breakdown-count"/);
@@ -170,8 +170,9 @@ test("fleet chart uses the same labelled enlarged scale for its grid and bars", 
   assert.match(source, /const fleetChartStep = 25;/);
   assert.match(source, /const fleetChartAxisMax = Math.max\(fleetChartStep, Math.ceil\(fleetChartPeak \/ fleetChartStep\) \* fleetChartStep\);/);
   assert.doesNotMatch(source, /const fleetChartScale = dashboardCountScale/);
-  assert.match(source, /fleetBarHeightPercent\(tick, fleetChartAxisMax, showFleetBreakdowns\)/);
-  assert.match(source, /Scale: 0–5 enlarged for readability; the same scale applies to every bar\./);
+  assert.match(source, /fleetBarHeightPercent\(tick, fleetChartAxisMax, showFleetBreakdowns, fleetBreakdownScaleMax\)/);
+  assert.match(source, /breakdownScaleMax=\{fleetBreakdownScaleMax\}/);
+  assert.match(source, /Breakdown scale: 0–\{fleetBreakdownScaleMax\} enlarged uniformly; totals continue above this range\./);
   assert.match(readabilityCss, /\.mine-dashboard \.mine-fleet-breakdown-segment \{ min-height: 0; max-height: none; \}/);
 });
 

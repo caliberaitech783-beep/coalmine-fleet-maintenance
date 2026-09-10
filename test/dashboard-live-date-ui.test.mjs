@@ -453,6 +453,9 @@ test("every site equipment and vehicle total opens exactly its registered assets
     let tree = view.render(rows);
     findAll(tree, (node) => node.type === "button" && node.props.className === mode && node.props["aria-controls"] === "fleet-region-plot")[0].props.onClick();
     tree = view.render(rows);
+    const fleetBars = findAll(tree, node => node.props.site?.breakdown && node.props.axisMax);
+    assert.ok(fleetBars.length);
+    assert.ok(fleetBars.every(node => node.props.breakdownScaleMax === 8), "all sites share the highest visible breakdown count");
     for (const site of sites.slice(0, 3)) {
       for (const category of ["equipment", "vehicles"]) {
         const clickSite = (isBreakdown) => {
