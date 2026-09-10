@@ -94,3 +94,11 @@ test("the list is unconditional and tabs support keyboard navigation", () => {
   assert.match(component, /\["site", "Site", "All sites"\]/);
   assert.doesNotMatch(component, /Step [1-5]/);
 });
+
+test("each fleet list opens from the top with its column header pinned while scrolling", () => {
+  const browser = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/dashboard-record-browser.css", import.meta.url), "utf8");
+  assert.ok(browser.includes(`<div className="dashboard-asset-list" ref={listRef}>`));
+  assert.ok(browser.includes("useEffect(() => { if (listRef.current) listRef.current.scrollTop = 0; }, [tableKey]);"));
+  assert.ok(css.includes(".dashboard-record-browser .dashboard-asset-list thead th { position: sticky; top: 0; z-index: 2;"));
+});

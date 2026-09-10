@@ -68,6 +68,9 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
     ["group", "Type", "All types"],
   ];
   const tableKey = JSON.stringify(view.selection);
+  const listRef = useRef(null);
+  // Every new selection shows its fleet list from the top, not where the previous list was scrolled.
+  useEffect(() => { if (listRef.current) listRef.current.scrollTop = 0; }, [tableKey]);
   const columnCount = 6 + (requestRecords ? 4 : 0) + (lifecycleRecords ? 3 : 0);
   const reset = () => { setFilters({ region: view.selection.region }); setOpenedLevel(0); };
   return <div className="dashboard-record-browser">
@@ -86,7 +89,7 @@ export default function DashboardRecordBrowser({ rows, regions, title = "Chart r
     </div>
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={view.selection.region ? `${id}-${view.selection.region}` : undefined}>
       <div className="dashboard-record-summary"><h4>{view.selection.region || "Fleet"} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
-      <div className="dashboard-asset-list">
+      <div className="dashboard-asset-list" ref={listRef}>
         <ActionsTable key={tableKey} exportTitle={`${title} · ${view.selection.region || "Fleet"}`} printTitle={`${title} · ${view.selection.region || "Fleet"}`}>
           <thead><tr>{requestRecords && <th>Job reference</th>}<th>Machine / Door no.</th><th>Equipment category</th><th>Equipment group</th><th>Model</th><th>{requestRecords ? "Request site" : "Current location"}</th><th>Serial / chassis no.</th>{requestRecords && <><th>Repair category</th><th>Status</th><th>Started</th></>}{lifecycleRecords && <><th>Closed</th><th>MIS verified at</th><th>First trip time</th></>}</tr></thead>
           <tbody>{view.rows.length ? view.rows.map((record, index) => <tr key={record.id || `${record.equipmentName}-${index}`}>
