@@ -106,6 +106,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   const view = harness();
   let tree = view.render();
   byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  byLabel(tree, "Select site-wise BD dates").props.onClick();
   tree = view.render();
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render();
@@ -137,6 +138,7 @@ test("site-wise range allows one day, keeps dates ordered, rejects future dates 
   const view = harness();
   let tree = view.render();
   byLabel(tree, "Dashboard date").props.onChange({target: {value: "2026-09-09"}});
+  byLabel(tree, "Select site-wise BD dates").props.onClick();
   tree = view.render();
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
@@ -162,4 +164,24 @@ test("site-wise range allows one day, keeps dates ordered, rejects future dates 
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: ""}});
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-05");
+});
+
+test("compact calendar opens the dates only on click and retains the selection after closing", () => {
+  const view = harness();
+  let tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD from date"), undefined);
+  assert.equal(byLabel(tree, "Select site-wise BD dates").props["aria-expanded"], false);
+  byLabel(tree, "Select site-wise BD dates").props.onClick();
+  tree = view.render();
+  assert.equal(byLabel(tree, "Select site-wise BD dates").props["aria-expanded"], true);
+  byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-01"}});
+  button(tree, "Done").props.onClick();
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD from date"), undefined);
+  byLabel(tree, "Select site-wise BD dates").props.onClick();
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-01");
+  findAll(tree, (node) => node.props.className === "dashboard-breakdown-date-modal")[0].props.close();
+  tree = view.render();
+  assert.equal(byLabel(tree, "Site-wise BD date range"), undefined);
 });
