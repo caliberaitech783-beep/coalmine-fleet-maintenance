@@ -46,7 +46,7 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(source, /for \(let attempt = 0; attempt < 3; attempt \+= 1\)/);
   assert.match(source, /The save connection was interrupted\. Please try again\./);
   assert.match(source, /hierarchyColumnViewOptions/);
-  assert.match(source, /group:"MIS Report", viewKey:"S"/);
+  assert.match(readFileSync(new URL("../hierarchy-report-catalogue.mjs", import.meta.url), "utf8"), /group:'MIS Report',viewKey:'S'/);
   assert.match(source, /key:"W", label:"WCL and NCL site-wise controls"/);
   assert.match(source, /hierarchyRowViewOptions/);
   assert.match(source, /hierarchyRowViewKey/);

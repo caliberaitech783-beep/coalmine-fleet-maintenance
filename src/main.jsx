@@ -42,6 +42,7 @@ import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_COLUMNS, IN_OUT_REPORT_DESCRIPTION, IN_OUT_REPORT_TITLE, buildInOutReportRows, signedCount } from "../in-out-report.mjs";
 import { buildDepartmentReports } from "../department-reports.mjs";
+import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
 import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../report-refinements.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
@@ -2035,89 +2036,26 @@ const selectedAccessValues = (record, key, fallbackKey = "") => {
   return [...new Set(String(record[key] || "").split(/\s*[|,]\s*/).map(normalizeRequestMenuLabel).filter(Boolean))];
 };
 const privilegeSiteOptions = [...new Set(subsidiaryData.flatMap((region) => region.sites))];
-const hierarchyReports = {
-  openedBd: "Location wise opened BD",
-  closingBd: "Location wise closing BD",
-  misVerification: "MIS Verification Report",
-  roadStatus: "Report for On Road / Off Road & Idle",
-  vehicleTransfer: "Vehicle Transfer Report",
-  locationWise: "Total Equipment / Vehicle Location Wise",
-  idleVehicle: "Idle Vehicle Report",
-  recentBreakdown: "Recent Breakdown Cases",
-  offRoadToMis: "Off Road to MIS Veri.",
-  offRoadToMaintenance: "Off Road to Maint. Close",
-  maintenanceToMis: "Event close Report - Maint. Closing to MIS Verif.",
-  idlePm: "Idle with PM verif.",
-  firstTrip: "On Road with first trip veri.",
-  inOut: IN_OUT_REPORT_TITLE,
-};
-const hierarchyLegacyReportTitles = new Map([
-  ["Location wise Open BD report with Category (Prod)", hierarchyReports.openedBd],
-  ["Location wise Closing BD report with Category (Maint.)", hierarchyReports.closingBd],
-  ["MIS Verification Report (MIS)", hierarchyReports.misVerification],
-  ["Off Road to MIS Verift Report - Time taken from Prod to MIS Veri.", hierarchyReports.offRoadToMis],
-  ["Event Open Report - Prod. Open with Maint. Close Time -- TAT", hierarchyReports.offRoadToMaintenance],
-  ["Idle Time with PM Verification Time", hierarchyReports.idlePm],
-  ["Idle Verification v/s MIS First Trip verification", hierarchyReports.firstTrip],
-]);
-const normalizeHierarchyReportAccess = (value = "") => [...new Set(String(value || "")
-  .split(/\s*\|\s*/)
-  .map((report) => hierarchyLegacyReportTitles.get(report.trim()) || report.trim())
-  .filter(Boolean))].join(" | ");
-const hierarchyReportGroups = [
-  {group:"Common Report", viewKey:"C", className:"common", reports:[
-    hierarchyReports.roadStatus,
-    hierarchyReports.vehicleTransfer,
-    hierarchyReports.locationWise,
-    hierarchyReports.recentBreakdown,
-    hierarchyReports.inOut,
-  ]},
-  {group:"Production Report", viewKey:"P", className:"production", reports:[
-    hierarchyReports.openedBd,
-    hierarchyReports.offRoadToMis,
-  ]},
-  {group:"Maintenance Report", viewKey:"M", className:"maintenance", reports:[
-    hierarchyReports.closingBd,
-    hierarchyReports.idleVehicle,
-    hierarchyReports.offRoadToMaintenance,
-    hierarchyReports.maintenanceToMis,
-    hierarchyReports.idlePm,
-  ]},
-  {group:"MIS Report", viewKey:"S", className:"mis", reports:[
-    hierarchyReports.misVerification,
-    hierarchyReports.firstTrip,
-  ]},
-];
-const hierarchyReportTitles = hierarchyReportGroups.flatMap((group) => group.reports);
-const hierarchyReportCodes = new Map([
-  hierarchyReports.openedBd,
-  hierarchyReports.closingBd,
-  hierarchyReports.misVerification,
-  hierarchyReports.roadStatus,
-  hierarchyReports.vehicleTransfer,
-  hierarchyReports.locationWise,
-  hierarchyReports.idleVehicle,
-  hierarchyReports.recentBreakdown,
-  hierarchyReports.offRoadToMis,
-  hierarchyReports.offRoadToMaintenance,
-  hierarchyReports.maintenanceToMis,
-  hierarchyReports.idlePm,
-  hierarchyReports.firstTrip,
-  hierarchyReports.inOut,
-].map((report, index) => [report, `R${index + 1}`]));
+// Hierarchy report headings mirror the Reports menu (General, Production, Maintenance, MIS); see hierarchy-report-catalogue.mjs.
+const hierarchyReports = { ...HIERARCHY_REPORTS, inOut: IN_OUT_REPORT_TITLE };
+const hierarchyReportGroups = HIERARCHY_REPORT_GROUPS;
+const hierarchyReportTitles = HIERARCHY_REPORT_TITLES;
+const hierarchyReportCodes = HIERARCHY_REPORT_CODES;
+const hierarchyReportsIn = (...groups) => hierarchyReportGroups.filter((group) => groups.includes(group.viewKey)).flatMap((group) => group.reports);
+const hierarchyManagerReports = hierarchyReportTitles.filter((report) => ![hierarchyReports.vehicleTransfer, hierarchyReports.locationWise, hierarchyReports.inOut].includes(report));
 const hierarchyDefaults = [
   {section:"Management", designation:"Director's", level:"1", schedule:"Daily 07:00:00 PM; weekly fleet Sat 07:00:00 PM", reportAccess:hierarchyReportTitles.join(" | ")},
   {section:"Management", designation:"Project Manager (P.M)", level:"2", schedule:"08:00:00 AM & 06:00:00 PM common; 07:00:00 PM operational; weekly fleet Sat 07:00:00 PM", reportAccess:hierarchyReportTitles.join(" | ")},
-  {section:"Production Dept.", designation:"Production Manager", level:"3", schedule:"Every event for opening/closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
-  {section:"Production Dept.", designation:"Production Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
-  {section:"Maintenance Dept.", designation:"Maintenance Manager", level:"3", schedule:"Every event for opening/closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
-  {section:"Maintenance Dept.", designation:"Maintenance Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.openedBd, hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
-  {section:"MIS Dept.", designation:"MIS Manager", level:"3", schedule:"Every event for closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:[hierarchyReports.closingBd, hierarchyReports.misVerification, hierarchyReports.roadStatus, hierarchyReports.idleVehicle, hierarchyReports.recentBreakdown, hierarchyReports.offRoadToMis, hierarchyReports.offRoadToMaintenance, hierarchyReports.maintenanceToMis, hierarchyReports.idlePm, hierarchyReports.firstTrip].join(" | ")},
-  {section:"MIS Dept.", designation:"MIS Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:[hierarchyReports.closingBd, hierarchyReports.misVerification].join(" | ")},
-  {section:"OEM", designation:"National Head", level:"1", schedule:"Every 7th day consolidate", reportAccess:hierarchyReports.closingBd},
-  {section:"OEM", designation:"Regional Head / Zonal Head", level:"2", schedule:"Every 5th day consolidate", reportAccess:hierarchyReports.closingBd},
-  {section:"OEM", designation:"Area Service engineer", level:"3", schedule:"Every 3rd day consolidate", reportAccess:hierarchyReports.closingBd},
-  {section:"OEM", designation:"Service Engineer / Site Service Engineer", level:"4", schedule:"Every day consolidate", reportAccess:hierarchyReports.closingBd},
+  {section:"Production Dept.", designation:"Production Manager", level:"3", schedule:"Every event for opening/closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:hierarchyManagerReports.join(" | ")},
+  {section:"Production Dept.", designation:"Production Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:hierarchyReportsIn("P").join(" | ")},
+  {section:"Maintenance Dept.", designation:"Maintenance Manager", level:"3", schedule:"Every event for opening/closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:hierarchyManagerReports.join(" | ")},
+  {section:"Maintenance Dept.", designation:"Maintenance Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:hierarchyReportsIn("M").join(" | ")},
+  {section:"MIS Dept.", designation:"MIS Manager", level:"3", schedule:"Every event for closing/MIS; 08:00:00 AM & 06:00:00 PM road status; 07:00:00 PM operational", reportAccess:hierarchyManagerReports.join(" | ")},
+  {section:"MIS Dept.", designation:"MIS Incharge / Supervisor", level:"4", schedule:"Every event", reportAccess:hierarchyReportsIn("S").join(" | ")},
+  {section:"OEM", designation:"National Head", level:"1", schedule:"Every 7th day consolidate", reportAccess:hierarchyReports.repairTat},
+  {section:"OEM", designation:"Regional Head / Zonal Head", level:"2", schedule:"Every 5th day consolidate", reportAccess:hierarchyReports.repairTat},
+  {section:"OEM", designation:"Area Service engineer", level:"3", schedule:"Every 3rd day consolidate", reportAccess:hierarchyReports.repairTat},
+  {section:"OEM", designation:"Service Engineer / Site Service Engineer", level:"4", schedule:"Every day consolidate", reportAccess:hierarchyReports.repairTat},
 ];
 const hierarchySiteGroups = subsidiaryData.map((region) => ({code:region.code, name:region.name, sites:region.sites}));
 const hierarchySiteTitles = hierarchySiteGroups.flatMap((region) => region.sites);

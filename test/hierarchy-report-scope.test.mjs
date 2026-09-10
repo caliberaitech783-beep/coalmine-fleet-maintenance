@@ -7,6 +7,7 @@ import {reportScopeIncludesSite} from '../region-scope.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,reportsDueForDesignation,reportsForHierarchyEvent} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
+import {hierarchyAccessAllowsReport} from '../hierarchy-report-catalogue.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const mobile=(fields={})=>({login:'mobile',userType:'Mobile User',userGroup:'Production User',site:'Sasti OB',...fields});
@@ -76,7 +77,7 @@ function deliveryHarness(users,{siteAccess=null}={}){
     }},
     requestStakeholderLogins:async()=>users.map(user=>user.login),
     resolveMobileAccess,flowDesignationForUser,applyHierarchyDeliveryRule,reportsDueForDesignation,reportsForHierarchyEvent,
-    hierarchyRecipientReportScope,reportScopeIncludesSite,splitHierarchyValues,
+    hierarchyRecipientReportScope,reportScopeIncludesSite,splitHierarchyValues,hierarchyAccessAllowsReport,
     hierarchyRuleForDesignation:()=>siteAccess===null?null:{siteAccess,reportAccess:DIRECTOR_REPORT_TITLES.join(' | ')},
     publishDirectorReportFiles:async args=>{
       const filtered=sourceDataForSites(data,args.siteAccess);

@@ -26,6 +26,7 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
+import {hierarchyAccessAllowsReport} from './hierarchy-report-catalogue.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
@@ -1921,8 +1922,8 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
       const recipientScope=hierarchyRecipientReportScope(user,profile,hierarchyRule?.siteAccess);
       if(Array.isArray(recipientScope.sites)&&!recipientScope.sites.length){skipped++;continue}
       if(event&&!reportScopeIncludesSite(recipientScope,event.request.site)){skipped++;continue}
-      const allowedReports=hierarchyRule?new Set(splitHierarchyValues(hierarchyRule.reportAccess)):null;
-      const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))].filter((title)=>!allowedReports||allowedReports.has(title));
+      // Hierarchy ticks use the Reports-menu catalogue; older scheduled titles map onto their catalogue equivalent.
+      const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))].filter((title)=>!hierarchyRule||hierarchyAccessAllowsReport(hierarchyRule.reportAccess,title));
       if(!reportTitles.length){skipped++;continue}
       const scheduleLabel=[...new Set(dueGroups.map((group)=>group.scheduleLabel))].join(' + ');
       const slotKey=dueGroups.map((group)=>group.slotKey).sort().join('+');

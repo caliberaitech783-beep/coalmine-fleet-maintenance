@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,reportsForHierarchyEvent,reportsDueForDesignation,flowDesignationForUser} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
+import {hierarchyAccessAllowsReport} from '../hierarchy-report-catalogue.mjs';
 import {defaultWhatsAppReportSettings,whatsappPurposeEnabled} from '../whatsapp-report-settings.mjs';
 import {reportTemplateFallback} from '../whatsapp-template-runtime.mjs';
 import {hierarchyReportMessagePurpose} from '../whatsapp-template-catalog.mjs';
@@ -61,7 +62,7 @@ function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
     requestStakeholderLogins:async()=>['production'],
     resolveMobileAccess,applyHierarchyDeliveryRule,flowDesignationForUser,reportsForHierarchyEvent,reportsDueForDesignation,hierarchyRecipientReportScope,reportScopeIncludesSite,
     hierarchyRuleForDesignation:()=>({siteAccess:'Sasti OB',reportAccess:DIRECTOR_REPORT_TITLES.join('|')}),
-    splitHierarchyValues:value=>value.split('|'),
+    splitHierarchyValues:value=>value.split('|'),hierarchyAccessAllowsReport,
     sourceDataForSites:data=>({...data,requests:siteAllowed?data.requests:[]}),
     publishDirectorReportFiles:async args=>{published.push(args);return {message:'Event report\nPDF https://example.com/report'}},
     publicBaseUrl:()=> 'https://example.com',metaWhatsAppRuntimeEnv:async()=>({}),
