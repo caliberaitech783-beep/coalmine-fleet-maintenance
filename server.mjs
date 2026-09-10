@@ -1,4 +1,5 @@
 import express from 'express';
+import {createNotificationFeed} from './notification-feed.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import pg from 'pg';
 import path from 'node:path';
@@ -778,6 +779,14 @@ async function migrate(){
     ALTER TABLE crm_notifications ADD COLUMN IF NOT EXISTS notification_key TEXT;
     CREATE UNIQUE INDEX IF NOT EXISTS crm_notifications_key_idx ON crm_notifications (notification_key) WHERE notification_key IS NOT NULL;
     CREATE INDEX IF NOT EXISTS crm_notifications_recipient_idx ON crm_notifications (recipient_login, is_read, created_at DESC);
+    CREATE OR REPLACE FUNCTION signal_crm_notification() RETURNS trigger LANGUAGE plpgsql AS $notification$
+    BEGIN
+      PERFORM pg_notify('bdms_notifications',NEW.recipient_login);
+      RETURN NEW;
+    END;
+    $notification$;
+    CREATE OR REPLACE TRIGGER crm_notification_inserted AFTER INSERT ON crm_notifications
+      FOR EACH ROW EXECUTE FUNCTION signal_crm_notification();
   `);
   const client=await pool.connect();
   try{
@@ -2572,17 +2581,37 @@ async function createMaintenanceReminderNotifications(){
   }
 }
 
+const waitForNotification=createNotificationFeed(pool);
 app.get('/api/notifications',requireSession,async(req,res,next)=>{
+  let subscription;
+  res.set('Cache-Control','private, no-store');
+  res.vary('Authorization');
   try{
     await createMaintenanceReminderNotifications().catch((error)=>{
       console.error('Maintenance reminder notification generation failed.',error);
     });
     const login=String(req.session.login||'').trim().toLowerCase();
-    const {rows}=await pool.query(`SELECT id,ticket_reference AS "ticketReference",message,is_read AS "isRead",
-      to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
-      FROM crm_notifications WHERE recipient_login=$1 ORDER BY created_at DESC LIMIT 50`,[login]);
-    res.json(rows);
-  }catch(error){next(error)}
+    // Subscribe before reading: an insert between the read and wait cannot be lost.
+    if(req.query.wait==='1')subscription=await waitForNotification(login,res);
+    const read=async()=>{
+      const {rows}=await pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
+        COALESCE(NULLIF(r.site,''),t.site,'') AS site,COALESCE(r.door_number,'') AS door,
+        to_char(n.created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
+        FROM crm_notifications n
+        LEFT JOIN maintenance_requests r ON r.reference=n.ticket_reference
+        LEFT JOIN crm_tickets t ON t.reference=n.ticket_reference
+        WHERE n.recipient_login=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 50`,[login]);
+      return rows;
+    };
+    let rows=await read();
+    if(subscription&&rows.map((row)=>String(row.id)).join(',')===String(req.query.known||'')){
+      await subscription.promise;
+      if(res.destroyed)return;
+      rows=await read();
+    }
+    if(!res.destroyed)res.json(rows);
+  }catch(error){if(!res.destroyed)next(error)}
+  finally{subscription?.close()}
 });
 
 app.get('/api/notifications/:id/target',requireSession,async(req,res,next)=>{

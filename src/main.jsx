@@ -1,5 +1,7 @@
 import { requestStatusLabel } from "./request-status.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
+import { notificationText } from "../notification-text.mjs";
+import { createNotificationTracker, createNotificationSound } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
@@ -7942,19 +7944,62 @@ function NotificationEntryDialog({ state, onClose }) {
   </Modal>, document.body);
 }
 
+function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef }) {
+  useEffect(() => {
+    const id = String(item.id);
+    if (!playedRef.current.has(id)) {
+      playedRef.current.add(id);
+      soundRef.current?.play();
+    }
+    const timer = window.setTimeout(() => onDismiss(id), 15000);
+    return () => window.clearTimeout(timer);
+  }, [item.id]);
+  return <div className="incoming-notification" role="status" aria-live="polite"><button className="incoming-notification-link" type="button" onClick={() => { onDismiss(String(item.id)); void onOpen(item); }}><Bell /><span><b>New notification</b><span>{notificationText(item)}</span><small>Click for more details.</small></span></button><button type="button" className="incoming-notification-close" aria-label="Dismiss notification" onClick={() => onDismiss(String(item.id))}><X /></button></div>;
+}
+
 function NotificationBell({ session, onOpenEntry }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const soundRef = useRef(null), playedRef = useRef(new Set());
   const centerRef = useRef(null), triggerRef = useRef(null), entryControllerRef = useRef(null), entrySequenceRef = useRef(0), onOpenEntryRef = useRef(onOpenEntry);
   onOpenEntryRef.current = onOpenEntry;
-  // Loading reminders updates the badge; only a bell click opens the dropdown.
-  const load = () => fetch("/api/notifications", {headers: {Authorization: `Bearer ${session.token}`}})
-    .then(async (response) => {
-      if (!response.ok) throw new Error(`Could not load notifications (HTTP ${response.status}).`);
-      return response.json();
-    })
-    .then((next) => { if (Array.isArray(next)) setItems(next); })
-    .catch((error) => console.warn("Notification refresh failed; retaining the last successful list.", error));
-  useEffect(() => { load(); const timer = window.setInterval(load, 30000); return () => window.clearInterval(timer); }, [session?.token]);
+  // A silent initial snapshot followed by authenticated long polling. PostgreSQL
+  // wakes the pending request immediately after any notification type is saved.
+  useEffect(() => {
+    const controller = new AbortController();
+    const track = createNotificationTracker();
+    const sound = createNotificationSound();
+    soundRef.current = sound;
+    playedRef.current = new Set();
+    setItems([]); setAlerts([]); setOpen(false);
+    let known = null, timer;
+    const load = async () => {
+      let delay = 0;
+      try {
+        const query = known === null ? "" : `?wait=1&known=${encodeURIComponent(known)}`;
+        const response = await fetch(`/api/notifications${query}`, {
+          cache: "no-store", signal: controller.signal,
+          headers: {Authorization: `Bearer ${session.token}`},
+        });
+        if (!response.ok) throw new Error(`Could not load notifications (HTTP ${response.status}).`);
+        const next = await response.json();
+        if (!Array.isArray(next)) throw new Error("Invalid notification list");
+        if (controller.signal.aborted) return;
+        const fresh = track(next);
+        known = next.map((item) => String(item.id)).join(",");
+        setItems(next);
+        if (fresh.length) setAlerts((current) => [...current, ...fresh]);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.warn("Notification refresh failed; retaining the last successful list.", error);
+        delay = 5000;
+      }
+      if (!controller.signal.aborted) timer = window.setTimeout(load, delay);
+    };
+    void load();
+    return () => { controller.abort(); window.clearTimeout(timer); sound.close(); };
+  }, [session?.token]);
+  const dismissAlert = (id) => setAlerts((current) => current.filter((item) => String(item.id) !== id));
   useEffect(() => {
     if (!open) return undefined;
     const closeOutside = (event) => {
@@ -8032,7 +8077,14 @@ function NotificationBell({ session, onOpenEntry }) {
     entrySequenceRef.current += 1;
     entryControllerRef.current?.abort();
   }, []);
-  return <><div className="notification-center" ref={centerRef}><button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>{open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><span>{item.message}</span><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>No notifications yet.</p>}</div></div>}</div><NotificationEntryDialog state={entryState} onClose={closeEntry} /></>;
+  return <>
+    <div className="notification-center" ref={centerRef}>
+      <button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>
+      {open && <div className="notification-popover" role="dialog" aria-label="Notifications"><header><b>Notifications</b><div><span>{items.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header><div className="notification-list">{items.length ? items.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><span>{notificationText(item)}</span><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>No notifications yet.</p>}</div></div>}
+    </div>
+    {alerts.length > 0 && createPortal(<div className="incoming-notification-stack" aria-label="New notifications">{alerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} />)}</div>, document.body)}
+    <NotificationEntryDialog state={entryState} onClose={closeEntry} />
+  </>;
 }
 
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {

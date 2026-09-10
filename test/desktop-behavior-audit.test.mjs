@@ -79,7 +79,8 @@ test("authentication responses hide non-JSON proxy bodies behind useful errors",
 test("notification failures retain existing items and never acknowledge unread items", () => {
   const bell = source.slice(source.indexOf("function NotificationBell("), source.indexOf("function Normal("));
   assert.match(bell, /if \(!response\.ok\) throw new Error\(`Could not load notifications/);
-  assert.match(bell, /if \(Array\.isArray\(next\)\) setItems\(next\)/);
+  assert.match(bell, /if \(!Array\.isArray\(next\)\) throw new Error\("Invalid notification list"\)/);
+  assert.match(bell, /if \(controller\.signal\.aborted\) return;[\s\S]*setItems\(next\)/);
   assert.doesNotMatch(bell, /response\.ok \? response\.json\(\) : \[\]/);
   assert.match(bell, /if \(!response\.ok\) throw new Error\(`Could not mark notifications as read/);
   assert.match(bell, /setItems\(\(current\) => current\.map/);

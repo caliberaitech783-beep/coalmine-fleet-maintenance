@@ -9,7 +9,9 @@ test("notification loading never opens the dropdown on login or polling", () => 
   const loading = bell.slice(bell.indexOf("const load ="), openEffectIndex);
   assert.match(bell, /\[open, setOpen\] = useState\(false\)/);
   assert.match(loading, /setItems\(next\)/);
-  assert.match(loading, /window\.setInterval\(load, 30000\)/);
+  assert.match(bell, /createNotificationTracker\(\)/);
+  assert.match(bell, /\?wait=1&known=/);
+  assert.match(bell, /controller\.abort\(\)/);
   assert.doesNotMatch(loading, /setOpen\(/);
   assert.match(bell, /onClick=\{toggle\}/);
   assert.equal(source.match(/<NotificationBell\b/g)?.length, 2);
