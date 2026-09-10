@@ -7,6 +7,7 @@ import { availabilityRequestsForDate } from "../src/dashboard-availability.mjs";
 import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
+import { formatDisplayDate } from "../date-time-format.mjs";
 
 const assets = [
   ...["A", "B", "C", "D"].map(door => ({ door, currentLocation: "Majri OB", category: "Vehicles" })),
@@ -96,6 +97,7 @@ function dashboardSection(date) {
   const scope = {
     React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite,
     locationBreakdowns: requests, dashboardDate: date, breakdownSummaryTo: "", todayKey: "2026-09-10", visibleEquipment: assets,
+    breakdownSummaryStartKey: "2026-09-01", breakdownSummaryEndKey: date || "2026-09-10", formatDisplayDate,
     trendAvailableSites: ["Majri OB", "Jayant OB"], roadFocusSite: "", openAssetDrilldown: () => {},
     // The other charts deliberately keep their existing day-of-submission filter.
     visibleBreakdowns: [], kpis: { onRoad: 999, offRoad: 999, idle: 999, availability: 999 },

@@ -116,6 +116,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
   assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
   assert.ok(text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of 08-09-2026"));
+  assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
   const exported = findAll(tree, (node) => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
   const incoming = exported.find((row) => row.section === "Breakdown movement" && row.metric === "BD In");
   assert.equal(incoming.value, 2);
@@ -128,6 +129,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   button(tree, "Availability Count").props.onClick();
   tree = view.render();
   assert.ok(byLabel(tree, "Sasti OB: 1 on road, 2 off road and 0 idle. Open fleet details."));
+  assert.equal(text(byLabel(tree, "Availability table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
   // The independent top-level date and live fleet chart are not changed.
   assert.equal(byLabel(tree, "Dashboard date").props.value, "2026-09-09");
   const breakdown = findAll(tree, (node) => node.type === "button" && node.props.className === "breakdown" && node.props["aria-controls"] === "fleet-region-plot")[0];
@@ -184,4 +186,5 @@ test("compact calendar opens the dates only on click and retains the selection a
   findAll(tree, (node) => node.props.className === "dashboard-breakdown-date-modal")[0].props.close();
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD date range"), undefined);
+  assert.ok(text(byLabel(tree, "Site-wise BD table period")).includes("From: 01-09-2026"));
 });
