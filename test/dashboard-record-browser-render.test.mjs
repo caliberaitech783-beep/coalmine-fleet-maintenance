@@ -18,6 +18,41 @@ const {code} = await transformWithOxc(source, "record-browser.jsx", {jsx: {runti
 const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) => descendants(child, test))
   : React.isValidElement(node) ? [...(test(node) ? [node] : []), ...descendants(node.props.children, test)] : [];
 
+test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
+  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+    useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
+    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
+  const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
+  const timingColumns = ["Closed", "MIS verified at", "First trip time"];
+  const row = {id: "case-1", requestReference: "JOB-1", requestSite: "Sasti OB", category: "Vehicle", requestStatus: "Closed",
+    requestStart: "2026-09-10 10:00:00", requestClosed: "2026-09-10 11:00:00", requestVerified: "2026-09-10 12:00:00", requestFirstTrip: "2026-09-10 11:30:00"};
+  for (const [title, event, expected] of [
+    ["Production Request", "production", ["Closed"]], ["Closed", "closed", ["Closed"]],
+    ["Verified", "verified", timingColumns], ["Idle Vehicles", "idle", []],
+    ["Open in Maint", "opened", []], ["Open in MIS", "closed", ["Closed"]],
+    ["All lifecycle requests", "all", timingColumns],
+  ]) {
+    let table;
+    const props = {rows: [row], regions: REGION_DATA, rowsAreScoped: true, requestRecords: true, lifecycleRecords: true, lifecycleEvent: event, title,
+      Status: ({children}) => children, formatDate: formatDisplayDateTime,
+      ActionsTable: received => {table = received; return React.createElement("table", null, received.children);}};
+    const html = renderToStaticMarkup(React.createElement(Browser, props));
+    const columns = dateColumnsFirst(tableModel(table.children).columns);
+    assert.deepEqual(columns.filter(column => timingColumns.includes(column.label)).map(column => column.label), expected, title);
+    assert.deepEqual(columns.slice(0, 2 + expected.length).map(column => column.label), ["Status", "Started", ...expected], title);
+    const dataRows = descendants(descendants(table.children, node => node.type === "tbody"), node => node.type === "tr");
+    const exported = tableExportModel(dataRows, columns, columns.map(column => column.key));
+    assert.equal(exported.rows.length, 1, title);
+    assert.equal(table.printTitle, table.exportTitle, title);
+    assert.match(html, /1 of 1 records/);
+    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 11 + expected.length, title);
+    for (const column of timingColumns.filter(label => !expected.includes(label))) assert.ok(!html.includes(`<th>${column}</th>`), `${title}: ${column}`);
+    if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-2026 11:00:00 AM", title);
+    const empty = renderToStaticMarkup(React.createElement(Browser, {...props, rows: []}));
+    assert.ok(empty.includes(`colSpan="${11 + expected.length}"`), `${title}: empty table alignment`);
+  }
+});
+
 test("BD Out closing times, table order, counts and exports stay consistent through region filtering and reset", () => {
   const slots = [];
   let cursor = 0;
