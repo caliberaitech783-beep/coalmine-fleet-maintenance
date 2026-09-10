@@ -352,3 +352,9 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
 .notification-popover .notification-site-filter select{width:100%;min-width:0;padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--ink);font:inherit;font-size:14px}
 [data-theme="dark"] .notification-message .notification-site{background:#352449!important;color:#e1c8ff!important}
 [data-theme="dark"] .notification-popover .notification-site-filter,[data-theme="dark"] .notification-popover .notification-site-filter select{background:#111d30;color:#e5ebf5;border-color:#65517e}
+.notification-popover header>b,.incoming-notification-link>span>b{font-size:18px!important;line-height:1.4!important}
+.notification-popover .notification-message .notification-site,.incoming-notification .notification-message .notification-site{font-size:18px!important}
+.notification-popover .notification-list>button .notification-details,.incoming-notification .notification-details{font-size:16px!important;line-height:1.6!important;overflow-wrap:anywhere}
+.notification-popover .notification-list>button>small,.incoming-notification-link small{font-size:14px!important;line-height:1.5!important}
+.notification-popover .notification-site-filter,.notification-popover header>div>span,.notification-popover .notification-list>p{font-size:14px!important}
+.notification-popover .notification-site-filter select{font-size:16px!important}
