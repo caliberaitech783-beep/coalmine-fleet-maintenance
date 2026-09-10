@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {readFileSync} from 'node:fs';
-import {notificationText, notificationParts, notificationSiteOptions, filterNotificationsBySite} from '../notification-text.mjs';
+import {notificationText, notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory} from '../notification-text.mjs';
 import {createNotificationFeed} from '../notification-feed.mjs';
 import {createNotificationTracker, createNotificationSound} from '../src/notification-alerts.mjs';
 
@@ -32,6 +32,50 @@ test('all event messages receive the same structured site/door prefix', () => {
   }
   assert.equal(notificationText({site:'Majri OB',message:'Ticket resolved.'}), 'Site: Majri OB — Ticket resolved.');
   assert.equal(notificationText({message:'System event.'}), 'Site: Not recorded — System event.');
+});
+
+test('notification categories follow the historical workflow event, not current status or incidental words', () => {
+  const examples = [
+    ['Request REQ-1 opened for V1. User: MIS manager.', 'production'],
+    ['Request REQ-1 closed for V1. Maintenance work: Production issue fixed; MIS next.', 'maintenance'],
+    ['Request REQ-1 was marked Idle (No work) by Maintenance User.', 'maintenance'],
+    ['Request REQ-1 was approved on road and closed at 10:00. It is now awaiting MIS verification.', 'maintenance'],
+    ['Idle status for request REQ-1 was cancelled by Maintenance Manager.', 'maintenance'],
+    ['User added a daily maintenance update for REQ-1.', 'maintenance'],
+    ['User updated today’s daily maintenance update for REQ-1.', 'maintenance'],
+    ["User updated today's daily maintenance update for REQ-1.", 'maintenance'],
+    ['09:00 reminder: add today’s maintenance update and delay reason for REQ-1.', 'maintenance'],
+    ['Request REQ-1 was verified by MIS and its first trip was completed.', 'mis'],
+    ['Request REQ-1 was verified by MIS with its first trip still pending.', 'mis'],
+    ['Unknown system notification mentioning production and maintenance.', 'other'],
+  ];
+  for (const [message, expected] of examples) {
+    assert.equal(notificationCategory({message, status: 'Closed', verifiedAt: '2026-09-10 12:00'}).key, expected, message);
+  }
+  for (const label of ['Production', 'Maintenance', 'MIS']) assert.equal(notificationCategory({ticketCategory: ` ${label} `, message: 'User created ticket TKT-1.'}).label, label);
+  assert.equal(notificationCategory({ticketCategory: 'General', message: 'Ticket TKT-1 was resolved by MIS.'}).key, 'other');
+  assert.equal(notificationCategory({}).key, 'other');
+});
+
+test('category filters combine with site selection and their counts partition the shown notifications once', () => {
+  const items = [
+    {id: 1, site: 'Sasti OB', message: 'Request REQ-1 opened.'},
+    {id: 2, site: 'Sasti OB', message: 'Request REQ-2 closed.'},
+    {id: 3, site: 'Majri OB', message: 'Request REQ-3 was verified.'},
+    {id: 4, site: 'Majri OB', ticketCategory: 'Production', message: 'Ticket created.'},
+    {id: 5, site: 'Majri OB', ticketCategory: 'General', message: 'Ticket resolved.'},
+  ];
+  const options = notificationCategoryOptions(items);
+  assert.deepEqual(options.map(({key,count}) => [key,count]), [['production',2],['maintenance',1],['mis',1],['other',1]]);
+  assert.equal(options.reduce((sum, category) => sum + category.count, 0), items.length);
+  assert.equal(filterNotificationsByCategory(items), items);
+  assert.deepEqual(filterNotificationsByCategory(items, 'production').map(item => item.id), [1,4]);
+  const atSite = filterNotificationsBySite(items, ' SASTI  OB ');
+  assert.deepEqual(filterNotificationsByCategory(atSite, 'production').map(item => item.id), [1]);
+  assert.deepEqual(filterNotificationsByCategory(atSite, 'mis'), []);
+  assert.deepEqual(notificationCategoryOptions(atSite).map(({key,count}) => [key,count]), [['production',1],['maintenance',1],['mis',0]]);
+  assert.equal(notificationCategoryOptions(atSite, 'other').at(-1).count, 0);
+  assert.deepEqual(items.map(item => item.id), [1,2,3,4,5]);
 });
 
 test('a numeric door never corrupts timestamps, durations or other location details', () => {

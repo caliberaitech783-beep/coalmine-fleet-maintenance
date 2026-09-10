@@ -1,7 +1,7 @@
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
-import { notificationParts, notificationSiteOptions, filterNotificationsBySite } from "../notification-text.mjs";
+import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker, createNotificationSound } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
@@ -8019,7 +8019,8 @@ function NotificationEntryDialog({ state, onClose }) {
 
 function NotificationMessage({ item }) {
   const {site, door, details} = notificationParts(item);
-  return <span className="notification-message"><strong className="notification-site">Site: {site}</strong><span className="notification-details">{[door ? `Door No. ${door}` : "", details].filter(Boolean).join(" — ")}</span></span>;
+  const category = notificationCategory(item);
+  return <span className="notification-message"><span className="notification-meta"><strong className="notification-site">Site: {site}</strong><span className={`notification-category ${category.key}`}><i className="notification-category-dot" aria-hidden="true" />{category.label}</span></span><span className="notification-details">{[door ? `Door No. ${door}` : "", details].filter(Boolean).join(" — ")}</span></span>;
 }
 
 function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef }) {
@@ -8037,6 +8038,7 @@ function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef }) 
 
 function NotificationBell({ session, onOpenEntry }) {
   const [siteFilter, setSiteFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const soundRef = useRef(null), playedRef = useRef(new Set());
@@ -8050,7 +8052,7 @@ function NotificationBell({ session, onOpenEntry }) {
     const sound = createNotificationSound();
     soundRef.current = sound;
     playedRef.current = new Set();
-    setItems([]); setAlerts([]); setOpen(false); setSiteFilter("");
+    setItems([]); setAlerts([]); setOpen(false); setSiteFilter(""); setCategoryFilter("");
     let known = null, timer;
     const load = async () => {
       // Bound requests during rolling upgrades when an older backend may not
@@ -8100,7 +8102,9 @@ function NotificationBell({ session, onOpenEntry }) {
   }, [open]);
   const unread = items.filter((item) => !item.isRead).length;
   const siteOptions = notificationSiteOptions(items, siteFilter);
-  const visibleItems = filterNotificationsBySite(items, siteFilter);
+  const siteItems = filterNotificationsBySite(items, siteFilter);
+  const categoryOptions = notificationCategoryOptions(siteItems, categoryFilter);
+  const visibleItems = filterNotificationsByCategory(siteItems, categoryFilter);
   const toggle = async () => {
     const next = !open; setOpen(next);
     if (next && unread) {
@@ -8165,8 +8169,11 @@ function NotificationBell({ session, onOpenEntry }) {
       <button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>
       {open && <div className="notification-popover" role="dialog" aria-label="Notifications">
         <header><b>Notifications</b><div><span>{visibleItems.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header>
-        <label className="notification-site-filter">Filter by site<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}><option value="">All sites</option>{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
-        <div className="notification-list">{visibleItems.length ? visibleItems.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><NotificationMessage item={item} /><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>{siteFilter ? "No notifications for this site." : "No notifications yet."}</p>}</div>
+        <div className="notification-filters">
+          <label className="notification-site-filter">Filter by site<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}><option value="">All sites</option>{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
+          <label className="notification-site-filter notification-category-filter">Filter by category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories ({siteItems.length})</option>{categoryOptions.map(category => <option key={category.key} value={category.key}>{category.label} ({category.count})</option>)}</select></label>
+        </div>
+        <div className="notification-list">{visibleItems.length ? visibleItems.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><NotificationMessage item={item} /><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>{categoryFilter ? "No notifications for these filters." : siteFilter ? "No notifications for this site." : "No notifications yet."}</p>}</div>
       </div>}
     </div>
     {alerts.length > 0 && createPortal(<div className="incoming-notification-stack" aria-label="New notifications">{alerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} />)}</div>, document.body)}

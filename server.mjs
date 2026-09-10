@@ -2185,7 +2185,7 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
     if(req.query.wait==='1')subscription=await waitForNotification(login,res);
     const read=async()=>{
       const {rows}=await pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
-        COALESCE(NULLIF(r.site,''),t.site,'') AS site,COALESCE(r.door_number,'') AS door,
+        COALESCE(NULLIF(r.site,''),t.site,'') AS site,COALESCE(r.door_number,'') AS door,COALESCE(t.category,'') AS "ticketCategory",
         to_char(n.created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
         FROM crm_notifications n
         LEFT JOIN maintenance_requests r ON r.reference=n.ticket_reference

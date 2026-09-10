@@ -361,3 +361,18 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
 /* Opt-in wrapping for MIS report headings, without changing other tables. */
 th.report-wrap-header .sort-header{white-space:normal;min-width:110px;max-width:240px;align-items:center}
 th.report-wrap-header .sort-header>span{white-space:normal;overflow-wrap:break-word}
+.notification-filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:12px 16px;flex:0 0 auto;border-bottom:1px solid var(--line)}
+.notification-filters .notification-site-filter{min-width:0;padding:0;border:0}
+.notification-message .notification-meta{display:flex!important;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px!important}
+.notification-message .notification-meta .notification-site{margin:0!important}
+.notification-message .notification-category{display:inline-flex!important;align-items:center;gap:6px;color:var(--notification-category-color)!important;font-size:14px!important;font-weight:700!important;white-space:nowrap!important}
+.notification-category.production{--notification-category-color:#2563eb}
+.notification-category.maintenance{--notification-category-color:#b45309}
+.notification-category.mis{--notification-category-color:#15803d}
+.notification-category.other{--notification-category-color:#64748b}
+.notification-category .notification-category-dot{display:inline-block;width:8px;height:8px;flex:0 0 8px;border-radius:50%;background:currentColor}
+[data-theme="dark"] .notification-category.production{--notification-category-color:#93b4ff}
+[data-theme="dark"] .notification-category.maintenance{--notification-category-color:#fbbf67}
+[data-theme="dark"] .notification-category.mis{--notification-category-color:#72ddb0}
+[data-theme="dark"] .notification-category.other{--notification-category-color:#c2cada}
+@media(max-width:380px){.notification-filters{grid-template-columns:1fr;gap:8px}}

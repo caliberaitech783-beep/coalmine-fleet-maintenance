@@ -38,3 +38,41 @@ export function notificationSiteOptions(items, selected = '') {
 export function filterNotificationsBySite(items, site = '') {
   return site ? items.filter((item) => siteKey(notificationParts(item).site) === siteKey(site)) : items;
 }
+
+const categories = [
+  {key: 'production', label: 'Production'},
+  {key: 'maintenance', label: 'Maintenance'},
+  {key: 'mis', label: 'MIS'},
+  {key: 'other', label: 'Other'},
+];
+
+export function notificationCategory(item = {}) {
+  // Ticket categories are structured data. Request notifications describe a
+  // historical event, so their category must not follow the request's current status.
+  const ticketCategory = value(item.ticketCategory).toLowerCase();
+  let key = ticketCategory;
+  if (!ticketCategory) {
+    const message = value(item.message);
+    if (/^Request(?:\s+\S+)?\s+(?:was\s+)?verified\b/i.test(message)) key = 'mis';
+    else if (/^Request(?:\s+\S+)?\s+(?:was\s+)?opened\b/i.test(message)) key = 'production';
+    else if (/^Request(?:\s+\S+)?\s+(?:closed\b|was\s+(?:closed\b|marked\s+Idle\b|approved\s+on\s+road\b))/i.test(message)
+      || /^Idle status for request\s+\S+\s+was cancelled\b/i.test(message)
+      || /^\d{1,2}:\d{2}\s+reminder:\s+add today[’']s maintenance update\b/i.test(message)
+      || /\b(?:added a|updated today[’']s) daily maintenance update for\s+\S+\.?$/i.test(message)) key = 'maintenance';
+  }
+  return categories.find(category => category.key === key) || categories[3];
+}
+
+export function notificationCategoryOptions(items, selected = '') {
+  const counts = new Map(categories.map(category => [category.key, 0]));
+  for (const item of items) {
+    const {key} = notificationCategory(item);
+    counts.set(key, counts.get(key) + 1);
+  }
+  return categories.filter(category => category.key !== 'other' || counts.get('other') || selected === 'other')
+    .map(category => ({...category, count: counts.get(category.key)}));
+}
+
+export function filterNotificationsByCategory(items, category = '') {
+  return category ? items.filter(item => notificationCategory(item).key === category) : items;
+}
