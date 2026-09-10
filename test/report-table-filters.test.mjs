@@ -62,5 +62,5 @@ test("reports page exposes generated report type and report-name sub tabs", () =
   assert.match(reportsSource, /roadStatusLabel\(record, reportRequests\)/);
   assert.match(reportsSource, /<ExportMenu title=\{title\} columns=\{visibleColumns\} rows=\{rows\}/);
   assert.match(reportsSource, /label="Generate"/);
-  assert.match(reportsSource, /column.key === "status" && !column.render ? { ...column, render: (row) => <Status>/, "department report status renders as a pill");
+  assert.ok(reportsSource.includes('column.key === "status" && !column.render ? { ...column, render: (row) => <Status>'), "department report status renders as a pill");
 });
