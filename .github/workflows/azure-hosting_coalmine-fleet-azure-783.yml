@@ -1,12 +1,275 @@
-name: Retired - azure-hosting_coalmine-fleet-azure-783.yml
+name: Build and deploy Node.js app to Azure Web App - coalmine-fleet-azure-783
 
-# Disabled globally at cutover so older branches cannot keep publishing.
 on:
+  push:
+    branches:
+      - azure-hosting
+      - azure-hosting-1.0
+    paths-ignore:
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "test/**"
   workflow_dispatch:
+    inputs:
+      report_source_sha:
+        description: "Optional immutable report-only commit based on current production"
+        required: false
+        type: string
+
 permissions:
   contents: read
+  id-token: write
+
+concurrency:
+  group: coalmine-fleet-production
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP: coalmine-fleet-maintenance-rg
+  AZURE_WEBAPP_NAME: coalmine-fleet-azure-783
+  AZURE_FRONT_DOOR_PROFILE: coalmine-afd-783
+  LIVE_URL: https://bdms.cmll.in
+
 jobs:
-  notice:
+  build:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: session_test
+          POSTGRES_PASSWORD: session_test
+          POSTGRES_DB: session_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U session_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+      report_base_sha: ${{ steps.source.outputs.base }}
+    permissions:
+      contents: read
     steps:
-      - run: echo "Use production-release.yml on azure-hosting-1.0."
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.report_source_sha || github.sha }}
+          fetch-depth: 0
+      - name: Resolve and validate deployment source
+        id: source
+        env:
+          REPORT_SOURCE_SHA: ${{ inputs.report_source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_sha="$(git rev-parse HEAD)"
+          base=""
+          if [ -n "$REPORT_SOURCE_SHA" ]; then
+            [[ "$REPORT_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+            test "$source_sha" = "$REPORT_SOURCE_SHA"
+            base="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/app-version" | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>process.stdout.write(JSON.parse(s).commit||""));')"
+            [[ "$base" =~ ^[0-9a-f]{40}$ ]]
+            git merge-base --is-ancestor "$base" "$source_sha"
+            mapfile -t changed < <(git diff --name-only "$base" "$source_sha")
+            test "${#changed[@]}" -gt 0
+            for file in "${changed[@]}"; do
+              case "$file" in
+                department-reports.mjs|test/department-reports.test.mjs) ;;
+                *) echo "Report-only release contains an unrelated file: $file"; exit 1 ;;
+              esac
+            done
+          fi
+          printf 'sha=%s\nbase=%s\n' "$source_sha" "$base" >> "$GITHUB_OUTPUT"
+          printf 'DEPLOY_SHA=%s\nAPP_VERSION_SOURCE=%s\n' "$source_sha" "$source_sha" >> "$GITHUB_ENV"
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.x"
+          cache: npm
+      - name: Install, test, and build
+        env:
+          AUTH_SESSION_TEST_DATABASE_URL: postgresql://session_test:session_test@localhost:5432/session_test
+          AUTH_SESSION_TEST_DATABASE_SSL: "false"
+        run: |
+          npm ci
+          npm test
+          npm run build
+          printf '%s' "$DEPLOY_SHA" > DEPLOYMENT_SHA
+      - name: Build deployment package
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -q -r "$RUNNER_TEMP/node-app.zip" . \
+            -x '.git/*' '.github/*' 'test/*' 'node_modules/.cache/*'
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: node-app-${{ github.sha }}
+          path: ${{ runner.temp }}/node-app.zip
+          compression-level: 0
+          retention-days: 30
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    env:
+      DEPLOY_SHA: ${{ needs.build.outputs.source_sha }}
+      REPORT_BASE_SHA: ${{ needs.build.outputs.report_base_sha }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download deployment artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: node-app-${{ github.sha }}
+          path: packages/current
+      - name: Login to Azure
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
+
+      - name: Start staging slot and discover its URL
+        shell: bash
+        run: |
+          az webapp start --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
+          staging_host="$(az webapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging --query defaultHostName -o tsv)"
+          test -n "$staging_host"
+          printf 'STAGING_URL=https://%s\n' "$staging_host" >> "$GITHUB_ENV"
+
+      - name: Deploy to Azure staging slot
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if az webapp deploy \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$AZURE_WEBAPP_NAME" \
+              --slot staging \
+              --src-path packages/current/node-app.zip \
+              --type zip \
+              --clean true \
+              --restart true; then
+              exit 0
+            fi
+            # OneDeploy can finish successfully after the Azure CLI has already
+            # returned a non-zero polling result. Only accept that case when the
+            # slot itself proves that the exact commit is healthy and isolated.
+            for health_attempt in {1..12}; do
+              if response="$(curl --fail --silent --show-error --max-time 20 "${STAGING_URL}/api/health?deploy-recovery=${DEPLOY_SHA}")" && \
+                HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false) process.exit(1)"; then
+                echo "Azure CLI reported a deployment error, but staging verified the exact commit: ${response}"
+                exit 0
+              fi
+              sleep 5
+            done
+            if [ "$attempt" -eq 3 ]; then
+              echo "Staging ZIP deployment failed after ${attempt} attempts"
+              exit 1
+            fi
+            echo "Staging ZIP deployment attempt ${attempt} failed; restarting the slot before retry"
+            az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging || true
+            sleep 20
+          done
+
+      - name: Restart and verify staging
+        shell: bash
+        run: |
+          az webapp restart --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
+          for attempt in {1..24}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${STAGING_URL}/api/health?deployment=${DEPLOY_SHA}")" && \
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==false) process.exit(1)"; then
+              echo "Staging verified at ${DEPLOY_SHA}: ${response}"
+              break
+            fi
+            if [ "$attempt" -eq 24 ]; then
+              echo "Staging verification failed"
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Swap staging into production with automatic rollback
+        shell: bash
+        run: |
+          set -u
+          if [ -n "$REPORT_BASE_SHA" ]; then
+            live_sha="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/app-version" | node -e 'let s="";process.stdin.on("data",x=>s+=x).on("end",()=>process.stdout.write(JSON.parse(s).commit||""));')"
+            if [ "$live_sha" != "$REPORT_BASE_SHA" ]; then
+              echo "Production changed during report-only release; refusing to replace newer changes."
+              exit 1
+            fi
+          fi
+          az webapp deployment slot swap --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging --target-slot production
+          for attempt in {1..24}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?deployment=${DEPLOY_SHA}")" && \
+              HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true) process.exit(1)"; then
+              echo "Production verified at ${DEPLOY_SHA}: ${response}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production verification failed; restoring the previous production package"
+          az webapp deployment slot swap --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging --target-slot production
+          for attempt in {1..24}; do
+            if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?rollback=${DEPLOY_SHA}")" && \
+              HEALTH_RESPONSE="$response" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected') process.exit(1)"; then
+              echo "Previous production package restored and healthy: ${response}"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Automatic rollback did not restore a healthy response"
+          exit 1
+
+      - name: Enforce Front Door-only production origin
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          frontdoor_id="$(az afd profile show --resource-group "$AZURE_RESOURCE_GROUP" --profile-name "$AZURE_FRONT_DOOR_PROFILE" --query frontDoorId -o tsv)"
+          origin_host="$(az webapp show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query defaultHostName -o tsv)"
+          test -n "$frontdoor_id"
+          test -n "$origin_host"
+
+          existing_rule="$(az webapp config access-restriction show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query "ipSecurityRestrictions[?name=='Allow-Coal-FrontDoor'] | [0]" -o json)"
+          rule_matches="$(RULE_JSON="$existing_rule" EXPECTED_FDID="$frontdoor_id" node -e 'const r=JSON.parse(process.env.RULE_JSON||"null");const id=process.env.EXPECTED_FDID;process.stdout.write(String(r?.name==="Allow-Coal-FrontDoor"&&r?.action==="Allow"&&r?.priority===100&&r?.ipAddress==="AzureFrontDoor.Backend"&&r?.headers?.["x-azure-fdid"]?.includes(id)));')"
+
+          if [ "$rule_matches" != "true" ]; then
+            if [ "$(az webapp config access-restriction show --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --query "ipSecurityRestrictions[?name=='Allow-Coal-FrontDoor'].name | [0]" -o tsv)" = "Allow-Coal-FrontDoor" ]; then
+              az webapp config access-restriction remove --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --rule-name Allow-Coal-FrontDoor
+            fi
+            az webapp config access-restriction add \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name "$AZURE_WEBAPP_NAME" \
+              --rule-name Allow-Coal-FrontDoor \
+              --action Allow \
+              --priority 100 \
+              --service-tag AzureFrontDoor.Backend \
+              --http-header "x-azure-fdid=${frontdoor_id}"
+          fi
+
+          for attempt in {1..12}; do
+            live_response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?origin-lock=${DEPLOY_SHA}")" || true
+            origin_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 20 "https://${origin_host}/api/health" || true)"
+            if HEALTH_RESPONSE="$live_response" node -e 'const h=JSON.parse(process.env.HEALTH_RESPONSE);if(h.status!=="ok"||h.database!=="connected"||h.scheduledJobsEnabled!==true)process.exit(1)' && [ "$origin_status" = "403" ]; then
+              echo "Front Door-only production origin verified; direct origin returned ${origin_status}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Front Door-only production origin verification failed"
+          exit 1
+
+      - name: Stop staging slot
+        if: always()
+        run: az webapp stop --resource-group "$AZURE_RESOURCE_GROUP" --name "$AZURE_WEBAPP_NAME" --slot staging
+
+      - name: Logout from Azure
+        if: always()
+        run: az logout
