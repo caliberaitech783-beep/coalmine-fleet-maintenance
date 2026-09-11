@@ -147,7 +147,7 @@
 .mine-dashboard .mine-trend-day { min-width: 60px; flex: 1 0 60px; grid-template-rows: 22px minmax(95px, 1fr) 24px; }
 .mine-dashboard .mine-trend-chart-days { width: max-content; min-width: 100%; }
 .mine-dashboard .mine-trend-chart-grid { top: 25px; bottom: 27px; }
-.mine-dashboard .mine-breakdown-trend-body { grid-template-columns: minmax(165px, .3fr) minmax(0, 1fr); }
+.mine-dashboard .mine-breakdown-trend-body { grid-template-columns: minmax(0, 1fr); }
 .mine-dashboard .mine-performance-gauges { gap: 14px; }
 .mine-dashboard .mine-radial-gauge { width: 130px; height: 130px; }
 .mine-dashboard .mine-radial-gauge strong { font-size: 30px !important; }
