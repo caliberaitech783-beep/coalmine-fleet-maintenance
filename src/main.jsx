@@ -10,7 +10,7 @@ import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
-import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
+import {WhatsAppReportSettingsDialog} from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import BackupAdministration from "./backup-administration.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
@@ -257,6 +257,7 @@ const nav = [
 ];
 const adminNav = [
   ["User Sessions", UserRound],
+  ["Report Setting", Settings],
   ["Backup", HardDrive],
   ["Export Backup", Download],
   ["Import Backup", Upload],
@@ -5532,7 +5533,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
-          {reportAdministrator && ["Admin", "Super Admin"].includes(session?.permissions?.adminLevel) && <WhatsAppReportSettingsButton token={session?.token || authToken} />}
           <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules} disabled={!reportAccessLoaded}><Clock /> Report schedules</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!reportAccessLoaded || !accessibleReportGroups.length}><Download /> Download reports ZIP</button>
         </div>
@@ -8667,6 +8667,7 @@ function App() {
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return isAdministrator;
+    if(name==="Report Setting")return isAdministrator;
     if(backupAdminPages.has(name))return isAdministrator;
     if(name==="Audit Trail")return isAdministrator;
     if(name==="Admin locks")return isAdministrator&&adminPermissions.adminLevel==="Super Admin";
@@ -9004,6 +9005,8 @@ function App() {
             <AdminLockManagement session={session} />
           ) : active === "User Sessions" ? (
             <UserSessionsPage session={session} />
+          ) : active === "Report Setting" ? (
+            <WhatsAppReportSettingsDialog token={session?.token || authToken} onClose={()=>selectMenu("Dashboard")} />
           ) : backupAdminPages.has(active) ? (
             <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
           ) : active === "Equipment master" ? (
