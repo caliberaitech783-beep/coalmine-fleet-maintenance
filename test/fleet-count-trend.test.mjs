@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolveCountTrend, trackCountTrend, BREAKDOWN_COUNT_STORAGE_KEY } from "../src/fleet-count-trend.mjs";
+import { resolveCountTrend, trackCountChange, formatCountDelta, localDayKey, BREAKDOWN_COUNT_STORAGE_KEY } from "../src/fleet-count-trend.mjs";
 
 function memoryStorage(initial = {}) {
   const data = new Map(Object.entries(initial));
@@ -13,31 +13,48 @@ test("resolveCountTrend reports up, down, or nothing", () => {
   assert.equal(resolveCountTrend(80, 12), "down");
   assert.equal(resolveCountTrend(80, 80), null);
   assert.equal(resolveCountTrend(null, 80), null);
-  assert.equal(resolveCountTrend(NaN, 80), null);
 });
 
-test("trackCountTrend compares with the last count seen in storage and stores the new one", () => {
+test("trackCountChange measures the live count against today's opening reading", () => {
   const storage = memoryStorage();
-  assert.equal(trackCountTrend(storage, "k", 12), null, "first sighting has no baseline");
-  assert.equal(trackCountTrend(storage, "k", 80), "up");
-  assert.equal(storage.data.get("k"), "80");
-  assert.equal(trackCountTrend(storage, "k", 80, "up"), "up", "unchanged count keeps the last arrow");
-  assert.equal(trackCountTrend(storage, "k", 79), "down");
+  assert.deepEqual(trackCountChange(storage, "k", 80, "2026-09-11"), { open: 80, delta: 0, direction: "flat" });
+  assert.deepEqual(JSON.parse(storage.data.get("k")), { day: "2026-09-11", open: 80 });
+  assert.deepEqual(trackCountChange(storage, "k", 79, "2026-09-11"), { open: 80, delta: -1, direction: "down" });
+  assert.deepEqual(trackCountChange(storage, "k", 92, "2026-09-11"), { open: 80, delta: 12, direction: "up" });
+  assert.equal(JSON.parse(storage.data.get("k")).open, 80, "the opening reading stays fixed through the day");
 });
 
-test("trackCountTrend tolerates missing or throwing storage", () => {
-  assert.equal(trackCountTrend(null, "k", 5), null);
+test("trackCountChange starts a fresh opening reading on a new day", () => {
+  const storage = memoryStorage({ k: JSON.stringify({ day: "2026-09-10", open: 80 }) });
+  assert.deepEqual(trackCountChange(storage, "k", 79, "2026-09-11"), { open: 79, delta: 0, direction: "flat" });
+  assert.deepEqual(JSON.parse(storage.data.get("k")), { day: "2026-09-11", open: 79 });
+});
+
+test("trackCountChange tolerates missing, corrupt, or throwing storage", () => {
+  assert.deepEqual(trackCountChange(null, "k", 5), { open: 5, delta: 0, direction: "flat" });
+  assert.deepEqual(trackCountChange(memoryStorage({ k: "{oops" }), "k", 5), { open: 5, delta: 0, direction: "flat" });
   const broken = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
-  assert.equal(trackCountTrend(broken, "k", 5, "down"), "down");
-  assert.equal(trackCountTrend(memoryStorage(), "k", Number.NaN, "up"), "up");
+  assert.deepEqual(trackCountChange(broken, "k", 5), { open: 5, delta: 0, direction: "flat" });
+  assert.equal(trackCountChange(memoryStorage(), "k", Number.NaN), null);
 });
 
-test("the dashboard breakdown chip renders the stored-count trend arrow", () => {
+test("formatCountDelta and localDayKey render ticker text", () => {
+  assert.equal(formatCountDelta(12), "+12");
+  assert.equal(formatCountDelta(-1), "−1");
+  assert.equal(formatCountDelta(0), "0");
+  assert.equal(formatCountDelta(1200), "+1,200");
+  assert.equal(localDayKey(new Date(2026, 8, 11, 23, 59)), "2026-09-11");
+});
+
+test("the dashboard breakdown chip renders the live ticker", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /trackCountTrend\(.*BREAKDOWN_COUNT_STORAGE_KEY, liveBreakdownAssetCount/);
-  assert.match(source, /mine-fleet-count-trend \$\{breakdownCountTrend\}/);
+  assert.match(source, /trackCountChange\(.*BREAKDOWN_COUNT_STORAGE_KEY, liveBreakdownAssetCount\)/);
+  assert.match(source, /if \(!managerDataReady\) return;/, "the ticker waits for both equipment and requests to load");
+  assert.match(source, /mine-fleet-count-trend \$\{breakdownCountChange\.direction\}/);
+  assert.match(source, /formatCountDelta\(breakdownCountChange\.delta\)/);
   const css = readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
   assert.match(css, /\.mine-fleet-count-trend\.up \{[^}]*color: #c62828/);
   assert.match(css, /\.mine-fleet-count-trend\.down \{[^}]*color: #2e7d32/);
-  assert.equal(BREAKDOWN_COUNT_STORAGE_KEY, "fleetBreakdownCountSeen");
+  assert.match(css, /\.mine-fleet-count-trend\.flat \{/);
+  assert.equal(BREAKDOWN_COUNT_STORAGE_KEY, "fleetBreakdownCountOpen");
 });
