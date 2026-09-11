@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hourlyBreakdownEvents } from "../src/hourly-breakdown.mjs";
+import { hourlyBreakdownEvents, hourlyBreakdownView, openHourlyBreakdownTab } from "../src/hourly-breakdown.mjs";
 
 test("rolling windows include recent entries and exits independently with IST timestamps", () => {
   const now = Date.parse("2026-09-11T12:00:00+05:30");
@@ -15,4 +15,48 @@ test("rolling windows include recent entries and exits independently with IST ti
   assert.equal(hourlyBreakdownEvents(rows, 10, now).length, 3);
   assert.equal(hourlyBreakdownEvents(rows, 11, now).length, 0);
   assert.equal(hourlyBreakdownEvents(rows, 1, now)[0].door, "V1");
+});
+
+test("hour and site counts match the filtered report and include zero-count sites", () => {
+  const now = Date.parse("2026-09-11T12:00:00+05:30");
+  const rows = [
+    {site: "Sasti OB", start: "2026-09-11 11:30", closedAt: "2026-09-11 11:45"},
+    {site: "Majri OB", start: "2026-09-11 10:30"},
+  ];
+  const all = hourlyBreakdownView(rows, 1, "", now);
+  assert.equal(all.total, 2);
+  assert.deepEqual(all.siteCounts, [{site: "Majri OB", count: 0}, {site: "Sasti OB", count: 2}]);
+  assert.deepEqual(all.hourCounts.slice(0, 2), [2, 3]);
+  const majri = hourlyBreakdownView(rows, 2, "Majri OB", now);
+  assert.equal(majri.rows.length, 1);
+  assert.deepEqual(majri.hourCounts.slice(0, 2), [0, 1]);
+});
+
+test("hour selector and site filters render the report inline in the inherited theme", () => {
+  class Element {
+    constructor(tag) { this.tag = tag; this.children = []; this.attributes = {}; this.dataset = {}; }
+    appendChild(node) { this.children.push(node); }
+    setAttribute(key, value) { this.attributes[key] = value; }
+    replaceChildren() { this.children = []; }
+  }
+  const doc = {head: new Element("head"), body: new Element("body"), documentElement: new Element("html"), createElement: tag => new Element(tag)};
+  const previousWindow = globalThis.window, previousDocument = globalThis.document;
+  globalThis.window = {open: () => ({document: doc})};
+  globalThis.document = {documentElement: {dataset: {theme: "dark"}}, body: {dataset: {}}};
+  try {
+    openHourlyBreakdownTab([{site: "Sasti OB"}, {site: "Majri OB"}]);
+    const nodes = root => [root, ...root.children.flatMap(nodes)];
+    const all = () => nodes(doc.body);
+    const hours = all().find(node => node.className === "hours");
+    const report = all().find(node => node.attributes["aria-label"] === "Hourly breakdown report");
+    assert.equal(doc.documentElement.dataset.theme, "dark");
+    assert.equal(hours.children.length, 10);
+    assert.equal(all().some(node => node.tag === "dialog"), false);
+    hours.children[1].onclick();
+    assert.equal(hours.children[1].attributes["aria-pressed"], "true");
+    const sites = all().find(node => node.className === "sites");
+    sites.children[2].onclick();
+    assert.match(nodes(report).find(node => node.tag === "h2").textContent, /Majri OB · Last 2 hours/);
+    assert.deepEqual(nodes(report).filter(node => node.tag === "th").map(node => node.textContent), ["Sites", "Door No", "In\/Out", "BD Timing"]);
+  } finally { globalThis.window = previousWindow; globalThis.document = previousDocument; }
 });
