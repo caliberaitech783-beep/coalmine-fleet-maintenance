@@ -25,6 +25,8 @@
 .dashboard-record-level-tabs > button[aria-pressed="true"] { border-color: #522e9015; border-bottom-color: var(--record-purple); background: #522e900e; color: var(--record-purple); }
 .dashboard-record-level-tabs > button b { padding: 2px 6px; border-radius: 5px; background: #522e900a; font-size: 10px; font-weight: 800; }
 .dashboard-record-level-tabs > button[aria-pressed="true"] b { background: var(--record-purple); color: #fff; }
+.dashboard-record-level[data-level="site"] .dashboard-record-level-tabs > button[aria-pressed="true"] { background: var(--record-purple); color: #fff; box-shadow: 0 2px 5px #522e9026; }
+.dashboard-record-level[data-level="site"] .dashboard-record-level-tabs > button[aria-pressed="true"] b { background: #ffffff29; color: #fff; }
 .dashboard-record-tab-scroll { display: grid; place-items: center; width: 26px; height: 30px; padding: 0; border: 1px solid #522e901a; border-radius: 6px; background: #522e9006; color: var(--record-purple); cursor: pointer; }
 .dashboard-record-tab-scroll:disabled { opacity: .35; cursor: default; }
 .dashboard-record-level-navigation[data-scrollable="false"] > .dashboard-record-tab-scroll { display: none; }
