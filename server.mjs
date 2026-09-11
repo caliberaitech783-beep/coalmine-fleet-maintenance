@@ -494,6 +494,40 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS session_messages_target_idx ON session_messages (target_session_public_id, dismissed_at, created_at);
     CREATE INDEX IF NOT EXISTS session_messages_created_idx ON session_messages (created_at DESC);
+    CREATE TABLE IF NOT EXISTS remote_assistance_sessions (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      target_session_public_id TEXT NOT NULL,
+      target_login TEXT NOT NULL DEFAULT '',
+      target_name TEXT NOT NULL DEFAULT '',
+      requester_login TEXT NOT NULL DEFAULT '',
+      requester_name TEXT NOT NULL DEFAULT '',
+      access_level TEXT NOT NULL DEFAULT 'control',
+      reason TEXT NOT NULL,
+      duration_minutes INTEGER NOT NULL DEFAULT 15,
+      status TEXT NOT NULL DEFAULT 'Pending',
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      responded_at TIMESTAMPTZ,
+      started_at TIMESTAMPTZ,
+      ended_at TIMESTAMPTZ,
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS remote_assistance_target_idx ON remote_assistance_sessions (target_session_public_id, requested_at DESC);
+    CREATE INDEX IF NOT EXISTS remote_assistance_requester_idx ON remote_assistance_sessions (requester_login, requested_at DESC);
+    CREATE TABLE IF NOT EXISTS remote_assistance_event_batches (
+      id BIGSERIAL PRIMARY KEY,
+      assistance_id UUID NOT NULL REFERENCES remote_assistance_sessions(id) ON DELETE CASCADE,
+      payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS remote_assistance_events_idx ON remote_assistance_event_batches (assistance_id, id);
+    CREATE TABLE IF NOT EXISTS remote_assistance_commands (
+      id BIGSERIAL PRIMARY KEY,
+      assistance_id UUID NOT NULL REFERENCES remote_assistance_sessions(id) ON DELETE CASCADE,
+      command_type TEXT NOT NULL,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS remote_assistance_commands_idx ON remote_assistance_commands (assistance_id, id);
     CREATE TABLE IF NOT EXISTS audit_events (
       id BIGSERIAL PRIMARY KEY,
       event_type TEXT NOT NULL DEFAULT 'Activity',
@@ -940,6 +974,47 @@ function requireAdministrator(req,res,next){
   return res.status(403).json({error:'Only an Admin or Super Admin can use this administration feature.'});
 }
 
+const REMOTE_ASSISTANCE_LIVE_STATUSES=['Pending','Approved','Active'];
+const REMOTE_ASSISTANCE_DURATIONS=new Set([5,10,15]);
+
+function validRemoteAssistanceId(value){
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value||''));
+}
+
+async function expireRemoteAssistanceSessions(){
+  const {rows}=await pool.query(`UPDATE remote_assistance_sessions
+    SET status='Expired',ended_at=COALESCE(ended_at,NOW())
+    WHERE status=ANY($1::text[]) AND expires_at<=NOW()
+    RETURNING id`,[REMOTE_ASSISTANCE_LIVE_STATUSES]);
+  if(rows.length){
+    const ids=rows.map(row=>row.id);
+    await Promise.all([
+      pool.query('DELETE FROM remote_assistance_event_batches WHERE assistance_id=ANY($1::uuid[])',[ids]),
+      pool.query('DELETE FROM remote_assistance_commands WHERE assistance_id=ANY($1::uuid[])',[ids]),
+    ]);
+  }
+  return rows.length;
+}
+
+function remoteAssistancePayload(row){
+  if(!row)return null;
+  return {
+    id:row.id,
+    status:row.status,
+    accessLevel:row.accessLevel,
+    reason:row.reason,
+    durationMinutes:Number(row.durationMinutes||15),
+    requesterLogin:row.requesterLogin,
+    requesterName:row.requesterName,
+    targetLogin:row.targetLogin,
+    targetName:row.targetName,
+    requestedAt:row.requestedAt,
+    respondedAt:row.respondedAt,
+    startedAt:row.startedAt,
+    expiresAt:row.expiresAt,
+  };
+}
+
 function backupFolder(settings=DEFAULT_BACKUP_SETTINGS){
   const folder=path.resolve(backupStorageRoot,normalizeBackupSettings(settings).storageFolder);
   const rootPrefix=`${backupStorageRoot}${path.sep}`;
@@ -1383,14 +1458,186 @@ app.patch('/api/session-messages/:messageId/dismiss',requireSession,async(req,re
   }catch(error){next(error)}
 });
 
+app.get('/api/remote-assistance/current',requireSession,async(req,res,next)=>{
+  try{
+    await expireRemoteAssistanceSessions();
+    const {rows}=await pool.query(`SELECT id,status,access_level AS "accessLevel",reason,duration_minutes AS "durationMinutes",
+      requester_login AS "requesterLogin",requester_name AS "requesterName",target_login AS "targetLogin",target_name AS "targetName",
+      requested_at AS "requestedAt",responded_at AS "respondedAt",started_at AS "startedAt",expires_at AS "expiresAt"
+      FROM remote_assistance_sessions
+      WHERE target_session_public_id=$1 AND status=ANY($2::text[])
+      ORDER BY requested_at DESC LIMIT 1`,[req.session.sessionId,REMOTE_ASSISTANCE_LIVE_STATUSES]);
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json({assistance:remoteAssistancePayload(rows[0])});
+  }catch(error){next(error)}
+});
+
+app.post('/api/user-sessions/:sessionId/assistance',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    await expireRemoteAssistanceSessions();
+    const targetSessionId=String(req.params.sessionId||'').trim();
+    const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
+    const reason=String(req.body?.reason||'').replace(/\s+/g,' ').trim();
+    const accessLevel=String(req.body?.accessLevel||'control').trim().toLowerCase();
+    const durationMinutes=Number(req.body?.durationMinutes||15);
+    if(reason.length<5||reason.length>500)return res.status(400).json({error:'Enter an assistance reason between 5 and 500 characters.'});
+    if(!['view','control'].includes(accessLevel))return res.status(400).json({error:'Select view-only or BDMS control access.'});
+    if(!REMOTE_ASSISTANCE_DURATIONS.has(durationMinutes))return res.status(400).json({error:'Assistance duration must be 5, 10, or 15 minutes.'});
+    const {rows:targets}=await pool.query(`SELECT token,session_public_id AS "sessionId",employee_name AS name,login_name AS login,
+      last_seen_at>NOW()-INTERVAL '2 minutes' AS online
+      FROM auth_sessions WHERE session_public_id=$1`,[targetSessionId]);
+    const target=targets[0];
+    if(!target)return res.status(404).json({error:'This user session is no longer active.'});
+    if(target.token===currentToken)return res.status(400).json({error:'You cannot request control of your current session.'});
+    if(!target.online)return res.status(409).json({error:'Assistance can only be requested while the user is online in BDMS.'});
+    const existing=await pool.query(`SELECT id FROM remote_assistance_sessions
+      WHERE target_session_public_id=$1 AND status=ANY($2::text[]) AND expires_at>NOW() LIMIT 1`,[targetSessionId,REMOTE_ASSISTANCE_LIVE_STATUSES]);
+    if(existing.rowCount)return res.status(409).json({error:'This user already has an active or pending assistance request.'});
+    const {rows}=await pool.query(`INSERT INTO remote_assistance_sessions
+      (target_session_public_id,target_login,target_name,requester_login,requester_name,access_level,reason,duration_minutes,status,expires_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Pending',NOW()+INTERVAL '5 minutes')
+      RETURNING id,status,access_level AS "accessLevel",reason,duration_minutes AS "durationMinutes",
+        requester_login AS "requesterLogin",requester_name AS "requesterName",target_login AS "targetLogin",target_name AS "targetName",
+        requested_at AS "requestedAt",responded_at AS "respondedAt",started_at AS "startedAt",expires_at AS "expiresAt"`,[
+          target.sessionId,target.login,target.name,String(req.session.login||''),String(req.session.name||''),accessLevel,reason,durationMinutes
+        ]);
+    req.audit={eventType:'Security',module:'Remote assistance',action:'Request BDMS assistance',targetType:'User session',targetReference:target.login||target.name||targetSessionId,reason:`${accessLevel==='control'?'BDMS control':'View only'} for ${durationMinutes} minutes: ${reason}`,changedFields:[]};
+    res.status(201).json({assistance:remoteAssistancePayload(rows[0])});
+  }catch(error){next(error)}
+});
+
+app.patch('/api/remote-assistance/:assistanceId/respond',requireSession,async(req,res,next)=>{
+  try{
+    const assistanceId=String(req.params.assistanceId||'');
+    const decision=String(req.body?.decision||'').trim().toLowerCase();
+    if(!validRemoteAssistanceId(assistanceId))return res.status(400).json({error:'Invalid assistance request.'});
+    if(!['approve','decline'].includes(decision))return res.status(400).json({error:'Choose approve or decline.'});
+    const {rows}=await pool.query(`UPDATE remote_assistance_sessions SET
+      status=$1,responded_at=NOW(),ended_at=CASE WHEN $1='Declined' THEN NOW() ELSE ended_at END,
+      expires_at=CASE WHEN $1='Approved' THEN NOW()+(duration_minutes*INTERVAL '1 minute') ELSE NOW() END
+      WHERE id=$2 AND target_session_public_id=$3 AND status='Pending' AND expires_at>NOW()
+      RETURNING id,status,access_level AS "accessLevel",reason,duration_minutes AS "durationMinutes",
+        requester_login AS "requesterLogin",requester_name AS "requesterName",target_login AS "targetLogin",target_name AS "targetName",
+        requested_at AS "requestedAt",responded_at AS "respondedAt",started_at AS "startedAt",expires_at AS "expiresAt"`,[
+          decision==='approve'?'Approved':'Declined',assistanceId,req.session.sessionId
+        ]);
+    if(!rows.length)return res.status(409).json({error:'This assistance request has expired or was already answered.'});
+    const assistance=rows[0];
+    req.audit={eventType:'Security',module:'Remote assistance',action:decision==='approve'?'Approve BDMS assistance':'Decline BDMS assistance',targetType:'Remote assistance',targetReference:assistanceId,reason:assistance.reason,changedFields:[]};
+    res.json({assistance:remoteAssistancePayload(assistance)});
+  }catch(error){next(error)}
+});
+
+app.post('/api/remote-assistance/:assistanceId/events',requireSession,async(req,res,next)=>{
+  try{
+    const assistanceId=String(req.params.assistanceId||'');
+    const events=Array.isArray(req.body?.events)?req.body.events:[];
+    if(!validRemoteAssistanceId(assistanceId))return res.status(400).json({error:'Invalid assistance session.'});
+    if(!events.length||events.length>100)return res.status(400).json({error:'An assistance update must contain between 1 and 100 events.'});
+    if(JSON.stringify(events).length>15*1024*1024)return res.status(413).json({error:'The assistance update is too large.'});
+    const active=await pool.query(`UPDATE remote_assistance_sessions SET status='Active',started_at=COALESCE(started_at,NOW())
+      WHERE id=$1 AND target_session_public_id=$2 AND status=ANY($3::text[]) AND expires_at>NOW()
+      RETURNING id`,[assistanceId,req.session.sessionId,['Approved','Active']]);
+    if(!active.rowCount)return res.status(409).json({error:'This assistance session is not active.'});
+    const {rows}=await pool.query(`INSERT INTO remote_assistance_event_batches (assistance_id,payload)
+      VALUES ($1,$2::jsonb) RETURNING id`,[assistanceId,JSON.stringify(events)]);
+    req.audit=false;
+    res.status(201).json({batchId:rows[0].id});
+  }catch(error){next(error)}
+});
+
+app.get('/api/remote-assistance/:assistanceId/events',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    await expireRemoteAssistanceSessions();
+    const assistanceId=String(req.params.assistanceId||'');
+    const after=Math.max(0,Number(req.query.after)||0);
+    if(!validRemoteAssistanceId(assistanceId))return res.status(400).json({error:'Invalid assistance session.'});
+    const {rows:sessions}=await pool.query(`SELECT id,status,access_level AS "accessLevel",reason,duration_minutes AS "durationMinutes",
+      requester_login AS "requesterLogin",requester_name AS "requesterName",target_login AS "targetLogin",target_name AS "targetName",
+      requested_at AS "requestedAt",responded_at AS "respondedAt",started_at AS "startedAt",expires_at AS "expiresAt"
+      FROM remote_assistance_sessions WHERE id=$1 AND requester_login=$2`,[assistanceId,String(req.session.login||'')]);
+    if(!sessions.length)return res.status(404).json({error:'Assistance session not found.'});
+    const {rows:batches}=await pool.query(`SELECT id,payload AS events FROM remote_assistance_event_batches
+      WHERE assistance_id=$1 AND id>$2 ORDER BY id ASC LIMIT 100`,[assistanceId,after]);
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json({assistance:remoteAssistancePayload(sessions[0]),batches});
+  }catch(error){next(error)}
+});
+
+app.post('/api/remote-assistance/:assistanceId/commands',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const assistanceId=String(req.params.assistanceId||'');
+    const commandType=String(req.body?.type||'').trim().toLowerCase();
+    const payload=req.body?.payload&&typeof req.body.payload==='object'?req.body.payload:{};
+    if(!validRemoteAssistanceId(assistanceId))return res.status(400).json({error:'Invalid assistance session.'});
+    if(!['click','input','scroll'].includes(commandType))return res.status(400).json({error:'Unsupported assistance command.'});
+    if(JSON.stringify(payload).length>5000)return res.status(413).json({error:'Assistance command is too large.'});
+    const active=await pool.query(`SELECT target_login,target_name FROM remote_assistance_sessions
+      WHERE id=$1 AND requester_login=$2 AND access_level='control' AND status=ANY($3::text[]) AND expires_at>NOW()`,[
+        assistanceId,String(req.session.login||''),['Approved','Active']
+      ]);
+    if(!active.rowCount)return res.status(409).json({error:'BDMS control is not active for this session.'});
+    const {rows}=await pool.query(`INSERT INTO remote_assistance_commands (assistance_id,command_type,payload)
+      VALUES ($1,$2,$3::jsonb) RETURNING id`,[assistanceId,commandType,JSON.stringify(payload)]);
+    const target=active.rows[0];
+    req.audit={eventType:'Security',module:'Remote assistance',action:`Remote ${commandType}`,targetType:'User session',targetReference:target.target_login||target.target_name||assistanceId,reason:'Action performed inside the approved BDMS tab',changedFields:[]};
+    res.status(201).json({commandId:rows[0].id});
+  }catch(error){next(error)}
+});
+
+app.get('/api/remote-assistance/:assistanceId/commands',requireSession,async(req,res,next)=>{
+  try{
+    const assistanceId=String(req.params.assistanceId||'');
+    const after=Math.max(0,Number(req.query.after)||0);
+    if(!validRemoteAssistanceId(assistanceId))return res.status(400).json({error:'Invalid assistance session.'});
+    const active=await pool.query(`SELECT id,status,expires_at AS "expiresAt" FROM remote_assistance_sessions
+      WHERE id=$1 AND target_session_public_id=$2 AND status=ANY($3::text[]) AND expires_at>NOW()`,[
+        assistanceId,req.session.sessionId,['Approved','Active']
+      ]);
+    if(!active.rowCount)return res.status(409).json({error:'This assistance session has ended.'});
+    const {rows}=await pool.query(`SELECT id,command_type AS type,payload FROM remote_assistance_commands
+      WHERE assistance_id=$1 AND id>$2 ORDER BY id ASC LIMIT 100`,[assistanceId,after]);
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json({commands:rows,expiresAt:active.rows[0].expiresAt});
+  }catch(error){next(error)}
+});
+
+app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,res,next)=>{
+  try{
+    const assistanceId=String(req.params.assistanceId||'');
+    if(!validRemoteAssistanceId(assistanceId))return res.status(400).json({error:'Invalid assistance session.'});
+    const adminLevel=String(req.session?.permissions?.adminLevel||'').trim().toLowerCase();
+    const administrator=req.session?.role==='super'&&['admin','super admin'].includes(adminLevel);
+    const {rows}=await pool.query(`UPDATE remote_assistance_sessions SET status='Ended',ended_at=NOW(),expires_at=NOW()
+      WHERE id=$1 AND status=ANY($2::text[]) AND (target_session_public_id=$3 OR ($4::boolean AND requester_login=$5))
+      RETURNING target_login AS "targetLogin",target_name AS "targetName"`,[
+        assistanceId,REMOTE_ASSISTANCE_LIVE_STATUSES,req.session.sessionId,administrator,String(req.session.login||'')
+      ]);
+    if(!rows.length)return res.status(404).json({error:'This assistance session is no longer active.'});
+    await Promise.all([
+      pool.query('DELETE FROM remote_assistance_event_batches WHERE assistance_id=$1',[assistanceId]),
+      pool.query('DELETE FROM remote_assistance_commands WHERE assistance_id=$1',[assistanceId]),
+    ]);
+    const target=rows[0];
+    req.audit={eventType:'Security',module:'Remote assistance',action:'End BDMS assistance',targetType:'User session',targetReference:target.targetLogin||target.targetName||assistanceId,changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+
 app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     await sessionStore.pruneExpired();
+    await expireRemoteAssistanceSessions();
     const currentToken=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'').trim();
     const {rows}=await pool.query(`SELECT sessions.token,sessions.session_public_id AS "sessionId",sessions.employee_name AS "name",sessions.login_name AS "login",
       COALESCE(NULLIF(sessions.permissions->>'adminLevel',''),NULLIF(sessions.assigned_role,''),NULLIF(sessions.user_type,''),sessions.role) AS "roleLabel",
       sessions.user_type AS "userType",sessions.assigned_role AS "assignedRole",sessions.created_at AS "createdAt",sessions.last_seen_at AS "lastSeenAt",
-      sessions.ip_address AS "ipAddress",sessions.device_id AS "deviceId",sessions.user_agent AS "userAgent",user_master.record_data AS "userRecord"
+      sessions.ip_address AS "ipAddress",sessions.device_id AS "deviceId",sessions.user_agent AS "userAgent",user_master.record_data AS "userRecord",
+      assistance.id AS "assistanceId",assistance.status AS "assistanceStatus",assistance.access_level AS "assistanceAccessLevel",
+      assistance.reason AS "assistanceReason",assistance.duration_minutes AS "assistanceDurationMinutes",assistance.expires_at AS "assistanceExpiresAt"
       FROM auth_sessions AS sessions
       LEFT JOIN LATERAL (
         SELECT users.record_data
@@ -1401,8 +1648,17 @@ app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,nex
         ORDER BY CASE WHEN lower(trim(users.record_data->>'login'))=lower(trim(sessions.login_name)) THEN 0 ELSE 1 END,users.created_at DESC
         LIMIT 1
       ) AS user_master ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT remote.id,remote.status,remote.access_level,remote.reason,remote.duration_minutes,remote.expires_at
+        FROM remote_assistance_sessions AS remote
+        WHERE remote.target_session_public_id=sessions.session_public_id
+          AND remote.requester_login=$1
+          AND remote.status=ANY($2::text[])
+          AND remote.expires_at>NOW()
+        ORDER BY remote.requested_at DESC LIMIT 1
+      ) AS assistance ON TRUE
       WHERE sessions.created_at>NOW()-INTERVAL '30 days'
-      ORDER BY sessions.last_seen_at DESC,sessions.created_at DESC`);
+      ORDER BY sessions.last_seen_at DESC,sessions.created_at DESC`,[String(req.session.login||''),REMOTE_ASSISTANCE_LIVE_STATUSES]);
     const now=Date.now();
     const sessions=rows.map(({token,userRecord,...row})=>({
       ...row,
@@ -1454,6 +1710,8 @@ app.delete('/api/user-sessions/:sessionId',requireSuper,requireAdministrator,asy
       FROM auth_sessions WHERE session_public_id=$1`,[sessionId]);
     if(!target.rows.length)return res.status(404).json({error:'This session is no longer active.'});
     if(target.rows[0].token===currentToken)return res.status(400).json({error:'Your current session cannot be force closed from this page. Use Sign out instead.'});
+    await pool.query(`UPDATE remote_assistance_sessions SET status='Ended',ended_at=NOW(),expires_at=NOW()
+      WHERE target_session_public_id=$1 AND status=ANY($2::text[])`,[sessionId,REMOTE_ASSISTANCE_LIVE_STATUSES]);
     await pool.query('DELETE FROM auth_sessions WHERE session_public_id=$1',[sessionId]);
     req.audit={eventType:'Security',module:'User sessions',action:'Force close session',targetType:'User session',targetReference:target.rows[0].login||target.rows[0].name||sessionId,changedFields:[]};
     res.status(204).end();
@@ -4441,6 +4699,9 @@ const backupImportCleanupTimer=setInterval(()=>{
 },10*60*1000);
 backupImportCleanupTimer.unref?.();
 const expiredSessionCleanupTimer=setInterval(()=>{
-  if(databaseReady)void sessionStore.pruneExpired().catch(error=>console.error('Idle session cleanup failed.',error));
+  if(databaseReady){
+    void sessionStore.pruneExpired().catch(error=>console.error('Idle session cleanup failed.',error));
+    void expireRemoteAssistanceSessions().catch(error=>console.error('Remote assistance cleanup failed.',error));
+  }
 },60*1000);
 expiredSessionCleanupTimer.unref?.();

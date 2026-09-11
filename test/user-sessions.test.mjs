@@ -4,6 +4,7 @@ import test from "node:test";
 
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+const remoteAssistance = readFileSync(new URL("../src/remote-assistance.jsx", import.meta.url), "utf8");
 
 test("user-session administration is restricted, token-safe, and auditable", () => {
   assert.match(server, /app\.get\('\/api\/user-sessions',requireSuper,requireAdministrator/);
@@ -48,4 +49,28 @@ test("online sessions support persistent direct messages", () => {
   assert.match(client, /This message will remain open until you close it\./);
   assert.match(client, /disabled=\{!row\.online\|\|row\.current\}/);
   assert.doesNotMatch(client.match(/function SessionMessageInbox[\s\S]*?\n}\n\nfunction UserSessionsPage/)?.[0]||"",/setTimeout\([^,]+,\s*\d+\).*dismiss/);
+});
+
+test("remote assistance is consent based, time limited, and restricted to administrators", () => {
+  assert.match(server, /CREATE TABLE IF NOT EXISTS remote_assistance_sessions/);
+  assert.match(server, /app\.post\('\/api\/user-sessions\/:sessionId\/assistance',requireSuper,requireAdministrator/);
+  assert.match(server, /app\.patch\('\/api\/remote-assistance\/:assistanceId\/respond',requireSession/);
+  assert.match(server, /target_session_public_id=\$3 AND status='Pending'/);
+  assert.match(server, /REMOTE_ASSISTANCE_DURATIONS=new Set\(\[5,10,15\]\)/);
+  assert.match(server, /access_level='control'/);
+  assert.match(server, /requester_login=\$2/);
+  assert.match(server, /action:`Remote \$\{commandType\}`/);
+  assert.match(server, /action:'End BDMS assistance'/);
+});
+
+test("the browser agent masks protected controls and keeps user disconnect available", () => {
+  assert.match(client, /<th>Assistance<\/th>/);
+  assert.match(client, /<RemoteAssistanceAgent session=\{session\}/);
+  assert.match(remoteAssistance, /User approval is required/);
+  assert.match(remoteAssistance, /blockSelector:'\[data-remote-assistance-ui\],input\[type="file"\]'/);
+  assert.match(remoteAssistance, /maskInputOptions:\{password:true\}/);
+  assert.match(remoteAssistance, /input\[type="password"\]/);
+  assert.match(remoteAssistance, /Approve BDMS assistance/);
+  assert.match(remoteAssistance, /End assistance/);
+  assert.match(remoteAssistance, /This BDMS tab only/);
 });

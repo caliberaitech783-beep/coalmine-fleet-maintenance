@@ -13,6 +13,7 @@ import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
 import {WhatsAppReportSettingsDialog} from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import BackupAdministration from "./backup-administration.jsx";
+import {RemoteAssistanceAction, RemoteAssistanceAgent} from "./remote-assistance.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
@@ -5086,7 +5087,7 @@ function UserSessionsPage({session}) {
   };
   useEffect(()=>{
     load();
-    const timer=window.setInterval(()=>load({quiet:true}),15000);
+    const timer=window.setInterval(()=>load({quiet:true}),3000);
     return()=>window.clearInterval(timer);
   },[session?.token]);
   const forceClose=async(row)=>{
@@ -5108,7 +5109,7 @@ function UserSessionsPage({session}) {
       && matchesSmartSearch(query,row.name,row.login,row.roleLabel,row.location,row.ipAddress,row.deviceId,device.type,device.platform,device.browser);
   });
   return <section className="panel pagepanel user-sessions-page">
-    <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See signed-in users, current online activity, and securely close individual sessions.</p></div><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button></header>
+    <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See live users, send messages, request approved BDMS-tab assistance, and securely close sessions.</p></div><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button></header>
     <div className="user-session-summary" aria-label="Session summary">
       <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
       <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Closes after 15 minutes idle</p></div></article>
@@ -5118,8 +5119,8 @@ function UserSessionsPage({session}) {
     <div className="user-session-toolbar"><div className="user-session-search"><Search /><input data-smart-search type="search" placeholder="Search user, role, location, device or IP" value={query} onChange={(event)=>setQuery(event.target.value)} /></div><div className="user-session-status" role="group" aria-label="Session status filter">{['All','Online','Inactive'].map(option=><button type="button" key={option} className={status===option?'active':''} aria-pressed={status===option} onClick={()=>setStatus(option)}>{option}</button>)}</div><span className="user-session-visible"><b>{visible.length}</b> visible</span><div className="user-session-actions" ref={setActionsToolbarTarget} /></div>
     {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
     {messageNotice&&<div className="user-session-sent" role="status"><CheckCircle2 /><span>{messageNotice}</span><button type="button" aria-label="Dismiss message confirmation" onClick={()=>setMessageNotice("")}><X /></button></div>}
-    <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="11" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
-    <footer className="user-session-note"><ShieldCheck /><span>Sessions close automatically after 15 minutes without user activity. Force closing immediately invalidates only that login and is saved in Audit Trail.</span></footer>
+    <div className="user-session-table-wrap"><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Assistance</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><span className={`session-state ${row.online?'online':'inactive'}`}><i />{row.online?'Online':'Inactive'}</span></td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><RemoteAssistanceAction row={row} token={session?.token||authToken} onChanged={()=>load({quiet:true})} /></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="12" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>
+    <footer className="user-session-note"><ShieldCheck /><span>Remote assistance starts only after user approval, stays inside the BDMS tab, and ends automatically after the selected duration. Sessions still close after 15 minutes without user activity.</span></footer>
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
   </section>;
 }
@@ -9015,6 +9016,7 @@ function App() {
           toggleTheme={toggleTheme}
         />
         <SessionMessageInbox session={session} />
+        <RemoteAssistanceAgent session={session} />
       </>
     );
   return (
@@ -9129,6 +9131,7 @@ function App() {
         </div>
       )}
       <SessionMessageInbox session={session} />
+      <RemoteAssistanceAgent session={session} />
     </div>
   );
 }
