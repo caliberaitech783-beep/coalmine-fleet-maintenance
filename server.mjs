@@ -1492,6 +1492,42 @@ app.post('/api/backups/export',requireSuper,requireAdministrator,async(req,res,n
   }catch(error){next(error)}
 });
 
+app.delete('/api/backups/:backupId',requireSuper,requireAdministrator,async(req,res,next)=>{
+  const backupId=String(req.params.backupId||'').trim();
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(backupId))return res.status(400).json({error:'Invalid backup reference.'});
+  const client=await pool.connect();
+  let locked=false,transactionStarted=false,originalPath='',stagedPath='';
+  try{
+    const {rows:locks}=await client.query("SELECT pg_try_advisory_lock(hashtext('bdms_backup_operation')) AS locked");
+    locked=Boolean(locks[0]?.locked);
+    if(!locked)return res.status(409).json({error:'A backup or restore is currently running. Try deleting this history after it completes.'});
+    await client.query('BEGIN');transactionStarted=true;
+    const {rows}=await client.query('SELECT file_name,storage_path,status FROM backup_runs WHERE id=$1 FOR UPDATE',[backupId]);
+    const backup=rows[0];
+    if(!backup){await client.query('ROLLBACK');transactionStarted=false;return res.status(404).json({error:'Backup history record not found.'});}
+    if(backup.storage_path){
+      originalPath=path.resolve(backup.storage_path);
+      if(!originalPath.startsWith(`${backupStorageRoot}${path.sep}`))throw Object.assign(new Error('The recorded backup path is outside protected storage.'),{status:409});
+      if(existsSync(originalPath)){
+        stagedPath=`${originalPath}.deleting-${backupId}`;
+        await fs.rename(originalPath,stagedPath);
+      }
+    }
+    await client.query('DELETE FROM backup_runs WHERE id=$1',[backupId]);
+    await client.query('COMMIT');transactionStarted=false;
+    if(stagedPath)await fs.rm(stagedPath,{force:true}).catch(error=>console.error('Deleted backup file cleanup failed:',error.message));
+    req.audit={eventType:'Administration',module:'Backup',action:'Delete backup',targetType:'Database backup',targetReference:backup.file_name,reason:`Deleted ${backup.status} backup history${originalPath?' and recovery file':''}`,changedFields:['history','recoveryFile']};
+    res.status(204).end();
+  }catch(error){
+    if(transactionStarted)await client.query('ROLLBACK').catch(()=>{});
+    if(stagedPath&&originalPath&&existsSync(stagedPath))await fs.rename(stagedPath,originalPath).catch(()=>{});
+    next(error);
+  }finally{
+    if(locked)await client.query("SELECT pg_advisory_unlock(hashtext('bdms_backup_operation'))").catch(()=>{});
+    client.release();
+  }
+});
+
 app.get('/api/backups/:backupId/download',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     const backupId=String(req.params.backupId||'').trim();

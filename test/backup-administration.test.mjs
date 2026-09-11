@@ -53,3 +53,13 @@ test('manual, scheduled, export, import and restore backup actions are written t
   assert.match(server,/action:'Restore imported backup'/);
   assert.match(server,/action:'Download stored backup'/);
 });
+
+test('backup history provides a protected delete action after the recovery column',()=>{
+  assert.match(client,/<th>Recovery file<\/th><th>Delete<\/th>/);
+  assert.match(client,/aria-label=\{`Delete \$\{row\.fileName\}`\}/);
+  assert.match(client,/method:'DELETE'/);
+  assert.match(server,/app\.delete\('\/api\/backups\/:backupId',requireSuper,requireAdministrator/);
+  assert.match(server,/pg_try_advisory_lock\(hashtext\('bdms_backup_operation'\)\)/);
+  assert.match(server,/DELETE FROM backup_runs WHERE id=\$1/);
+  assert.match(server,/action:'Delete backup'/);
+});

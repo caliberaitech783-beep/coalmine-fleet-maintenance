@@ -103,7 +103,8 @@ export function auditRouteDetails(method = "", path = "") {
   if (route.includes("admin-locks")) return { module: "Authentication", eventType: "Security", action: verb === "GET" ? "View administrator locks" : "Unlock administrator accounts" };
   if (route.startsWith("/api/user-sessions")) return { module: "User sessions", eventType: "Security", action: verb === "DELETE" ? "Force close session" : "View user sessions" };
   if (route.startsWith("/api/backups")) {
-    const action = route.endsWith("/settings") ? (verb === "GET" ? "View backup schedule" : "Update backup schedule")
+    const action = verb === "DELETE" ? "Delete backup"
+      : route.endsWith("/settings") ? (verb === "GET" ? "View backup schedule" : "Update backup schedule")
       : route.endsWith("/run") ? "Create stored backup"
       : route.endsWith("/export") ? "Export full backup"
       : route.endsWith("/import/inspect") ? "Inspect imported backup"

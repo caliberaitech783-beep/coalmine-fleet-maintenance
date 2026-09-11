@@ -33,6 +33,7 @@ test("audit routes classify security, master, workflow, and CRM activity", () =>
   assert.equal(auditRouteDetails("POST", "/api/logout").action, "Logout");
   assert.deepEqual(auditRouteDetails("POST", "/api/backups/export"), {module:"Backup",eventType:"Administration",action:"Export full backup"});
   assert.equal(auditRouteDetails("POST", "/api/backups/import/restore").action, "Restore imported backup");
+  assert.equal(auditRouteDetails("DELETE", "/api/backups/109cd88e-85b2-4b2d-b7f5-71fdb9706d3c").action, "Delete backup");
 });
 
 test("audit date range defaults to the current India date and validates selections", () => {
@@ -60,6 +61,7 @@ test("audit capture keeps administration and direct record changes out of routin
   assert.equal(auditShouldRecord("POST", "/api/backups/import/inspect"), true);
   assert.equal(auditShouldRecord("POST", "/api/backups/import/restore"), true);
   assert.equal(auditShouldRecord("GET", "/api/backups/109cd88e-85b2-4b2d-b7f5-71fdb9706d3c/download"), true);
+  assert.equal(auditShouldRecord("DELETE", "/api/backups/109cd88e-85b2-4b2d-b7f5-71fdb9706d3c"), true);
   assert.equal(auditShouldRecord("GET", "/api/backups"), false);
   assert.equal(auditShouldRecord("POST", "/api/masters/Users%20%26%20employees"), true);
   assert.equal(auditShouldRecord("PUT", "/api/masters/Users%20%26%20employees/1"), true);
