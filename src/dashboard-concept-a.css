@@ -1652,7 +1652,7 @@ button.mine-primary-kpi-card:focus-visible,
 }
 .mine-breakdown-trend-body {
   display: grid;
-  grid-template-columns: 135px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: 245px;
 }
 .mine-breakdown-trend-body > * { min-width: 0; padding: 12px; }
@@ -1662,6 +1662,9 @@ button.mine-primary-kpi-card:focus-visible,
   align-content: center;
   gap: 7px;
 }
+.mine-trend-controls .mine-trend-summary-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+.mine-trend-summary-row .mine-trend-summary { display: flex; gap: 8px; flex-wrap: wrap; }
+.mine-trend-summary-row .mine-trend-summary article { min-width: 170px; }
 .mine-trend-summary article {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
