@@ -313,7 +313,7 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
     </button>
   );
 }
-function HeaderClock({ className = "" }) {
+function HeaderClock({ className = "", timeFirst = false }) {
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   useEffect(() => {
     const updateClock = () => setCurrentDateTime(new Date());
@@ -324,9 +324,10 @@ function HeaderClock({ className = "" }) {
   const time = formatDisplayTime(currentDateTime);
   return (
     <time className={`header-clock ${className}`.trim()} dateTime={currentDateTime.toISOString()} aria-label={`Current date and time ${date} ${time}`}>
+      {timeFirst && <span className="header-clock-time">{time}</span>}
       <CalendarDays aria-hidden="true" />
       <span className="header-clock-date">{date}</span>
-      <span className="header-clock-time">{time}</span>
+      {!timeFirst && <span className="header-clock-time">{time}</span>}
     </time>
   );
 }
@@ -8981,7 +8982,7 @@ function App() {
             </button>
             Operations <ChevronRight /> <b>{navigationLabel(active)}</b>
           </div>
-          <HeaderClock />
+          <HeaderClock timeFirst={active === "Dashboard"} />
           <div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <AiFeeder role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} session={session} />
