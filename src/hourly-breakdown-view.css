@@ -5,18 +5,25 @@
 .hourly-breakdown-title { text-align: right; }
 .hourly-breakdown-title h2 { margin: 0; font: 800 22px Manrope, sans-serif; }
 .hourly-breakdown-title p { margin: 4px 0 0; color: var(--muted, #647892); font-size: 12px; }
-.hourly-breakdown-windows { display: flex; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+/* The window and site strips scroll by wheel or drag; the bars themselves stay hidden. */
+.hourly-breakdown-windows { display: flex; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .hourly-breakdown-windows button { flex: 1 0 auto; min-width: 0; white-space: nowrap; }
-.hourly-breakdown-view .dashboard-record-level-navigation { grid-template-columns: minmax(0, 1fr); }
-.hourly-breakdown-view .dashboard-asset-list { max-height: none; }
-.hourly-breakdown-summary { flex-wrap: wrap; padding: 10px 16px; }
+.hourly-breakdown-view.dashboard-record-browser .dashboard-record-level-navigation { grid-template-columns: minmax(0, 1fr); }
+.hourly-breakdown-view.dashboard-record-browser .dashboard-record-level-tabs { scrollbar-width: none; padding-bottom: 3px; }
+.hourly-breakdown-windows::-webkit-scrollbar, .hourly-breakdown-view.dashboard-record-browser .dashboard-record-level-tabs::-webkit-scrollbar { display: none; }
+/* The summary row carries the table toolbar, so the headings follow it directly. */
+.hourly-breakdown-summary { flex-wrap: wrap; gap: 8px 12px; padding: 8px 16px; }
 .hourly-breakdown-summary-text { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; min-width: 0; }
 .hourly-breakdown-summary-text span { font-size: 12px; color: var(--muted, #647892); }
 .hourly-breakdown-actions { flex: 0 0 auto; margin-left: auto; }
-.hourly-breakdown-view .dashboard-asset-list th { font-size: 12px; padding: 12px 16px; }
-.hourly-breakdown-view .dashboard-asset-list td { white-space: nowrap; font-size: 14px; padding: 12px 16px; }
+/* The list grows with the page instead of scrolling inside its own box. */
+.hourly-breakdown-view.dashboard-record-browser .dashboard-asset-list { max-height: none; overflow: visible; }
+.hourly-breakdown-view.dashboard-record-browser .dashboard-asset-list table { width: 100%; }
+.hourly-breakdown-view.dashboard-record-browser .dashboard-asset-list thead th { position: static; box-shadow: none; background: #f9fafc; font-size: 12px; padding: 9px 16px; border-bottom: 1px solid var(--line, #dde6f2); }
+.hourly-breakdown-view.dashboard-record-browser .dashboard-asset-list td { white-space: nowrap; font-size: 14px; padding: 12px 16px; }
 .hourly-breakdown-view .hourly-bd-in { background: #fce0eb; color: #87244b; font-weight: 700; font-variant-numeric: tabular-nums; }
 .hourly-breakdown-view .hourly-bd-out { background: #dcf4e4; color: #186738; font-weight: 700; font-variant-numeric: tabular-nums; }
+[data-theme="dark"] .hourly-breakdown-view.dashboard-record-browser .dashboard-asset-list thead th { background: #1f2a3d; }
 [data-theme="dark"] .hourly-breakdown-view .hourly-bd-in { background: #4a1f33; color: #ffc4d8; }
 [data-theme="dark"] .hourly-breakdown-view .hourly-bd-out { background: #163826; color: #b7efc9; }
 @media (max-width: 560px) {
@@ -24,4 +31,5 @@
   .hourly-breakdown-head { flex-direction: column; }
   .hourly-breakdown-title { text-align: left; }
   .hourly-breakdown-windows button { min-width: max-content; padding: 8px 10px; }
+  .hourly-breakdown-view.dashboard-record-browser .dashboard-asset-list { overflow-x: auto; }
 }
