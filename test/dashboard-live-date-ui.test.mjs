@@ -320,8 +320,8 @@ test("every day-wise date, metric and percentage opens its exact site/day entrie
       assert.deepEqual(detailView(tree).rows.map(row => row.requestReference), expected.map(row => row.ref), `${day.date} ${metric}`);
       if (metric !== "all") assert.equal(detailView(tree).rows.length, day[metric === "percentage" ? "balance" : metric]);
       const modal = byClass(tree, "dashboard-asset-modal");
-      assert.ok(modal.props.title.includes(displayDates.formatDisplayDate(day.date)));
-      assert.ok(modal.props.title.startsWith("Sasti OB"));
+      assert.ok(text(modal.props.title).includes(displayDates.formatDisplayDate(day.date)));
+      assert.ok(text(modal.props.title).startsWith("Sasti OB"));
       // Both the explicit Back action and the close/X action restore the same range.
       if (metric === "percentage") modal.props.close();
       else button(tree, "Back to day-wise report").props.onClick();
