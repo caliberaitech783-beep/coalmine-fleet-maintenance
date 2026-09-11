@@ -1,5 +1,5 @@
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
-import { openHourlyBreakdownTab } from "./hourly-breakdown.mjs";
+import HourlyBreakdownView from "./hourly-breakdown-view.jsx";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
@@ -1137,6 +1137,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendRangeError, setBreakdownTrendRangeError] = useState("");
   const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [breakdownCountChange, setBreakdownCountChange] = useState(null);
+  const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useState(false);
+  const openHourlyBreakdownTab = () => setHourlyBreakdownVisible(true);
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
@@ -1594,6 +1596,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const listAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded);
   const trendPointAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded, "button", { selector: "i, b, small", backgroundKey: "trend:all" });
   const cardAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, `${label}. Open full list`, equipmentLoaded, "group");
+  if (hourlyBreakdownVisible) return <HourlyBreakdownView requests={scopedBreakdowns.map(request => ({ ...request, door: request.door || equipmentForRequest(request)?.door }))} sites={availableRegions.flatMap(region => region.sites).filter(site => !restrictToScope || normalizedAllowedSites?.some(allowed => recordBelongsToSite({site: allowed}, site)))} onBack={() => setHourlyBreakdownVisible(false)} />;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}`}>
       <header className="mine-dashboard-head">

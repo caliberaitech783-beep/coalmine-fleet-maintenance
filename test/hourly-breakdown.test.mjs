@@ -1,6 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hourlyBreakdownEvents, hourlyBreakdownView, openHourlyBreakdownTab } from "../src/hourly-breakdown.mjs";
+import { hourlyBreakdownEvents, hourlyBreakdownView, openHourlyBreakdownTab, breakdownElapsed } from "../src/hourly-breakdown.mjs";
+import { REGION_DATA } from "../region-scope.mjs";
+
+test("site aliases merge, permitted zero-count sites remain, and timers stop on closure", () => {
+  const now = Date.parse("2026-09-11T12:00:00+05:30");
+  const requests = [
+    {site: "SASTI", start: "2026-09-11 11:30"},
+    {site: "SASTI OB", start: "2026-09-11 11:00", closedAt: "2026-09-11 11:45"},
+  ];
+  const view = hourlyBreakdownView(requests, 1, "Sasti OB", now, REGION_DATA.flatMap(region => region.sites));
+  assert.equal(view.siteCounts.length, 9);
+  assert.equal(view.siteCounts.filter(row => row.site === "Sasti OB").length, 1);
+  assert.equal(view.rows.length, 3);
+  assert.equal(view.siteCounts.find(row => row.site === "Lalpeth OB").count, 0);
+  const active = view.rows.find(row => row.closedAt == null);
+  const closed = view.rows.find(row => row.direction === "Out");
+  assert.equal(breakdownElapsed(active, now), "0h 30m 0s");
+  assert.equal(breakdownElapsed(active, now + 1000), "0h 30m 1s");
+  assert.equal(breakdownElapsed(closed, now + 1000), "0h 45m 0s");
+});
 
 test("rolling windows include recent entries and exits independently with IST timestamps", () => {
   const now = Date.parse("2026-09-11T12:00:00+05:30");

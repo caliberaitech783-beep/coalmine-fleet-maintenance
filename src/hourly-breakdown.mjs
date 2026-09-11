@@ -1,4 +1,5 @@
 import { parseRequestTimelineTimestamp } from "../request-timeline.mjs";
+import { displaySiteName } from "../region-scope.mjs";
 
 export function hourlyBreakdownEvents(requests, hours, now = Date.now()) {
   const end = Number(now), start = end - hours * 3600000;
@@ -9,19 +10,30 @@ export function hourlyBreakdownEvents(requests, hours, now = Date.now()) {
   ].flatMap(({ direction, value }) => {
     const timestamp = parseRequestTimelineTimestamp(value)?.getTime();
     return timestamp != null && timestamp >= start && timestamp <= end ? [{
-      key: `${request.ref || index}:${direction}`, site: request.site || request.currentLocation || "—",
+      key: `${request.ref || index}:${direction}`, site: displaySiteName(request.site || request.currentLocation) || "—",
       door: request.door || "—", direction, timestamp,
+      startedAt: parseRequestTimelineTimestamp(request.start || request.startedAt || request.createdAt)?.getTime() ?? null,
+      closedAt: parseRequestTimelineTimestamp(request.closedAt)?.getTime() ?? null,
     }] : [];
   })).sort((a, b) => b.timestamp - a.timestamp);
 }
 
-export function hourlyBreakdownView(requests, hours, site = "", now = Date.now()) {
+export function hourlyBreakdownView(requests, hours, site = "", now = Date.now(), availableSites = []) {
   const events = hourlyBreakdownEvents(requests, hours, now);
-  const sites = [...new Set(requests.map(row => row.site || row.currentLocation || "—"))].sort();
+  const sites = [...new Set([...availableSites, ...requests.map(row => row.site || row.currentLocation || "—")].map(displaySiteName))].filter(Boolean).sort();
+  site = displaySiteName(site);
   const siteCounts = sites.map(name => ({ site: name, count: events.filter(row => row.site === name).length }));
   const rows = site ? events.filter(row => row.site === site) : events;
   const hourCounts = Array.from({ length: 10 }, (_, index) => hourlyBreakdownEvents(requests, index + 1, now).filter(row => !site || row.site === site).length);
   return { rows, siteCounts, hourCounts, total: events.length };
+}
+
+export function breakdownElapsed(row, now = Date.now()) {
+  if (row.startedAt == null) return "—";
+  const end = row.closedAt ?? now;
+  if (end < row.startedAt) return "—";
+  const seconds = Math.floor((end - row.startedAt) / 1000);
+  return `${Math.floor(seconds / 3600)}h ${Math.floor(seconds % 3600 / 60)}m ${seconds % 60}s`;
 }
 
 export function openHourlyBreakdownTab(requests) {
