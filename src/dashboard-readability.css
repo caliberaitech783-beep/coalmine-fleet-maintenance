@@ -208,5 +208,23 @@
   .mine-dashboard .mine-site-road-summary { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* Mobile site details wrap onto several lines; reserve their own space above the region totals. */
+@media (max-width: 700px) {
+  .mine-dashboard-feature-row .mine-fleet-chart-layout { height: 390px; min-height: 390px; }
+  .mine-dashboard .mine-fleet-site-entry { grid-template-rows: minmax(0, 1fr) 180px; }
+  .mine-dashboard .mine-fleet-site-summary { gap: 4px; }
+  .mine-dashboard .mine-fleet-site-summary b { min-height: 40px; }
+  .mine-dashboard .mine-fleet-site-summary button {
+    max-width: 100%;
+    white-space: normal;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 750;
+    line-height: 1.35;
+  }
+  .mine-dashboard .mine-fleet-chart-grid { bottom: 244px; }
+  .mine-dashboard .mine-fleet-chart-regions footer { flex-wrap: wrap; align-content: center; gap: 2px 7px; }
+}
+
 /* Proportional segments; a small count still gets enough height to show its number, capped at its own bar. */
 .mine-dashboard .mine-fleet-breakdown-segment { min-height: 18px; max-height: 100%; }
