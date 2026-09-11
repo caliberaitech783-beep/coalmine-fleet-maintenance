@@ -179,3 +179,12 @@ test('MIS report retains saved concerns after verification with the same reason 
   assert.ok(!report.columns.some(c=>c.key==='verificationStatus'));
   assert.equal(report.dateValue(flagged),flagged.misFlaggedAt);
 });
+test('unverified cases delay counts hours and minutes since closure, then days once past 24 hours',()=>{
+  const report=build([{status:'Closed',closedAt:'2026-09-07 09:15'}]).find(r=>r.title==='Unverified Cases');
+  assert.equal(report.columns.findIndex(c=>c.key==='delay'),report.columns.findIndex(c=>c.key==='closedAt')+1);
+  assert.equal(report.columns.find(c=>c.key==='delay').label,'Delay');
+  assert.equal(cell(report,'delay'),'2h 45m');
+  for(const [closedAt,expected] of [['2026-09-07 11:59','0h 1m'],['2026-09-06 12:00:01','23h 59m'],['2026-09-06 12:00','1d 0h'],['2026-09-04 09:30','3d 2h'],['2026-09-07 12:30','0h 0m'],['invalid','Not recorded'],['','Not recorded']]) {
+    assert.equal(cell(report,'delay',{closedAt}),expected,closedAt);
+  }
+});

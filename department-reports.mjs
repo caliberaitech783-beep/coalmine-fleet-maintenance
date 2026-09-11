@@ -23,6 +23,13 @@ const productionLead = [col('status', 'Status', requestStatusLabel), site, ids[0
 const complaintColumns = base.slice(4);
 const maintenanceLead = [site, ids[0], base[2], base[3], base[5]];
 const closed = col('closedAt', 'Ticket Closed');
+// Time since ticket closure: hours and minutes under a day, days and hours once 24 hours have passed.
+function closedDelay(closedAt, now) {
+  const elapsed = now.getTime() - indiaDateTimeEpoch(closedAt);
+  if (!Number.isFinite(elapsed)) return 'Not recorded';
+  const minutes = Math.floor(Math.max(0,elapsed) / 60000), hours = Math.floor(minutes / 60);
+  return hours >= 24 ? `${Math.floor(hours / 24)}d ${hours % 24}h` : `${hours}h ${minutes % 60}m`;
+}
 function breakdownDaysHours(start, now) {
   const elapsed = now.getTime() - indiaDateTimeEpoch(start);
   if (!Number.isFinite(elapsed)) return 'Not recorded';
@@ -84,7 +91,7 @@ export function buildDepartmentReports({requests = [], equipmentRecords = [], tr
     report('maintenance', REPORT_TITLES[1], 'Open, in-progress and awaiting-parts off-road requests. BD duration shows completed days and hours since production submission.', [...maintenanceLead,col('start','Rep. Started'),col('days','BD Days / Hrs',r => breakdownDaysHours(r.start,now)),base[4],ref,ids[1]],open),
     report('maintenance', REPORT_TITLES[2], '24 productive hours per selected day. Partial days use the selected hours. Downtime is clipped to the period; overlapping incidents are counted once.', [site,ids[0],col('equipmentGroup','Equipment group',equipmentGroupValue),col('model','Model'),col('productive','Productive Hrs'),col('breakdown','Breakdown Hrs',r => r.breakdown.toFixed(2)),col('available','Available Hrs',r => r.available.toFixed(2)),col('percentage','Percentage',r => availabilityPercentage(r.percentage)),ids[1]], availabilityRows(equipmentRecords,requests,from,to,now), () => from),
 report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatch shows Delay when MIS verification is more than 30 minutes after first trip.', [...maintenanceLead,col('closedAt','Request Closed'),col('firstTrip','First Trip Made',firstTrip),col('difference','TAT',r => duration(r.closedAt,firstTrip(r))),col('mismatch','Mismatch',r => indiaDateTimeEpoch(r.verifiedAt)-indiaDateTimeEpoch(firstTrip(r))>1800000 ? 'Delay' : ''),base[4],col('driverName','Driver Name'),ref,ids[1],col('verifiedBy','MIS user')],finished.filter(r => indiaDateTimeEpoch(firstTrip(r))-indiaDateTimeEpoch(r.closedAt)>1800000), firstTrip),
-    report('mis', REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification.', [...maintenanceLead,closed,base[4],ref,ids[1]],requests.filter(r => status(r)==='closed' && !r.verifiedAt).filter(visibleInMisRequests),r => r.closedAt),
+    report('mis', REPORT_TITLES[4], 'Maintenance-closed requests awaiting MIS verification. Delay is the time since ticket closure.', [...maintenanceLead,closed,col('delay','Delay',r => closedDelay(r.closedAt,now)),base[4],ref,ids[1]],requests.filter(r => status(r)==='closed' && !r.verifiedAt).filter(visibleInMisRequests),r => r.closedAt),
     report('mis', REPORT_TITLES[5], 'Elapsed time between ticket closure, actual first trip, and MIS verification.', [...maintenanceLead,closed,col('verifiedAt','MIS verified at'),col('firstTripAt','First trip time',firstTrip),{...col('closeToMis','Time taken from ticket close to MIS verification',r => duration(r.closedAt,r.verifiedAt)),wrapHeader:true},{...col('closeToFirstTrip','Time taken for ticket close to first trip verification',r => duration(r.closedAt,firstTrip(r))),wrapHeader:true},{...col('firstTripToMis','First trip to MIS verification time taken',r => duration(firstTrip(r),r.verifiedAt)),wrapHeader:true},base[4],col('verifiedBy','MIS user'),ref,ids[1]],finished.filter(r => r.verifiedAt),r => r.verifiedAt),
     report('mis', REPORT_TITLES[7], 'Current equipment and vehicle master records.', [site,ids[0],col('equipmentName','Equipment / vehicle'),col('model','Model'),col('make','Make'),col('itemSpecification','Item specification name'),ids[1]],equipmentRecords,() => now.toISOString()),
     report('mis', REPORT_TITLES[8], MIS_IN_OUT_REPORT_DESCRIPTION, MIS_IN_OUT_REPORT_COLUMNS,buildSiteInOutReportRows(requests,{today:now}),r => r.date),

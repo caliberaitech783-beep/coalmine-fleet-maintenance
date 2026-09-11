@@ -7,7 +7,7 @@ test('MIS reports have the approved column order and wrapping',()=>{
   const reports=buildDepartmentReports();
   const expected={
     '30 Min. Mismatch':['site','door','equipmentGroup','model','category','closedAt','firstTrip','difference','mismatch','complaint','driverName','ref','chassis','verifiedBy'],
-    'Unverified Cases':['site','door','equipmentGroup','model','category','closedAt','complaint','ref','chassis'],
+    'Unverified Cases':['site','door','equipmentGroup','model','category','closedAt','delay','complaint','ref','chassis'],
     'MIS Turn Around Time':['site','door','equipmentGroup','model','category','closedAt','verifiedAt','firstTripAt','closeToMis','closeToFirstTrip','firstTripToMis','complaint','verifiedBy','ref','chassis'],
     'Total Fleet':['site','door','equipmentName','model','make','itemSpecification','chassis'],
     'Total In and out count report':['site','date','opened','closed','net','pendingClose','verified','idle','pendingVerification','averageTat'],
