@@ -12,17 +12,6 @@
 .mis-red-flag-form p{line-height:1.5}
 .mis-red-flag-error{padding:12px;border:1px solid #df7785;border-radius:8px;background:#fff0f2;color:#a91830}
 
-.mobile-workflow-table .workflow-table .workflow-sticky-actions {
-  position: sticky;
-  left: 0;
-  z-index: 2;
-  background: var(--panel, #fff);
-}
-.mobile-workflow-table .workflow-table thead .workflow-sticky-actions {
-  z-index: 3;
-  background: var(--soft, #f7f9fc);
-}
-
 .breakdown-table-auto-fit > tbody > tr > td,
 .workflow-table > tbody > tr > td {
   vertical-align: top;
