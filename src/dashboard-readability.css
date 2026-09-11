@@ -239,3 +239,28 @@
     box-shadow: 0 4px 12px #17233c14;
   }
 }
+/* Keep the live Breakdown badge inside its mobile tab as its value grows. */
+@media (max-width: 700px) {
+  .mine-dashboard .mine-fleet-chart-toggle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .mine-dashboard .mine-fleet-chart-toggle button {
+    min-width: 0;
+    max-width: 100%;
+    flex-wrap: wrap;
+    align-content: center;
+    gap: 6px;
+    padding: 8px;
+    font-size: 13px;
+  }
+  .mine-dashboard .mine-fleet-chart-toggle button b {
+    min-width: 0;
+    flex-shrink: 0;
+    font-size: 18px !important;
+  }
+  .mine-dashboard .mine-fleet-chart-toggle button .mine-fleet-count-trend { max-width: 100%; box-sizing: border-box; }
+}
