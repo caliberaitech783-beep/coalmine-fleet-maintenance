@@ -45,8 +45,9 @@
   .dashboard-asset-modal .dashboard-record-browser { padding: 10px; gap: 10px; }
   .dashboard-record-controls { padding: 12px; }
   .dashboard-record-topline { flex-wrap: wrap; gap: 6px; }
-  .dashboard-record-tabs { flex: 1; }
-  .dashboard-record-tabs button { flex: 1; min-width: 0; padding: 8px 12px; }
+  .dashboard-record-tabs { flex: 0 0 100%; width: 100%; min-width: 0; box-sizing: border-box; }
+  .dashboard-record-tabs button { flex: 1 0 auto; min-width: max-content; gap: 6px; padding: 8px 10px; white-space: nowrap; }
+  .dashboard-record-tabs button b { flex-shrink: 0; }
   .dashboard-record-reset { margin-left: auto; }
   .dashboard-record-level { grid-template-columns: 94px minmax(0, 1fr); gap: 6px; margin-top: 8px; padding-top: 8px; }
   .dashboard-record-level-label { gap: 6px; font-size: 10px; }
