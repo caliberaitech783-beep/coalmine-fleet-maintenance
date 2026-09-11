@@ -316,8 +316,8 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
     </button>
   );
 }
-function HeaderClock({ className = "", timeFirst = false }) {
-  // Dashboard changes presentation order only; all views share the same live clock.
+function HeaderClock({ className = "" }) {
+  // All pages share the same time-first presentation and live clock.
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   useEffect(() => {
     const updateClock = () => setCurrentDateTime(new Date());
@@ -328,10 +328,9 @@ function HeaderClock({ className = "", timeFirst = false }) {
   const time = formatDisplayTime(currentDateTime);
   return (
     <time className={`header-clock ${className}`.trim()} dateTime={currentDateTime.toISOString()} aria-label={`Current date and time ${date} ${time}`}>
-      {timeFirst && <span className="header-clock-time">{time}</span>}
+      <span className="header-clock-time">{time}</span>
       <CalendarDays aria-hidden="true" />
       <span className="header-clock-date">{date}</span>
-      {!timeFirst && <span className="header-clock-time">{time}</span>}
     </time>
   );
 }
@@ -9016,7 +9015,7 @@ function App() {
             </button>
             Operations <ChevronRight /> <b>{navigationLabel(active)}</b>
           </div>
-          <HeaderClock timeFirst={active === "Dashboard"} />
+          <HeaderClock />
           <div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             <AiFeeder role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} session={session} />

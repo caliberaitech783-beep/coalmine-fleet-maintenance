@@ -11,8 +11,9 @@ test("signed-in headers render a bold live date and time clock", () => {
   assert.match(source, /window\.clearInterval\(timer\)/);
   assert.match(source, /const date = formatDisplayDate\(currentDateTime\)/);
   assert.match(source, /const time = formatDisplayTime\(currentDateTime\)/);
-  assert.match(source, /<HeaderClock timeFirst=\{active === "Dashboard"\} \/>/);
-  assert.match(source, /timeFirst && <span className="header-clock-time">\{time\}<\/span>\}[\s\S]*<CalendarDays/);
+  assert.match(source, /<HeaderClock \/>/);
+  assert.match(source, /<span className="header-clock-time">\{time\}<\/span>\s*<CalendarDays aria-hidden="true" \/>\s*<span className="header-clock-date">\{date\}<\/span>/);
+  assert.doesNotMatch(source, /timeFirst/);
   assert.match(source, /<HeaderClock className="normal-header-clock" \/>/);
   assert.match(styles, /\.header-clock \{[\s\S]*font: 900 var\(--header-clock-size\)\/1 Manrope/);
   assert.match(styles, /font-variant-numeric: tabular-nums/);
