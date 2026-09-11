@@ -193,6 +193,16 @@
   .mine-dashboard .mine-breakdown-movement-kpis { gap: 8px; }
   .mine-dashboard .mine-breakdown-movement-kpis > div { grid-template-columns: minmax(0, 1fr); min-height: 106px; padding: 12px; }
   .mine-dashboard .mine-breakdown-movement-kpis strong { grid-column: 1; grid-row: 2; }
+  .mine-dashboard .mine-breakdown-movement-kpis small,
+  .dashboard-breakdown-detail-kpis small {
+    min-width: 0;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  .mine-dashboard .mine-breakdown-movement-kpis small > span { display: block; }
   .mine-dashboard .mine-breakdown-type-mix > div { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mine-dashboard .mine-breakdown-type-mix :is(article, button):nth-child(3n) { border-right: 1px solid var(--mine-line); }
   .mine-dashboard .mine-breakdown-type-mix :is(article, button):nth-child(2n) { border-right: 0; }
