@@ -4,7 +4,6 @@ import { changeDrilldownFilter, drilldownView, equipmentCategoryLabel, equipment
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "./request-status.mjs";
 import { filterRecordsByDate } from "./record-date-range.mjs";
-import { encodeDateRange } from "./date-range-filter.mjs";
 
 const categoryName = (value) => value === "Total vehicles" ? "Vehicles" : value === "Total equipment" ? "Equipment" : value;
 
@@ -52,10 +51,10 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   </div>;
 }
 
-export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialStartedDate = "", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
+export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
-  const [recordDateRange, setRecordDateRange] = useState(() => initialStartedDate ? encodeDateRange(initialStartedDate, initialStartedDate) : "");
+  const [recordDateRange, setRecordDateRange] = useState("");
   const datedRows = filterRecordsByDate(rows, recordDateRange, (record) => record.requestStart);
   const view = drilldownView(datedRows, regions, filters, { rowsAreScoped });
   const id = useId();

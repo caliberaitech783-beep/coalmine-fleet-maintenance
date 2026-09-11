@@ -9,7 +9,6 @@ import {REGION_DATA} from "../region-scope.mjs";
 import {calculateBreakdownMinutes, formatBreakdownDaysHours} from "../breakdown-duration.mjs";
 import {requestStatusSortRank} from "../src/request-status.mjs";
 import {filterRecordsByDate} from "../src/record-date-range.mjs";
-import {encodeDateRange} from "../src/date-range-filter.mjs";
 import {formatDisplayDateTime} from "../date-time-format.mjs";
 import {tableModel, dateColumnsFirst, tableExportModel} from "../src/table-actions-model.mjs";
 
@@ -18,20 +17,6 @@ const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", impor
 const {code} = await transformWithOxc(source, "record-browser.jsx", {jsx: {runtime: "classic"}});
 const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) => descendants(child, test))
   : React.isValidElement(node) ? [...(test(node) ? [node] : []), ...descendants(node.props.children, test)] : [];
-
-test("BD Balance initial Started date populates both dates and excludes older requests", () => {
-  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, encodeDateRange,
-    useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
-    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
-  const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
-  let table;
-  const rows = ["2026-09-11 09:00:00", "2026-09-10 09:00:00"].map((requestStart, id) => ({id, requestStart, requestSite: "Sasti OB", category: "Vehicle", requestStatus: "Open"}));
-  renderToStaticMarkup(React.createElement(Browser, {rows, regions: REGION_DATA, rowsAreScoped: true, initialStartedDate: "2026-09-11",
-    Status: ({children}) => children, formatDate: formatDisplayDateTime,
-    ActionsTable: received => {table = received; return React.createElement("table", null, received.children);}}));
-  assert.equal(table.recordDateFilter.value, encodeDateRange("2026-09-11", "2026-09-11"));
-  assert.equal(descendants(descendants(table.children, node => node.type === "tbody"), node => node.type === "tr").length, 1);
-});
 
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
   const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
