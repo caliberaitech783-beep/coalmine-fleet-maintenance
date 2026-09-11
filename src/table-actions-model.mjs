@@ -1,4 +1,5 @@
 import React from "react";
+import { reportTime12 } from "../report-time-format.mjs";
 import { matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { recordDateKey } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
@@ -25,6 +26,14 @@ export function tableSlots(row) {
   );
 }
 
+// Change presentation only: model values and data-sort-value remain untouched.
+function timeFirstCell(node) {
+  if (typeof node === "string") return reportTime12(node);
+  if (Array.isArray(node)) return node.map(timeFirstCell);
+  if (!React.isValidElement(node) || ["input", "select", "textarea"].includes(node.type)) return node;
+  return React.cloneElement(node, {}, timeFirstCell(node.props.children));
+}
+
 export function projectTableRow(row, indices) {
   const slots = tableSlots(row);
   const groups = [];
@@ -36,7 +45,7 @@ export function projectTableRow(row, indices) {
     else groups.push({ ...slot, span: 1 });
   }
   return React.cloneElement(row, {}, groups.map(({ cell, index, span }, position) =>
-    React.cloneElement(cell, { key: `${cell.key || index}:${position}`, ...(cell.props.colSpan || span > 1 ? { colSpan: span } : {}) }),
+    React.cloneElement(cell, { key: `${cell.key || index}:${position}`, ...(cell.props.colSpan || span > 1 ? { colSpan: span } : {}) }, cell.type === "td" ? timeFirstCell(cell.props.children) : cell.props.children),
   ));
 }
 
