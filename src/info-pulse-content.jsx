@@ -1,6 +1,6 @@
 import React, {useMemo, useState} from 'react';
 import {ChevronDown, ChevronLeft, ChevronRight, RefreshCw, MapPin, Truck, Info} from 'lucide-react';
-import {INFO_PULSE_COLUMNS, buildInfoPulseBreakdowns, infoPulseColumns, infoPulseSiteOptions, infoPulseView} from '../info-pulse-data.mjs';
+import {INFO_PULSE_COLUMNS, buildInfoPulseBreakdowns, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView} from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import {formatDisplayDate, formatDisplayTime, formatDisplayDateTime} from '../date-time-format.mjs';
 import {requestStatusLabel} from './request-status.mjs';
@@ -27,7 +27,10 @@ function RecordDate({value}) {
 }
 
 export default function InfoPulseContent({cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh}) {
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [filters, setFilters] = useState(() => {
+    const today = infoPulseDate(new Date(now ?? Date.now()).toISOString());
+    return {...EMPTY_FILTERS, from: today, to: today};
+  });
   const [expanded, setExpanded] = useState('');
   const [page, setPage] = useState(0);
   const [countHelp, setCountHelp] = useState(null);
@@ -83,7 +86,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
         <button type="button" className="pulse-help-trigger" aria-label="What these counts mean" aria-describedby={countHelp ? 'pulse-count-explanation' : undefined} onClick={showCountHelp}><Info size={15} aria-hidden="true" /></button>
         {countHelp && <div id="pulse-count-explanation" className="pulse-count-tooltip" role="tooltip" tabIndex={0} data-placement={countHelp.placement} style={{maxHeight: countHelp.maxHeight}}>
           <b className="pulse-tooltip-title">What these counts mean</b>
-          <p><b>Default:</b> All sites you can access, all request dates and all cases. Date filters use the breakdown start date in IST.</p>
+          <p><b>Default:</b> All sites you can access and all qualifying cases started today. Both request-date fields default to today in IST and apply immediately. Change the dates to view another period, or Reset to show all request dates.</p>
           <p><b>Total breakdowns</b> counts every open request once, excluding idle and closed or verified requests, whether or not it has raised an alert. Site chips show each site in your scope; select one to list its breakdowns.</p>
           <p><b>All cases</b> counts each qualifying request once. Its highest priority decides its box: <b>Critical → Warnings → Updates.</b> The three boxes add up to All cases; site badges show unique matching cases.</p>
           <p><b>Case order:</b> Critical first, longest ETC overdue first. Other critical cases follow by longest standing time, then warnings and updates.</p>
