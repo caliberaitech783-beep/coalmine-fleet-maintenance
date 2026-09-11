@@ -1,0 +1,66 @@
+.mine-dashboard .daily-bd-balance { grid-column: 1 / -1; overflow: hidden; }
+.mine-dashboard .bd-balance-header { display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap; padding:18px 20px; }
+.mine-dashboard .bd-balance-header h2 { margin:4px 0; }
+.mine-dashboard .bd-balance-header p { display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin:0; color:var(--mine-muted); }
+.bd-balance-header p svg { width:15px; height:15px; }
+.bd-balance-controls { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; }
+.mine-dashboard .bd-balance-controls label { display:grid; gap:5px; margin:0; color:var(--mine-text); }
+.bd-balance-controls label>span { display:flex; align-items:center; gap:4px; font-weight:700; }
+.bd-balance-controls svg { width:13px; height:13px; color:#522e90; }
+.mine-dashboard .bd-balance-controls :is(input,select) { height:40px; min-height:40px; padding:8px 10px; border:1px solid var(--mine-line); border-radius:6px; color:var(--mine-text); background:var(--mine-panel,#fff); font:inherit; }
+.bd-balance-controls select { max-width:240px; }
+.mine-dashboard .bd-balance-controls .mine-trend-period { margin:0; }
+.bd-balance-context { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px 20px 0; color:var(--mine-muted); }
+.bd-balance-context-change { display:flex; align-items:center; gap:8px; }
+.mine-dashboard .bd-balance-change { display:inline-flex; align-items:center; gap:3px; padding:4px 8px; border-radius:5px; font-weight:800; line-height:1.2; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.bd-balance-change svg { width:14px; height:14px; }
+.bd-balance-change.increase { color:#c52b43; background:#fff0f3; }
+.bd-balance-change.decrease { color:#127b56; background:#eaf8f0; }
+.bd-balance-change.steady { color:#64748b; background:#f1f4f8; }
+.bd-balance-help { display:inline-flex; cursor:help; }
+.bd-balance-help svg { width:16px; height:16px; }
+.bd-balance-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:14px 20px; }
+.daily-bd-balance .open { --bd-color:#9569bd; }
+.daily-bd-balance .incoming { --bd-color:#315fd4; }
+.daily-bd-balance .outgoing { --bd-color:#26956f; }
+.daily-bd-balance .balance { --bd-color:#522e90; }
+.mine-dashboard .bd-balance-summary>button { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; border:1px solid var(--mine-line); border-radius:8px; padding:12px 16px; background:var(--mine-panel,#fff); color:var(--mine-text); cursor:pointer; }
+.bd-balance-summary>button>span { display:flex; align-items:center; gap:7px; font-weight:700; }
+.bd-balance-summary i { width:8px; height:22px; background:var(--bd-color); border-radius:3px; flex:none; }
+.mine-dashboard .bd-balance-summary strong { font-size:27px; font-variant-numeric:tabular-nums; }
+.bd-balance-scroll { overflow-x:auto; margin:0 20px 14px; scrollbar-width:thin; overscroll-behavior-x:contain; }
+.bd-balance-days { display:grid; position:relative; min-width:100%; width:max-content; }
+.bd-balance-grid { position:absolute; inset:58px 0 45px; pointer-events:none; }
+.bd-balance-grid>i { position:absolute; left:0; right:0; border-top:1px dashed var(--mine-line); }
+.bd-balance-day { min-width:0; display:grid; grid-template-rows:30px 248px 45px; padding:0 12px; position:relative; }
+.bd-balance-day+.bd-balance-day { border-left:1px solid var(--mine-line); }
+.bd-balance-day-change { display:flex; align-items:center; justify-content:center; }
+.bd-balance-bars { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:5px; padding-top:28px; border-bottom:1px solid var(--mine-line); }
+.mine-dashboard .bd-balance-bar-button { min-width:0; min-height:0; border:0; border-radius:0; background:transparent; padding:0; display:flex; align-items:flex-end; justify-content:center; height:100%; cursor:pointer; }
+.bd-balance-bar { position:relative; display:block; width:85%; max-width:42px; background:var(--bd-color); border-radius:4px 4px 0 0; }
+.mine-dashboard .bd-balance-bar>b { position:absolute; bottom:calc(100% + 5px); left:50%; transform:translateX(-50%); color:var(--mine-text); font-size:14px!important; line-height:1.2; font-weight:800; white-space:nowrap; }
+.bd-balance-bar-button:hover .bd-balance-bar { filter:brightness(1.12); }
+.bd-balance-day>footer { display:grid; justify-items:center; align-content:center; gap:2px; }
+.bd-balance-day>footer>small { color:var(--mine-muted); }
+.bd-balance-day.today>footer>b { color:#315fd4; }
+.bd-balance-day.today { background:linear-gradient(to top,#315fd405,transparent); }
+.daily-bd-balance :is(button,input,select,[tabindex]):focus-visible { outline:2px solid #6336a3; outline-offset:2px; }
+.mine-dashboard .bd-balance-date-issue { display:block; text-align:left; border:0; border-top:1px solid var(--mine-line); width:100%; padding:10px 20px; background:#fff8ed; color:#9a5200; }
+.bd-balance-empty { display:flex; justify-content:center; align-items:center; flex-direction:column; gap:12px; min-height:220px; padding:24px; color:var(--mine-muted); }
+.bd-balance-empty button { display:inline-flex; align-items:center; gap:6px; }
+.bd-balance-empty svg { width:16px; height:16px; }
+.bd-balance-range-error { color:#c52b43; padding:0 20px; }
+.mine-dashboard-night .bd-balance-change.increase { color:#ff9bac; background:#4b2030; }
+.mine-dashboard-night .bd-balance-change.decrease { color:#78dfb7; background:#143e30; }
+.mine-dashboard-night .bd-balance-change.steady { color:#becbdf; background:#334155; }
+.mine-dashboard-night .bd-balance-date-issue { color:#ffd295; background:#5b381b; }
+@media(max-width:700px) {
+  .mine-dashboard .bd-balance-header { padding:14px; }
+  .bd-balance-controls { display:grid; width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .bd-balance-controls :is(input,select) { min-width:0; width:100%; max-width:none; box-sizing:border-box; }
+  .bd-balance-controls .mine-trend-period { align-self:end; }
+  .bd-balance-summary { grid-template-columns:repeat(2,minmax(0,1fr)); padding:12px 14px; }
+  .mine-dashboard .bd-balance-summary>button { padding:10px; }
+  .bd-balance-context { padding:10px 14px 0; }
+  .bd-balance-scroll { margin-left:14px; margin-right:14px; }
+}

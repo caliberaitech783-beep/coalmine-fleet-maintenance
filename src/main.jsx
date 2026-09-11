@@ -31,7 +31,7 @@ import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
 import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
-import { createDashboardRequestLoader, requestEventDate, splitDashboardRequests } from "./dashboard-request-data.mjs";
+import { createDashboardRequestLoader, requestDateKey, requestEventDate, splitDashboardRequests } from "./dashboard-request-data.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
 import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
@@ -175,6 +175,9 @@ import "./manager-scroll.css";
 import "./user-sessions.css";
 import "./backup-administration.css";
 import "./workspace-readability.css";
+import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
+import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
+import "./daily-bd-balance.css";
 import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
 import { trackCountChange, formatCountDelta, BREAKDOWN_COUNT_STORAGE_KEY } from "./fleet-count-trend.mjs";
@@ -1436,6 +1439,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     };
   });
   const rowsForAssetDrilldown = (key = "") => {
+    if (key.startsWith("balance:")) {
+      const [metric, from, to, site] = key.slice(8).split("|");
+      const records = site ? locationBreakdowns.filter((record) => recordBelongsToSite(record, site)) : locationBreakdowns;
+      return requestAssetRows(dailyBdRecordsForMetric(records, from, to, metric).map((record) => metric === "undated" ? record : ({
+        ...record,
+        start: [record.start, record.startedAt, record.createdAt].find((value) => requestDateKey(value)),
+        closedAt: [record.closedAt, record.completedAt].find((value) => requestDateKey(value)),
+      })));
+    }
     if (key.startsWith("site-total:")) {
       const [site, category] = key.slice(11).split("|");
       const categories = category === "vehicles" ? ["vehicle", "vehicles"] : ["equipment", "equipments"];
@@ -1505,7 +1517,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     return [];
   };
   // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
-  const requestDrilldownKey = (key = "") => key === "open-cases" || ["site-repair:", "repair:", "status:", "event:", "movement:", "trend:"].some((prefix) => key.startsWith(prefix));
+  const requestDrilldownKey = (key = "") => key === "open-cases" || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix));
   const fleetDrilldownRequests = (key = "") => ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
   const assetDrilldownRows = requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
@@ -1523,7 +1535,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     : siteScopedFocus === "onroad" ? "On road"
     : siteScopedFocus === "offroad" ? "Off road"
     : siteScopedFocus === "idle" ? "Idle" : siteScopedFocus;
-  const movementDrilldownParts = assetDrilldown.startsWith("movement:") ? assetDrilldown.slice(9).split("|") : [];
+  const movementDrilldownParts = assetDrilldown.startsWith("movement:") ? assetDrilldown.slice(9).split("|") : assetDrilldown.startsWith("balance:") ? assetDrilldown.slice(8).split("|") : [];
   const siteTotalDrilldownParts = assetDrilldown.startsWith("site-total:") ? assetDrilldown.slice(11).split("|") : [];
   // These Total Fleet chart lists already name their single site in the modal title.
   const hideFleetChartLocation = ["site-total:", "site:", "offroad-site:"].some((prefix) => assetDrilldown.startsWith(prefix));
@@ -1531,10 +1543,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const initialDrilldownSite = siteScopedSite || siteTotalDrilldownParts[0] || movementDrilldownParts[3] || (assetDrilldown.startsWith("trend:") && activeTrendSite !== "all" ? activeTrendSite : "") || (assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] : assetDrilldown.startsWith("site:") ? assetDrilldown.slice(5) : "");
   const initialDrilldownRegion = assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) : assetDrilldown.startsWith("region:") ? assetDrilldown.slice(7) : assetDrilldownRegions.find((region) => region.sites.some((site) => recordBelongsToSite({ site: initialDrilldownSite }, site)))?.code || "";
   const fleetBreakdownDrilldown = assetDrilldown.startsWith("fleet-breakdown:") || assetDrilldown.startsWith("offroad-site:");
-  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("trend:");
+  const requestAssetDrilldown = assetDrilldown === "open-cases" || assetDrilldown.startsWith("site-repair:") || assetDrilldown.startsWith("repair:") || assetDrilldown.startsWith("status:") || assetDrilldown.startsWith("event:") || assetDrilldown.startsWith("movement:") || assetDrilldown.startsWith("balance:") || assetDrilldown.startsWith("trend:");
   const lifecycleDrilldownParts = assetDrilldown.startsWith("event:") ? assetDrilldown.split(":") : [];
   const lifecycleDrilldownLabel = lifecycleDrilldownParts[1] === "mis" ? "Open in MIS" : lifecycleDrilldownParts[1] === "all" ? `All lifecycle requests · ${requestLifecycleRangeLabel}` : lifecycleDrilldownParts[1] === "production" ? "Production requests" : lifecycleDrilldownParts[1] === "opened" ? "Opened requests" : lifecycleDrilldownParts[1] === "closed" ? "Closed requests" : lifecycleDrilldownParts[1] === "idle" ? "Idle vehicles" : "Verified requests";
-  const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance" };
+  const movementLabels = { all: "All BD movement requests", open: "BD Open", incoming: "BD In", outgoing: "BD Out", balance: "BD Balance", undated: "Requests needing date correction" };
   const movementDrilldownTitle = movementDrilldownParts.length ? `${movementDrilldownParts[3] ? `${movementDrilldownParts[3]} · ` : ""}${movementDrilldownParts[4] || movementLabels[movementDrilldownParts[0]]} · ${movementDrilldownParts[1] ? formatDisplayDateRange(movementDrilldownParts[1], movementDrilldownParts[2]) : "All time"}` : "";
   const trendDrilldownTitle = assetDrilldown.startsWith("trend:")
     ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${formatDisplayDate(breakdownTrendAnchorKey)}`
@@ -1632,6 +1644,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
+        <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} />
         <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
             <div><span className="mine-eyebrow">Fleet operations control</span><h2>Tracking Vehicle Throughput</h2><p>Site-wise breakdown movement and fleet status in one view.</p></div>

@@ -5,6 +5,7 @@ import React from "react";
 import {transformWithOxc} from "vite";
 import * as metrics from "../dashboard-equipment-metrics.mjs";
 import * as movement from "../dashboard-breakdown-movement.mjs";
+import * as dailyBalance from "../src/daily-bd-balance.mjs";
 import * as actions from "../src/dashboard-card-actions.mjs";
 import * as dates from "../src/dashboard-request-data.mjs";
 import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
@@ -162,7 +163,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     openHourlyBreakdownTab() {},
     isDurationColumn, compareDurationValues,
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
-    ...metrics, ...movement, ...actions, ...dates, ...forecast, ...model, ...displayDates,
+    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates,
     availabilityRequestsForDate, dashboardFleetSnapshot,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
@@ -212,6 +213,43 @@ const detailView = (tree) => {
   const props = findAll(tree, (node) => Array.isArray(node.props.rows) && Array.isArray(node.props.regions))[0].props;
   return model.drilldownView(props.rows, props.regions, {region: props.initialRegion, site: props.initialSite}, {rowsAreScoped: props.rowsAreScoped});
 };
+
+test("daily BD chart sits directly below Total Fleet and every metric opens its exact scoped requests", () => {
+  const rows = [...requests, {ref: "MAJRI", site: "Majri OB", start: "2026-09-09 12:00", status: "Open"}];
+  const view = harness({regions: [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}], allowedSites: [], restrictToScope: false});
+  let tree = setDashboardDate(view, "2026-09-09", rows);
+  const chart = node => findAll(node, item => typeof item.props.onInspect === "function" && item.props.today)[0];
+  const siblings = React.Children.toArray(byClass(tree, "mine-dashboard-feature-row").props.children);
+  assert.match(siblings[0].props.className, /mine-fleet-region-chart/);
+  assert.equal(siblings[1].props, chart(tree).props);
+  assert.match(siblings[2].props.className, /mine-maintenance-availability-panel/);
+  assert.deepEqual(chart(tree).props.records, rows, "top opening-date filter must not discard carried history");
+  for (const site of ["", "Sasti OB", "Majri OB"]) {
+    const scope = site ? rows.filter(row => recordBelongsToSite(row, site)) : rows;
+    for (const {key} of dailyBalance.DAILY_BD_METRICS) {
+      chart(tree).props.onInspect(key, "2026-09-09", "2026-09-09", site);
+      tree = view.render(rows);
+      const expected = dailyBalance.dailyBdRecordsForMetric(scope, "2026-09-09", "2026-09-09", key).map(row => row.ref).sort();
+      assert.deepEqual(detailView(tree).rows.map(row => row.requestReference).sort(), expected, `${site || "All sites"}: ${key}`);
+      const browser = findAll(tree, node => Array.isArray(node.props.rows) && Array.isArray(node.props.regions))[0];
+      assert.equal(browser.props.requestRecords, true);
+      assert.equal(browser.props.showBdClosingTime, key === "outgoing");
+      if (key === "outgoing" && expected.length) assert.equal(browser.props.rows[0].requestClosed, "2026-09-09 09:00:00");
+    }
+  }
+});
+
+test("daily BD chart and linked rows respect assigned sites before any local selection", () => {
+  const view = harness();
+  const rows = [...requests, {ref: "OTHER-SITE", site: "Majri OB", status: "Open", start: "2026-09-09 12:00"}];
+  let tree = view.render(rows);
+  const chart = findAll(tree, node => typeof node.props.onInspect === "function" && node.props.today)[0];
+  assert.deepEqual(chart.props.records, requests);
+  assert.deepEqual(chart.props.sites, ["Sasti OB"]);
+  chart.props.onInspect("incoming", "2026-09-01", "2026-09-10", "");
+  tree = view.render(rows);
+  assert.deepEqual(detailView(tree).rows.map(row => row.requestReference).sort(), requests.map(row => row.ref).sort());
+});
 
 const activate = (node) => {
   const target = {};
