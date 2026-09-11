@@ -2,6 +2,7 @@ export const MIS_HIDDEN_REQUEST_REFERENCES = new Set([
   "REQ-1787994776734",
   "REQ-1787994588710",
   "REQ-1787759984730",
+  "REQ-1787670871030",
 ]);
 
 export const GLOBALLY_HIDDEN_REQUEST_OWNERS = new Set(["stupal moon"]);

@@ -6,11 +6,12 @@ const rows = [
   { ref: "REQ-1787994776734" },
   { ref: "REQ-1787994588710" },
   { ref: "REQ-1787759984730" },
+  { ref: "REQ-1787670871030" },
   { ref: "REQ-KEEP-VISIBLE" },
 ];
 
-test("only the three specified requests are hidden from MIS users", () => {
-  assert.equal(MIS_HIDDEN_REQUEST_REFERENCES.size, 3);
+test("only the specified requests are hidden from MIS users", () => {
+  assert.equal(MIS_HIDDEN_REQUEST_REFERENCES.size, 4);
   assert.deepEqual(
     requestsVisibleToSession(rows, { role: "normal", assignedRole: "MIS User" }),
     [{ ref: "REQ-KEEP-VISIBLE" }],
