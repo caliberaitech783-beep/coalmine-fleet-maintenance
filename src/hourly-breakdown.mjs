@@ -1,5 +1,5 @@
 import { parseRequestTimelineTimestamp } from "../request-timeline.mjs";
-import { displaySiteName } from "../region-scope.mjs";
+import { displaySiteName, REGION_DATA } from "../region-scope.mjs";
 
 export function hourlyBreakdownEvents(requests, hours, now = Date.now()) {
   const end = Number(now), start = end - hours * 3600000;
@@ -20,7 +20,11 @@ export function hourlyBreakdownEvents(requests, hours, now = Date.now()) {
 
 export function hourlyBreakdownView(requests, hours, site = "", now = Date.now(), availableSites = []) {
   const events = hourlyBreakdownEvents(requests, hours, now);
-  const sites = [...new Set([...availableSites, ...requests.map(row => row.site || row.currentLocation || "—")].map(displaySiteName))].filter(Boolean).sort();
+  const siteOrder = REGION_DATA.flatMap(region => region.sites);
+  const sites = [...new Set([...availableSites, ...requests.map(row => row.site || row.currentLocation || "—")].map(displaySiteName))].filter(Boolean).sort((a, b) => {
+    const rank = name => { const index = siteOrder.indexOf(name); return index < 0 ? siteOrder.length : index; };
+    return rank(a) - rank(b) || a.localeCompare(b);
+  });
   site = displaySiteName(site);
   const siteCounts = sites.map(name => ({ site: name, count: events.filter(row => row.site === name).length }));
   const rows = site ? events.filter(row => row.site === site) : events;

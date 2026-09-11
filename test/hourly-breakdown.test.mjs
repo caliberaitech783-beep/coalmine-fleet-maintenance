@@ -44,7 +44,9 @@ test("hour and site counts match the filtered report and include zero-count site
   ];
   const all = hourlyBreakdownView(rows, 1, "", now);
   assert.equal(all.total, 2);
-  assert.deepEqual(all.siteCounts, [{site: "Majri OB", count: 0}, {site: "Sasti OB", count: 2}]);
+  assert.deepEqual(all.siteCounts, [{site: "Sasti OB", count: 2}, {site: "Majri OB", count: 0}]);
+  const ordered = hourlyBreakdownView([], 1, "", now, ["Jayant OB", "Lalpeth OB", "Sasti OB", "Dudhichua OB", "Majri OB"]);
+  assert.deepEqual(ordered.siteCounts.map(row => row.site), ["Sasti OB", "Majri OB", "Lalpeth OB", "Jayant OB", "Dudhichua OB"]);
   assert.deepEqual(all.hourCounts.slice(0, 2), [2, 3]);
   const majri = hourlyBreakdownView(rows, 2, "Majri OB", now);
   assert.equal(majri.rows.length, 1);
@@ -74,7 +76,7 @@ test("hour selector and site filters render the report inline in the inherited t
     hours.children[1].onclick();
     assert.equal(hours.children[1].attributes["aria-pressed"], "true");
     const sites = all().find(node => node.className === "sites");
-    sites.children[2].onclick();
+    sites.children[3].onclick();
     assert.match(nodes(report).find(node => node.tag === "h2").textContent, /Majri OB · Last 2 hours/);
     assert.deepEqual(nodes(report).filter(node => node.tag === "th").map(node => node.textContent), ["Sites", "Door No", "In\/Out", "BD Timing"]);
   } finally { globalThis.window = previousWindow; globalThis.document = previousDocument; }

@@ -9,7 +9,8 @@
 .hourly-panel{border:1px solid #ead9ec;border-radius:14px;background:var(--panel,#fff);padding:20px;margin-top:20px}
 .hourly-periods{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;padding-bottom:16px}
 .hourly-periods button{flex:1 0 100px}
-.hourly-sites{display:flex;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid #ead9ec;padding-top:16px}
+.hourly-sites{display:flex;align-items:center;flex-wrap:nowrap;overflow-x:auto;gap:10px;border-top:1px solid #ead9ec;padding-top:16px}
+.hourly-sites>*{flex-shrink:0}
 .hourly-table{overflow:auto}.hourly-table table{width:100%;border-collapse:collapse}.hourly-table th,.hourly-table td{text-align:left;padding:16px;border-bottom:1px solid #ead9ec;white-space:nowrap}.hourly-table th{background:#f8f5fb;color:var(--muted,#7c7187)}
 .hourly-table .bd-in{background:#fce0eb;color:#87244b}.hourly-table .bd-out{background:#dcf4e4;color:#186738}
 [data-theme=dark] .hourly-panel{background:#192235;border-color:#493b58}[data-theme=dark] .hourly-breakdown-view{color:#e5ebf5}[data-theme=dark] .hourly-table th{background:#252139}
