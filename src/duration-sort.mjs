@@ -3,7 +3,7 @@ const durationKeys = new Set(["breakdowndays", "hours", "tat", "duration", "down
 // Dates/timestamps and meter readings are not durations.
 export function isDurationColumn(label = "", key = "") {
   return durationKeys.has(String(key).toLowerCase())
-    || /^(days of breakdown|bd days\s*\/\s*hrs|downtime|turn\s*around time(?:\s*\(tat\))?|time taken|duration|arrival delay|waiting when flagged|time to accept)$/i.test(String(label).trim());
+    || /^(days of breakdown|bd timing|bd days\s*\/\s*hrs|downtime|turn\s*around time(?:\s*\(tat\))?|time taken|duration|arrival delay|waiting when flagged|time to accept)$/i.test(String(label).trim());
 }
 
 function durationValue(value) {

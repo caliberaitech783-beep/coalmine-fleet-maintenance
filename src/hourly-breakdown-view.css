@@ -1,17 +1,22 @@
-.hourly-breakdown-view{padding:20px;color:var(--ink,#172b46)}
-.hourly-breakdown-view header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.hourly-breakdown-view h2,.hourly-breakdown-view h3{margin:0}
-.hourly-breakdown-view p{color:var(--muted,#7c7187)}
-.hourly-breakdown-view button{padding:12px;border:1px solid #ead9ec;border-radius:8px;background:#f8f5fb;color:#56308f;font:600 15px inherit;cursor:pointer;white-space:nowrap}
-.hourly-breakdown-view button[aria-pressed=true]{background:#56308f;color:white}
-.hourly-breakdown-view button b{display:inline-block;padding:3px 7px;margin-left:5px;border-radius:5px;background:#8055b52b}
-.hourly-breakdown-view button[aria-pressed=true] b{background:#ffffff25}
-.hourly-panel{border:1px solid #ead9ec;border-radius:14px;background:var(--panel,#fff);padding:20px;margin-top:20px}
-.hourly-periods{display:flex;flex-wrap:nowrap;gap:8px;overflow-x:auto;padding-bottom:16px}
-.hourly-periods button{flex:1 0 100px}
-.hourly-sites{display:flex;align-items:center;flex-wrap:nowrap;overflow-x:auto;gap:10px;border-top:1px solid #ead9ec;padding-top:16px}
-.hourly-sites>*{flex-shrink:0}
-.hourly-table{overflow:auto}.hourly-table table{width:100%;border-collapse:collapse}.hourly-table th,.hourly-table td{text-align:left;padding:16px;border-bottom:1px solid #ead9ec;white-space:nowrap}.hourly-table th{background:#f8f5fb;color:var(--muted,#7c7187)}
-.hourly-table .bd-in{background:#fce0eb;color:#87244b}.hourly-table .bd-out{background:#dcf4e4;color:#186738}
-[data-theme=dark] .hourly-panel{background:#192235;border-color:#493b58}[data-theme=dark] .hourly-breakdown-view{color:#e5ebf5}[data-theme=dark] .hourly-table th{background:#252139}
-@media(max-width:600px){.hourly-breakdown-view,.hourly-panel{padding:12px}}
+/* The hourly activity page reuses the chart-record browser controls and the shared actions table. */
+.hourly-breakdown-view.dashboard-record-browser { --record-purple: var(--brand-purple, #522e90); display: grid; gap: 16px; padding: 18px; color: var(--ink, #142943); }
+.hourly-breakdown-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.hourly-breakdown-back { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.hourly-breakdown-title { text-align: right; }
+.hourly-breakdown-title h2 { margin: 0; font: 800 22px Manrope, sans-serif; }
+.hourly-breakdown-title p { margin: 4px 0 0; color: var(--muted, #647892); font-size: 12px; }
+.hourly-breakdown-windows { display: flex; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+.hourly-breakdown-windows button { flex: 1 0 auto; min-width: 0; white-space: nowrap; }
+.hourly-breakdown-view .dashboard-record-level-navigation { grid-template-columns: minmax(0, 1fr); }
+.hourly-breakdown-view .dashboard-asset-list { max-height: none; }
+.hourly-breakdown-view .dashboard-asset-list td { white-space: nowrap; }
+.hourly-breakdown-view .hourly-bd-in { background: #fce0eb; color: #87244b; font-weight: 700; font-variant-numeric: tabular-nums; }
+.hourly-breakdown-view .hourly-bd-out { background: #dcf4e4; color: #186738; font-weight: 700; font-variant-numeric: tabular-nums; }
+[data-theme="dark"] .hourly-breakdown-view .hourly-bd-in { background: #4a1f33; color: #ffc4d8; }
+[data-theme="dark"] .hourly-breakdown-view .hourly-bd-out { background: #163826; color: #b7efc9; }
+@media (max-width: 560px) {
+  .hourly-breakdown-view.dashboard-record-browser { padding: 10px; gap: 10px; }
+  .hourly-breakdown-head { flex-direction: column; }
+  .hourly-breakdown-title { text-align: left; }
+  .hourly-breakdown-windows button { min-width: max-content; padding: 8px 10px; }
+}

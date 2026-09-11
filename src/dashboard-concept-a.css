@@ -1105,6 +1105,10 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-chart-toggle button:hover { background: var(--mine-panel); }
 .mine-fleet-chart-toggle button[aria-pressed="true"] { background: linear-gradient(135deg, #6d43a1, var(--brand-purple)); color: #fff; box-shadow: 0 2px 5px #522e9029; }
 .mine-fleet-chart-toggle button[aria-pressed="true"] b { background: #ffffff26; }
+/* Only the breakdown number opens the hourly activity page; the rest of the pill switches the chart. */
+.mine-fleet-chart-toggle button .mine-fleet-breakdown-count { cursor: pointer; text-decoration: underline dotted; text-decoration-color: currentColor; text-underline-offset: 3px; transition: background .15s ease, box-shadow .15s ease; }
+.mine-fleet-chart-toggle button .mine-fleet-breakdown-count:hover { box-shadow: 0 0 0 2px #522e9033; background: #522e9014; }
+.mine-fleet-chart-toggle button[aria-pressed="true"] .mine-fleet-breakdown-count:hover { box-shadow: 0 0 0 2px #ffffff66; background: #ffffff40; }
 .mine-fleet-chart-toggle button .mine-fleet-count-trend { display: inline-flex; align-items: center; justify-content: center; gap: 1px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; flex: none; font-size: 12px; font-style: normal; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; animation: mine-fleet-count-tick .4s ease; }
 .mine-fleet-chart-toggle button .mine-fleet-count-trend svg { width: 14px; height: 14px; stroke-width: 3; }
 .mine-fleet-chart-toggle button .mine-fleet-count-trend.up { color: #c62828; background: #ffcdd2; }

@@ -781,10 +781,17 @@ test("every site equipment and vehicle total opens exactly its registered assets
   for (const mode of ["breakdown", "total"]) {
     const view = harness({equipment, allowedSites, regions: [{code: "WCL", sites: sites.map(({site}) => site)}]});
     let tree = view.render(rows);
-    findAll(tree, (node) => node.type === "button" && node.props.className === mode && node.props["aria-controls"] === "fleet-region-plot")[0].props.onClick();
+    const modePill = () => findAll(tree, (node) => node.type === "button" && node.props["aria-controls"] === "fleet-region-plot" && String(node.props.className).startsWith(mode))[0];
+    modePill().props.onClick({target: {closest: () => null}});
     tree = view.render(rows);
+    assert.equal(tree.props.onBack, undefined, `clicking the ${mode} pill keeps the dashboard open`);
+    assert.equal(modePill().props["aria-pressed"], true);
     if (mode === "breakdown") {
+      // Only the breakdown number opens the hourly activity page.
+      modePill().props.onClick({target: {closest: (selector) => selector === ".mine-fleet-breakdown-count" ? {} : null}});
+      tree = view.render(rows);
       assert.equal(typeof tree.props.onBack, "function");
+      assert.equal(typeof tree.props.ActionsTable, "function");
       assert.ok(tree.props.sites.length);
       tree.props.onBack();
       tree = view.render(rows);
