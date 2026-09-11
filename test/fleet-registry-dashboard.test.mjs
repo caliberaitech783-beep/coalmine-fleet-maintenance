@@ -124,7 +124,8 @@ test("breakdown trend is compact, forecast-aware, responsive and site selectable
   assert.match(source, /className="mine-dashboard-lower-grid"/);
   assert.match(source, /<h2>Overall Fleet Performance<\/h2>/);
   assert.match(css, /\.mine-dashboard-lower-grid\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /\.mine-breakdown-trend-body\s*\{[^}]*grid-template-columns: 135px minmax\(0, 1fr\);/);
+  assert.match(css, /\.mine-breakdown-trend-body\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\);/);
+  assert.match(source, /View all <ChevronRight \/><\/button>\{equipmentLoaded && <div className="mine-trend-summary">/);
   assert.match(css, /\.mine-breakdown-trend-body\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /\.mine-trend-period button\.active/);
   assert.match(css, /\.mine-trend-day\.forecast > span i/);
