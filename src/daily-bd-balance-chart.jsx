@@ -56,7 +56,6 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
       <div className="bd-balance-scroll" tabIndex={0} role="region" aria-label="Daily BD In and BD Out bars with opening and closing balances; scroll for more dates">
         <div className="bd-balance-days" style={{gridTemplateColumns: `repeat(${ledger.days.length}, minmax(154px, 1fr))`}}>
           {ledger.days.map(day => <section className={`bd-balance-day${day.date === today ? ' today' : ''}`} key={day.date} aria-label={`BD movement ${formatDisplayDate(day.date)}`}>
-            <header className="bd-balance-day-date"><b>{formatDisplayDate(day.date)}</b><small>{day.date === today ? (stale ? 'Today · last checked' : 'Today · live') : new Date(`${day.date}T12:00:00Z`).toLocaleDateString('en-GB', {weekday: 'short', timeZone: 'Asia/Kolkata'})}</small></header>
             <div className="bd-balance-day-change"><BalanceChange row={day}/></div>
             <button type="button" className="bd-balance-opening" aria-label={`${formatDisplayDate(day.date)}: Opening BD, ${day.open} requests`} title={`Open at the start of ${formatDisplayDate(day.date)} · View requests`} onClick={() => inspect('open', day.date, day.date)}><span>Opening BD</span><b>{day.open.toLocaleString()}</b></button>
             <div className="bd-balance-plot">
@@ -65,6 +64,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
             </div>
             <div className="bd-balance-bar-labels" aria-hidden="true"><span>BD In</span><span>BD Out</span></div>
             <button type="button" className={`bd-balance-closing ${day.direction}`} aria-label={`${formatDisplayDate(day.date)}: Closing balance, ${day.balance} requests`} title={`${day.open} opening + ${day.incoming} in − ${day.outgoing} out = ${day.balance}. ${day.date === today ? 'Today so far.' : 'Carries into the next day.'} View requests`} onClick={() => inspect('balance', day.date, day.date)}><span><b>{day.date === today ? 'Balance now' : 'Closing BD'}</b><small>Net {signedCount(day.delta)}</small></span><strong>{day.balance.toLocaleString()}</strong></button>
+            <footer className="bd-balance-day-date"><b>{formatDisplayDate(day.date)}</b><small>{day.date === today ? (stale ? 'Today · last checked' : 'Today · live') : new Date(`${day.date}T12:00:00Z`).toLocaleDateString('en-GB', {weekday: 'short', timeZone: 'Asia/Kolkata'})}</small></footer>
           </section>)}
         </div>
       </div>

@@ -32,7 +32,7 @@
 .bd-balance-days { display:grid; position:relative; min-width:100%; width:max-content; }
 .bd-balance-grid { position:absolute; inset:28px 0 0; pointer-events:none; }
 .bd-balance-grid>i { position:absolute; left:0; right:0; border-top:1px dashed var(--mine-line); }
-.bd-balance-day { min-width:0; display:grid; grid-template-rows:44px 30px 32px 180px 24px 64px; padding:0 12px; position:relative; }
+.bd-balance-day { min-width:0; display:grid; grid-template-rows:30px 32px 180px 24px 64px 44px; padding:0 12px; position:relative; }
 .bd-balance-day+.bd-balance-day { border-left:1px solid var(--mine-line); }
 .bd-balance-day-date { display:grid; justify-items:center; align-content:center; gap:1px; }
 .bd-balance-day-date small { color:var(--mine-muted); }
