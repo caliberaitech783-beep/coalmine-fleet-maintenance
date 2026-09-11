@@ -314,6 +314,7 @@ function ThemeToggle({ theme, onToggle, className = "" }) {
   );
 }
 function HeaderClock({ className = "", timeFirst = false }) {
+  // Dashboard changes presentation order only; all views share the same live clock.
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   useEffect(() => {
     const updateClock = () => setCurrentDateTime(new Date());
