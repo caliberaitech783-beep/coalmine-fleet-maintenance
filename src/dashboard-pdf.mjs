@@ -1,5 +1,5 @@
 // Capture the rendered dashboard, not a separate table of KPI values.
-export async function downloadDashboardPdf(dashboard, filename) {
+export async function downloadDashboardPdf(dashboard, filename, print = false) {
   if (!dashboard) throw new Error("Dashboard is not available. Please reopen it and try again.");
   const [{toCanvas}, {jsPDF}] = await Promise.all([import("html-to-image"), import("jspdf")]);
   await document.fonts.ready;
@@ -39,6 +39,10 @@ export async function downloadDashboardPdf(dashboard, filename) {
     const width = Math.ceil(Math.max(clone.scrollWidth, clone.getBoundingClientRect().width));
     const height = Math.ceil(clone.scrollHeight);
     const canvas = await toCanvas(clone, {width, height, pixelRatio: Math.min(2, Math.sqrt(24000000 / (width * height))), backgroundColor: getComputedStyle(clone).backgroundColor || "#ffffff"});
+    if (print) {
+      await printDashboardCanvas(canvas, filename);
+      return;
+    }
     const pageWidth = 1100;
     const scale = pageWidth / canvas.width;
     const sliceHeight = Math.min(canvas.height, Math.floor(14000 / scale));
@@ -61,5 +65,50 @@ export async function downloadDashboardPdf(dashboard, filename) {
     pdf.save(filename);
   } finally {
     host.remove();
+  }
+}
+
+export function printDashboard(dashboard, title) {
+  return downloadDashboardPdf(dashboard, title, true);
+}
+
+async function printDashboardCanvas(canvas, title) {
+  const frame = document.createElement("iframe");
+  frame.title = "Dashboard print preview";
+  frame.style.cssText = "position:fixed;width:1px;height:1px;left:-10000px;top:0;border:0";
+  document.body.appendChild(frame);
+  try {
+    const doc = frame.contentDocument;
+    doc.title = title;
+    const style = doc.createElement("style");
+    style.textContent = "@page{size:A4 landscape;margin:8mm}html,body{margin:0;padding:0}section{break-after:page;page-break-after:always}section:last-child{break-after:auto;page-break-after:auto}img{display:block;width:100%;height:auto;print-color-adjust:exact;-webkit-print-color-adjust:exact}";
+    doc.head.appendChild(style);
+    // A4 landscape printable area: 281 x 194 mm. Use a little spare height.
+    const pagePixels = Math.floor(canvas.width * 192 / 281);
+    const images = [];
+    for (let top = 0; top < canvas.height; top += pagePixels) {
+      const part = document.createElement("canvas");
+      part.width = canvas.width;
+      part.height = Math.min(pagePixels, canvas.height - top);
+      const context = part.getContext("2d", {alpha:false});
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, part.width, part.height);
+      context.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
+      const page = doc.createElement("section");
+      const image = doc.createElement("img");
+      image.alt = `Dashboard page ${images.length + 1}`;
+      image.src = part.toDataURL("image/jpeg", 0.98);
+      page.appendChild(image);
+      doc.body.appendChild(page);
+      images.push(image);
+    }
+    await Promise.all(images.map(image => image.decode()));
+    frame.contentWindow.addEventListener("afterprint", () => frame.remove(), {once:true});
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+    window.setTimeout(() => frame.remove(), 300000);
+  } catch (error) {
+    frame.remove();
+    throw error;
   }
 }

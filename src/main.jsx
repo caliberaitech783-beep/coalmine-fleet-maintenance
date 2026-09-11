@@ -2676,7 +2676,16 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
       }
       downloadExportFile(await response.blob(), exportFileName(title, "pdf"));
   });
-  const printReport = () => { printTableReport({ title, columns, rows, highlightRow }); setOpen(false); };
+  const printReport = () => {
+    if (dashboardPdf) {
+      runDownload("Preparing dashboard print...", async () => {
+        const {printDashboard} = await import("./dashboard-pdf.mjs");
+        await printDashboard(triggerRef.current?.closest(".mine-dashboard, .manager-dashboard"), title);
+      });
+      return;
+    }
+    printTableReport({ title, columns, rows, highlightRow }); setOpen(false);
+  };
   if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Print ${title}`}><Printer /><span>Print</span></button>;
   return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
 }
