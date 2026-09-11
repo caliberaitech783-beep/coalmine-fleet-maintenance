@@ -9,7 +9,7 @@
 .bd-balance-controls svg { width:13px; height:13px; color:#522e90; }
 .mine-dashboard .bd-balance-controls :is(input,select) { box-sizing:border-box; height:44px; min-height:44px; padding:8px 12px; border:1px solid var(--mine-line); border-radius:6px; color:var(--mine-text); background:var(--mine-panel,#fff); font:inherit; }
 .bd-balance-controls select { max-width:240px; }
-.mine-dashboard .bd-balance-controls .mine-trend-period { margin:0; height:44px; box-sizing:border-box; }
+.mine-dashboard .bd-balance-controls .mine-trend-period { margin:0; height:44px; box-sizing:border-box; grid-template-columns:max-content repeat(3,44px); flex:none; }
 .mine-dashboard .bd-balance-controls .mine-trend-period>button { min-height:0; height:100%; padding:0 12px; }
 .bd-balance-context { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:16px var(--bd-gutter) 0; color:var(--mine-muted); }
 .bd-balance-context-change { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
@@ -77,7 +77,7 @@
   .mine-dashboard .daily-bd-balance>.bd-balance-header { padding:14px; }
   .bd-balance-controls { display:grid; width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); }
   .bd-balance-controls :is(input,select) { min-width:0; width:100%; max-width:none; box-sizing:border-box; }
-  .bd-balance-controls .mine-trend-period { align-self:end; }
+  .bd-balance-controls .mine-trend-period { align-self:end; grid-column:1 / -1; justify-self:start; }
   .bd-balance-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; padding:14px var(--bd-gutter) 18px; }
   .mine-dashboard .bd-balance-summary>button { padding:10px; min-height:68px; }
   .bd-balance-context { padding-top:14px; }

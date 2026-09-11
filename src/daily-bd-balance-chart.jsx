@@ -20,7 +20,7 @@ function BalanceChange({row}) {
 
 export default function DailyBdBalanceChart({records = [], sites = [], scopeLabel = 'All regions', today, ready = true, error = '', stale = false, onRefresh, onInspect}) {
   const [site, setSite] = useState('');
-  const [range, setRange] = useState({days: 7, from: '', to: ''});
+  const [range, setRange] = useState({days: 1, from: '', to: ''});
   const [rangeError, setRangeError] = useState('');
   const activeSite = sites.includes(site) ? site : '';
   const from = range.from || shiftBdDate(today, 1 - range.days), to = range.to || today;
@@ -32,7 +32,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
   const inspect = (metric, start = from, end = to) => onInspect?.(metric, start, end, activeSite);
   const preset = days => {setRange({days, from: '', to: ''}); setRangeError('');};
   const changeDate = (bound, value) => {
-    if (!value) {preset(7); return;}
+    if (!value) {preset(1); return;}
     let start = bound === 'from' ? value : from, end = bound === 'to' ? value : to;
     if (start > end) {if (bound === 'from') end = start; else start = end;}
     if (end > today || !recordedBreakdownRangeLength(start, end)) {setRangeError('Choose valid dates up to today, within a ten-year range.'); return;}
@@ -46,7 +46,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
         <label><span><MapPin aria-hidden="true"/> Site</span><select aria-label="Daily BD balance site" value={activeSite} onChange={event => setSite(event.target.value)}><option value="">All sites</option>{sites.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
         <label><span>From</span><input aria-label="Daily BD balance from date" type="date" value={from} max={today} onChange={event => changeDate('from', event.target.value)}/></label>
         <label><span>To</span><input aria-label="Daily BD balance to date" type="date" value={to} max={today} onChange={event => changeDate('to', event.target.value)}/></label>
-        <div className="mine-trend-period" role="group" aria-label="Daily BD balance period">{[7,14,30].map(days => <button type="button" key={days} aria-pressed={range.days === days} className={range.days === days ? 'active' : ''} onClick={() => preset(days)}>{days}D</button>)}</div>
+        <div className="mine-trend-period" role="group" aria-label="Daily BD balance period">{[1,7,14,30].map(days => <button type="button" key={days} aria-pressed={range.days === days} className={range.days === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}</div>
       </div>
     </header>
     {unavailable ? <div className="bd-balance-empty" role={error ? 'alert' : 'status'}><b>{error ? 'BD movement is unavailable' : 'Loading BD movement…'}</b>{error && <><span>{error}</span><button type="button" onClick={onRefresh}><RotateCcw/> Retry</button></>}</div> : <>

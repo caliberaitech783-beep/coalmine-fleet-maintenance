@@ -42,26 +42,30 @@ function harness() {
   return {calls, render(overrides = {}) {cursor = 0; return Chart({...props, ...overrides});}};
 }
 
-test('default seven days, all sites, persistent bar counts and exact date drill-down', () => {
+test('today is selected and applied by default to all counts and exact date drill-down', () => {
   const view = harness(), tree = view.render();
   assert.equal(label(tree, 'Daily BD balance site').props.value, '');
-  assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-05');
+  assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-11');
   assert.equal(label(tree, 'Daily BD balance to date').props.value, '2026-09-11');
-  assert.equal(find(tree, node => node.props.className?.startsWith('bd-balance-day ') || node.props.className === 'bd-balance-day').length, 7);
+  assert.equal(button(tree, 'Today').props['aria-pressed'], true);
+  for (const preset of ['7D', '14D', '30D']) assert.equal(button(tree, preset).props['aria-pressed'], false);
+  assert.equal(find(tree, node => node.props.className?.startsWith('bd-balance-day ') || node.props.className === 'bd-balance-day').length, 1);
+  for (const metric of ['Opening BD: 2', 'BD In: 1', 'BD Out: 1', 'Closing balance: 2']) assert.ok(label(tree, `${metric} requests in selected period`), metric);
   const bar = label(tree, '11-09-2026: BD Out, 1 requests');
   assert.equal(text(bar), '1');
   bar.props.onClick();
   assert.deepEqual(view.calls.pop(), ['outgoing', '2026-09-11', '2026-09-11', '']);
-  label(tree, 'Opening BD: 1 requests in selected period').props.onClick();
-  assert.deepEqual(view.calls.pop(), ['open', '2026-09-05', '2026-09-11', '']);
+  label(tree, 'Opening BD: 2 requests in selected period').props.onClick();
+  assert.deepEqual(view.calls.pop(), ['open', '2026-09-11', '2026-09-11', '']);
   const html = renderToStaticMarkup(tree);
-  assert.match(html, /\+100.0%/);
-  assert.match(html, /bd-balance-change increase/);
+  assert.match(html, /0.0%/);
   assert.match(html, /bd-balance-change steady/);
 });
 
 test('each day plots only In and Out; opening and closing counts remain clickable and carried forward', () => {
-  const view = harness(), tree = view.render();
+  const view = harness();
+  button(view.render(), '7D').props.onClick();
+  const tree = view.render();
   const days = find(tree, node => node.props.className?.startsWith('bd-balance-day ') || node.props.className === 'bd-balance-day');
   for (const day of days) {
     const bars = find(day, node => node.props.className?.startsWith('bd-balance-bar-button '));
@@ -79,6 +83,7 @@ test('each day plots only In and Out; opening and closing counts remain clickabl
 
 test('large opening balances do not shrink the In and Out plot; all dates share the same scale', () => {
   const view = harness();
+  button(view.render(), '7D').props.onClick();
   const records = [...Array.from({length: 1000}, (_, i) => ({ref: `OLD-${i}`, start: '2026-08-01'})), {ref: 'NEW', start: '2026-09-10', closedAt: '2026-09-11'}];
   const tree = view.render({records});
   const barHeight = node => find(node, item => item.props.className === 'bd-balance-bar')[0].props.style.height;
@@ -130,9 +135,36 @@ test('loading, retry, stale and unknown-date states do not silently fabricate co
   assert.doesNotMatch(text(tree), /Today · live/);
   tree = view.render({records: [{ref: 'BAD', status: 'Closed', start: '2026-09-01'}]});
   button(tree, '1 requests excluded: start or closing dates need correction. View requests').props.onClick();
-  assert.deepEqual(view.calls.pop(), ['undated', '2026-09-05', '2026-09-11', '']);
+  assert.deepEqual(view.calls.pop(), ['undated', '2026-09-11', '2026-09-11', '']);
   tree = view.render({records: [{ref: 'NEW', start: '2026-09-11', status: 'Open'}]});
   const html = renderToStaticMarkup(tree);
   assert.match(html, /\+1 from 0/);
   assert.doesNotMatch(html, /Infinity|NaN/);
+});
+
+test('Today follows the current day, custom dates persist, and clearing dates restores today', () => {
+  const view = harness();
+  let tree = view.render();
+  tree = view.render({today: '2026-09-12'});
+  assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-12');
+  assert.equal(label(tree, 'Daily BD balance to date').props.value, '2026-09-12');
+  button(tree, '7D').props.onClick();
+  tree = view.render({today: '2026-09-12'});
+  assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-06');
+  label(tree, 'Daily BD balance from date').props.onChange({target: {value: '2026-09-09'}});
+  tree = view.render({today: '2026-09-13'});
+  assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-09');
+  assert.equal(label(tree, 'Daily BD balance to date').props.value, '2026-09-12');
+  assert.equal(button(tree, 'Today').props['aria-pressed'], false);
+  button(tree, 'Today').props.onClick();
+  tree = view.render({today: '2026-09-13'});
+  assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-13');
+  assert.equal(label(tree, 'Daily BD balance to date').props.value, '2026-09-13');
+  button(tree, '30D').props.onClick();
+  tree = view.render({today: '2026-09-13'});
+  label(tree, 'Daily BD balance to date').props.onChange({target: {value: ''}});
+  tree = view.render({today: '2026-09-13'});
+  assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-13');
+  assert.equal(label(tree, 'Daily BD balance to date').props.value, '2026-09-13');
+  assert.equal(button(tree, 'Today').props['aria-pressed'], true);
 });
