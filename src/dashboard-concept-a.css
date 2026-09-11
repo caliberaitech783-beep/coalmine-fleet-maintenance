@@ -1086,7 +1086,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-region-chart {
   --fleet-equipment: var(--brand-red);
   --fleet-vehicles: var(--brand-purple);
-  --fleet-breakdown: #ff0000;
+  --fleet-breakdown: #8b0000;
   grid-column: 1 / -1;
   position: relative;
   padding-bottom: 10px;
