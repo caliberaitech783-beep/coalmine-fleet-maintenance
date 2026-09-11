@@ -1107,6 +1107,21 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   </section>;
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
+  const throughputFiltersRef = useRef(null);
+  useEffect(() => {
+    const filters = throughputFiltersRef.current;
+    if (!filters) return;
+    const header = document.querySelector('.top') || document.querySelector('.normal > header');
+    const updateOffset = () => {
+      const offset = header ? (parseFloat(getComputedStyle(header).top) || 0) + header.getBoundingClientRect().height : 0;
+      filters.style.setProperty('--throughput-sticky-top', `${offset}px`);
+    };
+    updateOffset();
+    const observer = new ResizeObserver(updateOffset);
+    if (header) observer.observe(header);
+    window.addEventListener('resize', updateOffset);
+    return () => { observer.disconnect(); window.removeEventListener('resize', updateOffset); };
+  }, []);
   const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
   const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
@@ -1621,7 +1636,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "road"} className={maintenanceAvailabilityTab === "road" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("road")}><Gauge />Availability Count</button>
             </div>
           </header>
-          <div className="dashboard-breakdown-period-controls dashboard-breakdown-summary-controls" role="group" aria-label="Site-wise BD date range">
+          <div ref={throughputFiltersRef} className="dashboard-breakdown-period-controls dashboard-breakdown-summary-controls" role="group" aria-label="Site-wise BD date range">
             <label><span>Region</span><select aria-label="Vehicle throughput region" value={selectedThroughputRegion?.code || "all"} onChange={(event) => { setThroughputRegion(event.target.value); setThroughputSite("all"); setRoadFocusSite(""); }}><option value="all">All regions</option>{throughputRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>
             {selectedThroughputRegion && <label><span>Site</span><select aria-label="Vehicle throughput site" value={activeThroughputSite} onChange={(event) => { setThroughputSite(event.target.value); setRoadFocusSite(""); }}><option value="all">All sites</option>{throughputSiteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}
             <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>

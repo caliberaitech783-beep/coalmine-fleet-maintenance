@@ -228,3 +228,14 @@
 
 /* Proportional segments; a small count still gets enough height to show its number, capped at its own bar. */
 .mine-dashboard .mine-fleet-breakdown-segment { min-height: 18px; max-height: 100%; }
+/* Pin the existing throughput controls below the measured app header. */
+@media screen {
+  .mine-dashboard .mine-maintenance-availability-panel { overflow: visible; }
+  .mine-dashboard .dashboard-breakdown-summary-controls {
+    position: sticky;
+    top: var(--throughput-sticky-top, 0px);
+    z-index: 8;
+    background: var(--mine-panel, #fff);
+    box-shadow: 0 4px 12px #17233c14;
+  }
+}
