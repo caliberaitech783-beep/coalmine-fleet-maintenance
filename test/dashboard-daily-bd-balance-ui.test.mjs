@@ -60,6 +60,33 @@ test('default seven days, all sites, persistent bar counts and exact date drill-
   assert.match(html, /bd-balance-change steady/);
 });
 
+test('each day plots only In and Out; opening and closing counts remain clickable and carried forward', () => {
+  const view = harness(), tree = view.render();
+  const days = find(tree, node => node.props.className?.startsWith('bd-balance-day ') || node.props.className === 'bd-balance-day');
+  for (const day of days) {
+    const bars = find(day, node => node.props.className?.startsWith('bd-balance-bar-button '));
+    assert.deepEqual(bars.map(node => node.props.className), ['bd-balance-bar-button incoming', 'bd-balance-bar-button outgoing']);
+    assert.ok(find(day, node => node.props.className === 'bd-balance-opening').length);
+    assert.ok(find(day, node => node.props.className?.startsWith('bd-balance-closing ')).length);
+  }
+  label(tree, '10-09-2026: Closing balance, 2 requests').props.onClick();
+  assert.deepEqual(view.calls.pop(), ['balance', '2026-09-10', '2026-09-10', '']);
+  label(tree, '11-09-2026: Opening BD, 2 requests').props.onClick();
+  assert.deepEqual(view.calls.pop(), ['open', '2026-09-11', '2026-09-11', '']);
+  assert.match(text(label(tree, '11-09-2026: Closing balance, 2 requests')), /Balance now/);
+  assert.match(text(tree), /Net change \+1 open/);
+});
+
+test('large opening balances do not shrink the In and Out plot; all dates share the same scale', () => {
+  const view = harness();
+  const records = [...Array.from({length: 1000}, (_, i) => ({ref: `OLD-${i}`, start: '2026-08-01'})), {ref: 'NEW', start: '2026-09-10', closedAt: '2026-09-11'}];
+  const tree = view.render({records});
+  const barHeight = node => find(node, item => item.props.className === 'bd-balance-bar')[0].props.style.height;
+  assert.equal(barHeight(label(tree, '10-09-2026: BD In, 1 requests')), '100%');
+  assert.equal(barHeight(label(tree, '11-09-2026: BD Out, 1 requests')), '100%');
+  assert.equal(barHeight(label(tree, '11-09-2026: BD In, 0 requests')), '0%');
+});
+
 test('site, period and date filters keep totals and drill-down in sync', () => {
   const view = harness(); let tree = view.render();
   label(tree, 'Daily BD balance site').props.onChange({target: {value: 'Sasti OB'}});

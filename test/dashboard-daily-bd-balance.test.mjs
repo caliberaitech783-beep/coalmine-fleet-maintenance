@@ -5,6 +5,25 @@ import {buildDailyBdBalance, dailyBdRecordsForMetric, bdBalanceChange, DAILY_BD_
 const request = (ref, start, closedAt = '', extra = {}) => ({ref, start, closedAt, status: closedAt ? 'Closed' : 'Open', ...extra});
 const refs = rows => rows.map(row => row.ref).sort();
 
+test('screenshot ledger reconciles to 75: every daily closing is the next opening, including the underlying requests', () => {
+  const incoming = [74, 44, 65, 83, 109, 136, 99], outgoing = [45, 47, 67, 70, 117, 117, 84];
+  const records = Array.from({length: 12}, (_, i) => request(`OLD-${i}`, '2026-09-01 09:00'));
+  for (let day = 0; day < 7; day++) {
+    const date = `2026-09-${String(day + 5).padStart(2, '0')}`;
+    for (let i = 0; i < incoming[day]; i++) records.push(request(`${day}-${i}`, `${date} 09:00`));
+    records.filter(row => !row.closedAt).slice(0, outgoing[day]).forEach(row => {row.status = 'Closed'; row.closedAt = `${date} 18:00`;});
+  }
+  const {days, totals, excluded} = buildDailyBdBalance(records, '2026-09-05', '2026-09-11');
+  assert.deepEqual(days.map(row => row.open), [12, 41, 38, 36, 49, 41, 60]);
+  assert.deepEqual(days.map(row => row.balance), [41, 38, 36, 49, 41, 60, 75]);
+  assert.deepEqual([totals.open, totals.incoming, totals.outgoing, totals.balance, totals.delta, totals.percent], [12, 610, 547, 75, 63, 525]);
+  assert.equal(excluded.length, 0);
+  for (const [i, day] of days.entries()) {
+    for (const {key} of DAILY_BD_METRICS) assert.equal(dailyBdRecordsForMetric(records, day.date, day.date, key).length, day[key]);
+    if (i > 0) assert.deepEqual(refs(dailyBdRecordsForMetric(records, days[i - 1].date, days[i - 1].date, 'balance')), refs(dailyBdRecordsForMetric(records, day.date, day.date, 'open')));
+  }
+});
+
 test('12 + 100 − 100 = 12; next day 12 + 100 − 98 = 14, carried into the next opening', () => {
   const records = [
     ...Array.from({length: 12}, (_, i) => request(`OLD-${i}`, '2025-01-01 10:00')),
