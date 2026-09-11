@@ -207,9 +207,11 @@ test("Info Pulse auto-opens after login and unlocks manual dismissal after its c
   assert.match(styles, /\.ai-feeder-trigger\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*800;/s);
   assert.match(styles, /\.ai-feeder-kicker\s*\{[^}]*font-size:\s*11px;[^}]*font-weight:\s*800;/s);
   assert.match(mainSource, /className="ai-feeder-dot"/);
-  // Both shells carry the header entry.
-  assert.equal(mainSource.match(/<AiFeeder\b/g)?.length, 2);
-  assert.equal(mainSource.match(/<AiFeeder[^>]*session=\{session\}/g)?.length, 2);
+  // Only the super-user shell carries the header entry; Production, Maintenance and MIS users never see Info Pulse.
+  assert.equal(mainSource.match(/<AiFeeder\b/g)?.length, 1);
+  assert.equal(mainSource.match(/<AiFeeder[^>]*session=\{session\}/g)?.length, 1);
+  assert.doesNotMatch(mainSource, /<AiFeeder[^>]*role=\{mobileRole\}/);
+  assert.doesNotMatch(mainSource.match(/<div className="normal-header-actions">.*/)[0], /<AiFeeder\b/);
   assert.match(styles, /@keyframes ai-feeder-blink/);
   assert.match(styles, /ai-feeder-countdown/);
 });
