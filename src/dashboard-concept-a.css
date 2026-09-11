@@ -1012,6 +1012,7 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-maintenance-availability-state { min-height: 180px; }
 .modal.dashboard-breakdown-movement-modal { width: min(1480px, calc(100vw - 24px)); max-height: calc(100dvh - 20px); }
 .modal.dashboard-breakdown-movement-modal > header { position: sticky; top: 0; z-index: 4; background: var(--surface); }
+.modal.dashboard-breakdown-movement-modal > header h3 { background: var(--brand-purple, #522e90); color: #fff; padding: 10px 16px; border-radius: 8px; }
 .dashboard-breakdown-movement-detail { display: grid; gap: 11px; }
 .dashboard-breakdown-period-controls {
   display: flex;
