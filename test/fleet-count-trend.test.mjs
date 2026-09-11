@@ -49,7 +49,9 @@ test("formatCountDelta and localDayKey render ticker text", () => {
 test("the dashboard breakdown chip renders the live ticker", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /trackCountChange\(.*BREAKDOWN_COUNT_STORAGE_KEY, liveBreakdownAssetCount\)/);
-  assert.match(source, /if \(!managerDataReady\) return;/, "the ticker waits for both equipment and requests to load");
+  assert.match(source, /const breakdownCountReady = equipmentLoaded && \(requestsUpdatedAt > 0 \|\| requests\.length > 0\);/, "the ticker waits for both equipment and requests to load");
+  assert.match(source, /if \(!breakdownCountReady\) return;/);
+  assert.doesNotMatch(source.slice(source.indexOf("function Dashboard(")), /managerDataReady/, "Dashboard must not reference the manager-only readiness flag");
   assert.match(source, /mine-fleet-count-trend \$\{breakdownCountChange\.direction\}/);
   assert.match(source, /formatCountDelta\(breakdownCountChange\.delta\)/);
   const css = readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
