@@ -1091,7 +1091,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     { section: "Request queue", metric: "Closed history", value: historyRows.length, scope: managerScopeLabel, details: "Closed or verified requests" },
   ];
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
-    <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" />}</div></header>
+    <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" dashboardPdf />}</div></header>
     {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
     {!requestsLoaded&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
@@ -1611,7 +1611,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}`}>
       <header className="mine-dashboard-head">
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
-        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>From</span><input aria-label="Dashboard from date" type="date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><input aria-label="Dashboard to date" type="date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label><span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" /></div>
+        <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>From</span><input aria-label="Dashboard from date" type="date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><input aria-label="Dashboard to date" type="date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label><span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" dashboardPdf /></div>
       </header>
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
@@ -2609,7 +2609,7 @@ function printTableReport({ title, columns = [], rows = [], highlightRow }) {
 function PrintButton({ title, columns = [], rows = [], className = "secondary", highlightRow }) {
   return <button type="button" className={`${className} print-table-trigger`} onClick={() => printTableReport({ title, columns, rows, highlightRow })}><Printer /><span>Print</span></button>;
 }
-function ExportMenu({ title, columns = [], rows = [], className = "secondary", label = "Export", printOnly = false, highlightRow }) {
+function ExportMenu({ title, columns = [], rows = [], className = "secondary", label = "Export", printOnly = false, highlightRow, dashboardPdf = false }) {
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -2659,6 +2659,11 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
     downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows), exportFileName(title, "xlsx"));
   });
   const downloadPdf = () => runDownload("Preparing PDF report...", async () => {
+      if (dashboardPdf) {
+        const {downloadDashboardPdf} = await import("./dashboard-pdf.mjs");
+        await downloadDashboardPdf(triggerRef.current?.closest(".mine-dashboard, .manager-dashboard"), exportFileName(title, "pdf"));
+        return;
+      }
       const response = await fetch("/api/exports/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
