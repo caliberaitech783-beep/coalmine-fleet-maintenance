@@ -61,6 +61,31 @@ export function buildInfoPulseCases(requests = [], options = {}) {
   return [...cases.values()].sort(compareCasePriority);
 }
 
+const ENDED_STATUSES = new Set(['closed', 'verified']);
+const IDLE_STATUSES = new Set(['idle', 'ideal']);
+// Mirrors the dashboard Breakdown count: open requests that are not idle.
+export function isActiveBreakdown(request = {}) {
+  const status = String(request.status || '').trim().toLowerCase();
+  return !ENDED_STATUSES.has(status) && !IDLE_STATUSES.has(status) && !String(request.verifiedAt || '').trim();
+}
+
+// Every active breakdown once, longest standing first, whether or not it has
+// raised an alert; alert issues are attached when the case list has them.
+export function buildInfoPulseBreakdowns(requests = [], cases = []) {
+  const issues = new Map(cases.map(row => [row.key, row.issues]));
+  const standingSince = request => {
+    const timestamp = parseIstTimestamp(request.start);
+    return Number.isFinite(timestamp) ? timestamp : Infinity;
+  };
+  return uniqueInfoPulseRequests(requests).filter(isActiveBreakdown).map(request => ({
+    key: request.pulseKey, request,
+    siteKey: canonicalSiteName(request.site || request.location || request.currentLocation) || 'unassigned',
+    site: displaySiteName(request.site || request.location || request.currentLocation) || 'Not assigned',
+    date: infoPulseDate(request.start),
+    issues: issues.get(request.pulseKey) || [],
+  })).sort((left, right) => standingSince(left.request) - standingSince(right.request) || left.key.localeCompare(right.key));
+}
+
 export function infoPulseSiteOptions(requests = [], assignedSites = []) {
   const sites = new Map();
   for (const value of [...assignedSites, ...requests.filter(Boolean).map(row => row.site || row.location || row.currentLocation || '')]) {

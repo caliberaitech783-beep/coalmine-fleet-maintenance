@@ -220,7 +220,6 @@ const clearStoredSession = () => {
   currentEmployeeName = "";
   localStorage.removeItem("nerveCenterSession");
   sessionStorage.removeItem("nerveCenterSession");
-  sessionStorage.removeItem("aiFeederGreeted");
 };
 // An authenticated 401 means this specific token is no longer valid (for
 // example after a password change), so return to sign-in instead of surfacing
@@ -8162,21 +8161,23 @@ function AiFeeder({ role = "", session }) {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    if (!session?.token) { setOpenMode(""); return; }
-    let greeted = "";
-    try { greeted = sessionStorage.getItem("aiFeederGreeted") || ""; } catch {}
-    if (greeted === "yes") return;
-    const savedDeadline = Number(greeted);
-    const deadline = Number.isFinite(savedDeadline) && savedDeadline > 0 ? savedDeadline : Date.now() + 60000;
-    try { sessionStorage.setItem("aiFeederGreeted", String(deadline)); } catch {}
-    setLoginCloseAvailableAt(deadline);
-    setOpenMode("login");
+    setOpenMode("");
+    if (!session?.token) return undefined;
+    let active = true;
+    // The server remembers when each user last saw the login prompt, so it
+    // opens once per four hours however many times they sign in.
+    fetch(`/api/info-pulse/prompt?t=${Date.now()}`, {method: "POST", cache: "no-store", headers: {Authorization: `Bearer ${session.token}`}})
+      .then(response => response.ok ? response.json() : null)
+      .then(body => {
+        if (!active || body?.show !== true) return;
+        setLoginCloseAvailableAt(Date.now() + Math.max(0, Number(body.closeAfterMs) || 0));
+        setOpenMode("login");
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, [session?.token]);
   const closePanel = () => {
-    if (openMode === "login") {
-      if (Date.now() < loginCloseAvailableAt) return;
-      try { sessionStorage.setItem("aiFeederGreeted", "yes"); } catch {}
-    }
+    if (openMode === "login" && Date.now() < loginCloseAvailableAt) return;
     setOpenMode("");
   };
   const ready = loadState.token === session?.token && loadState.ready;
@@ -8941,7 +8942,6 @@ function App() {
       notifyRequestChange(window);
     };
   const completeLogin = (nextSession) => {
-    try { sessionStorage.removeItem("aiFeederGreeted"); } catch {}
     setActive(LOGIN_LANDING_PAGE);
     pageHistory.current = [LOGIN_LANDING_PAGE];
     setCanGoBack(false);

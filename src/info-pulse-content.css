@@ -114,6 +114,25 @@
 .pulse-count-tooltip dt.warning { color: #946014; }
 .pulse-count-tooltip dt.info { color: #345fc4; }
 .pulse-count-tooltip dd { margin: 0; }
+.pulse-breakdown-box { display: grid; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); gap: 14px; margin-bottom: 12px; padding: 12px; border: 1px solid #e3d9ee; border-radius: 15px; background: linear-gradient(120deg, #f4effa, #fbf3f6); }
+.pulse-breakdown-box.selected { border-color: #74529c; box-shadow: 0 0 0 1px #74529c; }
+.pulse-breakdown-total { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; min-height: 80px; padding: 12px 18px; border: 1px solid transparent; border-radius: 12px; background: #522e90; color: #fff; font: inherit; text-align: left; cursor: pointer; }
+.pulse-breakdown-total span { font-size: 14px; font-weight: 750; }
+.pulse-breakdown-total b { grid-column: 2; grid-row: 1 / 3; font-size: 34px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pulse-breakdown-total small { font-size: 11px; font-weight: 500; color: #ffffffcc; }
+.pulse-breakdown-total:hover { filter: brightness(1.08); }
+.pulse-breakdown-total[aria-pressed="true"] { background: #3d1f70; box-shadow: inset 0 0 0 2px #ffffff80; }
+.pulse-breakdown-sites { display: flex; flex-wrap: wrap; align-content: center; gap: 7px; min-width: 0; }
+.pulse-breakdown-sites > button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 6px 12px; border: 1px solid #dccfe9; border-radius: 9px; background: #fff; color: #3f2c58; font: 700 13px Manrope, sans-serif; cursor: pointer; white-space: nowrap; }
+.pulse-breakdown-sites > button b { min-width: 22px; padding: 3px 7px; border-radius: 6px; background: #ffe8ec; color: #b62240; font-size: 14px; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.pulse-breakdown-sites > button.quiet { color: #7b7087; }
+.pulse-breakdown-sites > button.quiet b { background: #f0edf5; color: #7b7087; }
+.pulse-breakdown-sites > button:hover { border-color: #74529c; }
+.pulse-breakdown-sites > button[aria-pressed="true"] { border-color: #522e90; background: #522e90; color: #fff; box-shadow: inset 0 0 0 1px #522e90; }
+.pulse-breakdown-sites > button[aria-pressed="true"] b { background: #fff; color: #522e90; }
+.pulse-breakdown-empty { align-self: center; font-size: 13px; color: #7b7087; }
+.pulse-case-card.plain { border-left-color: #8a6bb8; }
+.pulse-issues .plain { color: #6b5b80; background: #f1edf7; }
 .pulse-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
 .pulse-stat { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 80px; padding: 16px 20px; border: 1px solid transparent; border-radius: 15px; background: #edf0f7; color: #51617e; font: inherit; text-align: left; }
 .pulse-stat span { font-size: 14px; font-weight: 750; }
@@ -226,6 +245,10 @@
   .pulse-site-tabs > button { min-height: 34px; padding-top: 5px; padding-bottom: 5px; }
   .pulse-meta { margin: 8px 0 10px; }
   .pulse-overview { margin-bottom: 12px; }
+  .pulse-breakdown-box { margin-bottom: 10px; padding: 9px; }
+  .pulse-breakdown-total { min-height: 60px; padding: 8px 14px; }
+  .pulse-breakdown-total b { font-size: 28px; }
+  .pulse-breakdown-sites > button { min-height: 32px; padding: 4px 10px; }
   .pulse-stat { min-height: 64px; padding: 12px 16px; }
   .pulse-stat b { font-size: 27px; }
 }
@@ -246,6 +269,10 @@
   .pulse-section-heading h3 { flex: 1; min-width: 140px; }
   .pulse-case-count { font-size: 14px; }
   .pulse-record-detail dl { grid-template-columns: 1fr 1fr; }
+  .pulse-breakdown-box { grid-template-columns: 1fr; gap: 10px; padding: 10px; border-radius: 11px; }
+  .pulse-breakdown-total { min-height: 60px; padding: 10px 14px; }
+  .pulse-breakdown-total b { font-size: 28px; }
+  .pulse-breakdown-sites > button { min-height: 34px; padding: 5px 10px; font-size: 12px; }
   .pulse-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
   .pulse-stat { min-height: 64px; padding: 12px 14px; border-radius: 11px; }
   .pulse-stat b { font-size: 25px; }

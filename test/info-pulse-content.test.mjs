@@ -114,6 +114,53 @@ test('real daily-update arrays render all reasons and dated history without cras
   assert.ok(!html.includes('[object Object]'));
 });
 
+test('total breakdowns box counts open requests by site, lists breakdowns without alerts, and returns to cases', () => {
+  const requests = [
+    {ref: 'Q-1', door: 'Q-1', site: 'Sasti OB', status: 'Open', start: '2026-09-08 12:00', expectedCompletionAt: '2026-09-12 12:00', dailyRemarks: 'Pump ordered', complaint: 'Quiet breakdown'},
+    {ref: 'A-1', door: 'A-1', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00', complaint: 'Overdue breakdown'},
+    {ref: 'M-1', door: 'M-1', site: 'Majri OB', status: 'Open', start: '2026-09-10 08:00', expectedCompletionAt: '2026-09-12 12:00', complaint: 'Fresh breakdown'},
+    {ref: 'C-1', door: 'C-1', site: 'Majri OB', status: 'Closed', closedAt: '2026-09-09 12:00', start: '2026-09-01 12:00', complaint: 'Closed'},
+    {ref: 'I-1', door: 'I-1', site: 'Majri OB', status: 'Idle', start: '2026-09-01 12:00', complaint: 'Idle'},
+  ];
+  const props = {requests, cases: data.buildInfoPulseCases(requests, {role: 'Admin', now: NOW})};
+  const app = harness();
+  let tree = app.render(props);
+  assert.equal(descendants(tree, node => node.props.className?.startsWith('pulse-stat ')).length, 4, 'the four priority boxes stay as they are');
+  assert.equal(text(byLabel(tree, 'Total breakdowns: 3 at All sites')), 'Total breakdowns3All sites · open requests, excluding idle');
+  assert.equal(text(byLabel(tree, 'Breakdowns at Sasti OB: 2')), 'Sasti OB2');
+  assert.equal(text(byLabel(tree, 'Breakdowns at Majri OB: 1')), 'Majri OB1');
+  assert.equal(byLabel(tree, 'Total breakdowns: 3 at All sites').props['aria-pressed'], false);
+  assert.equal(text(byLabel(tree, 'All cases: 4 cases')), 'All cases4', 'closed and idle rows still raise alert cases');
+  assert.ok(!text(byLabel(tree, 'Matching case records')).includes('Quiet breakdown'), 'a breakdown without alerts is not a case');
+  byLabel(tree, 'Breakdowns at Sasti OB: 2').props.onClick();
+  tree = app.render(props);
+  assert.equal(byLabel(tree, 'Breakdowns at Sasti OB: 2').props['aria-pressed'], true);
+  assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
+  assert.equal(text(byLabel(tree, 'Total breakdowns: 2 at Sasti OB')), 'Total breakdowns2Sasti OB · open requests, excluding idle');
+  assert.equal(byLabel(tree, 'All cases: 1 cases').props['aria-pressed'], false);
+  assert.equal(byLabel(tree, 'Filter issue: All cases').props['aria-pressed'], false);
+  assert.match(text(tree), /Sasti OB \/ All breakdowns2 breakdowns/);
+  const list = text(byLabel(tree, 'Matching case records'));
+  assert.ok(list.indexOf('Overdue breakdown') < list.indexOf('Quiet breakdown'), 'longest standing first');
+  assert.ok(list.includes('No alerts'));
+  assert.ok(!list.includes('Fresh breakdown') && !list.includes('Idle'));
+  byLabel(tree, 'Filter issue: ETC overdue').props.onClick();
+  tree = app.render(props);
+  assert.equal(byLabel(tree, 'Breakdowns at Sasti OB: 2').props['aria-pressed'], false);
+  assert.match(text(tree), /Sasti OB \/ ETC overdue1 cases/);
+  byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props.onClick();
+  tree = app.render(props);
+  assert.match(text(tree), /2 breakdowns/);
+  byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props.onClick();
+  tree = app.render(props);
+  assert.equal(byLabel(tree, 'All cases: 1 cases').props['aria-pressed'], true);
+  assert.match(text(tree), /Sasti OB \/ All cases1 cases/);
+  descendants(tree, node => node.type === 'input')[0].props.onChange({target: {value: '2026-09-10'}});
+  tree = app.render(props);
+  assert.ok(byLabel(tree, 'Total breakdowns: 0 at Sasti OB'), 'date filters apply to the breakdown count');
+  assert.equal(text(byLabel(tree, 'Breakdowns at Majri OB: 1')), 'Majri OB1');
+});
+
 test('all case cards appear immediately below the four count boxes without a repeated site table', () => {
   const app = harness();
   let tree = app.render();

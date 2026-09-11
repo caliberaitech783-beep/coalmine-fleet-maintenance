@@ -54,6 +54,7 @@ import {auditChangedFields,auditDateRange,auditRouteDetails,auditSafeError,audit
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
+import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
@@ -461,6 +462,10 @@ async function migrate(){
     CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
     CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_public_id_idx ON auth_sessions (session_public_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_last_seen_idx ON auth_sessions (last_seen_at DESC);
+    CREATE TABLE IF NOT EXISTS info_pulse_prompts (
+      login TEXT PRIMARY KEY,
+      shown_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     CREATE TABLE IF NOT EXISTS session_messages (
       id BIGSERIAL PRIMARY KEY,
       target_session_public_id TEXT NOT NULL,
@@ -3002,6 +3007,19 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
     const visibleRows=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
     res.set('Cache-Control','no-store');
     res.json({requests:await attachDailyRemarks(visibleRows),scope});
+  }catch(error){next(error)}
+});
+
+// Records when a user last saw the login Info Pulse so it opens once per
+// four hours across every sign-in and device, not on every login.
+app.post('/api/info-pulse/prompt',requireSession,async(req,res,next)=>{
+  try{
+    res.set('Cache-Control','no-store');
+    const authorization=await currentDashboardAuthorization(req.session);
+    const operationalRole=authorization?.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(authorization.session.assignedRole);
+    if(!authorization||(authorization.session.role!=='super'&&!operationalRole&&authorization.session.permissions?.readRequests!==true))
+      return res.json({show:false,closeAfterMs:0,nextAvailableAt:0});
+    res.json(await claimInfoPulsePrompt((text,values)=>pool.query(text,values),infoPulsePromptKey(req.session)));
   }catch(error){next(error)}
 });
 

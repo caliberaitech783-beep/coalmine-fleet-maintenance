@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {aiFeederAlerts, parseIstTimestamp} from '../ai-feeder.mjs';
-import {buildInfoPulseCases, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView} from '../info-pulse-data.mjs';
+import {buildInfoPulseBreakdowns, buildInfoPulseCases, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView, isActiveBreakdown} from '../info-pulse-data.mjs';
 import {infoPulseRequestScope, scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 
 const NOW = Date.parse('2026-09-10T12:00:00+05:30');
@@ -93,6 +93,32 @@ test('date filters use inclusive IST request dates, including zoned timestamps',
   assert.equal(infoPulseDate('2026-09-01T18:30:00Z'), '2026-09-02');
   assert.ok(Number.isNaN(parseIstTimestamp('2026-02-30 12:00')));
   assert.ok(Number.isNaN(parseIstTimestamp('2026-02-30T12:00:00Z')));
+});
+
+test('total breakdowns count every open non-idle request once, longest standing first, with or without alerts', () => {
+  const records = [
+    {...base, ref: 'quiet', start: '2026-09-08 12:00', expectedCompletionAt: '2026-09-12 12:00', dailyRemarks: 'Pump ordered'},
+    {...base, ref: 'old', start: '2026-08-01 12:00'},
+    {...base, ref: 'new', start: '2026-09-10 11:00', updatedAt: '2026-09-10 11:00'},
+    {...base, ref: 'new', start: '2026-09-10 11:00', updatedAt: '2026-09-10 11:30', complaint: 'Latest projection'},
+    {...base, ref: 'closed', status: 'Closed', closedAt: '2026-09-09 12:00'},
+    {...base, ref: 'verified', verifiedAt: '2026-09-09 12:00'},
+    {...base, ref: 'idle', status: 'Idle'},
+    {...base, ref: 'ideal', status: 'Ideal'},
+    {...base, ref: 'majri', site: 'Majri OB', start: ''},
+  ];
+  const cases = build(records);
+  assert.equal(cases.some(row => row.key === 'quiet'), false, 'the quiet breakdown raises no alert');
+  const rows = buildInfoPulseBreakdowns(records, cases);
+  assert.deepEqual(rows.map(row => row.key), ['old', 'quiet', 'new', 'majri']);
+  assert.equal(rows.find(row => row.key === 'new').request.complaint, 'Latest projection');
+  assert.deepEqual(rows.find(row => row.key === 'quiet').issues, []);
+  assert.deepEqual(rows.find(row => row.key === 'old').issues.map(issue => issue.type), cases.find(row => row.key === 'old').issues.map(issue => issue.type));
+  const view = infoPulseView(rows);
+  assert.equal(view.totals.total, 4);
+  assert.deepEqual(view.sites.map(site => [site.label, site.total]), [['Sasti OB', 3], ['Majri OB', 1]]);
+  assert.equal(infoPulseView(rows, {from: '2026-09-10'}).totals.total, 1);
+  assert.deepEqual(records.filter(isActiveBreakdown).map(row => row.ref), ['quiet', 'old', 'new', 'new', 'majri']);
 });
 
 test('verified, closed, idle and future requests are classified correctly', () => {
