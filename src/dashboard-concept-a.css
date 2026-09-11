@@ -1105,6 +1105,10 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-chart-toggle button:hover { background: var(--mine-panel); }
 .mine-fleet-chart-toggle button[aria-pressed="true"] { background: linear-gradient(135deg, #6d43a1, var(--brand-purple)); color: #fff; box-shadow: 0 2px 5px #522e9029; }
 .mine-fleet-chart-toggle button[aria-pressed="true"] b { background: #ffffff26; }
+.mine-fleet-chart-toggle button .mine-fleet-count-trend { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px; flex: none; }
+.mine-fleet-chart-toggle button .mine-fleet-count-trend svg { width: 15px; height: 15px; stroke-width: 3; }
+.mine-fleet-chart-toggle button .mine-fleet-count-trend.up { color: #c62828; background: #ffcdd2; }
+.mine-fleet-chart-toggle button .mine-fleet-count-trend.down { color: #2e7d32; background: #c8e6c9; }
 .mine-fleet-chart-toggle button:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 2px; }
 .mine-fleet-chart-tools { display: flex; align-items: center; justify-self: end; gap: 12px; }
 .mine-fleet-chart-legend { display: flex; align-items: center; gap: 12px; color: var(--mine-muted); font-size: 8px; }

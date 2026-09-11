@@ -177,6 +177,7 @@ import "./backup-administration.css";
 import "./workspace-readability.css";
 import "./dashboard-readability.css";
 import { APP_VERSION } from "./app-version.js";
+import { trackCountTrend, BREAKDOWN_COUNT_STORAGE_KEY } from "./fleet-count-trend.mjs";
 
 const vehicles = [];
 const breakdowns = [];
@@ -1117,6 +1118,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendFrom, setBreakdownTrendFrom] = useState(() => localDateKey(new Date()));
   const [breakdownTrendRangeError, setBreakdownTrendRangeError] = useState("");
   const [fleetChartMode, setFleetChartMode] = useState("breakdown");
+  const [breakdownCountTrend, setBreakdownCountTrend] = useState(null);
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
@@ -1175,6 +1177,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
   const liveFleetCounts = fleetChartCounts(visibleEquipment, liveBreakdowns);
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
+  useEffect(() => {
+    if (!equipmentLoaded) return;
+    const trend = trackCountTrend(typeof localStorage === "undefined" ? null : localStorage, BREAKDOWN_COUNT_STORAGE_KEY, liveBreakdownAssetCount, null);
+    if (trend) setBreakdownCountTrend(trend);
+  }, [equipmentLoaded, liveBreakdownAssetCount]);
   const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
@@ -1581,7 +1588,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-heading">
               <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown(fleetChartAllKey)}><h2>Total Fleet</h2></button>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" title={`${dashboardReconnecting ? "Last checked" : "Current"} vehicle counts; activity dates do not remove active breakdowns`} onClick={() => { setFleetChartMode(mode); if (mode === "breakdown") openHourlyBreakdownTab(locationBreakdowns.map((request) => ({ ...request, door: request.door || equipmentForRequest(request)?.door }))); }}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : liveBreakdownAssetCount).toLocaleString() : "—"}</b></button>)}
+                {[["total", "Total"], ["breakdown", "Breakdown"]].map(([mode, label]) => <button type="button" key={mode} className={mode} disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls="fleet-region-plot" title={`${dashboardReconnecting ? "Last checked" : "Current"} vehicle counts; activity dates do not remove active breakdowns`} onClick={() => { setFleetChartMode(mode); if (mode === "breakdown") openHourlyBreakdownTab(locationBreakdowns.map((request) => ({ ...request, door: request.door || equipmentForRequest(request)?.door }))); }}>{label} <b>{equipmentLoaded ? (mode === "total" ? assetCounts.total : liveBreakdownAssetCount).toLocaleString() : "—"}</b>{mode === "breakdown" && equipmentLoaded && breakdownCountTrend && <i className={`mine-fleet-count-trend ${breakdownCountTrend}`} aria-label={`Breakdown count ${breakdownCountTrend === "up" ? "increased" : "decreased"} since last seen`} title={`Breakdown count ${breakdownCountTrend === "up" ? "went up" : "went down"} since it was last seen on this device`}>{breakdownCountTrend === "up" ? <ArrowUp aria-hidden="true" /> : <ArrowDown aria-hidden="true" />}</i>}</button>)}
               </div>
             </div>
             <div className="mine-fleet-chart-tools"><div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div><button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
