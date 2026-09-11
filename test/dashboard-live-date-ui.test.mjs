@@ -788,7 +788,7 @@ test("every site equipment and vehicle total opens exactly its registered assets
     assert.equal(modePill().props["aria-pressed"], true);
     if (mode === "breakdown") {
       // Only the breakdown number opens the hourly activity page.
-      modePill().props.onClick({target: {closest: (selector) => selector === ".mine-fleet-breakdown-count" ? {} : null}});
+      modePill().props.onClick({target: {closest: (selector) => selector === ".mine-fleet-toggle-count" ? {} : null}});
       tree = view.render(rows);
       assert.equal(typeof tree.props.onBack, "function");
       assert.equal(typeof tree.props.ActionsTable, "function");
