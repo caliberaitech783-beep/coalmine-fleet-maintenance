@@ -176,6 +176,54 @@ export function applyHierarchyDeliveryRule(settings,designationKey,rule={}){
   }}};
 }
 
+export function reportsAssignedToDesignation(settings,designationKey){
+  return [...new Set((settings?.designations?.[designationKey]?.schedules||[]).flatMap((schedule)=>schedule.reports||[]))];
+}
+
+// A user's personal copy of their role schedule. The administrator's role
+// configuration decides which reports may be chosen; the frequency, IST times and
+// the selection within that list belong to the user.
+export function normalizeUserReportSchedule(value,{designationKey='',allowedReports=[]}={}){
+  if(!value||typeof value!=='object')return null;
+  const allowed=new Set(allowedReports.map(canonicalReportTitle));
+  const schedules=(Array.isArray(value.schedules)?value.schedules:[]).slice(0,20).map(configuredSchedule)
+    .map((schedule)=>({...schedule,reports:schedule.reports.filter((title)=>allowed.has(title))}));
+  return {
+    designationKey:clean(value.designationKey)||clean(designationKey),
+    enabled:value.enabled!==false,
+    schedules,
+    updatedAt:clean(value.updatedAt)||null,
+  };
+}
+
+export function userReportScheduleValidationError(userSchedule){
+  if(!userSchedule||!userSchedule.enabled)return '';
+  for(const schedule of userSchedule.schedules){
+    if(!schedule.enabled)continue;
+    if(schedule.cadence!=='event'&&!schedule.times.length)return 'Add at least one IST time to each active schedule.';
+    if(!schedule.reports.length)return 'Select at least one report for each active schedule.';
+  }
+  return '';
+}
+
+// Effective delivery settings for one user: the role default (already adjusted by any
+// Hierarchy master rule) unless that user saved a personal schedule for the same role.
+// The administrator's Active switch for the role still pauses the personal schedule.
+export function applyUserReportScheduleOverride(settings,designationKey,userSchedule){
+  const normalized=normalizeHierarchyReportScheduleSettings(settings||{});
+  const designation=normalized.designations[designationKey];
+  if(!designation||!userSchedule||typeof userSchedule!=='object')return normalized;
+  const personal=normalizeUserReportSchedule(userSchedule,{designationKey,allowedReports:reportsAssignedToDesignation(normalized,designationKey)});
+  if(personal.designationKey&&personal.designationKey!==designationKey)return normalized;
+  return {designations:{...normalized.designations,[designationKey]:{
+    ...designation,
+    enabled:designation.enabled&&personal.enabled,
+    // The user's list is final: never re-add a General Reports slot they removed.
+    managedByHierarchy:true,
+    schedules:personal.schedules,
+  }}};
+}
+
 export function hierarchyScheduleLabel(schedule={}){
   if(schedule.cadence==='event')return 'Every event';
   const times=(schedule.times||[]).map((time)=>formatDisplayTime(time)).join(' & ')||'Time not set';

@@ -5230,6 +5230,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [selectedScheduleDesignation, setSelectedScheduleDesignation] = useState("director");
   const [reportScheduleLoading, setReportScheduleLoading] = useState(false);
   const [reportScheduleSaving, setReportScheduleSaving] = useState(false);
+  // Department users edit a personal copy of their role schedule; administrators edit the role defaults.
+  const [userReportSchedule, setUserReportSchedule] = useState({ enabled: true, schedules: [] });
+  const [userScheduleCustomised, setUserScheduleCustomised] = useState(false);
+  const [reportScheduleOwner, setReportScheduleOwner] = useState({ name: "", login: "" });
   const reportAdministrator = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const [reportAccess, setReportAccess] = useState({ canManageAll: reportAdministrator, allowedDesignationKeys: [], allowedReports: [] });
   const [reportAccessLoaded, setReportAccessLoaded] = useState(reportAdministrator);
@@ -5432,7 +5436,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     setSelectedReportByCategory((current) => ({ ...current, [activeCategory.id]: report.title }));
   };
   const applyReportScheduleDetails = (details = {}) => {
-    setReportScheduleSettings(details.settings || defaultHierarchyReportScheduleSettings());
+    const settings = details.settings || defaultHierarchyReportScheduleSettings();
+    setReportScheduleSettings(settings);
     setReportScheduleRecipients(details.recipients || {});
     const access = {
       canManageAll: details.canManageAll === true,
@@ -5440,7 +5445,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       allowedReports: Array.isArray(details.allowedReports) ? details.allowedReports : [],
     };
     setReportAccess(access);
+    setReportScheduleOwner({ name: details.userName || session?.name || "", login: details.userLogin || "" });
     if (access.allowedDesignationKeys.length === 1) setSelectedScheduleDesignation(access.allowedDesignationKeys[0]);
+    if (!access.canManageAll) {
+      const roleDefault = settings.designations?.[access.allowedDesignationKeys[0]] || { enabled: true, schedules: [] };
+      const personal = details.userSchedule || roleDefault;
+      setUserReportSchedule({
+        enabled: personal.enabled !== false,
+        schedules: (personal.schedules || []).map((schedule) => ({ ...schedule, reports: (schedule.reports || []).filter((title) => access.allowedReports.includes(title)) })),
+      });
+      setUserScheduleCustomised(Boolean(details.userSchedule));
+    }
     setReportAccessLoaded(true);
   };
   const loadReportScheduleDetails = async () => {
@@ -5475,6 +5490,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     finally { setReportScheduleLoading(false); }
   };
   const updateScheduleDesignation = (updater) => {
+    if (!reportAccess.canManageAll) {
+      setUserReportSchedule((current) => updater(current));
+      return;
+    }
     setReportScheduleSettings((current) => ({
       ...current,
       designations: {
@@ -5502,12 +5521,27 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       const response = await fetch("/api/report-schedule-settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
-        body: JSON.stringify(reportScheduleSettings),
+        body: JSON.stringify(reportAccess.canManageAll ? reportScheduleSettings : { userSchedule: userReportSchedule }),
       });
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not save report schedules.");
       applyReportScheduleDetails(details);
       setDirectorTimingOpen(false);
+    } catch (error) { alert(error.message); }
+    finally { setReportScheduleSaving(false); }
+  };
+  const resetUserReportSchedule = async () => {
+    if (reportScheduleSaving || !window.confirm("Replace your personal schedule with the role default set by the administrator?")) return;
+    setReportScheduleSaving(true);
+    try {
+      const response = await fetch("/api/report-schedule-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
+        body: JSON.stringify({ resetToDefault: true }),
+      });
+      const details = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(details.error || "Could not reset your report schedule.");
+      applyReportScheduleDetails(details);
     } catch (error) { alert(error.message); }
     finally { setReportScheduleSaving(false); }
   };
@@ -5552,7 +5586,9 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     finally { setReportZipDownloading(false); }
   };
   const scheduleDesignationOptions = reportAccess.canManageAll ? reportDesignationOptions : reportDesignationOptions.filter((designation) => reportAccess.allowedDesignationKeys.includes(designation.key));
-  const selectedScheduleConfig = reportScheduleSettings.designations[selectedScheduleDesignation] || { enabled: true, allRecipients: true, recipientLogins: [], schedules: [] };
+  const selectedScheduleConfig = reportAccess.canManageAll
+    ? (reportScheduleSettings.designations[selectedScheduleDesignation] || { enabled: true, allRecipients: true, recipientLogins: [], schedules: [] })
+    : { allRecipients: true, recipientLogins: [], ...userReportSchedule };
   const selectedScheduleMeta = reportDesignationOptions.find((designation) => designation.key === selectedScheduleDesignation) || scheduleDesignationOptions[0] || reportDesignationOptions[0];
   const selectedScheduleRecipients = reportScheduleRecipients[selectedScheduleDesignation] || [];
   return (
@@ -5571,12 +5607,15 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         <div className="overlay" onPointerDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
           <div className="modal director-timing-modal" role="dialog" aria-modal="true" aria-label="Report delivery schedules">
             <header>
-              <div className="report-schedule-title"><span><CalendarDays /></span><div><h3>Report delivery schedules</h3><p>Choose recipients, timing and reports for each delivery slot</p></div></div>
+              <div className="report-schedule-title"><span><CalendarDays /></span><div><h3>Report delivery schedules</h3><p>{reportAccess.canManageAll ? "Set the default recipients, timing and reports for each user role" : "Choose which reports you receive on WhatsApp and when"}</p></div></div>
               <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X aria-hidden="true" /></button>
             </header>
             {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : <>
               <div className="report-schedule-toolbar">
-                <label><span>{reportAccess.canManageAll ? "Assign schedule to" : "Your assigned schedule"}</span><select value={selectedScheduleDesignation} onChange={(event) => setSelectedScheduleDesignation(event.target.value)} disabled={!reportAccess.canManageAll}>{scheduleDesignationOptions.map((designation) => <option key={designation.key} value={designation.key}>{designation.label}</option>)}</select></label>
+                {reportAccess.canManageAll
+                  ? <label><span>User role</span><select value={selectedScheduleDesignation} onChange={(event) => setSelectedScheduleDesignation(event.target.value)}>{scheduleDesignationOptions.map((designation) => <option key={designation.key} value={designation.key}>{designation.label}</option>)}</select></label>
+                  : <div className="report-schedule-owner"><span>Your schedule</span><b>{reportScheduleOwner.name || session?.name || reportScheduleOwner.login}</b><small>{selectedScheduleMeta.label} · <i>{userScheduleCustomised ? "Customised by you" : "Role default"}</i></small></div>}
+                {!reportAccess.canManageAll && userScheduleCustomised && <button type="button" className="report-schedule-reset" onClick={resetUserReportSchedule} disabled={reportScheduleSaving}><RotateCcw /> Use role default</button>}
                 <label className="report-schedule-switch"><input type="checkbox" checked={selectedScheduleConfig.enabled} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, enabled: event.target.checked }))} /><span>Active</span></label>
               </div>
               <div className="report-week-grid compact" aria-label="Seven day report schedule summary">
@@ -5603,7 +5642,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                     {schedule.cadence === "interval" && <label><span>Repeat every</span><div className="report-interval-input"><input type="number" min="2" max="31" value={schedule.intervalDays} onChange={(event) => updateReportSchedule(schedule.key, { intervalDays: Number(event.target.value) })} /><small>days</small></div></label>}
                     {schedule.cadence !== "event" && <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>}
                   </div>
-                  {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.filter((report,index,all) => all.findIndex(item => item.title === report.title) === index).map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <details className="report-assignment-picker report-assignment-readonly" open><summary>Assigned reports <b>{schedule.reports.length}</b></summary><div>{schedule.reports.length ? schedule.reports.map((title) => <label key={title}><input type="checkbox" checked readOnly tabIndex={-1} /><span>{title}</span></label>) : <p className="report-assignment-empty">No reports are assigned to this schedule.</p>}</div></details>}
+                  {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.filter((report,index,all) => all.findIndex(item => item.title === report.title) === index).map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <details className="report-assignment-picker" open><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportAccess.allowedReports.length ? reportAccess.allowedReports.map((title) => <label key={title}><input type="checkbox" checked={schedule.reports.includes(title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(title) ? schedule.reports.filter((item) => item !== title) : [...schedule.reports, title] })} /><span>{title}</span></label>) : <p className="report-assignment-empty">No reports are assigned to your role yet. Ask an administrator to add them to the role default.</p>}</div></details>}
                 </article>)}
                 <button type="button" className="report-add-schedule" onClick={addReportSchedule}><Plus /> Add schedule</button>
               </div>

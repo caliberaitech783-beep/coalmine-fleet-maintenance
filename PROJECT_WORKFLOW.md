@@ -390,6 +390,15 @@ Direct alerts retain site scoping. Admin, Super Admin and Director are excluded 
 
 **Hierarchy Master and Report schedules remain the source of hierarchy report assignments and timing.** A designation's Active switch only controls its hierarchy reports. The new hierarchy delivery switch pauses those bundles, and the new global switch pauses every WhatsApp message. Quiet hours suppress non-OTP delivery; event messages are not queued. A still-overdue reminder may qualify on a later check. A scheduled slot remains eligible only within the existing 20-minute delivery grace window. Messages already handed to the provider cannot be recalled.
 
+### Role defaults and personal schedules
+
+| Who | Opens | Saves |
+| --- | --- | --- |
+| Admin / Super Admin | **Reports → Report schedules**, choose a **User role** | The role default: Active switch, recipients, delivery slots and the reports each slot may contain (`app_settings.hierarchy_report_schedules`) |
+| Every other signed-in user | **Reports → Report schedules**, shown under their own name | A personal copy for that login only (`app_settings.hierarchy_report_schedule:user:<login>`) |
+
+A user starts from the role default and can change frequency, weekday, IST times, add or delete slots, and tick any report the administrator assigned to the role; reports outside that list are dropped on save, and an active slot needs at least one time and one report. Saving never touches the shared role default, so two MIS Incharge / Supervisors can keep different schedules. **Use role default** deletes the personal copy. The sender resolves each recipient as role default → Hierarchy master days/times rule → personal schedule, and the administrator's Active switch for the role still pauses personal schedules. A personal schedule saved under one role is ignored after the user moves to another role. `GET /api/report-schedule-settings` returns `userSchedule` (null while the user is on the role default) plus `userName`; `PUT` accepts `{userSchedule}` or `{resetToDefault: true}` from department users and the full designation map from administrators.
+
 Settings live in `app_settings.whatsapp_report_settings`; provider approval snapshots live separately in `app_settings.whatsapp_template_approvals`. Provider credentials remain in `app_settings.meta_whatsapp`. Merely deploying or opening the panel does not create or change settings. Save performs a revision check under a database advisory lock and returns HTTP 409 for a stale edit. Load defaults changes only the draft until Save. The shared Meta/Fast2SMS sending layer reads the current delivery policy before sending, including a second check after PDF upload; settings read failures cannot bypass the global pause.
 
 Endpoints: `GET /api/report-settings`, `PUT /api/report-settings` with `{settings, revision}`, and `POST /api/report-settings/templates` with `{action: "submit" | "refresh"}`. Settings writes and template actions are audited. No endpoint in this panel sends a WhatsApp test message.

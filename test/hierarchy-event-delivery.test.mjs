@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,reportsForHierarchyEvent,reportsDueForDesignation,flowDesignationForUser} from '../hierarchy-report-flow.mjs';
+import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,reportsForHierarchyEvent,reportsDueForDesignation,flowDesignationForUser,applyUserReportScheduleOverride} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {hierarchyAccessAllowsReport} from '../hierarchy-report-catalogue.mjs';
 import {defaultWhatsAppReportSettings,whatsappPurposeEnabled} from '../whatsapp-report-settings.mjs';
@@ -58,7 +58,7 @@ function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
       if(sql.includes('INSERT INTO whatsapp_alert_history'))history.push(args);
       return {rows:[],rowCount:1};
     }},
-    storedHierarchyReportScheduleSettings:async()=>settings,
+    storedHierarchyReportScheduleSettings:async()=>settings,storedUserReportScheduleOverrides:async()=>new Map(),applyUserReportScheduleOverride,
     requestStakeholderLogins:async()=>['production'],
     resolveMobileAccess,applyHierarchyDeliveryRule,flowDesignationForUser,reportsForHierarchyEvent,reportsDueForDesignation,hierarchyRecipientReportScope,reportScopeIncludesSite,
     hierarchyRuleForDesignation:()=>({siteAccess:'Sasti OB',reportAccess:DIRECTOR_REPORT_TITLES.join('|')}),

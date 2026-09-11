@@ -471,3 +471,13 @@
   .report-zip-groups { margin: 10px 12px 0; }
   .report-zip-modal > footer { padding: 11px 12px !important; }
 }
+
+/* Personal schedule owner strip and reset control in the schedule dialog. */
+.report-schedule-owner { flex: 1; min-width: 0; display: grid; gap: 3px; }
+.report-schedule-owner > span { color: #8c5478; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.report-schedule-owner > b { color: #2f2134; font: 850 14px Manrope; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.report-schedule-owner > small { color: #776779; font-size: 9px; }
+.report-schedule-owner i { font-style: normal; margin-left: 2px; padding: 2px 7px; border-radius: 999px; background: #f8eaf3; color: #8f2e67; font-weight: 800; }
+.report-schedule-reset { display: inline-flex; align-items: center; gap: 6px; height: 42px; padding: 0 12px; border: 1px solid #dbcbd7; border-radius: 7px; background: #fff; color: #86486e; font-size: 10px; font-weight: 800; }
+.report-schedule-reset:hover { border-color: #c57ca9; background: #fff5fa; color: #8f2c67; }
+.report-schedule-reset svg { width: 14px; }

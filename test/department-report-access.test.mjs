@@ -30,12 +30,13 @@ test("every signed-in Reports page includes schedules and ZIP download tools", (
   assert.doesNotMatch(reportsPage, /canUseReportWorkspaceTools/);
 });
 
-test("department users can inspect every report assigned to each schedule", () => {
+test("department users pick their own reports from the list the administrator assigned to the role", () => {
   const reportsPage = source.slice(source.indexOf("function ReportsPage("), source.indexOf("function MasterPage("));
   const scheduleStyles = fs.readFileSync(new URL("../src/report-schedule-polish.css", import.meta.url), "utf8");
-  assert.match(reportsPage, /className="report-assignment-picker report-assignment-readonly" open/);
-  assert.match(reportsPage, /schedule\.reports\.map\(\(title\) => <label key=\{title\}>/);
-  assert.match(reportsPage, /<summary>Assigned reports <b>\{schedule\.reports\.length\}<\/b><\/summary>/);
+  assert.match(reportsPage, /className="report-assignment-picker" open><summary>Reports <b>\{schedule\.reports\.length\}<\/b><\/summary>/);
+  assert.match(reportsPage, /reportAccess\.allowedReports\.map\(\(title\) => <label key=\{title\}><input type="checkbox" checked=\{schedule\.reports\.includes\(title\)\}/);
+  assert.doesNotMatch(reportsPage, /report-assignment-readonly/);
   assert.doesNotMatch(reportsPage, /available for this slot/);
-  assert.match(scheduleStyles, /\.report-assignment-readonly input \{ pointer-events: none; \}/);
+  assert.match(reportsPage, /className="report-schedule-owner"/);
+  assert.match(scheduleStyles, /\.report-schedule-owner \{/);
 });

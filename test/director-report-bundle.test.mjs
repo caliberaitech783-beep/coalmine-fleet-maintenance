@@ -97,7 +97,7 @@ test('Director report API and all-user schedule popup are wired into server and 
   assert.match(source,/Report delivery schedules/);
   assert.match(source,/HIERARCHY_REPORT_DESIGNATIONS/);
   assert.match(source,/Seven day report schedule summary/);
-  assert.match(source,/Assign schedule to/);
+  assert.match(source,/<span>User role<\/span>/);
   assert.match(source,/Save schedules/);
   assert.match(source,/Every N days/);
   assert.match(server,/app\.get\('\/api\/report-schedule-settings'/);

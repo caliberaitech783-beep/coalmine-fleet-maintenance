@@ -29,7 +29,7 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
-import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,reportsDueForDesignation,reportsForHierarchyEvent} from './hierarchy-report-flow.mjs';
+import {applyHierarchyDeliveryRule,applyUserReportScheduleOverride,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,normalizeUserReportSchedule,reportsAssignedToDesignation,reportsDueForDesignation,reportsForHierarchyEvent,userReportScheduleValidationError} from './hierarchy-report-flow.mjs';
 import {hierarchyAccessAllowsReport} from './hierarchy-report-catalogue.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
 import {prepareTicketReportRows,ticketReportDue,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
@@ -142,6 +142,21 @@ async function storedWhatsAppSettings(){
 async function storedHierarchyReportScheduleSettings(){
   const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[HIERARCHY_REPORT_SCHEDULE_SETTING_KEY]);
   return rows.length?normalizeHierarchyReportScheduleSettings(rows[0].setting_value):defaultHierarchyReportScheduleSettings();
+}
+
+// Personal report schedules are stored one row per user, keyed by the same login the
+// hierarchy sender uses, so a user's customisation never rewrites the shared role default.
+const USER_REPORT_SCHEDULE_SETTING_PREFIX='hierarchy_report_schedule:user:';
+function reportRecipientLogin(user={}){return String(user.login||user.employee||user.name||'').trim().toLowerCase()}
+function userReportScheduleSettingKey(login){return `${USER_REPORT_SCHEDULE_SETTING_PREFIX}${String(login||'').trim().toLowerCase()}`}
+async function storedUserReportSchedule(login){
+  if(!String(login||'').trim())return null;
+  const {rows}=await pool.query('SELECT setting_value,updated_at FROM app_settings WHERE setting_key=$1',[userReportScheduleSettingKey(login)]);
+  return rows.length?{...rows[0].setting_value,updatedAt:new Date(rows[0].updated_at).toISOString()}:null;
+}
+async function storedUserReportScheduleOverrides(){
+  const {rows}=await pool.query('SELECT setting_key,setting_value FROM app_settings WHERE setting_key LIKE $1',[`${USER_REPORT_SCHEDULE_SETTING_PREFIX}%`]);
+  return new Map(rows.map((row)=>[row.setting_key.slice(USER_REPORT_SCHEDULE_SETTING_PREFIX.length),row.setting_value]));
 }
 
 async function storedWhatsAppReportSettings(){
@@ -1730,10 +1745,6 @@ registerWhatsAppReportSettingsApi(app,{
   },
 });
 
-function reportsAssignedToDesignation(settings,designationKey){
-  return [...new Set((settings.designations?.[designationKey]?.schedules||[]).flatMap((schedule)=>schedule.reports||[]))];
-}
-
 async function reportScheduleScope(session,settings){
   if(canManageAllReportSchedules(session))return {canManageAll:true,allowedDesignationKeys:Object.keys(settings.designations||{}),allowedReports:DIRECTOR_REPORT_TITLES};
   const user=await currentUserRecord(session);
@@ -1741,13 +1752,41 @@ async function reportScheduleScope(session,settings){
   const profile={...resolved,assignedRole:session?.assignedRole||resolved.assignedRole,permissions:{...resolved.permissions,...(session?.permissions||{})}};
   const designation=flowDesignationForUser(user,profile);
   if(!designation)return null;
-  return {canManageAll:false,allowedDesignationKeys:[designation.key],allowedReports:reportsAssignedToDesignation(settings,designation.key),user};
+  // The role default a user customises is the one the sender would use: the
+  // administrator's schedule after any Hierarchy master days/times rule.
+  const {rows:hierarchyRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`);
+  const hierarchyRule=hierarchyRuleForDesignation(hierarchyRows,designation);
+  const roleSettings=hierarchyRule?applyHierarchyDeliveryRule(settings,designation.key,hierarchyRule):normalizeHierarchyReportScheduleSettings(settings);
+  return {
+    canManageAll:false,
+    allowedDesignationKeys:[designation.key],
+    allowedReports:reportsAssignedToDesignation(roleSettings,designation.key),
+    user,
+    login:reportRecipientLogin(user)||String(session?.login||'').trim().toLowerCase(),
+    name:String(user.employee||user.name||session?.name||user.login||'').trim(),
+    roleSettings,
+  };
 }
 
 function scopedReportScheduleSettings(settings,scope){
   if(scope.canManageAll)return settings;
   const key=scope.allowedDesignationKeys[0];
-  return {designations:{[key]:settings.designations[key]}};
+  return {designations:{[key]:(scope.roleSettings||settings).designations[key]}};
+}
+
+async function reportScheduleResponse(scope,settings,extra={}){
+  const designationKey=scope.allowedDesignationKeys[0];
+  const userSchedule=scope.canManageAll?null:normalizeUserReportSchedule(await storedUserReportSchedule(scope.login),{designationKey,allowedReports:scope.allowedReports});
+  return {
+    settings:scopedReportScheduleSettings(settings,scope),
+    canManageAll:scope.canManageAll,
+    allowedDesignationKeys:scope.allowedDesignationKeys,
+    allowedReports:scope.allowedReports,
+    userName:scope.name||'',
+    userLogin:scope.login||'',
+    userSchedule,
+    ...extra,
+  };
 }
 
 app.get('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
@@ -1766,7 +1805,7 @@ app.get('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
       if(!designation||!login||!scope.allowedDesignationKeys.includes(designation.key))continue;
       (recipients[designation.key]??=[]).push({login,name:String(user.employee||user.name||user.login||login).trim(),hasPhone:Boolean(String(user.phone||user.phoneNo||user.phoneNumber||'').trim())});
     }
-    res.json({settings:scopedReportScheduleSettings(settings,scope),recipients,canManageAll:scope.canManageAll,allowedDesignationKeys:scope.allowedDesignationKeys,allowedReports:scope.allowedReports});
+    res.json(await reportScheduleResponse(scope,settings,{recipients}));
   }catch(error){next(error)}
 });
 
@@ -1775,32 +1814,32 @@ app.put('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
     const current=await storedHierarchyReportScheduleSettings();
     const scope=await reportScheduleScope(req.session,current);
     if(!scope)return res.status(403).json({error:'No report designation is assigned to this profile.'});
-    let settings;
+    const body=req.body&&typeof req.body==='object'?req.body:{};
     if(scope.canManageAll){
-      settings=normalizeHierarchyReportScheduleSettings(req.body||{});
+      // Administrators save the role defaults every user in that role starts from.
+      const settings=normalizeHierarchyReportScheduleSettings(body);
+      await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+        ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
+        HIERARCHY_REPORT_SCHEDULE_SETTING_KEY,JSON.stringify(settings),
+      ]);
+      return res.json(await reportScheduleResponse(await reportScheduleScope(req.session,settings),settings));
+    }
+    // Every other user saves a personal copy; the shared role default is never rewritten here.
+    if(!scope.login)return res.status(400).json({error:'Your account has no login name, so a personal report schedule cannot be saved.'});
+    const settingKey=userReportScheduleSettingKey(scope.login);
+    if(body.resetToDefault===true||body.userSchedule===null){
+      await pool.query('DELETE FROM app_settings WHERE setting_key=$1',[settingKey]);
     }else{
       const designationKey=scope.allowedDesignationKeys[0];
-      const existing=current.designations[designationKey];
-      const submitted=req.body?.designations?.[designationKey];
-      if(!submitted||typeof submitted!=='object')return res.status(400).json({error:'Your assigned report schedule was not provided.'});
-      const allowedReports=new Set(scope.allowedReports);
-      const schedules=(Array.isArray(submitted.schedules)?submitted.schedules:[]).map((schedule)=>({
-        ...schedule,
-        reports:(Array.isArray(schedule.reports)?schedule.reports:scope.allowedReports).filter((title)=>allowedReports.has(title)),
-      }));
-      settings=normalizeHierarchyReportScheduleSettings({designations:{...current.designations,[designationKey]:{
-        ...submitted,
-        allRecipients:existing.allRecipients,
-        recipientLogins:existing.recipientLogins,
-        schedules,
-      }}});
+      const submitted=body.userSchedule&&typeof body.userSchedule==='object'?body.userSchedule:body.designations?.[designationKey];
+      if(!submitted||typeof submitted!=='object')return res.status(400).json({error:'Your report schedule was not provided.'});
+      const personal=normalizeUserReportSchedule({...submitted,designationKey,updatedAt:new Date().toISOString()},{designationKey,allowedReports:scope.allowedReports});
+      const validationError=userReportScheduleValidationError(personal);
+      if(validationError)return res.status(400).json({error:validationError});
+      await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+        ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[settingKey,JSON.stringify(personal)]);
     }
-    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
-      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
-      HIERARCHY_REPORT_SCHEDULE_SETTING_KEY,JSON.stringify(settings),
-    ]);
-    const savedScope=await reportScheduleScope(req.session,settings);
-    res.json({settings:scopedReportScheduleSettings(settings,savedScope),canManageAll:savedScope.canManageAll,allowedDesignationKeys:savedScope.allowedDesignationKeys,allowedReports:savedScope.allowedReports});
+    res.json(await reportScheduleResponse(scope,current));
   }catch(error){next(error)}
 });
 
@@ -2500,10 +2539,11 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
   if(!whatsappPurposeEnabled(await storedWhatsAppReportSettings(),'consolidatedRequestReport',now))return {skipped:true,reason:'paused by Report settings'};
   if(!event)hierarchyReportRunning=true;
   try{
-    const [{rows:userRows},{rows:hierarchyRows},scheduleSettings]=await Promise.all([
+    const [{rows:userRows},{rows:hierarchyRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
       storedHierarchyReportScheduleSettings(),
+      storedUserReportScheduleOverrides(),
     ]);
     const eventRecipients=event?new Set(await requestStakeholderLogins(pool,{site:event.request.site,requesterLogin:event.request.requesterLogin})):null;
     let sent=0,failed=0,skipped=0;
@@ -2517,7 +2557,9 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
       if(eventRecipients&&!eventRecipients.has(login)){skipped++;continue}
       if(!designationSettings?.allRecipients&&!designationSettings?.recipientLogins?.includes(login)){skipped++;continue}
       const hierarchyRule=hierarchyRuleForDesignation(hierarchyRows,designation);
-      const effectiveScheduleSettings=hierarchyRule?applyHierarchyDeliveryRule(scheduleSettings,designation.key,hierarchyRule):scheduleSettings;
+      const roleScheduleSettings=hierarchyRule?applyHierarchyDeliveryRule(scheduleSettings,designation.key,hierarchyRule):scheduleSettings;
+      // A saved personal schedule replaces the role default for this user only.
+      const effectiveScheduleSettings=applyUserReportScheduleOverride(roleScheduleSettings,designation.key,userScheduleOverrides.get(login)||null);
       const dueGroups=event?reportsForHierarchyEvent(designation.key,event,effectiveScheduleSettings):reportsDueForDesignation(designation.key,now,20,effectiveScheduleSettings);
       if(!dueGroups.length)continue;
       const recipientScope=hierarchyRecipientReportScope(user,profile,hierarchyRule?.siteAccess);

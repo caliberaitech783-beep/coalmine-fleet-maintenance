@@ -5,7 +5,7 @@ import {hierarchyRecipientReportScope} from '../hierarchy-report-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {reportScopeIncludesSite} from '../region-scope.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
-import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,reportsDueForDesignation,reportsForHierarchyEvent} from '../hierarchy-report-flow.mjs';
+import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDesignationForUser,reportsDueForDesignation,reportsForHierarchyEvent,applyUserReportScheduleOverride} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {hierarchyAccessAllowsReport} from '../hierarchy-report-catalogue.mjs';
 
@@ -66,7 +66,7 @@ function deliveryHarness(users,{siteAccess=null}={}){
   const published=[],claims=[],sent=[];
   const dependencies={
     databaseReady:true,storedWhatsAppReportSettings:async()=>({}),whatsappPurposeEnabled:()=>true,
-    storedHierarchyReportScheduleSettings:async()=>defaultHierarchyReportScheduleSettings(),
+    storedHierarchyReportScheduleSettings:async()=>defaultHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides:async()=>new Map(),applyUserReportScheduleOverride,
     pool:{query:async(sql,args=[])=>{
       if(sql.includes("master_name='Users & employees'"))return {rows:users.map(user=>({record_data:{phone:'910000000000',...user}}))};
       if(sql.includes("master_name='Hierarchy master'"))return {rows:[]};
