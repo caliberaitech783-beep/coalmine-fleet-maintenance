@@ -9,7 +9,12 @@
 .hourly-breakdown-windows button { flex: 1 0 auto; min-width: 0; white-space: nowrap; }
 .hourly-breakdown-view .dashboard-record-level-navigation { grid-template-columns: minmax(0, 1fr); }
 .hourly-breakdown-view .dashboard-asset-list { max-height: none; }
-.hourly-breakdown-view .dashboard-asset-list td { white-space: nowrap; }
+.hourly-breakdown-summary { flex-wrap: wrap; padding: 10px 16px; }
+.hourly-breakdown-summary-text { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; min-width: 0; }
+.hourly-breakdown-summary-text span { font-size: 12px; color: var(--muted, #647892); }
+.hourly-breakdown-actions { flex: 0 0 auto; margin-left: auto; }
+.hourly-breakdown-view .dashboard-asset-list th { font-size: 12px; padding: 12px 16px; }
+.hourly-breakdown-view .dashboard-asset-list td { white-space: nowrap; font-size: 14px; padding: 12px 16px; }
 .hourly-breakdown-view .hourly-bd-in { background: #fce0eb; color: #87244b; font-weight: 700; font-variant-numeric: tabular-nums; }
 .hourly-breakdown-view .hourly-bd-out { background: #dcf4e4; color: #186738; font-weight: 700; font-variant-numeric: tabular-nums; }
 [data-theme="dark"] .hourly-breakdown-view .hourly-bd-in { background: #4a1f33; color: #ffc4d8; }

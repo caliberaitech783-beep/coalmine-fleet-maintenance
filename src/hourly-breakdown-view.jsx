@@ -20,6 +20,7 @@ export default function HourlyBreakdownView({ requests, sites, onBack, ActionsTa
   const [site, setSite] = useState("");
   const [now, setNow] = useState(Date.now);
   const id = useId();
+  const [toolbarTarget, setToolbarTarget] = useState(null);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const view = hourlyBreakdownView(requests, hours, site, now, sites);
   const siteTabs = [{ site: "", count: view.total }, ...view.siteCounts];
@@ -51,9 +52,12 @@ export default function HourlyBreakdownView({ requests, sites, onBack, ActionsTa
       </div>
     </div>
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={`${id}-window-${hours}`}>
-      <div className="dashboard-record-summary"><h4>{title}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} events · Pink: BD In · Green: BD Out</span></div>
+      <div className="dashboard-record-summary hourly-breakdown-summary">
+        <div className="hourly-breakdown-summary-text"><h4>{title}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} events · Pink: BD In · Green: BD Out</span></div>
+        <div className="master-actions-slot hourly-breakdown-actions" ref={setToolbarTarget} />
+      </div>
       <div className="dashboard-asset-list">
-        <ActionsTable key={`${hours}|${site}`} exportTitle={`Hourly breakdown activity · ${title}`} printTitle={`Hourly breakdown activity · ${title}`} recordDateFilter={false}>
+        <ActionsTable key={`${hours}|${site}`} exportTitle={`Hourly breakdown activity · ${title}`} printTitle={`Hourly breakdown activity · ${title}`} recordDateFilter={false} toolbarTarget={toolbarTarget} toolbarPortal>
           <thead><tr><th>Sites</th><th>Door No</th><th>In/Out</th><th>BD Timing</th></tr></thead>
           <tbody>{view.rows.length ? view.rows.map((row) => <tr key={row.key}>
             <td>{row.site}</td><td>{row.door}</td><td>{row.direction}</td>
