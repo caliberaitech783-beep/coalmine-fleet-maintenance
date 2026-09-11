@@ -47,12 +47,16 @@ export async function downloadDashboardPdf(dashboard, filename) {
       const part = document.createElement("canvas");
       part.width = canvas.width;
       part.height = Math.min(sliceHeight, canvas.height - top);
-      part.getContext("2d").drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
+      const context = part.getContext("2d", {alpha: false});
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, part.width, part.height);
+      context.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
       const pageHeight = part.height * scale;
       const orientation = pageWidth > pageHeight ? "landscape" : "portrait";
       if (!pdf) pdf = new jsPDF({unit: "pt", format: [pageWidth, pageHeight], orientation, compress: true});
       else pdf.addPage([pageWidth, pageHeight], orientation);
-      pdf.addImage(part, "PNG", 0, 0, pageWidth, pageHeight);
+      // Explicit browser JPEG encoding avoids PNG predictor/alpha corruption in PDF viewers.
+      pdf.addImage(part.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, pageWidth, pageHeight);
     }
     pdf.save(filename);
   } finally {
