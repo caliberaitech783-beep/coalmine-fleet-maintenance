@@ -650,7 +650,7 @@ function Login({ onLogin, theme, toggleTheme }) {
           <button
             type="submit"
             className="primary"
-            disabled={working || !username.trim() || !password.trim()}
+            disabled={working || !username.trim() || !password}
           >
             {working ? "Signing in…" : "Sign in"} <ChevronRight />
           </button>
@@ -6153,8 +6153,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     )}
     {changingPassword && <Modal title={`Change password · ${String(changingPassword.employee || changingPassword.login || "Employee").toUpperCase()}`} close={() => setChangingPassword(null)}>
       <form className="form employee-password-form" onSubmit={changeEmployeePassword}>
-        <p>Set a secure temporary password for <b>{String(changingPassword.login || "").toUpperCase()}</b>. Existing login sessions will be signed out.</p>
-        <div className="formgrid"><label>New password *<input name="password" type="password" minLength="8" autoComplete="new-password" required /></label><label>Confirm password *<input name="confirmation" type="password" minLength="8" autoComplete="new-password" required /></label></div>
+        <p>Set a password for <b>{String(changingPassword.login || "").toUpperCase()}</b>. Any non-empty password is allowed, including the registered phone number. Existing login sessions will be signed out.</p>
+        <div className="formgrid"><label>New password *<input name="password" type="password" autoComplete="new-password" required /></label><label>Confirm password *<input name="confirmation" type="password" autoComplete="new-password" required /></label></div>
         <label className="employee-password-require-change"><input name="requireChange" type="checkbox" defaultChecked /><span><b>Require password change at next login</b><small>Recommended for administrator-issued passwords.</small></span></label>
         <footer><button type="button" onClick={() => setChangingPassword(null)}>Cancel</button><button className="primary"><LockKeyhole /> Change password</button></footer>
       </form>

@@ -1179,7 +1179,7 @@ app.post('/api/logout',requireSession,async(req,res,next)=>{
 app.post('/api/login',async(req,res,next)=>{
   try{
     const username=String(req.body?.username||'').trim().toLowerCase();
-    const password=String(req.body?.password||'').trim();
+    const password=String(req.body?.password||'');
     if(!username||!password)return res.status(400).json({error:'User name and password are required.'});
     const {rows:userRows}=await pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Users & employees'`);
     // Filter by the submitted login before verifying any password hashes. A
@@ -4219,7 +4219,7 @@ app.post('/api/masters/:master/:id/password',requireSuper,async(req,res,next)=>{
       await client.query('ROLLBACK');
       return res.status(403).json({error:'Only a Super Admin can change a Super Admin password.'});
     }
-    const validationError=passwordResetValidationError({password,confirmation,phone:passwordResetPhone(user)});
+    const validationError=!password?'A new password is required.':password!==confirmation?'The password confirmation does not match.':'';
     if(validationError){await client.query('ROLLBACK');return res.status(400).json({error:validationError})}
     const login=String(user.login||userLoginCandidates(user)[0]||'').trim();
     const updated={...user,passwordHash:hashPassword(password),mustChangePassword:requireChange};
