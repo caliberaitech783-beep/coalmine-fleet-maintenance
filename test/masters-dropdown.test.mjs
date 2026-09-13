@@ -13,6 +13,20 @@ test("selecting a master suppresses hover reopening until pointer leave", async 
   assert.match(css, /\.masters-menu:not\(\.selection-closed\):focus-within \.masters-dropdown/);
 });
 
+test("every desktop submenu closes after one of its destinations is selected", async () => {
+  const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+
+  for (const menu of ["Whatsapp", "Workspaces", "Admin"]) {
+    assert.match(source, new RegExp(`const \\[${menu.toLowerCase()}SelectionClosed, set${menu}SelectionClosed\\] = useState\\(false\\)`));
+    assert.match(source, new RegExp(`onPointerLeave=\\{\\(\\) => set${menu}SelectionClosed\\(false\\)\\}`));
+  }
+  assert.match(source, /const selectDropdownPage = \(page, event, setSelectionClosed\) => \{[\s\S]*?setSelectionClosed\(true\);[\s\S]*?event\.currentTarget\.blur\(\);/);
+  assert.match(source, /selectDropdownPage\(name, event, setWhatsappSelectionClosed\)/);
+  assert.match(source, /selectDropdownPage\(name, event, setWorkspacesSelectionClosed\)/);
+  assert.match(source, /selectDropdownPage\(name,event,setAdminSelectionClosed\)/);
+  assert.match(source, /event\.currentTarget\.blur\(\)/);
+});
+
 test("reports opens as a graphical dropdown of report sub types", async () => {
   const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../src/style.css", import.meta.url), "utf8");

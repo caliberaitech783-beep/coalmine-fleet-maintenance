@@ -664,10 +664,13 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [mastersOpen, setMastersOpen] = useState(false);
   const [mastersSelectionClosed, setMastersSelectionClosed] = useState(false);
   const [whatsappOpen, setWhatsappOpen] = useState(false);
+  const [whatsappSelectionClosed, setWhatsappSelectionClosed] = useState(false);
   const [workspacesOpen, setWorkspacesOpen] = useState(false);
+  const [workspacesSelectionClosed, setWorkspacesSelectionClosed] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [adminSelectionClosed, setAdminSelectionClosed] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
   useEffect(() => {
@@ -692,6 +695,12 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   };
   const selectPage = (page) => {
     closeMenus();
+    setActive(page);
+  };
+  const selectDropdownPage = (page, event, setSelectionClosed) => {
+    closeMenus();
+    setSelectionClosed(true);
+    event.currentTarget.blur();
     setActive(page);
   };
   const selectMaster = (page, event) => {
@@ -768,12 +777,18 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             ))}
           </div>
         </div>}
-        {canViewWhatsApp && <div className={whatsappOpen ? "masters-menu open" : "masters-menu"}>
+        {canViewWhatsApp && <div
+          className={`masters-menu${whatsappOpen ? " open" : ""}${whatsappSelectionClosed ? " selection-closed" : ""}`}
+          onPointerLeave={() => setWhatsappSelectionClosed(false)}
+        >
           <div className="nav-config-row"><button
             className={whatsappNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
             aria-expanded={whatsappOpen}
-            onClick={() => setWhatsappOpen((value) => !value)}
+            onClick={() => {
+              setWhatsappSelectionClosed(false);
+              setWhatsappOpen((value) => !value);
+            }}
           >
             <MessageCircle />
             <span className="nav-label">WhatsApp Integration</span>
@@ -781,25 +796,31 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           </button></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
             {visibleWhatsAppNav.map(([name, Icon]) => (
-              <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onPointerDown={closeMenus} onClick={() => selectPage(name)}>
+              <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={(event) => selectDropdownPage(name, event, setWhatsappSelectionClosed)}>
                 <Icon /><span className="nav-label">{navigationLabel(name)}</span>
               </button></div>
             ))}
           </div>
         </div>}
-        {permissions.adminLevel !== "Manager" && <div className={workspacesOpen ? "masters-menu open" : "masters-menu"}>
+        {permissions.adminLevel !== "Manager" && <div
+          className={`masters-menu${workspacesOpen ? " open" : ""}${workspacesSelectionClosed ? " selection-closed" : ""}`}
+          onPointerLeave={() => setWorkspacesSelectionClosed(false)}
+        >
           <div className="nav-config-row"><button
             className={operationalWorkspaceNav.some(([name]) => name === active) ? "active" : ""}
             aria-haspopup="menu"
             aria-expanded={workspacesOpen}
-            onClick={() => setWorkspacesOpen((value) => !value)}
+            onClick={() => {
+              setWorkspacesSelectionClosed(false);
+              setWorkspacesOpen((value) => !value);
+            }}
           >
             <Users />
             <span className="nav-label">Operational Workspaces</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown operational-workspaces-dropdown" role="menu">
-            {operationalWorkspaceNav.map(([name, Icon]) => <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={() => selectPage(name)}>
+            {operationalWorkspaceNav.map(([name, Icon]) => <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={(event) => selectDropdownPage(name, event, setWorkspacesSelectionClosed)}>
               <Icon /><span className="nav-label">{name}</span>
             </button></div>)}
           </div>
@@ -843,11 +864,14 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <span className="nav-label">{n}</span>
           </button></div>
         ))}
-        {canViewAdmin && <div className={adminOpen ? "masters-menu open" : "masters-menu"}>
-          <div className="nav-config-row"><button className={[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? "active" : ""} aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => setAdminOpen((value) => !value)}><ShieldCheck /><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
+        {canViewAdmin && <div
+          className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
+          onPointerLeave={() => setAdminSelectionClosed(false)}
+        >
+          <div className="nav-config-row"><button className={[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? "active" : ""} aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);setAdminOpen((value) => !value);}}><ShieldCheck /><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
-            {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={active===name?"active":""} onClick={()=>selectPage(name)}><Icon /><span className="nav-label">{name}</span></button></div>)}
-            {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={active === "Admin locks" ? "active" : ""} onClick={() => selectPage("Admin locks")}><ShieldCheck /><span className="nav-label">Admin locks</span></button></div>}
+            {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={active===name?"active":""} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><Icon /><span className="nav-label">{name}</span></button></div>)}
+            {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={active === "Admin locks" ? "active" : ""} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><ShieldCheck /><span className="nav-label">Admin locks</span></button></div>}
           </div>
         </div>}
       </nav>
