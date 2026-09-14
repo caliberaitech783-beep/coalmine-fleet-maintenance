@@ -295,3 +295,44 @@
 .ai-feeder-overlay.pulse-overlay { padding: 0; }
 .ai-feeder-panel.pulse-panel { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; box-shadow: none; }
 .pulse-panel .pulse-content { flex: 1 1 auto; }
+
+/* Compact case rows: at least ten cases fit on the full-screen panel. A row expands for the complaint, reasons, updates and details. */
+@media (min-width: 651px) {
+  .pulse-content .pulse-meta { margin: 6px 0 8px; }
+  .pulse-content .pulse-breakdown-box { margin-bottom: 8px; padding: 8px; }
+  .pulse-content .pulse-breakdown-total { min-height: 52px; padding: 6px 14px; }
+  .pulse-content .pulse-breakdown-total b { font-size: 26px; }
+  .pulse-content .pulse-breakdown-sites > button { min-height: 30px; padding: 3px 10px; }
+  .pulse-content .pulse-overview { gap: 8px; margin-bottom: 8px; }
+  .pulse-content .pulse-stat { min-height: 50px; padding: 8px 16px; border-radius: 11px; }
+  .pulse-content .pulse-stat b { font-size: 24px; }
+  .pulse-content .pulse-issue-option { min-height: 30px; padding: 3px 9px; }
+  .pulse-content .pulse-results-line { margin-bottom: 6px; }
+  .pulse-content .pulse-case-card { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; align-items: center; column-gap: 14px; row-gap: 0; padding: 5px 12px; margin-bottom: 5px; border-radius: 9px; }
+  .pulse-content .pulse-case-card .pulse-card-heading { flex-direction: column; align-items: flex-start; gap: 3px; margin: 0; }
+  .pulse-content .pulse-case-card .pulse-card-site { font-size: 12px; }
+  .pulse-content .pulse-case-card .pulse-card-status { padding: 1px 6px; font-size: 11px; }
+  .pulse-content .pulse-case-card .pulse-card-main { gap: 12px; min-width: 0; }
+  .pulse-content .pulse-case-card .pulse-card-vehicle { gap: 8px; min-width: 0; }
+  .pulse-content .pulse-case-card .pulse-card-vehicle > span { min-width: 0; }
+  .pulse-content .pulse-case-card .pulse-card-vehicle > svg { width: 30px; height: 30px; padding: 6px; border-radius: 8px; }
+  .pulse-content .pulse-case-card .pulse-card-vehicle b { font-size: 14px; }
+  .pulse-content .pulse-case-card .pulse-card-vehicle small { margin-top: 1px; font-size: 11px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pulse-content .pulse-case-card .pulse-issues { margin: 0; gap: 4px; max-width: 50%; }
+  .pulse-content .pulse-case-card .pulse-issues span { padding: 2px 6px; font-size: 11px; }
+  .pulse-content .pulse-case-card .pulse-card-dates { display: flex; flex-wrap: nowrap; gap: 6px; margin: 0; padding: 0; border: 0; }
+  .pulse-content .pulse-case-card .pulse-card-dates > div { min-width: 118px; padding: 4px 8px; border-radius: 6px; }
+  .pulse-content .pulse-case-card .pulse-card-dates dt { margin-bottom: 0; font-size: 10px; line-height: 1.3; }
+  .pulse-content .pulse-case-card .pulse-card-dates dd { font-size: 12px; line-height: 1.3; }
+  .pulse-content .pulse-case-card .pulse-card-dates .pulse-date { display: flex; gap: 5px; white-space: nowrap; }
+  .pulse-content .pulse-case-card .pulse-duration, .pulse-content .pulse-case-card .pulse-card-dates .pulse-days { font-size: 14px; line-height: 1.3; }
+  .pulse-content .pulse-case-card .pulse-card-reasons, .pulse-content .pulse-case-card .pulse-latest-update, .pulse-content .pulse-case-card .pulse-record-detail, .pulse-content .pulse-case-card .pulse-details-toggle { grid-column: 1 / -1; }
+  .pulse-content .pulse-case-card:not(.expanded) .pulse-card-reasons, .pulse-content .pulse-case-card:not(.expanded) .pulse-latest-update, .pulse-content .pulse-case-card:not(.expanded) .pulse-details-toggle { display: none; }
+  .pulse-content .pulse-case-card.expanded .pulse-card-reasons { margin: 10px 0 8px; }
+  .pulse-content .pulse-case-card.expanded .pulse-record-detail { padding: 12px 0; }
+  .pulse-content .pulse-case-card.expanded .pulse-details-toggle { padding: 8px 0 2px; }
+}
+@media (min-width: 651px) and (max-width: 1100px) {
+  .pulse-content .pulse-case-card { grid-template-columns: 130px minmax(0, 1fr); }
+  .pulse-content .pulse-case-card .pulse-card-dates { grid-column: 1 / -1; flex-wrap: wrap; margin-top: 4px; }
+}

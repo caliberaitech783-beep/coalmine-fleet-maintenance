@@ -92,7 +92,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
           <p><b>Case order:</b> Critical first, longest ETC overdue first. Other critical cases follow by longest standing time, then warnings and updates.</p>
           <dl>{columns.map(column => <div key={column.key}><dt className={column.tone}>{column.label}<small>{severityLabels[column.tone]}</small></dt><dd>{issueHelp[column.key]}</dd></div>)}</dl>
           <p>Issue counts can overlap: one request may be both overdue and down for 3 days. Verified requests and requests matching none of these checks are excluded. Filters narrow the results.</p>
-          <p>Cards show the site, equipment, status, standing time, ETC, complaint and recorded reasons. Expand a card for daily updates and full details. <b>{PAGE_SIZE} cases per page · IST · Refreshes every 30 seconds.</b></p>
+          <p>Each row shows the site, equipment, status, alerts, standing time and ETC. Expand a row for the complaint, recorded reasons, daily updates and full details. <b>{PAGE_SIZE} cases per page · IST · Refreshes every 30 seconds.</b></p>
         </div>}
       </div>
     </div><span>{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span></div>
@@ -126,7 +126,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
               const isExpanded = expanded === row.key;
               const highlights = reasons.reasons.filter(reason => reason.key !== 'work');
               const latestUpdate = reasons.updates.find(update => update.remark);
-              return <article className={`pulse-case-card ${row.issues.length ? pulseCaseSeverity(row) : 'plain'}`} key={row.key}>
+              return <article className={`pulse-case-card ${row.issues.length ? pulseCaseSeverity(row) : 'plain'}${isExpanded ? ' expanded' : ''}`} key={row.key}>
                 <div className="pulse-card-heading"><span className="pulse-card-site"><MapPin size={14} />{row.site}</span><span className="pulse-card-status">{requestStatusLabel(request)}</span></div>
                 <div className="pulse-card-main"><button type="button" className="pulse-record-link" aria-expanded={isExpanded} aria-controls={`pulse-record-${row.key}`} onClick={() => setExpanded(isExpanded ? '' : row.key)}><span className="pulse-card-vehicle"><Truck size={22} /><span><b>{request.door || request.reg || 'Not recorded'}</b><small>{request.equipmentGroup || request.equipment || ''}{request.equipmentGroup || request.equipment ? ' · ' : ''}{request.ref || 'Reference not recorded'}</small></span></span><ChevronDown size={18} /></button>
                 <div className="pulse-issues">{row.issues.length ? row.issues.map(issue => <span className={issue.severity} data-selected={filters.type === issue.type} key={issue.type}>{labels[issue.type]}</span>) : <span className="plain">No alerts</span>}</div></div>

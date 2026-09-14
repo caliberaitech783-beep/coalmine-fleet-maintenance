@@ -379,3 +379,13 @@ test("Info Pulse opens full screen with its content scrolling inside the panel",
   assert.match(css, /\.pulse-panel \.pulse-content \{ flex: 1 1 auto; \}/);
   assert.match(css, /\.pulse-content \{[^}]*overflow: auto;[^}]*min-height: 0;/);
 });
+
+test("case rows are compact until expanded, so at least ten fit on the full-screen panel", () => {
+  const source = readFileSync(new URL("../src/info-pulse-content.jsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/info-pulse-content.css", import.meta.url), "utf8");
+  assert.match(source, /className=\{`pulse-case-card \$\{row\.issues\.length \? pulseCaseSeverity\(row\) : 'plain'\}\$\{isExpanded \? ' expanded' : ''\}`\}/);
+  assert.match(source, /Each row shows the site, equipment, status, alerts, standing time and ETC\. Expand a row for the complaint, recorded reasons, daily updates and full details\./);
+  assert.match(css, /\.pulse-content \.pulse-case-card \{ display: grid; grid-template-columns: 150px minmax\(0, 1fr\) auto; align-items: center;/);
+  assert.match(css, /\.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-card-reasons, \.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-latest-update, \.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-details-toggle \{ display: none; \}/);
+  assert.match(css, /\.pulse-content \.pulse-case-card \.pulse-card-dates \{ display: flex; flex-wrap: nowrap;/);
+});
