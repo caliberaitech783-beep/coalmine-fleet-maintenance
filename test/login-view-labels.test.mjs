@@ -45,7 +45,7 @@ test("mobile layout supports iPhone safe areas and dynamic viewport height", () 
 
 test("mobile dialogs support touch dismissal and accessibility", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /onPointerDown=\{\(e\) => e\.target === e\.currentTarget && close\(\)\}/);
+  assert.match(source, /onPointerDown=\{\(e\) => e\.target === e\.currentTarget && !minimized && close\(\)\}/);
   assert.match(source, /role="dialog" aria-modal="true"/);
   assert.match(source, /type="button" onClick=\{close\} aria-label="Close dialog"/);
   assert.doesNotMatch(source, /className="overlay" onMouseDown=/);
