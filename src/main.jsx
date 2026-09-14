@@ -9196,6 +9196,7 @@ function App() {
           <HeaderClock />
           <div>
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            {adminPermissions.adminLevel === "Manager" && <HelpTraining roles={adminPermissions.managerRoles} />}
             <AiFeeder role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} session={session} />
             <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <Search />

@@ -1,11 +1,13 @@
 import React, {useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 import {CheckCircle2, CircleHelp, Languages, PlayCircle, X} from "lucide-react";
-import {userGuideForRole, userGuideStorageKey, userGuideVideo} from "./help-training.mjs";
+import {userGuideStorageKey, userGuideVideo, userGuidesForRoles} from "./help-training.mjs";
 import "./help-training.css";
 
-export default function HelpTraining({role = ""}) {
-  const guide = useMemo(() => userGuideForRole(role), [role]);
+export default function HelpTraining({role = "", roles = []}) {
+  const guides = useMemo(() => userGuidesForRoles([role, ...(Array.isArray(roles) ? roles : [roles])]), [role, roles]);
+  const [selectedRole, setSelectedRole] = useState("");
+  const guide = guides.find((option) => option.role === selectedRole) || guides[0] || null;
   const [open, setOpen] = useState(false);
   const [language, setLanguage] = useState("en");
   const [showCoachmark, setShowCoachmark] = useState(false);
@@ -34,7 +36,7 @@ export default function HelpTraining({role = ""}) {
 
   useEffect(() => {
     videoRef.current?.load();
-  }, [language]);
+  }, [guide?.role, language]);
 
   if (!guide) return null;
 
@@ -76,6 +78,9 @@ export default function HelpTraining({role = ""}) {
           </div>
           <button ref={closeButtonRef} type="button" className="help-training-close" onClick={closeGuide} aria-label="Close Help & Training"><X /></button>
         </header>
+        {guides.length > 1 && <nav className="help-training-role-tabs" aria-label="Manager guide">
+          {guides.map((option) => <button key={option.role} type="button" className={option.role === guide.role ? "active" : ""} aria-pressed={option.role === guide.role} onClick={() => setSelectedRole(option.role)}>{option.role}</button>)}
+        </nav>}
         <div className="help-training-body">
           <aside>
             <small>{guide.role.toUpperCase()}</small>
@@ -84,7 +89,7 @@ export default function HelpTraining({role = ""}) {
             <div className="help-training-audio"><Languages /><span><b>{language === "hi" ? "हिन्दी वीडियो" : "English video"}</b><small>{language === "hi" ? "सरल भारतीय हिन्दी" : "Clear Indian English"}</small></span></div>
           </aside>
           <div className="help-training-player">
-            <div><span>NOW PLAYING</span><b>{language === "hi" ? `${guide.role.replace(" User", "")} उपयोगकर्ता गाइड` : `${guide.role.replace(" User", "")} user guide`}</b></div>
+            <div><span>NOW PLAYING</span><b>{language === "hi" ? `${guide.role} गाइड` : `${guide.role} guide`}</b></div>
             <video ref={videoRef} key={videoSource} controls controlsList="nodownload" preload="metadata" playsInline>
               <source src={videoSource} type="video/mp4" />
               Your browser does not support the training video.
