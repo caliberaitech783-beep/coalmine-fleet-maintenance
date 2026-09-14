@@ -3689,17 +3689,6 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
-app.patch('/api/requests/:reference/delayed-reason',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
-  try{
-    const reference=String(req.params.reference||'').trim();
-    const delayedReason=String(req.body?.delayedReason||'').trim();
-    if(!delayedReason||delayedReason.length>160)return res.status(400).json({error:'Enter a delayed reason of up to 160 characters.'});
-    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>client.query(
-      `UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2 RETURNING ${requestProjection}`,
-      [delayedReason,reference]));
-    res.json(rows[0]);
-  }catch(error){maintenanceWriteFailure(error,res,next)}
-});
 
 app.patch('/api/requests/:reference/close',requireSession,requirePermission('closeRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
@@ -4679,6 +4668,18 @@ async function sendScheduledAuditLogExports(now=new Date()){
     throw error;
   }finally{auditLogExportRunning=false}
 }
+
+app.patch('/api/requests/:reference/delayed-reason',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const delayedReason=String(req.body?.delayedReason||'').trim();
+    if(!delayedReason||delayedReason.length>160)return res.status(400).json({error:'Enter a delayed reason of up to 160 characters.'});
+    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>client.query(
+      `UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2 RETURNING ${requestProjection}`,
+      [delayedReason,reference]));
+    res.json(rows[0]);
+  }catch(error){maintenanceWriteFailure(error,res,next)}
+});
 
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
