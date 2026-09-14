@@ -912,7 +912,9 @@ app.get('/api/app-version',(_req,res)=>{
 app.post('/api/preferred-language',requireSession,async(req,res,next)=>{
   try{
     const language=normalizeLanguage(req.body?.preferredLanguage);
-    if(!language)return res.status(400).json({error:'Choose English or Hindi as the preferred language.'});
+    const secondary=normalizeLanguage(req.body?.secondaryLanguage);
+    if(!language)return res.status(400).json({error:'Choose a supported language as Language 1.'});
+    if(secondary&&secondary===language)return res.status(400).json({error:'Language 2 must differ from Language 1.'});
     const login=String(req.session.login||'').trim().toLowerCase();
     const name=String(req.session.name||'').trim().toLowerCase();
     const {rows}=await pool.query(`SELECT id,record_data FROM master_records
@@ -921,10 +923,10 @@ app.post('/api/preferred-language',requireSession,async(req,res,next)=>{
         ($2 <> '' AND lower(trim(record_data->>'employee'))=$2)
       ) ORDER BY CASE WHEN lower(trim(record_data->>'login'))=$1 THEN 0 ELSE 1 END,created_at DESC LIMIT 1`,[login,name]);
     const row=rows[0];
-    if(row&&normalizeLanguage(row.record_data?.preferredLanguage)!==language){
-      await pool.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify({...row.record_data,preferredLanguage:language}),row.id]);
+    if(row&&(normalizeLanguage(row.record_data?.preferredLanguage)!==language||normalizeLanguage(row.record_data?.secondaryLanguage)!==secondary)){
+      await pool.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify({...row.record_data,preferredLanguage:language,secondaryLanguage:secondary}),row.id]);
     }
-    res.json({preferredLanguage:language,saved:Boolean(row)});
+    res.json({preferredLanguage:language,secondaryLanguage:secondary,saved:Boolean(row)});
   }catch(error){next(error)}
 });
 
@@ -937,7 +939,7 @@ app.post('/api/translate',requireSession,async(req,res,next)=>{
     const from=normalizeLanguage(req.body?.from),to=normalizeLanguage(req.body?.to);
     if(!text)return res.status(400).json({error:'Text to translate is required.'});
     if(text.length>MAX_TRANSLATION_CHARS)return res.status(400).json({error:`Text longer than ${MAX_TRANSLATION_CHARS} characters cannot be translated.`});
-    if(!from||!to)return res.status(400).json({error:'Choose English or Hindi as the source and target language.'});
+    if(!from||!to)return res.status(400).json({error:'Choose supported source and target languages.'});
     if(from===to)return res.json({text,from,to,translated:false,configured:true});
     const translator=await translatorPromise;
     if(!translator.configured)return res.json({text,from,to,translated:false,configured:false});
@@ -1034,6 +1036,7 @@ function loginPayload({token,profile,employee,login}){
     assignedRole:profile.assignedRole,
     permissions:profile.permissions,
     preferredLanguage:normalizeLanguage(employee.preferredLanguage)||'en',
+    secondaryLanguage:normalizeLanguage(employee.secondaryLanguage)||'',
   };
 }
 
@@ -1477,7 +1480,7 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
     const profile={sessionRole:reset.role,userType:reset.user_type,assignedRole:reset.assigned_role,permissions:reset.permissions||{}};
     await sessionStore.create({token,role:profile.sessionRole,name:reset.employee_name,login:reset.login_name,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
     req.auditSessionToken=token;
-    res.json(loginPayload({token,profile,employee:{employee:reset.employee_name,preferredLanguage:updated.preferredLanguage},login:reset.login_name}));
+    res.json(loginPayload({token,profile,employee:{employee:reset.employee_name,preferredLanguage:updated.preferredLanguage,secondaryLanguage:updated.secondaryLanguage},login:reset.login_name}));
   }catch(error){next(error)}
 });
 
@@ -3677,7 +3680,7 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
     const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
-    const storedComplaintLanguage=/^hi(-|$)/i.test(String(complaintLanguage).trim())?'hi':/^en(-|$)/i.test(String(complaintLanguage).trim())?'en':'';
+    const storedComplaintLanguage=(String(complaintLanguage).trim().toLowerCase().match(/^(en|hi|mr|bn|or|te|gu|pa|ta|kn)(-|$)/i)||[])[1]||'';
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
@@ -3746,12 +3749,12 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     validateRequestTimelineChange(before,{expectedCompletionAt:expectedAt||expectedCompletionAt,...(accepting?{acceptedAt:before.timelineRecordedAt}:{})},{now:before.timelineRecordedAt,userEntered:['expectedCompletionAt']});
     buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
-      complaint_language=CASE WHEN complaint=$2 THEN complaint_language ELSE $11 END,
+      complaint_language=CASE WHEN complaint=$2 THEN complaint_language ELSE '' END,
       accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
       opening_meter_readings=opening_meter_readings || $10::jsonb
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),/[\u0900-\u097F]/.test(String(complaint||''))?'hi':/[A-Za-z]/.test(String(complaint||''))?'en':'']);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading})]);
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });
@@ -3767,7 +3770,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const closingTime=String(req.body?.closingTime||'');
     const maintenanceWork=String(req.body?.maintenanceWork||'').trim();
     const maintenanceAudio=String(req.body?.maintenanceAudio||'');
-    const maintenanceWorkLanguage=/^hi(-|$)/i.test(String(req.body?.maintenanceWorkLanguage||'').trim())?'hi':/^en(-|$)/i.test(String(req.body?.maintenanceWorkLanguage||'').trim())?'en':'';
+    const maintenanceWorkLanguage=(String(req.body?.maintenanceWorkLanguage||'').trim().toLowerCase().match(/^(en|hi|mr|bn|or|te|gu|pa|ta|kn)(-|$)/i)||[])[1]||'';
     const status=String(req.body?.status||'Closed').trim();
     const ideal=req.body?.ideal===true||String(req.body?.ideal||'').toLowerCase()==='true';
     const idleReason=String(req.body?.idleReason||'').trim();

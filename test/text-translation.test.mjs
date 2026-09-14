@@ -16,7 +16,9 @@ import {
 test('normalizeLanguage accepts codes, locales and names in either script', () => {
   for (const value of ['hi', 'HI-IN', 'Hindi', 'हिंदी', ' hi-in ']) assert.equal(normalizeLanguage(value), 'hi', value);
   for (const value of ['en', 'en-IN', 'English', 'EN-GB']) assert.equal(normalizeLanguage(value), 'en', value);
-  for (const value of ['', null, undefined, 'mr', 'French']) assert.equal(normalizeLanguage(value), '', String(value));
+  for (const value of ['mr', 'Marathi', '\u092e\u0930\u093e\u0920\u0940']) assert.equal(normalizeLanguage(value), 'mr', value);
+  for (const value of ['bn-IN', 'or', 'te', 'gu', 'pa', 'ta', 'kn']) assert.ok(normalizeLanguage(value), value);
+  for (const value of ['', null, undefined, 'fr', 'French']) assert.equal(normalizeLanguage(value), '', String(value));
 });
 
 test('speech locale follows the preferred language and defaults to English', () => {
@@ -29,6 +31,9 @@ test('detectLanguage reads Devanagari as Hindi and Latin letters as English', ()
   assert.equal(detectLanguage('इंजन में तेल का रिसाव है।'), 'hi');
   assert.equal(detectLanguage('Brake is not working'), 'en');
   assert.equal(detectLanguage('12345 ---'), '');
+  assert.equal(detectLanguage('\u09ac\u09cd\u09b0\u09c7\u0995'), 'bn');
+  assert.equal(detectLanguage('\u0c2c\u0c4d\u0c30\u0c47\u0c15\u0c4d'), 'te');
+  assert.equal(detectLanguage('\u092c\u094d\u0930\u0947\u0915'), 'hi', 'Devanagari defaults to Hindi; Marathi comes from the recorded language');
   assert.equal(resolveSourceLanguage('Brake failed', 'hi'), 'hi', 'the recorded language wins over the script');
   assert.equal(resolveSourceLanguage('Brake failed', ''), 'en');
 });
@@ -61,6 +66,7 @@ test('translator sends the complaint to Claude with faithful-translation instruc
   assert.match(calls[0].system, /from English to Hindi/);
   assert.match(calls[0].system, /negation, number, vehicle or door number/);
   assert.match(translationInstructions('hi', 'en'), /from Hindi to English/);
+  assert.match(translationInstructions('en', 'te'), /from English to Telugu.*simple everyday Telugu in its own script/);
 });
 
 test('translator skips same-language text, guards length, and rejects empty or refused replies', async () => {

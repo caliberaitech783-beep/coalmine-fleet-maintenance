@@ -202,13 +202,11 @@ const storedSession = (() => {
 })();
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
-// Preferred language (English / Hindi) chosen at sign-in. It seeds speech input
-// and decides the language complaints are *read* in; audio always stays original.
+// Two languages chosen at sign-in. Language 1 is the reading and default speech
+// language; Language 2 is also understood. Complaint text in either language is
+// shown as written, anything else is translated into Language 1. Audio never changes.
 const PREFERRED_LANGUAGE_KEY = "nerveCenterPreferredLanguage";
-const LOGIN_LANGUAGE_OPTIONS = [
-  { code: "en", nativeName: "English", hint: "Speak and read complaints in English" },
-  { code: "hi", nativeName: "हिंदी", hint: "शिकायत हिंदी में बोलें और पढ़ें" },
-];
+const SECONDARY_LANGUAGE_KEY = "nerveCenterSecondaryLanguage";
 const SESSION_EXPIRED_PARAM = "session-expired";
 const SESSION_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const LOGIN_LANDING_PAGE = "Dashboard";
@@ -414,7 +412,11 @@ function Login({ onLogin, theme, toggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [preferredLanguage, setPreferredLanguage] = useState(() => preferredLanguageCode("en"));
+  const [preferredLanguage, setPreferredLanguage] = useState(() => preferredLanguageCodes()[0] || "en");
+  const [secondaryLanguage, setSecondaryLanguage] = useState(() => {
+    const [first, second] = preferredLanguageCodes();
+    return second || ((first || "en") === "hi" ? "en" : "hi");
+  });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
@@ -448,12 +450,16 @@ function Login({ onLogin, theme, toggleTheme }) {
       assignedRole: data.assignedRole || "",
       permissions: data.permissions || {},
       preferredLanguage,
+      secondaryLanguage,
     });
-    try { localStorage.setItem(PREFERRED_LANGUAGE_KEY, preferredLanguage); } catch {}
+    try {
+      localStorage.setItem(PREFERRED_LANGUAGE_KEY, preferredLanguage);
+      localStorage.setItem(SECONDARY_LANGUAGE_KEY, secondaryLanguage);
+    } catch {}
     void fetch("/api/preferred-language", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.token}` },
-      body: JSON.stringify({ preferredLanguage }),
+      body: JSON.stringify({ preferredLanguage, secondaryLanguage }),
     }).catch(() => {});
     if (rememberMe) {
       localStorage.setItem("nerveCenterSession", session);
@@ -664,21 +670,23 @@ function Login({ onLogin, theme, toggleTheme }) {
             </button>
           </div>
           <fieldset className="login-language">
-            <legend className="login-label">Preferred language · पसंदीदा भाषा</legend>
-            <div className="login-language-options" role="radiogroup" aria-label="Preferred language">
-              {LOGIN_LANGUAGE_OPTIONS.map((option) => (
-                <label key={option.code} className={preferredLanguage === option.code ? "selected" : ""}>
-                  <input
-                    type="radio"
-                    name="preferredLanguage"
-                    value={option.code}
-                    checked={preferredLanguage === option.code}
-                    onChange={() => setPreferredLanguage(option.code)}
-                  />
-                  <span><b>{option.nativeName}</b><small>{option.hint}</small></span>
+            <legend className="login-label">Preferred languages · पसंदीदा भाषाएँ</legend>
+            <div className="login-language-options">
+              {[
+                ["preferredLanguage", "Language 1 · भाषा 1", preferredLanguage, (code) => { setPreferredLanguage(code); if (code === secondaryLanguage) setSecondaryLanguage(preferredLanguage); }],
+                ["secondaryLanguage", "Language 2 · भाषा 2", secondaryLanguage, (code) => { setSecondaryLanguage(code); if (code === preferredLanguage) setPreferredLanguage(secondaryLanguage); }],
+              ].map(([name, label, value, pick]) => (
+                <label key={name}>
+                  <small>{label}</small>
+                  <select name={name} value={value} onChange={(event) => pick(event.target.value)}>
+                    {speechLanguages.map(([, englishName, code, nativeName]) => (
+                      <option key={code} value={code}>{nativeName}{nativeName === englishName ? "" : ` · ${englishName}`}</option>
+                    ))}
+                  </select>
                 </label>
               ))}
             </div>
+            <small className="login-language-hint">Language 1 is used to speak and to read complaints. Complaints in Language 2 are shown as written; other languages are translated into Language 1.</small>
           </fieldset>
           <label className="remember-me">
             <input
@@ -4046,35 +4054,62 @@ function Breakdown({ requests = [] }) {
     </section>
   );
 }
+// [speech locale, English name, code, native name]. Order is the order shown in
+// the login dropdowns. Mirrors SUPPORTED_LANGUAGES in text-translation.mjs.
 const speechLanguages = [
-  ["hi-IN", "Hindi"],
-  ["en-IN", "English"],
+  ["en-IN", "English", "en", "English"],
+  ["hi-IN", "Hindi", "hi", "हिंदी"],
+  ["mr-IN", "Marathi", "mr", "मराठी"],
+  ["bn-IN", "Bengali", "bn", "বাংলা"],
+  ["or-IN", "Odia", "or", "ଓଡ଼ିଆ"],
+  ["te-IN", "Telugu", "te", "తెలుగు"],
+  ["gu-IN", "Gujarati", "gu", "ગુજરાતી"],
+  ["pa-IN", "Punjabi", "pa", "ਪੰਜਾਬੀ"],
+  ["ta-IN", "Tamil", "ta", "தமிழ்"],
+  ["kn-IN", "Kannada", "kn", "ಕನ್ನಡ"],
 ];
-// Language helpers shared by speech input and complaint display. They mirror
-// text-translation.mjs on the server and stay dependency-free for the browser.
+const languageScripts = [["hi", /[\u0900-\u097F]/], ["bn", /[\u0980-\u09FF]/], ["pa", /[\u0A00-\u0A7F]/], ["gu", /[\u0A80-\u0AFF]/], ["or", /[\u0B00-\u0B7F]/], ["ta", /[\u0B80-\u0BFF]/], ["te", /[\u0C00-\u0C7F]/], ["kn", /[\u0C80-\u0CFF]/], ["en", /[A-Za-z]/]];
+// Language helpers shared by the login form, speech input and complaint display.
+// They stay dependency-free so the browser bundle needs no server module.
 function languageCode(value) {
   const text = String(value ?? "").trim().toLowerCase();
-  if (text === "hi" || text.startsWith("hi-") || text === "hindi" || text === "हिंदी") return "hi";
-  if (text === "en" || text.startsWith("en-") || text === "english") return "en";
-  return "";
+  if (!text) return "";
+  const match = speechLanguages.find(([, name, code, native]) => text === code || text.startsWith(`${code}-`) || text === name.toLowerCase() || text === native.toLowerCase());
+  return match ? match[2] : "";
 }
-function preferredLanguageCode(fallback = "") {
+function languageLabel(code) {
+  const entry = speechLanguages.find(([, , value]) => value === code);
+  return entry ? entry[3] : code;
+}
+// [Language 1, Language 2] of the signed-in user; empty when nothing is stored.
+function preferredLanguageCodes() {
   try {
     const raw = localStorage.getItem("nerveCenterSession") || sessionStorage.getItem("nerveCenterSession");
     const stored = raw ? JSON.parse(raw) : null;
-    return languageCode(stored?.preferredLanguage) || languageCode(localStorage.getItem("nerveCenterPreferredLanguage")) || fallback;
+    const first = languageCode(stored?.preferredLanguage) || languageCode(localStorage.getItem("nerveCenterPreferredLanguage"));
+    const second = languageCode(stored?.secondaryLanguage) || languageCode(localStorage.getItem("nerveCenterSecondaryLanguage"));
+    return [first, second && second !== first ? second : ""].filter(Boolean);
   } catch {
-    return fallback;
+    return [];
   }
 }
 function speechLocaleForLanguage(code) {
-  return languageCode(code) === "en" ? "en-IN" : "hi-IN";
+  const entry = speechLanguages.find(([, , value]) => value === languageCode(code));
+  return entry ? entry[0] : "hi-IN";
+}
+// The speech box offers the user's own two languages; every language when none is stored.
+function speechLanguageOptions() {
+  const codes = preferredLanguageCodes();
+  const own = speechLanguages.filter(([, , code]) => codes.includes(code));
+  return own.length ? own : speechLanguages;
 }
 function textLanguageCode(text, spokenLocale = "") {
   const value = String(text ?? "");
-  if (/[\u0900-\u097F]/.test(value)) return "hi";
-  if (/[A-Za-z]/.test(value)) return "en";
-  return languageCode(spokenLocale);
+  const hit = languageScripts.find(([, pattern]) => pattern.test(value));
+  const spoken = languageCode(spokenLocale);
+  // Devanagari is shared by Hindi and Marathi; trust the spoken language there.
+  if (hit && hit[0] === "hi" && spoken === "mr") return "mr";
+  return hit ? hit[0] : spoken;
 }
 const translationRequests = new Map();
 function requestTranslation(text, from, to) {
@@ -4091,13 +4126,15 @@ function requestTranslation(text, from, to) {
   }
   return translationRequests.get(key);
 }
-// Shows stored complaint text in the reader's preferred language. The original
-// wording is one tap away and the recorded audio is never changed.
+// Shows stored complaint text in the reader's Language 1. Text already in either
+// of the reader's languages is shown as written; the original wording is always
+// one tap away and the recorded audio is never changed.
 function TranslatedText({ text, language = "", as: Tag = "span", className = "", helper = false, fallback = "—" }) {
   const value = String(text ?? "").trim();
-  const reader = preferredLanguageCode("");
+  const readers = preferredLanguageCodes();
+  const reader = readers[0] || "";
   const source = languageCode(language) || textLanguageCode(value);
-  const wanted = Boolean(value && reader && source && source !== reader);
+  const wanted = Boolean(value && reader && source && !readers.includes(source));
   const key = `${source}|${reader}|${value}`;
   const [translation, setTranslation] = useState({ key: "", text: "", status: "idle" });
   const [showOriginal, setShowOriginal] = useState(false);
@@ -4114,7 +4151,7 @@ function TranslatedText({ text, language = "", as: Tag = "span", className = "",
   if (!value) return helper ? null : <Tag className={className}>{fallback}</Tag>;
   if (!wanted) return helper ? null : <Tag className={className}>{value}</Tag>;
   const translated = translation.key === key && translation.status === "done" ? translation.text : "";
-  const sourceName = source === "hi" ? "हिंदी" : "English";
+  const sourceName = languageLabel(source);
   if (helper) {
     return translated ? <small className="translated-helper"><b>{reader === "hi" ? "आपकी भाषा में:" : "In your language:"}</b> {translated}</small> : null;
   }
@@ -4139,7 +4176,7 @@ function EnhancedSpeechComplaint({
   required = true,
 }) {
   const [text, setText] = useState(""),
-    [lang, setLang] = useState(() => speechLocaleForLanguage(preferredLanguageCode("hi"))),
+    [lang, setLang] = useState(() => speechLocaleForLanguage(preferredLanguageCodes()[0] || "hi")),
     [listening, setListening] = useState(false),
     [working, setWorking] = useState(false),
     [note, setNote] = useState(""),
@@ -4322,9 +4359,9 @@ function EnhancedSpeechComplaint({
           disabled={listening || working}
           onChange={(e) => setLang(e.target.value)}
         >
-          {speechLanguages.map(([code, name]) => (
+          {speechLanguageOptions().map(([code, name, , nativeName]) => (
             <option key={code} value={code}>
-              {name}
+              {nativeName === name ? name : `${nativeName} · ${name}`}
             </option>
           ))}
         </select>
