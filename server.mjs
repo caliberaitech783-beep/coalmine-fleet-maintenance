@@ -42,7 +42,7 @@ import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-templat
 import {hierarchyReportMessagePurpose} from './whatsapp-template-catalog.mjs';
 import {registerWhatsAppReportSettingsApi,reportTemplateState} from './whatsapp-report-settings-api.mjs';
 import {canonicalSiteName,assignedUserSiteName,userSessionLocationName} from './site-location.mjs';
-import {normalizeSessionMessage,sessionMessageValidationError} from './session-message.mjs';
+import {normalizeSessionMessage,sessionMessagePayloadValidationError} from './session-message.mjs';
 import {BACKUP_FORMAT,backupFileName,exportDatabase,readBackupRecords,restoreDatabase} from './database-backup.mjs';
 import {BACKUP_SETTING_KEY,DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './backup-settings.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
@@ -513,6 +513,7 @@ async function migrate(){
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       dismissed_at TIMESTAMPTZ
     );
+    ALTER TABLE session_messages ADD COLUMN IF NOT EXISTS audio_data TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS session_messages_target_idx ON session_messages (target_session_public_id, dismissed_at, created_at);
     CREATE INDEX IF NOT EXISTS session_messages_created_idx ON session_messages (created_at DESC);
     CREATE TABLE IF NOT EXISTS remote_assistance_sessions (
@@ -1556,7 +1557,7 @@ app.post('/api/session-heartbeat',requireSession,async(req,res,next)=>{
 
 app.get('/api/session-messages',requireSession,async(req,res,next)=>{
   try{
-    const {rows}=await pool.query(`SELECT id,message,sender_name AS "senderName",sender_login AS "senderLogin",created_at AS "createdAt"
+    const {rows}=await pool.query(`SELECT id,message,audio_data AS "audioData",sender_name AS "senderName",sender_login AS "senderLogin",created_at AS "createdAt"
       FROM session_messages
       WHERE target_session_public_id=$1 AND dismissed_at IS NULL
       ORDER BY created_at ASC,id ASC`,[req.session.sessionId]);
@@ -1803,7 +1804,8 @@ app.post('/api/user-sessions/:sessionId/messages',requireSuper,requireAdministra
   try{
     const sessionId=String(req.params.sessionId||'').trim();
     const message=normalizeSessionMessage(req.body?.message);
-    const validationError=sessionMessageValidationError(req.body?.message);
+    const audioData=String(req.body?.audioData||'');
+    const validationError=sessionMessagePayloadValidationError({message,audioData});
     if(validationError)return res.status(400).json({error:validationError});
     const {rows:targets}=await pool.query(`SELECT session_public_id AS "sessionId",employee_name AS "name",login_name AS "login",
       last_seen_at>NOW()-INTERVAL '2 minutes' AS online
@@ -1812,12 +1814,12 @@ app.post('/api/user-sessions/:sessionId/messages',requireSuper,requireAdministra
     if(!target)return res.status(404).json({error:'This session is no longer active.'});
     if(!target.online)return res.status(409).json({error:'Messages can only be sent to a user who is online.'});
     const {rows}=await pool.query(`INSERT INTO session_messages
-      (target_session_public_id,target_login,target_name,sender_login,sender_name,message)
-      VALUES ($1,$2,$3,$4,$5,$6)
+      (target_session_public_id,target_login,target_name,sender_login,sender_name,message,audio_data)
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
       RETURNING id,created_at AS "createdAt"`,[
-        target.sessionId,target.login,target.name,String(req.session.login||''),String(req.session.name||''),message
+        target.sessionId,target.login,target.name,String(req.session.login||''),String(req.session.name||''),message,audioData
       ]);
-    req.audit={eventType:'Security',module:'User sessions',action:'Send session message',targetType:'User session',targetReference:target.login||target.name||sessionId,reason:`Administrative message (${message.length} characters)`,changedFields:[]};
+    req.audit={eventType:'Security',module:'User sessions',action:'Send session message',targetType:'User session',targetReference:target.login||target.name||sessionId,reason:audioData?`Administrative voice message${message?` with ${message.length} text characters`:''}`:`Administrative message (${message.length} characters)`,changedFields:[]};
     res.status(201).json({id:rows[0].id,createdAt:rows[0].createdAt});
   }catch(error){next(error)}
 });

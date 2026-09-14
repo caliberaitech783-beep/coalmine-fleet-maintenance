@@ -43,8 +43,12 @@ test("online sessions support persistent direct messages", () => {
   assert.match(server, /app\.get\('\/api\/session-messages',requireSession/);
   assert.match(server, /app\.patch\('\/api\/session-messages\/:messageId\/dismiss',requireSession/);
   assert.match(server, /target_session_public_id=\$1 AND dismissed_at IS NULL/);
+  assert.match(server, /ALTER TABLE session_messages ADD COLUMN IF NOT EXISTS audio_data/);
+  assert.match(server, /audio_data AS "audioData"/);
   assert.match(client, /function SessionMessageComposer/);
   assert.match(client, /function SessionMessageInbox/);
+  assert.match(client, /Record voice message/);
+  assert.match(client, /current\.audioData&&<audio/);
   assert.match(client, /role="alertdialog" aria-modal="true"/);
   assert.match(client, /This message will remain open until you close it\./);
   assert.match(client, /disabled=\{!row\.online\|\|row\.current\}/);

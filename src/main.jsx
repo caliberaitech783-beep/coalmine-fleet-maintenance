@@ -5197,16 +5197,92 @@ function sessionAgeLabel(value) {
 
 function SessionMessageComposer({row,session,onClose,onSent}) {
   const [message,setMessage]=useState("");
+  const [audioData,setAudioData]=useState("");
+  const [recording,setRecording]=useState(false);
+  const [recordingSeconds,setRecordingSeconds]=useState(0);
+  const [recordingNote,setRecordingNote]=useState("");
   const [sending,setSending]=useState(false);
   const [error,setError]=useState("");
+  const recorderRef=useRef(null);
+  const streamRef=useRef(null);
+  const chunksRef=useRef([]);
+  const elapsedTimerRef=useRef(null);
+  const maximumTimerRef=useRef(null);
+  const mountedRef=useRef(true);
+  const releaseMicrophone=()=>{
+    streamRef.current?.getTracks().forEach((track)=>track.stop());
+    streamRef.current=null;
+  };
+  const clearRecordingTimers=()=>{
+    window.clearInterval(elapsedTimerRef.current);
+    window.clearTimeout(maximumTimerRef.current);
+  };
+  const stopRecording=()=>{
+    clearRecordingTimers();
+    if(recorderRef.current?.state==='recording')recorderRef.current.stop();
+    else releaseMicrophone();
+    setRecording(false);
+  };
+  useEffect(()=>()=>{
+    mountedRef.current=false;
+    clearRecordingTimers();
+    if(recorderRef.current?.state==='recording'){
+      recorderRef.current.onstop=null;
+      recorderRef.current.stop();
+    }
+    releaseMicrophone();
+  },[]);
+  const startRecording=async()=>{
+    setError("");setRecordingNote("");
+    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder){
+      setError("Voice recording is not supported here. Use the current Chrome or Edge browser.");
+      return;
+    }
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      if(!mountedRef.current){stream.getTracks().forEach((track)=>track.stop());return;}
+      streamRef.current=stream;
+      chunksRef.current=[];
+      setAudioData("");
+      setRecordingSeconds(0);
+      const preferredType=["audio/mp4","audio/webm;codecs=opus","audio/webm"].find((type)=>window.MediaRecorder.isTypeSupported?.(type));
+      const recorder=preferredType?new MediaRecorder(stream,{mimeType:preferredType}):new MediaRecorder(stream);
+      recorderRef.current=recorder;
+      recorder.ondataavailable=(event)=>{if(event.data?.size)chunksRef.current.push(event.data);};
+      recorder.onstop=()=>{
+        clearRecordingTimers();
+        releaseMicrophone();
+        if(!mountedRef.current)return;
+        setRecording(false);
+        const mimeType=String(recorder.mimeType||preferredType||"audio/webm").split(";")[0];
+        const blob=new Blob(chunksRef.current,{type:mimeType});
+        if(!blob.size){setError("No voice was captured. Please record again.");return;}
+        if(blob.size>3*1024*1024){setError("Voice message is too large. Record a shorter message.");return;}
+        const reader=new FileReader();
+        reader.onload=()=>{if(mountedRef.current){setAudioData(String(reader.result||""));setRecordingNote("Voice message ready. Play it before sending if needed.");}};
+        reader.onerror=()=>{if(mountedRef.current)setError("Could not prepare the voice message. Please record again.");};
+        reader.readAsDataURL(blob);
+      };
+      recorder.start(250);
+      setRecording(true);
+      setRecordingNote("Recording from your microphone...");
+      elapsedTimerRef.current=window.setInterval(()=>setRecordingSeconds((value)=>value+1),1000);
+      maximumTimerRef.current=window.setTimeout(stopRecording,60000);
+    }catch{
+      releaseMicrophone();
+      setRecording(false);
+      setError("Allow microphone access to record a voice message.");
+    }
+  };
   const submit=async(event)=>{
     event.preventDefault();
     const text=message.trim();
-    if(!text)return setError("Write a message before sending.");
+    if(recording)return setError("Stop the recording before sending.");
+    if(!text&&!audioData)return setError("Record a voice message or write a message before sending.");
     setSending(true);
     try{
       const response=await fetch(`/api/user-sessions/${encodeURIComponent(row.sessionId)}/messages`,{
-        method:'POST',headers:{Authorization:`Bearer ${session?.token||authToken}`,'Content-Type':'application/json'},body:JSON.stringify({message:text}),
+        method:'POST',headers:{Authorization:`Bearer ${session?.token||authToken}`,'Content-Type':'application/json'},body:JSON.stringify({message:text,audioData}),
       });
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||'Could not send the session message.');
@@ -5217,9 +5293,13 @@ function SessionMessageComposer({row,session,onClose,onSent}) {
   return <Modal title={`Message · ${row.name||row.login||'Active user'}`} close={sending?()=>{}:onClose} className="session-message-compose-modal">
     <form className="session-message-compose" onSubmit={submit}>
       <div className="session-message-recipient"><span><UserRound /></span><div><small>Send to active session</small><b>{row.name||'Unknown user'}</b><p>{row.login||'No login name'} · {row.location||'Not assigned'}</p></div><i>Online</i></div>
-      <label><span>Short message</span><textarea autoFocus rows="5" maxLength="500" value={message} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a clear message for this user..." /></label>
+      <label><span>Short message <small>Optional with voice</small></span><textarea autoFocus rows="5" maxLength="500" value={message} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a clear message or record your voice..." /></label>
+      <div className={`session-voice-recorder${recording?' recording':''}`}>
+        <div><button type="button" onClick={recording?stopRecording:startRecording} disabled={sending}>{recording?<Square />:<Mic />}{recording?'Stop recording':'Record voice message'}</button><span>{recording?`Recording ${Math.floor(recordingSeconds/60)}:${String(recordingSeconds%60).padStart(2,'0')} · maximum 1 minute`:recordingNote||'The user can play your voice note inside the message popup.'}</span></div>
+        {audioData&&<div className="session-voice-preview"><audio controls preload="metadata" src={audioData}>Recorded voice message</audio><button type="button" onClick={()=>{setAudioData("");setRecordingNote("");}} disabled={sending} aria-label="Remove recorded voice message"><X /></button></div>}
+      </div>
       <div className="session-message-compose-meta"><span>{message.length} / 500 characters</span>{error&&<b role="alert">{error}</b>}</div>
-      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||!message.trim()}><Send />{sending?'Sending...':'Send message'}</button></footer>
+      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||recording||(!message.trim()&&!audioData)}><Send />{sending?'Sending...':audioData?'Send voice message':'Send message'}</button></footer>
     </form>
   </Modal>;
 }
@@ -5259,7 +5339,7 @@ function SessionMessageInbox({session}) {
   return createPortal(<div className="session-message-inbox-overlay">
     <section className="session-message-inbox" role="alertdialog" aria-modal="true" aria-labelledby="session-message-title" aria-describedby="session-message-body">
       <header><span><MessageCircle /></span><div><small>Direct message</small><h2 id="session-message-title">Message from {current.senderName||current.senderLogin||'Administrator'}</h2></div>{messages.length>1&&<b>{messages.length} messages</b>}</header>
-      <div className="session-message-inbox-body"><p id="session-message-body">{current.message}</p><small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
+      <div className="session-message-inbox-body" id="session-message-body">{current.message&&<p>{current.message}</p>}{current.audioData&&<audio controls preload="metadata" src={current.audioData}>Voice message from the administrator</audio>}<small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
       {error&&<div className="session-message-inbox-error" role="alert"><AlertTriangle />{error}</div>}
       <footer><span>This message will remain open until you close it.</span><button type="button" onClick={dismiss} disabled={closingId===String(current.id)}><X />{closingId===String(current.id)?'Closing...':'Close message'}</button></footer>
     </section>
