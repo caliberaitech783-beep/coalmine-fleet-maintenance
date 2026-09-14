@@ -1848,7 +1848,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <p className="mine-oem-detail-context">{dashboardRegion === "all" ? "All regions" : dashboardRegion} · {oemLive ? "Current breakdowns" : filteredDateLabel} · {oemDetailRows.length} breakdown assets · {oemDetailRequests.length} records</p>
         <BreakdownTable rows={oemDetailRequests} exportTitle={`OEM BD · ${oemSelectedLabel}`} showBreakdownDays showAudio showReason showCreatedBy showClosedBy showMakeModel showTurnaroundTime showReadOnlyAction />
       </Modal>}
-      {assetDrilldown && <Modal className="dashboard-asset-modal" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
+      {assetDrilldown && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
         <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} />
       </Modal>}
@@ -7332,7 +7332,7 @@ Subsidiaries = function SubsidiariesWithImport({ gotoEquipment, requests = [] } 
   if (!loaded) return <MasterLoader name="Region master" />;
   return <RegionMasterPage records={records} requests={requests} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
-function Modal({ title, close, children, className = "" }) {
+function Modal({ title, close, children, className = "", overlayClassName = "" }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(close);
   closeRef.current = close;
@@ -7343,8 +7343,8 @@ function Modal({ title, close, children, className = "" }) {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const focusableElements = () => Array.from(dialog.querySelectorAll(
-      'button:not(:disabled), [href], input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-    )).filter((element) => element.getAttribute("aria-hidden") !== "true");
+      'button:not(:disabled), summary, [href], input:not([type="hidden"]):not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )).filter((element) => element.getAttribute("aria-hidden") !== "true" && element.getClientRects().length > 0);
     const preferredFocus = dialog.querySelector(
       '[autofocus], form input:not([type="hidden"]):not(:disabled), form select:not(:disabled), form textarea:not(:disabled)',
     );
@@ -7384,7 +7384,7 @@ function Modal({ title, close, children, className = "" }) {
   }, []);
   return (
     <div
-      className="overlay"
+      className={`overlay ${overlayClassName}`.trim()}
       onPointerDown={(e) => e.target === e.currentTarget && close()}
     >
       <div ref={dialogRef} tabIndex={-1} className={`modal ${className}`.trim()} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Dialog"}>

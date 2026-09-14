@@ -342,8 +342,9 @@ test('nested red flag dialog alone handles Escape and Tab without closing the un
   const Modal=new Function('React','useRef','useEffect','document','X',`${compiledModal};return Modal;`)(React,value=>({current:value}),effect=>effects.push(effect),document,Null);
   const closed=[];
   const mount=name=>{
-    const input={getAttribute:()=>null,focus(){document.activeElement=input;focused.push(name);}};
-    const dialog={contains:element=>element===input||element===dialog,querySelector:()=>input,querySelectorAll:()=>[input],focus:()=>input.focus()};
+    const input={getAttribute:()=>null,getClientRects:()=>[{width:180,height:36}],focus(){document.activeElement=input;focused.push(name);}};
+    const hiddenInput={getAttribute:()=>null,getClientRects:()=>[],focus(){document.activeElement=hiddenInput;focused.push(`${name} hidden`);}};
+    const dialog={contains:element=>element===input||element===hiddenInput||element===dialog,querySelector:()=>input,querySelectorAll:()=>[hiddenInput,input],focus:()=>input.focus()};
     const tree=Modal({title:name,close:()=>closed.push(name)});
     children(tree,node=>node.props.role==='dialog')[0].props.ref.current=dialog;
     dialogs.push(dialog);
@@ -354,6 +355,9 @@ test('nested red flag dialog alone handles Escape and Tab without closing the un
   focused.length=0;
   document.activeElement=null;
   for(const listener of listeners)listener({key:'Tab',preventDefault(){}});
+  assert.deepEqual(focused,['Arrival reason']);
+  focused.length=0;
+  for(const listener of listeners)listener({key:'Tab',shiftKey:true,preventDefault(){}});
   assert.deepEqual(focused,['Arrival reason']);
   for(const listener of listeners)listener({key:'Escape',preventDefault(){}});
   assert.deepEqual(closed,['Arrival reason']);

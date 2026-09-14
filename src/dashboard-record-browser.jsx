@@ -98,7 +98,13 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
       : <b>{label}</b>;
   };
   return <div className="dashboard-record-browser">
-    <div className="dashboard-record-controls">
+    <details className="dashboard-record-controls">
+      <summary className="dashboard-record-filter-summary">
+        <b>Filters</b>
+        <span>{[view.regionLabel, view.selection.site, categoryName(view.selection.category), view.selection.group].filter(Boolean).join(" · ")}</span>
+        <span className="dashboard-record-show-filters">Show filters</span>
+        <span className="dashboard-record-hide-filters">Hide filters</span>
+      </summary>
       <div className="dashboard-record-topline">
         <div className="dashboard-record-tabs" role="tablist" aria-label="Chart records by region">
           {view.regions.map((region, index) => <button key={region.code} type="button" role="tab" id={`${id}-${region.code}`} aria-selected={view.selection.region === region.code} aria-controls={`${id}-records`} tabIndex={view.selection.region === region.code ? 0 : -1}
@@ -110,7 +116,7 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
       <div className="dashboard-record-hierarchy">
         {fields.slice(0, visibleLevel).map(([name, label, allLabel], index) => (index === 0 || view.options[fields[index - 1][0]].length > 0) && <FilterTabRow key={`${name}-${levels.slice(0, index + 1).map((parent) => view.selection[parent]).join("|")}`} name={name} label={label} allLabel={allLabel} options={view.options[name]} value={view.selection[name]} choose={choose} resultsId={`${id}-records`} />)}
       </div>
-    </div>
+    </details>
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={view.selection.region ? `${id}-${view.selection.region}` : undefined}>
       <div className="dashboard-record-summary"><h4>{view.regionLabel} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
       <div className="dashboard-asset-list" ref={listRef}>
