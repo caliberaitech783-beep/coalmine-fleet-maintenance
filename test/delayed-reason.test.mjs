@@ -3,6 +3,22 @@ import fs from 'node:fs';
 import test from 'node:test';
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from '../delayed-reason.mjs';
 
+test('maintenance request delayed reasons use searchable master choices and a scoped update',()=>{
+  const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  const form=client.slice(client.indexOf('function DelayedReasonForm'),client.indexOf('function DailyRemarkForm'));
+  assert.match(form,/useMasterRecords\("Delayed Reason"\)/);
+  assert.match(form,/matchesSmartSearch\(query, option\)/);
+  assert.match(form,/Add custom reason/);
+  assert.match(form,/await onSave\(reason.trim\(\)\)/);
+  assert.match(client,/onDelayedReason=\{permissions.editRequests \? setDelaying : null\}/);
+  const route=server.slice(server.indexOf("app.patch('/api/requests/:reference/delayed-reason'"),server.indexOf("app.patch('/api/requests/:reference',"));
+  assert.match(route,/requirePermission\('editRequests',\{role:'Maintenance User'\}\)/);
+  assert.match(route,/withMaintenanceArrivalGuard/);
+  assert.match(route,/delayedReason.length>160/);
+  assert.match(route,/SET delayed_reason=\$1 WHERE reference=\$2/);
+});
+
 test('Delayed Reason master contains the approved starting values',()=>{
   assert.deepEqual(DELAYED_REASON_DEFAULTS,[
     'Parts - OEM',

@@ -7387,6 +7387,36 @@ function MaintenanceRemarks({ remarks = [] }) {
   return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{formatTwelveHourDateTime(item.createdAt)} · {item.authorName}</b><p>{item.remark}</p><small>Delay: {item.delayReason}</small></article>)}</details> : "—";
 }
 
+function DelayedReasonForm({ request, close, onSave }) {
+  const [records, , loaded] = useMasterRecords("Delayed Reason");
+  const [query, setQuery] = useState("");
+  const [reason, setReason] = useState(request.delayedReason || "");
+  const [custom, setCustom] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const options = [...new Set(records.map((record) => String(record.delayedReason || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const visibleOptions = options.filter((option) => matchesSmartSearch(query, option));
+  return <Modal title={`Delayed reason · ${request.door || request.ref}`} close={saving ? () => {} : close}>
+    <form className="form" onSubmit={async (event) => {
+      event.preventDefault();
+      if (!reason.trim() || saving) return;
+      setSaving(true); setError("");
+      try { await onSave(reason.trim()); } catch (error) { setError(error.message); } finally { setSaving(false); }
+    }}>
+      <label className="full">Search delayed reasons<input type="search" data-smart-search value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search master reasons…" /></label>
+      <div className="full" style={{maxHeight: "260px", overflowY: "auto"}} role="group" aria-label="Delayed Reasons master">
+        {!loaded && <p>Loading reasons…</p>}
+        {loaded && !visibleOptions.length && <p>No matching reasons. You can add a custom reason below.</p>}
+        {visibleOptions.map((option) => <button key={option} type="button" className={!custom && reason === option ? "primary" : "secondary"} style={{display: "block", marginBottom: "8px", width: "100%", textAlign: "left"}} onClick={() => {setReason(option); setCustom(false);}}>{option}</button>)}
+      </div>
+      <button type="button" className="secondary full" onClick={() => {setCustom(true); setReason("");}}>Add custom reason</button>
+      {custom ? <label className="full">Custom delayed reason<input autoFocus required maxLength={160} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Enter delayed reason" /></label> : reason && <p className="full">Selected: {reason}</p>}
+      {error && <p className="full" role="alert">{error}</p>}
+      <footer><button type="button" disabled={saving} onClick={close}>Cancel</button><button className="primary" disabled={saving || !reason.trim()}>{saving ? "Saving…" : "Save delayed reason"}</button></footer>
+    </form>
+  </Modal>;
+}
+
 function DailyRemarkForm({ request, close, onSave }) {
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const previous=[...(request.dailyRemarks||[])].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
@@ -7484,7 +7514,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark, onDelayedReason }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
@@ -7524,6 +7554,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     ] : []),
     {key: "status", label: "Status", value: (row) => statusLabel(row)},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
+    ...(onDelayedReason ? [{key: "delayedReason", label: "Delayed reason", value: (row) => row.delayedReason}] : []),
     ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
     ...(startedFirst ? [startedColumn, ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn]),
@@ -7592,6 +7623,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
       <ActionsTable className="workflow-table" toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
+          {onDelayedReason && workflowHeader("delayedReason", "Delayed reason")}
           {showAcceptedTime && workflowHeader("acceptedTime", "Arrival wait")}
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
@@ -7603,6 +7635,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
             const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
               {actionsFirst && workflowActions(row, lockedIdeal)}
+              {onDelayedReason && <td><button type="button" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button></td>}
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
               <td><b>{row.ref}</b></td>
               <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
@@ -8554,6 +8587,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
+  const [delaying, setDelaying] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
   const [userReportCategory, setUserReportCategory] = useState("general");
@@ -8693,7 +8727,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} onDelayedReason={permissions.editRequests ? setDelaying : null} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
@@ -8702,6 +8736,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
+    {delaying && <DelayedReasonForm request={delaying} close={() => setDelaying(null)} onSave={async (delayedReason) => { await onUpdateRequest(delaying.ref, {delayedReason}, "delayed-reason"); setDelaying(null); }} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
@@ -8992,7 +9027,7 @@ function App() {
       return saved;
     },
     updateRequest = async (reference, payload, action = "edit") => {
-      const endpoint = action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
+      const endpoint = action === "delayed-reason" ? `/api/requests/${encodeURIComponent(reference)}/delayed-reason` : action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
       const response = await fetch(endpoint, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },

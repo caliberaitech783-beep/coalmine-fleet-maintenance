@@ -3656,6 +3656,18 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
   }
 });
 
+app.patch('/api/requests/:reference/delayed-reason',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const delayedReason=String(req.body?.delayedReason||'').trim();
+    if(!delayedReason||delayedReason.length>160)return res.status(400).json({error:'Enter a delayed reason of up to 160 characters.'});
+    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>client.query(
+      `UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2 RETURNING ${requestProjection}`,
+      [delayedReason,reference]));
+    res.json(rows[0]);
+  }catch(error){maintenanceWriteFailure(error,res,next)}
+});
+
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
@@ -4078,7 +4090,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const superCanView=(master)=>req.session.role==='super'&&(masterAccessAllows(req.session.permissions,master)||masterAccessAllows(req.session.permissions,master,'mobileMasterAccess'));
     const canViewEquipment=superCanView('Equipment master')||req.session.permissions?.viewEquipment===true;
     const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
-    const canViewDelayedReasons=superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true;
+    const canViewDelayedReasons=superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true||req.session.permissions?.editRequests===true;
     if(!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
