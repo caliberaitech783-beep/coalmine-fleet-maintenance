@@ -10,6 +10,7 @@ import * as actions from "../src/dashboard-card-actions.mjs";
 import * as dates from "../src/dashboard-request-data.mjs";
 import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
 import * as model from "../src/dashboard-drilldown-model.mjs";
+import * as oemBreakdown from "../src/oem-breakdown-model.mjs";
 import {equipmentGroupValue, normalizeEquipmentGroup} from "../equipment-group.mjs";
 import {dashboardCountScale} from "../src/dashboard-count-scale.mjs";
 import {fleetBarHeightPercent} from "../src/fleet-bar-scale.mjs";
@@ -164,7 +165,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     openHourlyBreakdownTab() {},
     isDurationColumn, compareDurationValues,
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
-    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates,
+    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown,
     availabilityRequestsForDate, dashboardFleetSnapshot,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
