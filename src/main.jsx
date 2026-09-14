@@ -151,8 +151,6 @@ import {
   Smartphone,
   Flag,
   HardDrive,
-  Minus,
-  Copy,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -7361,18 +7359,6 @@ function Modal({ title, close, children, className = "", overlayClassName = "" }
   const dialogRef = useRef(null);
   const closeRef = useRef(close);
   closeRef.current = close;
-  // Window state: "normal", "maximized" (fills the screen) or "minimized" (docked as a title bar so the page behind stays usable).
-  const [windowState, setWindowState] = useState("normal");
-  const minimized = windowState === "minimized", maximized = windowState === "maximized";
-  const toggleMinimized = () => setWindowState((current) => current === "minimized" ? "normal" : "minimized");
-  const toggleMaximized = () => setWindowState((current) => current === "maximized" ? "normal" : "maximized");
-  useEffect(() => {
-    // The page behind a minimized dialog scrolls again until it is restored.
-    if (!minimized) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "";
-    return () => { document.body.style.overflow = previousOverflow; };
-  }, [minimized]);
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return undefined;
@@ -7388,7 +7374,6 @@ function Modal({ title, close, children, className = "", overlayClassName = "" }
     if (!dialog.contains(document.activeElement)) (preferredFocus || dialog).focus();
     const handleKeyDown = (event) => {
       if (Array.from(document.querySelectorAll('.overlay > .modal[role="dialog"]')).at(-1) !== dialog) return;
-      if (dialog.classList?.contains("modal-minimized")) return;
       if (event.key === "Escape") {
         event.preventDefault();
         closeRef.current();
@@ -7422,23 +7407,15 @@ function Modal({ title, close, children, className = "", overlayClassName = "" }
   }, []);
   return (
     <div
-      className={`overlay ${overlayClassName}${minimized ? " overlay-minimized" : ""}`.trim()}
-      onPointerDown={(e) => e.target === e.currentTarget && !minimized && close()}
+      className={`overlay ${overlayClassName}`.trim()}
+      onPointerDown={(e) => e.target === e.currentTarget && close()}
     >
-      <div ref={dialogRef} tabIndex={-1} className={`modal ${className}${maximized ? " modal-maximized" : ""}${minimized ? " modal-minimized" : ""}`.trim()} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Dialog"}>
-        <header onDoubleClick={toggleMaximized} onClick={minimized ? toggleMinimized : undefined}>
+      <div ref={dialogRef} tabIndex={-1} className={`modal ${className}`.trim()} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Dialog"}>
+        <header>
           <h3>{title}</h3>
-          <div className="modal-window-controls">
-            <button type="button" onClick={(event) => { event.stopPropagation(); toggleMinimized(); }} aria-label={minimized ? "Restore window" : "Minimize window"} title={minimized ? "Restore" : "Minimize"}>
-              <Minus aria-hidden="true" />
-            </button>
-            <button type="button" onClick={(event) => { event.stopPropagation(); toggleMaximized(); }} aria-label={maximized ? "Restore window size" : "Maximize window"} title={maximized ? "Restore" : "Maximize"}>
-              {maximized ? <Copy aria-hidden="true" /> : <Square aria-hidden="true" />}
-            </button>
-            <button type="button" onClick={close} aria-label="Close dialog">
-              <X aria-hidden="true" />
-            </button>
-          </div>
+          <button type="button" onClick={close} aria-label="Close dialog">
+            <X aria-hidden="true" />
+          </button>
         </header>
         {children}
       </div>
