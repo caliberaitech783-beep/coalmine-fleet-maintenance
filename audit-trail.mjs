@@ -102,6 +102,7 @@ export function auditRouteDetails(method = "", path = "") {
   if (route.includes("navigation-settings")) return { module: "Access control", eventType: "Configuration", action: verb === "GET" ? "View navigation settings" : "Update navigation settings" };
   if (route.includes("admin-locks")) return { module: "Authentication", eventType: "Security", action: verb === "GET" ? "View administrator locks" : "Unlock administrator accounts" };
   if (route.startsWith("/api/user-sessions")) return { module: "User sessions", eventType: "Security", action: verb === "DELETE" ? "Force close session" : "View user sessions" };
+  if (route.startsWith("/api/user-activity")) return { module: "User activity", eventType: "Activity", action: "Record user activity" };
   if (route.startsWith("/api/backups")) {
     const action = verb === "DELETE" ? "Delete backup"
       : route.endsWith("/settings") ? (verb === "GET" ? "View backup schedule" : "Update backup schedule")
@@ -121,19 +122,15 @@ export function auditRouteDetails(method = "", path = "") {
   return { module: segment.replace(/\b\w/g, (letter) => letter.toUpperCase()), eventType: "Activity", action: `${action}: ${route}` };
 }
 
-export function auditShouldRecord(method = "", path = "") {
+export function auditShouldRecord(method = "", path = "", {statusCode = 0} = {}) {
   const verb = String(method).toUpperCase();
   const route = String(path).replace(/\/+$/, "") || "/";
   const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
 
-  if (["/api/login", "/api/logout"].includes(route)) return mutating;
-  if (route.includes("password-reset") || route.includes("change-initial-password")) return mutating;
-  if (route.startsWith("/api/masters/")) return mutating;
-  if (route.startsWith("/api/user-sessions/")) return verb === "DELETE";
-  if (route.startsWith("/api/backups/")) return ["GET","POST","PUT","PATCH","DELETE"].includes(verb);
-
-  // Keep deliberate record corrections and deletions, but exclude request
-  // creation and lifecycle steps such as close, verify, remarks and approvals.
-  if (/^\/api\/requests\/[^/]+$/.test(route)) return ["PUT", "PATCH", "DELETE"].includes(verb);
+  if (route === "/api/session-heartbeat") return false;
+  if (Number(statusCode) >= 400) return route.startsWith("/api/");
+  if (mutating) return route.startsWith("/api/");
+  if (verb === "GET" && /^\/api\/(?:exports|reports|backups)\/.+\/(?:download|export)$/.test(route)) return true;
+  if (verb === "GET" && /^\/api\/backups\/[^/]+\/download$/.test(route)) return true;
   return false;
 }

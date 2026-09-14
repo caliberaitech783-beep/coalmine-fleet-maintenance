@@ -29,6 +29,7 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
+import {buildUserActivitySummary,totalUserWorkedMinutes} from './user-activity-report.mjs';
 import {applyHierarchyDeliveryRule,applyUserReportScheduleOverride,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,normalizeUserReportSchedule,reportsAssignedToDesignation,reportsDueForDesignation,reportsForHierarchyEvent,userReportScheduleValidationError} from './hierarchy-report-flow.mjs';
 import {hierarchyAccessAllowsReport} from './hierarchy-report-catalogue.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
@@ -193,23 +194,15 @@ async function metaWhatsAppRuntimeEnv(){
 
 const auditClean=(value,limit=500)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,limit);
 const auditSessionId=(req)=>{
+  if(req.auditSessionId)return auditClean(req.auditSessionId,80);
+  if(req.auditSessionToken)return createHash('sha256').update(String(req.auditSessionToken)).digest('hex').slice(0,16);
   const token=String(req.headers?.authorization||'').replace(/^Bearer\s+/i,'').trim();
   return token?createHash('sha256').update(token).digest('hex').slice(0,16):'';
 };
 const auditRole=(session={})=>auditClean(session.permissions?.adminLevel||session.assignedRole||session.userType||session.role||'Unauthenticated',100);
 const auditTargetReference=(req)=>auditClean(req.params?.reference||req.params?.id||req.body?.reference||req.body?.username||'',160);
 const auditIpAddress=(req)=>auditClean(String(req.headers?.['x-forwarded-for']||'').split(',')[0]||req.ip||req.socket?.remoteAddress,100);
-const AUDIT_VISIBLE_SCOPE_SQL=`(
-  event_type NOT IN ('Workflow','Workflow timeline') AND (
-  event_type IN ('Security','Master data','Administration')
-  OR action IN ('Edit request','Delete request')
-  OR request_path IN ('/api/login','/api/logout')
-  OR request_path LIKE '/api/password-reset%'
-  OR request_path LIKE '/api/change-initial-password%'
-  OR request_path LIKE '/api/masters/%'
-  OR request_path LIKE '/api/backups/%'
-  OR (request_path LIKE '/api/requests/%' AND request_path NOT LIKE '/api/requests/%/%' AND request_method IN ('PUT','PATCH','DELETE'))
-))`;
+const AUDIT_VISIBLE_SCOPE_SQL=`TRUE`;
 const AUDIT_EVENT_PROJECTION=`id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
   actor_role AS "actorRole",module,action,target_type AS "targetType",target_reference AS "targetReference",reason,
   changed_fields AS "changedFields",ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",session_id AS "sessionId",
@@ -477,6 +470,20 @@ async function migrate(){
     CREATE INDEX IF NOT EXISTS auth_sessions_created_at_idx ON auth_sessions (created_at);
     CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_public_id_idx ON auth_sessions (session_public_id);
     CREATE INDEX IF NOT EXISTS auth_sessions_last_seen_idx ON auth_sessions (last_seen_at DESC);
+    CREATE TABLE IF NOT EXISTS user_session_activity (
+      session_id TEXT PRIMARY KEY,
+      actor_login TEXT NOT NULL DEFAULT '',
+      actor_name TEXT NOT NULL DEFAULT '',
+      actor_role TEXT NOT NULL DEFAULT '',
+      started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      active_seconds BIGINT NOT NULL DEFAULT 0,
+      ip_address TEXT NOT NULL DEFAULT '',
+      device_id TEXT NOT NULL DEFAULT '',
+      user_agent TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS user_session_activity_login_idx ON user_session_activity (actor_login,last_seen_at DESC);
+    CREATE INDEX IF NOT EXISTS user_session_activity_seen_idx ON user_session_activity (last_seen_at DESC);
     CREATE TABLE IF NOT EXISTS info_pulse_prompts (
       login TEXT PRIMARY KEY,
       shown_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -568,8 +575,20 @@ async function migrate(){
       slot_key TEXT PRIMARY KEY,
       status TEXT NOT NULL DEFAULT 'Sending',
       attempts INTEGER NOT NULL DEFAULT 1,
+      audit_report_short_code TEXT NOT NULL DEFAULT '',
+      user_activity_report_short_code TEXT NOT NULL DEFAULT '',
+      exported_event_count INTEGER NOT NULL DEFAULT 0,
+      purged_event_count INTEGER NOT NULL DEFAULT 0,
+      mail_confirmed_at TIMESTAMPTZ,
+      purged_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    ALTER TABLE audit_log_export_runs ADD COLUMN IF NOT EXISTS audit_report_short_code TEXT NOT NULL DEFAULT '';
+    ALTER TABLE audit_log_export_runs ADD COLUMN IF NOT EXISTS user_activity_report_short_code TEXT NOT NULL DEFAULT '';
+    ALTER TABLE audit_log_export_runs ADD COLUMN IF NOT EXISTS exported_event_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE audit_log_export_runs ADD COLUMN IF NOT EXISTS purged_event_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE audit_log_export_runs ADD COLUMN IF NOT EXISTS mail_confirmed_at TIMESTAMPTZ;
+    ALTER TABLE audit_log_export_runs ADD COLUMN IF NOT EXISTS purged_at TIMESTAMPTZ;
     CREATE TABLE IF NOT EXISTS audit_log_export_deliveries (
       slot_key TEXT NOT NULL REFERENCES audit_log_export_runs(slot_key) ON DELETE CASCADE,
       recipient_key TEXT NOT NULL,
@@ -851,7 +870,7 @@ app.use((req,res,next)=>{
   res.on('finish',()=>{
     if(req.audit===false)return;
     const outcome=res.statusCode>=200&&res.statusCode<400?'Success':'Failed';
-    if(!auditShouldRecord(req.method,req.path))return;
+    if(!auditShouldRecord(req.method,req.path,{statusCode:res.statusCode}))return;
     req.auditStatusCode=res.statusCode;
     req.auditDurationMs=Date.now()-startedAt;
     void appendAuditEvent(req,{
@@ -870,6 +889,18 @@ app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
   res.json({version:currentAppVersion,commit:deploymentSha});
+});
+
+app.post('/api/user-activity',requireSession,async(req,res,next)=>{
+  try{
+    const moduleName=auditClean(req.body?.module||'Application',120);
+    const action=auditClean(req.body?.action||'Use application',160);
+    const targetReference=auditClean(req.body?.targetReference||'',160);
+    const reason=auditClean(req.body?.reason||'',500);
+    await appendAuditEvent(req,{eventType:'Activity',module:moduleName,action,targetType:'Application view',targetReference,reason,changedFields:[]});
+    req.audit=false;
+    res.status(204).end();
+  }catch(error){next(error)}
 });
 
 app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
@@ -1233,6 +1264,7 @@ app.post('/api/login',async(req,res,next)=>{
     }
     const token=randomUUID();
     await sessionStore.create({token,role:profile.sessionRole,name:employee.employee,login,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+    req.auditSessionToken=token;
     res.json(loginPayload({token,profile,employee,login}));
   }catch(error){next(error)}
 });
@@ -1378,6 +1410,7 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
     const token=randomUUID();
     const profile={sessionRole:reset.role,userType:reset.user_type,assignedRole:reset.assigned_role,permissions:reset.permissions||{}};
     await sessionStore.create({token,role:profile.sessionRole,name:reset.employee_name,login:reset.login_name,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
+    req.auditSessionToken=token;
     res.json(loginPayload({token,profile,employee:{employee:reset.employee_name},login:reset.login_name}));
   }catch(error){next(error)}
 });
@@ -1395,11 +1428,30 @@ function sessionActivityDetails(req){
   };
 }
 
+async function touchUserSessionActivity(req,session={}){
+  const sessionId=auditClean(session.sessionId,80);
+  if(!sessionId)return;
+  const details=sessionActivityDetails(req);
+  await pool.query(`INSERT INTO user_session_activity
+    (session_id,actor_login,actor_name,actor_role,started_at,last_seen_at,active_seconds,ip_address,device_id,user_agent)
+    VALUES ($1,$2,$3,$4,COALESCE($5::timestamptz,NOW()),NOW(),0,$6,$7,$8)
+    ON CONFLICT (session_id) DO UPDATE SET
+      actor_login=EXCLUDED.actor_login,actor_name=EXCLUDED.actor_name,actor_role=EXCLUDED.actor_role,
+      active_seconds=user_session_activity.active_seconds+LEAST(900,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (NOW()-user_session_activity.last_seen_at)))))::bigint,
+      last_seen_at=NOW(),ip_address=EXCLUDED.ip_address,device_id=EXCLUDED.device_id,user_agent=EXCLUDED.user_agent
+    WHERE user_session_activity.last_seen_at<=NOW()-INTERVAL '5 seconds'`,[
+      sessionId,auditClean(session.login,120),auditClean(session.name,160),auditRole(session),session.created_at||session.createdAt||null,
+      details.ipAddress,details.deviceId,details.userAgent,
+    ]);
+}
+
 async function requireSession(req,res,next){
   try{
     const session=await readSession(req);
     if(!session)return res.status(401).json({error:'Your sign-in has expired. Please sign in again.'});
     req.session=session;
+    req.auditSessionId=session.sessionId;
+    if(typeof touchUserSessionActivity==='function')void touchUserSessionActivity(req,session).catch(error=>console.error('User session activity could not be recorded:',error.message));
     next();
   }catch(error){next(error)}
 }
@@ -1423,6 +1475,8 @@ async function requireSuper(req,res,next){
     if(req.path.startsWith('/api/whatsapp')&&!accessAllows(session.permissions?.tabAccess,'WhatsApp Integration')&&!accessAllows(session.permissions?.mobileTabAccess,'WhatsApp Integration'))
       return res.status(403).json({error:'You do not have access to WhatsApp Integration.'});
     req.session=session;
+    req.auditSessionId=session.sessionId;
+    if(typeof touchUserSessionActivity==='function')void touchUserSessionActivity(req,session).catch(error=>console.error('User session activity could not be recorded:',error.message));
     next();
   }catch(error){next(error)}
 }
@@ -4449,6 +4503,21 @@ const AUDIT_EXPORT_COLUMNS=[
   {label:'Device ID',key:'deviceId'},
   {label:'Session ID',key:'sessionId'},
 ];
+const USER_ACTIVITY_EXPORT_COLUMNS=[
+  {label:'User',key:'userName'},
+  {label:'Login',key:'login'},
+  {label:'Role',key:'role'},
+  {label:'Sessions',key:'sessionCount'},
+  {label:'Total activity count',key:'totalActivityCount'},
+  {label:'Successful activities',key:'successfulCount'},
+  {label:'Failed activities',key:'failedCount'},
+  {label:'Total worked time (HH:MM:SS)',key:'totalWorkedTime'},
+  {label:'Total worked minutes',key:'totalWorkedMinutes'},
+  {label:'First activity',key:'firstActivityAt'},
+  {label:'Last activity',key:'lastActivityAt'},
+  {label:'Modules used',key:'modules'},
+  {label:'Processes performed',key:'processes'},
+];
 
 function auditExportCell(event,key){
   if(key==='occurredAt')return formatDisplayDateTime(event.occurredAt);
@@ -4456,10 +4525,16 @@ function auditExportCell(event,key){
   return event[key]??'';
 }
 
-async function pruneAuditEvents(){
-  if(!databaseReady)return {skipped:true};
-  const result=await pool.query(`DELETE FROM audit_events WHERE occurred_at<NOW()-INTERVAL '5 days'`);
-  return {deleted:result.rowCount||0};
+function userActivityExportCell(row,key){
+  if(['firstActivityAt','lastActivityAt'].includes(key))return row[key]?formatDisplayDateTime(row[key]):'';
+  return row[key]??'';
+}
+
+async function publishAuditWorkbook({shortCode,filename,workbook}){
+  await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at)
+    VALUES ($1,$2,$3,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$4,NOW()+INTERVAL '30 days')`,
+    [randomUUID(),shortCode,filename,workbook]);
+  return `${publicBaseUrl()}/r/${shortCode}`;
 }
 
 let auditLogExportRunning=false;
@@ -4470,7 +4545,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
   const current=currentRows[0];
   if(current?.status?.startsWith('Sent'))return {skipped:true,reason:'already sent',slotKey};
   if(current?.status==='Sending'&&Date.now()-new Date(current.updated_at).getTime()<10*60*1000)return {skipped:true,reason:'already running',slotKey};
-  if(Number(current?.attempts||0)>=3)return {skipped:true,reason:'retry limit reached',slotKey};
+  if(current?.status?.startsWith('Failed')&&Date.now()-new Date(current.updated_at).getTime()<10*60*1000)return {skipped:true,reason:'waiting to retry',slotKey};
   if(!current){
     const {rows:lastRows}=await pool.query(`SELECT updated_at FROM audit_log_export_runs WHERE status LIKE 'Sent%' ORDER BY updated_at DESC LIMIT 1`);
     if(!auditLogExportDue(now,lastRows[0]?.updated_at))return {skipped:true,reason:'outside five-day schedule'};
@@ -4478,15 +4553,18 @@ async function sendScheduledAuditLogExports(now=new Date()){
   const claim=await pool.query(`INSERT INTO audit_log_export_runs (slot_key,status,attempts,updated_at)
     VALUES ($1,'Sending',1,NOW())
     ON CONFLICT (slot_key) DO UPDATE SET status='Sending',attempts=audit_log_export_runs.attempts+1,updated_at=NOW()
-      WHERE audit_log_export_runs.status LIKE 'Failed%' OR (audit_log_export_runs.status='Sending' AND audit_log_export_runs.updated_at<NOW()-INTERVAL '10 minutes')
+      WHERE (audit_log_export_runs.status LIKE 'Failed%' OR audit_log_export_runs.status='Sending') AND audit_log_export_runs.updated_at<NOW()-INTERVAL '10 minutes'
     RETURNING attempts`,[slotKey]);
   if(!claim.rowCount)return {skipped:true,reason:'already claimed',slotKey};
   auditLogExportRunning=true;
   let status='Failed - export did not complete';
   try{
-    const [{rows:eventRows},{rows:userRows}]=await Promise.all([
-      pool.query(`SELECT ${AUDIT_EVENT_PROJECTION} FROM audit_events WHERE occurred_at>=NOW()-INTERVAL '5 days' AND ${AUDIT_VISIBLE_SCOPE_SQL} ORDER BY occurred_at DESC,id DESC LIMIT 5000`),
+    const exportCutoff=now;
+    const [{rows:eventRows},{rows:userRows},{rows:sessionRows}]=await Promise.all([
+      pool.query(`SELECT ${AUDIT_EVENT_PROJECTION} FROM audit_events WHERE occurred_at<=$1 AND ${AUDIT_VISIBLE_SCOPE_SQL} ORDER BY occurred_at ASC,id ASC`,[exportCutoff]),
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+      pool.query(`SELECT session_id AS "sessionId",actor_login AS "actorLogin",actor_name AS "actorName",actor_role AS "actorRole",
+        started_at AS "startedAt",last_seen_at AS "lastSeenAt",active_seconds AS "activeSeconds" FROM user_session_activity WHERE started_at<=$1`,[exportCutoff]),
     ]);
     const recipients=userRows.map(({record_data})=>record_data||{}).map((user)=>({user,profile:resolveMobileAccess({user})}))
       .filter(({profile})=>profile.sessionRole==='super'&&['Admin','Super Admin'].includes(profile.permissions?.adminLevel))
@@ -4497,14 +4575,21 @@ async function sendScheduledAuditLogExports(now=new Date()){
         phone:String(user.phone||user.phoneNo||user.phoneNumber||'').trim(),
       }));
     if(!recipients.length)throw new Error('No Admin or Super Admin recipients are configured.');
-    const workbook=buildXlsxWorkbookBuffer('Nerve Center Audit Trail',AUDIT_EXPORT_COLUMNS,eventRows.map((event)=>AUDIT_EXPORT_COLUMNS.map(({key})=>auditExportCell(event,key))));
-    const shortCode=randomUUID().replace(/-/g,'').slice(0,16);
-    const filename=`BDMS-Audit-Trail-${slotKey}.xlsx`;
+    const configuredEmails=[...new Set(recipients.map((recipient)=>recipient.email.toLowerCase()).filter(Boolean))];
+    if(!configuredEmails.length)throw new Error('No Admin or Super Admin email address is configured. Audit records were retained.');
+    const activityRows=buildUserActivitySummary(eventRows,{sessions:sessionRows});
+    const totalWorkedMinutes=totalUserWorkedMinutes(activityRows);
+    const auditWorkbook=buildXlsxWorkbookBuffer('Nerve Center Audit Trail',AUDIT_EXPORT_COLUMNS,eventRows.map((event)=>AUDIT_EXPORT_COLUMNS.map(({key})=>auditExportCell(event,key))));
+    const activityWorkbook=buildXlsxWorkbookBuffer('Nerve Center User Activity',USER_ACTIVITY_EXPORT_COLUMNS,activityRows.map((row)=>USER_ACTIVITY_EXPORT_COLUMNS.map(({key})=>userActivityExportCell(row,key))));
+    const auditShortCode=randomUUID().replace(/-/g,'').slice(0,16);
+    const activityShortCode=randomUUID().replace(/-/g,'').slice(0,16);
     await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
-    await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at)
-      VALUES ($1,$2,$3,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$4,NOW()+INTERVAL '30 days')`,
-      [randomUUID(),shortCode,filename,workbook]);
-    const url=`${publicBaseUrl()}/r/${shortCode}`;
+    const [auditUrl,userActivityUrl]=await Promise.all([
+      publishAuditWorkbook({shortCode:auditShortCode,filename:`BDMS-Audit-Trail-${slotKey}.xlsx`,workbook:auditWorkbook}),
+      publishAuditWorkbook({shortCode:activityShortCode,filename:`BDMS-User-Activity-${slotKey}.xlsx`,workbook:activityWorkbook}),
+    ]);
+    await pool.query(`UPDATE audit_log_export_runs SET audit_report_short_code=$1,user_activity_report_short_code=$2,
+      exported_event_count=$3,updated_at=NOW() WHERE slot_key=$4`,[auditShortCode,activityShortCode,eventRows.length,slotKey]);
     const whatsappEnv=await metaWhatsAppRuntimeEnv();
     let emailSent=0,whatsappSent=0,deliveryFailures=0;
     const deliveredEmails=new Set(),deliveredPhones=new Set();
@@ -4515,13 +4600,13 @@ async function sendScheduledAuditLogExports(now=new Date()){
         const delivery=await pool.query(`INSERT INTO audit_log_export_deliveries (slot_key,recipient_key,channel,status,attempts,updated_at)
           VALUES ($1,$2,'Email','Sending',1,NOW())
           ON CONFLICT (slot_key,recipient_key,channel) DO UPDATE SET status='Sending',attempts=audit_log_export_deliveries.attempts+1,updated_at=NOW()
-            WHERE audit_log_export_deliveries.status LIKE 'Failed%' AND audit_log_export_deliveries.attempts<3
+            WHERE audit_log_export_deliveries.status LIKE 'Failed%' AND audit_log_export_deliveries.updated_at<NOW()-INTERVAL '10 minutes'
           RETURNING attempts`,[slotKey,emailKey]);
         if(delivery.rowCount){
           let deliveryStatus='Sent';
           try{
-            const result=await sendAuditLogExportEmail({to:recipient.email,url,generatedAt:now,rowCount:eventRows.length});
-            if(result.sent)emailSent++;else throw new Error(result.reason||'Email was not sent.');
+            const result=await sendAuditLogExportEmail({to:recipient.email,auditUrl,userActivityUrl,generatedAt:now,rowCount:eventRows.length,userCount:activityRows.length,totalWorkedMinutes});
+            if(result.sent&&result.confirmed)emailSent++;else throw new Error(result.reason||'The mail server did not confirm delivery.');
           }catch(error){deliveryFailures++;deliveryStatus=`Failed - ${String(error?.message||'Email delivery error').slice(0,160)}`;console.error(`Audit Trail email failed for ${recipient.login||recipient.email}:`,error.message)}
           await pool.query(`UPDATE audit_log_export_deliveries SET status=$1,updated_at=NOW() WHERE slot_key=$2 AND recipient_key=$3 AND channel='Email'`,[deliveryStatus,slotKey,emailKey]);
         }
@@ -4532,14 +4617,14 @@ async function sendScheduledAuditLogExports(now=new Date()){
         const delivery=await pool.query(`INSERT INTO audit_log_export_deliveries (slot_key,recipient_key,channel,status,attempts,updated_at)
           VALUES ($1,$2,'WhatsApp','Sending',1,NOW())
           ON CONFLICT (slot_key,recipient_key,channel) DO UPDATE SET status='Sending',attempts=audit_log_export_deliveries.attempts+1,updated_at=NOW()
-            WHERE audit_log_export_deliveries.status LIKE 'Failed%' AND audit_log_export_deliveries.attempts<3
+            WHERE audit_log_export_deliveries.status LIKE 'Failed%' AND audit_log_export_deliveries.updated_at<NOW()-INTERVAL '10 minutes'
           RETURNING attempts`,[slotKey,normalizedPhone]);
         if(delivery.rowCount){
           let deliveryStatus='Sent';
           try{
             await sendMetaWhatsAppTemplate({
               to:recipient.phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',
-              parameters:[`Nerve Center Audit Trail export. Latest five days: ${eventRows.length.toLocaleString('en-IN')} records. Excel: ${url}. Link expires in 30 days.`],
+              parameters:[`Nerve Center five-day reports. Audit Trail: ${auditUrl} User Activity: ${userActivityUrl} Links expire in 30 days.`],
             },{env:whatsappEnv});
             whatsappSent++;
           }catch(error){deliveryFailures++;deliveryStatus=`Failed - ${String(error?.message||'WhatsApp delivery error').slice(0,160)}`;console.error(`Audit Trail WhatsApp failed for ${recipient.login||recipient.phone}:`,error.message)}
@@ -4553,14 +4638,28 @@ async function sendScheduledAuditLogExports(now=new Date()){
       }
     }
     const {rows:deliveryRows}=await pool.query(`SELECT
-      COUNT(*) FILTER (WHERE status='Sent')::int AS sent,
-      COUNT(*) FILTER (WHERE status LIKE 'Failed%')::int AS failed
+      COUNT(*) FILTER (WHERE channel='Email' AND status='Sent')::int AS email_sent,
+      COUNT(*) FILTER (WHERE channel='Email' AND status LIKE 'Failed%')::int AS email_failed,
+      COUNT(*) FILTER (WHERE channel='WhatsApp' AND status LIKE 'Failed%')::int AS whatsapp_failed
       FROM audit_log_export_deliveries WHERE slot_key=$1`,[slotKey]);
-    if(!Number(deliveryRows[0]?.sent))throw new Error('No configured Admin email or WhatsApp recipient could be reached.');
-    deliveryFailures=Number(deliveryRows[0]?.failed||deliveryFailures);
-    status=deliveryFailures?`Failed - ${deliveryFailures} delivery channel(s) failed`:`Sent - email ${emailSent}, WhatsApp ${whatsappSent}`;
-    await pool.query(`UPDATE audit_log_export_runs SET status=$1,updated_at=NOW() WHERE slot_key=$2`,[status,slotKey]);
-    return {slotKey,status,rowCount:eventRows.length,url,emailSent,whatsappSent,deliveryFailures};
+    const confirmedEmails=Number(deliveryRows[0]?.email_sent||0);
+    const failedEmails=Number(deliveryRows[0]?.email_failed||0);
+    if(confirmedEmails<configuredEmails.length||failedEmails)throw new Error(`Administrator email confirmation incomplete (${confirmedEmails}/${configuredEmails.length}). Audit records were retained.`);
+    deliveryFailures=Number(deliveryRows[0]?.whatsapp_failed||0);
+    const client=await pool.connect();
+    let purgedEventCount=0;
+    try{
+      await client.query('BEGIN');
+      const purged=await client.query(`DELETE FROM audit_events WHERE occurred_at<=$1`,[exportCutoff]);
+      purgedEventCount=Number(purged.rowCount||0);
+      await client.query(`DELETE FROM user_session_activity WHERE last_seen_at<=$1::timestamptz-INTERVAL '15 minutes'`,[exportCutoff]);
+      await client.query(`UPDATE user_session_activity SET started_at=$1,last_seen_at=$1,active_seconds=0 WHERE last_seen_at<=$1`,[exportCutoff]);
+      status=`Sent - ${confirmedEmails} administrator email(s) confirmed${deliveryFailures?`; ${deliveryFailures} WhatsApp warning(s)`:''}`;
+      await client.query(`UPDATE audit_log_export_runs SET status=$1,mail_confirmed_at=NOW(),purged_at=NOW(),purged_event_count=$2,updated_at=NOW() WHERE slot_key=$3`,[status,purgedEventCount,slotKey]);
+      await client.query('COMMIT');
+    }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error}
+    finally{client.release()}
+    return {slotKey,status,rowCount:eventRows.length,userCount:activityRows.length,auditUrl,userActivityUrl,emailSent,whatsappSent,deliveryFailures,purgedEventCount};
   }catch(error){
     status=`Failed - ${String(error?.message||'Audit Trail export error').slice(0,180)}`;
     await pool.query(`UPDATE audit_log_export_runs SET status=$1,updated_at=NOW() WHERE slot_key=$2`,[status,slotKey]).catch(()=>{});
@@ -4584,6 +4683,31 @@ app.use(serverErrorHandler());
 
 app.listen(port,()=>console.log(`Nerve Center listening on port ${port}`));
 
+function backendResultSummary(result){
+  if(result===undefined||result===null)return 'Completed';
+  if(typeof result!=='object')return auditClean(result,500)||'Completed';
+  const safe=Object.fromEntries(Object.entries(result).filter(([key])=>!/(token|secret|password|fileData|content|buffer)/i.test(key)).slice(0,16));
+  return auditClean(JSON.stringify(safe),500)||'Completed';
+}
+
+async function appendBackendProcessAudit({module='Cloud runtime',action,targetReference='',outcome='Success',reason='',durationMs=0,errorCode=''}){
+  const request={method:'SYSTEM',path:'/system/backend-process',headers:{},body:{},params:{},session:{login:'system',name:'Cloud runtime',assignedRole:'System'},socket:{},get:()=>''};
+  await appendAuditEvent(request,{eventType:'Backend process',module,action,targetType:'Backend process',targetReference,actorLogin:'system',actorName:'Cloud runtime',actorRole:'System',outcome,reason,changedFields:[],durationMs,errorCode});
+}
+
+async function runAuditedBackendProcess({module,action,targetReference=''},task){
+  const startedAt=Date.now();
+  try{
+    const result=await task();
+    if(!result?.skipped)await appendBackendProcessAudit({module,action,targetReference,outcome:'Success',reason:backendResultSummary(result),durationMs:Date.now()-startedAt});
+    return result;
+  }catch(error){
+    const safe=auditSafeError(error);
+    await appendBackendProcessAudit({module,action,targetReference,outcome:'Failed',reason:safe.message,durationMs:Date.now()-startedAt,errorCode:safe.code});
+    throw error;
+  }
+}
+
 async function initializeDatabase(){
   try{
     await migrate();
@@ -4591,29 +4715,28 @@ async function initializeDatabase(){
     databaseError='';
     const expiredSessions=await sessionStore.pruneExpired();
     if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} idle for more than 15 minutes.`);
-    const retention=await pruneAuditEvents();
-    if(retention.deleted)console.log(`Audit Trail retention removed ${retention.deleted} records older than five days.`);
+    await appendBackendProcessAudit({module:'Cloud deployment',action:'Start application runtime',targetReference:deploymentSha||'Unknown commit',reason:`Database migration completed; scheduled jobs ${scheduledJobsEnabled?'enabled':'disabled'}.`});
     console.log('Database initialization completed.');
     if(scheduledJobsEnabled){
-      if(oracleConfigured)void syncTemporaryRequestDrivers()
+      if(oracleConfigured)void runAuditedBackendProcess({module:'Oracle synchronization',action:'Synchronize request drivers'},()=>syncTemporaryRequestDrivers())
         .then(result=>console.log('Oracle request-driver sync completed.',result))
         .catch(error=>console.error('Oracle request-driver startup sync failed.',error));
-      void sendScheduledConsolidatedWhatsAppReports()
+      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
         .then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result))
         .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
-      void sendScheduledConsolidatedTicketReports()
+      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports())
         .then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result))
         .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
-      void sendScheduledDirectorReportBundles()
+      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles())
         .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
         .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
-      void sendScheduledHierarchyReportBundles()
+      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles())
         .then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result))
         .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
-      void sendScheduledWorkflowWhatsAppReminders()
+      void runAuditedBackendProcess({module:'WhatsApp Integration',action:'Send workflow reminders'},()=>sendScheduledWorkflowWhatsAppReminders())
         .then(result=>console.log('Scheduled workflow WhatsApp reminder check completed.',result))
         .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
-      void sendScheduledAuditLogExports()
+      void runAuditedBackendProcess({module:'Audit Trail',action:'Generate five-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
         .then(result=>console.log('Scheduled Audit Trail export check completed.',result))
         .catch(error=>console.error('Scheduled Audit Trail export check failed.',error));
       void runScheduledBackup()
@@ -4640,43 +4763,43 @@ async function initializeDatabase(){
 void initializeDatabase();
 if(scheduledJobsEnabled){
   const requestDriverSyncTimer=setInterval(()=>{
-    void syncTemporaryRequestDrivers()
+    void runAuditedBackendProcess({module:'Oracle synchronization',action:'Synchronize request drivers'},()=>syncTemporaryRequestDrivers())
       .then(result=>console.log('Scheduled Oracle request-driver sync completed.',result))
       .catch(error=>console.error('Scheduled Oracle request-driver sync failed.',error));
   },driverSyncIntervalMs);
   requestDriverSyncTimer.unref?.();
   const consolidatedWhatsAppTimer=setInterval(()=>{
-    void sendScheduledConsolidatedWhatsAppReports()
+    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
   },60*1000);
   consolidatedWhatsAppTimer.unref?.();
   const consolidatedTicketWhatsAppTimer=setInterval(()=>{
-    void sendScheduledConsolidatedTicketReports()
+    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
   },60*1000);
   consolidatedTicketWhatsAppTimer.unref?.();
   const directorWhatsAppTimer=setInterval(()=>{
-    void sendScheduledDirectorReportBundles()
+    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles())
       .then(result=>{if(!result?.skipped)console.log('Scheduled Director WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
   },60*1000);
   directorWhatsAppTimer.unref?.();
   const hierarchyWhatsAppTimer=setInterval(()=>{
-    void sendScheduledHierarchyReportBundles()
+    void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles())
       .then(result=>{if(!result?.skipped)console.log('Scheduled hierarchy WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
   },60*1000);
   hierarchyWhatsAppTimer.unref?.();
   const workflowReminderTimer=setInterval(()=>{
-    void sendScheduledWorkflowWhatsAppReminders()
+    void runAuditedBackendProcess({module:'WhatsApp Integration',action:'Send workflow reminders'},()=>sendScheduledWorkflowWhatsAppReminders())
       .then(result=>{if(!result?.skipped)console.log('Scheduled workflow WhatsApp reminder check completed.',result)})
       .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
   },60*1000);
   workflowReminderTimer.unref?.();
   const auditLogExportTimer=setInterval(()=>{
-    void sendScheduledAuditLogExports()
+    void runAuditedBackendProcess({module:'Audit Trail',action:'Generate five-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled Audit Trail export completed.',result)})
       .catch(error=>console.error('Scheduled Audit Trail export failed.',error));
   },60*1000);
@@ -4690,10 +4813,6 @@ if(scheduledJobsEnabled){
   const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
   adminLockAuditTimer.unref?.();
 }
-const auditRetentionTimer=setInterval(()=>{
-  if(databaseReady)void pruneAuditEvents().catch(error=>console.error('Audit Trail retention cleanup failed.',error));
-},60*60*1000);
-auditRetentionTimer.unref?.();
 const backupImportCleanupTimer=setInterval(()=>{
   void prunePendingBackupImports().catch(error=>console.error('Backup import cleanup failed.',error));
 },10*60*1000);

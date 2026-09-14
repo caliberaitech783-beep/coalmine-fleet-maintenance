@@ -222,6 +222,15 @@ const clearStoredSession = () => {
   localStorage.removeItem("nerveCenterSession");
   sessionStorage.removeItem("nerveCenterSession");
 };
+const recordUserActivity = ({module = "Application", action = "Use application", targetReference = "", reason = ""} = {}) => {
+  if (!authToken) return;
+  void fetch("/api/user-activity", {
+    method: "POST",
+    keepalive: true,
+    headers: {"Content-Type": "application/json", Authorization: `Bearer ${authToken}`},
+    body: JSON.stringify({module, action, targetReference, reason}),
+  }).catch(() => {});
+};
 // An authenticated 401 means this specific token is no longer valid (for
 // example after a password change), so return to sign-in instead of surfacing
 // it as an unrelated save error. Ordinary UI deployments preserve sessions.
@@ -2603,6 +2612,7 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
   ]);
 }
 function printTableReport({ title, columns = [], rows = [], highlightRow }) {
+  recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records`});
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
   const headings = columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
   const body = exportRows.length ? exportRows.map((row, index) => `<tr${highlightRow?.(rows[index]) ? ' class="highlight-row"' : ""}>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No records available</td></tr>`;
@@ -2681,9 +2691,11 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
     }, 50);
   };
   const downloadExcel = () => runDownload("Preparing Excel report...", () => {
+    recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:`${rows.length} records`});
     downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows), exportFileName(title, "xlsx"));
   });
   const downloadPdf = () => runDownload("Preparing PDF report...", async () => {
+      recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
       if (dashboardPdf) {
         const {downloadDashboardPdf} = await import("./dashboard-pdf.mjs");
         await downloadDashboardPdf(triggerRef.current?.closest(".mine-dashboard, .manager-dashboard"), exportFileName(title, "pdf"));
@@ -2702,6 +2714,7 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
   });
   const printReport = () => {
     if (dashboardPdf) {
+      recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records`});
       runDownload("Preparing dashboard print...", async () => {
         const {printDashboard} = await import("./dashboard-pdf.mjs");
         await printDashboard(triggerRef.current?.closest(".mine-dashboard, .manager-dashboard"), title);
@@ -8853,6 +8866,12 @@ function App() {
     setCanGoBack(false);
     setActive(landingPage);
   }, [session?.token,responsiveMobile]);
+  const lastAuditedPage = useRef("");
+  useEffect(() => {
+    if (!session?.token || !active || active === lastAuditedPage.current) return;
+    lastAuditedPage.current = active;
+    recordUserActivity({module:"Navigation",action:"Open page",targetReference:active});
+  }, [active,session?.token]);
   const goBack = () => {
     if (pageHistory.current.length <= 1) return;
     pageHistory.current.pop();
