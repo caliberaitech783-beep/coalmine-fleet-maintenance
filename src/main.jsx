@@ -1061,6 +1061,7 @@ function ConnectionRecoveryNotice({ updatedAt = 0, retry }) {
 
 function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal }) {
   const [queueTab,setQueueTab]=useState("active");
+  const [managerDrilldown,setManagerDrilldown]=useState("");
   const [idleConfirmation, setIdleConfirmation] = useState(null);
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
   const [activeManagerRole,setActiveManagerRole]=useState(availableRoles[0]||"Production Manager");
@@ -1088,23 +1089,23 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
   const cards = productionManagerView
     ? [
-        ["Total equipment", fleet.total, fleet.unknown ? `Registered fleet · ${fleet.unknown} status needs identity review` : "Registered fleet", "all", totalTypes],
-        ["On road", fleet.onRoad, "Available for production", "onroad", onRoadTypes],
-        ["Off road", fleet.offRoad, "Vehicles with active maintenance requests", "offroad", offRoadTypes],
-        ["Idle", fleet.idle, "Operational but currently idle", "idle", idleTypes],
+        ["Total equipment", fleet.total, fleet.unknown ? `Registered fleet · ${fleet.unknown} status needs identity review` : "Registered fleet", {kind:"fleet",key:"all"}, totalTypes],
+        ["On road", fleet.onRoad, "Available for production", {kind:"fleet",key:"onroad"}, onRoadTypes],
+        ["Off road", fleet.offRoad, "Vehicles with active maintenance requests", {kind:"fleet",key:"offroad"}, offRoadTypes],
+        ["Idle", fleet.idle, "Operational but currently idle", {kind:"fleet",key:"idle"}, idleTypes],
       ]
     : activeManagerRole === "Maintenance Manager"
       ? [
-          ["Total equipment", fleet.total, "Equipment at the assigned location", "all"],
-          ["Received for maintenance", scopedRequests.length, "Total maintenance intake", ""],
-          ["Remaining", maintenanceActiveRequests.length, "Active maintenance requests; idle shown separately", ""],
-          ["Completed", closedRequests.length, "Returned from maintenance", ""],
+          ["Total equipment", fleet.total, "Equipment at the assigned location", {kind:"fleet",key:"all"}],
+          ["Received for maintenance", scopedRequests.length, "Total maintenance intake", {kind:"requests",key:"maintenance-received"}],
+          ["Remaining", maintenanceActiveRequests.length, "Active maintenance requests; idle shown separately", {kind:"requests",key:"maintenance-remaining"}],
+          ["Completed", closedRequests.length, "Returned from maintenance", {kind:"requests",key:"maintenance-completed"}],
         ]
       : [
-          ["Awaiting verification", pendingVerification.length, "Closed requests awaiting MIS verification", ""],
-          ["Verified requests", verifiedRequests.length, "Requests verified at this location", ""],
-          ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", ""],
-          ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", ""],
+          ["Awaiting verification", pendingVerification.length, "Closed requests awaiting MIS verification", {kind:"requests",key:"mis-awaiting"}],
+          ["Verified requests", verifiedRequests.length, "Requests verified at this location", {kind:"requests",key:"mis-verified"}],
+          ["First trip completed", verifiedRequests.filter((request) => request.firstTripDone).length, "Trip card confirmed", {kind:"requests",key:"mis-first-trip-completed"}],
+          ["First trip pending", verifiedRequests.filter((request) => !request.firstTripDone).length, "Verification follow-up", {kind:"requests",key:"mis-first-trip-pending"}],
         ];
   const canApproveIdle=true; // Every manager profile can approve within its assigned site scope.
   const canCancelIdle=managerRoleSelection(managerRoles.length?managerRoles:managerRole).includes("Maintenance Manager");
@@ -1114,6 +1115,21 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const historyRows=activeManagerRole==="MIS Manager"?verifiedRequests:closedRequests;
   const detailRows=queueTab==="history"?historyRows:activeRows;
   const visibleDetailRows=queueTab==="ideal"?idealRows:activeManagerRole==="Maintenance Manager"&&queueTab==="active"?visibleActiveRows:detailRows;
+  const managerRequestDrilldowns = {
+    "maintenance-received": requestRows,
+    "maintenance-remaining": maintenanceActiveRequests,
+    "maintenance-completed": closedRequests,
+    "mis-awaiting": pendingVerification,
+    "mis-verified": verifiedRequests,
+    "mis-first-trip-completed": verifiedRequests.filter((request) => request.firstTripDone),
+    "mis-first-trip-pending": verifiedRequests.filter((request) => !request.firstTripDone),
+  };
+  const managerDrilldownCard=cards.find(([, , , action])=>action?.key===managerDrilldown);
+  const managerDrilldownAction=managerDrilldownCard?.[3];
+  const managerFleetDrilldownRows=managerDrilldownAction?.kind==="fleet"
+    ? fleetAssetRequestDetails(managerDrilldownAction.key==="all"?siteEquipment:siteEquipment.filter((record)=>liveEquipmentRoadStatus(record,requestRows)===managerDrilldownAction.key),requestRows)
+    : [];
+  const managerRequestDrilldownRows=managerDrilldownAction?.kind==="requests"?(managerRequestDrilldowns[managerDrilldownAction.key]||[]):[];
   const title = activeManagerRole || "Manager";
   const description = productionManagerView
     ? `${managerReconnecting ? "Last checked" : managerDataReady ? "Live" : "Loading"} fleet availability for ${managerLocation || "the assigned sites"}.`
@@ -1129,14 +1145,21 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   ];
   return <section className="manager-dashboard" onPointerDown={preventTableAutoScroll}>
     <header className="manager-dashboard-head"><div><span>Role dashboard</span><h1>{title}</h1><p>{description}</p></div><div className="manager-dashboard-actions"><div className="manager-dashboard-badge"><ShieldCheck /> Manager view</div>{typeof ExportMenu === "function" && <ExportMenu title={`${title} dashboard KPI report`} columns={dashboardKpiExportColumns} rows={managerDashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" dashboardPdf />}</div></header>
-    {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active")}}>{role}</button>)}</div>}
+    {availableRoles.length>1&&<div className="mobile-tabs manager-role-tabs" role="tablist" aria-label="Manager dashboard role">{availableRoles.map((role)=><button type="button" key={role} className={activeManagerRole===role?"active":""} onClick={()=>{setActiveManagerRole(role);setQueueTab("active");setManagerDrilldown("")}}>{role}</button>)}</div>}
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
     {!requestsLoaded&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
     {managerReconnecting && <ConnectionRecoveryNotice updatedAt={managerUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
     {managerDataReady && !managerReconnecting && <p className="manager-live-status">Live status · Updated {new Date(managerUpdatedAt).toLocaleTimeString("en-IN")} · Refreshes every 10 seconds and when you return to this tab.</p>}
-    <div className="manager-kpi-grid">{cards.map(([label, value, hint, fleetFilter, types]) => <button type="button" key={label} onClick={() => fleetFilter && managerDataReady && gotoEquipment(fleetFilter, "")} disabled={!fleetFilter||!managerDataReady} aria-busy={!managerDataReady}>
-      <span>{label}</span><strong>{managerDataReady?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small>{productionManagerView&&managerDataReady && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
+    <div className="manager-kpi-grid">{cards.map(([label, value, hint, action, types]) => <button type="button" key={label} onClick={() => managerDataReady&&action&&setManagerDrilldown(action.key)} disabled={!action||!managerDataReady} aria-busy={!managerDataReady} aria-haspopup="dialog" aria-label={`${label}: ${managerDataReady?Number(value||0).toLocaleString():"loading"}. View details`}>
+      <span>{label}</span><strong>{managerDataReady?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small><ChevronRight className="manager-kpi-drilldown-icon" aria-hidden="true" />{productionManagerView&&managerDataReady && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
+    {managerDataReady&&managerDrilldownCard&&<Modal className="dashboard-asset-modal manager-kpi-modal" overlayClassName="dashboard-asset-overlay" title={`${managerDrilldownCard[0]} · ${managerDrilldownAction.kind==="fleet"?managerFleetDrilldownRows.length:managerRequestDrilldownRows.length} records`} close={()=>setManagerDrilldown("")}>
+      {managerDrilldownAction.kind==="fleet"
+        ? <DashboardRecordBrowser key={managerDrilldown} rows={managerFleetDrilldownRows} regions={REGION_DATA} rowsAreScoped title={`${title} · ${managerDrilldownCard[0]}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} />
+        : activeManagerRole==="MIS Manager"
+          ? <MobileWorkflowTable rows={managerRequestDrilldownRows} exportTitle={`${title} · ${managerDrilldownCard[0]}`} showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance Closing Time" showVerifiedBy showVerifiedAt showTripCard showMeterData showTurnaroundTime startedFirst />
+          : <BreakdownTable rows={managerRequestDrilldownRows} exportTitle={`${title} · ${managerDrilldownCard[0]}`} showMakeModel showReason showClosedBy showBreakdownDays={managerDrilldownAction.key!=="maintenance-completed"} />}
+    </Modal>}
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({managerDataReady?idealRows.length:"—"})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
     {managerDataReady && <>
     <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>

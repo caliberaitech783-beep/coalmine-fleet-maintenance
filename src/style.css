@@ -378,3 +378,4 @@ th.report-wrap-header .sort-header>span{white-space:normal;overflow-wrap:break-w
 [data-theme="dark"] .notification-category.mis{--notification-category-color:#72ddb0}
 [data-theme="dark"] .notification-category.other{--notification-category-color:#c2cada}
 @media(max-width:380px){.notification-filters{grid-template-columns:1fr;gap:8px}}
+.manager-kpi-grid button:not(:disabled){cursor:pointer}.manager-kpi-drilldown-icon{position:absolute;right:15px;top:15px;width:16px;color:#8090aa;transition:transform .15s ease}.manager-kpi-grid button:not(:disabled):hover .manager-kpi-drilldown-icon,.manager-kpi-grid button:not(:disabled):focus-visible .manager-kpi-drilldown-icon{transform:translateX(2px);color:#315ea8}

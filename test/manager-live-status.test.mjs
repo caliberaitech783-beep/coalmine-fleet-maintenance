@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
-import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
+import { fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import { managerRoleSelection } from "../admin-access.mjs";
@@ -14,6 +14,9 @@ const managerSource = source.slice(source.indexOf("function ManagerDashboard("),
 const managerCode = (await transformWithOxc(managerSource, "ManagerDashboard.jsx", { jsx: { runtime: "classic" } })).code;
 const Null = () => null;
 const BreakdownTable = () => null;
+const MobileWorkflowTable = () => null;
+const DashboardRecordBrowser = () => null;
+const Modal = () => null;
 const RequestDataState = () => null;
 const FleetDataState = () => null;
 const DashboardConnectionNotice = () => null;
@@ -40,6 +43,8 @@ const cards = (tree) => {
     element: node,
   }));
 };
+const card = (tree, label) => cards(tree).find((item) => item.label === label).element;
+const modal = (tree) => all(tree, (node) => node.type === Modal)[0];
 
 function managerHarness(equipment, equipmentState = {}) {
   const slots = [];
@@ -50,12 +55,13 @@ function managerHarness(equipment, equipmentState = {}) {
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const scope = {
-    React, useState, liveEquipmentMetrics, liveEquipmentRoadStatus, requestWithEquipmentMasterDetails,
+    React, useState, fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus, requestWithEquipmentMasterDetails,
     recordBelongsToSite, managerRoleSelection, visibleInMisRequests, visibleInMisHistory,
     equipmentGroupLabel: (row) => row.group || row.category || "Unspecified",
     useDashboardEquipment: () => ({ records: equipment, loaded: true, scope: { restrictToScope: true, allowedSites: ["Sasti OB"] }, ...equipmentState }),
-    preventTableAutoScroll: () => {}, BreakdownTable, RequestDataState, FleetDataState, ManagerIdleConfirmation, ConnectionRecoveryNotice: DashboardConnectionNotice,
-    ShieldCheck: Null,
+    preventTableAutoScroll: () => {}, BreakdownTable, MobileWorkflowTable, DashboardRecordBrowser, Modal, RequestDataState, FleetDataState, ManagerIdleConfirmation, ConnectionRecoveryNotice: DashboardConnectionNotice,
+    ActionsTable: Null, Status: Null, RequestTimelineButton: Null, REGION_DATA: [], formatTwelveHourDateTime: (value) => value, authToken: "fixture-token",
+    ShieldCheck: Null, ChevronRight: Null,
   };
   const component = new Function(...Object.keys(scope), `${managerCode}; return ManagerDashboard;`)(...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component({ requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props }); } };
@@ -113,6 +119,68 @@ test("MIS Manager separates pending and verified counts without moving open or I
   button(tree, "Closed history").props.onClick();
   tree = app.render(props);
   assert.deepEqual(table(tree).props.rows.map(({ ref }) => ref), ["VERIFIED"]);
+});
+
+test("every Production Manager KPI opens its scoped fleet drilldown without navigating to a restricted master", () => {
+  const app = managerHarness(equipment);
+  let navigations = 0;
+  const props = { managerRole: "Production Manager", requests: [open, idle, closed], gotoEquipment: () => { navigations += 1; } };
+  for (const [label, expected] of [["Total equipment", 3], ["On road", 1], ["Off road", 1], ["Idle", 1]]) {
+    let tree = app.render(props);
+    const trigger = card(tree, label);
+    assert.equal(trigger.props.disabled, false, label);
+    assert.equal(trigger.props["aria-haspopup"], "dialog", label);
+    trigger.props.onClick();
+    tree = app.render(props);
+    const dialog = modal(tree);
+    assert.ok(dialog, `${label} should open a dialog`);
+    assert.match(dialog.props.title, new RegExp(`^${label} · ${expected} records$`));
+    const browser = all(dialog, (node) => node.type === DashboardRecordBrowser)[0];
+    assert.equal(browser.props.rows.length, expected, label);
+    dialog.props.close();
+  }
+  assert.equal(navigations, 0, "manager KPI drilldowns stay in the scoped manager view");
+});
+
+test("Maintenance Manager KPIs drill into received, remaining, and completed request partitions", () => {
+  const app = managerHarness(equipment);
+  const props = { managerRole: "Maintenance Manager", requests: [open, idle, closed] };
+  for (const [label, expected] of [
+    ["Received for maintenance", ["OPEN", "IDLE", "CLOSED"]],
+    ["Remaining", ["OPEN"]],
+    ["Completed", ["CLOSED"]],
+  ]) {
+    let tree = app.render(props);
+    card(tree, label).props.onClick();
+    tree = app.render(props);
+    const dialog = modal(tree);
+    assert.match(dialog.props.title, new RegExp(`^${label} · ${expected.length} records$`));
+    assert.deepEqual(all(dialog, (node) => node.type === BreakdownTable)[0].props.rows.map(({ ref }) => ref), expected);
+    dialog.props.close();
+  }
+});
+
+test("MIS Manager KPIs drill into maintenance-closed, verified, and both first-trip states", () => {
+  const firstTripPending = { ...verified, ref: "VERIFIED-PENDING", firstTripDone: false };
+  const app = managerHarness(equipment);
+  const props = { managerRole: "MIS Manager", requests: [open, idle, closed, verified, firstTripPending] };
+  for (const [label, expected] of [
+    ["Awaiting verification", ["CLOSED"]],
+    ["Verified requests", ["VERIFIED", "VERIFIED-PENDING"]],
+    ["First trip completed", ["VERIFIED"]],
+    ["First trip pending", ["VERIFIED-PENDING"]],
+  ]) {
+    let tree = app.render(props);
+    card(tree, label).props.onClick();
+    tree = app.render(props);
+    const dialog = modal(tree);
+    assert.match(dialog.props.title, new RegExp(`^${label} · ${expected.length} records$`));
+    const workflow = all(dialog, (node) => node.type === MobileWorkflowTable)[0];
+    assert.deepEqual(workflow.props.rows.map(({ ref }) => ref), expected);
+    assert.equal(workflow.props.showVerifiedAt, true);
+    assert.equal(workflow.props.showTripCard, true);
+    dialog.props.close();
+  }
 });
 
 for (const [label, equipmentState, requestProps] of [
