@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {normalizeOperationalSiteFields,normalizeUserSiteFields} from '../region-scope.mjs';
 import {normalizeUserAccessLabels} from '../mobile-access.mjs';
 import {repairLegacySessionDefaults} from '../auth-session-schema.mjs';
+import {initializeLoginHistory} from '../user-login-history.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const migration=source.slice(source.indexOf('async function migrate(){'),source.indexOf('// Large JSON payloads arrive'));
@@ -29,7 +30,7 @@ async function runStartup({users=[],initialized=true}={}){
   };
   const context={
     pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],
-    normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,
+    normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,initializeLoginHistory,
     hashPassword:()=>assert.fail('startup must not construct default account credentials'),
   };
   await runInNewContext(`${migration}\nmigrate();`,context);
