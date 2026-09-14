@@ -28,3 +28,12 @@
 [data-theme="dark"] .session-message-inbox{border-color:#44536c;background:#162239}[data-theme="dark"] .session-message-inbox-body p{color:#f2f5fa}[data-theme="dark"] .session-message-inbox-body small{color:#9eacc0}[data-theme="dark"] .session-message-inbox>footer{border-color:#36455d;background:#111c30}[data-theme="dark"] .session-message-inbox>footer span{color:#aab6c7}
 @media(max-width:1100px){.user-session-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.user-session-summary article:nth-child(2){border-right:0}.user-session-table-wrap{max-height:calc(100vh - 475px)}}
 @media(max-width:700px){.user-session-summary{grid-template-columns:1fr}.user-session-summary article{min-height:86px;border-right:0}.user-session-toolbar{align-items:stretch;flex-direction:column}.user-session-search{width:100%}.user-session-visible{margin-left:0}.user-session-table-wrap{max-height:none}.user-session-status button{flex:1}.user-session-status{display:flex}}
+.login-activity-panel { padding: 24px; }
+.login-activity-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.login-activity-controls label { display: grid; gap: 6px; }
+.login-history-table { overflow-x: auto; margin-top: 16px; }
+.login-history-table table { min-width: 760px; }
+.user-session-status { flex-wrap: wrap; }
+button.session-state { border: 0; cursor: pointer; font: inherit; }
+button.session-state:focus-visible { outline: 2px solid #7043ad; outline-offset: 3px; }
+@media(max-width:700px) { .login-activity-panel { padding: 12px; } .login-activity-controls label { width: 100%; } }

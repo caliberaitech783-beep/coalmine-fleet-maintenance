@@ -11,6 +11,7 @@ import {pipeline} from 'node:stream/promises';
 import {createHash,randomUUID} from 'node:crypto';
 import {createSessionStore} from './auth-session.mjs';
 import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
+import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
 import {parseIndiaRequestDateTime} from './request-time.mjs';
 import {REQUEST_TIMELINE_FIELDS,parseRequestTimelineTimestamp,requestExpectedCompletionValue,validateRequestTimelineChange,buildRequestTimelineChanges,requestTimelineEvents,requestTimelineDurations} from './request-timeline.mjs';
 import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} from './password-auth.mjs';
@@ -763,6 +764,7 @@ async function migrate(){
       FOR EACH ROW EXECUTE FUNCTION signal_crm_notification();
   `);
   await repairLegacySessionDefaults(pool);
+  await initializeLoginHistory(pool);
   const client=await pool.connect();
   try{
     await client.query('BEGIN');
@@ -1681,6 +1683,7 @@ app.patch('/api/remote-assistance/:assistanceId/end',requireSession,async(req,re
   }catch(error){next(error)}
 });
 
+registerLoginHistoryRoutes(app,{pool,requireSuper,requireAdministrator,locationName:userSessionLocationName});
 app.get('/api/user-sessions',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
     await sessionStore.pruneExpired();
