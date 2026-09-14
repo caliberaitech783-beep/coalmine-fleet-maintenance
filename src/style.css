@@ -301,13 +301,13 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
 .notification-entry-hero>div{min-width:0}
 .notification-entry-hero span{display:block;color:#315fd4;font-size:11px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
 .notification-entry-hero h2{margin:5px 0 3px;color:var(--ink);font:850 clamp(18px,2.4vw,25px) Manrope;overflow-wrap:anywhere}
-.notification-entry-hero p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.45;overflow-wrap:anywhere}
+.notification-entry-hero p{margin:0;color:var(--muted);font-size:14px;line-height:1.45;overflow-wrap:anywhere}
 .notification-entry-hero>.status{flex:0 0 auto}
 .notification-entry-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin:0;background:var(--line);border-bottom:1px solid var(--line)}
 .notification-entry-fields>div{min-width:0;padding:14px 16px;background:#fff}
 .notification-entry-fields>div.wide{grid-column:1/-1}
-.notification-entry-fields dt{margin:0 0 5px;color:var(--muted);font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
-.notification-entry-fields dd{margin:0;color:var(--ink);font-size:14px;font-weight:700;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+.notification-entry-fields dt{margin:0 0 5px;color:var(--muted);font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.notification-entry-fields dd{margin:0;color:var(--ink);font-size:15px;font-weight:700;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
 .notification-entry-section{min-width:0;padding:18px 22px;border-bottom:1px solid var(--line);background:#fff}
 .notification-entry-section:last-child{border-bottom:0}
 .notification-entry-section h3{margin:0 0 11px;color:var(--ink);font:800 13px Manrope}
