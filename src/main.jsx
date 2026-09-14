@@ -1087,6 +1087,8 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const verifiedRequests = closedRequests.filter(visibleInMisHistory);
   const pendingVerification=closedRequests.filter(visibleInMisRequests);
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
+  // Earliest request start in the counted intake, so the card says from which date the total runs.
+  const maintenanceIntakeSince = scopedRequests.map((request) => String(request.start || "").trim()).filter(Boolean).sort()[0] || "";
   const cards = productionManagerView
     ? [
         ["Total equipment", fleet.total, fleet.unknown ? `Registered fleet · ${fleet.unknown} status needs identity review` : "Registered fleet", {kind:"fleet",key:"all"}, totalTypes],
@@ -1097,7 +1099,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     : activeManagerRole === "Maintenance Manager"
       ? [
           ["Total equipment", fleet.total, "Equipment at the assigned location", {kind:"fleet",key:"all"}],
-          ["Received for maintenance", scopedRequests.length, "Total maintenance intake", {kind:"requests",key:"maintenance-received"}],
+          ["Received for maintenance", scopedRequests.length, maintenanceIntakeSince ? `Total maintenance intake since ${formatDisplayDate(maintenanceIntakeSince)}` : "Total maintenance intake", {kind:"requests",key:"maintenance-received"}],
           ["Remaining", maintenanceActiveRequests.length, "Active maintenance requests; idle shown separately", {kind:"requests",key:"maintenance-remaining"}],
           ["Completed", closedRequests.length, "Returned from maintenance", {kind:"requests",key:"maintenance-completed"}],
         ]
