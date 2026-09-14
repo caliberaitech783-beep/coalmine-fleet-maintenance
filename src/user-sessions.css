@@ -34,6 +34,7 @@
 .login-history-table { overflow-x: auto; margin-top: 16px; }
 .login-history-table table { min-width: 760px; }
 .user-session-status { flex-wrap: wrap; }
+.user-session-toolbar { flex-wrap: wrap; }
 button.session-state { border: 0; cursor: pointer; font: inherit; }
 button.session-state:focus-visible { outline: 2px solid #7043ad; outline-offset: 3px; }
 @media(max-width:700px) { .login-activity-panel { padding: 12px; } .login-activity-controls label { width: 100%; } }
