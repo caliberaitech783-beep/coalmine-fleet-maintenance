@@ -1690,8 +1690,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>) : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-        <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} />
-        <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
+        {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} />}
+        {!showOemBreakdowns && <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
             <div><span className="mine-eyebrow">Fleet operations control</span><h2>Tracking Vehicle Throughput</h2><p>Site-wise breakdown movement and fleet status in one view.</p></div>
             <div className="mine-maintenance-availability-tabs" role="tablist" aria-label="Tracking vehicle throughput views">
@@ -1743,9 +1743,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               </button>) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}</div>
             </div>
           </div> : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-maintenance-availability-state" />}
-        </article>
+        </article>}
       </section>
-      <section className="mine-dashboard-grid mine-dashboard-core">
+      {!showOemBreakdowns && <section className="mine-dashboard-grid mine-dashboard-core">
         <article {...cardAction("all", "Total Equipment Intelligence")} className="mine-panel mine-fleet-command">
           <header className="mine-fleet-command-head">
             <div><h2>Total Equipment Intelligence</h2></div>
@@ -1816,7 +1816,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
         </article>
-      </section>
+      </section>}
       {breakdownDetailSite && <Modal className="dashboard-breakdown-movement-modal" title={`${breakdownDetailSite} · Day-wise BD Movement`} close={() => setBreakdownDetailSite("")}><div className="dashboard-breakdown-movement-detail">
         <div className="dashboard-breakdown-period-controls">
           <div className="mine-trend-period" role="group" aria-label="Breakdown movement day range">{[2, 5, 10].map((days) => <button type="button" key={days} className={!validBreakdownDetailRange && breakdownDetailDays === days ? "active" : ""} onClick={() => { setBreakdownDetailDays(days); setBreakdownDetailFrom(""); setBreakdownDetailTo(""); }}>{days} Days</button>)}</div>
@@ -1852,7 +1852,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
         <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} />
       </Modal>}
-      <section className="mine-dashboard-lower-grid">
+      {!showOemBreakdowns && <section className="mine-dashboard-lower-grid">
       <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">
         <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><label className="mine-trend-anchor"><span>From</span><input aria-label="Breakdown trend from date" type="date" max={todayKey} value={breakdownTrendStartKey} onChange={(event) => updateBreakdownTrendRange("from", event.target.value)} /></label><label className="mine-trend-anchor"><span>To</span><input aria-label="Breakdown trend to date" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => updateBreakdownTrendRange("to", event.target.value)} /></label><div className="mine-trend-summary-row"><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendPeriodDays === days ? "active" : ""} onClick={() => { setBreakdownTrendDays(days); setBreakdownTrendFrom(""); setBreakdownTrendRangeError(""); }}>{days}D</button>)}</div><button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button>{equipmentLoaded && <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendPeriodDays} selected days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>}</div></div>{breakdownTrendRangeError && <small role="alert">{breakdownTrendRangeError}</small>}</header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
@@ -1869,7 +1869,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           <div className="mine-performance-composition"><div><span>Fleet composition</span><b>{kpis.total.toLocaleString()} assets</b></div><div className="mine-performance-bar" aria-label={`${kpis.onRoad} utilized, ${kpis.idle} idle and ${Math.max(0, kpis.total - availableFleet)} unavailable`}><i {...listAction("onroad", "Utilized fleet records")} className="utilized" style={{ width: `${kpis.total ? (kpis.onRoad / kpis.total) * 100 : 0}%` }} /><i {...listAction("idle", "Idle fleet records")} className="idle" style={{ width: `${kpis.total ? (kpis.idle / kpis.total) * 100 : 0}%` }} /><i {...listAction("unavailable", "Unavailable fleet records")} className="unavailable" style={{ width: `${kpis.total ? (Math.max(0, kpis.total - availableFleet) / kpis.total) * 100 : 0}%` }} /></div><div className="mine-performance-legend"><span {...listAction("onroad", "Utilized fleet records")}><i className="utilized" />Utilized <b>{kpis.onRoad}</b></span><span {...listAction("idle", "Idle fleet records")}><i className="idle" />Idle <b>{kpis.idle}</b></span><span {...listAction("unavailable", "Unavailable fleet records")}><i className="unavailable" />Unavailable <b>{Math.max(0, kpis.total - availableFleet)}</b></span></div></div>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-performance-state" />}
       </article>
-      </section>
+      </section>}
     </div>
   );
 }
