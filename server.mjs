@@ -28,6 +28,7 @@ import {oracleConfigured,oracleDriverLookup,oracleEquipmentMasterRecords,oracleE
 import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
+import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
 import {buildUserActivitySummary,totalUserWorkedMinutes} from './user-activity-report.mjs';
@@ -338,6 +339,18 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS driver_name_source TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS driver_synced_at TIMESTAMPTZ;
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS complaint_language TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS maintenance_work_language TEXT NOT NULL DEFAULT '';
+    CREATE TABLE IF NOT EXISTS text_translations (
+      cache_key TEXT PRIMARY KEY,
+      source_language TEXT NOT NULL,
+      target_language TEXT NOT NULL,
+      source_text TEXT NOT NULL,
+      translated_text TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS ideal_requested_at TIMESTAMPTZ;
     ALTER TABLE maintenance_requests
@@ -893,6 +906,54 @@ app.get('/api/app-version',(_req,res)=>{
   res.json({version:currentAppVersion,commit:deploymentSha});
 });
 
+// The preferred language chosen at sign-in is remembered on the user record so
+// speech input and complaint translation follow it on every device.
+app.post('/api/preferred-language',requireSession,async(req,res,next)=>{
+  try{
+    const language=normalizeLanguage(req.body?.preferredLanguage);
+    if(!language)return res.status(400).json({error:'Choose English or Hindi as the preferred language.'});
+    const login=String(req.session.login||'').trim().toLowerCase();
+    const name=String(req.session.name||'').trim().toLowerCase();
+    const {rows}=await pool.query(`SELECT id,record_data FROM master_records
+      WHERE master_name='Users & employees' AND (
+        ($1 <> '' AND lower(trim(record_data->>'login'))=$1) OR
+        ($2 <> '' AND lower(trim(record_data->>'employee'))=$2)
+      ) ORDER BY CASE WHEN lower(trim(record_data->>'login'))=$1 THEN 0 ELSE 1 END,created_at DESC LIMIT 1`,[login,name]);
+    const row=rows[0];
+    if(row&&normalizeLanguage(row.record_data?.preferredLanguage)!==language){
+      await pool.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify({...row.record_data,preferredLanguage:language}),row.id]);
+    }
+    res.json({preferredLanguage:language,saved:Boolean(row)});
+  }catch(error){next(error)}
+});
+
+// Written complaints are translated into the reader's preferred language; the
+// original text and audio stay untouched. Results are cached per text/language.
+const translatorPromise=translatorFromEnvironment();
+app.post('/api/translate',requireSession,async(req,res,next)=>{
+  try{
+    const text=String(req.body?.text||'').trim();
+    const from=normalizeLanguage(req.body?.from),to=normalizeLanguage(req.body?.to);
+    if(!text)return res.status(400).json({error:'Text to translate is required.'});
+    if(text.length>MAX_TRANSLATION_CHARS)return res.status(400).json({error:`Text longer than ${MAX_TRANSLATION_CHARS} characters cannot be translated.`});
+    if(!from||!to)return res.status(400).json({error:'Choose English or Hindi as the source and target language.'});
+    if(from===to)return res.json({text,from,to,translated:false,configured:true});
+    const translator=await translatorPromise;
+    if(!translator.configured)return res.json({text,from,to,translated:false,configured:false});
+    const cacheKey=translationCacheKey(text,from,to);
+    const cached=await pool.query('SELECT translated_text FROM text_translations WHERE cache_key=$1',[cacheKey]);
+    if(cached.rows.length)return res.json({text:cached.rows[0].translated_text,from,to,translated:true,configured:true,cached:true});
+    const result=await translator.translate({text,from,to});
+    if(result.translated)await pool.query(`INSERT INTO text_translations (cache_key,source_language,target_language,source_text,translated_text)
+      VALUES ($1,$2,$3,$4,$5) ON CONFLICT (cache_key) DO NOTHING`,[cacheKey,from,to,text,result.text]);
+    res.json({text:result.text,from,to,translated:result.translated,configured:true,cached:false});
+  }catch(error){
+    if(error?.status&&error.status<500)return res.status(error.status).json({error:error.message});
+    console.error('Translation failed:',error.message);
+    res.status(502).json({error:'The translation service is unavailable right now. The original text is shown instead.'});
+  }
+});
+
 app.post('/api/user-activity',requireSession,async(req,res,next)=>{
   try{
     const moduleName=auditClean(req.body?.module||'Application',120);
@@ -971,8 +1032,10 @@ function loginPayload({token,profile,employee,login}){
     userType:profile.userType,
     assignedRole:profile.assignedRole,
     permissions:profile.permissions,
+    preferredLanguage:normalizeLanguage(employee.preferredLanguage)||'en',
   };
 }
+
 
 async function auditAdminLockIncidents(client=pool){
   if(ADMIN_LOCK_POLICY_PAUSED)return;
@@ -1413,7 +1476,7 @@ app.post('/api/change-initial-password',async(req,res,next)=>{
     const profile={sessionRole:reset.role,userType:reset.user_type,assignedRole:reset.assigned_role,permissions:reset.permissions||{}};
     await sessionStore.create({token,role:profile.sessionRole,name:reset.employee_name,login:reset.login_name,userType:profile.userType,assignedRole:profile.assignedRole,permissions:profile.permissions});
     req.auditSessionToken=token;
-    res.json(loginPayload({token,profile,employee:{employee:reset.employee_name},login:reset.login_name}));
+    res.json(loginPayload({token,profile,employee:{employee:reset.employee_name,preferredLanguage:updated.preferredLanguage},login:reset.login_name}));
   }catch(error){next(error)}
 });
 
@@ -3232,7 +3295,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 const requestProjection=`reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
-  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio",
+  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
   to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy", arrival_flag_remark AS "arrivalFlagRemark",
@@ -3611,7 +3674,8 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',start,meterType=''}=req.body||{};
+    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
+    const storedComplaintLanguage=/^hi(-|$)/i.test(String(complaintLanguage).trim())?'hi':/^en(-|$)/i.test(String(complaintLanguage).trim())?'en':'';
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
@@ -3629,10 +3693,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
     const {rows}=await createRequestWithVehicleLock({door,chassis},async(client)=>{
     const result=await client.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','']);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage]);
     await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
     return result;
     });
@@ -3680,11 +3744,12 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     validateRequestTimelineChange(before,{expectedCompletionAt:expectedAt||expectedCompletionAt,...(accepting?{acceptedAt:before.timelineRecordedAt}:{})},{now:before.timelineRecordedAt,userEntered:['expectedCompletionAt']});
     buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
+      complaint_language=CASE WHEN complaint=$2 THEN complaint_language ELSE $11 END,
       accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
       opening_meter_readings=opening_meter_readings || $10::jsonb
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading})]);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),/[\u0900-\u097F]/.test(String(complaint||''))?'hi':/[A-Za-z]/.test(String(complaint||''))?'en':'']);
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });
@@ -3700,6 +3765,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const closingTime=String(req.body?.closingTime||'');
     const maintenanceWork=String(req.body?.maintenanceWork||'').trim();
     const maintenanceAudio=String(req.body?.maintenanceAudio||'');
+    const maintenanceWorkLanguage=/^hi(-|$)/i.test(String(req.body?.maintenanceWorkLanguage||'').trim())?'hi':/^en(-|$)/i.test(String(req.body?.maintenanceWorkLanguage||'').trim())?'en':'';
     const status=String(req.body?.status||'Closed').trim();
     const ideal=req.body?.ideal===true||String(req.body?.ideal||'').toLowerCase()==='true';
     const idleReason=String(req.body?.idleReason||'').trim();
@@ -3759,19 +3825,19 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
           closingMeterReading,closingMeterFile,closingMeterFileName]);
     }
     const {rows}=ideal
-      ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status='Idle',idle_reason=$3,
+      ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,delayed_reason='',status='Idle',idle_reason=$3,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
           WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
-          [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference])
+          [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference,maintenanceWorkLanguage])
       : status==='Closed'
-        ? await client.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,delayed_reason=$5,status='Closed'
+        ? await client.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,maintenance_work_language=$7,delayed_reason=$5,status='Closed'
             WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
-            [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,delayedClosure?delayedReason:'',reference])
-        : await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,delayed_reason='',status=$3,
+            [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,delayedClosure?delayedReason:'',reference,maintenanceWorkLanguage])
+        : await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,delayed_reason='',status=$3,
             in_progress_at=CASE WHEN status<>'In progress' AND $3='In progress' THEN COALESCE(in_progress_at,NOW()) ELSE in_progress_at END,
             in_progress_by=CASE WHEN status<>'In progress' AND $3='In progress' AND in_progress_at IS NULL THEN $5 ELSE in_progress_by END
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
-            [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User']);
+            [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
     if(delayedClosure){
       await client.query(`INSERT INTO master_records (master_name,record_data)

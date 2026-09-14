@@ -202,6 +202,13 @@ const storedSession = (() => {
 })();
 let authToken = storedSession?.token || "";
 let currentEmployeeName = storedSession?.name || "";
+// Preferred language (English / Hindi) chosen at sign-in. It seeds speech input
+// and decides the language complaints are *read* in; audio always stays original.
+const PREFERRED_LANGUAGE_KEY = "nerveCenterPreferredLanguage";
+const LOGIN_LANGUAGE_OPTIONS = [
+  { code: "en", nativeName: "English", hint: "Speak and read complaints in English" },
+  { code: "hi", nativeName: "हिंदी", hint: "शिकायत हिंदी में बोलें और पढ़ें" },
+];
 const SESSION_EXPIRED_PARAM = "session-expired";
 const SESSION_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const LOGIN_LANDING_PAGE = "Dashboard";
@@ -407,6 +414,7 @@ function Login({ onLogin, theme, toggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [preferredLanguage, setPreferredLanguage] = useState(() => preferredLanguageCode("en"));
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [working, setWorking] = useState(false);
@@ -439,7 +447,14 @@ function Login({ onLogin, theme, toggleTheme }) {
       userType: data.userType || "",
       assignedRole: data.assignedRole || "",
       permissions: data.permissions || {},
+      preferredLanguage,
     });
+    try { localStorage.setItem(PREFERRED_LANGUAGE_KEY, preferredLanguage); } catch {}
+    void fetch("/api/preferred-language", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.token}` },
+      body: JSON.stringify({ preferredLanguage }),
+    }).catch(() => {});
     if (rememberMe) {
       localStorage.setItem("nerveCenterSession", session);
       sessionStorage.removeItem("nerveCenterSession");
@@ -648,6 +663,23 @@ function Login({ onLogin, theme, toggleTheme }) {
               {showPassword ? <EyeOff /> : <Eye />}
             </button>
           </div>
+          <fieldset className="login-language">
+            <legend className="login-label">Preferred language · पसंदीदा भाषा</legend>
+            <div className="login-language-options" role="radiogroup" aria-label="Preferred language">
+              {LOGIN_LANGUAGE_OPTIONS.map((option) => (
+                <label key={option.code} className={preferredLanguage === option.code ? "selected" : ""}>
+                  <input
+                    type="radio"
+                    name="preferredLanguage"
+                    value={option.code}
+                    checked={preferredLanguage === option.code}
+                    onChange={() => setPreferredLanguage(option.code)}
+                  />
+                  <span><b>{option.nativeName}</b><small>{option.hint}</small></span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <label className="remember-me">
             <input
               type="checkbox"
@@ -1909,7 +1941,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "make": return <td>{r.make || "—"}</td>;
     case "model": return <td>{r.model || "—"}</td>;
     case "site": return <td><MapPin /> {r.site}</td>;
-    case "complaint": return <td className="request-reason-cell"><div className="request-reason-text">{String(r.complaint || "").trim() || "—"}</div></td>;
+    case "complaint": return <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div></td>;
     case "createdBy": return <td>{r.owner || r.requesterLogin || "—"}</td>;
     case "closedBy": return <td>{r.closedBy || "—"}</td>;
     case "chassis": return <td>{r.chassis || "—"}</td>;
@@ -2014,7 +2046,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <MapPin /> {r.site}
                 </td>
-                {showReason && <td className="request-reason-cell"><div className="request-reason-text">{String(r.complaint || "").trim() || "—"}</div></td>}
+                {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div></td>}
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 {showClosedBy && <td>{r.closedBy || "—"}</td>}
                 {showAudio && <td>{r.chassis || "—"}</td>}
@@ -4018,6 +4050,86 @@ const speechLanguages = [
   ["hi-IN", "Hindi"],
   ["en-IN", "English"],
 ];
+// Language helpers shared by speech input and complaint display. They mirror
+// text-translation.mjs on the server and stay dependency-free for the browser.
+function languageCode(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (text === "hi" || text.startsWith("hi-") || text === "hindi" || text === "हिंदी") return "hi";
+  if (text === "en" || text.startsWith("en-") || text === "english") return "en";
+  return "";
+}
+function preferredLanguageCode(fallback = "") {
+  try {
+    const raw = localStorage.getItem("nerveCenterSession") || sessionStorage.getItem("nerveCenterSession");
+    const stored = raw ? JSON.parse(raw) : null;
+    return languageCode(stored?.preferredLanguage) || languageCode(localStorage.getItem("nerveCenterPreferredLanguage")) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+function speechLocaleForLanguage(code) {
+  return languageCode(code) === "en" ? "en-IN" : "hi-IN";
+}
+function textLanguageCode(text, spokenLocale = "") {
+  const value = String(text ?? "");
+  if (/[\u0900-\u097F]/.test(value)) return "hi";
+  if (/[A-Za-z]/.test(value)) return "en";
+  return languageCode(spokenLocale);
+}
+const translationRequests = new Map();
+function requestTranslation(text, from, to) {
+  const key = `${from}|${to}|${text}`;
+  if (!translationRequests.has(key)) {
+    translationRequests.set(key, fetch("/api/translate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ text, from, to }),
+    }).then((response) => readApiJson(response, "Could not translate this text.")).catch((error) => {
+      translationRequests.delete(key);
+      throw error;
+    }));
+  }
+  return translationRequests.get(key);
+}
+// Shows stored complaint text in the reader's preferred language. The original
+// wording is one tap away and the recorded audio is never changed.
+function TranslatedText({ text, language = "", as: Tag = "span", className = "", helper = false, fallback = "—" }) {
+  const value = String(text ?? "").trim();
+  const reader = preferredLanguageCode("");
+  const source = languageCode(language) || textLanguageCode(value);
+  const wanted = Boolean(value && reader && source && source !== reader);
+  const key = `${source}|${reader}|${value}`;
+  const [translation, setTranslation] = useState({ key: "", text: "", status: "idle" });
+  const [showOriginal, setShowOriginal] = useState(false);
+  useEffect(() => {
+    if (!wanted) return undefined;
+    let active = true;
+    setTranslation({ key, text: "", status: "loading" });
+    requestTranslation(value, source, reader).then((data) => {
+      if (!active) return;
+      setTranslation({ key, text: data?.translated ? String(data.text || "") : "", status: data?.translated ? "done" : "unavailable" });
+    }).catch(() => { if (active) setTranslation({ key, text: "", status: "failed" }); });
+    return () => { active = false; };
+  }, [key, wanted]);
+  if (!value) return helper ? null : <Tag className={className}>{fallback}</Tag>;
+  if (!wanted) return helper ? null : <Tag className={className}>{value}</Tag>;
+  const translated = translation.key === key && translation.status === "done" ? translation.text : "";
+  const sourceName = source === "hi" ? "हिंदी" : "English";
+  if (helper) {
+    return translated ? <small className="translated-helper"><b>{reader === "hi" ? "आपकी भाषा में:" : "In your language:"}</b> {translated}</small> : null;
+  }
+  if (!translated) {
+    return <Tag className={className} lang={source}>{value}{translation.key === key && translation.status === "loading" ? <i className="translated-pending" aria-label="Translating"> …</i> : null}</Tag>;
+  }
+  return (
+    <Tag className={`${className} translated-text`.trim()}>
+      {showOriginal ? <span lang={source}>{value}</span> : <span lang={reader}>{translated}</span>}
+      <button type="button" className="translated-toggle" onClick={(event) => { event.stopPropagation(); setShowOriginal((current) => !current); }} title={showOriginal ? "Show translation" : `Show original (${sourceName})`}>
+        {showOriginal ? (reader === "hi" ? "अनुवाद" : "Translation") : (reader === "hi" ? `मूल · ${sourceName}` : `Original · ${sourceName}`)}
+      </button>
+    </Tag>
+  );
+}
 function EnhancedSpeechComplaint({
   label = "Reason / complaint *",
   name = "complaint",
@@ -4027,7 +4139,7 @@ function EnhancedSpeechComplaint({
   required = true,
 }) {
   const [text, setText] = useState(""),
-    [lang, setLang] = useState("hi-IN"),
+    [lang, setLang] = useState(() => speechLocaleForLanguage(preferredLanguageCode("hi"))),
     [listening, setListening] = useState(false),
     [working, setWorking] = useState(false),
     [note, setNote] = useState(""),
@@ -4240,6 +4352,7 @@ function EnhancedSpeechComplaint({
         placeholder={placeholder}
       />
       <input type="hidden" name={audioName} value={audioData} />
+      <input type="hidden" name={`${name}Language`} value={textLanguageCode(text, lang)} />
       {audioData && <audio className="request-audio-preview" controls src={audioData} aria-label={`${label.replace(/\s*\*$/, "")} audio`}>Recorded audio</audio>}
       <small className={listening ? "voice-note live" : "voice-note"}>
         {note ||
@@ -4397,6 +4510,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
         category: String(fd.get("category") || "").trim(),
         complaint: fd.get("complaint"),
         complaintAudio: fd.get("complaintAudio"),
+        complaintLanguage: fd.get("complaintLanguage"),
         start: fd.get("date") + " · " + fd.get("time"),
         hours: "—",
         status: "Open",
@@ -4884,7 +4998,7 @@ function Generic({ name, requests = [] }) {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
-                      <td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td>{request.complaint}</td>
+                      <td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
                       <td>{request.start}</td><td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} label={`${age} ${age === 1 ? "day" : "days"}`} /></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
@@ -7691,7 +7805,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
               <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
-              {showReason && <td className="request-reason-cell"><div className="request-reason-text">{String(row.complaint || "").trim() || "—"}</div></td>}
+              {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.complaint} language={row.complaintLanguage} /></div></td>}
               {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}
               {startedFirst ? <>{startedCell(row)}{closedByCell(row)}{verifiedCells(row)}</> : <>{verifiedCells(row)}{closedByCell(row)}{startedCell(row)}</>}
               {showClosedAt && <td>{formatTwelveHourDateTime(row.closedAt)}</td>}
@@ -7795,7 +7909,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} />
         <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
-        <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /></label>
+        <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /><TranslatedText text={request.complaint} language={request.complaintLanguage} helper /></label>
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
       <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : request.acceptanceRequired && !request.acceptedAt ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
@@ -7849,7 +7963,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -7863,7 +7977,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>ETC</span><b>{request.expectedCompletionAt ? displayDateTime(request.expectedCompletionAt) : "Not set"}</b></div>
         <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
         <div><span>Closing readings</span><b>{requestMeterReadingLabel(request, "closing")}</b><MeterFileCell request={request} stage="closing" /></div>
-        <div><span>Reason / complaint</span><b>{request.complaint || "—"}</b></div>
+        <div><span>Reason / complaint</span><b><TranslatedText text={request.complaint} language={request.complaintLanguage} /></b></div>
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudio ? <audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
@@ -7967,7 +8081,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
         <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
         <div><span>Closed at</span><b>{displayDateTime(request.closedAt)}</b></div>
-        <div><span>Maintenance work</span><b>{request.maintenanceWork || "—"}</b></div>
+        <div><span>Maintenance work</span><b><TranslatedText text={request.maintenanceWork} language={request.maintenanceWorkLanguage} /></b></div>
         <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
       </div>
       <div className="formgrid"><VerificationTimeField /></div>
@@ -8358,9 +8472,9 @@ function AiFeeder({ role = "", session }) {
   </>;
 }
 
-function NotificationEntryField({ label, value, wide = false }) {
+function NotificationEntryField({ label, value, wide = false, language }) {
   const displayed = value === true ? "Yes" : value === false ? "No" : String(value ?? "").trim() || "—";
-  return <div className={wide ? "wide" : ""}><dt>{label}</dt><dd>{displayed}</dd></div>;
+  return <div className={wide ? "wide" : ""}><dt>{label}</dt><dd>{language === undefined ? displayed : <TranslatedText text={value} language={language} />}</dd></div>;
 }
 
 function NotificationRequestEntry({ reference, request = {} }) {
@@ -8385,9 +8499,9 @@ function NotificationRequestEntry({ reference, request = {} }) {
       <NotificationEntryField label="First trip time" value={formatTwelveHourDateTime(firstTripTimestamp(request), true)} />
       <NotificationEntryField label="MIS verification" value={request.verifiedAt ? `${formatTwelveHourDateTime(request.verifiedAt, true)}${request.verifiedBy ? ` · ${request.verifiedBy}` : ""}` : request.verificationStatus} />
       <NotificationEntryField label="Downtime" value={request.hours} />
-      <NotificationEntryField label="Reason / complaint" value={request.complaint} wide />
+      <NotificationEntryField label="Reason / complaint" value={request.complaint} language={request.complaintLanguage || ""} wide />
       <NotificationEntryField label="Idle reason" value={request.idleReason} wide />
-      <NotificationEntryField label="Maintenance work" value={request.maintenanceWork} wide />
+      <NotificationEntryField label="Maintenance work" value={request.maintenanceWork} language={request.maintenanceWorkLanguage || ""} wide />
       <NotificationEntryField label="Delay reason" value={request.delayedReason} wide />
     </dl>
     <section className="notification-entry-section" aria-label="Meter evidence">

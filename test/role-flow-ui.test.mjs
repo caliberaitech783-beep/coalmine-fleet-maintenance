@@ -63,6 +63,7 @@ function harness(name, extra = {}) {
     RequestRedFlagForm: Null, MaintenanceForm: Null, preventTableAutoScroll: () => {},
     arrivalRedFlagRequired: () => false, MIS_VERIFICATION_MENU: "MIS verification", PRODUCTION_REQUEST_COLUMNS: [],
     Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, MaintenanceEtcInput: Null,
+    TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
     requestStartParts: () => ({date: "2026-09-08", time: "14:00:00"}), requestMeterTypeForRequest: () => "HMR",
     indiaDateTimeInputValue: () => "2026-09-08T14:00:00", formatTwelveHourDateTime: value => value || "—",
     normalizeEquipmentGroup: value => value, TIME_24H_PATTERN: ".*", delayedReasonRequired: () => false,

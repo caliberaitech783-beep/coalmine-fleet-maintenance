@@ -65,6 +65,7 @@ function harness(name, extra = {}) {
       malformed() {resolve({ok: true, json: async () => {throw new Error("Bad JSON");}});},
     })),
     Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, ChevronRight: Null, MaintenanceEtcInput: "maintenance-etc",
+    TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
     requestStartParts: () => ({date: "2026-09-08", time: "12:00:00"}), requestMeterTypeForRequest: () => "KMR",
     useMasterRecords: () => [[]], normalizeEquipmentGroup: value => value,
     formatTwelveHourDateTime: value => value || "Not recorded", delayedReasonRequired: () => false,

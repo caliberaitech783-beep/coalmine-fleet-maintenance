@@ -23,6 +23,7 @@ const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseReque
   MeterFileCell: () => React.createElement("span", null, "Saved trip card"),
   ChevronRight: () => null,
   EnhancedSpeechComplaint: () => null,
+  TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
   requestStartParts: () => ({date: "2026-09-09", time: "12:00:00"}),
   TIME_24H_PATTERN: ".*",
   FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? null; } },
