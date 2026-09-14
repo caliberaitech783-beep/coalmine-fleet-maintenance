@@ -6,5 +6,8 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 
 test("Open in MIS uses the maintenance-closed requests awaiting verification", () => {
   assert.match(source, /mis: maintenanceClosedRows\.length/);
+  assert.match(source, /item\.key === "maintenance" \? openAssetDrilldown\("event:opened"\) : openAssetDrilldown\(`event:\$\{item\.key\}`\)/);
+  assert.match(source, /lifecycleDrilldownParts\[1\] === "mis" \? "Open in MIS"/);
   assert.doesNotMatch(source, /mis: Math\.max\(0, requestLifecycleRows\.closed\.length - requestLifecycleRows\.verified\.length\)/);
+  assert.doesNotMatch(source, /item\.key === "mis" \? openAssetDrilldown\("event:closed"\)/);
 });
