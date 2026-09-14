@@ -3656,17 +3656,6 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
   }
 });
 
-app.patch('/api/requests/:reference/delayed-reason',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
-  try{
-    const reference=String(req.params.reference||'').trim();
-    const delayedReason=String(req.body?.delayedReason||'').trim();
-    if(!delayedReason||delayedReason.length>160)return res.status(400).json({error:'Enter a delayed reason of up to 160 characters.'});
-    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>client.query(
-      `UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2 RETURNING ${requestProjection}`,
-      [delayedReason,reference]));
-    res.json(rows[0]);
-  }catch(error){maintenanceWriteFailure(error,res,next)}
-});
 
 app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
@@ -3696,6 +3685,18 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });
+    res.json(rows[0]);
+  }catch(error){maintenanceWriteFailure(error,res,next)}
+});
+
+app.patch('/api/requests/:reference/delayed-reason',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+  try{
+    const reference=String(req.params.reference||'').trim();
+    const delayedReason=String(req.body?.delayedReason||'').trim();
+    if(!delayedReason||delayedReason.length>160)return res.status(400).json({error:'Enter a delayed reason of up to 160 characters.'});
+    const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>client.query(
+      `UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2 RETURNING ${requestProjection}`,
+      [delayedReason,reference]));
     res.json(rows[0]);
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });

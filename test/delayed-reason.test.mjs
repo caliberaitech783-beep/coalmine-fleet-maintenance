@@ -12,7 +12,7 @@ test('maintenance request delayed reasons use searchable master choices and a sc
   assert.match(form,/Add custom reason/);
   assert.match(form,/await onSave\(reason.trim\(\)\)/);
   assert.match(client,/onDelayedReason=\{permissions.editRequests \? setDelaying : null\}/);
-  const route=server.slice(server.indexOf("app.patch('/api/requests/:reference/delayed-reason'"),server.indexOf("app.patch('/api/requests/:reference',"));
+  const route=server.slice(server.indexOf("app.patch('/api/requests/:reference/delayed-reason'"),server.indexOf("app.patch('/api/requests/:reference/close'"));
   assert.match(route,/requirePermission\('editRequests',\{role:'Maintenance User'\}\)/);
   assert.match(route,/withMaintenanceArrivalGuard/);
   assert.match(route,/delayedReason.length>160/);
