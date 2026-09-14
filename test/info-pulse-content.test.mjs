@@ -369,3 +369,13 @@ test('restored count boxes reconcile unique cases, combine with site and issue f
   assert.equal(byLabel(tree, 'Filter site: All sites').props['aria-pressed'], true);
   assert.equal(descendants(tree, node => node.type === 'article').length, 4);
 });
+
+test("Info Pulse opens full screen with its content scrolling inside the panel", () => {
+  const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../src/info-pulse-content.css", import.meta.url), "utf8");
+  assert.match(main, /<div className="ai-feeder-overlay pulse-overlay">\s*<div className="ai-feeder-panel pulse-panel"/);
+  assert.match(css, /\.ai-feeder-overlay\.pulse-overlay \{ padding: 0; \}/);
+  assert.match(css, /\.ai-feeder-panel\.pulse-panel \{ width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; box-shadow: none; \}/);
+  assert.match(css, /\.pulse-panel \.pulse-content \{ flex: 1 1 auto; \}/);
+  assert.match(css, /\.pulse-content \{[^}]*overflow: auto;[^}]*min-height: 0;/);
+});

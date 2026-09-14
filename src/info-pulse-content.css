@@ -290,3 +290,8 @@
   .pulse-record-detail .pulse-reason-details, .pulse-record-detail .pulse-reason-history dl { grid-template-columns: 1fr; }
   .pulse-record-detail .pulse-record-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Info Pulse opens full screen: the panel fills the viewport and its content scrolls inside. */
+.ai-feeder-overlay.pulse-overlay { padding: 0; }
+.ai-feeder-panel.pulse-panel { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; box-shadow: none; }
+.pulse-panel .pulse-content { flex: 1 1 auto; }
