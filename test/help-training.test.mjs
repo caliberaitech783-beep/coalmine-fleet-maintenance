@@ -46,6 +46,12 @@ test("normal user header renders Help and Training", async () => {
   assert.match(source, /<HelpTraining role=\{mobileRole\} \/>/);
 });
 
+test("operational user header displays the Help and Training control as an icon only", async () => {
+  const styles = await readFile("src/help-training.css", "utf8");
+  assert.match(styles, /\.normal>header \.help-training-trigger>span\{display:none\}/);
+  assert.match(styles, /\.normal>header \.help-training-trigger\{width:39px;/);
+});
+
 test("manager header renders Help and Training only for manager accounts", async () => {
   const source = await readFile("src/main.jsx", "utf8");
   assert.match(source, /adminPermissions\.adminLevel === "Manager" && <HelpTraining roles=\{adminPermissions\.managerRoles\} \/>/);
