@@ -17,3 +17,13 @@ test('unrelated tables retain their existing order', () => {
   const columns = ['Name', 'Model', 'HMR', 'KMR'].map(label => ({label}));
   assert.deepEqual(jobReferenceColumnsLast(columns), columns);
 });
+
+test('all breakdown heading variants place type then reason directly after days', () => {
+  for (const [type, reason] of [['Type of breakdown', 'Reason of breakdown'], ['Breakdown type', 'Breakdown reason'], ['Repair category', 'Reason']]) {
+    const columns = ['Status', reason, 'Site location', 'Days of breakdown', 'Model', type].map(label => ({label}));
+    for (const ordered of [jobReferenceColumnsLast(columns), requestColumnsInWorkflowOrder(columns)]) {
+      const index = ordered.findIndex(column => column.label === 'Days of breakdown');
+      assert.deepEqual(ordered.slice(index, index + 3).map(column => column.label), ['Days of breakdown', type, reason]);
+    }
+  }
+});

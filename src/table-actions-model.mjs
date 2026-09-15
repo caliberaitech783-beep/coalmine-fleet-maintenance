@@ -97,7 +97,10 @@ export function jobReferenceColumnsLast(columns) {
     ordered.splice(ordered.indexOf(target) + 1, 0, ...moving);
   };
   moveAfter(({label}) => /^status$/i.test(label.trim()), ({label}) => /^(?:machine\s*\/\s*)?door\s*(?:no\.?|number)$/i.test(label.trim()));
-  moveAfter(({label}) => /^days of breakdown$/i.test(label.trim()), ({label}) => /^(?:type of breakdown|reason of breakdown|breakdown type|breakdown reason)$/i.test(label.trim()));
+  const isBreakdownDays = ({label}) => /^days of breakdown$/i.test(label.trim());
+  // Workflow tables can supply reason before type; enforce type then reason in every table.
+  moveAfter(isBreakdownDays, ({label}) => /^(?:reason of breakdown|breakdown reason|reason)$/i.test(label.trim()));
+  moveAfter(isBreakdownDays, ({label}) => /^(?:type of breakdown|breakdown type|repair category)$/i.test(label.trim()));
   moveAfter(({label}) => /^(?:reason of breakdown|breakdown reason)$/i.test(label.trim()), ({label}) => /^(?:opening\s+)?(?:hmr|kmr)$/i.test(label.trim()));
   return ordered;
 }
