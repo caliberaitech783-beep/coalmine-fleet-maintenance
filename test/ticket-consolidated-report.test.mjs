@@ -26,9 +26,9 @@ test('CRM report splits open and closed tickets and sorts longest elapsed first'
   assert.equal(rows[0].site,'Sasti OB');
   const data={scopeLabel:'WCL',start:new Date('2026-08-27T02:30:00Z'),end,openTickets:rows.filter(({status})=>status!=='Resolved'),closedTickets:rows.filter(({status})=>status==='Resolved')};
   const message=buildTicketWhatsAppReport({...data,pdfUrl:'https://example.com/r/pdf',xlsxUrl:'https://example.com/r/excel'});
-  assert.match(message,/PDF: https:\/\/example.com\/r\/pdf/);
-  assert.match(message,/Excel: https:\/\/example.com\/r\/excel/);
-  assert.match(message,/OPEN TICKETS: 2/);assert.match(message,/CLOSED TICKETS: 1/);
+  assert.match(message,/PDF:\* https:\/\/example.com\/r\/pdf/);
+  assert.match(message,/Excel:\* https:\/\/example.com\/r\/excel/);
+  assert.match(message,/OPEN TICKETS:\* 2/);assert.match(message,/CLOSED TICKETS:\* 1/);
   assert.doesNotMatch(message,/TIC\/OLD|User One|Old issue/);
   const table=buildTicketReportTable(data);
   assert.equal(table.rows.length,3);

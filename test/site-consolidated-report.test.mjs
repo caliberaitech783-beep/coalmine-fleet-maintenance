@@ -50,11 +50,11 @@ test('backdated requests and acceptance or flag activity still appear in the int
 
 test('site messages highlight one site, identify exact period, and include separate direct file links',()=>{
   const message=buildSiteReportMessage({site:'Sasti OB',window,count:2,pdfUrl:'https://example.invalid/sasti.pdf',xlsxUrl:'https://example.invalid/sasti.xlsx'});
-  assert.match(message,/^\*SASTI OB\*/);assert.match(message,/\*FROM:\*/);assert.match(message,/\*TO:\*/);
+  assert.match(message,/^\*SITE: Sasti OB\*/);assert.match(message,/\*FROM:\*/);assert.match(message,/\*TO:\*/);
   assert.match(message,/\*PDF - Sasti OB:\* https:\/\/example.invalid\/sasti.pdf/);
-  assert.match(message,/Cases with activity: 2/);assert.ok(message.length<1024);
+  assert.match(message,/Cases with activity:\* 2/);assert.ok(message.length<1024);
   const crm=buildSiteReportMessage({kind:'CRM',site:'Sasti OB',window,count:0,pdfUrl:'https://example.invalid/a',xlsxUrl:'https://example.invalid/b'});
-  assert.match(crm,/Tickets with activity: 0/);
+  assert.match(crm,/Tickets with activity:\* 0/);
 });
 
 test('empty site report retains its activity sheet and a request is not truncated by list limits',()=>{

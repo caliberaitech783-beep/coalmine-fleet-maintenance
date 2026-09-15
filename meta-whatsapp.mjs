@@ -1,4 +1,5 @@
-import {META_WORKFLOW_TEMPLATES} from './whatsapp-template-catalog.mjs';
+import {META_WORKFLOW_TEMPLATES,LEGACY_WORKFLOW_TEMPLATES,baseTemplateKey} from './whatsapp-template-catalog.mjs';
+import {whatsAppMessageParameters} from './whatsapp-message-format.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled} from './whatsapp-report-settings.mjs';
 import {effectiveReportTemplate} from './whatsapp-template-runtime.mjs';
 
@@ -122,22 +123,36 @@ export async function sendMetaWhatsAppDocument({to,buffer,filename='nerve-center
   return {sent:true,recipient,mediaId:upload.id,messageId:details?.messages?.[0]?.id||''};
 }
 
-export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[],purpose=templateKey},{env=process.env,fetchImpl=fetch}={}){
+export async function sendMetaWhatsAppTemplate({to,templateKey,parameters=[],purpose=templateKey,context={}},{env=process.env,fetchImpl=fetch}={}){
   const settings=await assertDeliveryActive(env,purpose);
   const config=metaWhatsAppConfiguration(env);
   const recipient=normalizeWhatsAppRecipient(to);
   const template=effectiveReportTemplate(purpose,settings,env.WHATSAPP_TEMPLATE_APPROVALS)||META_WORKFLOW_TEMPLATES[templateKey];
   if(!template)throw new Error(`Unknown Meta WhatsApp template: ${templateKey}`);
   if(!recipient||recipient.length<10||recipient.length>15)throw new Error('A valid WhatsApp recipient phone number is required.');
-  if(parameters.length!==template.example.length)throw new Error(`Template ${template.name} requires ${template.example.length} parameters.`);
-  const bodyParameters=parameters.map((value)=>({type:'text',text:clean(value).replace(/\s+/g,' ')}));
+  const values=whatsAppMessageParameters(purpose,parameters,context);
+  if(values.length!==template.example.length)throw new Error(`Template ${template.name} requires ${template.example.length} parameters.`);
+  const bodyParameters=values.map((value)=>({type:'text',text:clean(value).replace(/\s+/g,' ')}));
   const components=[{type:'body',parameters:bodyParameters}];
   if(template.otpButton)components.push({type:'button',sub_type:'url',index:'0',parameters:bodyParameters});
-  const details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,purpose,body:{
+  let details;
+  try{details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,purpose,body:{
     messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'template',template:{
       name:template.name,language:{code:'en_US'},components,
     },
-  }});
+  }});}catch(error){
+    // Only an explicit missing/unapproved template response permits a legacy
+    // retry. Never retry an ambiguous network result (duplicate risk), a policy
+    // pause, or a template suspended by the provider.
+    const legacy=LEGACY_WORKFLOW_TEMPLATES[baseTemplateKey(purpose)];
+    if(Number(error.metaCode)!==132001||!legacy||legacy.name===template.name||parameters.length!==legacy.example.length)throw error;
+    details=await metaRequest(`${config.phoneNumberId}/messages`,{method:'POST',env,fetchImpl,purpose,body:{
+      messaging_product:'whatsapp',recipient_type:'individual',to:recipient,type:'template',template:{
+        name:legacy.name,language:{code:'en_US'},components:[{type:'body',parameters:parameters.map(value=>({type:'text',text:clean(value).replace(/\s+/g,' ')}))}],
+      },
+    }});
+    return {sent:true,recipient,template:legacy.name,layoutPending:true,messageId:details?.messages?.[0]?.id||''};
+  }
   return {sent:true,recipient,template:template.name,messageId:details?.messages?.[0]?.id||''};
 }
 

@@ -87,7 +87,7 @@ async function notifyFromTicketRoute(api,purpose,{creatorLogin='creator',commitE
   }};
   const ticket={reference:'TIC/1',creatorLogin,site:'Sasti OB'};
   const res={status(){return this;},json(value){timeline.push('response');responses.push(value);}};
-  const bindings={addTicketNotifications:api.addTicketNotifications,client:transactionClient,
+  const bindings={publicBaseUrl:()=>"https://bdms.cmll.in/",addTicketNotifications:api.addTicketNotifications,client:transactionClient,
     sendGenericWhatsAppAlertBestEffort:(...args)=>{
       timeline.push('whatsapp');const delivery=api.sendGenericWhatsAppAlertBestEffort(...args);pending.push(delivery);return delivery;
     },res,rows:[ticket],normalizeOperationalSiteFields:value=>value,sendTicketRaisedEmail:async()=>{},
@@ -278,7 +278,7 @@ test('workflow routing bypasses generic expansion and rechecks the saved event r
 test('an explicit purpose overrides the template purpose and remains attached to text fallback',async()=>{
   const api=harness({templateError:new Error('Template unavailable')});
   api.settings.channels.ticketCreated=false;
-  await api.sendWhatsAppNotifications(api.client,['admin'],'TIC/1','Resolved',{templateKey:'ticketCreated',parameters:[]},{purpose:'ticketResolved'});
+  await api.sendWhatsAppNotifications(api.client,['admin'],'TIC/1','Resolved',{templateKey:'ticketCreated',parameters:['TIC/1','Admin']},{purpose:'ticketResolved'});
   assert.equal(api.templateAttempts.length,1);
   assert.equal(api.templateAttempts[0].purpose,'ticketResolved');
   assert.equal(api.texts.length,1);

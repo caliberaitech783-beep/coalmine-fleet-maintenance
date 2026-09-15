@@ -116,10 +116,10 @@ export function siteReportFilename(kind,site,slotKey,extension){
 export function buildSiteReportMessage({kind='Fleet',site,window,count,pdfUrl,xlsxUrl}){
   if(!pdfUrl||!xlsxUrl)throw new Error('A site report requires both PDF and Excel links.');
   const siteLabel=displaySiteName(site)||'Not assigned';
-  return [`*${siteLabel.toUpperCase()}*`, `Nerve Center ${kind} consolidated report`,
+  return [`*SITE: ${siteLabel}*`, `*Nerve Center | ${kind} consolidated report*`,
     `*FROM:* ${dateLabel(window.start)}`,`*TO:* ${dateLabel(window.end)} IST`,
-    `${kind==='CRM'?'Tickets':'Cases'} with activity: ${count}`,
-    `*PDF - ${siteLabel}:* ${pdfUrl}`,`Excel - ${siteLabel}: ${xlsxUrl}`,
+    `*${kind==='CRM'?'Tickets':'Cases'} with activity:* ${count}`,
+    `*PDF - ${siteLabel}:* ${pdfUrl}`,`*Excel - ${siteLabel}:* ${xlsxUrl}`,
     'This site only. All activity from the previous scheduled time up to this time. Links expire in 14 days.',
   ].join('\n');
 }

@@ -221,7 +221,7 @@ test('every prepared template retains all required fields and has a readable pop
   }
   const body=reportTemplateChoices('ticketResolved')[2].body;
   assert.match(validateCustomTemplate('ticketResolved',body.replace('{{2}}','')),/every required/);
-  assert.match(validateCustomTemplate('ticketResolved',body+' {{7}}'),/numbered placeholders/);
+  assert.match(validateCustomTemplate('ticketResolved',body+' {{99}}'),/numbered placeholders/);
   assert.match(validateCustomTemplate('ticketResolved',body+' again {{1}}.'),/once/);
 });
 
@@ -242,7 +242,7 @@ test('every named report has ten samples, and single-report routing does not spl
   for(const report of SINGLE_REPORT_TEMPLATE_PURPOSES){
     assert.equal(hierarchyReportMessagePurpose([report.reportTitle]),report.key);
     assert.equal(reportTemplateChoices(report.key).length,10);
-    assert.match(previewReportTemplate(report.key,'Report: {{1}}.'),new RegExp(report.reportTitle.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
+    assert.match(previewReportTemplate(report.key,'Report: {{2}}.'),new RegExp(report.reportTitle.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));
   }
   assert.equal(hierarchyReportMessagePurpose(DIRECTOR_REPORT_TITLES),'consolidatedRequestReport');
   assert.equal(hierarchyReportMessagePurpose(['Unknown report']),'consolidatedRequestReport');
@@ -267,7 +267,7 @@ test('single reports inherit saved bundle wording and approval until an individu
   assert.equal(whatsappPurposeEnabled(settings,'manualReports'),true);
 });
 
-test('legacy template definitions and their approved variant names are retained',()=>{
+test('site-first templates use new immutable names and preserve saved style selections',()=>{
   const settings=defaultWhatsAppReportSettings();
   for(const key of ['requestOpened','requestClosed','requestVerified','requestIdle','consolidatedRequestReport','consolidatedTicketReport','ticketCreated','ticketResolved','dailyUpdate']){
     assert.equal(requestedReportTemplate(key,settings).name,META_WORKFLOW_TEMPLATES[key].name);
@@ -281,7 +281,7 @@ test('legacy template definitions and their approved variant names are retained'
     'manualReports/detailed':'bdms_manualreports_ab8c5bd16537a660',
   };
   for(const [sample,name] of Object.entries(existingNames)){
-    const [purpose,variant]=sample.split('/');assert.equal(candidateReportTemplate(purpose,{variant}).name,name);
+    const [purpose,variant]=sample.split('/');assert.notEqual(candidateReportTemplate(purpose,{variant}).name,name);
   }
   const legacy={...settings,templates:{consolidatedRequestReport:{variant:'detailed',body:''}}};
   const normalized=normalizeWhatsAppReportSettings(legacy);
@@ -302,7 +302,7 @@ test('template choice activates only after server-held approval and uses a conte
   settings.templates[purpose]={variant:'custom',body:candidate.body+' Please review.'};
   assert.notEqual(candidateReportTemplate(purpose,settings.templates[purpose]).name,candidate.name);
   assert.equal(effectiveReportTemplate(purpose,settings,approvals).name,META_WORKFLOW_TEMPLATES.requestOpened.name);
-  assert.match(reportTemplateFallback(purpose,META_WORKFLOW_TEMPLATES.requestOpened.example,settings,approvals,'old fallback'),/^BDMS Off Road Alert/);
+  assert.match(reportTemplateFallback(purpose,META_WORKFLOW_TEMPLATES.requestOpened.example,settings,approvals,'old fallback'),/^\*SITE: Majri OB\*/);
 });
 
 const deliveryEnv={META_WHATSAPP_ACCESS_TOKEN:'test-token',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_BUSINESS_ACCOUNT_ID:'456'};

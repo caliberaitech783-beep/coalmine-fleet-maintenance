@@ -11,7 +11,8 @@ export function hierarchyReportMessagePurpose(reportTitles=[]) {
   return titles.length===1?SINGLE_REPORT_TEMPLATE_PURPOSES.find(report=>report.reportTitle===titles[0])?.key||'consolidatedRequestReport':'consolidatedRequestReport';
 }
 
-export const META_WORKFLOW_TEMPLATES={
+// Keep approved provider definitions immutable for delivery during the v2 review.
+export const LEGACY_WORKFLOW_TEMPLATES={
   passwordResetOtp:{name:'nerve_password_reset_otp',category:'AUTHENTICATION',example:['123456'],otpButton:true,components:[
     {type:'BODY',add_security_recommendation:true},
     {type:'FOOTER',code_expiration_minutes:10},
@@ -29,7 +30,7 @@ export const META_WORKFLOW_TEMPLATES={
   requestIdle:{name:'bdms_vehicle_idle_v1',body:'BDMS Idle Vehicle Alert\n{{1}} at {{2}} was marked Idle at {{3}}. Reason: {{4}}. Request: {{5}}. Approval action: {{6}}.\nOpen request: {{7}}',example:['VOLVO TIPPERS | Door: V257 - MH34BZ5560','Majri OB','24 Aug 2026, 6:10 PM','No driver','REQ-1787566831835','Project Manager or Production Manager must approve Make On Road','https://bdms.cmll.in/?request=REQ-1787566831835']},
 };
 
-export const TEMPLATE_FIELD_LABELS = {
+export const LEGACY_TEMPLATE_FIELD_LABELS = {
   requestOpened:['Request reference','Site','Equipment','Door number','Breakdown type','Reported by','Opened at','Expected completion','Request link'],
   requestClosed:['Request reference','Equipment / door','Site','Closed by','Closed at','Downtime','Request link'],
   requestVerified:['Request reference','Equipment / door','Site','Verified by','Verified at','Closing meter','Request link'],
@@ -38,7 +39,42 @@ export const TEMPLATE_FIELD_LABELS = {
   ticketCreated:['Ticket reference','Created by','Site'],ticketResolved:['Ticket reference','Resolved by'],
   dailyUpdate:['Updated by','Request reference'],
 };
+export const TEMPLATE_FIELD_LABELS = {
+  requestOpened:['Site','Request','Equipment / door','Breakdown type','Complaint / reason','Reported by','Off Road since (IST)','Expected completion (IST)','Next step','Open request'],
+  requestClosed:['Site','Request','Equipment / door','Breakdown type','Complaint / reason','Work completed','Delay reason','Closed by','On Road at (IST)','Downtime','Next step','Open request'],
+  requestVerified:['Site','Request','Equipment / door','Breakdown type','Complaint / reason','Work completed','Verified by','Verified at (IST)','Closing meter','First trip','Next step','Open request'],
+  requestIdle:['Site','Request','Equipment / door','Breakdown type','Complaint / reason','Idle reason','Work completed','Idle since (IST)','Marked by','Next step','Open request'],
+  consolidatedRequestReport:['Site','Report','Reporting period (IST)','Summary','PDF / files','Excel / other files','Notes'],
+  consolidatedTicketReport:['Site','Report','Reporting period (IST)','Summary','PDF','Excel','Notes'],
+  ticketCreated:['Site','Ticket','Category','Priority','Issue / reason','Raised by','Raised at (IST)','Next step','Open CRM'],
+  ticketResolved:['Site','Ticket','Category','Priority','Issue / reason','Resolution','Resolved by','Resolved at (IST)','Next step','Open CRM'],
+  dailyUpdate:['Site','Request','Equipment / door','Breakdown type','Maintenance update','Delay reason','Expected completion (IST)','Updated by','Updated at (IST)','Next step','Open request'],
+  maintenanceReminder:['Site','Request','Update due (IST)','Next step'],
+};
+const sampleRequest=['Majri OB','REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Breakdown','Hydraulic hose leaking'];
+const sampleLink='https://bdms.cmll.in/?request=REQ-1787566831835';
+const examples={
+  requestOpened:[...sampleRequest,'Production User','24 Aug 2026, 3:49 PM','24 Aug 2026, 8:00 PM','Maintenance: review acceptance and record the repair plan.',sampleLink],
+  requestClosed:[...sampleRequest,'Replaced hydraulic hose and tested','Awaiting spare hose','Maintenance User','24 Aug 2026, 6:10 PM','0d 2h 21m','MIS: verify the closure and record the first trip.',sampleLink],
+  requestVerified:[...sampleRequest,'Replaced hydraulic hose and tested','MIS User','24 Aug 2026, 6:30 PM','HMR 12456','Completed at 24 Aug 2026, 6:25 PM','Production: review the verified record and first-trip status.',sampleLink],
+  requestIdle:[...sampleRequest,'No driver','Repair completed; awaiting driver','24 Aug 2026, 6:10 PM','Maintenance User','Await Project / Production Manager approval before Make On Road.',sampleLink],
+  ticketCreated:['Majri OB','TIC/MAJRI-OB/240826/000001','Maintenance','High','Spare hose unavailable','Maintenance User','24 Aug 2026, 4:00 PM','Admin: review the issue and record a resolution.','https://bdms.cmll.in/'],
+  ticketResolved:['Majri OB','TIC/MAJRI-OB/240826/000001','Maintenance','High','Spare hose unavailable','Replacement arranged from site stores','Administrator','24 Aug 2026, 5:30 PM','Review the recorded resolution in CRM.','https://bdms.cmll.in/'],
+  dailyUpdate:['Majri OB','REQ-1787566831835',sampleRequest[2],'Breakdown','Replacement hose requested','Awaiting parts','24 Aug 2026, 8:00 PM','Maintenance User','24 Aug 2026, 4:30 PM','Review the latest progress and expected completion.',sampleLink],
+  maintenanceReminder:['Majri OB','REQ-1787566831835','9:00 AM','Add today’s maintenance update and delay reason.'],
+  consolidatedRequestReport:['Majri OB','Fleet consolidated report','14 Sep 2026, 7:00 PM to 15 Sep 2026, 7:00 AM','6 cases with activity','https://example.com/reports/majri-fleet.pdf','https://example.com/reports/majri-fleet.xlsx','This site only. Download links expire in 14 days.'],
+  consolidatedTicketReport:['Majri OB','CRM consolidated report','14 Sep 2026, 7:00 PM to 15 Sep 2026, 7:00 AM','5 tickets with activity: 3 open, 2 resolved','https://example.com/reports/majri-crm.pdf','https://example.com/reports/majri-crm.xlsx','All permitted ticket categories for this site. Links expire in 14 days.'],
+};
+const standardTitles={requestOpened:'Off Road Alert',requestClosed:'On Road Update',requestVerified:'MIS Verified',requestIdle:'Idle Vehicle',ticketCreated:'New CRM Ticket',ticketResolved:'CRM Ticket Resolved',dailyUpdate:'Maintenance Update',maintenanceReminder:'Maintenance Reminder',consolidatedRequestReport:'Fleet Report',consolidatedTicketReport:'CRM Report'};
+export const META_WORKFLOW_TEMPLATES=Object.fromEntries(Object.entries(LEGACY_WORKFLOW_TEMPLATES).map(([key,legacy])=>[key,key==='passwordResetOtp'?legacy:{
+  name:`nerve_${key.toLowerCase()}_site_v2`,
+  body:`*SITE: {{1}}*\n*Nerve Center | ${standardTitles[key]}*\n\n${TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Nerve Center for complete details.`,
+  example:examples[key],
+}]));
 const aliases={offRoadEscalation:'requestOpened',idleReminder:'requestIdle',manualReports:'consolidatedRequestReport'};
+for(const [purpose,key,title] of [['offRoadEscalation','requestOpened','Off Road Escalation'],['idleReminder','requestIdle','Idle Reminder']]){
+  META_WORKFLOW_TEMPLATES[purpose]={...META_WORKFLOW_TEMPLATES[key],name:`nerve_${purpose.toLowerCase()}_site_v2`,body:META_WORKFLOW_TEMPLATES[key].body.replace(standardTitles[key],title)};
+}
 export const baseTemplateKey = purpose => isSingleReportPurpose(purpose)?'consolidatedRequestReport':aliases[purpose] || purpose;
 const titles={requestOpened:'OFF ROAD ALERT',requestClosed:'ON ROAD UPDATE',requestVerified:'MIS VERIFIED',requestIdle:'IDLE VEHICLE',offRoadEscalation:'OFF ROAD ESCALATION',idleReminder:'IDLE REMINDER',consolidatedRequestReport:'FLEET REPORTS',consolidatedTicketReport:'CRM TICKET REPORT',ticketCreated:'NEW CRM TICKET',ticketResolved:'CRM TICKET RESOLVED',dailyUpdate:'MAINTENANCE UPDATE'};
 const purposeNotes={
@@ -71,24 +107,28 @@ export function resolvedReportTemplateChoice(purpose,settings) {
   return {purpose,selection:settings?.templates?.[purpose]||{variant:'standard',body:''}};
 }
 export function reportTemplateChoices(purpose) {
-  const key=baseTemplateKey(purpose), base=META_WORKFLOW_TEMPLATES[key], fields=TEMPLATE_FIELD_LABELS[key];
+  const key=baseTemplateKey(purpose), base=META_WORKFLOW_TEMPLATES[purpose]||META_WORKFLOW_TEMPLATES[key], fields=TEMPLATE_FIELD_LABELS[key];
   if(!base||!fields)return [];
   const {title,intro,action}=reportTemplateContext(purpose);
-  const single=isSingleReportPurpose(purpose),report=fields.length===1;
-  const lines=fields.map((field,index)=>`${field}: {{${index+1}}}`).join('\n');
-  return [
-    {variant:'standard',label:'Current standard',description:'Keep the existing wording.',body:base.body},
-    {variant:'brief',label:'Compact summary',description:'Short lines for quick reading.',body:`Nerve Center · ${title}\n${fields.map((field,index)=>`${field}: {{${index+1}}}`).join(' | ')}\nView Nerve Center for the latest status.`},
-    {variant:'detailed',label:'Structured detail',description:'Clear labels, one item per line.',body:`*NERVE CENTER | ${title}*\n\n${fields.map((field,index)=>`*${field}:* {{${index+1}}}`).join('\n')}\n\nThis is an automated operational update. Please review the details in Nerve Center.`},
-    {variant:'executive',label:'Executive brief',description:report?'A short introduction for management review.':'Event context followed by key facts.',body:`*${title} | MANAGEMENT BRIEF*\n${intro}\n\n${lines}\n\nFor review: ${action}`},
-    {variant:'action',label:'Action focused',description:'Make the next operational step clear.',body:`*ACTION REVIEW · ${title}*\n\n${action}\n\n*Supporting details*\n${lines}\n\nRecord follow-up in Nerve Center so the team has the latest information.`},
-    {variant:'handover',label:'Team handover',description:report?'Share report context with the next team.':'Pass the event details to the next team.',body:`*TEAM HANDOVER | ${title}*\n${intro}\n\n${fields.map((field,index)=>`• ${field}: {{${index+1}}}`).join('\n')}\n\n*Next team:* ${action}\nCheck Nerve Center for updates since this message was generated.`},
-    {variant:'checklist',label:'Review checklist',description:'Facts followed by a short review checklist.',body:`*${title} — REVIEW CHECKLIST*\n\n${lines}\n\n☐ Review the ${report?'reporting scope and included records':'reference and recorded details'}.\n☐ ${action}\n☐ Record any required follow-up in Nerve Center.`},
-    {variant:'formal',label:'Formal notice',description:'Professional wording for official updates.',body:`Nerve Center | ${title}\n\nDear colleague,\n${intro} The recorded details are provided below for your review.\n\n${lines}\n\n${action}\nRegards,\nNerve Center Operations`},
-    {variant:'numbered',label:report?'Report review card':'Numbered facts',description:report?'Separate the report contents and follow-up.':'Numbered fields for easy reference.',body:report?`*${title} | REPORT REVIEW*\n\n*1. ${single?'Selected report':'Report contents'}*\n${lines}\n\n*2. Review and follow-up*\n${action}\n\nGenerated by Nerve Center.`:`*${title} | FACTS AT A GLANCE*\n\n${fields.map((field,index)=>`${index+1}. ${field}: {{${index+1}}}`).join('\n')}\n\n*Follow-up:* ${action}`},
-    {variant:'dashboard',label:'Status card',description:report?'A report-ready card with a clear next step.':'A visual event card with labelled facts.',body:`📋 *${title}*\n${intro}\n━━━━━━━━━━━━\n${lines}\n━━━━━━━━━━━━\n*Next step*\n${action}\n\nNerve Center · Operational update`},
+  const lines=fields.slice(1).map((field,index)=>`*${field}:* {{${index+2}}}`).join('\n');
+  const header=`*SITE: {{1}}*`;
+  const styles=[
+    ['standard','Site-first standard','Site heading and clearly labelled details.',null],
+    ['brief','Compact summary','Short introduction for quick reading.',`*${title}*`],
+    ['detailed','Structured detail','Event context and complete facts.',`*NERVE CENTER | ${title}*\n${intro}`],
+    ['executive','Executive brief','Key facts for review.',`*${title} | MANAGEMENT BRIEF*`],
+    ['action','Action focused','Highlight the required follow-up.',`*ACTION REVIEW | ${title}*`],
+    ['handover','Team handover','Pass the event details to the next team.',`*TEAM HANDOVER | ${title}*`],
+    ['checklist','Review checklist','Facts for a complete review.',`*${title} | REVIEW CHECKLIST*`],
+    ['formal','Formal notice','Professional operational wording.',`*Nerve Center | ${title}*\nDear colleague, ${intro}`],
+    ['numbered','Numbered facts','Numbered fields for reference.',`*${title} | FACTS AT A GLANCE*`],
+    ['dashboard','Status card','A clear operational status card.',`*${title} | STATUS CARD*`],
   ];
+  return styles.map(([variant,label,description,heading])=>({variant,label,description,
+    body:variant==='standard'?base.body:`${header}\n${heading}\n\n${variant==='numbered'?fields.slice(1).map((field,index)=>`${index+1}. *${field}:* {{${index+2}}}`).join('\n'):lines}\n\n${variant==='action'?action:'Open Nerve Center for complete details.'}`,
+  }));
 }
+
 export function validateCustomTemplate(purpose,body) {
   const fields=TEMPLATE_FIELD_LABELS[baseTemplateKey(purpose)];
   if(!fields||typeof body!=='string'||!body.trim()||body.length>1024)return 'Enter message wording between 1 and 1,024 characters.';
@@ -97,14 +137,12 @@ export function validateCustomTemplate(purpose,body) {
   if(fields.some((_,index)=>!tokens.includes(String(index+1))))return 'Keep every required placeholder so operational details are not lost.';
   if(tokens.length!==fields.length||tokens.some((token,index)=>token!==String(index+1)))return 'Use each required placeholder once, in numbered order.';
   if(/^\s*\{\{|\}\}\s*$/.test(body))return 'Add wording before and after the placeholders.';
+  if(!body.trimStart().startsWith('*SITE: {{1}}*\n'))return 'Start with *SITE: {{1}}* on its own first line so the site stays highlighted.';
   return '';
 }
 export function previewReportTemplate(purpose,body) {
   const base=META_WORKFLOW_TEMPLATES[baseTemplateKey(purpose)];
   const single=singleReportsByKey.get(purpose);
-  const example=single?[`${single.label} | SCOPE: Sasti OB | 4 rows | PDF: https://example.com/reports/sample.pdf | Excel: https://example.com/reports/sample.xlsx`]
-    :['consolidatedRequestReport','manualReports'].includes(purpose)?['Fleet report bundle | SCOPE: Sasti OB | Road status: 24 rows | Availability: 8 rows | PDF / Excel: https://example.com/reports/bundle']
-    :purpose==='consolidatedTicketReport'?['CRM consolidated report | SCOPE: WCL | WINDOW: 27 Aug 2026, 8:00 AM - 3:00 PM | 3 open, 2 closed | PDF: https://example.com/reports/crm.pdf | Excel: https://example.com/reports/crm.xlsx | Links expire in 14 days.']
-    :base?.example;
+  const example=base?.example?.map((value,index)=>single&&index===1?single.label:value);
   return String(body||'').replace(/\{\{(\d+)\}\}/g,(_,index)=>String(example?.[Number(index)-1]||`[field ${index}]`).replace(/\s+/g,' '));
 }

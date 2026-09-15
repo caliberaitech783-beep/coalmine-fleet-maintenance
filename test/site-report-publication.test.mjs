@@ -1,3 +1,4 @@
+import {siteReportMessageContext} from '../whatsapp-message-format.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -11,7 +12,7 @@ import {formatDisplayDateTime} from '../date-time-format.mjs';
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 test('site publication stores a real combined PDF and workbook with direct links to the same site files',async()=>{
   const writes=[];
-  const dependencies={buildSiteFleetReportTables,buildSiteReportMessage,siteReportFilename,buildTableBundlePdf,buildXlsxReportBundleBuffer,
+  const dependencies={siteReportMessageContext,buildSiteFleetReportTables,buildSiteReportMessage,siteReportFilename,buildTableBundlePdf,buildXlsxReportBundleBuffer,
     displaySiteName,formatDisplayDateTime,randomUUID,pool:{query:async(sql,args)=>{writes.push({sql,args});return {rowCount:1};}}};
   const snippet=server.slice(server.indexOf('async function publishDirectorReportFiles('),server.indexOf('async function publishDirectorReportArchive('));
   const publish=new Function(...Object.keys(dependencies),`${snippet};return publishDirectorReportFiles;`)(...Object.values(dependencies));
@@ -28,7 +29,7 @@ test('site publication stores a real combined PDF and workbook with direct links
   assert.equal(pdf.content.subarray(0,5).toString(),'%PDF-');
   assert.equal(xlsx.content.subarray(0,2).toString(),'PK');
   assert.match(xlsx.content.toString(),/SASTI-CASE/);assert.doesNotMatch(xlsx.content.toString(),/MAJRI-SECRET/);
-  assert.ok(result.message.startsWith('*SASTI OB*'));
+  assert.ok(result.message.startsWith('*SITE: Sasti OB*'));
   for(const [index,file] of [[0,pdf],[1,xlsx]]){
     const offset=index*4;
     assert.equal(stored.args[offset+2],file.filename);

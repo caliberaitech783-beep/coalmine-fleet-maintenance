@@ -6905,8 +6905,8 @@ function WhatsAppReport({type, requests = []}) {
     ? rows.filter((row) => locationMatchesRegion(row.locations, oemRegion))
     : rows;
   const reportText = isSite
-    ? [`Nerve Center - Daily Site-wise Report`, today, ...visibleRows.map((r) => `${r.name}: Total ${r.total}, On Road ${r.onRoad}, Off Road ${r.offRoad}, Idle ${r.idle}, Open Breakdowns ${r.breakdowns}`)].join("\n")
-    : [`Nerve Center - Daily OEM Report${oemRegion === "all" ? "" : ` - ${oemRegion}`}`, today, ...visibleRows.map((r) => `${r.name}: ${r.contacts} contacts, Levels ${r.levels || "N/A"}, Locations ${r.locations || "N/A"}`)].join("\n");
+    ? [`*SITE: ${visibleRows.map(r=>r.name).join(", ") || "No sites selected"}*`, `*Nerve Center | Daily site report*`, `*Date:* ${today}`, ...visibleRows.map((r) => `\n*${r.name}*\n*Total:* ${r.total} | *On Road:* ${r.onRoad} | *Off Road:* ${r.offRoad}\n*Idle:* ${r.idle} | *Open breakdowns:* ${r.breakdowns}`)].join("\n")
+    : [`*SITE: ${[...new Set(visibleRows.flatMap(r=>String(r.locations||"").split(", ")).filter(Boolean))].join(", ") || "Not assigned"}*`, `*Nerve Center | Daily OEM report${oemRegion === "all" ? "" : ` - ${oemRegion}`}*`, `*Date:* ${today}`, ...visibleRows.map((r) => `\n*OEM:* ${r.name}\n*Contacts:* ${r.contacts} | *Levels:* ${r.levels || "N/A"}\n*Sites:* ${r.locations || "Not assigned"}`)].join("\n");
   const share = () => window.open(`https://wa.me/?text=${encodeURIComponent(reportText)}`, "_blank", "noopener,noreferrer");
   const dummyReportTypes = ["A/B", "B/C", "C/D"];
   const oemReportLevels = ["Daily", "L1", "L2", "L3", "L4"];
@@ -6944,19 +6944,19 @@ function WhatsAppReport({type, requests = []}) {
     let phone = String(recipient?.phone || "").replace(/\D/g, "");
     if (phone.length === 10) phone = `91${phone}`;
     const message = [
-      "Nerve Center - Daily Site-wise Report",
-      today,
-      `Site: ${site.name}`,
-      `Report: ${reportType}`,
-      `Total equipment: ${site.total}`,
-      `On road: ${site.onRoad}`,
-      `Off road: ${site.offRoad}`,
-      `Idle: ${site.idle}`,
-      `Open breakdowns: ${site.breakdowns}`,
+      `*SITE: ${site.name}*`,
+      "*Nerve Center | Daily site report*",
+      `*Date:* ${today}`,
+      `*Report:* ${reportType}`,
+      `*Total equipment:* ${site.total}`,
+      `*On Road:* ${site.onRoad}`,
+      `*Off Road:* ${site.offRoad}`,
+      `*Idle:* ${site.idle}`,
+      `*Open breakdowns:* ${site.breakdowns}`,
     ].join("\n");
     try{
       if(!phone)throw new Error(`No WhatsApp phone number is assigned for ${site.name}.`);
-      await sendMetaReport({reportType:"Daily site-wise report",targetName:site.name,reportLevel:reportType,
+      await sendMetaReport({reportType:"Daily site-wise report",targetName:site.name,site:site.name,reportLevel:reportType,
         recipientName:recipient?.employee || recipient?.login || "WhatsApp recipient",recipientPhone:phone,message});
       setLastPrepared(`${reportType} report sent to ${site.name}${recipient ? ` (${recipient.employee || recipient.login})` : ""}`);
     }catch(error){
@@ -6980,17 +6980,17 @@ function WhatsAppReport({type, requests = []}) {
     let phone = String(recipient?.phone || "").replace(/\D/g, "");
     if (phone.length === 10) phone = `91${phone}`;
     const message = [
-      "Nerve Center - Daily OEM Report",
-      today,
-      `OEM: ${oem.name}`,
-      `Level: ${reportLevel}`,
-      `Contacts: ${oem.contacts}`,
-      `Locations: ${oem.locations || "Not assigned"}`,
+      `*SITE: ${oem.locations || "Not assigned"}*`,
+      "*Nerve Center | Daily OEM report*",
+      `*Date:* ${today}`,
+      `*OEM:* ${oem.name}`,
+      `*Level:* ${reportLevel}`,
+      `*Contacts:* ${oem.contacts}`,
       "Generated from the current Nerve Center fleet data.",
     ].join("\n");
     try{
       if(!phone)throw new Error(`No WhatsApp phone number is assigned for ${oem.name} ${reportLevel}.`);
-      await sendMetaReport({reportType:"Daily OEM report",targetName:oem.name,reportLevel,
+      await sendMetaReport({reportType:"Daily OEM report",targetName:oem.name,site:oem.locations || "Not assigned",reportLevel,
         recipientName:recipient?.contact || "WhatsApp recipient",recipientPhone:phone,message});
       setLastPrepared(`${reportLevel} report sent to ${oem.name}${recipient ? ` (${recipient.contact || "contact"})` : ""}`);
     }catch(error){

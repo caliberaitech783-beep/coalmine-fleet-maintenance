@@ -39,7 +39,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
       }
       if(sql.startsWith('SELECT * FROM maintenance_requests'))return {rows:saved?[structuredClone(saved)]:[]};
       if(sql.startsWith('SELECT meter_type'))return {rows:active(saved)&&!needsFlag(saved)?[structuredClone(saved)]:[]};
-      if(sql.startsWith('SELECT reference,site,requester_login'))return {rows:active(saved)&&!needsFlag(saved)?[structuredClone(saved)]:[]};
+      if(sql.startsWith('SELECT *,requester_login'))return {rows:active(saved)&&!needsFlag(saved)?[structuredClone(saved)]:[]};
       if(sql.startsWith('SELECT id FROM maintenance_daily_remarks'))return {rows:[]};
       if(sql.startsWith('SELECT record_data')){
         if(notificationFailure==='recipients')throw new Error('Notification recipient lookup unavailable');

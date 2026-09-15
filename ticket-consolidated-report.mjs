@@ -62,9 +62,9 @@ export function buildTicketReportTable({scopeLabel='Site',start,end,openTickets=
 export function buildTicketWhatsAppReport({scopeLabel='Site',start,end,openTickets=[],closedTickets=[],pdfUrl,xlsxUrl}){
   for(const link of [pdfUrl,xlsxUrl])if(!link||!/^https?:\/\//.test(link))throw new Error('CRM consolidated reports require PDF and Excel download links.');
   return [
-    'NERVE CENTER CRM CONSOLIDATED REPORT',`SCOPE: ${displaySiteName(scopeLabel)}`,
-    `WINDOW: ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
-    `OPEN TICKETS: ${openTickets.length} | CLOSED TICKETS: ${closedTickets.length}`,
-    `PDF: ${pdfUrl}`,`Excel: ${xlsxUrl}`,'Open the files for complete ticket details. Links expire in 14 days.',
+    `*SITE: ${displaySiteName(scopeLabel)}*`,'*NERVE CENTER CRM CONSOLIDATED REPORT*',
+    `*WINDOW:* ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
+    `*OPEN TICKETS:* ${openTickets.length} | *CLOSED TICKETS:* ${closedTickets.length}`,
+    `*PDF:* ${pdfUrl}`,`*Excel:* ${xlsxUrl}`,'Open the files for complete ticket details. Links expire in 14 days.',
   ].join('\n');
 }

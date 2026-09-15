@@ -48,10 +48,10 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   const message=buildDirectorWhatsAppMessage({generatedAt:new Date('2026-09-01T13:30:00Z'),links:[
     {department:'Production',title:'Location wise opened BD',pdfUrl:'https://bdms.cmll.in/r/a',xlsxUrl:'https://bdms.cmll.in/r/b'},
   ]});
-  assert.match(message,/▣ Nerve Center/);
+  assert.match(message,/\*SITE: All permitted sites\*\n\*Nerve Center\*/);
   assert.match(message,/Director's Daily Report/);
-  assert.match(message,/Schedule: Daily 07:00:00 PM IST/);
-  assert.match(message,/Generated: 01-09-2026 07:00:00 PM/);
+  assert.match(message,/Schedule:\* Daily 07:00:00 PM IST/);
+  assert.match(message,/Generated:\* 01-09-2026 07:00:00 PM/);
   assert.match(message,/Department Wise Report Links:/);
   assert.match(message,/Production --/);
   assert.match(message,/1\. Location wise opened BD/);

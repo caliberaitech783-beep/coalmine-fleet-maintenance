@@ -9,23 +9,22 @@ test('Meta WhatsApp configuration remains disabled until token and phone id are 
 });
 
 test('every workflow event has a Meta template definition',()=>{
-  assert.deepEqual(Object.keys(META_WORKFLOW_TEMPLATES),['passwordResetOtp','consolidatedRequestReport','consolidatedTicketReport','ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestClosed','requestVerified','requestIdle']);
+  assert.deepEqual(Object.keys(META_WORKFLOW_TEMPLATES),['passwordResetOtp','consolidatedRequestReport','consolidatedTicketReport','ticketCreated','ticketResolved','maintenanceReminder','dailyUpdate','requestOpened','requestClosed','requestVerified','requestIdle','offRoadEscalation','idleReminder']);
   assert.ok(Object.values(META_WORKFLOW_TEMPLATES).every(({name,body,components,example})=>/^(nerve|bdms)_/.test(name)&&(body||components?.length)&&example.length));
   assert.equal(META_WORKFLOW_TEMPLATES.passwordResetOtp.category,'AUTHENTICATION');
   assert.equal(META_WORKFLOW_TEMPLATES.passwordResetOtp.components.at(-1).buttons[0].otp_type,'COPY_CODE');
 });
 
-test('request lifecycle templates include complete operational details',()=>{
-  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.name,'bdms_offroad_request_opened_v1');
-  assert.equal(META_WORKFLOW_TEMPLATES.requestOpened.example.length,9);
-  assert.match(META_WORKFLOW_TEMPLATES.requestOpened.body,/Off Road Alert[\s\S]*Equipment:[\s\S]*Door No\.[\s\S]*Breakdown type:[\s\S]*ETC:[\s\S]*Open request:/);
-  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.name,'bdms_onroad_request_closed_v1');
-  assert.equal(META_WORKFLOW_TEMPLATES.requestClosed.example.length,7);
-  assert.match(META_WORKFLOW_TEMPLATES.requestClosed.body,/On Road Update[\s\S]*closed by[\s\S]*Total downtime:[\s\S]*Open request:/);
-  assert.equal(META_WORKFLOW_TEMPLATES.requestVerified.name,'bdms_mis_verification_completed_v1');
-  assert.equal(META_WORKFLOW_TEMPLATES.requestIdle.name,'bdms_vehicle_idle_v1');
-  assert.match(META_WORKFLOW_TEMPLATES.requestIdle.body,/Approval action:/);
-  assert.match(META_WORKFLOW_TEMPLATES.requestIdle.example[5],/Project Manager or Production Manager/);
+test('request lifecycle templates retain a highlighted site and event-specific fields',()=>{
+  for(const key of ['requestOpened','requestClosed','requestVerified','requestIdle','offRoadEscalation','idleReminder']){
+    assert.match(META_WORKFLOW_TEMPLATES[key].name,/_site_v2$/);
+    assert.match(META_WORKFLOW_TEMPLATES[key].body,/^\*SITE: \{\{1\}\}\*\n/);
+    assert.match(META_WORKFLOW_TEMPLATES[key].body,/\*Breakdown type:\*/);
+    assert.match(META_WORKFLOW_TEMPLATES[key].body,/\*Complaint \/ reason:\*/);
+  }
+  assert.match(META_WORKFLOW_TEMPLATES.requestClosed.body,/Work completed:[\s\S]*Delay reason:/);
+  assert.match(META_WORKFLOW_TEMPLATES.requestVerified.body,/Closing meter:[\s\S]*First trip:/);
+  assert.match(META_WORKFLOW_TEMPLATES.requestIdle.body,/Idle reason:/);
 });
 
 test('Cloud API template delivery uses approved template parameters',async()=>{
@@ -34,9 +33,10 @@ test('Cloud API template delivery uses approved template parameters',async()=>{
     env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123'},
     fetchImpl:async(url,options)=>{request={url,options};return {ok:true,json:async()=>({messages:[{id:'wamid.template'}]})}},
   });
-  assert.equal(result.template,'nerve_ticket_resolved');
+  assert.equal(result.template,'nerve_ticketresolved_site_v2');
   assert.equal(JSON.parse(request.options.body).type,'template');
-  assert.deepEqual(JSON.parse(request.options.body).template.components[0].parameters,[{type:'text',text:'TIC/1'},{type:'text',text:'Admin'}]);
+  const values=JSON.parse(request.options.body).template.components[0].parameters;
+  assert.equal(values.length,10);assert.equal(values[1].text,'TIC/1');assert.equal(values[6].text,'Admin');
 });
 
 test('password reset delivery supplies the OTP to the authentication body and copy-code button',async()=>{
@@ -55,13 +55,13 @@ test('template submission creates missing utility templates and preserves existi
   const requests=[];
   const results=await submitMetaWhatsAppTemplates({
     env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_BUSINESS_ACCOUNT_ID:'456'},
-    fetchImpl:async(url,options={})=>{requests.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>({data:[{id:'old',name:'nerve_ticket_created',status:'APPROVED',category:'UTILITY',language:'en_US'}]})};return {ok:true,json:async()=>({id:`new-${requests.length}`,status:'PENDING'})}},
+    fetchImpl:async(url,options={})=>{requests.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>({data:[{id:'old',name:'nerve_ticketcreated_site_v2',status:'APPROVED',category:'UTILITY',language:'en_US'}]})};return {ok:true,json:async()=>({id:`new-${requests.length}`,status:'PENDING'})}},
   });
-  assert.equal(results.length,11);
-  assert.equal(results.find((result)=>result.name==='nerve_ticket_created').existing,true);
-  assert.equal(requests.filter((request)=>request.options.method==='POST').length,10);
+  assert.equal(results.length,13);
+  assert.equal(results.find((result)=>result.name==='nerve_ticketcreated_site_v2').existing,true);
+  assert.equal(requests.filter((request)=>request.options.method==='POST').length,12);
   const submissions=requests.filter((request)=>request.options.method==='POST').map((request)=>JSON.parse(request.options.body));
-  assert.equal(submissions.filter((submission)=>submission.category==='UTILITY').length,9);
+  assert.equal(submissions.filter((submission)=>submission.category==='UTILITY').length,11);
   assert.equal(submissions.filter((submission)=>submission.category==='AUTHENTICATION').length,1);
 });
 
@@ -79,7 +79,7 @@ test('Fast2SMS delivery uses the provider endpoint and removes forbidden whitesp
   assert.equal(result.messageId,'wamid.fast2sms');
   assert.equal(request.url,'https://www.fast2sms.com/dev/whatsapp/v26.0/123/messages');
   assert.equal(request.options.headers.Authorization,'provider-key');
-  assert.equal(JSON.parse(request.options.body).template.components[0].parameters[0].text,'Line one Line two ready');
+  assert.equal(JSON.parse(request.options.body).template.components[0].parameters[3].text,'Line one Line two ready');
 });
 
 test('Meta phone registration uses the configured number and a six-digit PIN',async()=>{

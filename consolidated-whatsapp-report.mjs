@@ -82,6 +82,7 @@ const recordLines=(request,index,closed=false)=>[
 export function buildConsolidatedWhatsAppReport({scopeLabel='Site',start,end,openRequests=[],closedRequests=[],maxLength=3900}){
   const sites=[...new Set([...openRequests,...closedRequests].map(({site})=>displaySiteName(site)||'Not assigned'))].sort();
   const header=[
+    `*SITE: ${displaySiteName(scopeLabel)}*`,
     '🚨 *NERVE CENTER CONSOLIDATED REPORT*',
     `*SCOPE:* ${displaySiteName(scopeLabel)}`,
     `*WINDOW:* ${indiaDateTime(start)} – ${indiaDateTime(end)}`,

@@ -347,7 +347,7 @@ export function directorReportFilename(title,extension,slotKey){
   return `director-${safeFilePart(title)}-${slotKey}.${extension}`;
 }
 
-export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[],heading="Director's Daily Report",scheduleLabel='Daily 07:00:00 PM IST'}={}){
+export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[],heading="Director's Daily Report",scheduleLabel='Daily 07:00:00 PM IST',siteScope='All permitted sites'}={}){
   const byDepartment=links.reduce((groups,link)=>{
     const department=link.department||'General';
     if(!groups.has(department))groups.set(department,[]);
@@ -355,7 +355,7 @@ export function buildDirectorWhatsAppMessage({generatedAt=new Date(),links=[],he
     return groups;
   },new Map());
   const generated=formatDisplayDateTime(generatedAt);
-  const lines=['▣ Nerve Center',heading,`Schedule: ${scheduleLabel}`,`Generated: ${generated}`,'','Department Wise Report Links:'];
+  const lines=[`*SITE: ${siteScope}*`,'*Nerve Center*',`*${heading}*`,`*Schedule:* ${scheduleLabel}`,`*Generated:* ${generated} IST`,'','*Department Wise Report Links:*'];
   for(const [department,items] of byDepartment){
     lines.push('',`${department} --`);
     items.forEach((item,index)=>{
