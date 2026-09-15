@@ -1106,7 +1106,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-fleet-chart-toggle button:hover { background: var(--mine-panel); }
 .mine-fleet-chart-toggle button[aria-pressed="true"] { background: linear-gradient(135deg, #6d43a1, var(--brand-purple)); color: #fff; box-shadow: 0 2px 5px #522e9029; }
 .mine-fleet-chart-toggle button[aria-pressed="true"] b { background: #ffffff26; }
-/* Only the breakdown number opens the hourly activity page; the rest of the pill switches the chart. */
+/* Only the breakdown number opens the current breakdown list; the rest of the pill switches the chart. */
 .mine-fleet-chart-toggle button .mine-fleet-toggle-count { cursor: pointer; text-decoration: underline dotted; text-decoration-color: currentColor; text-underline-offset: 3px; transition: background .15s ease, box-shadow .15s ease; }
 .mine-fleet-chart-toggle button .mine-fleet-toggle-count:hover { box-shadow: 0 0 0 2px #522e9033; background: #522e9014; }
 .mine-fleet-chart-toggle button[aria-pressed="true"] .mine-fleet-toggle-count:hover { box-shadow: 0 0 0 2px #ffffff66; background: #ffffff40; }
