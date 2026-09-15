@@ -3,13 +3,13 @@ import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import RecordDateRange from "./record-date-range.jsx";
 import { primaryRecordDateColumn } from "./record-date-range.mjs";
-import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder } from "./table-actions-model.mjs";
+import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL } from "./table-actions-model.mjs";
 import "./table-actions.css";
 import "./sortable-table.css";
 
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
 
-export default function SharedActionsTable({ closedTimeAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, showRowNumbers = false, ...tableProps }) {
+export default function SharedActionsTable({ closedTimeAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, showRowNumbers = true, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -82,7 +82,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const printData = ExportMenu && printTitle ? exportData || tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
   const smartPrintData = ExportMenu && (printTitle || exportTitle) ? tableExportModel(dataRows, columns, columns.map(column => column.key), localFilters, sort) : null;
   if (showRowNumbers) {
-    const numberColumn = { key: "__rowNumber", label: "No.", value: (row) => rowNumbers.get(row) };
+    const numberColumn = { key: SERIAL_COLUMN_KEY, label: SERIAL_COLUMN_LABEL, value: (row) => rowNumbers.get(row) };
     // Print can reuse the export model; decorate each distinct model just once.
     for (const data of new Set([exportData, printData, smartPrintData])) if (data) {
       data.columns = [numberColumn, ...data.columns];
@@ -148,9 +148,9 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
         if (!showRowNumbers) return projected;
         const cells = tableElements(projected.props.children);
         if (section.type === "thead") return position === 0 ? React.cloneElement(projected, {},
-          <th key="row-number" scope="col" rowSpan={sectionRows.length > 1 ? sectionRows.length : undefined}>No.</th>, cells) : projected;
+          <th key="row-number" className="table-serial-header" scope="col" rowSpan={sectionRows.length > 1 ? sectionRows.length : undefined}>{SERIAL_COLUMN_LABEL}</th>, cells) : projected;
         if (!isDataRow(row)) return React.cloneElement(projected, {}, cells.map((cell) => React.cloneElement(cell, { colSpan: Math.max(1, indices.length + 1) })));
-        return React.cloneElement(projected, {}, <td key="row-number">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
+        return React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
       }));
     })}</table>
   </>;

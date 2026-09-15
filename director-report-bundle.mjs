@@ -8,6 +8,7 @@ import {reportTime12} from './report-time-format.mjs';
 import {recentBreakdownStatus,reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
+import {recordCountLine,withSerialColumn} from './serial-column.mjs';
 import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
@@ -290,10 +291,12 @@ function escapeXlsxText(value){
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff\r]/g,(character)=>`_x${character.charCodeAt(0).toString(16).padStart(4,'0').toUpperCase()}_`));
 }
 
-function xlsxWorksheetXml(columns=[],rows=[],preserveWhitespace=false){
-  rows=rows.map(row=>row.map(reportTime12));
-  const headings=columns.map((column)=>column.label||column.key||'Column');
-  const worksheetRows=[headings,...rows];
+function xlsxWorksheetXml(columns=[],rows=[],preserveWhitespace=false,title='Nerve Center report'){
+  const serial=withSerialColumn(columns,rows.map(row=>row.map(reportTime12)));
+  rows=serial.rows;
+  const headings=serial.columns.map((column)=>column.label||column.key||'Column');
+  // Title and record count first, matching the PDF heading and the print subtitle.
+  const worksheetRows=[[title||'Nerve Center report'],[recordCountLine(rows.length,formatDisplayDateTime(new Date()))],headings,...rows];
   const escapeText=preserveWhitespace?escapeXlsxText:escapeXml;
   const sheetData=worksheetRows.map((row,rowIndex)=>`<row r="${rowIndex+1}">${row.map((value,columnIndex)=>`<c r="${excelCellReference(columnIndex,rowIndex)}" t="inlineStr"><is><t${preserveWhitespace?' xml:space="preserve"':''}>${escapeText(value)}</t></is></c>`).join('')}</row>`).join('');
   const widths=headings.map((label,index)=>{
@@ -317,7 +320,7 @@ function xlsxSheetsWorkbookBuffer(title,sheets,escapeText=escapeXml){
 }
 
 export function buildXlsxWorkbookBuffer(title,columns=[],rows=[]){
-  return xlsxSheetsWorkbookBuffer(title,[{name:'Report',content:xlsxWorksheetXml(columns,rows)}]);
+  return xlsxSheetsWorkbookBuffer(title,[{name:'Report',content:xlsxWorksheetXml(columns,rows,false,title)}]);
 }
 
 function uniqueXlsxSheetName(title,usedNames){
@@ -339,7 +342,7 @@ export function buildXlsxReportBundleBuffer({title='Nerve Center report',tables=
   const selected=tables.length?tables:[{title:'Report',columns:[],rows:[]}],usedNames=new Set();
   return xlsxSheetsWorkbookBuffer(title,selected.map((table)=>({
     name:uniqueXlsxSheetName(table.title,usedNames),
-    content:xlsxWorksheetXml(table.columns,table.rows,true),
+    content:xlsxWorksheetXml(table.columns,table.rows,true,table.title),
   })),escapeXlsxText);
 }
 

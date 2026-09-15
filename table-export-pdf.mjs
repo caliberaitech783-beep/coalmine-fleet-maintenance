@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import {reportTime12} from './report-time-format.mjs';
 import {reportPdfFont as fontFor,reportPdfText,registerReportPdfFonts,fittingReportText as fittingCellText} from './report-pdf-text.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
+import {withSerialColumn} from './serial-column.mjs';
 
 const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff',highlight:'#f8caca'};
 const clean=(value,fallback='—')=>reportPdfText(value).replace(/\s+/g,' ').trim()||fallback;
@@ -59,7 +60,7 @@ function footer(doc,generatedAt){
 }
 
 function drawTable(doc,{title,columns=[],rows=[],highlights=[]},drawHeading=()=>drawReportHeading(doc,title,rows.length)){
-  rows=rows.map(row=>row.map(reportTime12));
+  ({columns,rows}=withSerialColumn(columns,rows.map(row=>row.map(reportTime12))));
   const highlighted=new Set(highlights);
   const width=doc.page.width-doc.page.margins.left-doc.page.margins.right,widths=columnWidths(columns,width),bottom=doc.page.height-doc.page.margins.bottom-22;
   let pageStart=drawTablePage(doc,drawHeading,columns,widths),y=pageStart;
@@ -75,8 +76,8 @@ function drawTable(doc,{title,columns=[],rows=[],highlights=[]},drawHeading=()=>
       const available=bottom-y;
       const pieces=remaining.map((value,index)=>fittingCellText(doc,value,widths[index]-8,available-9));
       const values=pieces.map(([value])=>value);
-      // Keep a short job reference on continuation pages for identification.
-      if(continuation&&!values[0]&&String(row[0]??'').length<=80)values[0]=clean(row[0]);
+      // Keep the serial number and a short job reference on continuation pages for identification.
+      if(continuation)[0,1].forEach((index)=>{if(!values[index]&&String(row[index]??'').length<=80)values[index]=clean(row[index]);});
       const height=Math.min(available,Math.max(25,...values.map((value,index)=>doc.font(fontFor(value)).heightOfString(value,{width:widths[index]-8,lineGap:1})+9)));
       let x=doc.page.margins.left;
       columns.forEach((_,columnIndex)=>{

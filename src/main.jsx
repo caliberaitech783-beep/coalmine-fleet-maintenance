@@ -4,6 +4,7 @@ import "./smart-print.css";
 import HourlyBreakdownView from "./hourly-breakdown-view.jsx";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
+import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker, createNotificationSound } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo } from "react";
@@ -2731,10 +2732,14 @@ function excelCellReference(columnIndex, rowIndex) {
   return `${column}${rowIndex + 1}`;
 }
 function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set()) {
-  const worksheetRows = [columns.map((column) => column.label), ...exportRows];
-  const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}"${rowIndex > 0 && highlightedRows.has(rowIndex - 1) ? ' s="1"' : ""} t="inlineStr"><is><t>${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
-  const widths = columns.map((column, index) => {
-    const maxLength = Math.max(String(column.label || "").length, ...exportRows.map((row) => String(row[index] || "").length));
+  const serial = withSerialColumn(columns, exportRows);
+  const labels = serial.columns.map((column) => column.label);
+  const summaryRows = [[title || "Nerve Center report"], [recordCountLine(exportRows.length, formatDisplayDateTime(new Date()))]];
+  const firstDataRow = summaryRows.length + 1;
+  const worksheetRows = [...summaryRows, labels, ...serial.rows];
+  const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}"${rowIndex >= firstDataRow && highlightedRows.has(rowIndex - firstDataRow) ? ' s="1"' : ""} t="inlineStr"><is><t>${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
+  const widths = labels.map((label, index) => {
+    const maxLength = Math.max(String(label || "").length, ...serial.rows.map((row) => String(row[index] || "").length));
     return `<col min="${index + 1}" max="${index + 1}" width="${Math.min(48, Math.max(12, maxLength + 2))}" customWidth="1"/>`;
   }).join("");
   const workbookTitle = escapeExportHtml(title || "Nerve Center report");
@@ -2752,8 +2757,9 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
 function printTableReport({ title, columns = [], rows = [], highlightRow }) {
   recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records`});
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
-  const headings = columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
-  const body = exportRows.length ? exportRows.map((row, index) => `<tr${highlightRow?.(rows[index]) ? ' class="highlight-row"' : ""}>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${columns.length}">No records available</td></tr>`;
+  const serial = withSerialColumn(columns, exportRows);
+  const headings = serial.columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
+  const body = serial.rows.length ? serial.rows.map((row, index) => `<tr${highlightRow?.(rows[index]) ? ' class="highlight-row"' : ""}>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${serial.columns.length}">No records available</td></tr>`;
   const frame = document.createElement("iframe");
   frame.title = `${title} print frame`;
   frame.style.position = "fixed";
@@ -3088,7 +3094,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
     <>
       {toolbarTarget ? createPortal(reportTableToolbar, toolbarTarget) : toolbarPortal ? null : reportTableToolbar}
       <table className="report-filter-table">
-        <thead><tr>{displayedColumns.map((column) => (
+        <thead><tr><th className="table-serial-header" scope="col">Sr. No.</th>{displayedColumns.map((column) => (
           <FilterableHeader
             key={column.key}
             durationSortOnly={false}
@@ -3107,9 +3113,10 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
         <tbody>
           {pagedRows.length ? pagedRows.map((row, index) => (
             <tr key={rowKey?.(row, index) ?? index} className={rowClassName?.(row, index) || ""}>
+              <td className="table-serial-cell">{firstVisibleRow + index}</td>
               {displayedColumns.map((column) => <td key={column.key} className={column.key === "complaint" || column.wrap ? "report-complaint-cell" : undefined}>{reportTime12(columnValue(row, column)) !== columnValue(row, column) ? reportTime12(columnValue(row, column)) : column.render ? column.render(row) : columnValue(row, column) || "—"}</td>)}
             </tr>
-          )) : <tr><td colSpan={displayedColumns.length} className="empty-state">{emptyMessage}</td></tr>}
+          )) : <tr><td colSpan={displayedColumns.length + 1} className="empty-state">{emptyMessage}</td></tr>}
         </tbody>
       </table>
       <div className="report-table-pagination"><span>{firstVisibleRow}-{lastVisibleRow} of {sortedRows.length.toLocaleString("en-IN")}</span><div><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={currentPage === 0} aria-label="Previous report page" title="Previous page"><ChevronLeft /></button><b>{currentPage + 1} / {pageCount}</b><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={currentPage >= pageCount - 1} aria-label="Next report page" title="Next page"><ChevronRight /></button></div></div>

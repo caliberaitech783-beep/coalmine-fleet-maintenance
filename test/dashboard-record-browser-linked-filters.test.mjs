@@ -97,7 +97,7 @@ test("disabling Started filtering ignores an already-applied range and forwards 
   const props = browserProps();
   const render = interactive("dashboard-record-browser", props);
   let table = browserTable(render());
-  assert.equal(table.props.showRowNumbers, false);
+  assert.equal(table.props.showRowNumbers, true);
   assert.equal(table.props.recordDateFilter.label, "Started");
   table.props.recordDateFilter.onChange("__date_range__:2026-09-10|2026-09-10");
   assert.deepEqual(browserJobs(render()), ["JOB-B"]);
@@ -121,7 +121,7 @@ const exportValues = menu => menu.props.rows.map(row => menu.props.columns.map(c
 const assertExportsMatch = tree => {
   for (const menu of nodes(tree, node => node.type === ExportMenu)) {
     assert.deepEqual(exportValues(menu), bodyValues(tree));
-    assert.equal(menu.props.smartPrintColumns[0].label, "No.");
+    assert.equal(menu.props.smartPrintColumns[0].label, "Sr. No.");
     assert.deepEqual(menu.props.smartPrintRows.map(row => menu.props.smartPrintColumns[0].value(row)), menu.props.rows.map((_, i) => i + 1));
   }
 };
@@ -135,7 +135,7 @@ test("rendered row sequence and all export/print models follow sorting, filterin
   tree = render();
   assert.deepEqual(bodyValues(tree).map(row => row.slice(0, 2)), [["1", "E1"], ["2", "T2"], ["3", "T10"]]);
   let filter = one(tree, node => node.type === FilterDialog);
-  assert.ok(!filter.props.columns.some(column => column.label === "No."));
+  assert.ok(!filter.props.columns.some(column => column.label === "Sr. No."));
   filter.props.onFilterChange(filter.props.columns.find(column => column.label === "Status").key, "Open");
   tree = render();
   assert.deepEqual(bodyValues(tree).map(row => row.slice(0, 2)), [["1", "T2"], ["2", "T10"]]);
@@ -161,7 +161,7 @@ test("rendered row sequence and all export/print models follow sorting, filterin
   props.showRowNumbers = false;
   tree = render();
   assert.equal(bodyValues(tree)[0][0], "T10");
-  assert.doesNotMatch(renderToStaticMarkup(tree), />No\.</);
+  assert.doesNotMatch(renderToStaticMarkup(tree), />Sr\. No\.</);
   assertExportsMatchWithoutNumbers(tree);
 });
 
@@ -203,7 +203,7 @@ test("numbers span multiple bodies, grouped headings, empty rows and print-only 
   tree = render();
   assert.deepEqual(bodyValues(tree).map(row => row[0]), ["1", "2", "3", "4"]);
   assertExportsMatch(tree);
-  assert.equal(one(tree, node => node.type === "th" && node.props.children === "No.").props.rowSpan, 2);
+  assert.equal(one(tree, node => node.type === "th" && node.props.children === "Sr. No.").props.rowSpan, 2);
   assert.equal(nodes(tree, node => node.type === "col").length, 4);
   props.children = [sharedProps().children[0], h("tbody", { key: "empty" }, h("tr", null, h("td", { colSpan: 3 }, "No records")))];
   tree = render();
@@ -218,9 +218,9 @@ test("the real browser and shared table render OEM controls and numbered exports
   const Wrapper = props => h(Shared, { ...sharedProps(), ...props, ExportMenu: CaptureExport });
   const html = renderToStaticMarkup(h(Browser, { ...browserProps(), rows: records.filter(row => row.category === "Vehicle"), ActionsTable: Wrapper, title: "OEM", hideHierarchyFilters: true, showDateFilter: false, showRowNumbers: true }));
   assert.doesNotMatch(html, /type="date"|role="tablist"|data-level="site"/);
-  assert.match(html, /<th scope="col">No\.<\/th>/);
-  assert.match(html, /<td>1<\/td>/);
-  assert.match(html, /<td>2<\/td>/);
+  assert.match(html, /<th class="table-serial-header" scope="col">Sr\. No\.<\/th>/);
+  assert.match(html, /<td class="table-serial-cell">1<\/td>/);
+  assert.match(html, /<td class="table-serial-cell">2<\/td>/);
   assert.equal(exports.length, 2);
   for (const model of exports) {
     assert.deepEqual(model.rows.map(row => model.columns[0].value(row)), [1, 2]);

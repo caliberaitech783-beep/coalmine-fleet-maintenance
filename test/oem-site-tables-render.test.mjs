@@ -85,7 +85,7 @@ function verifySiteTables(result, expectedSites, identityColumn) {
     const section = result.sections[index];
     assert.equal((section.markup.match(/<table\b/g) || []).length, 1);
     assert.ok(section.markup.indexOf("<h4>") < section.markup.indexOf("<table"), "site heading precedes its table");
-    assert.equal(section.headers[0], "No.");
+    assert.equal(section.headers[0], "Sr. No.");
     assert.ok(!section.headers.some(label => ["Request site", "Current location"].includes(label)));
     const identityIndex = section.headers.indexOf(identityColumn);
     assert.ok(identityIndex >= 0, `missing ${identityColumn}`);
@@ -99,7 +99,7 @@ function verifySiteTables(result, expectedSites, identityColumn) {
     assert.equal(siteExports.filter(model => model.printOnly).length, 1);
     for (const model of siteExports) {
       assert.deepEqual(model.columns.map(column => column.label), section.headers);
-      assert.equal(model.smartPrintColumns[0].label, "No.");
+      assert.equal(model.smartPrintColumns[0].label, "Sr. No.");
       assert.ok(!model.smartPrintColumns.some(column => ["Request site", "Current location"].includes(column.label)));
       for (const [columns, rows] of [[model.columns, model.rows], [model.smartPrintColumns, model.smartPrintRows]]) {
         assert.deepEqual(rows.map(row => columns[0].value(row)), identities.map((_, i) => i + 1));

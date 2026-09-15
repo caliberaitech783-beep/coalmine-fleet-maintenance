@@ -4,6 +4,9 @@ import { matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { recordDateKey } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
 
+// Re-exported so the shared table (and its test harness) read the serial column contract from one place.
+export { SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL } from "../serial-column.mjs";
+
 export function tableElements(children) {
   return React.Children.toArray(children).flatMap((child) =>
     React.isValidElement(child) ? child.type === React.Fragment ? tableElements(child.props.children) : [child] : [],

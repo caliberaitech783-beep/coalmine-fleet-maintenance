@@ -61,7 +61,7 @@ test("hierarchy master renders report-wise and site-wise tick matrix", () => {
   assert.match(styles, /\.hierarchy-view-controls/);
   assert.match(styles, /\.hierarchy-view-tab\.active/);
   assert.match(styles, /\.hierarchy-group-row th\.mis/);
-  assert.match(styles, /\.hierarchy-col-schedule\{position:sticky!important;left:458px!important/);
+  assert.match(styles, /\.hierarchy-col-schedule\{position:sticky!important;left:516px!important/);
   assert.match(styles, /\.hierarchy-report-legend/);
   assert.match(styles, /\.hierarchy-row-edit/);
   assert.match(styles, /\.hierarchy-edit-modal/);

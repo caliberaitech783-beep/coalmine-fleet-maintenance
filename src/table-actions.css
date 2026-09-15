@@ -54,3 +54,6 @@
   .toolbar-actions-end .table-parameter-filter-trigger,
   .toolbar-actions-end .export-menu-trigger { width: 100%; justify-content: center; }
 }
+
+/* Serial number column shown in front of every shared table. */
+.table-serial-header, .table-serial-cell { width: 1%; min-width: 58px; white-space: nowrap; text-align: center; font-variant-numeric: tabular-nums; }

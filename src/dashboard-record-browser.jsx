@@ -51,7 +51,7 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   </div>;
 }
 
-export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", summaryLabel = "", initialRegion = "", initialSite = "", hideHierarchyFilters = false, showDateFilter = true, showRowNumbers = false, hideCurrentLocation = false, hideSiteColumn = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, onHourlyReport = null, bdBalanceColumns = false, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
+export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", summaryLabel = "", initialRegion = "", initialSite = "", hideHierarchyFilters = false, showDateFilter = true, showRowNumbers = true, hideCurrentLocation = false, hideSiteColumn = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, onHourlyReport = null, bdBalanceColumns = false, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const [recordDateRange, setRecordDateRange] = useState("");

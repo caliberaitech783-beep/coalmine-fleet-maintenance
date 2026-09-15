@@ -1067,7 +1067,9 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
     const title=String(req.body?.title||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,2000)||'Nerve Center report';
     const requestedColumns=Array.isArray(req.body?.columns)?req.body.columns:[];
     const requestedRows=Array.isArray(req.body?.rows)?req.body.rows:[];
-    if(!requestedColumns.length||requestedColumns.length>24)return res.status(400).json({error:'Select between 1 and 24 report columns.'});
+    // Shared tables already send their Sr. No. column; it does not count against the data-column limit.
+    const dataColumnCount=requestedColumns.length-(String(requestedColumns[0]?.label??'').trim()==='Sr. No.'?1:0);
+    if(dataColumnCount<1||dataColumnCount>24)return res.status(400).json({error:'Select between 1 and 24 report columns.'});
     if(requestedRows.length>5000)return res.status(413).json({error:'This report has too many rows to export at once. Apply a filter and try again.'});
     const columns=requestedColumns.map((column,index)=>({label:String(column?.label||`Column ${index+1}`).replace(/\s+/g,' ').trim().slice(0,100)||`Column ${index+1}`}));
     const rows=[];
