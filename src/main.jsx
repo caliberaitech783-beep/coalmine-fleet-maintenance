@@ -8,6 +8,8 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
+import {capturePhotoForInput} from "./camera-upload.mjs";
+import './camera-upload.css';
 import {UserLoginHistory,UserLoginActivity} from "./user-login-history.jsx";
 import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
@@ -8030,7 +8032,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <MaintenanceEtcInput value={expectedCompletionAt} onChange={setExpectedCompletionAt} />
         {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} />
-        <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
+        <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /><TranslatedText text={request.complaint} language={request.complaintLanguage} helper /></label>
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
@@ -8102,7 +8104,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
       <div className="formgrid">
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} missingOnly />
         <MeterReadingFields request={request} stage="closing" equipmentRecords={equipmentRecords} />
-        <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small></label>
+        <label className="full">Trip card upload <small>Optional</small><input name="closingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setTripCardFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{tripCardFile ? `${tripCardFile.name} · ${(tripCardFile.size / 1024 / 1024).toFixed(1)} MB` : request.closingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small></label>
         <label>Closing date *<input name="closingDate" type="date" required value={closingDate} readOnly aria-readonly="true" /></label>
         <label>Closing time (12-hour with seconds) *<input name="closingTime" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
         {request.closedAt && <label className="full">Reason for correcting the recorded closing time *<textarea name="correctionReason" required maxLength={500} /><small>This active entry already has a closing time: {displayDateTime(request.closedAt)}. The original and replacement will be retained.</small></label>}
@@ -8218,7 +8220,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
             if (tripCardPreview) URL.revokeObjectURL(tripCardPreview);
             setTripCardFile(file);
             setTripCardPreview(file ? URL.createObjectURL(file) : "");
-          }} />
+          }} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button>
           <small>JPEG, PNG or WebP · maximum 5 MB</small>
           {tripCardPreview && <img className="trip-card-preview" src={tripCardPreview} alt="First trip card preview" />}
         </label>
@@ -8285,7 +8287,7 @@ function TicketCreateForm({ session, close, onCreated }) {
       <div className="formgrid">
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
         <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue, or select Hindi / English and speak in that language." required={false} />
-        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
+        <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       </div>
       {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
       <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
@@ -8356,7 +8358,7 @@ function TicketResolutionForm({ ticket, session, close, onResolved }) {
   return <Modal title={`Resolve ${ticket.reference}`} close={dismiss}>
     <form className="form ticket-resolution-form" onSubmit={submit}>
       <EnhancedSpeechComplaint label="Resolution message" name="resolutionMessage" audioName="resolutionAudio" buttonLabel="Record resolution audio" placeholder="Explain the resolution, or select Hindi / English and speak in that language." required={false} />
-      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
+      <label className="ticket-attachment-field"><span>Resolution image or video</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
       <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Resolving…" : "Resolve ticket"} <CheckCircle2 /></button></footer>
     </form>
