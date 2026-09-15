@@ -18,6 +18,21 @@ const {code} = await transformWithOxc(source, "record-browser.jsx", {jsx: {runti
 const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) => descendants(child, test))
   : React.isValidElement(node) ? [...(test(node) ? [node] : []), ...descendants(node.props.children, test)] : [];
 
+test("BD Balance places location, reasons and meter readings beside their requested columns", () => {
+  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+    useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
+    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
+  const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
+  const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownReason: "Brake repair"};
+  const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true,
+    Status: ({children}) => children, formatDate: formatDisplayDateTime, ActionsTable: ({children}) => React.createElement("table", null, children)}));
+  assert.match(html, /<th>Days of breakdown<\/th><th>Current location<\/th>/);
+  assert.match(html, /<th>Equipment category<\/th><th>Type of breakdown<\/th><th>Reason of breakdown<\/th>/);
+  assert.match(html, /<th>Model<\/th><th>HMR<\/th><th>KMR<\/th>/);
+  assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
+  assert.match(html, /Brake repair/);
+});
+
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
   const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,

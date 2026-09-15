@@ -228,6 +228,10 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       requestStatus,
       requestStart: current?.start || "—",
       requestClosed: "—",
+      hmr: current?.hmr ?? record.hmr,
+      kmr: current?.kmr ?? record.kmr,
+      repairCategory: current?.category || "—",
+      breakdownReason: current?.complaint || "—",
     };
   });
 }
