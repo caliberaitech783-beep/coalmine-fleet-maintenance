@@ -18,6 +18,16 @@ test('unrelated tables retain their existing order', () => {
   assert.deepEqual(jobReferenceColumnsLast(columns), columns);
 });
 
+test('request lifecycle lists place Request site immediately after Status', () => {
+  for (const event of ['Production Request', 'Closed', 'Verified', 'Idle Vehicles', 'Open in Maint', 'Open in MIS']) {
+    const labels = ['Status', 'Days of breakdown', 'Started', 'Machine / Door no.', 'Request site', 'Closed'];
+    const columns = labels.map((label, index) => ({label, index}));
+    const ordered = jobReferenceColumnsLast(columns);
+    assert.deepEqual(ordered.map(column => column.label), ['Status', 'Request site', 'Machine / Door no.', 'Days of breakdown', 'Started', 'Closed'], event);
+    assert.deepEqual(ordered.map(column => column.index), [0, 4, 3, 1, 2, 5], event);
+  }
+});
+
 test('all breakdown heading variants place type then reason directly after days', () => {
   for (const [type, reason] of [['Type of breakdown', 'Reason of breakdown'], ['Breakdown type', 'Breakdown reason'], ['Repair category', 'Reason']]) {
     const columns = ['Status', reason, 'Site location', 'Days of breakdown', 'Model', type].map(label => ({label}));
