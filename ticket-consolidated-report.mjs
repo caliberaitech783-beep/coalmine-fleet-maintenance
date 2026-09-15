@@ -1,5 +1,5 @@
-import {canonicalSiteName} from './site-location.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
+import {displaySiteName} from './region-scope.mjs';
 
 export const TICKET_REPORT_HOURS=[8,15,20];
 const INDIA_OFFSET_MS=330*60*1000;
@@ -44,7 +44,7 @@ export function prepareTicketReportRows(tickets=[],reportTime=new Date()){
     const openedAt=new Date(ticket.openedAt||ticket.createdAt);
     const resolvedAt=ticket.resolvedAt?new Date(ticket.resolvedAt):null;
     const elapsedMs=Math.max(0,(resolvedAt&&!Number.isNaN(resolvedAt.getTime())?resolvedAt:reportTime)-openedAt);
-    return {...ticket,site:canonicalSiteName(ticket.site)||'Not assigned',elapsedMs,elapsed:durationLabel(elapsedMs)};
+    return {...ticket,site:displaySiteName(ticket.site)||'Not assigned',elapsedMs,elapsed:durationLabel(elapsedMs)};
   }).sort((left,right)=>right.elapsedMs-left.elapsedMs);
 }
 
@@ -54,7 +54,7 @@ export function buildTicketReportTable({scopeLabel='Site',start,end,openTickets=
   const date=value=>value&&!Number.isNaN(new Date(value).getTime())?indiaDateTime(new Date(value)):'';
   const rows=[...openTickets,...closedTickets].map(ticket=>[
     ticket.reference||'',ticket.site||'Not assigned',ticket.resolvedAt?'Resolved':ticket.status||'Open',ticket.user||'',ticket.remarks||'',
-    date(ticket.openedAt||ticket.createdAt),date(ticket.resolvedAt),ticket.elapsed||'',scopeLabel,date(start),date(end),
+    date(ticket.openedAt||ticket.createdAt),date(ticket.resolvedAt),ticket.elapsed||'',displaySiteName(scopeLabel),date(start),date(end),
   ]);
   return {title:'CRM consolidated report',columns,rows};
 }
@@ -62,7 +62,7 @@ export function buildTicketReportTable({scopeLabel='Site',start,end,openTickets=
 export function buildTicketWhatsAppReport({scopeLabel='Site',start,end,openTickets=[],closedTickets=[],pdfUrl,xlsxUrl}){
   for(const link of [pdfUrl,xlsxUrl])if(!link||!/^https?:\/\//.test(link))throw new Error('CRM consolidated reports require PDF and Excel download links.');
   return [
-    'NERVE CENTER CRM CONSOLIDATED REPORT',`SCOPE: ${scopeLabel}`,
+    'NERVE CENTER CRM CONSOLIDATED REPORT',`SCOPE: ${displaySiteName(scopeLabel)}`,
     `WINDOW: ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
     `OPEN TICKETS: ${openTickets.length} | CLOSED TICKETS: ${closedTickets.length}`,
     `PDF: ${pdfUrl}`,`Excel: ${xlsxUrl}`,'Open the files for complete ticket details. Links expire in 14 days.',

@@ -1,5 +1,6 @@
 import {canonicalSiteName} from './site-location.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
+import {displaySiteName} from './region-scope.mjs';
 
 export const CONSOLIDATED_REPORT_HOURS=[6,10,14,18,22];
 const INDIA_OFFSET_MS=330*60*1000;
@@ -63,7 +64,7 @@ export function prepareConsolidatedRows(requests=[],reportTime=new Date()){
     const startedAt=new Date(request.startedAt||request.start);
     const closedAt=request.closedAt?new Date(request.closedAt):null;
     const elapsedMs=Math.max(0,(closedAt&&!Number.isNaN(closedAt.getTime())?closedAt:reportTime)-startedAt);
-    return {...request,site:canonicalSiteName(request.site)||'Not assigned',elapsedMs,elapsed:durationLabel(elapsedMs)};
+    return {...request,site:displaySiteName(request.site)||'Not assigned',elapsedMs,elapsed:durationLabel(elapsedMs)};
   }).sort((left,right)=>right.elapsedMs-left.elapsedMs);
 }
 
@@ -79,18 +80,18 @@ const recordLines=(request,index,closed=false)=>[
 ].join('\n');
 
 export function buildConsolidatedWhatsAppReport({scopeLabel='Site',start,end,openRequests=[],closedRequests=[],maxLength=3900}){
-  const sites=[...new Set([...openRequests,...closedRequests].map(({site})=>canonicalSiteName(site)||'Not assigned'))].sort();
+  const sites=[...new Set([...openRequests,...closedRequests].map(({site})=>displaySiteName(site)||'Not assigned'))].sort();
   const header=[
     '🚨 *NERVE CENTER CONSOLIDATED REPORT*',
-    `*SCOPE:* ${scopeLabel}`,
+    `*SCOPE:* ${displaySiteName(scopeLabel)}`,
     `*WINDOW:* ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
     `*GENERATED:* ${indiaDateTime(end)}`,
   ].join('\n');
   const sections=[];
   if(!sites.length)sections.push('\n✅ *NO REQUEST ACTIVITY IN THIS WINDOW*');
   for(const site of sites){
-    const opened=openRequests.filter((row)=>row.site===site);
-    const closed=closedRequests.filter((row)=>row.site===site);
+    const opened=openRequests.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(site));
+    const closed=closedRequests.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(site));
     sections.push(`\n📍 *${site.toUpperCase()}*`);
     sections.push(`🔴 *OFF ROAD / OPEN (${opened.length})*`);
     sections.push(opened.length?opened.map((row,index)=>recordLines(row,index)).join('\n'):'No open requests.');

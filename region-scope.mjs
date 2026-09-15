@@ -66,14 +66,14 @@ export function sitesForManagerRegions(value){
 export function managerReportScope(user={}){
   const regions=managerRegionSelection(user.managerRegion||user.region);
   const selectedSites=managerSiteSelection(user.managerSites);
-  if(selectedSites.length)return {key:`SITES-${selectedSites.join('+')}`,label:selectedSites.join(' + '),sites:selectedSites};
+  if(selectedSites.length)return {key:`SITES-${selectedSites.join('+')}`,label:selectedSites.map(displaySiteName).join(' + '),sites:selectedSites};
   if(regions.includes('All'))return {key:'ALL',label:'All regions',sites:null};
   if(regions.length){
     const sites=[...new Set(REGION_DATA.filter(({code})=>regions.includes(code)).flatMap(({sites})=>sites).map(canonicalSiteName).filter(Boolean))];
     return {key:regions.join('+'),label:regions.join(' + '),sites};
   }
   const site=canonicalSiteName(user.site||user.location||user.currentLocation);
-  return {key:site||'UNASSIGNED',label:site||'Unassigned site',sites:site?[site]:[]};
+  return {key:site||'UNASSIGNED',label:site?displaySiteName(site):'Unassigned site',sites:site?[site]:[]};
 }
 
 export function reportScopeIncludesSite(scope,site){

@@ -1,5 +1,6 @@
 import {elapsedMilliseconds} from './report-metrics.mjs';
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
+import {displaySiteName} from './region-scope.mjs';
 
 export const IN_OUT_REPORT_TITLE='In and Out Report';
 export const IN_OUT_REPORT_DESCRIPTION='Day-wise register of vehicles that came in for breakdown (opened), went out after maintenance (closed), were MIS verified or marked idle, with the balance still in workshop at day end.';
@@ -49,7 +50,7 @@ function vehicleLabel(record={}){
 }
 
 function siteLabel(record={}){
-  return clean(record.reportSite)||clean(record.site)||clean(record.currentLocation)||clean(record.location)||'Not assigned';
+  return displaySiteName(record.reportSite||record.site||record.currentLocation||record.location)||'Not assigned';
 }
 
 export function vehicleListLabel(records=[],limit=VEHICLE_LIST_LIMIT){

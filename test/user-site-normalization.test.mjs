@@ -7,6 +7,7 @@ const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 
 test('every spelling of a site resolves to the single display name',()=>{
+  assert.equal(displaySiteName('SASTI'),'Sasti OB');
   assert.equal(displaySiteName('sasti ob'),'Sasti OB');
   assert.equal(displaySiteName('SASTI II'),'Sasti OB');
   assert.equal(displaySiteName('Majri'),'Majri OB');
@@ -17,9 +18,9 @@ test('every spelling of a site resolves to the single display name',()=>{
   assert.equal(displaySiteName('Some New Site'),'Some New Site');
 });
 
-test('operational records normalize Majri across stored site fields',()=>{
-  assert.deepEqual(normalizeOperationalSiteFields({currentLocation:'MAJRI',source:'Majri II',destination:'Majri OB',door:'D1'}),{
-    currentLocation:'Majri OB',source:'Majri OB',destination:'Majri OB',door:'D1',
+test('operational records normalize Sasti and Majri across stored site fields',()=>{
+  assert.deepEqual(normalizeOperationalSiteFields({site:'SASTI',currentLocation:'Sasti II',source:'Majri II',destination:'Majri OB',door:'D1'}),{
+    site:'Sasti OB',currentLocation:'Sasti OB',source:'Majri OB',destination:'Majri OB',door:'D1',
   });
 });
 
@@ -42,6 +43,10 @@ test('server normalises user site names on write and migrates stored users once'
   assert.match(server,/operational_site_names_normalized_v2/);
   assert.match(server,/UPDATE maintenance_requests SET site='Majri OB'/);
   assert.match(server,/UPDATE crm_tickets SET site='Majri OB'/);
+  assert.match(server,/key='sasti_site_name_normalized_v1'/);
+  assert.match(server,/UPDATE maintenance_requests SET site='Sasti OB'/);
+  assert.match(server,/UPDATE crm_tickets SET site='Sasti OB'/);
+  assert.match(server,/const storedSite=canonicalSiteName\(site\)==='sasti ob'\?'Sasti OB'/);
 });
 
 test('the user form shows the same display names for manager sites and team locations',()=>{

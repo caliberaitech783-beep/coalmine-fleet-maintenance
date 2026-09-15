@@ -8,6 +8,7 @@ import {reportTime12} from './report-time-format.mjs';
 import {recentBreakdownStatus,reportPdfHeading} from './report-refinements.mjs';
 import {indiaDateTimeInputValue} from './report-date-range.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
+import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
 
 export const DIRECTOR_REPORT_HOUR=19;
 export const DIRECTOR_REPORT_TITLES=[
@@ -100,7 +101,7 @@ function roadStatusLabel(record,requests=[]){
 function locationCountRows(records=[]){
   const groups=new Map();
   for(const record of records){
-    const location=clean(record.currentLocation||record.location)||'Not assigned';
+    const location=displaySiteName(record.currentLocation||record.location)||'Not assigned';
     const type=['vehicle','vehicles'].includes(clean(record.category).toLowerCase())?'vehicles':'equipment';
     const current=groups.get(location)||{location,equipment:0,vehicles:0,total:0};
     current[type]+=1;
@@ -137,7 +138,7 @@ function enrichRequests(requests=[],equipmentRecords=[]){
       reportModel:request.model||equipment.model||'',
       chassis:request.chassis||equipment.chassisNo||equipment.manufacturerSerialNo||'',
       equipmentGroup:normalizeEquipmentGroup(request.equipmentGroup)||equipmentGroupValue(equipment),
-      reportSite:request.site||equipment.currentLocation||equipment.location||'',
+      reportSite:displaySiteName(request.site||equipment.currentLocation||equipment.location),
     };
   });
 }
@@ -147,6 +148,9 @@ function table(title,department,description,columns,rows){
 }
 
 export function buildDirectorReportTables({requests=[],equipmentRecords=[],transferRecords=[],now=new Date()}={}){
+  requests=requests.map(normalizeOperationalSiteFields);
+  equipmentRecords=equipmentRecords.map(normalizeOperationalSiteFields);
+  transferRecords=transferRecords.map(normalizeOperationalSiteFields);
   const reportRequests=enrichRequests(requests,equipmentRecords);
   const inOutRows=buildInOutReportRows(reportRequests,{today:now});
   const openBreakdownRows=reportRequests.filter((request)=>['open','in progress','awaiting parts'].includes(clean(request.status).toLowerCase())&&!request.closedAt);
@@ -157,9 +161,9 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
   const fleetStatusRows=equipmentRecords.map((record,index)=>({
     ...record,reportId:record.id||`${record.equipmentName||record.door||'equipment'}-${index}`,
     reportEquipment:record.equipmentName||record.equipment||record.door||'',reportDoor:record.door||'',
-    reportMake:record.make||'',reportModel:record.model||record.modelNo||'',reportSite:record.currentLocation||record.location||'',reportRoadStatus:roadStatusLabel(record,reportRequests),
+    reportMake:record.make||'',reportModel:record.model||record.modelNo||'',reportSite:displaySiteName(record.currentLocation||record.location),reportRoadStatus:roadStatusLabel(record,reportRequests),
   }));
-  const transferRows=enrichRequests(transferRecords.map((record)=>({...record,chassis:record.chassisNo||record.manufacturerSerialNo||''})),equipmentRecords).map((record,index)=>({...record,reportId:record.id||`${record.transferNo||'transfer'}-${index}`,reportEquipment:record.equipment||record.equipmentName||record.door||'',reportSite:record.destination||record.currentLocation||record.location||''}));
+  const transferRows=enrichRequests(transferRecords.map((record)=>({...record,chassis:record.chassisNo||record.manufacturerSerialNo||''})),equipmentRecords).map((record,index)=>({...record,reportId:record.id||`${record.transferNo||'transfer'}-${index}`,reportEquipment:record.equipment||record.equipmentName||record.door||'',reportSite:displaySiteName(record.destination||record.currentLocation||record.location)}));
   const locationWiseRows=locationCountRows(equipmentRecords);
   const recentBreakdownRows=[...reportRequests].sort((a,b)=>latestTime(b)-latestTime(a)).slice(0,250);
   const requestColumns=[

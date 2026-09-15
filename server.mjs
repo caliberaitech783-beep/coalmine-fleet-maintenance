@@ -46,7 +46,7 @@ import {normalizeSessionMessage,sessionMessagePayloadValidationError} from './se
 import {BACKUP_FORMAT,backupFileName,exportDatabase,readBackupRecords,restoreDatabase} from './database-backup.mjs';
 import {BACKUP_SETTING_KEY,DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './backup-settings.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
-import {managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
+import {displaySiteName,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf} from './table-export-pdf.mjs';
@@ -863,6 +863,25 @@ async function migrate(){
       await client.query("UPDATE crm_tickets SET site='Majri OB' WHERE lower(trim(site)) IN ('majri','majri ii','majri ob')");
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('operational_site_names_normalized_v2','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
+    // Remove the legacy standalone "Sasti" location from every persisted
+    // operational source. This uses a new marker because earlier deployments
+    // only rewrote Majri in request and CRM tables.
+    const {rows:sastiSitesNormalized}=await client.query("SELECT value FROM app_metadata WHERE key='sasti_site_name_normalized_v1' FOR UPDATE");
+    if(!sastiSitesNormalized.length){
+      const {rows:masterRows}=await client.query('SELECT id,master_name,record_data FROM master_records FOR UPDATE');
+      for(const row of masterRows){
+        const normalized=row.master_name==='Users & employees'
+          ? normalizeUserSiteFields(row.record_data)
+          : normalizeOperationalSiteFields(row.record_data);
+        if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
+          await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
+      }
+      await client.query("UPDATE maintenance_requests SET site='Sasti OB' WHERE regexp_replace(lower(trim(site)),'[^a-z0-9]+','','g') IN ('sasti','sastiii','sastiob')");
+      await client.query("UPDATE crm_tickets SET site='Sasti OB' WHERE regexp_replace(lower(trim(site)),'[^a-z0-9]+','','g') IN ('sasti','sastiii','sastiob')");
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('sasti_site_name_normalized_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     await client.query('COMMIT');
@@ -3088,7 +3107,8 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
     if(category){values.push(category);conditions.push(`category=$${values.length}`)}
     const where=conditions.length?`WHERE ${conditions.join(' AND ')}`:'';
     const {rows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets ${where} ORDER BY created_at DESC`,values);
-    res.json(managerScope?rows.filter((ticket)=>reportScopeIncludesSite(managerScope,ticket.site)):rows);
+    const visibleRows=managerScope?rows.filter((ticket)=>reportScopeIncludesSite(managerScope,ticket.site)):rows;
+    res.json(visibleRows.map(normalizeOperationalSiteFields));
   }catch(error){next(error)}
 });
 
@@ -3114,7 +3134,7 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     if(!validTicketMediaDataUrl(messageAudio,{kind:'audio'}))return res.status(400).json({error:'Ticket audio must be a supported recording up to 3 MB.'});
     if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
     const user=await currentUserRecord(req.session,client);
-    const site=String(user.site||user.location||user.currentLocation||'Not assigned').trim()||'Not assigned';
+    const site=displaySiteName(user.site||user.location||user.currentLocation)||'Not assigned';
     await client.query('BEGIN');
     const inserted=await client.query(`INSERT INTO crm_tickets
       (creator_login,creator_name,creator_role,site,category,priority,message,message_audio,attachment_data,attachment_name,attachment_type)
@@ -3128,7 +3148,7 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} (@${creatorLogin}) created ticket ${reference}.`,
       {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:true});
     await client.query('COMMIT');
-    res.status(201).json(rows[0]);
+    res.status(201).json(normalizeOperationalSiteFields(rows[0]));
     sendTicketRaisedEmail(rows[0]).catch((error)=>console.error(`Ticket email failed for ${reference}:`,error.message));
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
@@ -3680,6 +3700,7 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
     const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
+    const storedSite=canonicalSiteName(site)==='sasti ob'?'Sasti OB':String(site||'').trim()||'Not assigned';
     const storedComplaintLanguage=(String(complaintLanguage).trim().toLowerCase().match(/^(en|hi|mr|bn|or|te|gu|pa|ta|kn)(-|$)/i)||[])[1]||'';
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
@@ -3689,7 +3710,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const requester=await currentUserRecord(req.session);
     if(req.session.role==='normal'){
       const assignedSite=canonicalSiteName(requester.site||requester.location||requester.currentLocation);
-      if(!assignedSite||assignedSite!==canonicalSiteName(site))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});
+      if(!assignedSite||assignedSite!==canonicalSiteName(storedSite))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});
     }
     const startedAt=String(start||'').trim()?parseRequestTimelineTimestamp(start):new Date();
     validateRequestTimelineChange({}, {start:startedAt||String(start)}, {userEntered:['start']});
@@ -3701,7 +3722,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),site,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage]);
     await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
     return result;
     });

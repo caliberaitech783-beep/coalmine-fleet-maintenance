@@ -40,6 +40,7 @@ test('consolidated report uses Equipment Master OEM and sorts elapsed time high 
   const rows=prepareConsolidatedRows(requests,reportTime);
   assert.deepEqual(rows.map(({reference})=>reference),['REQ-OLD','REQ-NEW']);
   assert.equal(rows[0].oem,'Komatsu');
+  assert.ok(rows.every(({site})=>site==='Sasti OB'));
   const message=buildConsolidatedWhatsAppReport({scopeLabel:'WCL',start:new Date('2026-08-26T16:30:00Z'),end:reportTime,openRequests:rows,closedRequests:[]});
   assert.match(message,/\*NERVE CENTER CONSOLIDATED REPORT\*/);
   assert.match(message,/🔴 \*OFF ROAD \/ OPEN \(2\)\*/);
@@ -57,5 +58,7 @@ test('Idle requests include their reason in consolidated reports',()=>{
     openRequests:prepareConsolidatedRows([{reference:'REQ-IDLE',site:'SASTI',door:'HP2',startedAt:'2026-08-26T22:30:00Z',status:'Idle',idleReason:'No driver'}],end),
     closedRequests:[],
   });
+  assert.match(message,/\*SCOPE:\* Sasti OB/);
+  assert.match(message,/📍 \*SASTI OB\*/);
   assert.match(message,/Status: Idle \| Idle reason: No driver/);
 });

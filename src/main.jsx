@@ -5482,7 +5482,7 @@ function roadStatusLabel(record, requests = []) {
 function locationCountRows(records = []) {
   const groups = new Map();
   records.forEach((record) => {
-    const location = String(record.currentLocation || record.location || "Not assigned").trim() || "Not assigned";
+    const location = displaySiteName(record.currentLocation || record.location) || "Not assigned";
     const type = ["vehicle", "vehicles"].includes(String(record.category || "").trim().toLowerCase()) ? "vehicles" : "equipment";
     const current = groups.get(location) || { location, equipment: 0, vehicles: 0, total: 0 };
     current[type] += 1;
@@ -5607,7 +5607,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportModel: request.model || equipment?.model || "",
       chassis: request.chassis || equipment?.chassisNo || equipment?.manufacturerSerialNo || "",
       equipmentGroup: normalizeEquipmentGroup(request.equipmentGroup) || equipmentGroupValue(equipment || {}),
-      reportSite: request.site || equipment?.currentLocation || equipment?.location || "",
+      reportSite: displaySiteName(request.site || equipment?.currentLocation || equipment?.location),
     };
   }), [requests, equipmentByReference]);
   const elapsedRows = reportRequests.filter((request) => request.start || request.closedAt || request.verifiedAt);
@@ -5625,7 +5625,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     reportDoor: record.door || "",
     reportMake: record.make || "",
     reportModel: record.model || record.modelNo || "",
-    reportSite: record.currentLocation || record.location || "",
+    reportSite: displaySiteName(record.currentLocation || record.location),
     reportRoadStatus: roadStatusLabel(record, reportRequests),
   }));
   const transferRows = transferRecords.map((record, index) => {
@@ -5637,7 +5637,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       reportId: record.id || `${record.transferNo || "transfer"}-${index}`,
       reportDoor: record.door || asset?.door || "",
       reportEquipment: record.equipment || record.equipmentName || record.door || "",
-      reportSite: record.destination || record.currentLocation || record.location || "",
+      reportSite: displaySiteName(record.destination || record.currentLocation || record.location),
     };
   });
   const locationWiseRows = locationCountRows(equipmentRecords);
@@ -5683,8 +5683,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "door", label: "Door no.", value: (record) => record.reportDoor, render: (record) => <b>{record.reportDoor || "—"}</b>},
     {key: "transferNo", label: "Transfer no.", value: (record) => record.transferNo},
     {key: "transferDate", label: "Transfer date", value: (record) => formatDisplayDate(record.transferDate), sortValue: (record) => record.transferDate, render: (record) => formatDisplayDate(record.transferDate)},
-    {key: "from", label: "From location", value: (record) => record.source},
-    {key: "to", label: "To location", value: (record) => record.destination},
+    {key: "from", label: "From location", value: (record) => displaySiteName(record.source)},
+    {key: "to", label: "To location", value: (record) => displaySiteName(record.destination)},
     {key: "model", label: "Model", value: (record) => record.modelNo || record.model},
     {key: "driver", label: "Driver", value: (record) => record.driver},
   ];

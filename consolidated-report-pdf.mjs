@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import {canonicalSiteName} from './site-location.mjs';
 import {reportPdfFont,reportPdfText,registerReportPdfFonts,fittingReportText} from './report-pdf-text.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
+import {displaySiteName} from './region-scope.mjs';
 
 const COLORS={navy:'#10284c',blue:'#2859b8',muted:'#65758b',line:'#dce4ef',red:'#c43c35',green:'#16845b',soft:'#f4f7fb'};
 const indiaDateTime=(value)=>formatDisplayDateTime(value);
@@ -21,7 +22,7 @@ function header(doc,{title,scopeLabel,start,end,openLabel,openCount,closedLabel,
   const left=doc.page.margins.left,top=doc.y;
   doc.roundedRect(left,top,width,92,8).fill(COLORS.navy);
   doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(19).text(title,left+18,top+18,{width:width-36});
-  doc.font(reportPdfFont(scopeLabel)).fontSize(9).fillColor('#dce8ff').text(`Scope: ${clean(scopeLabel)}`,left+18,top+48,{width:width-36});
+  doc.font(reportPdfFont(scopeLabel)).fontSize(9).fillColor('#dce8ff').text(`Scope: ${clean(displaySiteName(scopeLabel))}`,left+18,top+48,{width:width-36});
   doc.font('Helvetica').text(`Window: ${indiaDateTime(start)} - ${indiaDateTime(end)}`,left+18,top+64,{width:width-36});
   const cardsY=top+108;
   const cardWidth=(width-12)/2;
@@ -75,7 +76,7 @@ function record(doc,{title,badge,lines},index){
 }
 
 function groupedSites(openRows,closedRows){
-  return [...new Set([...openRows,...closedRows].map(({site})=>canonicalSiteName(site)||'Not assigned'))].sort();
+  return [...new Set([...openRows,...closedRows].map(({site})=>displaySiteName(site)||'Not assigned'))].sort();
 }
 
 function footer(doc){
@@ -99,8 +100,8 @@ export async function buildFleetConsolidatedReportPdf({scopeLabel='Site',start,e
   if(!sites.length)doc.fillColor(COLORS.green).font('Helvetica-Bold').fontSize(12).text('No request activity in this reporting window.');
   for(const site of sites){
     siteHeading(doc,site);
-    const opened=openRequests.filter((row)=>(canonicalSiteName(row.site)||'Not assigned')===site);
-    const closed=closedRequests.filter((row)=>(canonicalSiteName(row.site)||'Not assigned')===site);
+    const opened=openRequests.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(site));
+    const closed=closedRequests.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(site));
     section(doc,'OFF ROAD / OPEN',opened.length,COLORS.red);
     if(!opened.length)doc.fillColor(COLORS.muted).font('Helvetica').fontSize(9).text('No open requests.').moveDown();
     opened.forEach((row,index)=>record(doc,{title:row.door||row.equipment,badge:row.elapsed,lines:[['Request',row.reference||row.ref],['User',row.user||row.owner],['OEM',row.oem],['Status',`${clean(row.status,'Open')}${String(row.status||'').toLowerCase()==='idle'?` (${clean(row.idleReason,'Reason not assigned')})`:''}`]]},index));
@@ -118,8 +119,8 @@ export async function buildTicketConsolidatedReportPdf({scopeLabel='Site',start,
   if(!sites.length)doc.fillColor(COLORS.green).font('Helvetica-Bold').fontSize(12).text('No CRM ticket activity in this reporting window.');
   for(const site of sites){
     siteHeading(doc,site);
-    const opened=openTickets.filter((row)=>(canonicalSiteName(row.site)||'Not assigned')===site);
-    const closed=closedTickets.filter((row)=>(canonicalSiteName(row.site)||'Not assigned')===site);
+    const opened=openTickets.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(site));
+    const closed=closedTickets.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(site));
     section(doc,'OPEN TICKETS',opened.length,COLORS.red);
     if(!opened.length)doc.fillColor(COLORS.muted).font('Helvetica').fontSize(9).text('No open tickets.').moveDown();
     opened.forEach((row,index)=>record(doc,{title:row.reference||'Ticket',badge:row.elapsed,lines:[['Time lapsed',row.elapsed],['User',row.user],['Remarks',row.remarks]]},index));

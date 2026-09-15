@@ -6,6 +6,7 @@ import {acceptanceTime, maintenanceDelay, pendingRemark, availabilityPercentage}
 import {visibleInMisRequests} from './src/mis-history.mjs';
 import {MIS_IN_OUT_REPORT_COLUMNS, MIS_IN_OUT_REPORT_DESCRIPTION, buildSiteInOutReportRows} from './in-out-report.mjs';
 import {requestTimelineDurations,formatTimelineDuration,requestTimelineEvents} from './request-timeline.mjs';
+import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
 
 const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report'];
 export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6);
@@ -17,7 +18,7 @@ const col = (key, label, value = row => row[key]) => ({key, label, value});
 const duration = (a, b) => Number.isFinite(indiaDateTimeEpoch(a)) && indiaDateTimeEpoch(b) >= indiaDateTimeEpoch(a) ? elapsedLabel(a, b) : 'Not recorded';
 const ids = [col('door', 'Door no.', r => r.reportDoor || r.door), col('chassis', 'Chassis No', r => r.chassis || r.chassisNo || r.manufacturerSerialNo)];
 const base = [...ids, col('equipmentGroup', 'Equipment group', equipmentGroupValue), col('model', 'Model', r => r.reportModel || r.model), col('complaint', 'Reason/Complaint'), col('category', 'Repair category')];
-const site = col('site', 'Location', r => r.reportSite || r.site || r.currentLocation || r.location);
+const site = col('site', 'Location', r => displaySiteName(r.reportSite || r.site || r.currentLocation || r.location));
 const ref = col('ref', 'Job Reference No');
 const productionLead = [col('status', 'Status', requestStatusLabel), site, ids[0]];
 const complaintColumns = base.slice(4);
@@ -82,6 +83,9 @@ export function availabilityRows(equipment, requests, from, to, now = new Date()
 }
 
 export function buildDepartmentReports({requests = [], equipmentRecords = [], transferRecords = [], from, to, now = new Date()} = {}) {
+  requests=requests.map(normalizeOperationalSiteFields);
+  equipmentRecords=equipmentRecords.map(normalizeOperationalSiteFields);
+  transferRecords=transferRecords.map(normalizeOperationalSiteFields);
   const report = (category, title, description, columns, rows, dateValue = r => r.start) => ({category,title,description,columns,rows,dateValue,emptyMessage:'No matching records for this report'});
   const open = requests.filter(r => ['open','in progress','awaiting parts'].includes(status(r)) && !r.closedAt);
   const finished = requests.filter(r => r.closedAt);
