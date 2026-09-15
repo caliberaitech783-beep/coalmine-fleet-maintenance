@@ -35,6 +35,7 @@ function harness() {
     React, ...data, ...dates, ...reasons, ...timing, requestStatusLabel, parseIstTimestamp,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === 'function' ? initial() : initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
     useMemo: callback => callback(),
+    createPortal: (child, target) => React.createElement('div', {'data-portal-target': target}, child),
     ...Object.fromEntries(['ArrowLeft', 'ChevronDown', 'ChevronLeft', 'ChevronRight', 'RefreshCw', 'MapPin', 'Truck', 'Info'].map(name => [name, () => null])),
   };
   const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
@@ -170,6 +171,19 @@ test('real daily-update arrays render all reasons and dated history without cras
   assert.ok(!html.includes('[object Object]'));
 });
 
+test('header total and visible breakdown reasons retain filters and complete AM/PM times', () => {
+  const app = allDatesHarness();
+  const tree = app.render({headerTarget: 'overview-header'});
+  const portal = descendants(tree, node => node.props['data-portal-target'] === 'overview-header')[0];
+  assert.ok(byLabel(portal, 'Total breakdowns: 67 at All sites'));
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-breakdown-sites').length, 0);
+  const previews = descendants(tree, node => node.props.className === 'pulse-breakdown-reason');
+  assert.equal(previews.length, 25);
+  assert.match(text(previews[0]), /Breakdown reasonHydraulic leak/);
+  const css = readFileSync(new URL('../src/info-pulse-content.css', import.meta.url), 'utf8');
+  assert.match(css, /\.pulse-card-dates \.pulse-date \{ display: block; white-space: nowrap;/);
+});
+
 test('total breakdowns box counts open requests by site, lists breakdowns without alerts, and returns to cases', () => {
   const requests = [
     {ref: 'Q-1', door: 'Q-1', site: 'Sasti OB', status: 'Open', start: '2026-09-08 12:00', expectedCompletionAt: '2026-09-12 12:00', dailyRemarks: 'Pump ordered', complaint: 'Quiet breakdown'},
@@ -183,14 +197,16 @@ test('total breakdowns box counts open requests by site, lists breakdowns withou
   let tree = app.render(props);
   assert.equal(descendants(tree, node => node.props.className?.startsWith('pulse-stat ')).length, 4, 'the four priority boxes stay as they are');
   assert.equal(text(byLabel(tree, 'Total breakdowns: 3 at All sites')), 'Total breakdowns3All sites · open requests, excluding idle');
-  assert.equal(text(byLabel(tree, 'Breakdowns at Sasti OB: 2')), 'Sasti OB2');
-  assert.equal(text(byLabel(tree, 'Breakdowns at Majri OB: 1')), 'Majri OB1');
+  assert.equal(byLabel(tree, 'Breakdowns by site'), undefined, 'duplicate site buttons are removed');
+  assert.ok(byLabel(tree, 'Filter site: Majri OB'));
   assert.equal(byLabel(tree, 'Total breakdowns: 3 at All sites').props['aria-pressed'], false);
   assert.equal(text(byLabel(tree, 'All cases: 4 cases')), 'All cases4', 'closed and idle rows still raise alert cases');
   assert.ok(!text(byLabel(tree, 'Matching case records')).includes('Quiet breakdown'), 'a breakdown without alerts is not a case');
-  byLabel(tree, 'Breakdowns at Sasti OB: 2').props.onClick();
+  byLabel(tree, 'Total breakdowns: 3 at All sites').props.onClick();
   tree = app.render(props);
-  assert.equal(byLabel(tree, 'Breakdowns at Sasti OB: 2').props['aria-pressed'], true);
+  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
+  tree = app.render(props);
+  assert.equal(byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props['aria-pressed'], true);
   assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
   assert.equal(text(byLabel(tree, 'Total breakdowns: 2 at Sasti OB')), 'Total breakdowns2Sasti OB · open requests, excluding idle');
   assert.equal(byLabel(tree, 'All cases: 1 cases').props['aria-pressed'], false);
@@ -202,7 +218,7 @@ test('total breakdowns box counts open requests by site, lists breakdowns withou
   assert.ok(!list.includes('Fresh breakdown') && !list.includes('Idle'));
   byLabel(tree, 'Filter issue: ETC overdue').props.onClick();
   tree = app.render(props);
-  assert.equal(byLabel(tree, 'Breakdowns at Sasti OB: 2').props['aria-pressed'], false);
+  assert.equal(byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props['aria-pressed'], false);
   assert.match(text(tree), /Sasti OB \/ ETC overdue1 cases/);
   byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props.onClick();
   tree = app.render(props);
@@ -214,7 +230,7 @@ test('total breakdowns box counts open requests by site, lists breakdowns withou
   descendants(tree, node => node.type === 'input')[0].props.onChange({target: {value: '2026-09-10'}});
   tree = app.render(props);
   assert.ok(byLabel(tree, 'Total breakdowns: 0 at Sasti OB'), 'date filters apply to the breakdown count');
-  assert.equal(text(byLabel(tree, 'Breakdowns at Majri OB: 1')), 'Majri OB1');
+  assert.ok(byLabel(tree, 'Filter site: Majri OB'));
 });
 
 test('all case cards appear immediately below the four count boxes without a repeated site table', () => {
@@ -385,7 +401,7 @@ test("case rows are compact until expanded, so at least ten fit on the full-scre
   const css = readFileSync(new URL("../src/info-pulse-content.css", import.meta.url), "utf8");
   assert.match(source, /className=\{`pulse-case-card \$\{row\.issues\.length \? pulseCaseSeverity\(row\) : 'plain'\}\$\{isExpanded \? ' expanded' : ''\}`\}/);
   assert.match(source, /Each row shows the site, equipment, status, alerts, standing time and ETC\. Expand a row for the complaint, recorded reasons, daily updates and full details\./);
-  assert.match(css, /\.pulse-content \.pulse-case-card \{ display: grid; grid-template-columns: 150px minmax\(0, 1fr\) auto; align-items: center;/);
+  assert.match(css, /\.pulse-content \.pulse-case-card \{ display: grid; grid-template-columns: 150px minmax\(220px, 1fr\) minmax\(140px, .6fr\) auto; align-items: center;/);
   assert.match(css, /\.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-card-reasons, \.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-latest-update, \.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-details-toggle \{ display: none; \}/);
   assert.match(css, /\.pulse-content \.pulse-case-card \.pulse-card-dates \{ display: flex; flex-wrap: nowrap;/);
 });

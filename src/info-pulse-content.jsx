@@ -1,4 +1,5 @@
 import React, {useMemo, useState} from 'react';
+import {createPortal} from 'react-dom';
 import {ChevronDown, ChevronLeft, ChevronRight, RefreshCw, MapPin, Truck, Info} from 'lucide-react';
 import {INFO_PULSE_COLUMNS, buildInfoPulseBreakdowns, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView} from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
@@ -26,7 +27,7 @@ function RecordDate({value}) {
     : <span className="pulse-missing">Not recorded</span>;
 }
 
-export default function InfoPulseContent({cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh}) {
+export default function InfoPulseContent({cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh, headerTarget = null}) {
   const [filters, setFilters] = useState(() => {
     const today = infoPulseDate(new Date(now ?? Date.now()).toISOString());
     return {...EMPTY_FILTERS, from: today, to: today};
@@ -98,17 +99,11 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
     </div><span>{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span></div>
     {error && <div className="pulse-message pulse-error" role="alert">{ready ? 'Refresh failed. Showing the last loaded counts.' : 'Could not load site counts.'} <button type="button" disabled={refreshing} onClick={onRefresh}>Retry</button></div>}
     {!ready ? <p className="pulse-message" role="status">{error ? 'Counts unavailable.' : 'Loading site counts…'}</p> : summary.invalidRange ? <p className="pulse-message pulse-error" role="alert">From date must be on or before To date.</p> : <>
-      <section className={`pulse-breakdown-box${breakdownsView ? ' selected' : ''}`} aria-label="Total breakdowns by site">
+      {(() => { const total = (
         <button type="button" className="pulse-breakdown-total" aria-pressed={breakdownsView} aria-label={`Total breakdowns: ${breakdownTotal} at ${selectedSite}`} onClick={() => breakdownsView ? changeFilter('view', '') : showBreakdowns()}>
           <span>Total breakdowns</span><b>{breakdownTotal}</b><small>{selectedSite} · open requests, excluding idle</small>
         </button>
-        <div className="pulse-breakdown-sites" role="group" aria-label="Breakdowns by site">
-          {sites.length ? sites.map(site => {
-            const count = breakdownCounts.get(site.key) || 0;
-            return <button type="button" key={site.key} className={count ? 'active' : 'quiet'} aria-pressed={breakdownsView && filters.site === site.key} aria-label={`Breakdowns at ${site.label}: ${count}`} onClick={() => showBreakdowns(site.key)}><span>{site.label}</span><b>{count}</b></button>;
-          }) : <span className="pulse-breakdown-empty">No sites in scope</span>}
-        </div>
-      </section>
+      ); return headerTarget ? createPortal(total, headerTarget) : total; })()}
       <div className="pulse-overview" role="group" aria-label="Cases by highest priority">
         {Object.entries(severityLabels).map(([key, label]) => <button type="button" key={key} className={`pulse-stat ${key}${!breakdownsView && (filters.severity || 'all') === key ? ' selected' : ''}`} aria-pressed={!breakdownsView && (filters.severity || 'all') === key} aria-label={`${label}: ${severityCounts[key]} cases`} disabled={key !== 'all' && !severityCounts[key] && filters.severity !== key} onClick={() => changeFilter('severity', key === 'all' ? '' : key)}><span>{label}</span><b>{severityCounts[key]}</b></button>)}
       </div>
@@ -130,6 +125,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
                 <div className="pulse-card-heading"><span className="pulse-card-site"><MapPin size={14} />{row.site}</span><span className="pulse-card-status">{requestStatusLabel(request)}</span></div>
                 <div className="pulse-card-main"><button type="button" className="pulse-record-link" aria-expanded={isExpanded} aria-controls={`pulse-record-${row.key}`} onClick={() => setExpanded(isExpanded ? '' : row.key)}><span className="pulse-card-vehicle"><Truck size={22} /><span><b>{request.door || request.reg || 'Not recorded'}</b><small>{request.equipmentGroup || request.equipment || ''}{request.equipmentGroup || request.equipment ? ' · ' : ''}{request.ref || 'Reference not recorded'}</small></span></span><ChevronDown size={18} /></button>
                 <div className="pulse-issues">{row.issues.length ? row.issues.map(issue => <span className={issue.severity} data-selected={filters.type === issue.type} key={issue.type}>{labels[issue.type]}</span>) : <span className="plain">No alerts</span>}</div></div>
+                <div className="pulse-breakdown-reason"><span>Breakdown reason</span><p>{String(request.complaint || '').trim() || 'Not recorded'}</p></div>
                 <dl className="pulse-card-dates">{pulseCaseTiming(row, now).map(field => <div key={field.label} className={field.tone || ''}><dt>{field.label}</dt><dd>{'date' in field ? <RecordDate value={field.date} /> : <strong className="pulse-duration">{field.value}</strong>}</dd></div>)}</dl>
                 <dl className="pulse-card-reasons">{highlights.map(reason => <div key={reason.key} className={`${reason.key === 'complaint' ? 'complaint' : 'reason'}${reason.missing ? ' missing' : ''}`}><dt>{reason.key === 'complaint' ? 'Issue / complaint' : reason.label}</dt><dd>{reason.value}</dd>{reason.at && <time>{formatDisplayDateTime(reason.at)} IST</time>}</div>)}</dl>
                 {(latestUpdate || request.maintenanceWork) && <div className="pulse-latest-update"><b>{latestUpdate ? 'Latest maintenance update' : 'Maintenance work'}</b><p>{latestUpdate?.remark || request.maintenanceWork}</p>{latestUpdate?.createdAt && <time>{formatDisplayDateTime(latestUpdate.createdAt)} IST{latestUpdate.author ? ` · ${latestUpdate.author}` : ''}</time>}</div>}
