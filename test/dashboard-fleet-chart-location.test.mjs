@@ -55,14 +55,14 @@ test("other request drilldowns retain Request site even if the fleet-only option
   const html = render({ requestRecords: true, hideCurrentLocation: true });
   assert.ok(html.includes("<th>Request site</th>"));
   assert.ok(html.includes("<td>Majri OB</td>"));
-  assert.equal((html.match(/<th[ >]/g) || []).length, 11);
+  assert.equal((html.match(/<th[ >]/g) || []).length, 13);
 });
 
 test("empty site fleet lists span exactly their visible columns", () => {
   assert.ok(render({ rows: [], hideCurrentLocation: true }).includes('colSpan="8"'));
   assert.ok(render({ rows: [] }).includes('colSpan="9"'));
-  assert.ok(render({ rows: [], requestRecords: true, lifecycleRecords: true, hideCurrentLocation: true }).includes('colSpan="14"'));
-  assert.ok(render({ rows: [], requestRecords: true, showBdClosingTime: true }).includes('colSpan="12"'));
+  assert.ok(render({ rows: [], requestRecords: true, lifecycleRecords: true, hideCurrentLocation: true }).includes('colSpan="16"'));
+  assert.ok(render({ rows: [], requestRecords: true, showBdClosingTime: true }).includes('colSpan="14"'));
 });
 
 test("every equipment and vehicle site bar hides category in both fleet and breakdown views", () => {

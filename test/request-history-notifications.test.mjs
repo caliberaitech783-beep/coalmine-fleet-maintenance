@@ -8,7 +8,7 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   const mobileStyles=fs.readFileSync(new URL("../src/mobile-workflow.css",import.meta.url),"utf8");
   const server=fs.readFileSync(new URL("../server.mjs",import.meta.url),"utf8");
   const access=fs.readFileSync(new URL("../mobile-access.mjs",import.meta.url),"utf8");
-  assert.match(source,/showReason \? \[\["complaint", "Reason"\]\]/);
+  assert.match(source,/showReason \? \[\["complaint", "Breakdown reason"\]\]/);
   assert.match(source,/\["status", "Status"\]/);
   assert.match(source,/Closed history/);
   assert.match(source,/activeRequests=requestRows\.filter[\s\S]*!=="closed"/);
@@ -28,8 +28,8 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(source,/rows=\{activeRequests\.filter\(\(row\) => !row\.verifiedAt[\s\S]*showCreatedBy showComplaintAudio showMeterData showActions/);
   assert.match(source,/rows=\{visibleRows\} exportTitle=\{workspaceReportTitles.\w+\} showMakeModel showReason showClosedBy showTurnaroundTime/);
   assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{closedHistoryClosingLabel\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
-  assert.match(source,/showReason=\{isMaintenance \|\| isMis\} showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{closedHistoryClosingLabel\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
-  assert.match(source,/showReason=\{productionManagerView\} showClosedBy=\{queueTab==="history"\}/);
+  assert.match(source,/showReason showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{closedHistoryClosingLabel\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
+  assert.match(source,/showReason showClosedBy=\{queueTab==="history"\}/);
   assert.match(access,/"Closed history"/);
   assert.match(server,/async function requestStakeholderLogins/);
   assert.match(server,/profile\.permissions\.adminLevel==='Manager'&&userManagesSite\(user,site\)/);

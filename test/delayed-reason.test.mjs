@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from '../delayed-reason.mjs';
+import {DELAYED_REASON_DEFAULTS,DELAYED_REASONS_BY_REPAIR_TYPE,delayedReasonRequired,delayedReasonsForRepairType} from '../delayed-reason.mjs';
 
 test('maintenance request delayed reasons use searchable master choices and a scoped update',()=>{
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
@@ -17,6 +17,27 @@ test('maintenance request delayed reasons use searchable master choices and a sc
   assert.match(route,/withMaintenanceArrivalGuard/);
   assert.match(route,/delayedReason.length>160/);
   assert.match(route,/SET delayed_reason=\$1 WHERE reference=\$2/);
+});
+
+test('delayed reasons are offered per breakdown type in the approved order',()=>{
+  const common=['Parts - OEM','Parts - CMLL','Tools NA - OEM','Tools NA - CMLL','Repair in progress - OEM','Repair in progress - CMLL','Approval - OEM','Approval - CMLL'];
+  assert.deepEqual(DELAYED_REASONS_BY_REPAIR_TYPE.ACCIDENTAL,[...common,'Acc- Insurance Survey-OEM','Acc- Insurance Survey-CMLL','Acc- Insurance Approval-CMLL','Acc- Insurance Approval-OEM','Acc- Repair Estimate-CMLL','Acc- Repair Estimate-OEM','Manpower shortage - OEM','Manpower shortage - CMLL']);
+  assert.deepEqual(DELAYED_REASONS_BY_REPAIR_TYPE.SUPERSTRUCTURE,[...common,'Fault Diagnosis - OEM','Superstructure - Parts','Superstructure - Manpower','Superstructure - Repair','Manpower shortage - OEM','Manpower shortage - CMLL']);
+  assert.deepEqual(DELAYED_REASONS_BY_REPAIR_TYPE.GENERAL,[...common,'Fault Diagnosis - OEM','Manpower shortage - OEM','Manpower shortage - CMLL']);
+  assert.deepEqual(delayedReasonsForRepairType('Accidental'),DELAYED_REASONS_BY_REPAIR_TYPE.ACCIDENTAL);
+  assert.deepEqual(delayedReasonsForRepairType('Super Structure'),DELAYED_REASONS_BY_REPAIR_TYPE.SUPERSTRUCTURE);
+  assert.deepEqual(delayedReasonsForRepairType('superstructure'),DELAYED_REASONS_BY_REPAIR_TYPE.SUPERSTRUCTURE);
+  for(const type of ['WGM','Preventive','Breakdown','Aggregate Repair','',undefined])assert.deepEqual(delayedReasonsForRepairType(type),DELAYED_REASONS_BY_REPAIR_TYPE.GENERAL,type);
+  // Reasons removed from the master disappear; custom master reasons stay available for every type.
+  const master=['Parts - CMLL','Fault Diagnosis - OEM','Superstructure - Repair','Crane booked','Acc- Repair Estimate-OEM'];
+  assert.deepEqual(delayedReasonsForRepairType('Breakdown',master),['Parts - CMLL','Fault Diagnosis - OEM','Crane booked']);
+  assert.deepEqual(delayedReasonsForRepairType('Accidental',master),['Parts - CMLL','Acc- Repair Estimate-OEM','Crane booked']);
+  assert.deepEqual(delayedReasonsForRepairType('Super Structure',master),['Parts - CMLL','Fault Diagnosis - OEM','Superstructure - Repair','Crane booked']);
+  const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.match(client,/delayedReasonsForRepairType\(request\.category, records\.map/);
+  assert.match(client,/\{key: "category", label: "Breakdown type", value: \(row\) => row\.category\}/);
+  assert.match(client,/\["category", "Breakdown type"\], \["delayedReason", "Delayed reason"\]/);
+  assert.match(client,/case "delayedReason": return <td>\{r\.delayedReason \|\| "—"\}<\/td>;/);
 });
 
 test('Delayed Reason master contains the approved starting values',()=>{
@@ -59,8 +80,8 @@ test('the Delayed reason column only appears once ETC has passed and the close f
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(client,/delayedReasonRequired\(row\.expectedCompletionAt, new Date\(now\), 0\)/);
-  assert.match(client,/showDelayedReason = Boolean\(onDelayedReason\) && rows\.some\(delayedReasonDue\)/);
-  assert.match(client,/showDelayedReason && workflowHeader\("delayedReason", "Delayed reason"\)/);
+  assert.match(client,/canSelectDelayedReason = \(row\) => Boolean\(onDelayedReason\) && delayedReasonDue\(row\)/);
+  assert.match(client,/\{workflowHeader\("delayedReason", "Delayed reason"\)\}/);
   assert.doesNotMatch(client,/name="delayedReason"/);
   assert.doesNotMatch(client,/delayedReasonNeeded/);
   assert.match(client,/delayedReason: storedDelayedReason/);

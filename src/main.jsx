@@ -49,7 +49,7 @@ import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime } from "../date-time-format.mjs";
 import { calculateBreakdownDaysFromStart, calculateBreakdownMinutes, durationLabelMinutes } from "../breakdown-duration.mjs";
-import { delayedReasonRequired } from "../delayed-reason.mjs";
+import { delayedReasonRequired, delayedReasonsForRepairType } from "../delayed-reason.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
@@ -1217,7 +1217,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     </Modal>}
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({managerDataReady?idealRows.length:"—"})</button>}<button className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
     {managerDataReady && <>
-    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason={productionManagerView} showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
+    <article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
     </>}
     {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
@@ -1559,6 +1559,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       requestReference: request.ref || request.reference || "—",
       requestStatus: requestStatusLabel(request),
       repairCategory: request.category || "—",
+      delayedReason: request.delayedReason || "—",
+      breakdownReason: request.complaint || "—",
       requestStart: request.start || "—",
       requestClosed: request.closedAt || request.completedAt || "—",
       requestVerified: request.verifiedAt || "—",
@@ -1954,7 +1956,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     </div>
   );
 }
-const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "complaint", "start", "status", "dailyRemarks", "ref", "createdBy"];
+const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "delayedReason", "complaint", "start", "status", "dailyRemarks", "ref", "createdBy"];
 function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal } = {}) {
   switch (key) {
     case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
@@ -1970,6 +1972,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "chassis": return <td>{r.chassis || "—"}</td>;
     case "breakdownDays": return <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={`${r.breakdownDays} ${r.breakdownDays === 1 ? "day" : "days"}`} /></td>;
     case "category": return <td>{r.category}</td>;
+    case "delayedReason": return <td>{r.delayedReason || "—"}</td>;
     case "start": return <td>{formatTwelveHourDateTime(r.start)}</td>;
     case "hours": return <td>{r.hours}</td>;
     case "status": return <td><Status>{requestStatusLabel(r)}</Status></td>;
@@ -1985,7 +1988,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     default: return null;
   }
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", exportTitle = "Breakdown report", columnOrder = null }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showClosedBy = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", exportTitle = "Breakdown report", columnOrder = null }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
@@ -1999,10 +2002,10 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
   }, [showBreakdownDays]);
   const columns = [
       ...(showReadOnlyAction ? [["requestAction", "Actions"]] : []), ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
-      ...(showReason ? [["complaint", "Reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
+      ...(showReason ? [["complaint", "Breakdown reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
-      ["category", "Repair category"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
+      ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal || onCancelIdeal ? [["idealAction", "Action"]] : []),
     ],
     orderedColumns = columnOrder ? [...columns.filter(([key]) => key === "requestAction"), ...columnOrder.map((orderKey) => columns.find(([key]) => key === orderKey)).filter(Boolean)] : columns,
@@ -2075,6 +2078,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 {showAudio && <td>{r.chassis || "—"}</td>}
                 {showBreakdownDays && <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={`${r.breakdownDays} ${r.breakdownDays === 1 ? "day" : "days"}`} /></td>}
                 <td>{r.category}</td>
+                <td>{r.delayedReason || "—"}</td>
                 <td>{formatTwelveHourDateTime(r.start)}</td>
                 <td>{showBreakdownDays ? r.hours : <RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={r.hours || "—"} />}</td>
                 <td>
@@ -7671,9 +7675,9 @@ function DelayedReasonForm({ request, close, onSave }) {
   const [custom, setCustom] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const options = [...new Set(records.map((record) => String(record.delayedReason || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const options = delayedReasonsForRepairType(request.category, records.map((record) => String(record.delayedReason || "").trim()).filter(Boolean));
   const visibleOptions = options.filter((option) => matchesSmartSearch(query, option));
-  return <Modal title={`Delayed reason · ${request.door || request.ref}`} close={saving ? () => {} : close}>
+  return <Modal title={`Delayed reason · ${request.door || request.ref}${request.category ? ` · ${request.category}` : ""}`} close={saving ? () => {} : close}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
       if (!reason.trim() || saving) return;
@@ -7791,7 +7795,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = false, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
@@ -7804,7 +7808,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     return () => window.clearInterval(timer);
   }, []);
   const delayedReasonDue = (row) => Boolean(String(row.delayedReason || "").trim()) || delayedReasonRequired(row.expectedCompletionAt, new Date(now), 0);
-  const showDelayedReason = Boolean(onDelayedReason) && rows.some(delayedReasonDue);
+  const canSelectDelayedReason = (row) => Boolean(onDelayedReason) && delayedReasonDue(row);
   const statusLabel = (row) => String(row.verifiedAt || "").trim() ? "Verified" : (showAcceptanceStatus || showInProgressStatus)
     && String(row.acceptedAt || "").trim()
     && ["open", "in progress"].includes(String(row.status || "").trim().toLowerCase())
@@ -7825,6 +7829,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     {key: "door", label: "Door no.", value: (row) => row.door},
     ...(showMakeModel ? [{key: "make", label: "Make", value: (row) => row.make}, {key: "model", label: "Model", value: (row) => row.model}] : []),
     {key: "site", label: "Site location", value: (row) => row.site},
+    {key: "category", label: "Breakdown type", value: (row) => row.category},
     ...(showMisFlagData ? [
       {key: "misFlaggedAt", label: "MIS red flag raised", value: (row) => formatTwelveHourDateTime(row.misFlaggedAt, true)},
       {key: "misFlaggedBy", label: "Flagged by", value: (row) => row.misFlaggedBy},
@@ -7833,8 +7838,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     ] : []),
     {key: "status", label: "Status", value: (row) => statusLabel(row)},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
-    ...(showDelayedReason ? [{key: "delayedReason", label: "Delayed reason", value: (row) => row.delayedReason}] : []),
-    ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
+    {key: "delayedReason", label: "Delayed reason", value: (row) => row.delayedReason},
+    ...(showReason ? [{key: "complaint", label: "Breakdown reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
     ...(startedFirst ? [startedColumn, ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn]),
     ...(showClosedAt ? [{key: "closedAt", label: closedAtLabel, value: (row) => formatTwelveHourDateTime(row.closedAt)}] : []),
@@ -7903,10 +7908,10 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
           {showAcceptedTime && workflowHeader("acceptedTime", "Arrival wait")}
-          {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
-          {showDelayedReason && workflowHeader("delayedReason", "Delayed reason")}
+          {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}{workflowHeader("category", "Breakdown type")}
+          {workflowHeader("delayedReason", "Delayed reason")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
-          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
@@ -7920,7 +7925,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
-              {showDelayedReason && <td>{delayedReasonDue(row) ? <button type="button" className="delayed-reason-compact" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button> : "—"}</td>}
+              <td>{row.category || "—"}</td>
+              <td>{canSelectDelayedReason(row) ? <button type="button" className="delayed-reason-compact" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button> : (row.delayedReason || "—")}</td>
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
               <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
@@ -7939,7 +7945,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               </td>}
               {!actionsFirst && workflowActions(row, lockedIdeal)}
             </tr>;
-          }) : <tr><td colSpan={8 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showTripCard ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={10 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showMeterData ? 2 : 0) + (showTripCard ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </ActionsTable>
     </div></>
@@ -9032,7 +9038,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason={isMaintenance || isMis} showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}
+      {tab === "history" && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}
       {tab === "idle" && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
