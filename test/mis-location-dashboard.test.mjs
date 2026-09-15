@@ -30,7 +30,7 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(source,/showClosedBy && <td>\{row\.closedBy \|\| "—"\}<\/td>/);
   assert.match(source,/showTripCard && workflowHeader\("tripCard", "Trip card image"\)/);
   assert.match(source,/<TripCardCell request=\{row\} \/>/);
-  assert.match(source,/tab === "requests"[\s\S]*showReason showClosedBy showTurnaroundTime/);
+  assert.match(source,/isMis && tab === "requests"[^\n]*showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime/);
   assert.match(source,/showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
   assert.match(server,/app\.get\('\/api\/requests\/:reference\/trip-card'/);
   assert.match(server,/first_trip_card_image AS image/);
@@ -54,6 +54,6 @@ test("MIS tables show Started, Closed by, Verified by, then Verified date & time
   assert.match(source, /\.\.\.\(startedFirst \? \[startedColumn, \.\.\.closedByColumns, \.\.\.verifiedColumns\] : \[\.\.\.verifiedColumns, \.\.\.closedByColumns, startedColumn\]\),/);
   assert.match(source, /\{startedFirst \? <>\{startedHeader\(\)\}\{closedByHeader\(\)\}\{verifiedHeaders\(\)\}<\/> : <>\{verifiedHeaders\(\)\} \{closedByHeader\(\)\}\{startedHeader\(\)\}<\/>\}/);
   assert.match(source, /\{startedFirst \? <>\{startedCell\(row\)\}\{closedByCell\(row\)\}\{verifiedCells\(row\)\}<\/> : <>\{verifiedCells\(row\)\}\{closedByCell\(row\)\}\{startedCell\(row\)\}<\/>\}/);
-  assert.match(source, /showClosedBy showTurnaroundTime showMeterData startedFirst showActions onVerify=\{setVerifying\}/);
+  assert.match(source, /showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify=\{setVerifying\}/);
   assert.match(source, /showTurnaroundTime=\{isMis\} startedFirst=\{isMis\}/);
 });

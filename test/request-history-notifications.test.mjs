@@ -26,7 +26,7 @@ test("request lifecycle has reason/status columns, closed history, and stakehold
   assert.match(mobileStyles,/\.normal \.table \.mobile-breakdown-table th,[\s\S]*display: table-cell/);
   assert.match(source,/rows=\{activeRequests\} exportTitle=\{workspaceReportTitles.\w+\} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio/);
   assert.match(source,/rows=\{activeRequests\.filter\(\(row\) => !row\.verifiedAt[\s\S]*showCreatedBy showComplaintAudio showMeterData showActions/);
-  assert.match(source,/rows=\{visibleRows\} exportTitle=\{workspaceReportTitles.\w+\} showMakeModel showReason showClosedBy showTurnaroundTime/);
+  assert.match(source,/rows=\{visibleRows\} exportTitle=\{workspaceReportTitles.\w+\} showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime/);
   assert.match(source,/showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{closedHistoryClosingLabel\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\} showTripCard=\{isMis\}/);
   assert.match(source,/showReason showClosedBy showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{closedHistoryClosingLabel\} showVerifiedBy=\{isMis\} showVerifiedAt=\{isMis\}/);
   assert.match(source,/showReason showClosedBy=\{queueTab==="history"\}/);
