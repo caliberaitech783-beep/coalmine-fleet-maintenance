@@ -54,7 +54,7 @@ export function masterAccessAllows(permissions = {}, name, selectionKey = "maste
 }
 
 /** Read-only organisation pages in the Administration menu (Admin and Super Admin only). */
-export const ORGANISATION_PAGE_NAMES = ["Access structure", "Hierarchy levels", "Reporting structure"];
+export const ORGANISATION_PAGE_NAMES = ["Access structure", "Hierarchy levels", "Reporting structure", "People by designation"];
 export const MANAGER_ROLE_OPTIONS = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 
 export function normalizeAdminLevel(value = "") {

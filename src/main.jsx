@@ -297,6 +297,7 @@ const adminNav = [
   ["Access structure", Users],
   ["Hierarchy levels", Network],
   ["Reporting structure", Building2],
+  ["People by designation", User],
   ["Backup", HardDrive],
   ["Export Backup", Download],
   ["Import Backup", Upload],
@@ -6729,7 +6730,7 @@ function MasterLoadError({ name, error, retry }) {
   );
 }
 // Read-only, site-wise organisation pages for Admin and Super Admin (Access
-// structure, Hierarchy levels, Reporting structure). They read the three masters
+// structure, Hierarchy levels, Reporting structure, People by designation). They read the three masters
 // through useMasterRecords, so they revalidate when the tab regains focus, every
 // minute while visible, and on demand - any change to those masters shows up.
 function OrganisationChartPage({ view = "reporting" }) {

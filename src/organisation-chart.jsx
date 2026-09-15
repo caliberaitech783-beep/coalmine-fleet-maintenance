@@ -39,6 +39,7 @@ const PAGE_TEXT = {
   access: { title: ORGANISATION_PAGES.access, intro: "Who can sign in at each site and with what access: managers by role and mobile users by User Group. Company-wide roles sit on top." },
   levels: { title: ORGANISATION_PAGES.levels, intro: "The Hierarchy master escalation levels that apply to each site, with the people at that site who hold each designation." },
   reporting: { title: ORGANISATION_PAGES.reporting, intro: "Who reports to whom, from the Superior field in Users & employees: Directors on top, then each site's Project Manager, the department managers (Production, Maintenance, MIS) and the incharges and supervisors under each manager. Faded entries have no matching Superior and are placed by designation and site." },
+  people: { title: ORGANISATION_PAGES.people, intro: "Each designation with the named people who hold it at each site, for example Director's (Mohit Chadda) and Project Manager (Vivek): Management, then the Production, Maintenance and MIS departments, then OEM. Super Admin and Admin are company-wide." },
 };
 
 function ReportingNode({ tree }) {
@@ -87,19 +88,31 @@ function ReportingSite({ entry, onDetail }) {
   </section>;
 }
 
-/** Read-only, site-wise organisation pages: access structure, hierarchy levels, reporting structure. */
+function PeopleSite({ entry, onDetail }) {
+  const { site, designations } = entry;
+  const held = designations.reduce((sum, section) => sum + section.designations.filter((designation) => designation.people.length).length, 0);
+  return <section className="org-site">
+    <SiteHeading site={site} detail={countLabel(held, "designation held", "designations held")} onDetail={() => onDetail("designations", site)} />
+    <div className="org-tree"><ul>{designations.map(({ section, designations: list, people }) => <li key={section} className="org-root">
+      <Node title={section}><CountLink onClick={() => onDetail("sectionPeople", site, section)}>{countLabel(people.length, "person", "people")}</CountLink></Node>
+      <ul>{list.map((designation) => <li key={designation.key}><Node tag={`L${designation.configured?.level || designation.level}`} tagClass={section === "OEM" ? "t-oem" : "t-level"} title={designation.people.length ? `${designation.label} (${designation.people.map((person) => person.name).join(", ")})` : designation.label} subtitle={designation.configured ? designation.configured.schedule || undefined : "not in Hierarchy master"} /><People people={designation.people} empty="Nobody at this site holds this designation" /></li>)}</ul>
+    </li>)}</ul></div>
+  </section>;
+}
+
+/** Read-only, site-wise organisation pages: access structure, hierarchy levels, reporting structure, people by designation. */
 export default function OrganisationChartView({ view = "reporting", chart, loading = false, error = "", updatedAt = 0, onRefresh }) {
   const [activeSite, setActiveSite] = useState("all");
   const [detail, setDetail] = useState(null);
-  const openDetail = (kind, site = "") => setDetail(organisationDetail(chart, kind, site));
+  const openDetail = (kind, site = "", extra = "") => setDetail(organisationDetail(chart, kind, site, extra));
   const { sites, companyWide } = chart.sites;
   const { reporting, summary } = chart;
   const text = PAGE_TEXT[view] || PAGE_TEXT.reporting;
   const visible = activeSite === "all" ? sites : sites.filter((entry) => entry.site === activeSite);
   const updated = updatedAt ? new Date(updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
-  const SiteBlock = view === "access" ? AccessSite : view === "levels" ? LevelsSite : ReportingSite;
+  const SiteBlock = view === "access" ? AccessSite : view === "levels" ? LevelsSite : view === "people" ? PeopleSite : ReportingSite;
   return <section className={`panel pagepanel organisation-chart org-view-${view}`} aria-busy={loading}>
-    <header><div><span className="page-eyebrow">Masters · read only · site-wise</span><h1>{text.title}</h1><p>{text.intro} Updates by itself whenever Users &amp; employees, Privilege or Hierarchy master change.</p></div>
+    <header><div><span className="page-eyebrow">Administration · read only · site-wise</span><h1>{text.title}</h1><p>{text.intro} Updates by itself whenever Users &amp; employees, Privilege or Hierarchy master change.</p></div>
       <div className="org-chart-actions">{updated && <span className="org-updated">Updated {updated}</span>}<button type="button" className="secondary" onClick={onRefresh} disabled={loading}><RefreshCw /> {loading ? "Refreshing…" : "Refresh"}</button></div></header>
     {error && <div className="org-error" role="alert"><AlertTriangle /><span>{error}</span></div>}
     <div className="org-summary" aria-label="Summary">
@@ -110,7 +123,7 @@ export default function OrganisationChartView({ view = "reporting", chart, loadi
       <button type="button" role="tab" aria-selected={activeSite === "all"} className={activeSite === "all" ? "active" : ""} onClick={() => setActiveSite("all")}>All sites</button>
       {sites.map((entry) => <button key={entry.site} type="button" role="tab" aria-selected={activeSite === entry.site} className={activeSite === entry.site ? "active" : ""} onClick={() => setActiveSite(entry.site)}>{entry.site}<small>{entry.people.length}</small></button>)}
     </div>
-    {view === "access" && <div className="org-company"><span className="org-company-label">Company-wide</span>
+    {(view === "access" || view === "people") && <div className="org-company"><span className="org-company-label">Company-wide</span>
       <div className="org-company-groups">
         <div><b>Super Admin</b><People people={companyWide.superAdmins} /></div>
         <div><b>Admin</b><People people={companyWide.admins} /></div>

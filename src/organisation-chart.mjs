@@ -1,18 +1,19 @@
 /**
  * Organisation chart: a read-only picture of who is who, built live from the
- * Users & employees, Privilege and Hierarchy masters. Three trees:
- *  1. access  - account type, access level, manager roles, mobile user groups;
- *  2. levels  - the Hierarchy master escalation levels as configured;
- *  3. people  - every designation with the named people who hold it.
+ * Users & employees, Privilege and Hierarchy masters. Four trees:
+ *  1. access    - account type, access level, manager roles, mobile user groups;
+ *  2. levels    - the Hierarchy master escalation levels as configured;
+ *  3. reporting - who reports to whom, from the Superior field;
+ *  4. people    - every designation with the named people who hold it.
  * Pure functions only, so the page and the tests share one model.
  */
 import { resolveMobileAccess, userLoginCandidates } from "../mobile-access.mjs";
 import { whatsAppRecipientRole } from "../whatsapp-recipient-policy.mjs";
 
-/** The three read-only Masters pages built from this model (names shared with admin-access.mjs). */
+/** The four read-only Administration pages built from this model (names shared with admin-access.mjs). */
 import { ORGANISATION_PAGE_NAMES } from "../admin-access.mjs";
 export { ORGANISATION_PAGE_NAMES };
-export const ORGANISATION_PAGES = Object.freeze({ access: ORGANISATION_PAGE_NAMES[0], levels: ORGANISATION_PAGE_NAMES[1], reporting: ORGANISATION_PAGE_NAMES[2] });
+export const ORGANISATION_PAGES = Object.freeze({ access: ORGANISATION_PAGE_NAMES[0], levels: ORGANISATION_PAGE_NAMES[1], reporting: ORGANISATION_PAGE_NAMES[2], people: ORGANISATION_PAGE_NAMES[3] });
 export const ORGANISATION_CHART_PAGE = ORGANISATION_PAGES.reporting;
 /** Departments are always shown in this order. */
 export const DEPARTMENT_ORDER = Object.freeze(["Production", "Maintenance", "MIS"]);
@@ -274,9 +275,20 @@ export function peopleAtSite(people = [], site = "") {
   });
 }
 
+/** People by designation at a site: every section except Administration (company-wide), in chart order. */
+function designationsAtSite(here, applicable) {
+  const configured = (label) => applicable.find((row) => words(row.designation) === words(label)) || null;
+  return CHART_SECTIONS.filter((section) => section !== "Administration").map((section) => {
+    const designations = CHART_DESIGNATIONS.filter((designation) => designation.section === section)
+      .map((designation) => ({ ...designation, configured: configured(designation.label), people: here.filter((person) => person.designationKey === designation.key) }));
+    return { section, designations, people: designations.flatMap((designation) => designation.people) };
+  });
+}
+
 /**
- * The same three pictures, one per site: access structure, hierarchy levels and
- * reporting lines. `companyWide` holds the roles that are not tied to a site.
+ * The same four pictures, one per site: access structure, hierarchy levels,
+ * reporting lines and people by designation. `companyWide` holds the roles
+ * that are not tied to a site.
  */
 export function buildSiteViews({ people = [], rows = [], reporting = { sites: [] }, access = {} } = {}) {
   const siteNames = [...new Set(people.flatMap(personSites))].sort((a, b) => a.localeCompare(b));
@@ -306,6 +318,7 @@ export function buildSiteViews({ people = [], rows = [], reporting = { sites: []
         otherMobile: mobile.filter((person) => !MOBILE_GROUP_ORDER.includes(person.assignedRole)),
       },
       levels,
+      designations: designationsAtSite(here, applicable),
       reporting: (reporting.sites || []).find((entry) => entry.site === site) || { site, pms: [], trees: [] },
     };
   });
@@ -332,12 +345,15 @@ const linkRow = ({ person, parent, superiorText }, explicit) => ({
   site: person.site || person.sites.join(", ") || "All",
 });
 
+const SECTION_KEYS = (section) => CHART_DESIGNATIONS.filter((designation) => designation.section === section).map((designation) => designation.key);
+
 /**
  * The records behind a number on the organisation pages, as a small table.
- * `kind`: sites | people | superUsers | managers | mobileUsers | hierarchyRows | explicitLinks | inferredLinks.
- * With `site`, people-type lists and hierarchy rows are limited to that site.
+ * `kind`: sites | people | superUsers | managers | mobileUsers | hierarchyRows | explicitLinks | inferredLinks
+ *       | designations | sectionPeople (with `extra` = the section, e.g. "Production Dept.").
+ * With `site`, people-type lists, hierarchy rows and designations are limited to that site.
  */
-export function organisationDetail(chart, kind, site = "") {
+export function organisationDetail(chart, kind, site = "", extra = "") {
   const entry = site ? (chart.sites?.sites || []).find((item) => item.site === site) : null;
   const people = entry ? entry.people : chart.people || [];
   const at = site ? ` at ${site}` : "";
@@ -354,6 +370,15 @@ export function organisationDetail(chart, kind, site = "") {
       const sections = entry ? entry.levels : chart.levels || [];
       return { kind, site, title: `Hierarchy master rows${at}`, columns: [["section", "Section"], ["designation", "Designation"], ["level", "Level"], ["schedule", "Schedule"], ["sites", "Site ticks"]],
         rows: sections.flatMap((section) => section.rows.map((row) => ({ section: section.section, designation: row.designation, level: row.level ? `L${row.level}` : "—", schedule: row.schedule || "—", sites: row.siteAccess.length ? row.siteAccess.join(", ") : "All sites" }))) };
+    }
+    case "designations": {
+      const sections = entry ? entry.designations : (chart.peopleTree || []).filter((section) => section.section !== "Administration");
+      return { kind, site, title: `Designations${at}`, columns: [["section", "Section"], ["designation", "Designation"], ["level", "Level"], ["schedule", "Schedule"], ["count", "Holders"], ["people", "People"]],
+        rows: sections.flatMap((section) => section.designations.map((designation) => ({ section: section.section, designation: designation.label, level: `L${designation.configured?.level || designation.level}`, schedule: designation.configured ? designation.configured.schedule || "—" : "not in Hierarchy master", count: designation.people.length, people: designation.people.map((person) => person.name).join(", ") || "—" }))) };
+    }
+    case "sectionPeople": {
+      const keys = SECTION_KEYS(extra);
+      return list(`${extra || "Section"}${at}`, people.filter((person) => keys.includes(person.designationKey)));
     }
     case "explicitLinks":
     case "inferredLinks": {

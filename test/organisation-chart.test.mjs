@@ -91,10 +91,11 @@ test("the chart resolves designations like the WhatsApp report flow, except that
   assert.equal(chartPerson({}).name, "Unnamed");
 });
 
-test("three read-only pages sit in the Administration menu for Admin and Super Admin only", () => {
-  assert.deepEqual(ORGANISATION_PAGE_NAMES, ["Access structure", "Hierarchy levels", "Reporting structure"]);
+test("four read-only pages sit in the Administration menu for Admin and Super Admin only", () => {
+  assert.deepEqual(ORGANISATION_PAGE_NAMES, ["Access structure", "Hierarchy levels", "Reporting structure", "People by designation"]);
   assert.equal(ORGANISATION_PAGES.reporting, "Reporting structure");
-  assert.match(main, /const adminNav = \[\n  \["User Sessions", UserRound\],\n  \["Access structure", Users\],\n  \["Hierarchy levels", Network\],\n  \["Reporting structure", Building2\],/, "the pages sit in the Administration dropdown, after User Sessions");
+  assert.equal(ORGANISATION_PAGES.people, "People by designation");
+  assert.match(main, /const adminNav = \[\n  \["User Sessions", UserRound\],\n  \["Access structure", Users\],\n  \["Hierarchy levels", Network\],\n  \["Reporting structure", Building2\],\n  \["People by designation", User\],/, "the pages sit in the Administration dropdown, after User Sessions");
   assert.doesNotMatch(main, /\["Hierarchy master", Network\],\n  \["Access structure"/, "and no longer in Masters");
   assert.match(main, /if\(ORGANISATION_PAGE_NAMES\.includes\(name\)\)return isAdministrator;/);
   assert.match(main, /ORGANISATION_PAGE_NAMES\.includes\(active\) \? \(\n\s+<OrganisationChartPage view=\{Object\.keys\(ORGANISATION_PAGES\)\.find\(\(key\) => ORGANISATION_PAGES\[key\] === active\)\} \/>/);
@@ -155,7 +156,7 @@ test("the reporting page renders directors, per-site trees and flags inferred pl
   assert.match(view, /placed by designation and site/);
   assert.match(view, /reporting\.directors\.map\(\(director\) =>/);
   assert.match(view, /visible\.map\(\(entry\) => <SiteBlock key=\{entry\.site\} entry=\{entry\} onDetail=\{openDetail\} \/>\)/);
-  assert.match(view, /const SiteBlock = view === "access" \? AccessSite : view === "levels" \? LevelsSite : ReportingSite;/);
+  assert.match(view, /const SiteBlock = view === "access" \? AccessSite : view === "levels" \? LevelsSite : view === "people" \? PeopleSite : ReportingSite;/);
   assert.match(view, /Not placed on any site/);
   assert.match(view, /Company-wide/);
 });
@@ -261,4 +262,54 @@ test("every number on the pages opens the records behind it", () => {
   assert.match(view, /openDetail\("explicitLinks"\)/);
   assert.match(view, /openDetail\("inferredLinks"\)/);
   assert.match(view, /onPickSite=\{\(site\) => \{ setActiveSite\(site\); setDetail\(null\); \}\}/, "picking a site in the Sites list opens that site");
+});
+
+test("the People by designation page is site-wise: each site lists every designation with its holders, and its counts open the records", () => {
+  const staff = [
+    { login: "mohit", employee: "Mohit Chadda", userType: "Super User", adminLevel: "Super Admin", designation: "Director" },
+    { login: "vivek", employee: "Vivek", userType: "Super User", adminLevel: "Manager", managerRole: "Project Manager", managerSites: "Sasti OB|Majri OB" },
+    { login: "priyank", employee: "Priyank Rao", userType: "Super User", adminLevel: "Manager", managerRole: "Production Manager", managerSites: "Sasti OB" },
+    { login: "ramesh", employee: "Ramesh Kumar", userType: "Mobile User", userGroup: "Production User", site: "Sasti OB" },
+    { login: "dinesh", employee: "Dinesh Pawar", userType: "Mobile User", userGroup: "Production User", site: "Majri OB" },
+    { login: "anil", employee: "Anil Wagh", userType: "Mobile User", userGroup: "Maintenance User", site: "Majri OB" },
+    { login: "anoop", employee: "Anoop Paul", userType: "Super User", adminLevel: "Admin" },
+  ];
+  const hierarchy = [
+    { section: "Management", designation: "Director's", level: "1", schedule: "Daily 07:00:00 PM" },
+    { section: "Production Dept.", designation: "Production Manager", level: "3", schedule: "Every event", siteAccess: "Sasti OB" },
+  ];
+  const chart = buildOrganisationChart({ users: staff, hierarchy });
+  const sasti = chart.sites.sites.find((entry) => entry.site === "Sasti OB");
+  assert.deepEqual(sasti.designations.map((section) => section.section), ["Management", "Production Dept.", "Maintenance Dept.", "MIS Dept.", "OEM"], "Administration is company-wide, the rest follow the chart order");
+  assert.deepEqual(sasti.designations.map((section) => [section.section, section.designations.map((designation) => `${designation.label}:${designation.people.map((person) => person.name).join("+")}`)]), [
+    ["Management", ["Director's:Mohit Chadda", "Project Manager (P.M):Vivek"]],
+    ["Production Dept.", ["Production Manager:Priyank Rao", "Production Incharge / Supervisor:Ramesh Kumar"]],
+    ["Maintenance Dept.", ["Maintenance Manager:", "Maintenance Incharge / Supervisor:"]],
+    ["MIS Dept.", ["MIS Manager:", "MIS Incharge / Supervisor:"]],
+    ["OEM", ["National Head:", "Regional Head / Zonal Head:", "Area Service engineer:", "Service Engineer / Site Service Engineer:"]],
+  ], "directors and the PM count for every site; the other site's staff do not");
+  assert.deepEqual(sasti.designations[1].people.map((person) => person.name), ["Priyank Rao", "Ramesh Kumar"]);
+  assert.equal(sasti.designations[0].designations[0].configured.schedule, "Daily 07:00:00 PM");
+  assert.equal(sasti.designations[1].designations[0].configured.level, 3);
+  const majri = chart.sites.sites.find((entry) => entry.site === "Majri OB");
+  assert.equal(majri.designations[1].designations[0].configured, null, "a row ticked for another site is not configured here");
+  assert.deepEqual(majri.designations[1].designations[1].people.map((person) => person.name), ["Dinesh Pawar"]);
+  const detail = organisationDetail(chart, "designations", "Sasti OB");
+  assert.equal(detail.title, "Designations at Sasti OB");
+  assert.deepEqual(detail.columns.map(([key]) => key), ["section", "designation", "level", "schedule", "count", "people"]);
+  assert.deepEqual(detail.rows.slice(0, 3), [
+    { section: "Management", designation: "Director's", level: "L1", schedule: "Daily 07:00:00 PM", count: 1, people: "Mohit Chadda" },
+    { section: "Management", designation: "Project Manager (P.M)", level: "L2", schedule: "not in Hierarchy master", count: 1, people: "Vivek" },
+    { section: "Production Dept.", designation: "Production Manager", level: "L3", schedule: "Every event", count: 1, people: "Priyank Rao" },
+  ]);
+  assert.equal(detail.rows.length, 12);
+  assert.equal(organisationDetail(chart, "designations").rows.length, 12, "company-wide: every designation except Administration");
+  assert.deepEqual(organisationDetail(chart, "sectionPeople", "Majri OB", "Production Dept.").rows.map((row) => row.name), ["Dinesh Pawar"]);
+  assert.equal(organisationDetail(chart, "sectionPeople", "Majri OB", "Production Dept.").title, "Production Dept. at Majri OB");
+  assert.deepEqual(organisationDetail(chart, "sectionPeople", "", "Management").rows.map((row) => row.name), ["Mohit Chadda", "Vivek"]);
+  assert.match(view, /people: \{ title: ORGANISATION_PAGES\.people/);
+  assert.match(view, /function PeopleSite\(\{ entry, onDetail \}\)/);
+  assert.match(view, /onDetail=\{\(\) => onDetail\("designations", site\)\}/, "the site heading count opens the site's designations");
+  assert.match(view, /onDetail\("sectionPeople", site, section\)/, "each section count opens the people of that section at the site");
+  assert.match(view, /\(view === "access" \|\| view === "people"\) && <div className="org-company">/, "Super Admin, Admin and Directors sit in the company-wide block");
 });
