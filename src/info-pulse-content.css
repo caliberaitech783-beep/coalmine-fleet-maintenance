@@ -155,9 +155,7 @@
 .pulse-breakdown-empty { align-self: center; font-size: 13px; color: #7b7087; }
 .pulse-case-card.plain { border-left-color: #8a6bb8; }
 .pulse-issues .plain { color: #6b5b80; background: #f1edf7; }
-.pulse-content .pulse-overview { display: grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; overflow-x: auto; }
-.pulse-overview .pulse-breakdown-total { min-width: 0; min-height: 50px; padding: 8px 14px; }
-.pulse-overview .pulse-breakdown-total span { white-space: nowrap; }
+.pulse-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
 .pulse-stat { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 80px; padding: 16px 20px; border: 1px solid transparent; border-radius: 15px; background: #edf0f7; color: #51617e; font: inherit; text-align: left; }
 .pulse-stat span { font-size: 14px; font-weight: 750; }
 .pulse-stat b { font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; }

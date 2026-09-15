@@ -1,4 +1,5 @@
 import React, {useMemo, useState} from 'react';
+import {createPortal} from 'react-dom';
 import {ChevronDown, ChevronLeft, ChevronRight, RefreshCw, MapPin, Truck, Info} from 'lucide-react';
 import {INFO_PULSE_COLUMNS, buildInfoPulseBreakdowns, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView} from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
@@ -99,10 +100,12 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
     </div></div>
     {error && <div className="pulse-message pulse-error" role="alert">{ready ? 'Refresh failed. Showing the last loaded counts.' : 'Could not load site counts.'} <button type="button" disabled={refreshing} onClick={onRefresh}>Retry</button></div>}
     {!ready ? <p className="pulse-message" role="status">{error ? 'Counts unavailable.' : 'Loading site counts…'}</p> : summary.invalidRange ? <p className="pulse-message pulse-error" role="alert">From date must be on or before To date.</p> : <>
-      <div className="pulse-overview" role="group" aria-label="Cases by highest priority">
+      {(() => { const total = (
         <button type="button" className="pulse-breakdown-total" aria-pressed={breakdownsView} aria-label={`Total breakdowns: ${breakdownTotal} at ${selectedSite}`} onClick={() => breakdownsView ? changeFilter('view', '') : showBreakdowns()}>
           <span>Total breakdowns</span><b>{breakdownTotal}</b><small>{selectedSite} · open requests, excluding idle</small>
         </button>
+      ); return headerTarget ? createPortal(total, headerTarget) : total; })()}
+      <div className="pulse-overview" role="group" aria-label="Cases by highest priority">
         {Object.entries(severityLabels).map(([key, label]) => <button type="button" key={key} className={`pulse-stat ${key}${!breakdownsView && (filters.severity || 'all') === key ? ' selected' : ''}`} aria-pressed={!breakdownsView && (filters.severity || 'all') === key} aria-label={`${label}: ${severityCounts[key]} cases`} disabled={key !== 'all' && !severityCounts[key] && filters.severity !== key} onClick={() => changeFilter('severity', key === 'all' ? '' : key)}><span>{label}</span><b>{severityCounts[key]}</b></button>)}
       </div>
       <div className="pulse-issue-filter" role="group" aria-label="Filter cases by issue">

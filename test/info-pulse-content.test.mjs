@@ -171,12 +171,11 @@ test('real daily-update arrays render all reasons and dated history without cras
   assert.ok(!html.includes('[object Object]'));
 });
 
-test('total breakdowns sits beside All cases and visible reasons retain complete AM/PM times', () => {
+test('header total and visible breakdown reasons retain filters and complete AM/PM times', () => {
   const app = allDatesHarness();
   const tree = app.render({headerTarget: 'overview-header'});
-  const overview = byLabel(tree, 'Cases by highest priority');
-  assert.ok(byLabel(overview, 'Total breakdowns: 67 at All sites'));
-  assert.ok(byLabel(overview, 'All cases: 67 cases'));
+  const portal = descendants(tree, node => node.props['data-portal-target'] === 'overview-header')[0];
+  assert.ok(byLabel(portal, 'Total breakdowns: 67 at All sites'));
   assert.equal(descendants(tree, node => node.props.className === 'pulse-breakdown-sites').length, 0);
   const previews = descendants(tree, node => node.props.className === 'pulse-breakdown-reason');
   assert.equal(previews.length, 25);
