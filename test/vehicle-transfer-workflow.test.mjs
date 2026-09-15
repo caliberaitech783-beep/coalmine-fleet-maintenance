@@ -45,6 +45,7 @@ test('destination acceptance changes only the Vehicle Master location and transf
 test('server and interface wire submission, both PM actions, audit, notifications and master update',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const client=readFileSync(new URL('../src/vehicle-transfer-workflow.jsx',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/vehicle-transfer-workflow.css',import.meta.url),'utf8');
   assert.match(server,/app\.post\('\/api\/vehicle-transfers'/);
   assert.match(server,/source-approval/);
   assert.match(server,/destination-verification/);
@@ -60,6 +61,12 @@ test('server and interface wire submission, both PM actions, audit, notification
   assert.match(client,/Destination MIS verification/);
   assert.match(client,/Destination PM acceptance/);
   assert.match(client,/Vehicle Master updated/);
+  assert.match(styles,/\.modal\.vehicle-transfer-form-modal\{width:min\(980px/);
+  assert.match(styles,/\.vehicle-transfer-form \.formgrid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(styles,/\.vehicle-transfer-form \.formgrid>label\{display:grid/);
+  assert.match(styles,/\.vehicle-transfer-form :is\(input,select,textarea\)\{display:block;width:100%/);
+  assert.match(styles,/\.vehicle-transfer-form \.full\{grid-column:1\/-1\}/);
+  assert.match(styles,/@media\(max-width:700px\)[\s\S]*\.vehicle-transfer-form \.formgrid\{grid-template-columns:minmax\(0,1fr\)/);
 });
 
 test('MIS navigation places Vehicle Transfer directly after Tickets',()=>{
