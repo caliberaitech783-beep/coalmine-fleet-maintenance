@@ -2849,6 +2849,12 @@ function vehicleTransferManagerRoles(session={}){
     ?session.permissions.managerRoles:session.permissions?.managerRole);
 }
 
+const VEHICLE_TRANSFER_PM_ROLES=['Project Manager','Production Manager'];
+
+function hasVehicleTransferPmRole(managerRoles=[]){
+  return VEHICLE_TRANSFER_PM_ROLES.some((role)=>managerRoles.includes(role));
+}
+
 async function vehicleTransferAccessContext(session,client=pool){
   const user=await currentUserRecord(session,client);
   const managerRoles=vehicleTransferManagerRoles(session);
@@ -2857,7 +2863,7 @@ async function vehicleTransferAccessContext(session,client=pool){
   const manager=session?.role==='super'&&adminLevel==='manager';
   const misUser=session?.role==='normal'&&session.assignedRole==='MIS User';
   const misManager=manager&&managerRoles.includes('MIS Manager');
-  const pmManager=manager&&managerRoles.includes('Project Manager');
+  const pmManager=manager&&hasVehicleTransferPmRole(managerRoles);
   const assignedSite=canonicalSiteName(assignedUserSiteName(user));
   const scope=manager?managerReportScope(user):null;
   return {user,administrator,manager,misUser,misManager,pmManager,assignedSite,scope,
@@ -2890,7 +2896,7 @@ async function vehicleTransferPmLogins(client,site){
     if(!login)continue;
     const profile=resolveMobileAccess({user});
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'
-      &&profile.permissions.managerRoles.includes('Project Manager')
+      &&hasVehicleTransferPmRole(profile.permissions.managerRoles)
       &&userManagesSite(user,site))logins.push(login);
   }
   return [...new Set(logins)];
@@ -2927,7 +2933,7 @@ async function vehicleTransferSiteOptions(client=pool){
 app.get('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
   try{
     const context=await vehicleTransferAccessContext(req.session);
-    if(!context.canView)return res.status(403).json({error:'Only MIS users, MIS managers, assigned Project Managers, and administrators can view vehicle transfers.'});
+    if(!context.canView)return res.status(403).json({error:'Only MIS users, MIS managers, assigned Project or Production Managers, and administrators can view vehicle transfers.'});
     const [{rows:transferRows},{rows:equipmentRows},sites]=await Promise.all([
       pool.query(`SELECT id,record_data,created_at FROM master_records WHERE master_name='Vehicle transfers' ORDER BY created_at DESC,id DESC`),
       pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY created_at ASC`),

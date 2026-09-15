@@ -168,7 +168,7 @@ export default function VehicleTransferWorkflow({session, Dialog, embedded = fal
     </div>
     {notice && <div className="vehicle-transfer-notice" role="status"><CheckCircle2 /><span>{notice}</span><button type="button" aria-label="Dismiss" onClick={() => setNotice('')}><X /></button></div>}
     <div className="vehicle-transfer-guide"><ShieldCheck /><p><b>How acceptance is checked:</b> each row shows all four stages, the responsible person and time. The destination PM button remains locked until destination MIS verification is complete. “Completed” confirms acceptance and the Vehicle Master location update.</p></div>
-    {isProjectManager && <div className="vehicle-transfer-tabs" role="tablist" aria-label="Project Manager vehicle transfer work queues">
+    {isProjectManager && <div className="vehicle-transfer-tabs" role="tablist" aria-label="PM vehicle transfer work queues">
       <button type="button" role="tab" aria-selected={activeView === VEHICLE_TRANSFER_VIEW.ALL} className={activeView === VEHICLE_TRANSFER_VIEW.ALL ? 'active' : ''} onClick={() => setActiveView(VEHICLE_TRANSFER_VIEW.ALL)}><ArrowRightLeft /> All Transfers <b>{counts.total}</b></button>
       <button type="button" role="tab" aria-selected={activeView === VEHICLE_TRANSFER_VIEW.RELEASE} className={activeView === VEHICLE_TRANSFER_VIEW.RELEASE ? 'active' : ''} onClick={() => setActiveView(VEHICLE_TRANSFER_VIEW.RELEASE)}><Send /> Release Vehicle <b>{releaseCount}</b></button>
       <button type="button" role="tab" aria-selected={activeView === VEHICLE_TRANSFER_VIEW.ACCEPT} className={activeView === VEHICLE_TRANSFER_VIEW.ACCEPT ? 'active' : ''} onClick={() => setActiveView(VEHICLE_TRANSFER_VIEW.ACCEPT)}><CheckCircle2 /> Accept Vehicle <b>{acceptCount}</b></button>

@@ -44,7 +44,7 @@ test('destination acceptance changes only the Vehicle Master location and transf
   assert.equal(updated.lastTransferAcceptedBy,'Destination PM');
 });
 
-test('Project Manager tabs separate release and acceptance work queues',()=>{
+test('PM tabs separate release and acceptance work queues',()=>{
   const records=[
     {id:1,canApproveSource:true,canAcceptDestination:false},
     {id:2,canApproveSource:false,canAcceptDestination:true},
@@ -67,13 +67,15 @@ test('server and interface wire submission, both PM actions, audit, notification
   assert.match(server,/action:'Approve vehicle dispatch'/);
   assert.match(server,/action:'Verify destination vehicle transfer'/);
   assert.match(server,/action:'Accept vehicle transfer'/);
-  assert.match(server,/managerRoles\.includes\('Project Manager'\)/);
+  assert.match(server,/VEHICLE_TRANSFER_PM_ROLES=\['Project Manager','Production Manager'\]/);
+  assert.match(server,/hasVehicleTransferPmRole\(managerRoles\)/);
+  assert.match(server,/hasVehicleTransferPmRole\(profile\.permissions\.managerRoles\)/);
   assert.match(server,/master_name='Equipment master'/);
   assert.match(server,/Vehicle Master now shows/);
   assert.match(client,/Source approval pending/);
   assert.match(client,/Destination MIS verification/);
   assert.match(client,/Destination PM acceptance/);
-  assert.match(client,/Project Manager vehicle transfer work queues/);
+  assert.match(client,/PM vehicle transfer work queues/);
   assert.match(client,/Release Vehicle/);
   assert.match(client,/Accept Vehicle/);
   assert.match(client,/Release vehicle/);
