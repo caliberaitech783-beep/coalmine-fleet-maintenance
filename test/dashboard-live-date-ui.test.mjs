@@ -807,14 +807,18 @@ test("every site equipment and vehicle total opens exactly its registered assets
     assert.equal(tree.props.onBack, undefined, `clicking the ${mode} pill keeps the dashboard open`);
     assert.equal(modePill().props["aria-pressed"], true);
     if (mode === "breakdown") {
-      // Only the breakdown number opens the hourly activity page.
+      // The breakdown number opens all current breakdown assets before hourly activity.
       modePill().props.onClick({target: {closest: (selector) => selector === ".mine-fleet-toggle-count" ? {} : null}});
+      tree = view.render(rows);
+      assert.equal(detailView(tree).rows.length, 15);
+      button(tree, "Hourly In/Out report").props.onClick();
       tree = view.render(rows);
       assert.equal(typeof tree.props.onBack, "function");
       assert.equal(typeof tree.props.ActionsTable, "function");
       assert.ok(tree.props.sites.length);
       tree.props.onBack();
       tree = view.render(rows);
+      assert.equal(detailView(tree).rows.length, 15);
     }
     const fleetBars = findAll(tree, node => node.props.site?.breakdown && node.props.axisMax);
     assert.ok(fleetBars.length);
