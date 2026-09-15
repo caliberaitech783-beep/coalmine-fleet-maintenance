@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {printColumnOptions,selectedPrintColumns,nextPrintLayout,normalizePrintLayoutName,printLayoutStorageKey,openSmartPrint} from '../src/smart-print.mjs';
+import {printColumnOptions,selectedPrintColumns,nextPrintLayout,normalizePrintLayoutName,printLayoutStorageKey,removePrintLayout,openSmartPrint} from '../src/smart-print.mjs';
 test('only chosen headings and values reach print in table order',()=>{
  const columns=[{label:'Door',value:r=>r.door},{label:'Private',value:()=>{throw Error('Excluded value read');}},{label:'Status',value:r=>r.status}];
  const options=printColumnOptions(columns);
@@ -22,8 +22,10 @@ test('saved layouts are sequential, reusable and account scoped',()=>{
  assert.throws(()=>nextPrintLayout([],[],'Empty'),/Select at least/);
  assert.throws(()=>nextPrintLayout([first],[options[1].id],'daily BREAKDOWN'),/already exists/);
  assert.throws(()=>normalizePrintLayoutName('   '),/Enter a report name/);
+ assert.deepEqual(removePrintLayout([first,second],first.number),[second]);
+ assert.throws(()=>removePrintLayout([first],99),/no longer exists/);
 });
-test('dialog prompts for a report name, restores it, and prints directly from the saved-layout control',()=>{
+test('dialog prompts for a report name, restores it, prints it, and can delete it',()=>{
  class Element {
   constructor(tag){this.tag=tag;this.children=[];this.value='';}
   append(...nodes){this.children.push(...nodes);}
@@ -34,7 +36,7 @@ test('dialog prompts for a report name, restores it, and prints directly from th
  const storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)};
  const oldDocument=globalThis.document,oldWindow=globalThis.window;
  globalThis.document={body,createElement:tag=>new Element(tag)};
- globalThis.window={localStorage:storage,sessionStorage:storage,prompt:()=> 'Operations summary'};
+ globalThis.window={localStorage:storage,sessionStorage:storage,prompt:()=> 'Operations summary',confirm:()=>true};
  const all=node=>[node,...node.children.flatMap(all)];
  try {
   const columns=[{label:'Door',value:r=>r.door},{label:'Secret',value:r=>r.secret}],rows=[{door:'24',secret:'hidden'}],printed=[];
@@ -54,7 +56,9 @@ test('dialog prompts for a report name, restores it, and prints directly from th
   openSmartPrint(config);nodes=all(body.children.at(-1));
   const select=nodes.find(n=>n.tag==='select');select.value='1';select.onchange();
   assert.deepEqual(nodes.filter(n=>n.tag==='input').map(n=>n.checked),[true,false]);
-  nodes.find(n=>n.textContent==='Print saved layout').onclick();
-  assert.deepEqual(printed[1].columns,[columns[0]]);
+  nodes.find(n=>n.textContent==='Delete saved layout').onclick();
+  assert.equal(JSON.parse(data.get([...data.keys()].find(key=>key.startsWith('bdms:smart-print:')))).length,0);
+  assert.equal(select.children.some(n=>n.textContent==='Operations summary'),false);
+  assert.equal(nodes.find(n=>n.textContent==='Delete saved layout').disabled,true);
  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });

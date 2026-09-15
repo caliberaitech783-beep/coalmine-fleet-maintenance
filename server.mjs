@@ -69,7 +69,7 @@ import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mj
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
-import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
+import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
 
@@ -3063,8 +3063,8 @@ app.post('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
     const saved={id:rows[0].id,...rows[0].record_data,submittedAt:rows[0].record_data.submittedAt||rows[0].created_at,status:VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL};
     const recipients=await vehicleTransferPmLogins(pool,saved.source);
     await addTicketNotificationsBestEffort(pool,recipients,saved.transferNo,`Vehicle transfer ${saved.transferNo} for ${saved.equipment} is awaiting source-site PM dispatch approval from ${saved.source} to ${saved.destination}.`,null,{whatsapp:false});
-    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Submit vehicle transfer',targetType:'Vehicle transfer',targetReference:saved.transferNo,
-      reason:`Sent from ${saved.source} to ${saved.destination} for source PM approval`,changedFields:[{field:'status',before:'Draft',after:saved.status}]};
+    req.audit={eventType:'Vehicle transfer',module:'Vehicle transfers',action:'Submit vehicle transfer',targetType:'Vehicle transfer',targetReference:saved.transferNo,
+      ...vehicleTransferAuditDetails(saved,{previousStatus:'Draft'})};
     res.status(201).json(saved);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
@@ -3086,8 +3086,8 @@ app.patch('/api/vehicle-transfers/:id/source-approval',requireSession,async(req,
     await client.query('COMMIT');
     const recipients=await vehicleTransferMisLogins(pool,updated.destination);
     await addTicketNotificationsBestEffort(pool,recipients,updated.transferNo,`Vehicle transfer ${updated.transferNo} for ${updated.equipment} was dispatched from ${updated.source}. Destination-site MIS verification is required at ${updated.destination}.`,null,{whatsapp:false});
-    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Approve vehicle dispatch',targetType:'Vehicle transfer',targetReference:updated.transferNo,
-      reason:`Source PM approved dispatch from ${updated.source} to ${updated.destination}`,changedFields:[{field:'status',before:before.status||VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL,after:updated.status}]};
+    req.audit={eventType:'Vehicle transfer',module:'Vehicle transfers',action:'Release vehicle from source',targetType:'Vehicle transfer',targetReference:updated.transferNo,
+      ...vehicleTransferAuditDetails(updated,{previousStatus:before.status||VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL})};
     res.json({id,...updated});
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
@@ -3110,8 +3110,8 @@ app.patch('/api/vehicle-transfers/:id/destination-verification',requireSession,a
     await client.query('COMMIT');
     const recipients=await vehicleTransferPmLogins(pool,updated.destination);
     await addTicketNotificationsBestEffort(pool,recipients,updated.transferNo,`Destination MIS verified vehicle transfer ${updated.transferNo} for ${updated.equipment} at ${updated.destination}. Destination Project Manager acceptance is now required.`,null,{whatsapp:false});
-    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Verify destination vehicle transfer',targetType:'Vehicle transfer',targetReference:updated.transferNo,
-      reason:`Destination MIS verified the vehicle at ${updated.destination} before PM acceptance`,changedFields:[{field:'status',before:before.status,after:updated.status}]};
+    req.audit={eventType:'Vehicle transfer',module:'Vehicle transfers',action:'Verify vehicle at destination',targetType:'Vehicle transfer',targetReference:updated.transferNo,
+      ...vehicleTransferAuditDetails(updated,{previousStatus:before.status})};
     res.json({id,...updated});
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
@@ -3143,8 +3143,9 @@ app.patch('/api/vehicle-transfers/:id/destination-acceptance',requireSession,asy
     ]);
     const recipients=[updated.submittedLogin,...sourceRecipients,...destinationMisRecipients].filter(Boolean);
     await addTicketNotificationsBestEffort(pool,recipients,updated.transferNo,`Vehicle transfer ${updated.transferNo} was accepted at ${updated.destination}. Vehicle Master now shows ${updated.equipment} at ${updated.destination}.`,null,{whatsapp:false});
-    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Accept vehicle transfer',targetType:'Vehicle transfer',targetReference:updated.transferNo,
-      reason:`Destination PM accepted the vehicle and Vehicle Master was updated`,changedFields:[{field:'status',before:before.status,after:updated.status},{field:'Vehicle Master location',before:before.source,after:before.destination}]};
+    const transferAudit=vehicleTransferAuditDetails(updated,{previousStatus:before.status});
+    transferAudit.changedFields.push({field:'Vehicle Master location',before:before.source,after:before.destination});
+    req.audit={eventType:'Vehicle transfer',module:'Vehicle transfers',action:'Accept vehicle at destination',targetType:'Vehicle transfer',targetReference:updated.transferNo,...transferAudit};
     res.json({id,...updated});
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
@@ -5184,6 +5185,10 @@ const AUDIT_EXPORT_COLUMNS=[
   {label:'Action',key:'action'},
   {label:'Target type',key:'targetType'},
   {label:'Target / record',key:'targetReference'},
+  {label:'Source location',key:'sourceLocation'},
+  {label:'Destination location',key:'destinationLocation'},
+  {label:'Work completed',key:'workCompleted'},
+  {label:'Work pending',key:'workPending'},
   {label:'Outcome',key:'outcome'},
   {label:'HTTP status',key:'statusCode'},
   {label:'Reason / details',key:'reason'},
@@ -5211,6 +5216,8 @@ const USER_ACTIVITY_EXPORT_COLUMNS=[
 function auditExportCell(event,key){
   if(key==='occurredAt')return formatDisplayDateTime(event.occurredAt);
   if(key==='changedFields')return Array.isArray(event.changedFields)&&event.changedFields.length?JSON.stringify(event.changedFields):'';
+  const transferFields={sourceLocation:'Source location',destinationLocation:'Destination location',workCompleted:'Work completed',workPending:'Work pending'};
+  if(transferFields[key])return Array.isArray(event.changedFields)?event.changedFields.find((change)=>change.field===transferFields[key])?.after||'':'';
   return event[key]??'';
 }
 

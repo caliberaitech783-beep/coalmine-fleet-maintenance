@@ -23,6 +23,13 @@ export function nextPrintLayout(layouts,ids,name) {
     throw new Error('A saved layout with this report name already exists.');
   return {number:Math.max(0,...layouts.map(layout=>Number(layout.number)||0))+1,name:normalizedName,columns:[...new Set(ids)]};
 }
+export function removePrintLayout(layouts,number) {
+  const selectedNumber=Number(number);
+  if(!Number.isInteger(selectedNumber)||selectedNumber<=0)throw new Error('Select a saved report layout to delete.');
+  const remaining=layouts.filter(layout=>Number(layout.number)!==selectedNumber);
+  if(remaining.length===layouts.length)throw new Error('The selected report layout no longer exists.');
+  return remaining;
+}
 export function printLayoutStorageKey(account,options) {
   return `bdms:smart-print:v1:${JSON.stringify([account,options.map(option=>[option.id,option.label])])}`;
 }
@@ -79,11 +86,25 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,onPrint,fo
     const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
     if(layout)printSelection(layout.columns,layout.name||title);
   },controls,'smart-print-saved-print');
+  const deleteSavedButton=button('Delete saved layout',()=>{
+    try{
+      const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
+      if(!layout)throw new Error('Select a saved report layout to delete.');
+      if(!window.confirm(`Delete the saved report layout “${layout.name}”?`))return;
+      const latest=validPrintLayouts(JSON.parse(storage.getItem(key)||'[]'));
+      layouts=removePrintLayout(latest,layout.number);
+      storage.setItem(key,JSON.stringify(layouts));
+      updateLayouts();
+      notice.textContent=`Deleted “${layout.name}”. Your current column selection is still available to print or save again.`;
+      render();
+    }catch(error){notice.textContent=error?.message||'Could not delete the saved report layout.';}
+  },controls,'smart-print-saved-delete');
   const render=()=>{
     for(const {input,id} of checkboxes)input.checked=selected.includes(id);
     const chosen=selectedPrintColumns(options,selected);printButton.disabled=!chosen.length;
     const savedSelected=layouts.some(item=>String(item.number)===layoutSelect.value);
     printSavedButton.disabled=!savedSelected;
+    deleteSavedButton.disabled=!savedSelected||Boolean(storageError);
     printButton.hidden=savedSelected;
     count.textContent=`${chosen.length} of ${options.length} columns · ${rows.length} records`;
     preview.replaceChildren(make('h3','Print preview — first 5 records'));

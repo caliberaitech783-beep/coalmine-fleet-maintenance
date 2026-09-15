@@ -28,6 +28,10 @@ test("audit routes classify security, master, workflow, and CRM activity", () =>
   assert.equal(auditRouteDetails("DELETE", "/api/user-sessions/example-session").action, "Force close session");
   assert.equal(auditRouteDetails("PUT", "/api/masters/Users%20%26%20employees/1").module, "Users & employees");
   assert.equal(auditRouteDetails("DELETE", "/api/requests/REQ-1").action, "Delete request");
+  assert.deepEqual(auditRouteDetails("POST", "/api/vehicle-transfers"), {module:"Vehicle transfers",eventType:"Vehicle transfer",action:"Submit vehicle transfer"});
+  assert.equal(auditRouteDetails("PATCH", "/api/vehicle-transfers/12/source-approval").action, "Release vehicle from source");
+  assert.equal(auditRouteDetails("PATCH", "/api/vehicle-transfers/12/destination-verification").action, "Verify vehicle at destination");
+  assert.equal(auditRouteDetails("PATCH", "/api/vehicle-transfers/12/destination-acceptance").action, "Accept vehicle at destination");
   assert.equal(auditRouteDetails("PATCH", "/api/tickets/TIC-1").eventType, "CRM");
   assert.equal(auditRouteDetails("PATCH", "/api/requests/REQ-1/verify").action, "Verify request");
   assert.equal(auditRouteDetails("POST", "/api/logout").action, "Logout");
@@ -102,7 +106,7 @@ test("server persists append-only audit events and exposes the detailed report",
   assert.match(server, /mail_confirmed_at=NOW\(\),purged_at=NOW\(\)/);
   assert.match(server, /action:'Administrator password change'/);
   assert.match(client, /function AuditTrailPage/);
-  for (const column of ["Date & time", "Event", "User / login", "Role", "Module", "Action", "Target / record", "Outcome", "Reason / details", "Changes", "IP address", "App Device ID", "Device type", "Platform", "Browser", "Session ID"])
+  for (const column of ["Date & time", "Event", "User / login", "Role", "Module", "Action", "Target / record", "Source location", "Destination location", "Work completed", "Work pending", "Outcome", "Reason / details", "Changes", "IP address", "App Device ID", "Device type", "Platform", "Browser", "Session ID"])
     assert.match(client, new RegExp(column.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.match(client, /headers\.set\("X-BDMS-Device-ID", clientDeviceId\)/);
   assert.match(client, /label="Device"[\s\S]*label="Platform"/);

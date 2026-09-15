@@ -79,6 +79,13 @@ export function auditRouteDetails(method = "", path = "") {
   if (route.includes("change-initial-password")) return { module: "Authentication", eventType: "Security", action: "Change initial password" };
   if (route.includes("/password")) return { module: "Users & employees", eventType: "Security", action: "Administrator password change" };
   if (route.startsWith("/api/masters/")) return { module: decodeURIComponent(route.split("/")[3] || "Masters"), eventType: "Master data", action: verb === "POST" ? "Create or import records" : verb === "PUT" || verb === "PATCH" ? "Edit record" : verb === "DELETE" ? "Delete record" : "View records" };
+  if (route.startsWith("/api/vehicle-transfers")) {
+    const action = route.endsWith("/source-approval") ? "Release vehicle from source"
+      : route.endsWith("/destination-verification") ? "Verify vehicle at destination"
+      : route.endsWith("/destination-acceptance") ? "Accept vehicle at destination"
+      : verb === "POST" ? "Submit vehicle transfer" : "View vehicle transfers";
+    return {module:"Vehicle transfers",eventType:"Vehicle transfer",action};
+  }
   if (route.startsWith("/api/requests")) {
     const action = verb === "DELETE" ? "Delete request"
       : route.endsWith("/verify") ? "Verify request"

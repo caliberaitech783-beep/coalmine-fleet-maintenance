@@ -5212,6 +5212,10 @@ function auditChangesLabel(changes = []) {
     : "—";
 }
 
+function auditChangeAfter(changes = [], field = "") {
+  return Array.isArray(changes) ? changes.find((change) => change.field === field)?.after || "—" : "—";
+}
+
 function auditTimestampLabel(value) {
   return formatDisplayDateTime(value);
 }
@@ -5291,6 +5295,10 @@ function AuditTrailPage({ session }) {
       module: event.module,
       action: event.action,
       target: [event.targetType, event.targetReference].filter(Boolean).join(" · "),
+      sourceLocation: auditChangeAfter(event.changedFields,"Source location"),
+      destinationLocation: auditChangeAfter(event.changedFields,"Destination location"),
+      workCompleted: auditChangeAfter(event.changedFields,"Work completed"),
+      workPending: auditChangeAfter(event.changedFields,"Work pending"),
       outcome: event.outcome,
       requestMethod: event.requestMethod,
       requestPath: event.requestPath,
@@ -5307,7 +5315,8 @@ function AuditTrailPage({ session }) {
   };
   const columns = [
     ["occurredAt", "Date & time"], ["eventType", "Event"], ["actor", "User / login"], ["actorRole", "Role"],
-    ["module", "Module"], ["action", "Action"], ["target", "Target / record"], ["outcome", "Outcome"], ["statusCode", "HTTP status"],
+    ["module", "Module"], ["action", "Action"], ["target", "Target / record"], ["sourceLocation", "Source location"], ["destinationLocation", "Destination location"],
+    ["workCompleted", "Work completed"], ["workPending", "Work pending"], ["outcome", "Outcome"], ["statusCode", "HTTP status"],
     ["requestMethod", "Method"], ["requestPath", "Endpoint"], ["durationMs", "Duration"], ["errorCode", "Error code"], ["requestId", "Request ID"],
     ["reason", "Reason / details"], ["changes", "Changes"], ["ipAddress", "IP address"], ["deviceId", "App Device ID"],
     ["deviceType", "Device type"], ["platform", "Platform"], ["browser", "Browser"], ["sessionId", "Session ID"],
@@ -5324,11 +5333,23 @@ function AuditTrailPage({ session }) {
   const exportColumns = columns.map(([key, label]) => ({label, value:(event) => valueFor(event, key)}));
   const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
   return <section className="panel pagepanel generic audit-page">
-    <header><div><h1>Audit Trail</h1><p>Today’s administration, backup, user change, deletion, and account security activity</p></div><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></header>
+    <header><div><h1>Audit Trail</h1><p>Today’s administration, user changes, account security, backup, and vehicle transfer activity</p></div><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></header>
     <div className="audit-summary"><span><b>{Number(summary?.total ?? events.length).toLocaleString("en-IN")}</b> recorded events</span><span><b>{Number(summary?.failed ?? events.filter((event) => event.outcome === "Failed").length).toLocaleString("en-IN")}</b> failed actions</span><span><b>{Number(summary?.users ?? new Set(events.map((event) => event.actorLogin).filter(Boolean)).size).toLocaleString("en-IN")}</b> users</span><span><b>{Number(summary?.devices ?? new Set(events.map((event) => event.deviceId).filter(Boolean)).size).toLocaleString("en-IN")}</b> devices</span></div>
     <div className="audit-device-filter-band"><AuditToggleGroup label="Device" value={deviceType} options={auditDeviceTypeOptions} onChange={setDeviceType} /><AuditToggleGroup label="Platform" value={platform} options={auditPlatformOptions} onChange={setPlatform} /><span className="audit-visible-count"><b>{rows.length.toLocaleString("en-IN")}</b> visible · {events.length.toLocaleString("en-IN")} loaded</span></div>
     <div className="toolbar audit-toolbar"><div><Search /><input data-smart-search type="search" placeholder="Search audit trail" value={query} onChange={(event) => setQuery(event.target.value)} /></div><form className="audit-date-range" onSubmit={applyDateRange}><label>From date<input type="date" value={fromDate} max={toDate||undefined} onChange={(event)=>setFromDate(event.target.value)} /></label><label>To date<input type="date" value={toDate} min={fromDate||undefined} onChange={(event)=>setToDate(event.target.value)} /></label><button type="submit" className="secondary" disabled={loading}><ListFilter /> Apply dates</button><button type="button" className="secondary" onClick={showToday} disabled={loading}><CalendarDays /> Today</button></form><div className="toolbar-actions-end"><div className="master-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={events} filters={filters} onFilterChange={updateFilter} onClearFilters={() => {setFilters({});setDeviceType("All");setPlatform("All");}} /><ExportMenu title="Audit Trail" columns={exportColumns} rows={rows} /></div></div>
-    <div className="emptytable master-table-scroll audit-table-wrap" onClick={() => setOpenFilter(null)}><ActionsTable className="audit-table" toolbarTarget={actionsToolbarTarget} toolbarPortal recordDateFilter={false}><thead><tr>{columns.map(([key,label]) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(field) => setOpenFilter((current) => current === field ? null : field)} values={[...new Set(events.map((event) => valueFor(event,key)))].sort((a,b) => sortCollator.compare(a,b))} filterValue={filters[key] || ""} onFilterChange={(value) => updateFilter(key,value)} />)}</tr></thead><tbody>{rows.length ? rows.map((event) => <tr key={event.id}><td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td><td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td><td>{event.statusCode || "—"}</td><td><code>{event.requestMethod || "—"}</code></td><td className="audit-wrap-cell">{event.requestPath || "—"}</td><td>{valueFor(event,"durationMs")}</td><td><code>{event.errorCode || "—"}</code></td><td><code>{event.requestId || "—"}</code></td><td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td><code>{event.deviceId || "—"}</code></td><td><span className={`audit-device-badge ${valueFor(event,"deviceType").toLowerCase()}`}>{valueFor(event,"deviceType")}</span></td><td>{valueFor(event,"platform")}</td><td title={event.userAgent || ""}>{valueFor(event,"browser")}</td><td><code>{event.sessionId || "—"}</code></td></tr>) : <tr><td colSpan={columns.length} className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody></ActionsTable></div>
+    <div className="emptytable master-table-scroll audit-table-wrap" onClick={() => setOpenFilter(null)}>
+      <ActionsTable className="audit-table" toolbarTarget={actionsToolbarTarget} toolbarPortal recordDateFilter={false}>
+        <thead><tr>{columns.map(([key,label]) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(field) => setOpenFilter((current) => current === field ? null : field)} values={[...new Set(events.map((event) => valueFor(event,key)))].sort((a,b) => sortCollator.compare(a,b))} filterValue={filters[key] || ""} onFilterChange={(value) => updateFilter(key,value)} />)}</tr></thead>
+        <tbody>{rows.length ? rows.map((event) => <tr key={event.id}>
+          <td><b>{valueFor(event,"occurredAt")}</b></td><td>{event.eventType}</td><td><b>{event.actorName || event.actorLogin || "Unknown"}</b><small>{event.actorLogin || "—"}</small></td><td>{event.actorRole || "—"}</td>
+          <td>{event.module}</td><td><b>{event.action}</b></td><td>{valueFor(event,"target")}</td><td>{valueFor(event,"sourceLocation")}</td><td>{valueFor(event,"destinationLocation")}</td>
+          <td className="audit-wrap-cell">{valueFor(event,"workCompleted")}</td><td className="audit-wrap-cell">{valueFor(event,"workPending")}</td><td><span className={`audit-outcome ${String(event.outcome).toLowerCase()}`}>{event.outcome}</span></td>
+          <td>{event.statusCode || "—"}</td><td><code>{event.requestMethod || "—"}</code></td><td className="audit-wrap-cell">{event.requestPath || "—"}</td><td>{valueFor(event,"durationMs")}</td><td><code>{event.errorCode || "—"}</code></td><td><code>{event.requestId || "—"}</code></td>
+          <td className="audit-wrap-cell">{event.reason || "—"}</td><td className="audit-wrap-cell" title={valueFor(event,"changes")}>{valueFor(event,"changes")}</td><td>{event.ipAddress || "—"}</td><td><code>{event.deviceId || "—"}</code></td>
+          <td><span className={`audit-device-badge ${valueFor(event,"deviceType").toLowerCase()}`}>{valueFor(event,"deviceType")}</span></td><td>{valueFor(event,"platform")}</td><td title={event.userAgent || ""}>{valueFor(event,"browser")}</td><td><code>{event.sessionId || "—"}</code></td>
+        </tr>) : <tr><td colSpan={columns.length} className="empty-state">{loading ? "Loading audit events..." : "No audit events found."}</td></tr>}</tbody>
+      </ActionsTable>
+    </div>
     {hasMore && <div className="audit-history-actions"><button type="button" className="secondary" onClick={() => load({append:true})} disabled={loadingMore}>{loadingMore ? "Loading older records..." : "Load older audit records"}</button></div>}
   </section>;
 }

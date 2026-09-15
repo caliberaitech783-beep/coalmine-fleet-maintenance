@@ -63,6 +63,49 @@ export function vehicleTransferProgress(record = {}) {
   ];
 }
 
+const auditText = (value, limit = 240) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit);
+const auditDate = (value) => {
+  const text = auditText(value);
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  return match ? `${match[3]}-${match[2]}-${match[1]}` : text;
+};
+
+export function vehicleTransferWorkStatus(record = {}) {
+  const status = vehicleTransferStatus(record);
+  const completed = [
+    `MIS submitted${record.submittedBy ? ` by ${auditText(record.submittedBy, 120)}` : ''}`,
+    record.sourceApprovedAt ? `Source PM released${record.sourceApprovedBy ? ` by ${auditText(record.sourceApprovedBy, 120)}` : ''}` : '',
+    record.destinationMisVerifiedAt ? `Destination MIS verified${record.destinationMisVerifiedBy ? ` by ${auditText(record.destinationMisVerifiedBy, 120)}` : ''}` : '',
+    record.destinationAcceptedAt ? `Destination PM accepted${record.destinationAcceptedBy ? ` by ${auditText(record.destinationAcceptedBy, 120)}` : ''}` : '',
+  ].filter(Boolean).join('; ');
+  const pending = status === VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL
+    ? `Source PM release at ${auditText(record.source)}`
+    : status === VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION
+      ? `Destination MIS verification at ${auditText(record.destination)}`
+      : status === VEHICLE_TRANSFER_STATUS.DESTINATION_ACCEPTANCE
+        ? `Destination PM acceptance at ${auditText(record.destination)}`
+        : 'None - transfer completed and Vehicle Master updated';
+  return {completed,pending};
+}
+
+export function vehicleTransferAuditDetails(record = {}, {previousStatus = 'Draft'} = {}) {
+  const work = vehicleTransferWorkStatus(record);
+  const value = (item, limit = 240) => auditText(item, limit);
+  const fields = [
+    ['Transfer number',record.transferNo],['Transfer date',auditDate(record.transferDate)],['Vehicle / equipment',record.equipment],
+    ['Door no.',record.door],['Registration no.',record.reg],['Model no.',record.modelNo],
+    ['Manufacturing serial no.',record.manufacturerSerialNo],['Chassis no.',record.chassisNo],
+    ['Source location',record.source],['Destination location',record.destination],['Driver',record.driver],
+    ['Diesel quantity',record.dieselQty],['KMR',record.kmr],['HMR',record.hmr],['Transfer remarks',record.remarks],
+    ['Work completed',work.completed],['Work pending',work.pending],
+  ].filter(([,after])=>value(after)).map(([field,after])=>({field,before:'',after:value(after)}));
+  fields.push({field:'Status',before:value(previousStatus),after:value(vehicleTransferStatus(record))});
+  return {
+    reason:`${value(record.equipment)||'Vehicle'}: ${value(record.source)||'Unspecified source'} to ${value(record.destination)||'Unspecified destination'}. Completed: ${work.completed}. Pending: ${work.pending}`,
+    changedFields:fields,
+  };
+}
+
 export function vehicleTransferViewRecords(records = [], view = VEHICLE_TRANSFER_VIEW.ALL) {
   if (view === VEHICLE_TRANSFER_VIEW.RELEASE) return records.filter((record) => record.canApproveSource);
   if (view === VEHICLE_TRANSFER_VIEW.ACCEPT) return records.filter((record) => record.canAcceptDestination);

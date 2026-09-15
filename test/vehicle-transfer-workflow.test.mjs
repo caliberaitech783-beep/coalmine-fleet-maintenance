@@ -6,10 +6,12 @@ import {
   VEHICLE_TRANSFER_VIEW,
   applyAcceptedVehicleTransfer,
   transferMatchesEquipment,
+  vehicleTransferAuditDetails,
   vehicleTransferProgress,
   vehicleTransferStatus,
   vehicleTransferValidationError,
   vehicleTransferViewRecords,
+  vehicleTransferWorkStatus,
 } from '../vehicle-transfer-workflow.mjs';
 
 test('vehicle transfer lifecycle exposes each accountable stage',()=>{
@@ -55,6 +57,20 @@ test('PM tabs separate release and acceptance work queues',()=>{
   assert.deepEqual(vehicleTransferViewRecords(records,VEHICLE_TRANSFER_VIEW.ACCEPT).map(({id})=>id),[2]);
 });
 
+test('audit details identify the full route, completed work, and next pending owner',()=>{
+  const submitted={transferNo:'VT-12',transferDate:'2026-09-15',equipment:'V-12',door:'V-12',chassisNo:'CH-12',source:'Sasti OB',destination:'Majri OB',status:VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL,submittedBy:'MIS User'};
+  assert.deepEqual(vehicleTransferWorkStatus(submitted),{completed:'MIS submitted by MIS User',pending:'Source PM release at Sasti OB'});
+  const released={...submitted,status:VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION,sourceApprovedAt:'2026-09-15T10:00:00Z',sourceApprovedBy:'Source PM'};
+  const audit=vehicleTransferAuditDetails(released,{previousStatus:VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL});
+  assert.match(audit.reason,/V-12: Sasti OB to Majri OB/);
+  assert.equal(audit.changedFields.find(({field})=>field==='Source location').after,'Sasti OB');
+  assert.equal(audit.changedFields.find(({field})=>field==='Destination location').after,'Majri OB');
+  assert.equal(audit.changedFields.find(({field})=>field==='Transfer date').after,'15-09-2026');
+  assert.equal(audit.changedFields.find(({field})=>field==='Work completed').after,'MIS submitted by MIS User; Source PM released by Source PM');
+  assert.equal(audit.changedFields.find(({field})=>field==='Work pending').after,'Destination MIS verification at Majri OB');
+  assert.deepEqual(audit.changedFields.find(({field})=>field==='Status'),{field:'Status',before:VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL,after:VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION});
+});
+
 test('server and interface wire submission, both PM actions, audit, notifications and master update',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const client=readFileSync(new URL('../src/vehicle-transfer-workflow.jsx',import.meta.url),'utf8');
@@ -64,9 +80,11 @@ test('server and interface wire submission, both PM actions, audit, notification
   assert.match(server,/destination-verification/);
   assert.match(server,/destination-acceptance/);
   assert.match(server,/action:'Submit vehicle transfer'/);
-  assert.match(server,/action:'Approve vehicle dispatch'/);
-  assert.match(server,/action:'Verify destination vehicle transfer'/);
-  assert.match(server,/action:'Accept vehicle transfer'/);
+  assert.match(server,/action:'Release vehicle from source'/);
+  assert.match(server,/action:'Verify vehicle at destination'/);
+  assert.match(server,/action:'Accept vehicle at destination'/);
+  assert.match(server,/eventType:'Vehicle transfer'/);
+  assert.match(server,/vehicleTransferAuditDetails/);
   assert.match(server,/VEHICLE_TRANSFER_PM_ROLES=\['Project Manager','Production Manager'\]/);
   assert.match(server,/hasVehicleTransferPmRole\(managerRoles\)/);
   assert.match(server,/hasVehicleTransferPmRole\(profile\.permissions\.managerRoles\)/);
