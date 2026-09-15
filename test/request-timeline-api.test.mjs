@@ -66,7 +66,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     else saved.status=args[2];
     return {rows:[current(saved)],rowCount:1};
   },release(){assert.equal(tx,false);released=true;}};
-  const context={...timeline,Date,app:{get(path,...handlers){if(kind==='timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
+  const context={...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,

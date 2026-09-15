@@ -4049,7 +4049,7 @@ app.get('/api/requests/:reference/complaint-media',requireSession,async(req,res,
     const operational=session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(session.assignedRole);
     if(session.role!=='super'&&!operational&&session.permissions?.readRequests!==true)return res.status(403).json({error:'Your assigned role cannot view request attachments.'});
     const reference=String(req.params.reference||'').trim();
-    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const {rows}=await pool.query('SELECT site,requester_login AS "requesterLogin" FROM maintenance_requests WHERE reference=$1',[reference]);
     const request=rows[0];
     if(!request)return res.status(404).json({error:'Request not found.'});
     if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
