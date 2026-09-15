@@ -69,3 +69,21 @@ button.session-state:focus-visible { outline: 2px solid #7043ad; outline-offset:
   .login-history-modal .login-history-total { padding: 10px 12px; }
   .login-history-modal .login-history-total strong { font-size: 24px; }
 }
+.login-activity-panel .login-activity-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.login-activity-heading h2 { margin: 0; font-size: 24px; }
+.login-activity-count { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-radius: 10px; background: color-mix(in srgb, #7043ad 9%, var(--surface, #fff)); border: 1px solid #7043ad30; }
+.login-activity-count strong { font-size: 26px; font-variant-numeric: tabular-nums; }
+.login-activity-panel .login-activity-controls { padding: 16px; border: 1px solid var(--line, #e5e9f1); border-radius: 12px; background: var(--surface, #fff); gap: 14px; }
+.login-activity-controls label { font-size: 13px; font-weight: 600; }
+.login-activity-controls :is(select,input) { min-height: 44px; border: 1px solid var(--line, #d7dfeb); border-radius: 7px; padding: 9px 12px; background: var(--surface, #fff); color: inherit; font: inherit; max-width: 100%; }
+.login-activity-range { margin: 12px 0; font-size: 13px; color: var(--muted, #71809d); }
+.login-activity-table-actions { margin-top: 12px; }
+.login-activity-table-actions .shared-table-actions-toolbar { border: 0; padding: 8px 0; }
+.login-activity-panel .login-activity-scroll { margin-top: 0; max-height: 60dvh; overflow: auto; border: 1px solid var(--line, #e5e9f1); border-radius: 10px; overscroll-behavior: contain; }
+.login-activity-scroll table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.login-activity-scroll table thead { position: sticky; top: 0; z-index: 3; background: var(--surface, #fff); }
+.login-activity-scroll table thead th { position: sticky; top: 0; background: var(--surface, #fff); box-shadow: inset 0 -1px var(--line, #d7dfeb); white-space: normal; }
+.login-activity-scroll table :is(th,td) { padding: 14px 16px; }
+.login-activity-scroll tbody tr:nth-child(even) { background: color-mix(in srgb, #7043ad 3%, var(--surface, #fff)); }
+.login-activity-scroll tbody tr:hover { background: color-mix(in srgb, #7043ad 7%, var(--surface, #fff)); }
+@media(max-width:700px) { .login-activity-heading h2 { font-size: 20px; } .login-activity-controls label { min-width: 0; } .login-activity-scroll { max-height: 65dvh; } }
