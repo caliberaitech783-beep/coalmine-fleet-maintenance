@@ -435,6 +435,8 @@ Recipient site scope is resolved before publication and intersected with applica
 
 ### Version-2 policy migration, reset and persistence
 
+Scheduled Availability Report figures use the exact delivery window, including downtime carried over from incidents already open at the start. Those incidents contribute to interval availability without being repeated as new case activity. Manual month-to-date availability reports retain their existing behavior.
+
 Settings are stored under `app_settings` key `whatsapp_report_settings`. `normalizeWhatsAppReportSettings()` automatically upgrades settings without a current `deliveryPolicyVersion` to **version 2**: it replaces old immediate-event recipient lists with the unified defaults, includes Super Admin in CRM report recipients, and enables CRM-created/resolved and daily-update channels. **This intentionally changes effective legacy routing/channels when the new code reads them, even before an administrator saves the panel.** It is not a promise that deployment leaves routing unchanged.
 
 The routing migration preserves saved global/event delivery pauses, reminder settings, CRM days/times and empty-report preference, quiet hours and template choices. Role/personal schedules have their separate timed-only normalisation described above. Once version 2 is saved, permitted custom role selections and explicitly disabled generic channels are retained; Manager/Director immediate-alert exclusions remain enforced. Legacy CRM summary-only/PDF-only/combined formats normalise to linked PDF and XLSX files.

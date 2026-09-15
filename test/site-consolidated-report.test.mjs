@@ -63,3 +63,20 @@ test('empty site report retains its activity sheet and a request is not truncate
   assert.equal(tables[0].rows.length,301);
   assert.equal(buildSiteFleetReportTables({source,site:'Majri OB',window}).length,1);
 });
+
+test('availability uses the exact overnight interval across a month boundary and includes carried-over downtime',()=>{
+  const monthWindow={start:new Date('2026-08-31T19:00:00+05:30'),end:new Date('2026-09-01T07:00:00+05:30')};
+  const source={equipmentRecords:[{currentLocation:'Sasti OB',door:'D-1'},{currentLocation:'Sasti OB',door:'D-2'}],requests:[
+    request('carried',{start:'2026-08-20 08:00:00'}),
+    request('closed',{door:'D-2',start:'2026-08-20 08:00:00',closedAt:'2026-09-01 06:00:00',status:'Closed'}),
+    request('other-site',{site:'Majri OB',door:'D-2',start:'2026-08-31 20:00:00'}),
+  ]};
+  const tables=buildSiteFleetReportTables({source,site:'Sasti OB',window:monthWindow,reportTitles:['Availability Report']});
+  assert.deepEqual(tables[0].rows.map(row=>row[0]),['closed']);
+  const availability=tables.find(table=>table.title==='Availability Report');
+  const cell=(row,key)=>row[availability.columns.findIndex(column=>column.key===key)];
+  const carried=availability.rows.find(row=>cell(row,'door')==='D-1');
+  const closed=availability.rows.find(row=>cell(row,'door')==='D-2');
+  assert.equal(cell(carried,'productive'),12);assert.equal(cell(carried,'breakdown'),'12.00');assert.equal(cell(carried,'available'),'0.00');
+  assert.equal(cell(closed,'productive'),12);assert.equal(cell(closed,'breakdown'),'11.00');assert.equal(cell(closed,'available'),'1.00');
+});

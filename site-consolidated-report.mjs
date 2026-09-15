@@ -3,6 +3,7 @@ import {canonicalSiteName} from './site-location.mjs';
 import {displaySiteName} from './region-scope.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {buildDirectorReportTables} from './director-report-bundle.mjs';
+import {availabilityRows} from './department-reports.mjs';
 
 const clean=value=>String(value??'').trim();
 export const REQUEST_REPORT_EVENTS=[
@@ -95,7 +96,15 @@ export function buildSiteFleetReportTables({source,site,window,reportTitles=[]})
   const selected=new Set(reportTitles);
   const tables=buildDirectorReportTables({requests,equipmentRecords:scoped.equipmentRecords,
     transferRecords:scoped.transferRecords.filter(row=>transferInWindow(row,window)),now:window.end})
-    .filter(table=>selected.has(table.title)&&table.rows.length);
+    .filter(table=>selected.has(table.title)&&table.rows.length)
+    .map(table=>table.title==='Availability Report'?{
+      ...table,
+      // Availability measures the whole interval, including incidents already
+      // open at its start. Activity-only rows would falsely show those assets as
+      // available; the legacy month-to-date denominator is also inappropriate.
+      rows:availabilityRows(scoped.equipmentRecords,scoped.requests,window.start,window.end,window.end)
+        .map(row=>table.columns.map(column=>column.value?column.value(row):row[column.key])),
+    }:table);
   // Complete activity stays first, so status-specific views cannot hide a case
   // that changed status more than once between two scheduled deliveries.
   return [activity,...tables];
