@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildOrganisationChart, buildReportingLines, chartDesignationKey, chartPerson, personSites, CHART_DESIGNATIONS, ORGANISATION_CHART_PAGE } from "../src/organisation-chart.mjs";
+import { buildOrganisationChart, buildReportingLines, chartDesignationKey, chartPerson, peopleAtSite, personSites, CHART_DESIGNATIONS, ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES } from "../src/organisation-chart.mjs";
 import { flowDesignationForUser } from "../hierarchy-report-flow.mjs";
 import { resolveMobileAccess } from "../mobile-access.mjs";
 import { masterAccessAllows } from "../admin-access.mjs";
@@ -91,17 +91,20 @@ test("the chart resolves designations like the WhatsApp report flow, except that
   assert.equal(chartPerson({}).name, "Unnamed");
 });
 
-test("the page sits in the Masters menu for Admin and Super Admin only and is read only", () => {
-  assert.equal(ORGANISATION_CHART_PAGE, "Organisation chart");
-  assert.match(main, /\["Hierarchy master", Network\],\n  \["Organisation chart", Users\],/);
-  assert.match(main, /if\(name===ORGANISATION_CHART_PAGE\)return isAdministrator;/);
-  assert.match(main, /active === ORGANISATION_CHART_PAGE \? \(\n\s+<OrganisationChartPage \/>/);
-  assert.match(main, /useMasterRecords\("Users & employees"\);\n\s+const \[privileges, , privilegesLoaded, , , , privilegesError, refreshPrivileges\] = useMasterRecords\("Privilege"\);\n\s+const \[hierarchy, , hierarchyLoaded, , , , hierarchyError, refreshHierarchy\] = useMasterRecords\("Hierarchy master"\);/, "all three masters feed the chart and revalidate on their own");
-  assert.equal(masterAccessAllows({ adminLevel: "Super Admin", masterAccess: ["Equipment master"] }, "Organisation chart"), true, "not switchable off in Privilege");
-  assert.equal(masterAccessAllows({ adminLevel: "Admin" }, "Organisation chart"), true);
-  assert.equal(masterAccessAllows({ adminLevel: "Manager" }, "Organisation chart"), false);
-  assert.doesNotMatch(view, /onAdd|onEdit|onDelete|<input|<textarea|<select/, "the view has no editing controls");
-  assert.match(view, /Director's \(Mohit Chadda\) and Project Manager \(Vivek\)/);
+test("three read-only pages sit in the Masters menu for Admin and Super Admin only", () => {
+  assert.deepEqual(ORGANISATION_PAGE_NAMES, ["Access structure", "Hierarchy levels", "Reporting structure"]);
+  assert.equal(ORGANISATION_PAGES.reporting, "Reporting structure");
+  assert.match(main, /\["Hierarchy master", Network\],\n  \["Access structure", Users\],\n  \["Hierarchy levels", Network\],\n  \["Reporting structure", Building2\],/);
+  assert.match(main, /if\(ORGANISATION_PAGE_NAMES\.includes\(name\)\)return isAdministrator;/);
+  assert.match(main, /ORGANISATION_PAGE_NAMES\.includes\(active\) \? \(\n\s+<OrganisationChartPage view=\{Object\.keys\(ORGANISATION_PAGES\)\.find\(\(key\) => ORGANISATION_PAGES\[key\] === active\)\} \/>/);
+  assert.match(main, /useMasterRecords\("Users & employees"\);\n\s+const \[privileges, , privilegesLoaded, , , , privilegesError, refreshPrivileges\] = useMasterRecords\("Privilege"\);\n\s+const \[hierarchy, , hierarchyLoaded, , , , hierarchyError, refreshHierarchy\] = useMasterRecords\("Hierarchy master"\);/, "all three masters feed the pages and revalidate on their own");
+  for (const name of ORGANISATION_PAGE_NAMES) {
+    assert.equal(masterAccessAllows({ adminLevel: "Super Admin", masterAccess: ["Equipment master"] }, name), true, `${name}: not switchable off in Privilege`);
+    assert.equal(masterAccessAllows({ adminLevel: "Admin" }, name), true);
+    assert.equal(masterAccessAllows({ adminLevel: "Manager" }, name), false);
+  }
+  assert.doesNotMatch(view, /onAdd|onEdit|onDelete|<input|<textarea|<select/, "the views have no editing controls");
+  assert.match(view, /role="tablist" aria-label="Sites"/, "every page has an All sites / per-site switch");
 });
 
 test("reporting lines put the directors on top and build each site from PM to managers to supervisors using the Superior field", () => {
@@ -130,13 +133,13 @@ test("reporting lines put the directors on top and build each site from PM to ma
   const outline = (tree, depth = 0) => [`${"  ".repeat(depth)}${tree.person.name}${tree.explicit ? "" : " *"}`, ...tree.children.flatMap((child) => outline(child, depth + 1))];
   assert.deepEqual(sasti.trees.flatMap((tree) => outline(tree)), [
     "Vivek",
-    "  Neha Kulkarni *",
-    "    Priya Deshmukh *",
     "  Priyank Rao",
     "    Ramesh Kumar",
     "  Rajesh More",
     "    Suresh Patil *",
-  ], "explicit superiors are used; missing or unknown ones fall back to the department manager of the site and are flagged");
+    "  Neha Kulkarni *",
+    "    Priya Deshmukh *",
+  ], "Production, then Maintenance, then MIS; explicit superiors are used; missing or unknown ones fall back to the department manager of the site and are flagged");
   const majri = reporting.sites.find((site) => site.site === "Majri OB");
   assert.deepEqual(majri.trees.flatMap((tree) => outline(tree)), ["Ajay Singh", "  Dinesh Pawar"]);
   assert.deepEqual(reporting.unplaced.map((person) => person.name), ["Lost Person"], "people without a site or a superior are listed, not lost; admins are not reporting-line staff");
@@ -148,11 +151,56 @@ test("reporting lines put the directors on top and build each site from PM to ma
   assert.deepEqual([alone.directors, alone.sites, alone.unplaced], [[], [], []]);
 });
 
-test("the reporting panel renders directors, per-site trees and flags inferred placements", () => {
-  assert.match(view, /4 · Reporting lines, site-wise/);
+test("the reporting page renders directors, per-site trees and flags inferred placements", () => {
+  assert.match(view, /reporting: \{ title: ORGANISATION_PAGES\.reporting/);
   assert.match(view, /function ReportingNode\(\{ tree \}\)/);
   assert.match(view, /placed by designation and site/);
   assert.match(view, /reporting\.directors\.map\(\(director\) =>/);
-  assert.match(view, /reporting\.sites\.map\(\(\{ site, pms, trees \}\) =>/);
+  assert.match(view, /visible\.map\(\(entry\) => <SiteBlock key=\{entry\.site\} entry=\{entry\} \/>\)/);
+  assert.match(view, /const SiteBlock = view === "access" \? AccessSite : view === "levels" \? LevelsSite : ReportingSite;/);
   assert.match(view, /Not placed on any site/);
+  assert.match(view, /Company-wide/);
+});
+
+test("every page is site-wise: access, levels and reporting are built per site with company-wide roles on top", () => {
+  const staff = [
+    { login: "mohit", employee: "Mohit Chadda", userType: "Super User", adminLevel: "Super Admin", designation: "Director" },
+    { login: "vivek", employee: "Vivek", userType: "Super User", adminLevel: "Manager", managerRole: "Project Manager", managerSites: "Sasti OB|Majri OB" },
+    { login: "priyank", employee: "Priyank Rao", userType: "Super User", adminLevel: "Manager", managerRole: "Production Manager", managerSites: "Sasti OB", superior: "Vivek" },
+    { login: "kamal", employee: "Kamal Verma", userType: "Super User", adminLevel: "Manager", managerRole: "Maintenance Manager", managerSites: "Majri OB", superior: "Vivek" },
+    { login: "ramesh", employee: "Ramesh Kumar", userType: "Mobile User", userGroup: "Production User", site: "Sasti OB", superior: "Priyank Rao" },
+    { login: "anil", employee: "Anil Wagh", userType: "Mobile User", userGroup: "Maintenance User", site: "Majri OB" },
+    { login: "anoop", employee: "Anoop Paul", userType: "Super User", adminLevel: "Admin" },
+    { login: "float", employee: "Floating Manager", userType: "Super User", adminLevel: "Manager", managerRole: "MIS Manager" },
+  ];
+  const hierarchy = [
+    { section: "Management", designation: "Project Manager (P.M)", level: "2" },
+    { section: "Production Dept.", designation: "Production Manager", level: "3", siteAccess: "Sasti OB" },
+    { section: "Maintenance Dept.", designation: "Maintenance Manager", level: "3", siteAccess: "Majri OB" },
+    { section: "MIS Dept.", designation: "MIS Manager", level: "3" },
+  ];
+  const chart = buildOrganisationChart({ users: staff, hierarchy });
+  const { companyWide, sites } = chart.sites;
+  assert.deepEqual(sites.map((entry) => entry.site), ["Majri OB", "Sasti OB"]);
+  assert.deepEqual(companyWide.superAdmins.map((person) => person.name), ["Mohit Chadda"]);
+  assert.deepEqual(companyWide.admins.map((person) => person.name), ["Anoop Paul"]);
+  assert.deepEqual(companyWide.directors.map((person) => person.name), ["Mohit Chadda"]);
+  assert.deepEqual(companyWide.managersWithoutSite.map((person) => person.name), ["Floating Manager"]);
+  const sasti = sites.find((entry) => entry.site === "Sasti OB");
+  assert.deepEqual(sasti.access.managerRoles.map(({ role, people }) => [role, people.map((person) => person.name)]), [
+    ["Project Manager", ["Vivek"]], ["Production Manager", ["Priyank Rao"]], ["Maintenance Manager", []], ["MIS Manager", []],
+  ], "a PM over two sites appears at both; a manager of another site does not");
+  assert.deepEqual(sasti.access.mobileGroups.map(({ group, people }) => [group, people.map((person) => person.name)]), [
+    ["Production User", ["Ramesh Kumar"]], ["Maintenance User", []], ["MIS User", []],
+  ]);
+  assert.deepEqual(sasti.levels.map((section) => [section.section, section.rows.map((row) => `${row.designation}:${row.people.map((person) => person.name).join("+")}`)]), [
+    ["Management", ["Project Manager (P.M):Vivek"]],
+    ["Production Dept.", ["Production Manager:Priyank Rao"]],
+    ["MIS Dept.", ["MIS Manager:"]],
+  ], "rows ticked for another site are left out; rows without site ticks apply everywhere");
+  const majri = sites.find((entry) => entry.site === "Majri OB");
+  assert.deepEqual(majri.levels.map((section) => section.section), ["Management", "Maintenance Dept.", "MIS Dept."]);
+  assert.deepEqual(majri.reporting.trees.map((tree) => [tree.person.name, tree.children.map((child) => [child.person.name, child.children.map((grand) => grand.person.name)])]), [["Vivek", [["Kamal Verma", ["Anil Wagh"]]]]]);
+  assert.deepEqual(peopleAtSite(chart.people, "Sasti OB").map((person) => person.name), ["Mohit Chadda", "Priyank Rao", "Ramesh Kumar", "Vivek"], "company-wide designations without a site count for every site; admins do not");
+  assert.deepEqual(buildOrganisationChart({}).sites, { companyWide: { superAdmins: [], admins: [], directors: [], managersWithoutSite: [] }, sites: [] });
 });

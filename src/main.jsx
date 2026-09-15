@@ -2,7 +2,7 @@ import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs"
 import { openSmartPrint } from "./smart-print.mjs";
 import { SavedReportsPanel } from "./saved-reports.jsx";
 import OrganisationChartView from "./organisation-chart.jsx";
-import { ORGANISATION_CHART_PAGE, buildOrganisationChart } from "./organisation-chart.mjs";
+import { ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES, buildOrganisationChart } from "./organisation-chart.mjs";
 import "./smart-print.css";
 import HourlyBreakdownView from "./hourly-breakdown-view.jsx";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
@@ -311,7 +311,9 @@ const masterNav = [
   ["Delayed Reason", Clock],
   ["Vehicle transfers", ArrowRightLeft],
   ["Hierarchy master", Network],
-  ["Organisation chart", Users],
+  ["Access structure", Users],
+  ["Hierarchy levels", Network],
+  ["Reporting structure", Building2],
   ["OEM master", ShieldCheck],
 ];
 const whatsappNav = [
@@ -6726,10 +6728,11 @@ function MasterLoadError({ name, error, retry }) {
     </section>
   );
 }
-// Read-only organisation chart for Admin and Super Admin. It reads the three
-// masters through useMasterRecords, so it revalidates when the tab regains focus,
-// every minute while visible, and on demand - any change to those masters shows up.
-function OrganisationChartPage() {
+// Read-only, site-wise organisation pages for Admin and Super Admin (Access
+// structure, Hierarchy levels, Reporting structure). They read the three masters
+// through useMasterRecords, so they revalidate when the tab regains focus, every
+// minute while visible, and on demand - any change to those masters shows up.
+function OrganisationChartPage({ view = "reporting" }) {
   const [users, , usersLoaded, , , , usersError, refreshUsers] = useMasterRecords("Users & employees");
   const [privileges, , privilegesLoaded, , , , privilegesError, refreshPrivileges] = useMasterRecords("Privilege");
   const [hierarchy, , hierarchyLoaded, , , , hierarchyError, refreshHierarchy] = useMasterRecords("Hierarchy master");
@@ -6738,7 +6741,7 @@ function OrganisationChartPage() {
   useEffect(() => { if (loaded) setUpdatedAt(Date.now()); }, [loaded, users, privileges, hierarchy]);
   const chart = useMemo(() => buildOrganisationChart({ users, privileges, hierarchy }), [users, privileges, hierarchy]);
   const refresh = () => { refreshUsers?.(); refreshPrivileges?.(); refreshHierarchy?.(); };
-  return <OrganisationChartView chart={chart} loading={!loaded} error={usersError || privilegesError || hierarchyError || ""} updatedAt={updatedAt} onRefresh={refresh} />;
+  return <OrganisationChartView key={view} view={view} chart={chart} loading={!loaded} error={usersError || privilegesError || hierarchyError || ""} updatedAt={updatedAt} onRefresh={refresh} />;
 }
 function useMasterRecords(name, seed = []) {
   const [records, setRecords] = useState(seed),
@@ -9295,7 +9298,7 @@ function App() {
     if(name==="Audit Trail")return isAdministrator;
     if(name==="Admin locks")return isAdministrator&&adminPermissions.adminLevel==="Super Admin";
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
-    if(name===ORGANISATION_CHART_PAGE)return isAdministrator;
+    if(ORGANISATION_PAGE_NAMES.includes(name))return isAdministrator;
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
     if (masterNav.some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
@@ -9659,8 +9662,8 @@ function App() {
             breakdownFleetFilter ? <Equipment initialFilter={breakdownFleetFilter} pageTitle="Breakdown master" statusRequests={requests} allowedLocations={breakdownFleetSites} /> : <Breakdown requests={requests} />
           ) : active === "Region master" ? (
             <Subsidiaries gotoEquipment={gotoEquipment} requests={requests} />
-          ) : active === ORGANISATION_CHART_PAGE ? (
-            <OrganisationChartPage />
+          ) : ORGANISATION_PAGE_NAMES.includes(active) ? (
+            <OrganisationChartPage view={Object.keys(ORGANISATION_PAGES).find((key) => ORGANISATION_PAGES[key] === active)} />
           ) : active === "Meta API setup" ? (
             <MetaWhatsAppSetup />
           ) : active === "WhatsApp alert history" ? (

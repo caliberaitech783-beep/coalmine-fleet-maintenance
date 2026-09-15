@@ -9,7 +9,13 @@
 import { resolveMobileAccess, userLoginCandidates } from "../mobile-access.mjs";
 import { whatsAppRecipientRole } from "../whatsapp-recipient-policy.mjs";
 
-export const ORGANISATION_CHART_PAGE = "Organisation chart";
+/** The three read-only Masters pages built from this model (names shared with admin-access.mjs). */
+import { ORGANISATION_PAGE_NAMES } from "../admin-access.mjs";
+export { ORGANISATION_PAGE_NAMES };
+export const ORGANISATION_PAGES = Object.freeze({ access: ORGANISATION_PAGE_NAMES[0], levels: ORGANISATION_PAGE_NAMES[1], reporting: ORGANISATION_PAGE_NAMES[2] });
+export const ORGANISATION_CHART_PAGE = ORGANISATION_PAGES.reporting;
+/** Departments are always shown in this order. */
+export const DEPARTMENT_ORDER = Object.freeze(["Production", "Maintenance", "MIS"]);
 
 /** Display order of the hierarchy designations, matching the Hierarchy master defaults. */
 export const CHART_DESIGNATIONS = [
@@ -161,10 +167,16 @@ export function buildReportingLines(people = []) {
     const parent = explicit || inferred(person);
     links.set(person, { parent, explicit: Boolean(explicit), superiorText: person.superiors.join(", ") });
   });
-  const childrenOf = (parent) => people.filter((person) => links.get(person)?.parent === parent).sort(byName);
-  const node = (person, depth = 0, seen = new Set()) => {
+  // Under a superior: Production, then Maintenance, then MIS; managers before supervisors; then by name.
+  const departmentRank = (person) => { const department = DEPARTMENT_OF[person.designationKey]; return department ? DEPARTMENT_ORDER.indexOf(department) : person.designationKey === "projectManager" ? -1 : DEPARTMENT_ORDER.length; };
+  const levelRank = (person) => MANAGER_KEYS.includes(person.designationKey) ? 0 : SUPERVISOR_KEYS.includes(person.designationKey) ? 1 : 2;
+  const childrenOf = (parent) => people.filter((person) => links.get(person)?.parent === parent).sort((a, b) => departmentRank(a) - departmentRank(b) || levelRank(a) - levelRank(b) || byName(a, b));
+  // A site box only shows the people of that site: a PM over two sites appears in
+  // both boxes, each time with that site's staff under him.
+  const belongsTo = (person, site) => { const sites = personSites(person); return !sites.length || sites.includes(site); };
+  const node = (person, site, depth = 0, seen = new Set()) => {
     const link = links.get(person) || {};
-    const children = depth < 8 && !seen.has(person) ? childrenOf(person).map((child) => node(child, depth + 1, new Set([...seen, person]))) : [];
+    const children = depth < 8 && !seen.has(person) ? childrenOf(person).filter((child) => belongsTo(child, site)).map((child) => node(child, site, depth + 1, new Set([...seen, person]))) : [];
     return { person, explicit: Boolean(link.explicit), superiorText: link.superiorText || "", children };
   };
   const siteNames = [...new Set(people.filter((person) => person.designationKey !== "director").flatMap(personSites))].sort((a, b) => a.localeCompare(b));
@@ -174,7 +186,7 @@ export function buildReportingLines(people = []) {
     const sitePms = pms.filter((pm) => { const sites = personSites(pm); return sites.includes(site) || (!sites.length && site === ALL_SITES); });
     // People who report to no one reachable from a PM but belong to this site sit directly under the site.
     const roots = [...sitePms, ...people.filter((person) => person.designationKey !== "director" && !pms.includes(person) && !links.get(person)?.parent && personSites(person).includes(site))];
-    const trees = [...new Set(roots)].map((person) => node(person));
+    const trees = [...new Set(roots)].map((person) => node(person, site));
     trees.forEach(collect);
     return { site, pms: sitePms, trees };
   };
@@ -225,12 +237,14 @@ export function buildOrganisationChart({ users = [], privileges = [], hierarchy 
   const peopleTree = CHART_SECTIONS.map((section) => ({ section, designations: designations.filter((designation) => designation.section === section) }));
   const unassigned = people.filter((person) => !person.designationKey);
   const reporting = buildReportingLines(people);
+  const sites = buildSiteViews({ people, rows, reporting, access });
   return {
     people,
     access,
     levels,
     peopleTree,
     reporting,
+    sites,
     unassigned,
     summary: {
       people: people.length,
@@ -242,4 +256,55 @@ export function buildOrganisationChart({ users = [], privileges = [], hierarchy 
       unassigned: unassigned.length,
     },
   };
+}
+
+// Directors and PMs without a site list count for every site; admins stay company-wide.
+const GLOBAL_KEYS = ["director", "projectManager"];
+const designationByLabel = (label) => CHART_DESIGNATIONS.find((designation) => words(designation.label) === words(label)) || null;
+const sectionRank = (section) => { const index = CHART_SECTIONS.indexOf(section); return index < 0 ? CHART_SECTIONS.length : index; };
+
+/** People who count for a site: they list it, or they have no site and hold a company-wide designation. */
+export function peopleAtSite(people = [], site = "") {
+  return people.filter((person) => {
+    const sites = personSites(person);
+    return sites.includes(site) || (!sites.length && GLOBAL_KEYS.includes(person.designationKey));
+  });
+}
+
+/**
+ * The same three pictures, one per site: access structure, hierarchy levels and
+ * reporting lines. `companyWide` holds the roles that are not tied to a site.
+ */
+export function buildSiteViews({ people = [], rows = [], reporting = { sites: [] }, access = {} } = {}) {
+  const siteNames = [...new Set(people.flatMap(personSites))].sort((a, b) => a.localeCompare(b));
+  const companyWide = {
+    superAdmins: access.superAdmins || [],
+    admins: access.admins || [],
+    directors: people.filter((person) => person.designationKey === "director"),
+    managersWithoutSite: people.filter((person) => person.adminLevel === "Manager" && !personSites(person).length),
+  };
+  const sites = siteNames.map((site) => {
+    const here = peopleAtSite(people, site);
+    const managers = here.filter((person) => person.adminLevel === "Manager");
+    const mobile = here.filter((person) => person.userType === "Mobile User");
+    const applicable = rows.filter((row) => !row.siteAccess.length || row.siteAccess.some((ticked) => words(ticked) === words(site)));
+    const levels = [...new Set(applicable.map((row) => row.section))].sort((a, b) => sectionRank(a) - sectionRank(b) || a.localeCompare(b))
+      .map((section) => ({
+        section,
+        rows: applicable.filter((row) => row.section === section).sort((a, b) => a.level - b.level || a.designation.localeCompare(b.designation))
+          .map((row) => { const designation = designationByLabel(row.designation); return { ...row, key: designation?.key || "", people: designation ? here.filter((person) => person.designationKey === designation.key) : [] }; }),
+      }));
+    return {
+      site,
+      people: here,
+      access: {
+        managerRoles: MANAGER_ROLE_ORDER.map((role) => ({ role, people: managers.filter((person) => person.managerRoles.includes(role)) })),
+        mobileGroups: MOBILE_GROUP_ORDER.map((group) => ({ group, people: mobile.filter((person) => person.assignedRole === group) })),
+        otherMobile: mobile.filter((person) => !MOBILE_GROUP_ORDER.includes(person.assignedRole)),
+      },
+      levels,
+      reporting: (reporting.sites || []).find((entry) => entry.site === site) || { site, pms: [], trees: [] },
+    };
+  });
+  return { companyWide, sites };
 }
