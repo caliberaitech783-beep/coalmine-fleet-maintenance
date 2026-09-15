@@ -349,6 +349,17 @@ test('short stoppages show minutes, exact dates, complaint and missing overdue r
   assert.ok(!html.includes('pulse-record-detail'));
 });
 
+test('Info Pulse renders impossible same-day AM ETC values as PM with the corrected delay', () => {
+  const now = parseIstTimestamp('2026-09-15 16:08:00');
+  const request = {ref: 'AM-PM', door: 'S270', site: 'Sasti OB', status: 'Open', start: '2026-09-15 10:05:00', expectedCompletionAt: '2026-09-15 03:00', complaint: 'Brake problem'};
+  const app = allDatesHarness();
+  const html = renderToStaticMarkup(app.render({now, requests: [request], cases: data.buildInfoPulseCases([request], {now})}));
+  assert.match(html, /15-09-2026/);
+  assert.match(html, /03:00:00 PM/);
+  assert.match(html, /ETC overdue by<\/dt><dd><strong[^>]*>1h 8m/);
+  assert.doesNotMatch(html, /13h 8m|03:00:00 AM/);
+});
+
 test('restored count boxes reconcile unique cases, combine with site and issue filters, and reset', () => {
   const requests = [
     {ref: 'A', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00'},

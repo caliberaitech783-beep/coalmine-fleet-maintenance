@@ -8,6 +8,7 @@ import {
   aiFeederAlerts,
   aiFeederSummary,
   alertTypesForRole,
+  effectiveInfoPulseEtcTimestamp,
   parseIstTimestamp,
 } from "../ai-feeder.mjs";
 import {infoPulseRequestScope,isInfoPulseDirector,scopeInfoPulseRequests} from "../info-pulse-scope.mjs";
@@ -38,6 +39,13 @@ test("a request past its ETC raises a critical alert", () => {
   assert.equal(overdue.severity, "critical");
   assert.match(overdue.title, /EXCAVATOR · VPC70/);
   assert.match(overdue.detail, /2 hours ago/);
+});
+
+test("an impossible same-day AM ETC is recovered as PM before alerts are calculated", () => {
+  const request = {ref: "REQ-AM-PM", status: "Open", start: "2026-09-15 10:09:50", expectedCompletionAt: "2026-09-15 03:00"};
+  assert.equal(effectiveInfoPulseEtcTimestamp(request), parseIstTimestamp("2026-09-15 15:00"));
+  const alerts = aiFeederAlerts([request], {role: "Admin", now: parseIstTimestamp("2026-09-15 16:08")});
+  assert.equal(alerts.find(alert => alert.type === "etc-overdue")?.detail, "Expected back on road 1 hour ago and the request is still Open.");
 });
 
 test("a closed request never raises overdue, long running or stale alerts", () => {

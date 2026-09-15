@@ -52,6 +52,19 @@ export function parseIstTimestamp(value) {
   return Date.parse(`${match[1]}T${time}+05:30`);
 }
 
+const indiaDate = (timestamp) => new Date(timestamp + 330 * 60_000).toISOString().slice(0, 10);
+
+// Older same-day records can contain an impossible AM value even though the
+// operator intended PM (for example, 03:00 after a 10:09 breakdown). Recover
+// only that unambiguous 12-hour inversion; valid overdue ETCs stay untouched.
+export function effectiveInfoPulseEtcTimestamp(request = {}) {
+  const entered = parseIstTimestamp(request.expectedCompletionAt);
+  const started = parseIstTimestamp(request.start);
+  if (!Number.isFinite(entered) || !Number.isFinite(started) || entered >= started || indiaDate(entered) !== indiaDate(started)) return entered;
+  const inferredPm = entered + 12 * HOUR_MS;
+  return inferredPm >= started && indiaDate(inferredPm) === indiaDate(entered) ? inferredPm : entered;
+}
+
 const statusOf = (request) => String(request?.status || "").trim().toLowerCase();
 const isVerified = (request) => Boolean(String(request?.verifiedAt || "").trim()) ||
   statusOf(request) === "verified" || String(request?.verificationStatus || "").trim().toLowerCase() === "verified";
@@ -91,7 +104,7 @@ function buildAlerts(requests, nowMs) {
     if (!request) continue;
     const closed = isClosed(request);
     const startedAt = parseIstTimestamp(request.start);
-    const etcAt = parseIstTimestamp(request.expectedCompletionAt);
+    const etcAt = effectiveInfoPulseEtcTimestamp(request);
     const closedAt = parseIstTimestamp(request.closedAt);
     const active = !closed && !isIdle(request);
     if (isVerified(request) || (Number.isFinite(startedAt) && startedAt > nowMs)) continue;

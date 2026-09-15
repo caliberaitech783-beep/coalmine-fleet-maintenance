@@ -125,6 +125,9 @@ test("future actual event input is rejected with millisecond precision, but plan
     assert.doesNotThrow(() => validateRequestTimelineChange({}, {[event]: nowIso}, {now, userEntered: [event]}));
   }
   assert.doesNotThrow(() => validateRequestTimelineChange({}, {expectedCompletionAt: "2026-12-31 23:59:59"}, {now, userEntered: ["expectedCompletionAt"]}));
+  assertTimelineError(() => validateRequestTimelineChange({}, {expectedCompletionAt: nowIso}, {now, userEntered: ["expectedCompletionAt"]}), /later than the current time/i);
+  assertTimelineError(() => validateRequestTimelineChange({}, {expectedCompletionAt: "2026-09-08 03:00:00"}, {now, userEntered: ["expectedCompletionAt"]}), /later than the current time/i);
+  assert.doesNotThrow(() => validateRequestTimelineChange({expectedCompletionAt: "2026-09-08 03:00:00"}, {complaint: "Unrelated edit"}, {now, userEntered: ["expectedCompletionAt"]}));
   assert.doesNotThrow(() => validateRequestTimelineChange({firstTripAt: "2026-12-31 23:59:59"}, {complaint: "Old imported record"}, {now, userEntered: ["firstTripAt"]}));
 });
 

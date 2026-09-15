@@ -1,4 +1,4 @@
-import {parseIstTimestamp} from '../ai-feeder.mjs';
+import {effectiveInfoPulseEtcTimestamp, parseIstTimestamp} from '../ai-feeder.mjs';
 
 export function pulseElapsed(from, to) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return 'Not recorded';
@@ -10,7 +10,7 @@ export function pulseElapsed(from, to) {
 
 export function pulseCaseTiming(row, now) {
   const request = row.request || {};
-  const start = parseIstTimestamp(request.start), closed = parseIstTimestamp(request.closedAt), etc = parseIstTimestamp(request.expectedCompletionAt);
+  const start = parseIstTimestamp(request.start), closed = parseIstTimestamp(request.closedAt), etc = effectiveInfoPulseEtcTimestamp(request);
   const status = String(request.status || '').trim().toLowerCase();
   const idle = ['idle', 'ideal'].includes(status);
   const ended = !idle && (Boolean(request.closedAt) || ['closed', 'verified'].includes(status) || Boolean(request.verifiedAt));
@@ -18,7 +18,7 @@ export function pulseCaseTiming(row, now) {
     {label: ended ? 'Breakdown started' : 'Standing since', date: request.start},
     {label: ended ? 'Breakdown duration' : idle ? 'Standing for' : 'Down for', value: pulseElapsed(start, ended ? closed : now), tone: ended ? '' : 'standing'},
   ];
-  if (request.expectedCompletionAt) fields.push({label: 'ETC', date: request.expectedCompletionAt});
+  if (request.expectedCompletionAt) fields.push({label: 'ETC', date: Number.isFinite(etc) ? new Date(etc).toISOString() : request.expectedCompletionAt});
   if (request.closedAt) fields.push({label: idle ? 'Idle since' : 'Repair closed', date: request.closedAt});
   if (idle && Number.isFinite(closed)) fields.push({label: 'Idle for', value: pulseElapsed(closed, now), tone: 'warning'});
   const types = new Set((row.issues || []).map(issue => issue.type));

@@ -31,6 +31,7 @@ export function validateRequestTimelineChange(before={},changes={}, {now=new Dat
   const current=epoch(now);
   for(const key of changed){
     if(key!=='expectedCompletionAt'&&userEntered.includes(key)&&epoch(next[key])!==null&&epoch(next[key])>current)throw error(`${labels[key]} cannot be in the future.`);
+    if(key==='expectedCompletionAt'&&userEntered.includes(key)&&epoch(next[key])!==null&&epoch(next[key])<=current)throw error(`${labels[key]} must be later than the current time.`);
   }
   // Only a pair involving a changed event is checked. Unrelated legacy
   // inconsistencies do not prevent an ETC, remark or other normal update.

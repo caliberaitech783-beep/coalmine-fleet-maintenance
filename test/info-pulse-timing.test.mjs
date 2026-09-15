@@ -18,6 +18,17 @@ test('open cases show standing time and overdue duration using India timestamps'
   assert.equal(result['ETC overdue by'], '10m');
   assert.equal(result['Standing since'], '2026-09-10T05:45:00Z');
 });
+test('same-day AM ETC before the breakdown is treated as the intended PM time', () => {
+  const screenshotNow = at('2026-09-15 16:08:00');
+  const screenshotFields = (request) => Object.fromEntries(pulseCaseTiming({request, issues: [{type: 'etc-overdue'}]}, screenshotNow).map(field => [field.label, field.value ?? field.date]));
+  const first = screenshotFields({start: '2026-09-15 10:05:00', status: 'Open', expectedCompletionAt: '2026-09-15 03:00'});
+  assert.equal(first['Down for'], '6h 3m');
+  assert.equal(first.ETC, '2026-09-15T09:30:00.000Z');
+  assert.equal(first['ETC overdue by'], '1h 8m');
+  const second = screenshotFields({start: '2026-09-15 09:30:53', status: 'Open', expectedCompletionAt: '2026-09-15 04:04'});
+  assert.equal(second.ETC, '2026-09-15T10:34:00.000Z');
+  assert.equal(second['ETC overdue by'], '4m');
+});
 test('closed cases stop breakdown time at closure and separately show pending MIS time', () => {
   const result = fields({start: '2026-09-08 10:00', status: 'Closed', closedAt: '2026-09-09 11:00', expectedCompletionAt: '2026-09-08 15:00'}, ['awaiting-verification']);
   assert.equal(result['Breakdown duration'], '1d 1h 0m');

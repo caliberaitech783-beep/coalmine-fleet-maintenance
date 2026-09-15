@@ -119,6 +119,8 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
           {rows.length ? rows.map(row => {
               const request = row.request;
               const reasons = pulseCaseReasons(row, filters.type);
+              const timingFields = pulseCaseTiming(row, now);
+              const displayedEtc = timingFields.find(field => field.label === 'ETC')?.date;
               const isExpanded = expanded === row.key;
               const highlights = reasons.reasons.filter(reason => reason.key !== 'work');
               const latestUpdate = reasons.updates.find(update => update.remark);
@@ -127,14 +129,14 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
                 <div className="pulse-card-main"><button type="button" className="pulse-record-link" aria-expanded={isExpanded} aria-controls={`pulse-record-${row.key}`} onClick={() => setExpanded(isExpanded ? '' : row.key)}><span className="pulse-card-vehicle"><Truck size={22} /><span><b>{request.door || request.reg || 'Not recorded'}</b><small>{request.equipmentGroup || request.equipment || ''}{request.equipmentGroup || request.equipment ? ' · ' : ''}{request.ref || 'Reference not recorded'}</small></span></span><ChevronDown size={18} /></button>
                 <div className="pulse-issues">{row.issues.length ? row.issues.map(issue => <span className={issue.severity} data-selected={filters.type === issue.type} key={issue.type}>{labels[issue.type]}</span>) : <span className="plain">No alerts</span>}</div></div>
                 <div className="pulse-breakdown-reason"><span>Breakdown reason</span><p>{String(request.complaint || '').trim() || 'Not recorded'}</p></div>
-                <dl className="pulse-card-dates">{pulseCaseTiming(row, now).map(field => <div key={field.label} className={field.tone || ''}><dt>{field.label}</dt><dd>{'date' in field ? <RecordDate value={field.date} /> : <strong className="pulse-duration">{field.value}</strong>}</dd></div>)}</dl>
+                <dl className="pulse-card-dates">{timingFields.map(field => <div key={field.label} className={field.tone || ''}><dt>{field.label}</dt><dd>{'date' in field ? <RecordDate value={field.date} /> : <strong className="pulse-duration">{field.value}</strong>}</dd></div>)}</dl>
                 <dl className="pulse-card-reasons">{highlights.map(reason => <div key={reason.key} className={`${reason.key === 'complaint' ? 'complaint' : 'reason'}${reason.missing ? ' missing' : ''}`}><dt>{reason.key === 'complaint' ? 'Issue / complaint' : reason.label}</dt><dd>{reason.value}</dd>{reason.at && <time>{formatDisplayDateTime(reason.at)} IST</time>}</div>)}</dl>
                 {(latestUpdate || request.maintenanceWork) && <div className="pulse-latest-update"><b>{latestUpdate ? 'Latest maintenance update' : 'Maintenance work'}</b><p>{latestUpdate?.remark || request.maintenanceWork}</p>{latestUpdate?.createdAt && <time>{formatDisplayDateTime(latestUpdate.createdAt)} IST{latestUpdate.author ? ` · ${latestUpdate.author}` : ''}</time>}</div>}
                 {isExpanded && <div id={`pulse-record-${row.key}`} className="pulse-record-detail"><dl className="pulse-record-facts">{[
                 ['Status', requestStatusLabel(request)], ['Equipment', request.equipmentGroup || request.equipment],
                 ['Registration', request.reg], ['Repair type', request.category],
                 ['Maintenance work', request.maintenanceWork],
-                ['ETC', request.expectedCompletionAt && formatDisplayDateTime(request.expectedCompletionAt)],
+                ['ETC', displayedEtc && formatDisplayDateTime(displayedEtc)],
                 ['Closed', request.closedAt && formatDisplayDateTime(request.closedAt)],
               ].filter(([, value]) => String(value || '').trim()).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
                   <h4>Daily updates & delay reasons <span>{reasons.updates.length}</span></h4>
