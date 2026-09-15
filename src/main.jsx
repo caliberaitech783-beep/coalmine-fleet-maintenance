@@ -1224,17 +1224,21 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
 }
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const throughputFiltersRef = useRef(null);
+  const dashboardBannerRef = useRef(null);
   useEffect(() => {
     const filters = throughputFiltersRef.current;
-    if (!filters) return;
+    const banner = dashboardBannerRef.current;
+    if (!banner) return;
     const header = document.querySelector('.top') || document.querySelector('.normal > header');
     const updateOffset = () => {
       const offset = header ? (parseFloat(getComputedStyle(header).top) || 0) + header.getBoundingClientRect().height : 0;
-      filters.style.setProperty('--throughput-sticky-top', `${offset}px`);
+      banner.style.setProperty('--dashboard-banner-top', `${offset}px`);
+      filters?.style.setProperty('--throughput-sticky-top', `${offset + banner.getBoundingClientRect().height}px`);
     };
     updateOffset();
     const observer = new ResizeObserver(updateOffset);
     if (header) observer.observe(header);
+    observer.observe(banner);
     window.addEventListener('resize', updateOffset);
     return () => { observer.disconnect(); window.removeEventListener('resize', updateOffset); };
   }, []);
@@ -1740,7 +1744,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   if (hourlyBreakdownVisible) return <HourlyBreakdownView ActionsTable={ActionsTable} requests={scopedBreakdowns.map(request => ({ ...request, door: request.door || equipmentForRequest(request)?.door }))} sites={availableRegions.flatMap(region => region.sites).filter(site => !restrictToScope || normalizedAllowedSites?.some(allowed => recordBelongsToSite({site: allowed}, site)))} onBack={() => setHourlyBreakdownVisible(false)} />;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
-      <header className="mine-dashboard-head">
+      <header ref={dashboardBannerRef} className="mine-dashboard-head">
         <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
         <div className="mine-head-actions"><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{selectedRegion && <label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion.code} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>From</span><input aria-label="Dashboard from date" type="date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><input aria-label="Dashboard to date" type="date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => setDashboardOem(event.target.value)}><option value="all">All OEMs</option>{oemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" dashboardPdf /></div>
       </header>
