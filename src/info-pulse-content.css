@@ -67,7 +67,6 @@
 .pulse-error button { color: inherit; border: 0; background: transparent; text-decoration: underline; font: inherit; }
 .pulse-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 12px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .pulse-pagination > div { display: flex; align-items: center; gap: 8px; }
-.pulse-content .pulse-issue-filter .pulse-pagination { flex-shrink: 0; margin: 0; gap: 8px; align-self: center; white-space: nowrap; }
 .pulse-content .pulse-pagination button { min-height: 28px; min-width: 28px; padding: 3px 6px; }
 .pulse-content :is(button, input, select, [tabindex]):focus-visible { outline: 3px solid #617fc0; outline-offset: 2px; }
 

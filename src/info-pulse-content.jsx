@@ -114,7 +114,6 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
           return <button type="button" key={column.key} className={`pulse-issue-option ${column.tone}`} aria-pressed={!breakdownsView && filters.type === column.key} aria-label={`Filter issue: ${column.label}`} disabled={Boolean(column.key) && !count && filters.type !== column.key} onClick={() => changeFilter('type', column.key)}><span>{column.label}</span><b>{count}</b></button>;
         })}
       <div className="pulse-results-line"><h3>{selectedSite} <span>/ {breakdownsView ? 'All breakdowns' : [severityLabels[filters.severity], labels[filters.type]].filter(Boolean).join(' · ') || 'All cases'}</span></h3><span role="status">{detail.rows.length} {breakdownsView ? 'breakdowns' : 'cases'}</span></div>
-        {detail.rows.length > PAGE_SIZE && <div className="pulse-pagination"><span>{currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, detail.rows.length)} of {detail.rows.length} {breakdownsView ? 'breakdowns' : 'cases'}</span><div><button type="button" aria-label="Previous cases" disabled={currentPage === 0} onClick={() => {setPage(currentPage - 1); setExpanded('');}}><ChevronLeft size={16} /></button><span>{currentPage + 1} / {lastPage + 1}</span><button type="button" aria-label="Next cases" disabled={currentPage === lastPage} onClick={() => {setPage(currentPage + 1); setExpanded('');}}><ChevronRight size={16} /></button></div></div>}
       </div>
         <div key={`cases:${filters.view}:${filters.site}:${filters.from}:${filters.to}:${filters.type}:${filters.severity}:${currentPage}`} className="pulse-case-list" tabIndex={0} role="region" aria-label="Matching case records">
           {rows.length ? rows.map(row => {
@@ -145,6 +144,7 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
               </article>;
             }) : <p className="pulse-empty">{breakdownsView ? 'No active breakdowns.' : 'No matching cases.'}</p>}
         </div>
+        {detail.rows.length > PAGE_SIZE && <div className="pulse-pagination"><span>{currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, detail.rows.length)} of {detail.rows.length} {breakdownsView ? 'breakdowns' : 'cases'}</span><div><button type="button" aria-label="Previous cases" disabled={currentPage === 0} onClick={() => {setPage(currentPage - 1); setExpanded('');}}><ChevronLeft size={16} /></button><span>{currentPage + 1} / {lastPage + 1}</span><button type="button" aria-label="Next cases" disabled={currentPage === lastPage} onClick={() => {setPage(currentPage + 1); setExpanded('');}}><ChevronRight size={16} /></button></div></div>}
     </>}
   </div>;
 }
