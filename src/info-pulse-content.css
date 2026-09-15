@@ -77,6 +77,14 @@
 .pulse-heading-total .pulse-breakdown-total { min-height: 0; padding: 8px 14px; gap: 2px 12px; }
 .pulse-heading-total .pulse-breakdown-total b { font-size: 26px; }
 .pulse-heading-total .pulse-breakdown-total small { max-width: 240px; }
+@media (min-width: 1001px) {
+  .ai-feeder-panel.pulse-panel > header { position: relative; }
+  .pulse-heading-total { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+}
+@media (max-width: 1000px) {
+  .pulse-panel .pulse-title { flex: 1; min-width: 0; }
+  .pulse-heading-total { width: 100%; display: flex; justify-content: center; }
+}
 .pulse-breakdown-reason { min-width: 0; }
 .pulse-breakdown-reason > span { color: #68778e; font-size: 11px; }
 .pulse-breakdown-reason p { margin: 2px 0 0; font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
