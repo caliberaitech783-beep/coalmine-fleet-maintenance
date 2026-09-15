@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {sessionTimeSummary,formatSessionDuration} from './login-session-duration.mjs';
 
 function useHistory(token,parameters,refreshKey=0){
   const [state,setState]=useState({loading:true,data:null,error:''});
@@ -17,13 +18,15 @@ function useHistory(token,parameters,refreshKey=0){
 export function UserLoginHistory({token,row,Modal,Table,formatDate,deviceDetails,onClose}){
   const [refresh,setRefresh]=useState(0);
   const {loading,data,error}=useHistory(token,new URLSearchParams({period:'24h',login:row.login}).toString(),refresh);
+  const timing=sessionTimeSummary(data?.sessions||[],data?.from,data?.to);
   return <Modal title={`${row.name||row.login} · Login sessions · Last 24 hours`} close={onClose}>
     <p>All recorded sessions used in the last 24 hours, including separate devices and sessions that have ended.</p>
+    <p>Duration runs from login to last recorded activity, limited to the last 24 hours. Total time combines overlapping sessions only once; it is recorded session time, not a measure of continuous work.</p>
     <button type="button" className="secondary" onClick={()=>setRefresh(value=>value+1)}>Refresh history</button>
     {error&&<p role="alert">{error}</p>}
-    <div className="login-history-table"><Table preserveColumnOrder exportTitle="User login sessions · Last 24 hours"><thead><tr><th>Session</th><th>Signed in</th><th>Last activity</th><th>Device</th><th>Device ID</th><th>IP address</th></tr></thead>
-      <tbody>{(data?.sessions||[]).map(item=>{const device=deviceDetails(item.userAgent);return <tr key={item.sessionId}><td>{item.active?'Signed in':'Ended / expired'}</td><td>{formatDate(item.createdAt)}</td><td>{formatDate(item.lastSeenAt)}</td><td>{device.type} · {device.platform} · {device.browser}</td><td>{item.deviceId||'Not recorded'}</td><td>{item.ipAddress||'Not recorded'}</td></tr>;})}
-      {!data?.sessions?.length&&<tr><td colSpan="6">{loading?'Loading history…':'No recorded sessions in the last 24 hours.'}</td></tr>}</tbody></Table></div>
+    <div className="login-history-table"><Table preserveColumnOrder exportTitle="User login sessions · Last 24 hours"><thead><tr><th>Session</th><th>Duration</th><th>Total time spent (last 24 hours)</th><th>Last activity</th><th>Device</th><th>Device ID</th><th>IP address</th></tr></thead>
+      <tbody>{(data?.sessions||[]).map((item,index)=>{const device=deviceDetails(item.userAgent);return <tr key={item.sessionId}><td>{item.active?'Signed in':'Ended / expired'}</td><td>{formatSessionDuration(timing.durations[index])}</td><td>{formatSessionDuration(timing.total)}</td><td>{formatDate(item.lastSeenAt)}</td><td>{device.type} · {device.platform} · {device.browser}</td><td>{item.deviceId||'Not recorded'}</td><td>{item.ipAddress||'Not recorded'}</td></tr>;})}
+      {!data?.sessions?.length&&<tr><td colSpan="7">{loading?'Loading history…':'No recorded sessions in the last 24 hours.'}</td></tr>}</tbody></Table></div>
     <p>Continuous history tracking began {data?.trackingSince?formatDate(data.trackingSince):'recently'}. Earlier retained activity is included where available.</p>
   </Modal>;
 }
