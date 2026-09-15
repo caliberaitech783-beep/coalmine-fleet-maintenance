@@ -1,8 +1,8 @@
 import {resolveMobileAccess} from './mobile-access.mjs';
 
-export const WHATSAPP_DELIVERY_POLICY_VERSION=2;
+export const WHATSAPP_DELIVERY_POLICY_VERSION=3;
 export const DEFAULT_WORKFLOW_ALERT_ROLES=Object.freeze([
-  'productionSupervisor','maintenanceSupervisor','misSupervisor','admin','superAdmin',
+  'productionSupervisor','maintenanceSupervisor','misSupervisor',
 ]);
 export const DEFAULT_CRM_REPORT_ROLES=Object.freeze(['Admin','Manager','Super Admin']);
 
@@ -28,12 +28,11 @@ export function whatsAppRecipientRole(user={},profile=resolveMobileAccess({user}
 }
 
 // Shared by request routing and generic CRM / daily maintenance notifications.
-// These classify recipients only; callers still enforce purpose switches and
-// the existing site authorization for recipients other than all-alert admins.
-export function isWhatsAppAllAlertRecipient(user={},profile=resolveMobileAccess({user})){
-  return ['admin','superAdmin'].includes(whatsAppRecipientRole(user,profile));
+// Leadership accounts receive scheduled reports, but no immediate event traffic.
+export function isWhatsAppAllAlertRecipient(){
+  return false;
 }
 
 export function isWhatsAppReportsOnlyRecipient(user={},profile=resolveMobileAccess({user})){
-  return ['manager','director'].includes(whatsAppRecipientRole(user,profile));
+  return ['manager','director','admin','superAdmin'].includes(whatsAppRecipientRole(user,profile));
 }

@@ -39,7 +39,7 @@ test('delivery overview has an accessible policy matrix and explains scope and r
   assert.match(html,/<h2 id="wrs-title">WhatsApp delivery settings<\/h2>/);
   assert.match(html,/<caption>Default role delivery rules<\/caption>/);
   assert.match(html,/Managers and Directors<\/th><td>Never per-request<\/td>/);
-  assert.match(html,/Admin and Super Admin<\/th><td>All alerts<\/td>/);
+  assert.match(html,/Admin and Super Admin<\/th><td>Never per-request<\/td>/);
   assert.match(html,/CRM users receive alerts for their own tickets/);
   assert.match(html,/Hierarchy report assignments and site access still apply/);
   assert.match(html,/7 PM → 7 AM/);
@@ -112,7 +112,7 @@ test('request alert role choices use the policy options and do not imply manager
   assert.match(html,/never per-request alerts or reminders/);
   for(const role of policy.WORKFLOW_ROLE_OPTIONS)assert.ok(html.includes(role.label),role.label);
   const delivery=renderToStaticMarkup(harness().render());
-  assert.match(delivery,/Notify the ticket creator, Admin and Super Admin/);
+  assert.match(delivery,/Notify the ticket creator within existing CRM access/);
   assert.doesNotMatch(delivery,/assigned managers|event report bundles/);
 });
 

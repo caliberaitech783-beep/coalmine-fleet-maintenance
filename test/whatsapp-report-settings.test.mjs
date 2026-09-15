@@ -9,13 +9,13 @@ import {applyHierarchyDeliveryRule,applyUserReportScheduleOverride,defaultHierar
 import {ticketReportWindow,ticketReportDue} from '../ticket-consolidated-report.mjs';
 import {sendMetaWhatsAppTemplate,sendMetaWhatsAppText,sendMetaWhatsAppDocument,setWhatsAppDeliveryPolicyReader,metaWhatsAppTemplateStatuses,submitMetaWhatsAppTemplates} from '../meta-whatsapp.mjs';
 
-const defaultAlertRoles=['productionSupervisor','maintenanceSupervisor','misSupervisor','admin','superAdmin'];
+const defaultAlertRoles=['productionSupervisor','maintenanceSupervisor','misSupervisor'];
 
-test('an absent settings record enables all four alerts for operational users and administrators',()=>{
+test('an absent settings record enables all four alerts for operational users only',()=>{
   const settings=normalizeWhatsAppReportSettings();
   assert.equal(whatsappSettingsValidationError(settings),'');
   assert.equal(settings.enabled,true);
-  assert.equal(settings.deliveryPolicyVersion,2);
+  assert.equal(settings.deliveryPolicyVersion,3);
   for(const {key} of EVENT_OPTIONS){
     assert.deepEqual(settings.events[key].recipientRoles,defaultAlertRoles);
     assert.deepEqual(WHATSAPP_WORKFLOW_POLICY[key].recipientRoles,defaultAlertRoles);
@@ -44,7 +44,7 @@ test('pre-v2 saved routing migrates once while retaining pauses, reminders, sche
     input.templates.consolidatedRequestReport={variant:'detailed',body:''};
     input.templates[SINGLE_REPORT_TEMPLATE_PURPOSES[0].key]={variant:'executive',body:''};
     const before=structuredClone(input),result=normalizeWhatsAppReportSettings(input);
-    assert.equal(result.deliveryPolicyVersion,2);
+    assert.equal(result.deliveryPolicyVersion,3);
     assert.equal(result.enabled,false);
     for(const {key} of EVENT_OPTIONS){
       assert.equal(result.events[key].enabled,input.events[key].enabled);
@@ -63,8 +63,9 @@ test('pre-v2 saved routing migrates once while retaining pauses, reminders, sche
   }
 });
 
-test('v2 selections persist, filter reports-only roles, and keep explicitly disabled generic channels',()=>{
+test('v2 selections migrate by removing leadership while preserving operational choices and disabled channels',()=>{
   const input=defaultWhatsAppReportSettings();
+  input.deliveryPolicyVersion=2;
   input.events.opened.recipientRoles=['misSupervisor','misSupervisor','productionManager','director','unknown'];
   input.events.closed.recipientRoles=[];
   input.events.verified.recipientRoles=['admin'];
@@ -74,16 +75,16 @@ test('v2 selections persist, filter reports-only roles, and keep explicitly disa
   const result=normalizeWhatsAppReportSettings(input);
   assert.deepEqual(result.events.opened.recipientRoles,['misSupervisor']);
   assert.deepEqual(result.events.closed.recipientRoles,[]);
-  assert.deepEqual(result.events.verified.recipientRoles,['admin']);
-  assert.deepEqual(result.events.idle.recipientRoles,['oemServiceEngineer','superAdmin']);
+  assert.deepEqual(result.events.verified.recipientRoles,[]);
+  assert.deepEqual(result.events.idle.recipientRoles,['oemServiceEngineer']);
   assert.deepEqual(result.crm.recipientRoles,['Super Admin']);
   assert.deepEqual(result.channels,input.channels);
   assert.equal(whatsappSettingsValidationError(result),'');
   assert.deepEqual(normalizeWhatsAppReportSettings(result),result);
 });
 
-test('manager and Director checkboxes are unavailable and rejected for every immediate alert',()=>{
-  for(const role of ['productionManager','maintenanceManager','misManager','projectManager','director']){
+test('leadership checkboxes are unavailable and rejected for every immediate alert',()=>{
+  for(const role of ['productionManager','maintenanceManager','misManager','projectManager','director','admin','superAdmin']){
     assert.equal(WORKFLOW_ROLE_OPTIONS.some(option=>option.key===role),false,role);
     for(const {key} of EVENT_OPTIONS){
       const input=defaultWhatsAppReportSettings();input.events[key].recipientRoles=[role];
@@ -170,9 +171,9 @@ test('changing selected roles changes direct recipients while retaining site and
   ];
   const settings=defaultWhatsAppReportSettings();
   const recipients=()=>workflowWhatsAppRecipientLogins(users,{eventType:'opened',site:'Sasti OB',settings});
-  assert.deepEqual(recipients(),['maintenance','production','admin','super']);
+  assert.deepEqual(recipients(),['maintenance','production']);
   settings.events.opened.recipientRoles=['productionSupervisor','admin','superAdmin'];
-  assert.deepEqual(recipients(),['production','admin','super']);
+  assert.deepEqual(recipients(),['production']);
   settings.events.opened.recipientRoles=['productionSupervisor'];
   users.push({login:'production',userType:'Super User',adminLevel:'Super Admin',site:'Sasti OB'});
   assert.deepEqual(recipients(),[]);

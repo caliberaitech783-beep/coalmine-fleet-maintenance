@@ -59,18 +59,18 @@ test('all managers and Directors stay reports-only even with legacy role selecti
   }
 });
 
-test('Admin and true Super Admin receive every alert globally, with Super Admin overriding job titles',()=>{
+test('Admin and true Super Admin are reports-only for every event, with Super Admin overriding job titles',()=>{
   const recipients=[admin('admin'),{login:'implicit-admin',userType:'Super User'},admin('super','Super Admin'),
     admin('assigned-admin','Admin',{site:'Majri OB',managerSites:'Majri OB',managerRegion:'WCL'}),
     admin('director-super',' Super   Admin ',{designation:'Director',employee:'Mohit Chadda',managerRole:'Project Manager',site:'Majri OB'}),
     admin('manager-super','Super Admin',{designation:'Maintenance Manager',managerSites:'Sasti OB'}),
   ];
   for(const user of recipients){
-    assert.equal(isWhatsAppAllAlertRecipient(user),true,user.login);
-    assert.equal(isWhatsAppReportsOnlyRecipient(user),false,user.login);
-    assert.equal(isExcludedWorkflowWhatsAppRecipient(user),false,user.login);
+    assert.equal(isWhatsAppAllAlertRecipient(user),false,user.login);
+    assert.equal(isWhatsAppReportsOnlyRecipient(user),true,user.login);
+    assert.equal(isExcludedWorkflowWhatsAppRecipient(user),true,user.login);
     for(const settings of [null,defaultWhatsAppReportSettings()])for(const eventType of eventTypes)for(const site of ['Sasti OB','Jayant OB','Unlisted site','']){
-      assert.equal(isWorkflowWhatsAppRecipient(user,eventType,site,settings),true,`${user.login}/${eventType}/${site}`);
+      assert.equal(isWorkflowWhatsAppRecipient(user,eventType,site,settings),false,`${user.login}/${eventType}/${site}`);
     }
   }
   assert.equal(whatsAppRecipientRole(admin('director','Admin',{designation:'Director'})),'director');
@@ -112,14 +112,14 @@ test('a reports-only duplicate login blocks mobile or admin rows regardless of o
   }
 });
 
-test('saved alert selections and pauses apply to Admins without falling back to their mobile or job role',()=>{
+test('saved alert selections cannot re-enable Admin event messages or fall back to a mobile role',()=>{
   const settings=defaultWhatsAppReportSettings();
   const user={...mobile('admin','Production User'),adminLevel:'Admin'};
   settings.events.opened.recipientRoles=['productionSupervisor'];
   assert.equal(isWorkflowWhatsAppRecipient(user,'opened','Sasti OB',settings),false);
   assert.deepEqual(workflowWhatsAppRecipientLogins([mobile('ADMIN','Production User'),user],{eventType:'opened',site:'Sasti OB',settings}),[]);
   settings.events.opened.recipientRoles=['admin'];
-  assert.equal(isWorkflowWhatsAppRecipient(user,'opened','Majri OB',settings),true);
+  assert.equal(isWorkflowWhatsAppRecipient(user,'opened','Majri OB',settings),false);
   settings.events.opened.enabled=false;
   assert.equal(isWorkflowWhatsAppRecipient(user,'opened','Majri OB',settings),false);
   settings.events.opened.enabled=true;settings.enabled=false;

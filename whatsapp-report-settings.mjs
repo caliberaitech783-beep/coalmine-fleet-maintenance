@@ -3,7 +3,7 @@ import {DEFAULT_CRM_REPORT_ROLES,DEFAULT_WORKFLOW_ALERT_ROLES,WHATSAPP_DELIVERY_
 
 export const WORKFLOW_ROLE_OPTIONS = [
   ['productionSupervisor','Production supervisor'],['maintenanceSupervisor','Maintenance supervisor'],
-  ['misSupervisor','MIS supervisor'],['admin','Admin'],['superAdmin','Super Admin'],
+  ['misSupervisor','MIS supervisor'],
   ['oemNationalHead','OEM national head'],['oemRegionalHead','OEM regional head'],
   ['oemAreaServiceEngineer','OEM area engineer'],['oemServiceEngineer','OEM site engineer'],
 ].map(([key,label])=>({key,label}));
@@ -42,19 +42,20 @@ export function defaultWhatsAppReportSettings() {
 
 export function normalizeWhatsAppReportSettings(input={}) {
   const value=object(input), defaults=defaultWhatsAppReportSettings();
-  const migrateRouting=!(Number.isInteger(value.deliveryPolicyVersion)&&value.deliveryPolicyVersion>=WHATSAPP_DELIVERY_POLICY_VERSION);
+  const sourcePolicyVersion=Number.isInteger(value.deliveryPolicyVersion)?value.deliveryPolicyVersion:0;
+  const migrateLegacyRouting=sourcePolicyVersion<2;
   const roles=new Set(WORKFLOW_ROLE_OPTIONS.map(role=>role.key));
   const events=object(value.events), reminders=object(value.reminders), crm=object(value.crm), channels=object(value.channels), quiet=object(value.quietHours), templates=object(value.templates);
-  // Version 2 updates routing only. Delivery pauses, reminders, schedules,
-  // quiet hours and template choices retain their saved values.
+  // Version 3 removes leadership from immediate events. Existing operational
+  // selections, delivery pauses, schedules and template choices stay intact.
   return {deliveryPolicyVersion:WHATSAPP_DELIVERY_POLICY_VERSION,enabled:bool(value.enabled,defaults.enabled),
-    events:Object.fromEntries(EVENT_OPTIONS.map(({key})=>{const current=object(events[key]);return [key,{enabled:bool(current.enabled,true),recipientRoles:!migrateRouting&&Array.isArray(current.recipientRoles)?unique(current.recipientRoles.filter(role=>roles.has(role))):defaults.events[key].recipientRoles}];})),
+    events:Object.fromEntries(EVENT_OPTIONS.map(({key})=>{const current=object(events[key]);return [key,{enabled:bool(current.enabled,true),recipientRoles:!migrateLegacyRouting&&Array.isArray(current.recipientRoles)?unique(current.recipientRoles.filter(role=>roles.has(role))):defaults.events[key].recipientRoles}];})),
     reminders:Object.fromEntries(['offRoad','idle'].map(key=>[key,{enabled:bool(reminders[key]?.enabled,true),hours:bounded(reminders[key]?.hours,defaults.reminders[key].hours,1,key==='idle'?24:168)}])),
     crm:{enabled:bool(crm.enabled,true),days:Array.isArray(crm.days)?unique(crm.days.filter(day=>Number.isInteger(day)&&day>=0&&day<=6)).sort():defaults.crm.days,
       times:Array.isArray(crm.times)?unique(crm.times.filter(validWhatsAppTime)).sort().slice(0,6):defaults.crm.times,
-      recipientRoles:!migrateRouting&&Array.isArray(crm.recipientRoles)?unique(crm.recipientRoles.filter(role=>DEFAULT_CRM_REPORT_ROLES.includes(role))):defaults.crm.recipientRoles,
+      recipientRoles:!migrateLegacyRouting&&Array.isArray(crm.recipientRoles)?unique(crm.recipientRoles.filter(role=>DEFAULT_CRM_REPORT_ROLES.includes(role))):defaults.crm.recipientRoles,
       sendEmpty:bool(crm.sendEmpty,true),format:'links'},
-    channels:Object.fromEntries(Object.entries(defaults.channels).map(([key,fallback])=>[key,migrateRouting&&['ticketCreated','ticketResolved','dailyUpdate'].includes(key)?true:bool(channels[key],fallback)])),
+    channels:Object.fromEntries(Object.entries(defaults.channels).map(([key,fallback])=>[key,migrateLegacyRouting&&['ticketCreated','ticketResolved','dailyUpdate'].includes(key)?true:bool(channels[key],fallback)])),
     quietHours:{enabled:bool(quiet.enabled,false),start:validWhatsAppTime(quiet.start)?quiet.start:defaults.quietHours.start,end:validWhatsAppTime(quiet.end)?quiet.end:defaults.quietHours.end},
     templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:validReportTemplateVariant(key,templates[key]?.variant)?templates[key].variant:defaults.templates[key].variant,body:typeof templates[key]?.body==='string'?templates[key].body.slice(0,1024):''}])),
   };

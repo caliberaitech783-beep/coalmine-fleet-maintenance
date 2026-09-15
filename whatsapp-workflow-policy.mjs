@@ -36,7 +36,7 @@ function workflowRoleKeys(user={},profile=resolveMobileAccess({user})){
 
 export function isExcludedWorkflowWhatsAppRecipient(user={},profile=resolveMobileAccess({user}),settings=null,eventType=''){
   const role=whatsAppRecipientRole(user,profile);
-  if(['manager','director'].includes(role))return true;
+  if(['manager','director','admin','superAdmin'].includes(role))return true;
   // An excluded leadership row must also block an eligible duplicate login.
   return Boolean(settings&&role&&!settings.events?.[eventType]?.recipientRoles?.includes(role));
 }
@@ -50,7 +50,6 @@ export function isWorkflowWhatsAppRecipient(user={},eventType='',site='',setting
   const leadership=whatsAppRecipientRole(user,profile);
   const keys=leadership?new Set([leadership]):workflowRoleKeys(user,profile);
   if(!policy.recipientRoles?.some((role)=>keys.has(role)))return false;
-  if(['admin','superAdmin'].includes(leadership))return true;
   if(profile.sessionRole==='normal'){
     const userSite=canonicalSiteName(assignedUserSiteName(user));
     return Boolean(userSite)&&userSite===canonicalSiteName(site);

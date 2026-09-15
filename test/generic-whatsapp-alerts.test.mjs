@@ -101,24 +101,24 @@ async function notifyFromTicketRoute(api,purpose,{creatorLogin='creator',commitE
 }
 
 for(const purpose of ['ticketCreated','ticketResolved']){
-  test(`${purpose}: generic selection adds administrators and only the selected creator among mobile users`,async()=>{
+  test(`${purpose}: generic selection keeps the selected operational creator and excludes leadership`,async()=>{
     const api=harness();
     const audience=await api.genericWhatsAppAlertLogins(api.client,[' CREATOR ','creator',...reportsOnlyLogins,'missing',''],{purpose,site:'Sasti OB'});
-    assert.deepEqual(sorted(audience),sorted(['creator',...adminLogins]));
+    assert.deepEqual(audience,['creator']);
     assert.equal(api.templates.length,0);
     assert.equal(api.inApp.length,0);
     // Ticket ownership still allows the creator after their assigned site changes.
     api.users.find(user=>user.login==='other-site').site='Jayant OB';
-    assert.deepEqual(sorted(await api.genericWhatsAppAlertLogins(api.client,['other-site'],{purpose,site:'Sasti OB'})),sorted(['other-site',...adminLogins]));
+    assert.deepEqual(await api.genericWhatsAppAlertLogins(api.client,['other-site'],{purpose,site:'Sasti OB'}),['other-site']);
   });
 
-  test(`${purpose}: the real route sends to creator + Admin/Super Admin and preserves in-app recipients`,async()=>{
+  test(`${purpose}: the real route sends only to the creator and preserves in-app recipients`,async()=>{
     const api=harness(),route=await notifyFromTicketRoute(api,purpose);
-    assert.deepEqual(sorted(api.sentLogins()),sorted(['creator',...adminLogins]));
+    assert.deepEqual(api.sentLogins(),['creator']);
     assert.deepEqual(api.inApp.map(args=>args[0]),purpose==='ticketCreated'?['admin','director','manager','multi-manager']:['creator','manager','multi-manager']);
     assert.ok(api.inApp.every(args=>args[1]==='TIC/1'));
     assert.ok(api.templates.every(message=>message.templateKey===purpose&&message.purpose===purpose&&message.parameters[0]==='TIC/1'));
-    assert.equal(api.history.length,4);
+    assert.equal(api.history.length,1);
     assert.ok(api.history.every(args=>args[1]==='TIC/1'&&args[5]==='Sent'));
     assert.deepEqual(route.timeline,[...api.inApp.map(()=> 'in-app'),'commit','response','whatsapp']);
     assert.equal(route.responses.length,1);
@@ -134,13 +134,13 @@ for(const purpose of ['ticketCreated','ticketResolved']){
       await nextTurn();
       assert.equal(completed,true,'The route must not await WhatsApp network delivery');
       assert.deepEqual(timeline.slice(-3),['commit','response','whatsapp']);
-      assert.equal(api.templateAttempts.length,4);
+      assert.equal(api.templateAttempts.length,1);
       assert.equal(api.templates.length,0);
       assert.equal(api.history.length,0);
     }finally{
       release();const route=await routePromise;await Promise.all(route.pending);
     }
-    assert.deepEqual(sorted(api.sentLogins()),sorted(['creator',...adminLogins]));
+    assert.deepEqual(api.sentLogins(),['creator']);
   });
 
   test(`${purpose}: a failed commit starts no WhatsApp follow-up`,async()=>{
@@ -155,27 +155,27 @@ for(const purpose of ['ticketCreated','ticketResolved']){
   test(`${purpose}: manager / Director creators and their duplicate logins receive no immediate alert`,async()=>{
     for(const creatorLogin of reportsOnlyLogins){
       const api=harness();await notifyFromTicketRoute(api,purpose,{creatorLogin});
-      assert.deepEqual(sorted(api.sentLogins()),sorted(adminLogins),creatorLogin);
+      assert.deepEqual(api.sentLogins(),[],creatorLogin);
       if(purpose==='ticketResolved')assert.equal(api.inApp[0][0],creatorLogin);
     }
   });
 }
 
-test('dailyUpdate sends to all operational users at the exact assigned site plus global admins, preserving in-app recipients',async()=>{
+test('dailyUpdate sends to operational users at the exact assigned site and excludes leadership',async()=>{
   const api=harness(),inApp=[' CREATOR ','manager','director','creator','other-site',''];
   await api.addTicketNotifications(api.client,inApp,'REQ/1','Daily update',{templateKey:'dailyUpdate',parameters:['Maintenance author','REQ/1']},{site:'SASTI II'});
-  assert.deepEqual(sorted(api.sentLogins()),sorted([...siteUserLogins,...adminLogins]));
+  assert.deepEqual(sorted(api.sentLogins()),sorted(siteUserLogins));
   assert.deepEqual(api.inApp.map(args=>args[0]),['creator','manager','director','other-site']);
   assert.ok(api.templates.every(message=>message.purpose==='dailyUpdate'));
-  assert.equal(api.history.length,siteUserLogins.length+adminLogins.length);
+  assert.equal(api.history.length,siteUserLogins.length);
 });
 
-test('dailyUpdate with no site has only administrators; mobile manager scope fields never grant cross-site access',async()=>{
+test('dailyUpdate with no site has no audience and mobile manager scope fields never grant cross-site access',async()=>{
   const api=harness();
   for(const site of ['', 'Unknown site']){
-    assert.deepEqual(sorted(await api.genericWhatsAppAlertLogins(api.client,siteUserLogins,{purpose:'dailyUpdate',site})),sorted(adminLogins));
+    assert.deepEqual(await api.genericWhatsAppAlertLogins(api.client,siteUserLogins,{purpose:'dailyUpdate',site}),[]);
   }
-  assert.deepEqual(sorted(await api.genericWhatsAppAlertLogins(api.client,['creator'],{purpose:'dailyUpdate',site:'Majri OB'})),sorted(['other-site',...adminLogins]));
+  assert.deepEqual(await api.genericWhatsAppAlertLogins(api.client,['creator'],{purpose:'dailyUpdate',site:'Majri OB'}),['other-site']);
 });
 
 test('duplicate-login exclusions in generic routing and the sender are independent of row order and casing',async()=>{
@@ -185,9 +185,9 @@ test('duplicate-login exclusions in generic routing and the sender are independe
     const audience=await api.genericWhatsAppAlertLogins(api.client,selected,{purpose,site:'Sasti OB'});
     assert.ok(!audience.includes('duplicate-mobile')&&!audience.includes('duplicate-admin'));
     const result=await api.sendWhatsAppNotifications(api.client,selected,'REF/1','Message',{templateKey:purpose,parameters:[]},{site:'Sasti OB'});
-    assert.deepEqual(sorted(api.sentLogins()),sorted(adminLogins));
-    assert.deepEqual(sorted(result.map(item=>item.login)),sorted(adminLogins));
-    assert.equal(api.history.length,adminLogins.length);
+    assert.deepEqual(api.sentLogins(),[]);
+    assert.deepEqual(result,[]);
+    assert.equal(api.history.length,0);
   }
 });
 
@@ -196,14 +196,14 @@ test('the sender rechecks reports-only records introduced after generic audience
   const audience=await api.genericWhatsAppAlertLogins(api.client,['creator'],{purpose:'ticketCreated',site:'Sasti OB'});
   assert.ok(audience.includes('creator'));
   const result=await api.sendWhatsAppNotifications(api.client,audience,'TIC/1','Created',{templateKey:'ticketCreated',parameters:[]});
-  assert.deepEqual(sorted(api.sentLogins()),sorted(adminLogins));
+  assert.deepEqual(api.sentLogins(),[]);
   assert.ok(!result.some(item=>item.login==='creator'));
 });
 
-test('legacy request template calls retain Super Admin while excluding reports-only job titles',async()=>{
+test('legacy request template calls exclude all leadership job titles',async()=>{
   const api=harness();
   await api.sendWhatsAppNotifications(api.client,['super','admin','director','manager'],'REQ/1','Opened',{templateKey:'requestOpened',parameters:[]});
-  assert.deepEqual(sorted(api.sentLogins()),['admin','super']);
+  assert.deepEqual(api.sentLogins(),[]);
 });
 
 for(const purpose of ['ticketCreated','ticketResolved','dailyUpdate']){
@@ -231,11 +231,11 @@ for(const purpose of ['ticketCreated','ticketResolved','dailyUpdate']){
   });
 }
 
-test('pausing one generic purpose leaves the other generic purposes active',async()=>{
+test('pausing one generic purpose leaves the other generic purposes active for operational users',async()=>{
   for(const paused of ['ticketCreated','ticketResolved','dailyUpdate']){
     const api=harness();api.settings.channels[paused]=false;
     for(const purpose of ['ticketCreated','ticketResolved','dailyUpdate']){
-      await api.sendWhatsAppNotifications(api.client,['admin'],'REF/1','Message',{templateKey:purpose,parameters:[]});
+      await api.sendWhatsAppNotifications(api.client,['creator'],'REF/1','Message',{templateKey:purpose,parameters:[]});
     }
     assert.deepEqual(api.templates.map(message=>message.purpose),['ticketCreated','ticketResolved','dailyUpdate'].filter(purpose=>purpose!==paused));
   }
@@ -278,7 +278,7 @@ test('workflow routing bypasses generic expansion and rechecks the saved event r
 test('an explicit purpose overrides the template purpose and remains attached to text fallback',async()=>{
   const api=harness({templateError:new Error('Template unavailable')});
   api.settings.channels.ticketCreated=false;
-  await api.sendWhatsAppNotifications(api.client,['admin'],'TIC/1','Resolved',{templateKey:'ticketCreated',parameters:['TIC/1','Admin']},{purpose:'ticketResolved'});
+  await api.sendWhatsAppNotifications(api.client,['creator'],'TIC/1','Resolved',{templateKey:'ticketCreated',parameters:['TIC/1','Creator']},{purpose:'ticketResolved'});
   assert.equal(api.templateAttempts.length,1);
   assert.equal(api.templateAttempts[0].purpose,'ticketResolved');
   assert.equal(api.texts.length,1);
@@ -288,10 +288,10 @@ test('an explicit purpose overrides the template purpose and remains attached to
 
 test('provider policy pauses never trigger a text fallback and are recorded as skipped',async()=>{
   const api=harness({templateError:Object.assign(new Error('Delivery paused'),{code:'WHATSAPP_POLICY_PAUSED'})});
-  const result=await api.sendWhatsAppNotifications(api.client,['admin'],'TIC/1','Created',{templateKey:'ticketCreated',parameters:[]});
+  const result=await api.sendWhatsAppNotifications(api.client,['creator'],'TIC/1','Created',{templateKey:'ticketCreated',parameters:[]});
   assert.equal(api.templateAttempts.length,1);
   assert.equal(api.texts.length,0);
-  assert.deepEqual(result,[{login:'admin',status:'Skipped - Delivery paused'}]);
+  assert.deepEqual(result,[{login:'creator',status:'Skipped - Delivery paused'}]);
   assert.equal(api.history[0][5],'Skipped - Delivery paused');
 });
 
@@ -299,9 +299,9 @@ test('missing phones are audited only for eligible existing logins and duplicate
   const users=fixtureUsers();users.find(user=>user.login==='admin').phone='';
   const api=harness({users});
   const result=await api.sendWhatsAppNotifications(api.client,['admin','creator',' CREATOR ','missing','director','duplicate-mobile'],'TIC/1','Created',{templateKey:'ticketCreated',parameters:[]});
-  assert.deepEqual(result,[{login:'admin',status:'Skipped - phone number missing'},{login:'creator',status:'Sent'}]);
+  assert.deepEqual(result,[{login:'creator',status:'Sent'}]);
   assert.deepEqual(api.sentLogins(),['creator']);
-  assert.equal(api.history.length,2);
-  assert.equal(api.history[0][3],'admin');
-  assert.equal(api.history[0][5],'Skipped - phone number missing');
+  assert.equal(api.history.length,1);
+  assert.equal(api.history[0][3],'creator');
+  assert.equal(api.history[0][5],'Sent');
 });
