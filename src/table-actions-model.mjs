@@ -87,7 +87,18 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
 
 export function jobReferenceColumnsLast(columns) {
   const isJobReference = (column) => /^job\s+ref(?:erence)?s?\.?$/i.test(column.label.trim());
-  return [...columns.filter((column) => !isJobReference(column)), ...columns.filter(isJobReference)];
+  let ordered = [...columns.filter((column) => !isJobReference(column)), ...columns.filter(isJobReference)];
+  // Apply the same adjacent-field layout to tables, printing and exports without changing source indices.
+  const moveAfter = (anchor, matches) => {
+    const target = ordered.find(anchor);
+    const moving = ordered.filter(matches);
+    if (!target || !moving.length) return;
+    ordered = ordered.filter((column) => !matches(column));
+    ordered.splice(ordered.indexOf(target) + 1, 0, ...moving);
+  };
+  moveAfter(({label}) => /^status$/i.test(label.trim()), ({label}) => /^(?:machine\s*\/\s*)?door\s*(?:no\.?|number)$/i.test(label.trim()));
+  moveAfter(({label}) => /^(?:reason of breakdown|breakdown reason)$/i.test(label.trim()), ({label}) => /^(?:hmr|kmr)$/i.test(label.trim()));
+  return ordered;
 }
 
 export function dateColumnsFirst(columns, statusFirst = true) {
