@@ -6,8 +6,8 @@
 .hourly-breakdown-title h2 { margin: 0; font: 800 22px Manrope, sans-serif; }
 .hourly-breakdown-title p { margin: 4px 0 0; color: var(--muted, #647892); font-size: 12px; }
 /* The window and site strips scroll by wheel or drag; the bars themselves stay hidden. */
-.hourly-breakdown-windows { display: flex; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.hourly-breakdown-windows button { flex: 1 0 auto; min-width: 0; white-space: nowrap; }
+.hourly-breakdown-view .dashboard-record-tabs.hourly-breakdown-windows { display: flex; flex-wrap: nowrap; width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.hourly-breakdown-view .hourly-breakdown-windows button { flex: 1 0 auto; min-width: 0; white-space: nowrap; }
 .hourly-breakdown-view.dashboard-record-browser .dashboard-record-level-navigation { grid-template-columns: minmax(0, 1fr); }
 .hourly-breakdown-view.dashboard-record-browser .dashboard-record-level-tabs { scrollbar-width: none; padding-bottom: 3px; }
 .hourly-breakdown-windows::-webkit-scrollbar, .hourly-breakdown-view.dashboard-record-browser .dashboard-record-level-tabs::-webkit-scrollbar { display: none; }
