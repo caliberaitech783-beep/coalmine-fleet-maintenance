@@ -6,6 +6,7 @@ import {activeRequestConflictMessage} from '../request-conflict.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {parseIndiaRequestDateTime} from '../request-time.mjs';
 import {validRequestAudioDataUrl} from '../request-workflow.mjs';
+import {validComplaintMedia} from '../complaint-media.mjs';
 import * as timeline from '../request-timeline.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
@@ -61,7 +62,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
     setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,currentUserRecord:async()=>({site:'Sasti OB'}),
-    canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,activeRequestConflictMessage,requestProjection:'*',
+    canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,validComplaintMedia,activeRequestConflictMessage,requestProjection:'*',
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],
     addTicketNotificationsBestEffort:async()=>{},requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',
     workflowRequestLink:()=>'',publicBaseUrl:()=>'',console,

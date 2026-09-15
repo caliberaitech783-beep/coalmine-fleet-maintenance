@@ -20,6 +20,7 @@ import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
 import {normalizeMobileNavigationVisibility} from './navigation-visibility.mjs';
@@ -384,6 +385,8 @@ async function migrate(){
       WHERE driver_name_source='' AND driver_name<>'';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS complaint_audio TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS complaint_media JSONB NOT NULL DEFAULT '[]'::jsonb;
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS superior_name TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
@@ -3803,6 +3806,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
   registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
+  (complaint_media <> '[]'::jsonb) AS "complaintMediaAvailable",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
   to_char(arrival_flagged_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "arrivalFlaggedAt", arrival_flagged_by AS "arrivalFlaggedBy", arrival_flag_remark AS "arrivalFlagRemark",
@@ -4010,6 +4014,7 @@ async function withRequestTimelineTransaction(req,reference,write){
   finally{client.release()}
 }
 
+
 app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>{
   try{
     const authorization=await currentDashboardAuthorization(req.session);
@@ -4033,6 +4038,29 @@ app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>
     const {timelineRequestId,timelineRecordedAt,...visibleRequest}=request;
     const [requestWithRemarks]=await attachDailyRemarks([visibleRequest]);
     res.json({reference,request:requestWithRemarks,events:requestTimelineEvents(request,history),history,durations:requestTimelineDurations(request)});
+  }catch(error){next(error)}
+});
+
+app.get('/api/requests/:reference/complaint-media',requireSession,async(req,res,next)=>{
+  try{
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+    const {session,user}=authorization;
+    const operational=session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(session.assignedRole);
+    if(session.role!=='super'&&!operational&&session.permissions?.readRequests!==true)return res.status(403).json({error:'Your assigned role cannot view request attachments.'});
+    const reference=String(req.params.reference||'').trim();
+    const {rows}=await pool.query(`SELECT ${requestProjection},${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const request=rows[0];
+    if(!request)return res.status(404).json({error:'Request not found.'});
+    if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+    if(session.role==='normal'){
+      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+      if(!assignedSite||assignedSite!==canonicalSiteName(request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+      if(session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==String(user.login||req.session.login||'').trim().toLowerCase())return res.status(403).json({error:'Only your own request attachments are available.'});
+    }
+    const media=await pool.query('SELECT complaint_media FROM maintenance_requests WHERE reference=$1',[reference]);
+    res.set('Cache-Control','no-store');
+    res.json({items:media.rows[0]?.complaint_media||[]});
   }catch(error){next(error)}
 });
 
@@ -4189,6 +4217,8 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     if(!ref||!door||!complaint)return res.status(400).json({error:'Reference, door number and complaint are required.'});
     if(!String(chassis).trim())return res.status(400).json({error:'Chassis number is required. Contact the admin team to update the chassis number in Equipment Master.'});
     if(!validRequestAudioDataUrl(complaintAudio))return res.status(400).json({error:'Complaint audio must be a supported recording up to 3 MB.'});
+    const complaintMedia=req.body?.complaintMedia??[];
+    if(req.body?.complaintMedia!==undefined&&!validComplaintMedia(complaintMedia))return res.status(400).json({error:'Attach at most one photo and one video, in supported formats, up to 5 MB each.'});
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     const requester=await currentUserRecord(req.session);
     if(req.session.role==='normal'){
@@ -4206,6 +4236,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
       RETURNING ${requestProjection}`,
       [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage]);
+    if(complaintMedia.length){
+      await client.query('UPDATE maintenance_requests SET complaint_media=$2::jsonb WHERE reference=$1',[ref,JSON.stringify(complaintMedia)]);
+      result.rows[0].complaintMediaAvailable=true;
+    }
     await recordRequestTimeline(client,req,ref,{}, {events:['start'],sources:{start:String(start||'').trim()?'user':'system'}});
     return result;
     });

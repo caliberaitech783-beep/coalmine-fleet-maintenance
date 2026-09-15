@@ -1,4 +1,4 @@
-const SENSITIVE_FIELD = /(password|hash|token|secret|otp|audio|image|attachment|file_data|accessToken|authorization|cookie)/i;
+const SENSITIVE_FIELD = /(password|hash|token|secret|otp|audio|image|attachment|complaintMedia|file_data|accessToken|authorization|cookie)/i;
 
 export function auditIndiaDateKey(value = new Date()) {
   const date = value instanceof Date ? value : new Date(value);

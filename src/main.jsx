@@ -11,6 +11,8 @@ import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
 import {capturePhotoForInput} from "./camera-upload.mjs";
+import {ComplaintMediaInputs,ComplaintMediaView} from "./complaint-media.jsx";
+import {readComplaintMedia} from "../complaint-media.mjs";
 import './camera-upload.css';
 import {UserLoginHistory,UserLoginActivity} from "./user-login-history.jsx";
 import { filterRecordsByDate } from "./record-date-range.mjs";
@@ -1997,7 +1999,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "make": return <td>{r.make || "—"}</td>;
     case "model": return <td>{r.model || "—"}</td>;
     case "site": return <td><MapPin /> {r.site}</td>;
-    case "complaint": return <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div></td>;
+    case "complaint": return <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>;
     case "createdBy": return <td>{r.owner || r.requesterLogin || "—"}</td>;
     case "closedBy": return <td>{r.closedBy || "—"}</td>;
     case "chassis": return <td>{r.chassis || "—"}</td>;
@@ -2103,7 +2105,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>
                   <MapPin /> {r.site}
                 </td>
-                {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div></td>}
+                {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.complaint} language={r.complaintLanguage} /></div>{r.complaintMediaAvailable && <ComplaintMediaView request={r} token={authToken} Dialog={Modal} />}</td>}
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 {showClosedBy && <td>{r.closedBy || "—"}</td>}
                 {showAudio && <td>{r.chassis || "—"}</td>}
@@ -4621,6 +4623,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     setCheckingConflict(false);
     setDuplicateConflict(null);
     try {
+      if (fd.get("complaintPhoto")?.size || fd.get("complaintVideo")?.size) request.complaintMedia = await readComplaintMedia(fd);
       await submitMaintenanceRequest(onSubmit, request);
       close();
     } catch (error) {
@@ -4751,6 +4754,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             {driverLookup.status === "temporary" && <small>{driverLookup.source === "Lookup unavailable" ? "Driver lookup is temporarily unavailable." : driverLookup.source === "Not found" ? "No driver was found for this vehicle and time." : "Manually entered driver."} Enter the actual name if known, or leave it blank. Oracle will retry the lookup automatically.</small>}
           </label>
           <SpeechComplaint />
+          <ComplaintMediaInputs />
         </div>
         {v && (
           <div className="autofetch">
@@ -7974,7 +7978,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
               <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
-              {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.complaint} language={row.complaintLanguage} /></div></td>}
+              {showReason && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.complaint} language={row.complaintLanguage} /></div>{row.complaintMediaAvailable && <ComplaintMediaView request={row} token={authToken} Dialog={Modal} />}</td>}
               {showCreatedBy && <td>{row.owner || row.requesterLogin || "—"}</td>}
               {startedFirst ? <>{startedCell(row)}{closedByCell(row)}{verifiedCells(row)}</> : <>{verifiedCells(row)}{closedByCell(row)}{startedCell(row)}</>}
               {showClosedAt && <td>{formatTwelveHourDateTime(row.closedAt)}</td>}
@@ -8144,7 +8148,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>ETC</span><b>{request.expectedCompletionAt ? displayDateTime(request.expectedCompletionAt) : "Not set"}</b></div>
         <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
         <div><span>Closing readings</span><b>{requestMeterReadingLabel(request, "closing")}</b><MeterFileCell request={request} stage="closing" /></div>
-        <div><span>Reason / complaint</span><b><TranslatedText text={request.complaint} language={request.complaintLanguage} /></b></div>
+        <div><span>Reason / complaint</span><b><TranslatedText text={request.complaint} language={request.complaintLanguage} /></b>{request.complaintMediaAvailable && <ComplaintMediaView request={request} token={authToken} Dialog={Modal} />}</div>
         <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudio ? <audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
