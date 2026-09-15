@@ -121,6 +121,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   };
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
+      <span className="shared-table-record-count" role="status">{[...bodySelections.values()].flat().filter(isDataRow).length} of {dataRows.length} records</span>
       {printData && dateRangeControl}
       {printData && <ExportMenu printOnly title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} />
