@@ -1,4 +1,6 @@
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
+import { openSmartPrint } from "./smart-print.mjs";
+import "./smart-print.css";
 import HourlyBreakdownView from "./hourly-breakdown-view.jsx";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
@@ -2738,9 +2740,9 @@ function printTableReport({ title, columns = [], rows = [], highlightRow }) {
   }, 150);
 }
 function PrintButton({ title, columns = [], rows = [], className = "secondary", highlightRow }) {
-  return <button type="button" className={`${className} print-table-trigger`} onClick={() => printTableReport({ title, columns, rows, highlightRow })}><Printer /><span>Print</span></button>;
+  return <button type="button" className={`${className} print-table-trigger`} onClick={() => openSmartPrint({ title, columns, rows, highlightRow, onPrint: printTableReport, formatCell: exportCellText })}><Printer /><span>Smart Print</span></button>;
 }
-function ExportMenu({ title, columns = [], rows = [], className = "secondary", label = "Export", printOnly = false, highlightRow, dashboardPdf = false }) {
+function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Export", printOnly = false, highlightRow, dashboardPdf = false }) {
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -2809,18 +2811,11 @@ function ExportMenu({ title, columns = [], rows = [], className = "secondary", l
       downloadExportFile(await response.blob(), exportFileName(title, "pdf"));
   });
   const printReport = () => {
-    if (dashboardPdf) {
-      recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records`});
-      runDownload("Preparing dashboard print...", async () => {
-        const {printDashboard} = await import("./dashboard-pdf.mjs");
-        await printDashboard(triggerRef.current?.closest(".mine-dashboard, .manager-dashboard"), title);
-      });
-      return;
-    }
-    printTableReport({ title, columns, rows, highlightRow }); setOpen(false);
+    setOpen(false);
+    openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, onPrint: printTableReport, formatCell: exportCellText });
   };
-  if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Print ${title}`}><Printer /><span>Print</span></button>;
-  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
+  if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Smart Print ${title}`}><Printer /><span>Smart Print</span></button>;
+  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
 }
 function ReportColumnSelector({ columns = [], visibleColumnKeys = [], onApply, onClose }) {
   const [draftKeys, setDraftKeys] = useState(visibleColumnKeys);
@@ -5581,7 +5576,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
         </div>
         <div className="generated-report-heading-actions">
           <div className="report-heading-table-actions" ref={setTableToolbarTarget} />
-          <ExportMenu title={title} columns={visibleColumns} rows={rows} className="secondary" label="Generate" />
+          <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} className="secondary" label="Generate" />
         </div>
       </div>
       {children || (
