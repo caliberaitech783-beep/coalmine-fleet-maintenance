@@ -33,10 +33,11 @@ import {ANNOUNCEMENT_ACTIVE_DAYS,announcementReaderKey,announcementValidationErr
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
 import {buildUserActivitySummary,totalUserWorkedMinutes} from './user-activity-report.mjs';
-import {applyHierarchyDeliveryRule,applyUserReportScheduleOverride,defaultHierarchyReportScheduleSettings,flowDesignationForUser,normalizeHierarchyReportScheduleSettings,normalizeUserReportSchedule,reportsAssignedToDesignation,reportsDueForDesignation,reportsForHierarchyEvent,userReportScheduleValidationError} from './hierarchy-report-flow.mjs';
+import {applyHierarchyDeliveryRule,applyUserReportScheduleOverride,defaultHierarchyReportScheduleSettings,flowDesignationForUser,HIERARCHY_REPORT_DESIGNATIONS,normalizeHierarchyReportScheduleSettings,normalizeUserReportSchedule,reportsAssignedToDesignation,reportsDueForDesignation,reportsForHierarchyEvent,userReportScheduleValidationError} from './hierarchy-report-flow.mjs';
 import {hierarchyAccessAllowsReport} from './hierarchy-report-catalogue.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
-import {prepareTicketReportRows,ticketReportDue,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
+import {prepareTicketReportRows,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
+import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
@@ -50,8 +51,9 @@ import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
 import {displaySiteName,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
-import {buildTableExportPdf} from './table-export-pdf.mjs';
-import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
+import {buildTableExportPdf,buildTableBundlePdf} from './table-export-pdf.mjs';
+import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,buildXlsxReportBundleBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
+import {buildSiteFleetReportTables,buildSiteReportMessage,reportSites,siteReportFilename,timestampInReportWindow} from './site-consolidated-report.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage} from './request-conflict.mjs';
 import {auditChangedFields,auditDateRange,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
@@ -59,7 +61,7 @@ import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
-import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
+import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
@@ -2230,8 +2232,16 @@ registerWhatsAppReportSettingsApi(app,{
   },
 });
 
-async function reportScheduleScope(session,settings){
-  if(canManageAllReportSchedules(session))return {canManageAll:true,allowedDesignationKeys:Object.keys(settings.designations||{}),allowedReports:DIRECTOR_REPORT_TITLES};
+async function reportScheduleScope(session,settings,{personal=false}={}){
+  if(!personal&&canManageAllReportSchedules(session)){
+    const {rows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`);
+    let roleSettings=normalizeHierarchyReportScheduleSettings(settings);
+    for(const [key,designation] of Object.entries(HIERARCHY_REPORT_DESIGNATIONS)){
+      const rule=hierarchyRuleForDesignation(rows,{key,...designation});
+      if(rule)roleSettings=applyHierarchyDeliveryRule(roleSettings,key,rule);
+    }
+    return {canManageAll:true,allowedDesignationKeys:Object.keys(settings.designations||{}),allowedReports:DIRECTOR_REPORT_TITLES,roleSettings};
+  }
   const user=await currentUserRecord(session);
   const resolved=resolveMobileAccess({user});
   const profile={...resolved,assignedRole:session?.assignedRole||resolved.assignedRole,permissions:{...resolved.permissions,...(session?.permissions||{})}};
@@ -2254,14 +2264,14 @@ async function reportScheduleScope(session,settings){
 }
 
 function scopedReportScheduleSettings(settings,scope){
-  if(scope.canManageAll)return settings;
+  if(scope.canManageAll)return scope.roleSettings||settings;
   const key=scope.allowedDesignationKeys[0];
   return {designations:{[key]:(scope.roleSettings||settings).designations[key]}};
 }
 
 async function reportScheduleResponse(scope,settings,extra={}){
   const designationKey=scope.allowedDesignationKeys[0];
-  const userSchedule=scope.canManageAll?null:normalizeUserReportSchedule(await storedUserReportSchedule(scope.login),{designationKey,allowedReports:scope.allowedReports});
+  const userSchedule=scope.canManageAll?null:normalizeUserReportSchedule(await storedUserReportSchedule(scope.login),{designationKey,allowedReports:scope.allowedReports,roleSchedules:(scope.roleSettings||settings).designations[designationKey]?.schedules});
   return {
     settings:scopedReportScheduleSettings(settings,scope),
     canManageAll:scope.canManageAll,
@@ -2280,7 +2290,7 @@ app.get('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
       storedHierarchyReportScheduleSettings(),
     ]);
-    const scope=await reportScheduleScope(req.session,settings);
+    const scope=await reportScheduleScope(req.session,settings,{personal:req.query.scope==='personal'});
     if(!scope)return res.status(403).json({error:'No report designation is assigned to this profile.'});
     const recipients={};
     for(const row of rows){
@@ -2297,12 +2307,15 @@ app.get('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
 app.put('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
   try{
     const current=await storedHierarchyReportScheduleSettings();
-    const scope=await reportScheduleScope(req.session,current);
+    const scope=await reportScheduleScope(req.session,current,{personal:req.query.scope==='personal'});
     if(!scope)return res.status(403).json({error:'No report designation is assigned to this profile.'});
     const body=req.body&&typeof req.body==='object'?req.body:{};
     if(scope.canManageAll){
       // Administrators save the role defaults every user in that role starts from.
-      const settings=normalizeHierarchyReportScheduleSettings(body);
+      const settings=normalizeHierarchyReportScheduleSettings({designations:{...(scope.roleSettings||current).designations,...body.designations}});
+      for(const [key,designation] of Object.entries(settings.designations)){
+        if(body.designations?.[key])designation.managedByReportSettings=true;
+      }
       await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
         ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[
         HIERARCHY_REPORT_SCHEDULE_SETTING_KEY,JSON.stringify(settings),
@@ -2318,7 +2331,7 @@ app.put('/api/report-schedule-settings',requireSession,async(req,res,next)=>{
       const designationKey=scope.allowedDesignationKeys[0];
       const submitted=body.userSchedule&&typeof body.userSchedule==='object'?body.userSchedule:body.designations?.[designationKey];
       if(!submitted||typeof submitted!=='object')return res.status(400).json({error:'Your report schedule was not provided.'});
-      const personal=normalizeUserReportSchedule({...submitted,designationKey,updatedAt:new Date().toISOString()},{designationKey,allowedReports:scope.allowedReports});
+      const personal=normalizeUserReportSchedule({...submitted,designationKey,updatedAt:new Date().toISOString()},{designationKey,allowedReports:scope.allowedReports,roleSchedules:(scope.roleSettings||current).designations[designationKey]?.schedules});
       const validationError=userReportScheduleValidationError(personal);
       if(validationError)return res.status(400).json({error:validationError});
       await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
@@ -2685,22 +2698,18 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
     WHERE master_name='Users & employees' AND lower(trim(record_data->>'login'))=ANY($1::text[])`,[logins]);
   const contacts=new Map();
   const usersByLogin=new Map();
-  const requestTemplate=String(workflowTemplate?.templateKey||'').startsWith('request');
   const workflowExcludedLogins=new Set(workflowType?rows.map(({record_data})=>record_data||{}).filter((user)=>isExcludedWorkflowWhatsAppRecipient(user,resolveMobileAccess({user}),reportSettings,workflowType)).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean):[]);
-  // Workflows use explicit role choices, including duplicate-login exclusions.
-  // Legacy request calls without a workflow still exclude Super Admin traffic.
-  const superAdminLogins=new Set(rows.map(({record_data})=>record_data||{}).filter(isTrueSuperAdmin).map((user)=>String(user.login||'').trim().toLowerCase()).filter(Boolean));
+  const reportsOnlyLogins=new Set(rows.map(({record_data})=>record_data||{}).filter(user=>isWhatsAppReportsOnlyRecipient(user)).map(user=>String(user.login||'').trim().toLowerCase()));
   for(const row of rows){
     const user=row.record_data||{};
     const login=String(user.login||'').trim().toLowerCase();
-    if(workflowExcludedLogins.has(login))continue;
+    if(workflowExcludedLogins.has(login)||reportsOnlyLogins.has(login))continue;
     if(workflowType&&!isWorkflowWhatsAppRecipient(user,workflowType,site,reportSettings))continue;
-    if(requestTemplate&&!workflowType&&superAdminLogins.has(login))continue;
     const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
     if(login&&!usersByLogin.has(login))usersByLogin.set(login,user);
     if(login&&phone&&!contacts.has(login))contacts.set(login,{name:String(user.employee||user.name||user.login||login),phone});
   }
-  const eligibleLogins=workflowType?[...usersByLogin.keys()]:requestTemplate?logins.filter((login)=>!superAdminLogins.has(login)):logins;
+  const eligibleLogins=[...usersByLogin.keys()];
   const missingPhone=eligibleLogins.filter((login)=>!contacts.has(login));
   const missingResults=await Promise.all(missingPhone.map(async(login)=>{const user=usersByLogin.get(login)||{};const status='Skipped - phone number missing';await pool.query(`INSERT INTO whatsapp_alert_history
     (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
@@ -2726,12 +2735,31 @@ async function sendWhatsAppNotifications(client,recipients,reference,message,wor
   return [...missingResults,...deliveryResults];
 }
 
+async function genericWhatsAppAlertLogins(client,recipients,{purpose,site}){
+  const selected=new Set(recipients.map(value=>String(value||'').trim().toLowerCase()).filter(Boolean));
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const excluded=new Set(rows.map(({record_data})=>record_data||{}).filter(user=>isWhatsAppReportsOnlyRecipient(user)).map(user=>String(user.login||'').trim().toLowerCase()));
+  return [...new Set(rows.map(({record_data})=>record_data||{}).filter(user=>{
+    const login=String(user.login||'').trim().toLowerCase(),profile=resolveMobileAccess({user});
+    if(!login||excluded.has(login))return false;
+    if(isWhatsAppAllAlertRecipient(user,profile))return true;
+    if(profile.sessionRole!=='normal')return false;
+    const sameSite=Boolean(site)&&canonicalSiteName(assignedUserSiteName(user))===canonicalSiteName(site);
+    // CRM users may read their own tickets only. Request updates can go to
+    // every operational user at the site, as requested by the delivery policy.
+    return purpose==='dailyUpdate'?sameSite&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole):selected.has(login);
+  }).map(user=>String(user.login||'').trim().toLowerCase()))];
+}
+
 async function addTicketNotifications(client,recipients,reference,message,workflowTemplate,{whatsapp=true,whatsappRecipients=null,workflowType='',site=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
   for(const login of logins){
     await client.query(`INSERT INTO crm_notifications (recipient_login,ticket_reference,message) VALUES ($1,$2,$3)`,[login,reference,message]);
   }
-  if(whatsapp)await sendWhatsAppNotifications(client,whatsappRecipients??logins,reference,message,workflowTemplate,{workflowType,site});
+  if(whatsapp){
+    const audience=workflowType?whatsappRecipients??logins:await genericWhatsAppAlertLogins(client,whatsappRecipients??logins,{purpose:workflowTemplate?.templateKey,site});
+    await sendWhatsAppNotifications(client,audience,reference,message,workflowTemplate,{workflowType,site});
+  }
 }
 
 async function addTicketNotificationsBestEffort(client,recipients,reference,message,workflowTemplate,options){
@@ -2740,6 +2768,13 @@ async function addTicketNotificationsBestEffort(client,recipients,reference,mess
   }catch(error){
     console.error(`Request ${reference} was updated, but its follow-up notifications could not be saved.`,error);
   }
+}
+
+async function sendGenericWhatsAppAlertBestEffort(recipients,reference,message,template,site){
+  try{
+    const audience=await genericWhatsAppAlertLogins(pool,recipients,{purpose:template.templateKey,site});
+    return await sendWhatsAppNotifications(pool,audience,reference,message,template,{site});
+  }catch(error){console.error(`Saved ${reference}, but WhatsApp follow-up failed.`,error.message);return []}
 }
 
 let consolidatedReportRunning=false;
@@ -2817,7 +2852,7 @@ async function publishCrmReportFiles({scopeLabel,start,end,openTickets=[],closed
   const pdf=await buildTicketConsolidatedReportPdf(data);
   const table=buildTicketReportTable(data);
   const xlsx=buildXlsxWorkbookBuffer(table.title,table.columns,table.rows);
-  const pdfFilename=reportFilename('CRM',scopeKey,slotKey);
+  const pdfFilename=siteReportFilename('CRM',scopeLabel,slotKey,'pdf');
   const xlsxFilename=pdfFilename.replace(/\.pdf$/i,'.xlsx');
   const pdfCode=randomUUID().replace(/-/g,'').slice(0,10),xlsxCode=randomUUID().replace(/-/g,'').slice(0,10);
   await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
@@ -2829,76 +2864,101 @@ async function publishCrmReportFiles({scopeLabel,start,end,openTickets=[],closed
   return {pdf,pdfFilename,pdfUrl,xlsxUrl,message:buildTicketWhatsAppReport({...data,pdfUrl,xlsxUrl})};
 }
 
+function crmReportGroups({user,profile,reportSettings,scheduleSettings,userSchedule,hierarchyRule,now}){
+  const designation=flowDesignationForUser(user,profile);
+  if(designation&&userSchedule&&(!userSchedule.designationKey||userSchedule.designationKey===designation.key)){
+    const roleSettings=hierarchyRule?applyHierarchyDeliveryRule(scheduleSettings,designation.key,hierarchyRule):scheduleSettings;
+    const effective=applyUserReportScheduleOverride(roleSettings,designation.key,userSchedule);
+    const allowed=effective.designations[designation.key];
+    const login=reportRecipientLogin(user);
+    if(!allowed?.allRecipients&&!allowed?.recipientLogins?.includes(login))return [];
+    return combineReportWindowGroups(reportsDueForDesignation(designation.key,now,20,effective)).map(group=>({...group,slotKey:`CRM-${group.slotKey}`}));
+  }
+  // A delayed poll can cover multiple nearby slots. Keep each existing CRM
+  // claim key so retries and already-sent reports remain independently tracked.
+  const windows=scheduledReportWindowsDue(reportSettings.crm,now,20)
+    .map(window=>({...window,slotKey:ticketReportWindow(window.end,reportSettings.crm).slotKey}));
+  return windows.map(window=>({window,slotKey:window.slotKey,scheduleKey:'crm-default'}));
+}
+
 let consolidatedTicketReportRunning=false;
 async function sendScheduledConsolidatedTicketReports(now=new Date()){
   if(!databaseReady||consolidatedTicketReportRunning)return {skipped:true};
   const reportSettings=await storedWhatsAppReportSettings();
   if(!whatsappPurposeEnabled(reportSettings,'consolidatedTicketReport',now))return {skipped:true,reason:'paused by Report settings'};
-  if(!ticketReportDue(now,20,reportSettings.crm))return {skipped:true,reason:'outside scheduled CRM report window'};
   consolidatedTicketReportRunning=true;
   try{
-    const window=ticketReportWindow(now,reportSettings.crm);
-    const [{rows:ticketRows},{rows:userRows}]=await Promise.all([
-      pool.query(`SELECT reference,site,creator_name AS "user",message AS remarks,status,
-        created_at AS "openedAt",resolved_at AS "resolvedAt"
-        FROM crm_tickets
-        WHERE (created_at >= $1 AND created_at < $2 AND status <> 'Resolved')
-           OR (resolved_at >= $1 AND resolved_at < $2)`,[window.start,window.end]),
+    const [{rows:userRows},{rows:hierarchyRows},{rows:equipmentRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
+      pool.query(`SELECT record_data FROM master_records WHERE master_name='Equipment master'`),
+      storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
     ]);
-    const tickets=prepareTicketReportRows(ticketRows,window.end);
-    const openTickets=tickets.filter((ticket)=>ticket.status!=='Resolved'&&!ticket.resolvedAt);
-    const closedTickets=tickets.filter((ticket)=>Boolean(ticket.resolvedAt));
+    const windows=new Map(),bundles=new Map();
     let sent=0,failed=0,skipped=0;
     for(const row of userRows){
-      const user=row.record_data||{};
-      const profile=resolveMobileAccess({user});
+      const user=row.record_data||{},profile=resolveMobileAccess({user});
       if(profile.sessionRole!=='super')continue;
-      const isAdmin=profile.permissions.adminLevel==='Admin';
-      const isSuperAdmin=profile.permissions.adminLevel==='Super Admin';
-      if(!reportSettings.crm.recipientRoles.includes(profile.permissions.adminLevel))continue;
-      const login=String(user.login||'').trim().toLowerCase();
-      const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
+      // Legacy manager accounts may normalize to Admin permissions. Directors
+      // retain their existing account category for the CRM report switches.
+      const crmRole={admin:'Admin',manager:'Manager',superAdmin:'Super Admin'}[whatsAppRecipientRole(user,profile)]||profile.permissions.adminLevel;
+      if(!reportSettings.crm.recipientRoles.includes(crmRole))continue;
+      const login=reportRecipientLogin(user),phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       if(!login)continue;
-      let scope=managerReportScope(user);
-      if((isAdmin||isSuperAdmin)&&scope.sites!==null&&!scope.sites.length)scope={key:'ALL',label:'All regions',sites:null};
-      if(scope.sites!==null&&!scope.sites.length){skipped++;continue}
-      const scopedOpen=openTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
-      const scopedClosed=closedTickets.filter((ticket)=>reportScopeIncludesSite(scope,ticket.site));
-      if(!reportSettings.crm.sendEmpty&&!scopedOpen.length&&!scopedClosed.length){skipped++;continue;}
-      const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
-        (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
-        ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
-          SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
-          WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
-        RETURNING id`,[window.slotKey,login,`CRM-${scope.key}`]);
-      if(!claim.rowCount){skipped++;continue}
-      const recipientName=String(user.employee||user.name||user.login||login);
-      let status='Sent';
-      try{
-        if(!phone)throw new Error('Phone number missing');
-        const bundle=await publishCrmReportFiles({scopeLabel:scope.label,start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed,slotKey:window.slotKey,scopeKey:scope.key});
-        const whatsappEnv=await metaWhatsAppRuntimeEnv();
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[bundle.message]},{env:whatsappEnv})}
-        catch(templateError){
-          if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
-          console.warn('CRM linked template unavailable; attempting PDF delivery:',templateError.message);
-          await sendMetaWhatsAppDocument({to:phone,buffer:bundle.pdf,purpose:'consolidatedTicketReport',filename:bundle.pdfFilename,caption:`CRM consolidated report • ${scope.label}. PDF: ${bundle.pdfUrl} Excel: ${bundle.xlsxUrl}. Links expire in 14 days.`},{env:whatsappEnv});
+      const designation=flowDesignationForUser(user,profile);
+      const hierarchyRule=designation?hierarchyRuleForDesignation(hierarchyRows,designation):null;
+      const scope=hierarchyRecipientReportScope(user,profile,hierarchyRule?.siteAccess);
+      if(Array.isArray(scope.sites)&&!scope.sites.length){skipped++;continue}
+      const groups=crmReportGroups({user,profile,reportSettings,scheduleSettings,userSchedule:userScheduleOverrides.get(login),hierarchyRule,now});
+      for(const group of groups){
+        const {window,slotKey}=group,key=`${window.start.toISOString()}/${window.end.toISOString()}`;
+        if(!windows.has(key)){
+          const {rows}=await pool.query(`SELECT reference,site,creator_name AS "user",message AS remarks,status,
+            created_at AS "openedAt",resolved_at AS "resolvedAt" FROM crm_tickets
+            WHERE (created_at >= $1 AND created_at < $2) OR (resolved_at >= $1 AND resolved_at < $2)`,[window.start,window.end]);
+          const tickets=rows.filter(ticket=>timestampInReportWindow(ticket.openedAt,window)||timestampInReportWindow(ticket.resolvedAt,window))
+            .map(ticket=>ticket.resolvedAt&&new Date(ticket.resolvedAt)>=window.end?{...ticket,resolvedAt:null,status:'Open'}:ticket);
+          windows.set(key,prepareTicketReportRows(tickets,window.end));
         }
-        sent++;
-      }catch(error){
-        status=`Failed - ${String(error?.message||'Meta delivery error').slice(0,160)}`;
-        failed++;
-        console.error(`Consolidated CRM WhatsApp report failed for ${login}:`,error.message);
+        const tickets=windows.get(key).filter(ticket=>reportScopeIncludesSite(scope,ticket.site));
+        const sites=reportSites({requests:tickets,equipmentRecords:equipmentRows.map(row=>row.record_data||{})},scope);
+        for(const site of sites){
+          const selected=tickets.filter(ticket=>canonicalSiteName(ticket.site)===site);
+          const scopedOpen=selected.filter(ticket=>!ticket.resolvedAt),scopedClosed=selected.filter(ticket=>Boolean(ticket.resolvedAt));
+          if(!reportSettings.crm.sendEmpty&&!selected.length){skipped++;continue}
+          const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+            (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
+            ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
+              SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
+              WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
+            RETURNING id`,[slotKey,login,`CRM-SITE-${site}`]);
+          if(!claim.rowCount){skipped++;continue}
+          const recipientName=String(user.employee||user.name||user.login||login);
+          let status='Sent';
+          try{
+            if(!phone)throw new Error('Phone number missing');
+            const bundleKey=`${key}/${site}`;
+            if(!bundles.has(bundleKey))bundles.set(bundleKey,publishCrmReportFiles({scopeLabel:displaySiteName(site),start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed,slotKey,scopeKey:site}));
+            const bundle=await bundles.get(bundleKey);
+            const message=buildSiteReportMessage({kind:'CRM',site,window,count:selected.length,pdfUrl:bundle.pdfUrl,xlsxUrl:bundle.xlsxUrl});
+            const env=await metaWhatsAppRuntimeEnv();
+            try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[message]},{env})}
+            catch(templateError){
+              if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
+              await sendMetaWhatsAppDocument({to:phone,buffer:bundle.pdf,purpose:'consolidatedTicketReport',filename:bundle.pdfFilename,
+                caption:`${displaySiteName(site)} - CRM consolidated report. ${formatDisplayDateTime(window.start)} to ${formatDisplayDateTime(window.end)} IST. PDF: ${bundle.pdfUrl} Excel: ${bundle.xlsxUrl}. Links expire in 14 days.`},{env});
+            }
+            sent++;
+          }catch(error){status=`Failed - ${String(error?.message||'CRM delivery error').slice(0,160)}`;failed++;console.error(`CRM report failed for ${login} / ${site}:`,error.message)}
+          await Promise.all([
+            pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
+            pool.query(`INSERT INTO whatsapp_alert_history
+              (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,['Site consolidated CRM report',displaySiteName(site),slotKey,recipientName,phone,status]),
+          ]);
+        }
       }
-      await Promise.all([
-        pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
-        pool.query(`INSERT INTO whatsapp_alert_history
-          (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
-          ['Consolidated CRM ticket report',scope.label,window.slotKey,recipientName,phone,status]),
-      ]);
     }
-    return {slotKey:window.slotKey,sent,failed,skipped,open:openTickets.length,closed:closedTickets.length};
+    return {sent,failed,skipped};
   }finally{consolidatedTicketReportRunning=false}
 }
 
@@ -2936,7 +2996,27 @@ function hierarchyRuleForDesignation(records=[],designation={}){
     .find((record)=>String(record.designation||'').trim().toLowerCase()===wanted);
 }
 
-async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 07:00:00 PM IST',siteAccess='',eventRequest=null}){
+async function publishDirectorReportFiles({baseUrl,slotKey,now=new Date(),reportTitles=null,heading="Director's Daily Report",scheduleLabel='Daily 07:00:00 PM IST',siteAccess='',eventRequest=null,window=null,sourceData:providedSource=null}){
+  if(window){
+    const sourceData=providedSource||await directorReportSourceData();
+    const tables=buildSiteFleetReportTables({source:sourceData,site:siteAccess,window,reportTitles:reportTitles||[]});
+    const site=displaySiteName(siteAccess);
+    const title=`${site} - Consolidated fleet report`;
+    const subtitle=`${formatDisplayDateTime(window.start)} to ${formatDisplayDateTime(window.end)} IST`;
+    const pdf=await buildTableBundlePdf({title,subtitle,tables,generatedAt:now});
+    const xlsx=buildXlsxReportBundleBuffer({title:`${title} | ${subtitle}`,tables});
+    const pdfFilename=siteReportFilename('Fleet',site,slotKey,'pdf'),xlsxFilename=siteReportFilename('Fleet',site,slotKey,'xlsx');
+    const pdfCode=randomUUID().replace(/-/g,'').slice(0,16),xlsxCode=randomUUID().replace(/-/g,'').slice(0,16);
+    await pool.query(`DELETE FROM published_reports WHERE expires_at<=NOW()`);
+    await pool.query(`INSERT INTO published_reports (id,short_code,filename,content_type,file_data,expires_at) VALUES
+      ($1,$2,$3,'application/pdf',$4,NOW()+INTERVAL '14 days'),
+      ($5,$6,$7,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',$8,NOW()+INTERVAL '14 days')`,
+      [randomUUID(),pdfCode,pdfFilename,pdf,randomUUID(),xlsxCode,xlsxFilename,xlsx]);
+    const pdfUrl=`${baseUrl}/r/${pdfCode}`,xlsxUrl=`${baseUrl}/r/${xlsxCode}`;
+    return {slotKey,generatedAt:now,links:[{title,site,pdfUrl,xlsxUrl,rowCount:tables[0].rows.length}],
+      files:[{filename:pdfFilename,contentType:'application/pdf',content:pdf},{filename:xlsxFilename,contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',content:xlsx}],
+      message:buildSiteReportMessage({site,window,count:tables[0].rows.length,pdfUrl,xlsxUrl})};
+  }
   const selectedTitles=reportTitles?new Set(reportTitles):null;
   const sourceData=sourceDataForSites(await directorReportSourceData(),siteAccess);
   if(eventRequest)sourceData.requests=sourceDataForSites({requests:[eventRequest],equipmentRecords:[],transferRecords:[]},siteAccess).requests;
@@ -3018,93 +3098,96 @@ async function sendScheduledDirectorReportBundles(now=new Date()){
   return {skipped:true,reason:'Director schedule is handled by the hierarchy report flow'};
 }
 
+function combineReportWindowGroups(groups=[]){
+  const combined=new Map();
+  for(const group of groups){
+    if(!group.window)continue;
+    const key=`${group.window.start.toISOString()}/${group.window.end.toISOString()}`;
+    const current=combined.get(key)||{window:group.window,reports:[],slotKeys:[],scheduleKeys:[],labels:[]};
+    current.reports.push(...group.reports);current.slotKeys.push(group.slotKey);current.scheduleKeys.push(group.scheduleKey);current.labels.push(group.scheduleLabel);combined.set(key,current);
+  }
+  return [...combined.values()].map(group=>({...group,reports:[...new Set(group.reports)],slotKey:group.slotKeys.sort().join('+'),scheduleKey:group.scheduleKeys.sort().join('+'),scheduleLabel:[...new Set(group.labels)].join(' + ')}));
+}
+
 let hierarchyReportRunning=false;
 async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
-  if(!databaseReady||(!event&&hierarchyReportRunning))return {skipped:true};
+  if(event)return {skipped:true,reason:'Individual events use alerts; reports are consolidated at scheduled times.'};
+  if(!databaseReady||hierarchyReportRunning)return {skipped:true};
   if(!whatsappPurposeEnabled(await storedWhatsAppReportSettings(),'consolidatedRequestReport',now))return {skipped:true,reason:'paused by Report settings'};
-  if(!event)hierarchyReportRunning=true;
+  hierarchyReportRunning=true;
   try{
     const [{rows:userRows},{rows:hierarchyRows},scheduleSettings,userScheduleOverrides]=await Promise.all([
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' ORDER BY created_at ASC`),
       pool.query(`SELECT record_data FROM master_records WHERE master_name='Hierarchy master' ORDER BY created_at ASC`),
-      storedHierarchyReportScheduleSettings(),
-      storedUserReportScheduleOverrides(),
+      storedHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides(),
     ]);
-    const eventRecipients=event?new Set(await requestStakeholderLogins(pool,{site:event.request.site,requesterLogin:event.request.requesterLogin})):null;
+    let sourceData=null;
+    const bundles=new Map();
     let sent=0,failed=0,skipped=0;
     for(const row of userRows){
-      const user=row.record_data||{};
-      const profile=resolveMobileAccess({user});
+      const user=row.record_data||{},profile=resolveMobileAccess({user});
       const designation=flowDesignationForUser(user,profile);
       if(!designation)continue;
       const designationSettings=scheduleSettings.designations[designation.key];
-      const login=String(user.login||user.employee||user.name||'').trim().toLowerCase();
-      if(eventRecipients&&!eventRecipients.has(login)){skipped++;continue}
+      const login=reportRecipientLogin(user);
       if(!designationSettings?.allRecipients&&!designationSettings?.recipientLogins?.includes(login)){skipped++;continue}
       const hierarchyRule=hierarchyRuleForDesignation(hierarchyRows,designation);
       const roleScheduleSettings=hierarchyRule?applyHierarchyDeliveryRule(scheduleSettings,designation.key,hierarchyRule):scheduleSettings;
-      // A saved personal schedule replaces the role default for this user only.
       const effectiveScheduleSettings=applyUserReportScheduleOverride(roleScheduleSettings,designation.key,userScheduleOverrides.get(login)||null);
-      const dueGroups=event?reportsForHierarchyEvent(designation.key,event,effectiveScheduleSettings):reportsDueForDesignation(designation.key,now,20,effectiveScheduleSettings);
+      if(hierarchyRule){
+        // Only report rows this recipient may receive can advance the window.
+        // The effective settings are a fresh per-recipient copy.
+        const effectiveDesignation=effectiveScheduleSettings.designations[designation.key];
+        effectiveDesignation.schedules=effectiveDesignation.schedules.map(schedule=>({...schedule,
+          reports:schedule.reports.filter(title=>hierarchyAccessAllowsReport(hierarchyRule.reportAccess,title)),
+        }));
+      }
+      const dueGroups=combineReportWindowGroups(reportsDueForDesignation(designation.key,now,20,effectiveScheduleSettings));
       if(!dueGroups.length)continue;
       const recipientScope=hierarchyRecipientReportScope(user,profile,hierarchyRule?.siteAccess);
       if(Array.isArray(recipientScope.sites)&&!recipientScope.sites.length){skipped++;continue}
-      if(event&&!reportScopeIncludesSite(recipientScope,event.request.site)){skipped++;continue}
-      // Hierarchy ticks use the Reports-menu catalogue; older scheduled titles map onto their catalogue equivalent.
-      const reportTitles=[...new Set(dueGroups.flatMap((group)=>group.reports))].filter((title)=>!hierarchyRule||hierarchyAccessAllowsReport(hierarchyRule.reportAccess,title));
-      if(!reportTitles.length){skipped++;continue}
-      const scheduleLabel=[...new Set(dueGroups.map((group)=>group.scheduleLabel))].join(' + ');
-      const slotKey=dueGroups.map((group)=>group.slotKey).sort().join('+');
-      const scheduleKey=dueGroups.map((group)=>group.scheduleKey).sort().join('+');
       const phone=String(user.phone||user.phoneNo||user.phoneNumber||'').trim();
       const recipientName=String(user.employee||user.name||user.login||designation.label);
       if(!phone){skipped++;continue}
-      const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
-        (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
-        ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
-          SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
-          WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
-        RETURNING id`,[slotKey,login||`hierarchy:${phone}`,`HIERARCHY-${designation.key}-${scheduleKey}`]);
-      if(!claim.rowCount){skipped++;continue}
-      let status='Sent',bundle=null;
-      try{
-        bundle=await publishDirectorReportFiles({
-          baseUrl:publicBaseUrl(),
-          slotKey,
-          now,
-          reportTitles,
-          siteAccess:recipientScope.sites===null?'':recipientScope.sites.join(' | '),
-          heading:`${designation.label} ${event?'Event':'Consolidated'} Report`,
-          scheduleLabel,
-          eventRequest:event?.request||null,
-        });
-        const env=await metaWhatsAppRuntimeEnv();
-        const messagePurpose=hierarchyReportMessagePurpose(reportTitles);
-        try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:messagePurpose,parameters:[bundle.message.replace(/\s+/g,' ').trim()]},{env})}
-        catch(templateError){
-          if(event&&templateError.code!=='WHATSAPP_POLICY_PAUSED')await sendMetaWhatsAppText({to:phone,message:reportTemplateFallback(messagePurpose,[bundle.message],env.WHATSAPP_REPORT_SETTINGS,env.WHATSAPP_TEMPLATE_APPROVALS,bundle.message),purpose:messagePurpose},{env});
-          else throw templateError;
+      sourceData??=await directorReportSourceData();
+      const sites=reportSites(sourceData,recipientScope);
+      for(const group of dueGroups){
+        const reportTitles=group.reports.filter(title=>!hierarchyRule||hierarchyAccessAllowsReport(hierarchyRule.reportAccess,title));
+        if(!reportTitles.length){skipped++;continue}
+        for(const site of sites){
+          const {slotKey,scheduleKey,window,scheduleLabel}=group;
+          const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+            (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
+            ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
+              SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
+              WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
+            RETURNING id`,[slotKey,login,`HIERARCHY-${designation.key}-${scheduleKey}-SITE-${site}`]);
+          if(!claim.rowCount){skipped++;continue}
+          let status='Sent';
+          try{
+            const bundleKey=JSON.stringify([site,window.start,window.end,[...reportTitles].sort()]);
+            if(!bundles.has(bundleKey))bundles.set(bundleKey,publishDirectorReportFiles({baseUrl:publicBaseUrl(),slotKey,now,reportTitles,siteAccess:site,heading:`${designation.label} Consolidated Report`,scheduleLabel,window,sourceData}));
+            const bundle=await bundles.get(bundleKey);
+            const env=await metaWhatsAppRuntimeEnv();
+            await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',parameters:[bundle.message]},{env});sent++;
+          }catch(error){
+            status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;failed++;
+            console.error(`Hierarchy WhatsApp report failed for ${recipientName} / ${site}:`,error.message);
+          }
+          await Promise.all([
+            pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
+            pool.query(`INSERT INTO whatsapp_alert_history
+              (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,['Site consolidated fleet report',displaySiteName(site),slotKey,recipientName,phone,status]),
+          ]);
         }
-        sent++;
-      }catch(error){
-        status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;
-        failed++;
-        console.error(`Hierarchy WhatsApp report failed for ${recipientName}:`,error.message);
       }
-      await Promise.all([
-        pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
-        pool.query(`INSERT INTO whatsapp_alert_history
-          (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
-          ['Hierarchy linked report bundle',designation.label,slotKey,recipientName,phone,status]),
-      ]);
     }
     return {sent,failed,skipped};
-  }finally{if(!event)hierarchyReportRunning=false}
+  }finally{hierarchyReportRunning=false}
 }
 
-async function sendRequestEventReports(type,request){
-  try{return await sendScheduledHierarchyReportBundles(new Date(),{type,request})}
-  catch(error){console.error(`Request ${request.ref} saved, but event report delivery failed.`,error.message);return {failed:true}}
+async function sendRequestEventReports(){
+  return {skipped:true,reason:'Individual events use alerts; reports are consolidated at scheduled times.'};
 }
 
 app.post('/api/reports/director/send-test',requireSuper,async(req,res,next)=>{
@@ -3229,9 +3312,11 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     const recipients=await ticketSuperRecipients(client,{creatorRole,site});
     const creatorLogin=String(req.session.login||'').trim().toLowerCase();
     await addTicketNotifications(client,[...recipients.adminLogins,...recipients.managerLogins],reference,`${req.session.name||'A user'} (@${creatorLogin}) created ticket ${reference}.`,
-      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:true});
+      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},{whatsapp:false});
     await client.query('COMMIT');
     res.status(201).json(normalizeOperationalSiteFields(rows[0]));
+    void sendGenericWhatsAppAlertBestEffort([creatorLogin,...recipients.adminLogins],reference,`Ticket ${reference} was created.`,
+      {templateKey:'ticketCreated',parameters:[reference,req.session.name||creatorLogin,site]},site);
     sendTicketRaisedEmail(rows[0]).catch((error)=>console.error(`Ticket email failed for ${reference}:`,error.message));
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
@@ -3259,9 +3344,11 @@ app.patch('/api/tickets/resolve',requireSession,async(req,res,next)=>{
     const ticket=result.rows[0];
     const recipients=await ticketSuperRecipients(client,{creatorRole:ticket.creatorRole,site:ticket.site});
     await addTicketNotifications(client,[ticket.creatorLogin,...recipients.managerLogins],ticket.reference,`Ticket ${ticket.reference} was resolved by ${req.session.name||'Admin'}.`,
-      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},{whatsapp:true});
+      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},{whatsapp:false});
     await client.query('COMMIT');
     res.json(ticket);
+    void sendGenericWhatsAppAlertBestEffort([ticket.creatorLogin,...recipients.adminLogins],ticket.reference,`Ticket ${ticket.reference} was resolved.`,
+      {templateKey:'ticketResolved',parameters:[ticket.reference,req.session.name||'Admin']},ticket.site);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
 });
 
@@ -3702,7 +3789,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&userManagesSite(user,eligible.rows[0].site))recipients.push(login);
     }
     await addTicketNotificationsBestEffort(pool,recipients,reference,`${authorName} ${updatedToday?'updated today’s':'added a'} daily maintenance update for ${reference}.`,
-      {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:true});
+      {templateKey:'dailyUpdate',parameters:[authorName,reference]},{whatsapp:true,site:eligible.rows[0].site});
     }catch(error){
       console.error(`Request ${reference} daily update was saved, but its notification recipients could not be resolved.`,error);
     }

@@ -1,16 +1,16 @@
 import {flowDesignationForUser} from './hierarchy-report-flow.mjs';
 import {resolveMobileAccess} from './mobile-access.mjs';
 import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
-import {canonicalSiteName} from './site-location.mjs';
+import {assignedUserSiteName,canonicalSiteName} from './site-location.mjs';
+import {DEFAULT_WORKFLOW_ALERT_ROLES,whatsAppRecipientRole} from './whatsapp-recipient-policy.mjs';
 
-const DIRECTOR_PROFILE_NAMES=new Set(['mohit chadda','manish chadda','rahul chadda']);
-const normalizedWords=(value)=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
+export {isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole} from './whatsapp-recipient-policy.mjs';
 
 export const WHATSAPP_WORKFLOW_POLICY={
-  opened:{templateKey:'requestOpened',recipientRoles:['maintenanceSupervisor','maintenanceManager','productionManager']},
-  closed:{templateKey:'requestClosed',recipientRoles:['productionSupervisor','productionManager','maintenanceManager']},
-  verified:{templateKey:'requestVerified',recipientRoles:['productionManager','maintenanceManager','misManager']},
-  idle:{templateKey:'requestIdle',recipientRoles:['projectManager','productionManager','maintenanceManager','misManager']},
+  opened:{templateKey:'requestOpened',recipientRoles:[...DEFAULT_WORKFLOW_ALERT_ROLES]},
+  closed:{templateKey:'requestClosed',recipientRoles:[...DEFAULT_WORKFLOW_ALERT_ROLES]},
+  verified:{templateKey:'requestVerified',recipientRoles:[...DEFAULT_WORKFLOW_ALERT_ROLES]},
+  idle:{templateKey:'requestIdle',recipientRoles:[...DEFAULT_WORKFLOW_ALERT_ROLES]},
 };
 
 export const WHATSAPP_WORKFLOW_DELIVERY_RULES={
@@ -26,38 +26,19 @@ export const WHATSAPP_WORKFLOW_DELIVERY_RULES={
 
 function workflowRoleKeys(user={},profile=resolveMobileAccess({user})){
   const keys=new Set();
-  const designation=flowDesignationForUser(user,profile);
+  const designation=flowDesignationForUser(user,profile)||flowDesignationForUser({designation:user.assignedRole||user.mobileRole},profile);
   if(designation?.key)keys.add(designation.key);
   if(profile.assignedRole==='Production User')keys.add('productionSupervisor');
   if(profile.assignedRole==='Maintenance User')keys.add('maintenanceSupervisor');
   if(profile.assignedRole==='MIS User')keys.add('misSupervisor');
-  for(const role of profile.permissions?.managerRoles||[]){
-    if(role==='Production Manager')keys.add('productionManager');
-    if(role==='Maintenance Manager')keys.add('maintenanceManager');
-    if(role==='MIS Manager')keys.add('misManager');
-  }
-  return {keys,designation};
-}
-
-function leadershipRole(user,profile,designation){
-  const rawAdminLevel=normalizedWords(user.adminLevel),name=normalizedWords(user.employee||user.name);
-  if(rawAdminLevel==='super admin'||designation?.key==='superAdmin')return 'superAdmin';
-  if(DIRECTOR_PROFILE_NAMES.has(name)||designation?.key==='director')return 'director';
-  if(rawAdminLevel==='admin'||(profile.sessionRole==='super'&&profile.permissions?.adminLevel==='Admin'&&designation?.key!=='projectManager'))return 'admin';
-  return '';
+  return keys;
 }
 
 export function isExcludedWorkflowWhatsAppRecipient(user={},profile=resolveMobileAccess({user}),settings=null,eventType=''){
-  if(settings){
-    const role=leadershipRole(user,profile,workflowRoleKeys(user,profile).designation);
-    return Boolean(role&&!settings.events?.[eventType]?.recipientRoles.includes(role));
-  }
-  const rawAdminLevel=normalizedWords(user.adminLevel);
-  const name=normalizedWords(user.employee||user.name);
-  const {designation}=workflowRoleKeys(user,profile);
-  if(DIRECTOR_PROFILE_NAMES.has(name)||designation?.key==='director')return true;
-  if(rawAdminLevel==='admin'||rawAdminLevel==='super admin')return true;
-  return profile.sessionRole==='super'&&profile.permissions?.adminLevel==='Admin'&&designation?.key!=='projectManager';
+  const role=whatsAppRecipientRole(user,profile);
+  if(['manager','director'].includes(role))return true;
+  // An excluded leadership row must also block an eligible duplicate login.
+  return Boolean(settings&&role&&!settings.events?.[eventType]?.recipientRoles?.includes(role));
 }
 
 export function isWorkflowWhatsAppRecipient(user={},eventType='',site='',settings=null){
@@ -66,16 +47,15 @@ export function isWorkflowWhatsAppRecipient(user={},eventType='',site='',setting
   if(settings&&(!settings.enabled||policy.enabled===false))return false;
   const profile=resolveMobileAccess({user});
   if(isExcludedWorkflowWhatsAppRecipient(user,profile,settings,eventType))return false;
-  let {keys,designation}=workflowRoleKeys(user,profile);
-  const leadership=leadershipRole(user,profile,designation);
-  if(settings&&leadership)keys=new Set([leadership]);
-  if(!policy.recipientRoles.some((role)=>keys.has(role)))return false;
+  const leadership=whatsAppRecipientRole(user,profile);
+  const keys=leadership?new Set([leadership]):workflowRoleKeys(user,profile);
+  if(!policy.recipientRoles?.some((role)=>keys.has(role)))return false;
+  if(['admin','superAdmin'].includes(leadership))return true;
   if(profile.sessionRole==='normal'){
-    const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
+    const userSite=canonicalSiteName(assignedUserSiteName(user));
     return Boolean(userSite)&&userSite===canonicalSiteName(site);
   }
   const scope=managerReportScope(user);
-  if(settings&&['admin','superAdmin'].includes(leadership)&&Array.isArray(scope.sites)&&!scope.sites.length)return true;
   return reportScopeIncludesSite(scope,site);
 }
 

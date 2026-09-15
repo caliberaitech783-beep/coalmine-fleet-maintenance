@@ -13,7 +13,7 @@ import './camera-upload.css';
 import {UserLoginHistory,UserLoginActivity} from "./user-login-history.jsx";
 import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
-import {WhatsAppReportSettingsDialog} from "./whatsapp-report-settings.jsx";
+import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import BackupAdministration from "./backup-administration.jsx";
 import {RemoteAssistanceAction, RemoteAssistanceAgent} from "./remote-assistance.jsx";
@@ -281,7 +281,6 @@ const nav = [
 ];
 const adminNav = [
   ["User Sessions", UserRound],
-  ["Report Setting", Settings],
   ["Backup", HardDrive],
   ["Export Backup", Download],
   ["Import Backup", Upload],
@@ -5091,7 +5090,6 @@ const reportCategoryTabs = [
 const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const reportDesignationOptions = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
 function reportScheduleKind(schedule) {
-  if (schedule.cadence === "event") return "Every event";
   if (schedule.cadence === "interval") return `Every ${schedule.intervalDays} days`;
   if (schedule.cadence === "weekly") return "Weekly";
   return "Daily";
@@ -5621,18 +5619,20 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   },[session?.token]);
   const [selectedReportByCategory, setSelectedReportByCategory] = useState({});
   const [directorTimingOpen, setDirectorTimingOpen] = useState(false);
+  const [reportScheduleScope, setReportScheduleScope] = useState("personal");
   const [reportScheduleSettings, setReportScheduleSettings] = useState(defaultHierarchyReportScheduleSettings);
   const [reportScheduleRecipients, setReportScheduleRecipients] = useState({});
   const [selectedScheduleDesignation, setSelectedScheduleDesignation] = useState("director");
   const [reportScheduleLoading, setReportScheduleLoading] = useState(false);
+  const [reportScheduleError, setReportScheduleError] = useState("");
   const [reportScheduleSaving, setReportScheduleSaving] = useState(false);
-  // Department users edit a personal copy of their role schedule; administrators edit the role defaults.
+  // Everyone can edit a personal schedule; administrators can also select the shared role defaults.
   const [userReportSchedule, setUserReportSchedule] = useState({ enabled: true, schedules: [] });
   const [userScheduleCustomised, setUserScheduleCustomised] = useState(false);
   const [reportScheduleOwner, setReportScheduleOwner] = useState({ name: "", login: "" });
   const reportAdministrator = session?.role === "super" && session?.permissions?.adminLevel !== "Manager";
   const [reportAccess, setReportAccess] = useState({ canManageAll: reportAdministrator, allowedDesignationKeys: [], allowedReports: [] });
-  const [reportAccessLoaded, setReportAccessLoaded] = useState(reportAdministrator);
+  const [reportAccessLoaded, setReportAccessLoaded] = useState(false);
   const [reportZipOpen, setReportZipOpen] = useState(false);
   const [selectedZipReports, setSelectedZipReports] = useState([]);
   const [reportZipDownloading, setReportZipDownloading] = useState(false);
@@ -5854,8 +5854,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     }
     setReportAccessLoaded(true);
   };
-  const loadReportScheduleDetails = async () => {
-    const response = await fetch("/api/report-schedule-settings", { headers: { Authorization: `Bearer ${session?.token || authToken}` } });
+  const loadReportScheduleDetails = async (scope = reportScheduleScope) => {
+    const response = await fetch(`/api/report-schedule-settings${scope === "personal" ? "?scope=personal" : ""}`, { headers: { Authorization: `Bearer ${session?.token || authToken}` } });
     const details = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(details.error || "Could not load report schedules.");
     applyReportScheduleDetails(details);
@@ -5877,12 +5877,14 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     if (!reportAccessLoaded || availableReportCategories.some((category) => category.id === activeReportCategory)) return;
     if (availableReportCategories[0]) setActiveReportCategory(availableReportCategories[0].id);
   }, [reportAccessLoaded, activeReportCategory, availableReportCategories.map((category) => category.id).join("|")]);
-  const openReportSchedules = async () => {
+  const openReportSchedules = async (scope = "personal") => {
+    setReportScheduleScope(scope);
     setDirectorTimingOpen(true);
     setReportScheduleLoading(true);
+    setReportScheduleError("");
     try {
-      await loadReportScheduleDetails();
-    } catch (error) { alert(error.message); }
+      await loadReportScheduleDetails(scope);
+    } catch (error) { setReportScheduleError(error.message); }
     finally { setReportScheduleLoading(false); }
   };
   const updateScheduleDesignation = (updater) => {
@@ -5904,17 +5906,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   }));
   const addReportSchedule = () => updateScheduleDesignation((designation) => ({
     ...designation,
-    schedules: [...designation.schedules, { key: `custom-${Date.now()}`, enabled: true, cadence: "daily", weekday: 1, intervalDays: 7, times: ["19:00"], reports: reportAccess.canManageAll ? [] : [...reportAccess.allowedReports] }],
+    schedules: [...designation.schedules, { key: `custom-${Date.now()}`, enabled: true, cadence: "daily", weekday: null, intervalDays: null, times: ["19:00"], reports: reportAccess.canManageAll ? [] : [...reportAccess.allowedReports] }],
   }));
   const removeReportSchedule = (scheduleKey) => updateScheduleDesignation((designation) => ({
     ...designation,
     schedules: designation.schedules.filter((schedule) => schedule.key !== scheduleKey),
   }));
   const saveReportSchedules = async () => {
-    if (reportScheduleSaving) return;
+    if (reportScheduleSaving || reportScheduleLoading || reportScheduleError) return;
     setReportScheduleSaving(true);
     try {
-      const response = await fetch("/api/report-schedule-settings", {
+      const response = await fetch(`/api/report-schedule-settings${reportScheduleScope === "personal" ? "?scope=personal" : ""}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
         body: JSON.stringify(reportAccess.canManageAll ? reportScheduleSettings : { userSchedule: userReportSchedule }),
@@ -5930,7 +5932,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     if (reportScheduleSaving || !window.confirm("Replace your personal schedule with the role default set by the administrator?")) return;
     setReportScheduleSaving(true);
     try {
-      const response = await fetch("/api/report-schedule-settings", {
+      const response = await fetch("/api/report-schedule-settings?scope=personal", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
         body: JSON.stringify({ resetToDefault: true }),
@@ -5995,24 +5997,30 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           <p>Workflow events, elapsed time, and live master totals.</p>
         </div>
         <div className="reports-header-actions">
-          <button type="button" className="secondary director-timing-trigger" onClick={openReportSchedules} disabled={!reportAccessLoaded}><Clock /> Report schedules</button>
+          {reportAdministrator && reportAccessLoaded && <WhatsAppReportSettingsButton token={session?.token || authToken} onOpenReportSchedules={(target) => openReportSchedules(target === "personal" ? "personal" : "organisation")} />}
+          <button type="button" className="secondary director-timing-trigger" onClick={() => openReportSchedules("personal")} disabled={!reportAccessLoaded}><Clock /> My report schedule</button>
           <button type="button" className="primary" onClick={openReportZip} disabled={!reportAccessLoaded || !accessibleReportGroups.length}><Download /> Download reports ZIP</button>
         </div>
       </header>
       {directorTimingOpen && createPortal(
         <div className="overlay" onPointerDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
-          <div className="modal director-timing-modal" role="dialog" aria-modal="true" aria-label="Report delivery schedules">
+          <div className="modal director-timing-modal" role="dialog" aria-modal="true" aria-label={reportAccess.canManageAll ? "Role default report schedules" : "My report schedule"}>
             <header>
-              <button type="button" className="modal-back-button" onClick={() => setDirectorTimingOpen(false)} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><div className="report-schedule-title"><span><CalendarDays /></span><div><h3>Report delivery schedules</h3><p>{reportAccess.canManageAll ? "Set the default recipients, timing and reports for each user role" : "Choose which reports you receive on WhatsApp and when"}</p></div></div>
+              <button type="button" className="modal-back-button" onClick={() => setDirectorTimingOpen(false)} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><div className="report-schedule-title"><span><CalendarDays /></span><div><h3>{reportAccess.canManageAll ? "Role default report schedules" : "My report schedule"}</h3><p>{reportAccess.canManageAll ? "Set shared report defaults for each role; saved personal schedules take priority" : "Choose your report days, times and reports on WhatsApp"}</p></div></div>
               <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X aria-hidden="true" /></button>
             </header>
-            {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : <>
+            {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : reportScheduleError ? <div className="wrs-feedback wrs-error" role="alert">{reportScheduleError}<button type="button" onClick={() => openReportSchedules(reportScheduleScope)}>Reload schedules</button></div> : <>
+              <details className="wrs-schedule-context"><summary>Timing defaults, report windows and site access</summary>
+                <p>{reportAccess.canManageAll ? "You are editing role defaults. Saving these choices makes this panel the source for the role’s report timing, replacing older hierarchy day and time choices. Hierarchy report assignments and site access still apply." : "You are editing My report schedule. Your saved personal days and times override role defaults and the organisation’s CRM fallback timetable. Without a saved personal schedule, CRM keeps its organisation fallback days and times."}</p>
+                <p>Report windows run from the previous scheduled time to the current time. For example, 7 PM → 7 AM covers the overnight period. Each highlighted site has one PDF and one Excel file for that window, covering all ticket categories you are permitted to view.</p>
+                <p>Managers and Directors receive scheduled reports only, never per-request alerts. Request alerts and delivery defaults are managed in WhatsApp delivery settings.</p>
+              </details>
               <div className="report-schedule-toolbar">
                 {reportAccess.canManageAll
                   ? <label><span>User role</span><select value={selectedScheduleDesignation} onChange={(event) => setSelectedScheduleDesignation(event.target.value)}>{scheduleDesignationOptions.map((designation) => <option key={designation.key} value={designation.key}>{designation.label}</option>)}</select></label>
-                  : <div className="report-schedule-owner"><span>Your schedule</span><b>{reportScheduleOwner.name || session?.name || reportScheduleOwner.login}</b><small>{selectedScheduleMeta.label} · <i>{userScheduleCustomised ? "Customised by you" : "Role default"}</i></small></div>}
+                  : <div className="report-schedule-owner"><span>My report schedule</span><b>{reportScheduleOwner.name || session?.name || reportScheduleOwner.login}</b><small>{selectedScheduleMeta.label} · <i>{userScheduleCustomised ? "Customised by you" : "Using role default"}</i></small></div>}
                 {!reportAccess.canManageAll && userScheduleCustomised && <button type="button" className="report-schedule-reset" onClick={resetUserReportSchedule} disabled={reportScheduleSaving}><RotateCcw /> Use role default</button>}
-                <label className="report-schedule-switch"><input type="checkbox" checked={selectedScheduleConfig.enabled} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, enabled: event.target.checked }))} /><span>Active</span></label>
+                <label className="report-schedule-switch"><input type="checkbox" aria-label={reportAccess.canManageAll ? "Role default reports active" : "My scheduled reports active"} checked={selectedScheduleConfig.enabled} onChange={(event) => updateScheduleDesignation((designation) => ({ ...designation, enabled: event.target.checked }))} /><span>Active</span></label>
               </div>
               <div className="report-week-grid compact" aria-label="Seven day report schedule summary">
                 {reportWeekDays.map((day, index) => {
@@ -6033,10 +6041,10 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                     <button type="button" onClick={() => removeReportSchedule(schedule.key)} aria-label="Delete schedule"><Trash2 /></button>
                   </header>
                   <div className="report-schedule-fields">
-                    <label><span>Frequency</span><select value={schedule.cadence} onChange={(event) => updateReportSchedule(schedule.key, { cadence: event.target.value })}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every N days</option><option value="event">Every event</option></select></label>
+                    <label><span>Frequency</span><select value={schedule.cadence} onChange={(event) => updateReportSchedule(schedule.key, { cadence: event.target.value, weekday: event.target.value === "weekly" ? (schedule.weekday ?? 1) : null, intervalDays: event.target.value === "interval" ? (schedule.intervalDays || 7) : null })}><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="interval">Every N days</option></select></label>
                     {schedule.cadence === "weekly" && <label><span>Day</span><select value={schedule.weekday} onChange={(event) => updateReportSchedule(schedule.key, { weekday: Number(event.target.value) })}>{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
                     {schedule.cadence === "interval" && <label><span>Repeat every</span><div className="report-interval-input"><input type="number" min="2" max="31" value={schedule.intervalDays} onChange={(event) => updateReportSchedule(schedule.key, { intervalDays: Number(event.target.value) })} /><small>days</small></div></label>}
-                    {schedule.cadence !== "event" && <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>}
+                    <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" aria-label={`Report delivery time ${index+1}`} value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>
                   </div>
                   {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.filter((report,index,all) => all.findIndex(item => item.title === report.title) === index).map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <details className="report-assignment-picker" open><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportAccess.allowedReports.length ? reportAccess.allowedReports.map((title) => <label key={title}><input type="checkbox" checked={schedule.reports.includes(title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(title) ? schedule.reports.filter((item) => item !== title) : [...schedule.reports, title] })} /><span>{title}</span></label>) : <p className="report-assignment-empty">No reports are assigned to your role yet. Ask an administrator to add them to the role default.</p>}</div></details>}
                 </article>)}
@@ -6045,7 +6053,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             </>}
             <footer>
               <button type="button" onClick={() => setDirectorTimingOpen(false)} disabled={reportScheduleSaving}>Cancel</button>
-              <button type="button" className="primary" onClick={saveReportSchedules} disabled={reportScheduleLoading || reportScheduleSaving}><Save /> {reportScheduleSaving ? "Saving…" : "Save schedules"}</button>
+              <button type="button" className="primary" onClick={saveReportSchedules} disabled={reportScheduleLoading || reportScheduleSaving || !!reportScheduleError}><Save /> {reportScheduleSaving ? "Saving…" : reportAccess.canManageAll ? "Save role defaults" : "Save my schedule"}</button>
             </footer>
           </div>
         </div>,
@@ -7177,51 +7185,12 @@ const regionSites = (record = {}) => String(record.sites || "")
   .map((site) => site.trim())
   .filter(Boolean);
 const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).map((item) => item.trim()).filter(Boolean);
-const hierarchyStandardTimes = ["06:00", "08:00", "10:00", "14:00", "18:00", "19:00", "22:00"];
-const hierarchyScheduleTimePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
-const hierarchyDayForWeekday = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const hierarchyDesignationOption = (row = {}) => reportDesignationOptions.find((option) => (
-  option.label.toLowerCase() === String(row.designation || "").trim().toLowerCase()
-));
-const hierarchyDeliveryDefaults = (row = {}) => {
-  if (Object.prototype.hasOwnProperty.call(row, "scheduleDays") || Object.prototype.hasOwnProperty.call(row, "scheduleTimes")) {
-    return {days: splitPipeValues(row.scheduleDays), times: splitPipeValues(row.scheduleTimes)};
-  }
-  const option = hierarchyDesignationOption(row);
-  const schedules = option ? defaultHierarchyReportScheduleSettings().designations[option.key]?.schedules || [] : [];
-  const scheduled = schedules.filter((schedule) => schedule.cadence !== "event");
-  const days = new Set();
-  scheduled.forEach((schedule) => {
-    if (schedule.cadence === "weekly") days.add(hierarchyDayForWeekday[schedule.weekday]);
-    else reportWeekDays.forEach((day) => days.add(day));
-  });
-  const times = [...new Set(scheduled.flatMap((schedule) => schedule.times || []))].sort();
-  return {days: reportWeekDays.filter((day) => days.has(day)), times};
-};
-const hierarchyTimeLabel = (value) => {
-  const [hourValue, minute = "00"] = String(value || "").split(":");
-  const hour = Number(hourValue);
-  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return value;
-  return `${hour % 12 || 12}:${minute} ${hour < 12 ? "AM" : "PM"}`;
-};
-const hierarchyScheduleSummary = (row, days, times) => {
-  const selectedDays = reportWeekDays.filter((day) => days.includes(day));
-  const selectedTimes = [...new Set(times.filter((time) => hierarchyScheduleTimePattern.test(time)))].sort();
-  const option = hierarchyDesignationOption(row);
-  const hasEvents = option?.schedules?.some((schedule) => schedule.eventBased || schedule.cadence === "event");
-  const scheduled = !selectedDays.length || !selectedTimes.length
-    ? "Scheduled delivery off"
-    : `${selectedDays.length === 7 ? "Daily" : selectedDays.map((day) => day.slice(0, 3)).join(", ")} at ${selectedTimes.map(hierarchyTimeLabel).join(" & ")}`;
-  return hasEvents ? `Every event; ${scheduled}` : scheduled;
-};
 
-function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
+function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll, onOpenReportSettings }) {
   const [savingKey, setSavingKey] = useState("");
   const [editingRow, setEditingRow] = useState(null);
   const [editingReports, setEditingReports] = useState([]);
   const [editingSites, setEditingSites] = useState([]);
-  const [editingScheduleDays, setEditingScheduleDays] = useState([]);
-  const [editingScheduleTimes, setEditingScheduleTimes] = useState([]);
   const [saveMessage, setSaveMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [query, setQuery] = useState("");
@@ -7273,12 +7242,9 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     checked ? [...new Set([...selected, value])] : selected.filter((item) => item !== value)
   ));
   const openHierarchyEditor = (row) => {
-    const delivery = hierarchyDeliveryDefaults(row);
     setSaveError("");
     setEditingReports(splitPipeValues(row.reportAccess));
     setEditingSites(splitPipeValues(row.siteAccess));
-    setEditingScheduleDays(delivery.days);
-    setEditingScheduleTimes(delivery.times);
     setEditingRow(row);
   };
   const closeHierarchyEditor = () => {
@@ -7286,16 +7252,6 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     setEditingRow(null);
     setEditingReports([]);
     setEditingSites([]);
-    setEditingScheduleDays([]);
-    setEditingScheduleTimes([]);
-  };
-  const updateCustomScheduleTime = (previousTime, nextTime) => setEditingScheduleTimes((times) => (
-    [...new Set(times.map((time) => time === previousTime ? nextTime : time))]
-  ));
-  const addCustomScheduleTime = () => {
-    const candidates = ["09:00", "12:00", "15:00", "17:00", "20:00", "21:00"];
-    const next = candidates.find((time) => !editingScheduleTimes.includes(time));
-    if (next) setEditingScheduleTimes((times) => [...times, next]);
   };
   const saveRow = async (row, updates) => {
     const payload = {
@@ -7303,8 +7259,8 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
       designation: row.designation,
       level: row.level,
       schedule: row.schedule,
-      scheduleDays: row.scheduleDays || "",
-      scheduleTimes: row.scheduleTimes || "",
+      ...(Object.prototype.hasOwnProperty.call(row, "scheduleDays") ? {scheduleDays: row.scheduleDays} : {}),
+      ...(Object.prototype.hasOwnProperty.call(row, "scheduleTimes") ? {scheduleTimes: row.scheduleTimes} : {}),
       reportAccess: row.reportAccess || "",
       siteAccess: row.siteAccess || "",
       ...updates,
@@ -7327,17 +7283,9 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
   const saveHierarchyDetails = async (event) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    const scheduleTimes = [...new Set(editingScheduleTimes.filter((time) => hierarchyScheduleTimePattern.test(time)))].sort();
-    if (editingScheduleDays.length && !scheduleTimes.length) {
-      setSaveError("Select at least one valid IST delivery time, or clear all scheduled days.");
-      return;
-    }
     const saved = await saveRow(editingRow, {
       section: String(values.get("section") || "").trim(),
       level: String(values.get("level") || "").trim(),
-      schedule: hierarchyScheduleSummary(editingRow, editingScheduleDays, scheduleTimes),
-      scheduleDays: reportWeekDays.filter((day) => editingScheduleDays.includes(day)).join(" | "),
-      scheduleTimes: scheduleTimes.join(" | "),
       reportAccess: editingReports.join(" | "),
       siteAccess: editingSites.join(" | "),
     });
@@ -7362,8 +7310,8 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     <section className="hierarchy-master-page panel pagepanel">
       <header>
         <div>
-          <h1>Hierarchy &amp; report delivery</h1>
-          <p>Manage designation, level, location, reports, weekdays and WhatsApp delivery times</p>
+          <h1>Hierarchy &amp; report access</h1>
+          <p>Manage designations, levels, report assignments and site access. Set delivery days and times in Reports.</p>
         </div>
         <MasterActions name="Hierarchy master" records={allRows} onAdd={onAdd} onDeleteAll={onDeleteAll} />
       </header>
@@ -7441,7 +7389,7 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
                       <button type="button" className="hierarchy-row-edit" title={`Edit all settings for ${row.designation}`} aria-label={`Edit all settings for ${row.designation}`} onClick={() => openHierarchyEditor(row)} disabled={savingKey === row.rowKey}><Pencil aria-hidden="true" /><span>Edit</span></button>
                     </td>
                     <td className="hierarchy-col-level"><span className="hierarchy-level">L{String(row.level).replace(/^L/i, "")}</span></td>
-                    <td className="hierarchy-col-schedule hierarchy-schedule">{row.schedule}</td>
+                    <td className="hierarchy-col-schedule hierarchy-schedule"><button type="button" className="wrs-outline-button" onClick={onOpenReportSettings}>Manage in Reports</button></td>
                   </>}
                   {visibleReportTitles.map((report) => (
                     <td key={report}>
@@ -7466,33 +7414,13 @@ function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll }) {
     </section>
     {editingRow && <Modal title={`Edit hierarchy · ${editingRow.designation}`} close={closeHierarchyEditor} className="hierarchy-edit-modal">
       <form className="form master-form" onSubmit={saveHierarchyDetails}>
-        <p className="hierarchy-edit-help">Update the schedule, reporting files, and site access for this hierarchy row in one place.</p>
+        <p className="hierarchy-edit-help">Update report assignments and site access for this hierarchy row. Delivery timing is managed in Reports → WhatsApp delivery settings.</p>
         {saveError && <div className="hierarchy-save-error" role="alert"><AlertTriangle /><span>{saveError}</span></div>}
         <div className="formgrid">
           <label>Designation<input value={editingRow.designation} readOnly aria-readonly="true" /></label>
           <label>Section *<input name="section" defaultValue={editingRow.section} required autoFocus /></label>
           <label>Level *<select name="level" defaultValue={String(editingRow.level).replace(/^L/i, "")} required>{[1, 2, 3, 4].map((level) => <option key={level} value={level}>L{level}</option>)}</select></label>
-          <fieldset className="hierarchy-delivery-editor full">
-            <legend>Report delivery schedule</legend>
-            <div className="hierarchy-delivery-heading">
-              <div><CalendarDays /><span><b>Weekdays</b><small>India Standard Time</small></span></div>
-              <div><button type="button" onClick={() => setEditingScheduleDays([...reportWeekDays])}>All days</button><button type="button" onClick={() => setEditingScheduleDays([])}>Clear</button></div>
-            </div>
-            <div className="hierarchy-weekday-selector" role="group" aria-label="Scheduled delivery days">
-              {reportWeekDays.map((day) => <label key={day} className={editingScheduleDays.includes(day) ? "active" : ""}><input type="checkbox" checked={editingScheduleDays.includes(day)} onChange={(event) => toggleDraftValue(setEditingScheduleDays, day, event.target.checked)} /><span><b>{day.slice(0, 3)}</b><small>{day}</small></span></label>)}
-            </div>
-            <div className="hierarchy-delivery-heading time-heading">
-              <div><Clock /><span><b>Delivery times</b><small>Up to 6 time slots</small></span></div>
-              <button type="button" onClick={addCustomScheduleTime} disabled={editingScheduleTimes.length >= 6}>+ Custom time</button>
-            </div>
-            <div className="hierarchy-time-selector" role="group" aria-label="Scheduled delivery times">
-              {hierarchyStandardTimes.map((time) => <label key={time} className={editingScheduleTimes.includes(time) ? "active" : ""}><input type="checkbox" checked={editingScheduleTimes.includes(time)} disabled={!editingScheduleTimes.includes(time) && editingScheduleTimes.length >= 6} onChange={(event) => toggleDraftValue(setEditingScheduleTimes, time, event.target.checked)} /><span>{hierarchyTimeLabel(time)}</span></label>)}
-            </div>
-            {!!editingScheduleTimes.filter((time) => !hierarchyStandardTimes.includes(time)).length && <div className="hierarchy-custom-times">
-              {editingScheduleTimes.filter((time) => !hierarchyStandardTimes.includes(time)).map((time) => <label key={time}><input type="checkbox" checked onChange={() => setEditingScheduleTimes((times) => times.filter((item) => item !== time))} aria-label={`Use custom time ${time}`} /><input type="time" value={time} onChange={(event) => updateCustomScheduleTime(time, event.target.value)} /></label>)}
-            </div>}
-            <output className="hierarchy-schedule-preview"><b>Schedule</b><span>{hierarchyScheduleSummary(editingRow, editingScheduleDays, editingScheduleTimes)}</span></output>
-          </fieldset>
+          <div className="wrs-note full"><strong>Report days and times</strong><p>Open Reports → WhatsApp delivery settings for role defaults, or My report schedule for your personal timing. Save any report or site access changes here before leaving.</p><button type="button" className="wrs-outline-button" onClick={onOpenReportSettings}>Open Reports</button></div>
           <fieldset className="hierarchy-access-editor full">
             <legend>Reporting files</legend>
             <p>Select every report this designation should receive.</p>
@@ -7639,7 +7567,7 @@ Generic = function GenericWithMasters(props) {
     name === "Privilege" ? (
       <PrivilegeMasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} />
     ) : name === "Hierarchy master" ? (
-      <HierarchyMasterPage records={records} onAdd={onAdd} onEdit={onEdit} onDeleteAll={onDeleteAll} />
+      <HierarchyMasterPage records={records} onAdd={onAdd} onEdit={onEdit} onDeleteAll={onDeleteAll} onOpenReportSettings={props.onOpenReportSettings} />
     ) : (
       <MasterPage name={name} records={records} onAdd={onAdd} onEdit={onEdit} onDelete={onDelete} onDeleteAll={onDeleteAll} siteOptions={masterSiteOptions} canCreateSuperAdmin={props.session?.permissions?.adminLevel==="Super Admin"} />
     )
@@ -9166,7 +9094,6 @@ function App() {
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return isAdministrator;
-    if(name==="Report Setting")return isAdministrator;
     if(backupAdminPages.has(name))return isAdministrator;
     if(name==="Audit Trail")return isAdministrator;
     if(name==="Admin locks")return isAdministrator&&adminPermissions.adminLevel==="Super Admin";
@@ -9227,6 +9154,7 @@ function App() {
     };
   }, []);
   const selectMenu = (name) => {
+    if (name === "Report Setting") name = "Reports";
     if (adminOnlyPages.has(name) && !isAdministrator) return;
     if (session?.role === "super" && !canOpenAdminPage(name)) return;
     if (name === active) return;
@@ -9511,8 +9439,6 @@ function App() {
             <AdminLockManagement session={session} />
           ) : active === "User Sessions" ? (
             <UserSessionsPage session={session} />
-          ) : active === "Report Setting" ? (
-            <WhatsAppReportSettingsDialog token={session?.token || authToken} onClose={()=>selectMenu("Dashboard")} />
           ) : backupAdminPages.has(active) ? (
             <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
           ) : active === "Equipment master" ? (
@@ -9551,7 +9477,7 @@ function App() {
           ) : whatsappNav.some(([name]) => name === active) ? (
             <WhatsAppReport type={active} requests={requests} />
           ) : (
-            <Generic name={active} requests={requests} session={session} />
+            <Generic name={active} requests={requests} session={session} onOpenReportSettings={() => selectMenu("Reports")} />
           )}
         </div>
       </main>

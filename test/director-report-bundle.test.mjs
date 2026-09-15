@@ -94,11 +94,13 @@ test('Director report API and all-user schedule popup are wired into server and 
   assert.match(server,/publishDirectorReportArchive/);
   assert.match(server,/archiveUrl/);
   assert.match(server,/sendScheduledDirectorReportBundles/);
-  assert.match(source,/Report delivery schedules/);
+  assert.match(source,/Role default report schedules/);
+  assert.match(source,/My report schedule/);
   assert.match(source,/HIERARCHY_REPORT_DESIGNATIONS/);
   assert.match(source,/Seven day report schedule summary/);
   assert.match(source,/<span>User role<\/span>/);
-  assert.match(source,/Save schedules/);
+  assert.match(source,/Save role defaults/);
+  assert.match(source,/Save my schedule/);
   assert.match(source,/Every N days/);
   assert.match(server,/app\.get\('\/api\/report-schedule-settings'/);
   assert.match(server,/app\.put\('\/api\/report-schedule-settings'/);

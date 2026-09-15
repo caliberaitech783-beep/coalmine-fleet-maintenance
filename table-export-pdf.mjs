@@ -44,28 +44,26 @@ function drawColumnHeader(doc,columns,widths){
   doc.y=y+height;
 }
 
-function drawTablePage(doc,title,count,columns,widths){
-  drawReportHeading(doc,title,count);
+function drawTablePage(doc,drawHeading,columns,widths){
+  drawHeading();
   drawColumnHeader(doc,columns,widths);
   return doc.y;
 }
 
-function footer(doc){
+function footer(doc,generatedAt){
   const pages=doc.bufferedPageRange();
   for(let index=0;index<pages.count;index++){
     doc.switchToPage(index);
-    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Nerve Center | Generated ${formatDisplayDateTime(new Date())} | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
+    doc.fillColor(COLORS.muted).font('Helvetica').fontSize(7.5).text(`Nerve Center | Generated ${formatDisplayDateTime(generatedAt??new Date())} | Page ${index+1} of ${pages.count}`,doc.page.margins.left,doc.page.height-47,{width:doc.page.width-doc.page.margins.left-doc.page.margins.right,align:'center',lineBreak:false});
   }
 }
 
-export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[],highlights=[]}={}){
+function drawTable(doc,{title,columns=[],rows=[],highlights=[]},drawHeading=()=>drawReportHeading(doc,title,rows.length)){
   rows=rows.map(row=>row.map(reportTime12));
   const highlighted=new Set(highlights);
-  const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info:{Title:clean(title),Author:'Nerve Center'}}),result=collect(doc);
-  registerReportPdfFonts(doc);
   const width=doc.page.width-doc.page.margins.left-doc.page.margins.right,widths=columnWidths(columns,width),bottom=doc.page.height-doc.page.margins.bottom-22;
-  let pageStart=drawTablePage(doc,title,rows.length,columns,widths),y=pageStart;
-  const newTablePage=()=>{doc.addPage();pageStart=drawTablePage(doc,title,rows.length,columns,widths);y=pageStart;};
+  let pageStart=drawTablePage(doc,drawHeading,columns,widths),y=pageStart;
+  const newTablePage=()=>{doc.addPage();pageStart=drawTablePage(doc,drawHeading,columns,widths);y=pageStart;};
   if(!rows.length)doc.fillColor(COLORS.muted).font('Helvetica-Bold').fontSize(10).text('No records are available for this report.',doc.page.margins.left,y+16,{width});
   rows.forEach((row,rowIndex)=>{
     let remaining=columns.map((_,index)=>clean(row[index])),continuation=false;
@@ -92,5 +90,39 @@ export async function buildTableExportPdf({title='Nerve Center report',columns=[
       if(remaining.some(Boolean)){newTablePage();continuation=true;}
     }while(remaining.some(Boolean));
   });
+}
+
+function createTableDocument(title,generatedAt){
+  const info={Title:clean(title),Author:'Nerve Center'};
+  if(generatedAt!==undefined)info.CreationDate=new Date(generatedAt);
+  const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info});
+  registerReportPdfFonts(doc);
+  return doc;
+}
+
+export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[],highlights=[]}={}){
+  const doc=createTableDocument(title),result=collect(doc);
+  drawTable(doc,{title,columns,rows,highlights});
   footer(doc);doc.end();return result;
+}
+
+/** One site PDF: title identifies the site; subtitle carries its reporting window. */
+export async function buildTableBundlePdf({title='Nerve Center report',subtitle='',tables=[],generatedAt=new Date()}={}){
+  const sections=tables.length?tables.filter((table,index)=>index===0||table.rows?.length):[{title:'Report',columns:[],rows:[]}];
+  const doc=createTableDocument(title,generatedAt),result=collect(doc);
+  sections.forEach((table,index)=>{
+    if(index)doc.addPage();
+    drawTable(doc,table,()=>{
+      drawReportHeading(doc,title,table.rows?.length||0);
+      const left=doc.page.margins.left,width=doc.page.width-left-doc.page.margins.right;
+      if(clean(subtitle,'')){
+        doc.fillColor(COLORS.muted).font(fontFor(subtitle)).fontSize(9).text(clean(subtitle),left,doc.y,{width});
+        doc.y+=8;
+      }
+      const sectionTitle=clean(table.title,'Report');
+      doc.fillColor(COLORS.navy).font(fontFor(sectionTitle,true)).fontSize(11).text(sectionTitle,left,doc.y,{width});
+      doc.y+=9;
+    });
+  });
+  footer(doc,generatedAt);doc.end();return result;
 }

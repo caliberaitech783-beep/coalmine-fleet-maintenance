@@ -284,25 +284,63 @@ function excelCellReference(columnIndex,rowIndex){
   return `${column}${rowIndex+1}`;
 }
 
-export function buildXlsxWorkbookBuffer(title,columns=[],rows=[]){
+// SpreadsheetML escapes keep XML control characters and literal escape sequences intact.
+function escapeXlsxText(value){
+  return escapeXml(String(value??'').replace(/_x[0-9a-f]{4}_/gi,(match)=>`_x005F_${match.slice(1)}`)
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff\r]/g,(character)=>`_x${character.charCodeAt(0).toString(16).padStart(4,'0').toUpperCase()}_`));
+}
+
+function xlsxWorksheetXml(columns=[],rows=[],preserveWhitespace=false){
   rows=rows.map(row=>row.map(reportTime12));
   const headings=columns.map((column)=>column.label||column.key||'Column');
   const worksheetRows=[headings,...rows];
-  const sheetData=worksheetRows.map((row,rowIndex)=>`<row r="${rowIndex+1}">${row.map((value,columnIndex)=>`<c r="${excelCellReference(columnIndex,rowIndex)}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`).join('')}</row>`).join('');
+  const escapeText=preserveWhitespace?escapeXlsxText:escapeXml;
+  const sheetData=worksheetRows.map((row,rowIndex)=>`<row r="${rowIndex+1}">${row.map((value,columnIndex)=>`<c r="${excelCellReference(columnIndex,rowIndex)}" t="inlineStr"><is><t${preserveWhitespace?' xml:space="preserve"':''}>${escapeText(value)}</t></is></c>`).join('')}</row>`).join('');
   const widths=headings.map((label,index)=>{
-    const maxLength=Math.max(String(label||'').length,...rows.map((row)=>String(row[index]||'').length));
+    const maxLength=rows.reduce((maximum,row)=>Math.max(maximum,String(row[index]||'').length),String(label||'').length);
     return `<col min="${index+1}" max="${index+1}" width="${Math.min(48,Math.max(12,maxLength+2))}" customWidth="1"/>`;
   }).join('');
-  const workbookTitle=escapeXml(title||'Nerve Center report');
+  return `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>`;
+}
+
+function xlsxSheetsWorkbookBuffer(title,sheets,escapeText=escapeXml){
+  const workbookTitle=escapeText(title||'Nerve Center report');
   return zipStoredFiles([
-    {name:'[Content_Types].xml',content:'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>'},
+    {name:'[Content_Types].xml',content:`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets.map((_,index)=>`<Override PartName="/xl/worksheets/sheet${index+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`},
     {name:'_rels/.rels',content:'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>'},
     {name:'docProps/core.xml',content:`<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${workbookTitle}</dc:title><dc:creator>Nerve Center</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`},
     {name:'docProps/app.xml',content:'<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Nerve Center</Application></Properties>'},
-    {name:'xl/_rels/workbook.xml.rels',content:'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'},
-    {name:'xl/workbook.xml',content:`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Report" sheetId="1" r:id="rId1"/></sheets></workbook>`},
-    {name:'xl/worksheets/sheet1.xml',content:`<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>`},
+    {name:'xl/_rels/workbook.xml.rels',content:`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_,index)=>`<Relationship Id="rId${index+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index+1}.xml"/>`).join('')}</Relationships>`},
+    {name:'xl/workbook.xml',content:`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((sheet,index)=>`<sheet name="${escapeText(sheet.name)}" sheetId="${index+1}" r:id="rId${index+1}"/>`).join('')}</sheets></workbook>`},
+    ...sheets.map((sheet,index)=>({name:`xl/worksheets/sheet${index+1}.xml`,content:sheet.content})),
   ]);
+}
+
+export function buildXlsxWorkbookBuffer(title,columns=[],rows=[]){
+  return xlsxSheetsWorkbookBuffer(title,[{name:'Report',content:xlsxWorksheetXml(columns,rows)}]);
+}
+
+function uniqueXlsxSheetName(title,usedNames){
+  let base=clean(title).replace(/[\u0000-\u001f\u007f-\u009f\ufffe\uffff\\/?*:[\]]/g,' ').replace(/^[\s']+|[\s']+$/g,'')||'Report';
+  if(base.toLowerCase()==='history')base='History report';
+  // Avoid splitting a surrogate pair or leaving an apostrophe at either edge.
+  const shorten=(value,length)=>value.slice(0,length).replace(/[\ud800-\udbff]$/,'').replace(/[\s']+$/g,'');
+  let name=shorten(base,31),suffix=1;
+  while(usedNames.has(name.toLowerCase())){
+    const ending=` (${++suffix})`;
+    name=shorten(base,31-ending.length)+ending;
+  }
+  usedNames.add(name.toLowerCase());
+  return name;
+}
+
+/** One worksheet per supplied table, including empty selected reports. */
+export function buildXlsxReportBundleBuffer({title='Nerve Center report',tables=[]}={}){
+  const selected=tables.length?tables:[{title:'Report',columns:[],rows:[]}],usedNames=new Set();
+  return xlsxSheetsWorkbookBuffer(title,selected.map((table)=>({
+    name:uniqueXlsxSheetName(table.title,usedNames),
+    content:xlsxWorksheetXml(table.columns,table.rows,true),
+  })),escapeXlsxText);
 }
 
 export function directorReportFilename(title,extension,slotKey){

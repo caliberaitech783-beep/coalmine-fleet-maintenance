@@ -25,7 +25,7 @@ test("every signed-in Reports page includes schedules and ZIP download tools", (
   assert.match(source, /mobileTabs\.add\("Reports"\)/);
   assert.match(source, /record\.reportAccess = \[\.\.\.departmentReportLabels\]\.join/);
   assert.match(reportsPage, /className="reports-header-actions"/);
-  assert.match(reportsPage, /<Clock \/> Report schedules/);
+  assert.match(reportsPage, /<Clock \/> My report schedule/);
   assert.match(reportsPage, /<Download \/> Download reports ZIP/);
   assert.doesNotMatch(reportsPage, /canUseReportWorkspaceTools/);
 });

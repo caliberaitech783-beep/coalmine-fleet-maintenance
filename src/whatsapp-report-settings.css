@@ -26,6 +26,27 @@
 .wrs-section-heading p{margin:0;color:var(--wrs-muted);max-width:650px}
 .wrs-dialog h4{font-size:15px;margin:24px 0 10px}
 .wrs-card{border:1px solid var(--wrs-border);border-radius:13px;background:#fff;margin:0 0 15px;overflow:hidden}
+.wrs-role-matrix{overflow-x:auto;border:1px solid var(--wrs-border);border-radius:13px;margin-bottom:15px}
+.wrs-role-matrix table{width:100%;border-collapse:collapse;text-align:left;font-size:13px;line-height:1.5}
+.wrs-role-matrix caption{text-align:left;padding:13px 16px;background:#faf7fc;font-weight:700;color:var(--wrs-ink)}
+.wrs-role-matrix th,.wrs-role-matrix td{padding:13px 16px;border-top:1px solid var(--wrs-border);vertical-align:top;white-space:normal}
+.wrs-role-matrix thead th{background:#f5f7fb;font-size:12px;color:#52647b}
+.wrs-role-matrix tbody th{width:40%;color:var(--wrs-ink)}
+.wrs-role-matrix td{color:#425975}
+.wrs-role-matrix small{display:block;margin-top:4px;font-size:11px;font-weight:400;color:var(--wrs-muted)}
+.wrs-schedule-links{padding:17px 18px;border:1px solid #ddcbe2;border-radius:13px;background:#fcf8fd}
+.wrs-schedule-links h4{margin:0 0 7px}
+.wrs-schedule-links p{font-size:12px;line-height:1.65;margin:0;color:var(--wrs-muted)}
+.wrs-schedule-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:13px}
+.wrs-schedule-links .wrs-help{margin-top:10px}
+.wrs-reset small{display:block;margin:3px 0 0;font-size:10px;color:#68778b}
+.director-timing-modal .wrs-schedule-context{margin:14px 18px;padding:14px 16px;border:1px solid #eadce7;border-radius:11px;background:#fbf7fc;color:#4e4059;font-size:13px;line-height:1.65}
+.wrs-schedule-context p{margin:0 0 8px}
+.wrs-schedule-context p:last-child{margin-bottom:0}
+.wrs-schedule-context summary{cursor:pointer;font-weight:700}
+.wrs-schedule-context[open] summary{margin-bottom:10px}
+.wrs-schedule-context summary:focus-visible{outline:3px solid #6366f1;outline-offset:3px}
+@media(max-width:600px){.wrs-role-matrix table{font-size:12px}.wrs-role-matrix th,.wrs-role-matrix td{padding:10px 8px}.wrs-schedule-actions{flex-direction:column}.wrs-footer-actions{flex-wrap:wrap}}
 .wrs-toggle-row{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:17px 19px;cursor:pointer;margin:0;border-bottom:1px solid #edf0f5}
 .wrs-toggle-row:last-child{border-bottom:0}
 .wrs-toggle-row>span:first-child{display:flex;flex-direction:column;gap:4px;min-width:0}

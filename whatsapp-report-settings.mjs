@@ -1,10 +1,9 @@
 import {SINGLE_REPORT_TEMPLATE_PURPOSES,isSingleReportPurpose,validReportTemplateVariant} from './whatsapp-template-catalog.mjs';
+import {DEFAULT_CRM_REPORT_ROLES,DEFAULT_WORKFLOW_ALERT_ROLES,WHATSAPP_DELIVERY_POLICY_VERSION} from './whatsapp-recipient-policy.mjs';
 
 export const WORKFLOW_ROLE_OPTIONS = [
-  ['maintenanceSupervisor','Maintenance supervisor'],['maintenanceManager','Maintenance manager'],
-  ['productionSupervisor','Production supervisor'],['productionManager','Production manager'],
-  ['misSupervisor','MIS supervisor'],['misManager','MIS manager'],['projectManager','Project manager'],
-  ['director','Director'],['admin','Admin'],['superAdmin','Super Admin'],
+  ['productionSupervisor','Production supervisor'],['maintenanceSupervisor','Maintenance supervisor'],
+  ['misSupervisor','MIS supervisor'],['admin','Admin'],['superAdmin','Super Admin'],
   ['oemNationalHead','OEM national head'],['oemRegionalHead','OEM regional head'],
   ['oemAreaServiceEngineer','OEM area engineer'],['oemServiceEngineer','OEM site engineer'],
 ].map(([key,label])=>({key,label}));
@@ -24,7 +23,6 @@ export const PURPOSE_OPTIONS = [
   {key:'manualReports',label:'Manual report send',group:'Manual reports'},
   ...SINGLE_REPORT_TEMPLATE_PURPOSES,
 ];
-const initialRoles = {opened:['maintenanceSupervisor','maintenanceManager','productionManager'],closed:['productionSupervisor','productionManager','maintenanceManager'],verified:['productionManager','maintenanceManager','misManager'],idle:['projectManager','productionManager','maintenanceManager','misManager']};
 export const validWhatsAppTime = value => typeof value==='string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const unique = values => [...new Set(values)];
 const object = value => value && typeof value==='object' && !Array.isArray(value) ? value : {};
@@ -32,11 +30,11 @@ const bool = (value,fallback) => typeof value==='boolean' ? value : fallback;
 const bounded = (value,fallback,min,max) => Number.isInteger(value)&&value>=min&&value<=max ? value : fallback;
 
 export function defaultWhatsAppReportSettings() {
-  return {enabled:true,
-    events:Object.fromEntries(EVENT_OPTIONS.map(({key})=>[key,{enabled:true,recipientRoles:[...initialRoles[key]]}])),
+  return {deliveryPolicyVersion:WHATSAPP_DELIVERY_POLICY_VERSION,enabled:true,
+    events:Object.fromEntries(EVENT_OPTIONS.map(({key})=>[key,{enabled:true,recipientRoles:[...DEFAULT_WORKFLOW_ALERT_ROLES]}])),
     reminders:{offRoad:{enabled:true,hours:4},idle:{enabled:true,hours:1}},
-    crm:{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:['Admin','Manager'],sendEmpty:true,format:'links'},
-    channels:{hierarchyReports:true,ticketCreated:false,ticketResolved:false,dailyUpdate:false,passwordResetOtp:true,manualReports:true},
+    crm:{enabled:true,days:[0,1,2,3,4,5,6],times:['08:00','15:00','20:00'],recipientRoles:[...DEFAULT_CRM_REPORT_ROLES],sendEmpty:true,format:'links'},
+    channels:{hierarchyReports:true,ticketCreated:true,ticketResolved:true,dailyUpdate:true,passwordResetOtp:true,manualReports:true},
     quietHours:{enabled:false,start:'22:00',end:'07:00'},
     templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:isSingleReportPurpose(key)?'inherit':'standard',body:''}])),
   };
@@ -44,16 +42,19 @@ export function defaultWhatsAppReportSettings() {
 
 export function normalizeWhatsAppReportSettings(input={}) {
   const value=object(input), defaults=defaultWhatsAppReportSettings();
+  const migrateRouting=!(Number.isInteger(value.deliveryPolicyVersion)&&value.deliveryPolicyVersion>=WHATSAPP_DELIVERY_POLICY_VERSION);
   const roles=new Set(WORKFLOW_ROLE_OPTIONS.map(role=>role.key));
   const events=object(value.events), reminders=object(value.reminders), crm=object(value.crm), channels=object(value.channels), quiet=object(value.quietHours), templates=object(value.templates);
-  return {enabled:bool(value.enabled,defaults.enabled),
-    events:Object.fromEntries(EVENT_OPTIONS.map(({key})=>{const current=object(events[key]);return [key,{enabled:bool(current.enabled,true),recipientRoles:Array.isArray(current.recipientRoles)?unique(current.recipientRoles.filter(role=>roles.has(role))):defaults.events[key].recipientRoles}];})),
+  // Version 2 updates routing only. Delivery pauses, reminders, schedules,
+  // quiet hours and template choices retain their saved values.
+  return {deliveryPolicyVersion:WHATSAPP_DELIVERY_POLICY_VERSION,enabled:bool(value.enabled,defaults.enabled),
+    events:Object.fromEntries(EVENT_OPTIONS.map(({key})=>{const current=object(events[key]);return [key,{enabled:bool(current.enabled,true),recipientRoles:!migrateRouting&&Array.isArray(current.recipientRoles)?unique(current.recipientRoles.filter(role=>roles.has(role))):defaults.events[key].recipientRoles}];})),
     reminders:Object.fromEntries(['offRoad','idle'].map(key=>[key,{enabled:bool(reminders[key]?.enabled,true),hours:bounded(reminders[key]?.hours,defaults.reminders[key].hours,1,key==='idle'?24:168)}])),
     crm:{enabled:bool(crm.enabled,true),days:Array.isArray(crm.days)?unique(crm.days.filter(day=>Number.isInteger(day)&&day>=0&&day<=6)).sort():defaults.crm.days,
       times:Array.isArray(crm.times)?unique(crm.times.filter(validWhatsAppTime)).sort().slice(0,6):defaults.crm.times,
-      recipientRoles:Array.isArray(crm.recipientRoles)?unique(crm.recipientRoles.filter(role=>['Admin','Manager','Super Admin'].includes(role))):defaults.crm.recipientRoles,
+      recipientRoles:!migrateRouting&&Array.isArray(crm.recipientRoles)?unique(crm.recipientRoles.filter(role=>DEFAULT_CRM_REPORT_ROLES.includes(role))):defaults.crm.recipientRoles,
       sendEmpty:bool(crm.sendEmpty,true),format:'links'},
-    channels:Object.fromEntries(Object.entries(defaults.channels).map(([key,fallback])=>[key,bool(channels[key],fallback)])),
+    channels:Object.fromEntries(Object.entries(defaults.channels).map(([key,fallback])=>[key,migrateRouting&&['ticketCreated','ticketResolved','dailyUpdate'].includes(key)?true:bool(channels[key],fallback)])),
     quietHours:{enabled:bool(quiet.enabled,false),start:validWhatsAppTime(quiet.start)?quiet.start:defaults.quietHours.start,end:validWhatsAppTime(quiet.end)?quiet.end:defaults.quietHours.end},
     templates:Object.fromEntries(PURPOSE_OPTIONS.map(({key})=>[key,{variant:validReportTemplateVariant(key,templates[key]?.variant)?templates[key].variant:defaults.templates[key].variant,body:typeof templates[key]?.body==='string'?templates[key].body.slice(0,1024):''}])),
   };
@@ -65,7 +66,7 @@ export function whatsappSettingsValidationError(input) {
   for(const key of ['offRoad','idle']){const reminder=input.reminders?.[key];if(!reminder||typeof reminder.enabled!=='boolean'||!Number.isInteger(reminder.hours)||reminder.hours<1||reminder.hours>(key==='idle'?24:168))return 'Use 1–168 hours for Off Road escalation and 1–24 hours for Idle reminders.';}
   const crm=input.crm;
   if(!crm||typeof crm.enabled!=='boolean'||!Array.isArray(crm.days)||crm.days.some(day=>!Number.isInteger(day)||day<0||day>6)||!Array.isArray(crm.times)||crm.times.length>6||crm.times.some(time=>!validWhatsAppTime(time)))return 'Set valid CRM weekdays and up to six IST delivery times.';
-  if(!Array.isArray(crm.recipientRoles)||crm.recipientRoles.some(role=>!['Admin','Manager','Super Admin'].includes(role))||!['links','both','pdf','summary'].includes(crm.format)||typeof crm.sendEmpty!=='boolean')return 'Choose valid CRM recipients, report format and empty-report preference.';
+  if(!Array.isArray(crm.recipientRoles)||crm.recipientRoles.some(role=>!DEFAULT_CRM_REPORT_ROLES.includes(role))||!['links','both','pdf','summary'].includes(crm.format)||typeof crm.sendEmpty!=='boolean')return 'Choose valid CRM recipients, report format and empty-report preference.';
   if(crm.enabled&&(!crm.days.length||!crm.times.length||!crm.recipientRoles.length))return 'Choose at least one CRM day, time and recipient role, or turn CRM reports off.';
   const quiet=input.quietHours;
   if(!quiet||typeof quiet.enabled!=='boolean'||!validWhatsAppTime(quiet.start)||!validWhatsAppTime(quiet.end)||quiet.enabled&&quiet.start===quiet.end)return 'Quiet hours need different valid start and end times.';

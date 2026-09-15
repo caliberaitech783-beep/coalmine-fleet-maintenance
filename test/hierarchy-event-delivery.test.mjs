@@ -1,33 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,reportsForHierarchyEvent,reportsDueForDesignation,flowDesignationForUser,applyUserReportScheduleOverride} from '../hierarchy-report-flow.mjs';
+import {defaultHierarchyReportScheduleSettings,HIERARCHY_REPORT_DESIGNATIONS,reportsForHierarchyEvent} from '../hierarchy-report-flow.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
-import {hierarchyAccessAllowsReport} from '../hierarchy-report-catalogue.mjs';
-import {defaultWhatsAppReportSettings,whatsappPurposeEnabled} from '../whatsapp-report-settings.mjs';
-import {reportTemplateFallback} from '../whatsapp-template-runtime.mjs';
-import {hierarchyReportMessagePurpose} from '../whatsapp-template-catalog.mjs';
-import {hierarchyRecipientReportScope} from '../hierarchy-report-scope.mjs';
-import {reportScopeIncludesSite} from '../region-scope.mjs';
-import {resolveMobileAccess} from '../mobile-access.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const request={ref:'REQ/123',site:'Sasti OB',requesterLogin:'production',status:'Open'};
 
-test('event schedules select only the matching report and use a stable per-request event key',()=>{
-  for(const [index,type] of ['opened','closed','verified'].entries()){
-    const groups=reportsForHierarchyEvent('productionSupervisor',{type,request});
-    assert.equal(groups.length,1);
-    assert.deepEqual(groups[0].reports,[DIRECTOR_REPORT_TITLES[index]]);
-    assert.deepEqual(groups,reportsForHierarchyEvent('productionSupervisor',{type,request}));
-    assert.notEqual(groups[0].slotKey,reportsForHierarchyEvent('productionSupervisor',{type,request:{...request,ref:'REQ/124'}})[0].slotKey);
+test('no designation receives per-event reports even with legacy event schedules',()=>{
+  for(const designation of [...Object.keys(HIERARCHY_REPORT_DESIGNATIONS),'unknown']){
+    const settings={designations:{[designation]:{enabled:true,schedules:[{key:'every-event',enabled:true,eventBased:true,cadence:'event',reports:DIRECTOR_REPORT_TITLES}]}}};
+    for(const type of ['opened','closed','verified','idle',undefined]){
+      assert.deepEqual(reportsForHierarchyEvent(designation,{type,request}),[],`${designation}: ${type}`);
+      assert.deepEqual(reportsForHierarchyEvent(designation,{type,request},settings),[],`${designation}: legacy ${type}`);
+    }
   }
-  assert.deepEqual(reportsForHierarchyEvent('misSupervisor',{type:'opened',request}),[]);
-  assert.deepEqual(reportsForHierarchyEvent('director',{type:'opened',request}),[]);
-  assert.deepEqual(reportsForHierarchyEvent('superAdmin',{type:'opened',request}),[]);
-  assert.deepEqual(reportsForHierarchyEvent('unknown',{type:'opened',request}),[]);
-  assert.deepEqual(reportsForHierarchyEvent('productionSupervisor',{type:'idle',request}),[]);
-  assert.deepEqual(reportsForHierarchyEvent('productionSupervisor',{type:'opened',request:{}}),[]);
+  assert.deepEqual(reportsForHierarchyEvent(),[]);
+  assert.deepEqual(reportsForHierarchyEvent(null,null,null),[]);
 });
 
 test('disabled designations, schedules and unselected reports do not send events',()=>{
@@ -39,71 +28,59 @@ test('disabled designations, schedules and unselected reports do not send events
   assert.deepEqual(reportsForHierarchyEvent('productionSupervisor',{type:'opened',request},settings),[]);
   config.schedules[0].enabled=true;config.schedules[0].reports=[DIRECTOR_REPORT_TITLES[1]];
   assert.deepEqual(reportsForHierarchyEvent('productionSupervisor',{type:'opened',request},settings),[]);
-  assert.equal(reportsForHierarchyEvent('productionSupervisor',{type:'closed',request},settings).length,1);
+  assert.deepEqual(reportsForHierarchyEvent('productionSupervisor',{type:'closed',request},settings),[]);
 });
 
-function deliveryHarness({fail=false,selected=true,siteAllowed=true}={}){
-  const settings=defaultHierarchyReportScheduleSettings();
-  settings.designations.productionSupervisor.allRecipients=false;
-  settings.designations.productionSupervisor.recipientLogins=selected?['production']:[];
-  const sent=[],published=[],history=[],claims=new Set();
-  const users=[{login:'production',phone:'919999999999',site:siteAllowed?'Sasti OB':'Majri OB',userType:'Mobile User',userGroup:'Production User'},{login:'other-site',phone:'918888888888',site:'Majri OB',userType:'Mobile User',userGroup:'Production User'}];
-  const dependencies={databaseReady:true,storedWhatsAppReportSettings:async()=>defaultWhatsAppReportSettings(),whatsappPurposeEnabled,reportTemplateFallback,hierarchyReportMessagePurpose,
-    pool:{query:async(sql,args=[])=>{
-      if(sql.includes("master_name='Users & employees'"))return {rows:users.map(record_data=>({record_data}))};
-      if(sql.includes("master_name='Hierarchy master'"))return {rows:[]};
-      if(sql.startsWith('INSERT INTO whatsapp_consolidated_report_runs')){
-        const key=args.join('|');if(claims.has(key))return {rowCount:0,rows:[]};claims.add(key);return {rowCount:1,rows:[{id:claims.size}]};
-      }
-      if(sql.includes('INSERT INTO whatsapp_alert_history'))history.push(args);
-      return {rows:[],rowCount:1};
-    }},
-    storedHierarchyReportScheduleSettings:async()=>settings,storedUserReportScheduleOverrides:async()=>new Map(),applyUserReportScheduleOverride,
-    requestStakeholderLogins:async()=>['production'],
-    resolveMobileAccess,applyHierarchyDeliveryRule,flowDesignationForUser,reportsForHierarchyEvent,reportsDueForDesignation,hierarchyRecipientReportScope,reportScopeIncludesSite,
-    hierarchyRuleForDesignation:()=>({siteAccess:'Sasti OB',reportAccess:DIRECTOR_REPORT_TITLES.join('|')}),
-    splitHierarchyValues:value=>value.split('|'),hierarchyAccessAllowsReport,
-    sourceDataForSites:data=>({...data,requests:siteAllowed?data.requests:[]}),
-    publishDirectorReportFiles:async args=>{published.push(args);return {message:'Event report\nPDF https://example.com/report'}},
-    publicBaseUrl:()=> 'https://example.com',metaWhatsAppRuntimeEnv:async()=>({}),
-    sendMetaWhatsAppTemplate:async args=>{if(fail)throw new Error('Template unavailable');sent.push(args)},
-    sendMetaWhatsAppText:async()=>{throw new Error('Delivery unavailable')},
-    console:{error:()=>{}},
+function deliveryHarness({databaseReady=true}={}){
+  const calls=[];
+  const forbidden=(name)=>(...args)=>{calls.push({name,args});throw new Error(`Event reports must not call ${name}`);};
+  // Event entry points must exit before resolving a recipient, reading settings
+  // or source data, claiming a run, publishing a file or touching a transport.
+  const dependencies={
+    databaseReady,pool:{query:forbidden('pool.query')},console:{error:forbidden('console.error')},
+    ...Object.fromEntries([
+      'storedWhatsAppReportSettings','whatsappPurposeEnabled','storedHierarchyReportScheduleSettings','storedUserReportScheduleOverrides',
+      'reportRecipientLogin','resolveMobileAccess','flowDesignationForUser','hierarchyRuleForDesignation','applyHierarchyDeliveryRule',
+      'applyUserReportScheduleOverride','reportsDueForDesignation','hierarchyRecipientReportScope','hierarchyAccessAllowsReport',
+      'directorReportSourceData','reportSites','displaySiteName','publishDirectorReportFiles','publicBaseUrl',
+      'metaWhatsAppRuntimeEnv','sendMetaWhatsAppTemplate','sendMetaWhatsAppText',
+    ].map((name)=>[name,forbidden(name)])),
   };
-  const snippet=server.slice(server.indexOf('let hierarchyReportRunning=false;'),server.indexOf("app.post('/api/reports/director/send-test'"));
-  const api=new Function(...Object.keys(dependencies),`${snippet};return {sendRequestEventReports};`)(...Object.values(dependencies));
-  return {...api,sent,published,history};
+  const snippet=server.slice(server.indexOf('function combineReportWindowGroups('),server.indexOf("app.post('/api/reports/director/send-test'"));
+  assert.ok(snippet.includes('async function sendScheduledHierarchyReportBundles('));
+  const api=new Function(...Object.keys(dependencies),`${snippet};return {sendRequestEventReports,sendScheduledHierarchyReportBundles};`)(...Object.values(dependencies));
+  return {...api,calls};
 }
 
-test('event delivery honors recipients and site scope, publishes one request, and deduplicates repeats',async()=>{
+test('request event report hooks are no-ops for all lifecycle events, concurrent calls and repeated requests',async()=>{
   const harness=deliveryHarness();
-  const results=await Promise.all([harness.sendRequestEventReports('opened',request),harness.sendRequestEventReports('opened',{...request,ref:'REQ/124'})]);
-  assert.deepEqual(results.map(result=>result.sent),[1,1]);
-  assert.equal(harness.sent.length,2);
-  assert.equal(harness.sent[0].templateKey,'consolidatedRequestReport');
-  assert.equal(harness.sent[0].purpose,hierarchyReportMessagePurpose([DIRECTOR_REPORT_TITLES[0]]));
-  assert.equal(harness.sent[0].parameters[0].includes('\n'),false);
-  assert.deepEqual(harness.published[0].eventRequest,request);
-  assert.deepEqual(harness.published[0].reportTitles,[DIRECTOR_REPORT_TITLES[0]]);
-  await harness.sendRequestEventReports('opened',request);
-  assert.equal(harness.sent.length,2);
-  for(const options of [{selected:false},{siteAllowed:false}]){
-    const excluded=deliveryHarness(options);await excluded.sendRequestEventReports('opened',request);
-    assert.equal(excluded.sent.length,0);assert.equal(excluded.published.length,0);
+  const results=await Promise.all(['opened','closed','verified','idle','opened'].map((type)=>harness.sendRequestEventReports(type,request)));
+  results.push(await harness.sendRequestEventReports('opened',{...request,ref:'REQ/124',site:'Majri OB'}));
+  results.push(await harness.sendRequestEventReports());
+  for(const result of results){
+    assert.equal(result.skipped,true);
+    assert.match(result.reason,/reports are consolidated at scheduled times/);
+    assert.equal(result.sent||0,0);
+  }
+  assert.deepEqual(harness.calls,[]);
+});
+
+test('the scheduler rejects event invocations even at a due time before reading settings or accessing unavailable services',async()=>{
+  for(const databaseReady of [true,false]){
+    const harness=deliveryHarness({databaseReady});
+    for(const event of [{type:'opened',request},{type:'closed',request},{type:'verified',request},{}]){
+      const result=await harness.sendScheduledHierarchyReportBundles(new Date('2026-09-11T13:35:00Z'),event);
+      assert.equal(result.skipped,true);
+      assert.match(result.reason,/Individual events use alerts/);
+    }
+    assert.equal((await harness.sendRequestEventReports('closed',request)).skipped,true);
+    assert.deepEqual(harness.calls,[],'event reports never depend on database or delivery availability');
   }
 });
 
-test('failed delivery is recorded and does not throw after a request was saved',async()=>{
-  const harness=deliveryHarness({fail:true});
-  const result=await harness.sendRequestEventReports('opened',request);
-  assert.equal(result.failed,1);
-  assert.match(harness.history[0][5],/^Failed - Delivery unavailable/);
-});
-
-test('creation, both closing paths and verification invoke event delivery after successful writes',()=>{
+test('saved request paths retain the harmless compatibility report hooks',()=>{
   assert.equal(server.split("await sendRequestEventReports('opened',rows[0])").length-1,1);
   assert.equal(server.split("await sendRequestEventReports('closed',rows[0])").length-1,2);
   assert.equal(server.split("void sendRequestEventReports('verified',rows[0])").length-1,1);
   assert.match(server,/if\(!rows\.length\)\{[\s\S]*status changed[\s\S]*\}\s*res\.json\(rows\[0\]\);\s*void sendRequestEventReports\('verified'/);
-  assert.match(server,/if\(eventRequest\)sourceData.requests=sourceDataForSites\(\{requests:\[eventRequest\]/);
 });

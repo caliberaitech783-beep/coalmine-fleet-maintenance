@@ -12,38 +12,54 @@ test('server WhatsApp delivery is enabled through the shared runtime switch',()=
   assert.match(server,/return \{\.\.\.process\.env,META_WHATSAPP_DELIVERY_PAUSED:'true'\}/);
 });
 
-test('new request WhatsApp alerts are immediate while unrelated notification policies remain unchanged',()=>{
+test('request alerts and daily updates use the shared immediate notification path with generic defaults enabled',()=>{
   assert.match(server,/async function addTicketNotifications\(client,recipients,reference,message,workflowTemplate,\{whatsapp=true,whatsappRecipients=null,workflowType='',site=''\}=\{\}\)/);
-  assert.match(server,/if\(whatsapp\)await sendWhatsAppNotifications/);
+  assert.match(server,/if\(whatsapp\)\{[\s\S]*?await genericWhatsAppAlertLogins[\s\S]*?await sendWhatsAppNotifications/);
   assert.match(server,/templateKey:'requestOpened'[\s\S]*\{whatsapp:true,whatsappRecipients,workflowType:'opened'/);
   assert.match(server,/templateKey:'requestClosed'[\s\S]*\{whatsapp:true,whatsappRecipients,workflowType:'closed'/);
   assert.match(server,/templateKey:'requestVerified'[\s\S]*\{whatsapp:true,whatsappRecipients,workflowType:'verified'/);
   assert.match(server,/templateKey:'requestIdle'[\s\S]*\{whatsapp:true,whatsappRecipients,workflowType:'idle'/);
   for(const purpose of ['ticketCreated','ticketResolved','dailyUpdate']){
-    assert.equal(defaultWhatsAppReportSettings().channels[purpose],false);
-    assert.match(server,new RegExp(`templateKey:'${purpose}'[^;]+\\{whatsapp:true\\}`));
+    assert.equal(defaultWhatsAppReportSettings().channels[purpose],true);
   }
+  assert.match(server,/templateKey:'dailyUpdate'[^;]+\{whatsapp:true,site:/);
+});
+
+test('CRM routes commit in-app notifications and respond before starting WhatsApp asynchronously',()=>{
+  for(const [start,end,purpose] of [
+    ["app.post('/api/tickets',","app.patch('/api/tickets/resolve',",'ticketCreated'],
+    ["app.patch('/api/tickets/resolve',",'async function createMaintenanceReminderNotifications(', 'ticketResolved'],
+  ]){
+    const route=server.slice(server.indexOf(start),server.indexOf(end));
+    assert.match(route,new RegExp(`templateKey:'${purpose}'[^;]+\\{whatsapp:false\\}`));
+    const write=route.indexOf('await addTicketNotifications('),commit=route.indexOf("await client.query('COMMIT');",write);
+    const response=route.indexOf(purpose==='ticketCreated'?'res.status(201).json(':'res.json(ticket);',commit);
+    const followUp=route.indexOf('void sendGenericWhatsAppAlertBestEffort(',response);
+    assert.ok(write>=0&&commit>write&&response>commit&&followUp>response,purpose);
+  }
+});
+
+test('scheduled consolidated reporting remains registered independently of immediate alerts',()=>{
   assert.match(server,/sendScheduledConsolidatedTicketReports/);
-  assert.match(server,/WhatsApp request traffic is[\s\S]*scheduled consolidated report/);
   assert.match(server,/async function sendScheduledConsolidatedWhatsAppReports/);
   assert.match(server,/whatsapp_consolidated_report_runs/);
   assert.match(server,/templateKey:'consolidatedRequestReport'/);
-  assert.match(server,/sendScheduledConsolidatedWhatsAppReports[\s\S]*const isAdmin=profile\.permissions\.adminLevel==='Admin';[\s\S]*if\(!isAdmin&&!isManager\)continue;/);
-  assert.match(server,/sendScheduledConsolidatedWhatsAppReports[\s\S]*if\(isAdmin&&scope\.sites!==null&&!scope\.sites\.length\)scope=\{key:'ALL',label:'All regions',sites:null\};/);
   assert.match(server,/setInterval\(\(\)=>\{[\s\S]*sendScheduledConsolidatedWhatsAppReports/);
 });
 
-test('legacy request traffic without a configured workflow still excludes Super Admin logins',()=>{
-  assert.match(server,/const superAdminLogins=new Set/);
-  assert.match(server,/requestTemplate&&!workflowType&&superAdminLogins\.has\(login\)/);
-  assert.match(server,/eligibleLogins=workflowType\?\[\.\.\.usersByLogin.keys\(\)\]:requestTemplate\?logins\.filter/);
+test('the sender excludes reports-only logins and has no legacy blanket Super Admin exclusion',()=>{
+  const sender=server.slice(server.indexOf('async function sendWhatsAppNotifications('),server.indexOf('async function genericWhatsAppAlertLogins('));
+  assert.match(sender,/isWhatsAppReportsOnlyRecipient\(user\)/);
+  assert.match(sender,/reportsOnlyLogins\.has\(login\)/);
+  assert.match(sender,/const eligibleLogins=\[\.\.\.usersByLogin.keys\(\)\]/);
+  assert.doesNotMatch(sender,/superAdminLogins|isTrueSuperAdmin/);
 });
 
 test('workflow WhatsApp recipients are independently selected and rechecked at delivery',()=>{
   assert.match(server,/requestWorkflowWhatsAppLogins/);
   assert.match(server,/workflowWhatsAppRecipientLogins\(rows,\{eventType,site,settings:await storedWhatsAppReportSettings\(\)\}\)/);
   assert.match(server,/const workflowExcludedLogins=new Set/);
-  assert.match(server,/if\(workflowExcludedLogins\.has\(login\)\)continue/);
+  assert.match(server,/if\(workflowExcludedLogins\.has\(login\)\|\|reportsOnlyLogins\.has\(login\)\)continue/);
   assert.match(server,/if\(workflowType&&!isWorkflowWhatsAppRecipient\(user,workflowType,site,reportSettings\)\)continue/);
   assert.match(server,/whatsappRecipients\?\?logins/);
 });
