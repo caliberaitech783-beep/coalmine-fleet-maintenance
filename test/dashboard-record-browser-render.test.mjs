@@ -28,7 +28,7 @@ test("BD Balance places location, reasons and meter readings beside their reques
     Status: ({children}) => children, formatDate: formatDisplayDateTime, ActionsTable: ({children}) => React.createElement("table", null, children)}));
   assert.match(html, /<th>Days of breakdown<\/th><th>Current location<\/th>/);
   assert.match(html, /<th>Equipment category<\/th><th>Type of breakdown<\/th><th>Reason of breakdown<\/th>/);
-  assert.match(html, /<th>Model<\/th><th>HMR<\/th><th>KMR<\/th>/);
+  assert.match(html, /<th>Model<\/th><th>Opening HMR<\/th><th>Opening KMR<\/th>/);
   assert.match(html, /<td>Test model<\/td><td>0<\/td><td>1234<\/td>/);
   assert.match(html, /Brake repair/);
 });
