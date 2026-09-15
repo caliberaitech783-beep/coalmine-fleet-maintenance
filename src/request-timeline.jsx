@@ -24,6 +24,11 @@ const stageDefinitions = [
   ["verificationLag", "Verification after first trip", "firstTripAt", "verifiedAt"],
 ];
 
+// Equipment group and door number that identify the machine, shown with the request number everywhere in the time breakdown.
+export function requestTimelineIdentity(request = {}) {
+  return [request.equipmentGroup || request.equipment, request.door || request.reg].map(value => String(value || "").trim()).filter(Boolean).join(" · ");
+}
+
 export function RequestTimelineView({data}) {
   const events = Array.isArray(data.events) ? data.events : [];
   const history = Array.isArray(data.history) ? data.history : [];
@@ -31,7 +36,9 @@ export function RequestTimelineView({data}) {
   const request = data.request || {};
   const remarks = (Array.isArray(request.dailyRemarks) ? request.dailyRemarks : []).filter(Boolean).slice().sort((a,b) => (parseRequestTimelineTimestamp(b.createdAt)?.getTime() || 0) - (parseRequestTimelineTimestamp(a.createdAt)?.getTime() || 0));
   const idleApproval = Boolean(data.request?.idealApprovedAt || data.request?.idealApprovedBy);
+  const identity = requestTimelineIdentity(request);
   return <div className="request-timeline-content">
+    {identity && <p className="request-timeline-identity"><b>{identity}</b>{request.site ? <span> · {request.site}</span> : null}<span> · {data.reference}</span></p>}
     <p>Each duration uses the two recorded event times shown below. The three workflow stages do not overlap. Verification is shown separately, not added to the total.</p>
     {idleApproval && <p className="request-timeline-note">This request closed through a manager’s on-road approval. Its closure is not a separately recorded repair-completion time. The maintenance interval can include idle waiting.</p>}
     <div className="request-timeline-stages">
@@ -77,7 +84,7 @@ export function RequestTimelineView({data}) {
   </div>;
 }
 
-export function RequestTimelineContent({reference,token}) {
+export function RequestTimelineContent({reference,token,onLoaded}) {
   const [state,setState] = useState(null);
   const [retry,setRetry] = useState(0);
   useEffect(() => {
@@ -88,7 +95,7 @@ export function RequestTimelineContent({reference,token}) {
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.error || "Could not load this request’s time breakdown.");
         if (body.reference !== reference || !Array.isArray(body.events) || !Array.isArray(body.history) || !body.durations) throw new Error("The time breakdown response is incomplete. Please retry.");
-        if (!controller.signal.aborted) setState({reference,token,data:body});
+        if (!controller.signal.aborted) { setState({reference,token,data:body}); onLoaded?.(body.request || {}); }
       }).catch(error => {if (!controller.signal.aborted) setState({reference,token,error:error.message});});
     return () => controller.abort();
   },[reference,token,retry]);
@@ -99,8 +106,10 @@ export function RequestTimelineContent({reference,token}) {
 
 export default function RequestTimelineButton({reference,token,Dialog,label}) {
   const [open,setOpen] = useState(false);
-  useEffect(() => setOpen(false),[reference,token]);
+  const [identity,setIdentity] = useState("");
+  useEffect(() => {setOpen(false); setIdentity("");},[reference,token]);
   if (!reference) return null;
+  const title = identity ? `Time breakdown · ${reference} · ${identity}` : `Time breakdown · ${reference}`;
   return <><button type="button" className="request-timeline-link" title="View time breakdown" aria-label={`View time breakdown for ${reference}`} onClick={() => setOpen(true)}>{label || reference}</button>
-    {open && <Dialog title={`Time breakdown · ${reference}`} close={() => setOpen(false)}><RequestTimelineContent reference={reference} token={token} /></Dialog>}</>;
+    {open && <Dialog title={title} close={() => setOpen(false)}><RequestTimelineContent reference={reference} token={token} onLoaded={request => setIdentity(requestTimelineIdentity(request))} /></Dialog>}</>;
 }

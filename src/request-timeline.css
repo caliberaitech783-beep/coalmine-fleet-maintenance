@@ -25,3 +25,6 @@
 .request-timeline-updates dl { margin:10px 0 0; }
 .request-timeline-updates dd { margin:0 0 8px; white-space:pre-wrap; }
 @media(max-width:640px) { .request-timeline-stages,.request-timeline-events { grid-template-columns:minmax(0,1fr); } .request-timeline-content { padding:12px; } }
+.request-timeline-identity { margin:0 0 14px; padding:10px 14px; border-radius:8px; background:#f3eef9; color:#3a2a55; font-size:15px; }
+.request-timeline-identity b { font-weight:800; }
+.request-timeline-identity span { color:#5f4f7a; }

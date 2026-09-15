@@ -331,3 +331,15 @@ test("MIS verification attachment validation and API rejection remain inline and
   assert.equal(all(app.render(), node => node.type === "input" && node.props.type === "checkbox")[0].props.checked, true);
   assert.equal(button(app.render(), "Cancel").props.disabled, false);
 });
+
+test("the time breakdown shows the equipment group and door number with the request number", async () => {
+  const {requestTimelineIdentity} = await import("../src/request-timeline.jsx").catch(() => ({}));
+  const identified = {...request, equipmentGroup: "SCANIA TIPPERS", door: "S56-MH34BZ0561", site: "Dhoptala OB (2nd)"};
+  const view = text(harness("RequestTimelineView").render({data: body(request.ref, {request: identified})}));
+  assert.ok(view.includes("SCANIA TIPPERS · S56-MH34BZ0561 · Dhoptala OB (2nd) · QA-TIMELINE-01"));
+  const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8");
+  assert.ok(source.includes("const title = identity ? `Time breakdown · ${reference} · ${identity}` : `Time breakdown · ${reference}`;"));
+  assert.ok(source.includes("onLoaded={request => setIdentity(requestTimelineIdentity(request))}"));
+  assert.ok(source.includes("onLoaded?.(body.request || {})"));
+  void requestTimelineIdentity;
+});
