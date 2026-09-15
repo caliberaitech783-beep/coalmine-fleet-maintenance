@@ -51,6 +51,23 @@ test('a delayed reason becomes mandatory four hours after ETC',()=>{
   assert.equal(delayedReasonRequired('',new Date()),false);
 });
 
+test('the Delayed reason column only appears once ETC has passed and the close form reuses it',()=>{
+  const etc='2026-09-06 10:00';
+  assert.equal(delayedReasonRequired(etc,new Date('2026-09-06T09:59+05:30'),0),false);
+  assert.equal(delayedReasonRequired(etc,new Date('2026-09-06T10:00+05:30'),0),true);
+  const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
+  assert.match(client,/delayedReasonRequired\(row\.expectedCompletionAt, new Date\(now\), 0\)/);
+  assert.match(client,/showDelayedReason = Boolean\(onDelayedReason\) && rows\.some\(delayedReasonDue\)/);
+  assert.match(client,/showDelayedReason && workflowHeader\("delayedReason", "Delayed reason"\)/);
+  assert.doesNotMatch(client,/name="delayedReason"/);
+  assert.match(client,/delayedReason: storedDelayedReason/);
+  assert.match(client,/disabled=\{submitting\|\|delayedReasonMissing\}/);
+  assert.match(server,/expected_completion_at,delayed_reason FROM maintenance_requests/);
+  assert.match(server,/const effectiveDelayedReason=delayedReason\|\|String\(meterRows\[0\]\.delayed_reason\|\|''\)\.trim\(\)/);
+  assert.doesNotMatch(server,/delayed_reason='',status/);
+});
+
 test('Delayed Reason master, close form, and server validation are connected',()=>{
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
@@ -60,7 +77,6 @@ test('Delayed Reason master, close form, and server validation are connected',()
   assert.match(client,/useMasterRecords\("Delayed Reason"\)/);
   assert.match(client,/masterAccessAllows\(viewPermissions, name\)/);
   assert.match(server,/masterAccessAllows\(session\.permissions,requestedMaster\)/);
-  assert.match(client,/Add custom delayed reason/);
   assert.match(client,/delayedReasonRequired\(request\.expectedCompletionAt,closingAt\)/);
   assert.match(server,/delayed_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(server,/delayedReasonRequired\(meterRows\[0\]\.expected_completion_at,closedAt\)/);

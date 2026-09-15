@@ -3824,10 +3824,11 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
       validateRequestTimelineChange(before,{closedAt},{now:before.timelineRecordedAt,userEntered:['closedAt']});
       buildRequestTimelineChanges(before,{...before,closedAt},{events:['closedAt'],reason:req.body?.correctionReason,requireCorrectionReason:['closedAt']});
     }
-    const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
+    const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at,delayed_reason FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
     if(!meterRows.length)throw arrivalRedFlagError();
     const delayedClosure=!ideal&&status==='Closed'&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
-    if(delayedClosure&&!delayedReason)throw Object.assign(new Error('Select a delayed reason because this request is being closed at least 4 hours after ETC.'),{status:400});
+    const effectiveDelayedReason=delayedReason||String(meterRows[0].delayed_reason||'').trim();
+    if(delayedClosure&&!effectiveDelayedReason)throw Object.assign(new Error('Select a delayed reason because this request is being closed at least 4 hours after ETC. Use the Delayed reason column in Active Maintenance Requests.'),{status:400});
     if(openingMeterReading&&!validMeterReading(openingMeterReading))throw Object.assign(new Error(`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`),{status:400});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))throw Object.assign(new Error(`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`),{status:400});
     if(!validMeterReadings(openingMeterReadings)||!validMeterReadings(closingMeterReadings))throw Object.assign(new Error('Enter valid HMR and KMR readings.'),{status:400});
@@ -3851,21 +3852,21 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
           closingMeterReading,closingMeterFile,closingMeterFileName]);
     }
     const {rows}=ideal
-      ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,delayed_reason='',status='Idle',idle_reason=$3,
+      ? await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status='Idle',idle_reason=$3,
           ideal_requested_at=NOW(),ideal_requested_by=$4,ideal_approved_at=NULL,ideal_approved_by=''
           WHERE reference=$5 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
           [maintenanceWork,maintenanceAudio,idleReason,req.session.name||'Maintenance User',reference,maintenanceWorkLanguage])
       : status==='Closed'
         ? await client.query(`UPDATE maintenance_requests SET closed_at=$1,closed_by=$2,maintenance_work=$3,maintenance_audio=$4,maintenance_work_language=$7,delayed_reason=$5,status='Closed'
             WHERE reference=$6 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
-            [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,delayedClosure?delayedReason:'',reference,maintenanceWorkLanguage])
-        : await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,delayed_reason='',status=$3,
+            [closedAt,req.session.name||'Maintenance User',maintenanceWork,maintenanceAudio,effectiveDelayedReason,reference,maintenanceWorkLanguage])
+        : await client.query(`UPDATE maintenance_requests SET closed_at=NULL,closed_by='',maintenance_work=$1,maintenance_audio=$2,maintenance_work_language=$6,status=$3,
             in_progress_at=CASE WHEN status<>'In progress' AND $3='In progress' THEN COALESCE(in_progress_at,NOW()) ELSE in_progress_at END,
             in_progress_by=CASE WHEN status<>'In progress' AND $3='In progress' AND in_progress_at IS NULL THEN $5 ELSE in_progress_by END
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
-    if(delayedClosure){
+    if(delayedClosure&&delayedReason){
       await client.query(`INSERT INTO master_records (master_name,record_data)
         SELECT 'Delayed Reason',$1::jsonb
         WHERE NOT EXISTS (

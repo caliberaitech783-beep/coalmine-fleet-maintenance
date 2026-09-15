@@ -7806,6 +7806,8 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+  const delayedReasonDue = (row) => Boolean(String(row.delayedReason || "").trim()) || delayedReasonRequired(row.expectedCompletionAt, new Date(now), 0);
+  const showDelayedReason = Boolean(onDelayedReason) && rows.some(delayedReasonDue);
   const statusLabel = (row) => String(row.verifiedAt || "").trim() ? "Verified" : (showAcceptanceStatus || showInProgressStatus)
     && String(row.acceptedAt || "").trim()
     && ["open", "in progress"].includes(String(row.status || "").trim().toLowerCase())
@@ -7834,7 +7836,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
     ] : []),
     {key: "status", label: "Status", value: (row) => statusLabel(row)},
     {key: "idleReason", label: "Idle reason", value: (row) => row.idleReason},
-    ...(onDelayedReason ? [{key: "delayedReason", label: "Delayed reason", value: (row) => row.delayedReason}] : []),
+    ...(showDelayedReason ? [{key: "delayedReason", label: "Delayed reason", value: (row) => row.delayedReason}] : []),
     ...(showReason ? [{key: "complaint", label: "Reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
     ...(startedFirst ? [startedColumn, ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn]),
@@ -7905,7 +7907,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
           {showActions && actionsFirst && <th>Actions</th>}
           {showAcceptedTime && workflowHeader("acceptedTime", "Arrival wait")}
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}
-          {onDelayedReason && workflowHeader("delayedReason", "Delayed reason")}
+          {showDelayedReason && workflowHeader("delayedReason", "Delayed reason")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showMeterData && <>{workflowHeader("openingMeter", "Opening KMR/HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
@@ -7921,7 +7923,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
-              {onDelayedReason && <td><button type="button" className="delayed-reason-compact" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button></td>}
+              {showDelayedReason && <td>{delayedReasonDue(row) ? <button type="button" className="delayed-reason-compact" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button> : "—"}</td>}
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
               <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
@@ -8053,9 +8055,6 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
     [ideal,setIdeal]=useState(() => ["idle", "ideal"].includes(String(request.status || "").trim().toLowerCase())),
     [idleReason,setIdleReason]=useState(() => String(request.idleReason || "").trim());
   const status = "Closed";
-  const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
-  const [delayedReason, setDelayedReason] = useState("");
-  const [customDelayedReason, setCustomDelayedReason] = useState("");
   const [tripCardFile, setTripCardFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
@@ -8065,8 +8064,8 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const tatDays=Math.floor(tatMilliseconds/86400000),tatHours=Math.floor((tatMilliseconds%86400000)/3600000),tatMinutes=Math.floor((tatMilliseconds%3600000)/60000);
   const turnaroundTime=`${tatDays}d ${tatHours}h ${tatMinutes}m`;
   const delayedReasonNeeded=!ideal&&status==="Closed"&&delayedReasonRequired(request.expectedCompletionAt,closingAt);
-  const delayedReasonOptions=useMemo(()=>[...new Set(delayedReasonRecords.map((record)=>String(record.delayedReason||"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b)),[delayedReasonRecords]);
-  const selectedDelayedReason=delayedReason==="__custom__"?customDelayedReason.trim():delayedReason;
+  const storedDelayedReason=String(request.delayedReason||"").trim();
+  const delayedReasonMissing=delayedReasonNeeded&&!storedDelayedReason;
   return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
@@ -8083,7 +8082,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         const closingMeterFile = tripCardFile ? await readMeterEvidence(tripCardFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
         const closingMeterReadings = meterReadingsFromForm(form, request, "closing", equipmentRecords);
-        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: delayedReasonNeeded ? selectedDelayedReason : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
+        await onSave({closingDate: form.get("closingDate"), closingTime: form.get("closingTime"), correctionReason: String(form.get("correctionReason") || "").trim(), turnaroundTime, maintenanceWork: form.get("maintenanceWork"), maintenanceAudio: form.get("maintenanceAudio"), maintenanceWorkLanguage: form.get("maintenanceWorkLanguage"), status: ideal ? "Idle" : status, ideal, idleReason: ideal ? idleReason : "", delayedReason: storedDelayedReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", closingMeterReadings, closingMeterReading: closingMeterReadings[meterType] || "", closingMeterFile, closingMeterFileName: tripCardFile?.name || ""});
       } catch (error) { setFormError(error?.message || "Could not save the maintenance update. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -8133,7 +8132,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
             </div>
           </>}
         </fieldset>
-        {delayedReasonNeeded&&<fieldset className="delayed-reason-field full"><legend>Delayed reason *</legend><p>This request is being closed at least 4 hours after ETC. Select the reason for the delay.</p><label>Reason<select name="delayedReason" required value={delayedReason} onChange={(event)=>{setDelayedReason(event.target.value);if(event.target.value!=="__custom__")setCustomDelayedReason("")}}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}<option value="__custom__">Add custom delayed reason</option></select></label>{delayedReason==="__custom__"&&<label>New delayed reason *<input name="customDelayedReason" required maxLength="160" value={customDelayedReason} onChange={(event)=>setCustomDelayedReason(event.target.value)} placeholder="Enter a new delayed reason" /></label>}</fieldset>}
+        {delayedReasonNeeded&&<fieldset className="delayed-reason-field full"><legend>Delayed reason</legend>{storedDelayedReason?<p>Recorded delayed reason: <b>{storedDelayedReason}</b></p>:<p>This request is being closed at least 4 hours after ETC. Select the delayed reason from the Delayed reason column in Active Maintenance Requests before closing it.</p>}</fieldset>}
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
@@ -8143,7 +8142,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         />
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
-      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting||delayedReasonMissing}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
