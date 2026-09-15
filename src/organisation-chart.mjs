@@ -195,8 +195,11 @@ export function buildReportingLines(people = []) {
   if (withoutSite.length) sites.unshift(siteFor(ALL_SITES));
   directors.forEach((director) => placed.add(director));
   const unplaced = people.filter((person) => !placed.has(person) && !["superAdmin", "admin"].includes(person.designationKey)).sort(byName);
-  const inferredCount = [...links.values()].filter((link) => link.parent && !link.explicit).length;
-  return { directors, sites, unplaced, inferredCount, linkedCount: [...links.values()].filter((link) => link.explicit).length };
+  const linkRows = (test) => people.filter((person) => { const link = links.get(person); return link && test(link); })
+    .map((person) => ({ person, parent: links.get(person).parent, superiorText: links.get(person).superiorText })).sort((a, b) => byName(a.person, b.person));
+  const explicitLinks = linkRows((link) => link.explicit);
+  const inferredLinks = linkRows((link) => link.parent && !link.explicit);
+  return { directors, sites, unplaced, explicitLinks, inferredLinks, inferredCount: inferredLinks.length, linkedCount: explicitLinks.length };
 }
 
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
@@ -307,4 +310,59 @@ export function buildSiteViews({ people = [], rows = [], reporting = { sites: []
     };
   });
   return { companyWide, sites };
+}
+
+/** Short labels for the designation keys, shared by the pages and the detail lists. */
+export const ROLE_LABELS = Object.freeze({
+  director: "Director", projectManager: "Project Manager", productionManager: "Production Manager", maintenanceManager: "Maintenance Manager", misManager: "MIS Manager",
+  productionSupervisor: "Production Incharge / Supervisor", maintenanceSupervisor: "Maintenance Incharge / Supervisor", misSupervisor: "MIS Incharge / Supervisor",
+  oemNationalHead: "National Head", oemRegionalHead: "Regional / Zonal Head", oemAreaServiceEngineer: "Area Service Engineer", oemServiceEngineer: "Service Engineer", superAdmin: "Super Admin", admin: "Admin",
+});
+
+const PERSON_COLUMNS = [["name", "Name"], ["login", "Login"], ["type", "Account type"], ["access", "Access / User Group"], ["roles", "Manager roles"], ["designation", "Designation"], ["site", "Site"]];
+const personRow = (person) => ({
+  name: person.name, login: person.login || "—", type: person.userType || "No login type",
+  access: person.adminLevel || person.assignedRole || "—", roles: person.managerRoles.join(", ") || "—",
+  designation: ROLE_LABELS[person.designationKey] || "—", site: person.site || person.sites.join(", ") || person.region || "All",
+});
+const LINK_COLUMNS = [["name", "Person"], ["designation", "Designation"], ["reportsTo", "Reports to"], ["source", "Source"], ["site", "Site"]];
+const linkRow = ({ person, parent, superiorText }, explicit) => ({
+  name: person.name, designation: ROLE_LABELS[person.designationKey] || "—", reportsTo: parent ? parent.name : "—",
+  source: explicit ? "Superior field" : superiorText ? `Superior "${superiorText}" not found · placed by designation and site` : "No Superior · placed by designation and site",
+  site: person.site || person.sites.join(", ") || "All",
+});
+
+/**
+ * The records behind a number on the organisation pages, as a small table.
+ * `kind`: sites | people | superUsers | managers | mobileUsers | hierarchyRows | explicitLinks | inferredLinks.
+ * With `site`, people-type lists and hierarchy rows are limited to that site.
+ */
+export function organisationDetail(chart, kind, site = "") {
+  const entry = site ? (chart.sites?.sites || []).find((item) => item.site === site) : null;
+  const people = entry ? entry.people : chart.people || [];
+  const at = site ? ` at ${site}` : "";
+  const list = (title, rows) => ({ kind, site, title, columns: PERSON_COLUMNS, rows: rows.map(personRow) });
+  switch (kind) {
+    case "sites":
+      return { kind, site: "", title: "Sites", columns: [["site", "Site"], ["people", "People"], ["managers", "Managers"], ["mobile", "Mobile users"], ["pms", "Project Manager"]],
+        rows: (chart.sites?.sites || []).map((item) => ({ site: item.site, people: item.people.length, managers: item.people.filter((person) => person.adminLevel === "Manager").length, mobile: item.people.filter((person) => person.userType === "Mobile User").length, pms: item.reporting.pms.map((person) => person.name).join(", ") || "—" })) };
+    case "people": return list(`People${at}`, people);
+    case "superUsers": return list(`Super Users${at}`, people.filter((person) => person.userType === "Super User"));
+    case "managers": return list(`Managers${at}`, people.filter((person) => person.adminLevel === "Manager"));
+    case "mobileUsers": return list(`Mobile Users${at}`, people.filter((person) => person.userType === "Mobile User"));
+    case "hierarchyRows": {
+      const sections = entry ? entry.levels : chart.levels || [];
+      return { kind, site, title: `Hierarchy master rows${at}`, columns: [["section", "Section"], ["designation", "Designation"], ["level", "Level"], ["schedule", "Schedule"], ["sites", "Site ticks"]],
+        rows: sections.flatMap((section) => section.rows.map((row) => ({ section: section.section, designation: row.designation, level: row.level ? `L${row.level}` : "—", schedule: row.schedule || "—", sites: row.siteAccess.length ? row.siteAccess.join(", ") : "All sites" }))) };
+    }
+    case "explicitLinks":
+    case "inferredLinks": {
+      const explicit = kind === "explicitLinks";
+      const links = (explicit ? chart.reporting?.explicitLinks : chart.reporting?.inferredLinks) || [];
+      const rows = site ? links.filter((link) => personSites(link.person).includes(site)) : links;
+      return { kind, site, title: explicit ? `Reporting links from the Superior field${at}` : `Placed by designation and site${at}`, columns: LINK_COLUMNS, rows: rows.map((link) => linkRow(link, explicit)) };
+    }
+    default:
+      return { kind, site, title: "Details", columns: [], rows: [] };
+  }
 }

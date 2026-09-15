@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildOrganisationChart, buildReportingLines, chartDesignationKey, chartPerson, peopleAtSite, personSites, CHART_DESIGNATIONS, ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES } from "../src/organisation-chart.mjs";
+import { buildOrganisationChart, buildReportingLines, chartDesignationKey, chartPerson, organisationDetail, peopleAtSite, personSites, CHART_DESIGNATIONS, ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES } from "../src/organisation-chart.mjs";
 import { flowDesignationForUser } from "../hierarchy-report-flow.mjs";
 import { resolveMobileAccess } from "../mobile-access.mjs";
 import { masterAccessAllows } from "../admin-access.mjs";
@@ -154,7 +154,7 @@ test("the reporting page renders directors, per-site trees and flags inferred pl
   assert.match(view, /function ReportingNode\(\{ tree \}\)/);
   assert.match(view, /placed by designation and site/);
   assert.match(view, /reporting\.directors\.map\(\(director\) =>/);
-  assert.match(view, /visible\.map\(\(entry\) => <SiteBlock key=\{entry\.site\} entry=\{entry\} \/>\)/);
+  assert.match(view, /visible\.map\(\(entry\) => <SiteBlock key=\{entry\.site\} entry=\{entry\} onDetail=\{openDetail\} \/>\)/);
   assert.match(view, /const SiteBlock = view === "access" \? AccessSite : view === "levels" \? LevelsSite : ReportingSite;/);
   assert.match(view, /Not placed on any site/);
   assert.match(view, /Company-wide/);
@@ -201,4 +201,64 @@ test("every page is site-wise: access, levels and reporting are built per site w
   assert.deepEqual(majri.reporting.trees.map((tree) => [tree.person.name, tree.children.map((child) => [child.person.name, child.children.map((grand) => grand.person.name)])]), [["Vivek", [["Kamal Verma", ["Anil Wagh"]]]]]);
   assert.deepEqual(peopleAtSite(chart.people, "Sasti OB").map((person) => person.name), ["Mohit Chadda", "Priyank Rao", "Ramesh Kumar", "Vivek"], "company-wide designations without a site count for every site; admins do not");
   assert.deepEqual(buildOrganisationChart({}).sites, { companyWide: { superAdmins: [], admins: [], directors: [], managersWithoutSite: [] }, sites: [] });
+});
+
+test("every number on the pages opens the records behind it", () => {
+  const staff = [
+    { login: "mohit", employee: "Mohit Chadda", userType: "Super User", adminLevel: "Super Admin", designation: "Director" },
+    { login: "vivek", employee: "Vivek", userType: "Super User", adminLevel: "Manager", managerRole: "Project Manager", managerSites: "Sasti OB|Majri OB", superior: "Mohit Chadda" },
+    { login: "priyank", employee: "Priyank Rao", userType: "Super User", adminLevel: "Manager", managerRole: "Production Manager", managerSites: "Sasti OB", superior: "Vivek" },
+    { login: "ramesh", employee: "Ramesh Kumar", userType: "Mobile User", userGroup: "Production User", site: "Sasti OB" },
+    { login: "anil", employee: "Anil Wagh", userType: "Mobile User", userGroup: "Maintenance User", site: "Majri OB", superior: "Nobody Known" },
+    { login: "anoop", employee: "Anoop Paul", userType: "Super User", adminLevel: "Admin" },
+  ];
+  const hierarchy = [
+    { section: "Management", designation: "Project Manager (P.M)", level: "2", schedule: "08:00 AM & 06:00 PM" },
+    { section: "Production Dept.", designation: "Production Manager", level: "3", siteAccess: "Sasti OB" },
+  ];
+  const chart = buildOrganisationChart({ users: staff, hierarchy });
+  const sites = organisationDetail(chart, "sites");
+  assert.deepEqual(sites.rows, [
+    { site: "Majri OB", people: 3, managers: 1, mobile: 1, pms: "Vivek" },
+    { site: "Sasti OB", people: 4, managers: 2, mobile: 1, pms: "Vivek" },
+  ]);
+  assert.deepEqual(sites.columns.map(([key]) => key), ["site", "people", "managers", "mobile", "pms"]);
+  const people = organisationDetail(chart, "people");
+  assert.equal(people.title, "People");
+  assert.deepEqual(people.rows.map((row) => [row.name, row.type, row.access, row.designation, row.site]), [
+    ["Anil Wagh", "Mobile User", "Maintenance User", "Maintenance Incharge / Supervisor", "Majri OB"],
+    ["Anoop Paul", "Super User", "Admin", "Admin", "All"],
+    ["Mohit Chadda", "Super User", "Super Admin", "Director", "All"],
+    ["Priyank Rao", "Super User", "Manager", "Production Manager", "Sasti OB"],
+    ["Ramesh Kumar", "Mobile User", "Production User", "Production Incharge / Supervisor", "Sasti OB"],
+    ["Vivek", "Super User", "Manager", "Project Manager", "Sasti OB, Majri OB"],
+  ]);
+  assert.deepEqual(organisationDetail(chart, "superUsers").rows.map((row) => row.name), ["Anoop Paul", "Mohit Chadda", "Priyank Rao", "Vivek"]);
+  assert.deepEqual(organisationDetail(chart, "managers", "Sasti OB").rows.map((row) => row.name), ["Priyank Rao", "Vivek"]);
+  assert.equal(organisationDetail(chart, "managers", "Sasti OB").title, "Managers at Sasti OB");
+  assert.deepEqual(organisationDetail(chart, "mobileUsers", "Majri OB").rows.map((row) => row.name), ["Anil Wagh"]);
+  assert.deepEqual(organisationDetail(chart, "hierarchyRows").rows, [
+    { section: "Management", designation: "Project Manager (P.M)", level: "L2", schedule: "08:00 AM & 06:00 PM", sites: "All sites" },
+    { section: "Production Dept.", designation: "Production Manager", level: "L3", schedule: "—", sites: "Sasti OB" },
+  ]);
+  assert.deepEqual(organisationDetail(chart, "hierarchyRows", "Majri OB").rows.map((row) => row.designation), ["Project Manager (P.M)"], "site-limited rows leave out designations ticked for other sites");
+  const explicit = organisationDetail(chart, "explicitLinks");
+  assert.equal(explicit.rows.length, chart.reporting.linkedCount);
+  assert.deepEqual(explicit.rows.map((row) => [row.name, row.reportsTo, row.source]), [["Priyank Rao", "Vivek", "Superior field"], ["Vivek", "Mohit Chadda", "Superior field"]]);
+  const inferred = organisationDetail(chart, "inferredLinks");
+  assert.equal(inferred.rows.length, chart.reporting.inferredCount);
+  assert.deepEqual(inferred.rows.map((row) => [row.name, row.reportsTo, row.source]), [
+    ["Anil Wagh", "Vivek", 'Superior "Nobody Known" not found · placed by designation and site'],
+    ["Ramesh Kumar", "Priyank Rao", "No Superior · placed by designation and site"],
+  ]);
+  assert.deepEqual(organisationDetail(chart, "inferredLinks", "Majri OB").rows.map((row) => row.name), ["Anil Wagh"]);
+  assert.deepEqual(organisationDetail(chart, "unknown").rows, []);
+  assert.match(view, /function DetailDialog\(\{ detail, onClose, onPickSite \}\)/);
+  assert.match(view, /className="org-summary-card" onClick=\{\(\) => openDetail\(kind\)\}/, "summary cards are buttons");
+  assert.match(view, /onDetail=\{\(\) => onDetail\("people", site\)\}/, "site people counts open the site's people");
+  assert.match(view, /onDetail=\{\(\) => onDetail\("hierarchyRows", site\)\}/);
+  assert.match(view, /onDetail=\{\(\) => onDetail\("managers", site\)\}/);
+  assert.match(view, /openDetail\("explicitLinks"\)/);
+  assert.match(view, /openDetail\("inferredLinks"\)/);
+  assert.match(view, /onPickSite=\{\(site\) => \{ setActiveSite\(site\); setDetail\(null\); \}\}/, "picking a site in the Sites list opens that site");
 });
