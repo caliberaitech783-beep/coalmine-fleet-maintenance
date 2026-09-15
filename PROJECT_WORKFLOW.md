@@ -433,9 +433,9 @@ Fleet and CRM publish **separate bundles for each authorised site and delivery w
 
 Recipient site scope is resolved before publication and intersected with applicable hierarchy restrictions. Managers without an authorised site/region are skipped; a hierarchy row cannot broaden their access. Dispatch claims in `whatsapp_consolidated_report_runs` are scoped by occurrence, recipient and site (plus the report flow/schedule identity), and delivery outcomes are recorded in `whatsapp_alert_history`. Repeated scheduler polls deduplicate claims; failed report attempts may retry up to three attempts within the eligible delivery window.
 
-### Version-2 policy migration, reset and persistence
-
 Scheduled Availability Report figures use the exact delivery window, including downtime carried over from incidents already open at the start. Those incidents contribute to interval availability without being repeated as new case activity. Manual month-to-date availability reports retain their existing behavior.
+
+### Version-2 policy migration, reset and persistence
 
 Settings are stored under `app_settings` key `whatsapp_report_settings`. `normalizeWhatsAppReportSettings()` automatically upgrades settings without a current `deliveryPolicyVersion` to **version 2**: it replaces old immediate-event recipient lists with the unified defaults, includes Super Admin in CRM report recipients, and enables CRM-created/resolved and daily-update channels. **This intentionally changes effective legacy routing/channels when the new code reads them, even before an administrator saves the panel.** It is not a promise that deployment leaves routing unchanged.
 

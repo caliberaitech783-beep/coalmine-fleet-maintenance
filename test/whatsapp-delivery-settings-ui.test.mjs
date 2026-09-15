@@ -178,8 +178,8 @@ test('the mobile operational header always offers Reports even when request and 
   const start=main.indexOf('<nav className="normal-header-nav">'),end=main.indexOf('</nav>',start)+6;
   const {code:navCode}=await transformWithOxc(`function MobileNav(){return (${main.slice(start,end)});}`,'mobile-reports-preview.jsx',{jsx:{runtime:'classic'}});
   for(const mobileRole of ['Production User','Maintenance User','MIS User','OEM User']){
-    const sections=[],scope={React,mobileRole,section:'dashboard',showRequestsMenu:false,showTicketsMenu:false,setSection:next=>sections.push(next),
-      ...Object.fromEntries(['LayoutDashboard','Wrench','FileBarChart','Ticket'].map(name=>[name,()=>null]))};
+    const sections=[],scope={React,mobileRole,isMis:mobileRole==='MIS User',section:'dashboard',showRequestsMenu:false,showTicketsMenu:false,setSection:next=>sections.push(next),
+      ...Object.fromEntries(['LayoutDashboard','Wrench','FileBarChart','Ticket','ArrowRightLeft'].map(name=>[name,()=>null]))};
     const Nav=new Function(...Object.keys(scope),`${navCode};return MobileNav;`)(...Object.values(scope));
     const tree=Nav(),buttons=descendants(tree,node=>node.type==='button');
     const reports=buttons.find(button=>renderToStaticMarkup(button).includes('Reports'));
