@@ -65,8 +65,9 @@
 .pulse-message, .pulse-panel .pulse-table .pulse-empty { padding: 28px 16px; text-align: center; color: #536179; }
 .pulse-error { background: #fff3f4; color: #a6223a; border-radius: 6px; padding: 12px; margin-bottom: 14px; }
 .pulse-error button { color: inherit; border: 0; background: transparent; text-decoration: underline; font: inherit; }
-.pulse-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-variant-numeric: tabular-nums; }
-.pulse-pagination > div { display: flex; align-items: center; gap: 12px; }
+.pulse-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 12px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.pulse-pagination > div { display: flex; align-items: center; gap: 8px; }
+.pulse-content .pulse-pagination button { min-height: 28px; min-width: 28px; padding: 3px 6px; }
 .pulse-content :is(button, input, select, [tabindex]):focus-visible { outline: 3px solid #617fc0; outline-offset: 2px; }
 
 /* Keep the original Info Pulse palette and cards around the site-wise data. */
