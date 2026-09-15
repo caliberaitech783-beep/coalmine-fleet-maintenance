@@ -174,18 +174,19 @@ test('a failed schedule load cannot save the previous editor contents under a di
   await save();
 });
 
-test('the mobile operational header always offers Reports even when request and ticket menus are hidden',async()=>{
+test('existing operational headers retain Reports and General User follows its menu selection',async()=>{
   const start=main.indexOf('<nav className="normal-header-nav">'),end=main.indexOf('</nav>',start)+6;
   const {code:navCode}=await transformWithOxc(`function MobileNav(){return (${main.slice(start,end)});}`,'mobile-reports-preview.jsx',{jsx:{runtime:'classic'}});
-  for(const mobileRole of ['Production User','Maintenance User','MIS User','OEM User']){
-    const sections=[],scope={React,mobileRole,isMis:mobileRole==='MIS User',section:'dashboard',showRequestsMenu:false,showTicketsMenu:false,setSection:next=>sections.push(next),
+  for(const [mobileRole,showReportsMenu] of [['Production User',true],['Maintenance User',true],['MIS User',true],['OEM User',true],['General User',false],['General User',true]]){
+    const sections=[],scope={React,mobileRole,isGeneral:mobileRole==='General User',isMis:mobileRole==='MIS User',section:'dashboard',showDashboardMenu:true,showReportsMenu,showRequestsMenu:false,showTicketsMenu:false,setSection:next=>sections.push(next),
       ...Object.fromEntries(['LayoutDashboard','Wrench','FileBarChart','Ticket','ArrowRightLeft'].map(name=>[name,()=>null]))};
     const Nav=new Function(...Object.keys(scope),`${navCode};return MobileNav;`)(...Object.values(scope));
     const tree=Nav(),buttons=descendants(tree,node=>node.type==='button');
     const reports=buttons.find(button=>renderToStaticMarkup(button).includes('Reports'));
-    assert.ok(reports,mobileRole);reports.props.onClick();assert.deepEqual(sections,['reports']);
+    assert.equal(Boolean(reports),showReportsMenu,mobileRole);
+    if(reports){reports.props.onClick();assert.deepEqual(sections,['reports']);}
   }
-  assert.match(main,/!embedded&&section==="reports"&&<ReportsPage/);
+  assert.match(main,/!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage/);
 });
 
 test('admin, manager, director and operational profiles retain a Reports navigation destination',()=>{
