@@ -2846,7 +2846,7 @@ function ReportColumnSelector({ columns = [], visibleColumnKeys = [], onApply, o
   return createPortal(
     <div className="report-action-dialog-backdrop" onPointerDown={onClose}>
       <section className="report-columns-dialog" role="dialog" aria-modal="true" aria-labelledby="report-columns-title" onPointerDown={(event) => event.stopPropagation()}>
-        <header><h2 id="report-columns-title">Select Columns</h2><button type="button" onClick={onClose} aria-label="Close column selector" title="Close"><X /></button></header>
+        <header><button type="button" className="modal-back-button" onClick={onClose} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><h2 id="report-columns-title">Select Columns</h2><button type="button" onClick={onClose} aria-label="Close column selector" title="Close"><X /></button></header>
         <div className="report-columns-body">
           <div className="report-column-list-panel">
             <h3>Do Not Display</h3>
@@ -2885,7 +2885,7 @@ function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
   return createPortal(
     <div className="report-action-dialog-backdrop" onPointerDown={onClose}>
       <section className="report-sort-dialog" role="dialog" aria-modal="true" aria-labelledby="report-sort-title" onPointerDown={(event) => event.stopPropagation()}>
-        <header><h2 id="report-sort-title">Sort Report</h2><button type="button" onClick={onClose} aria-label="Close sort dialog" title="Close"><X /></button></header>
+        <header><button type="button" className="modal-back-button" onClick={onClose} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><h2 id="report-sort-title">Sort Report</h2><button type="button" onClick={onClose} aria-label="Close sort dialog" title="Close"><X /></button></header>
         <div><label><span>Column</span><select value={columnKey} onChange={(event) => setColumnKey(event.target.value)}>{columns.map((column) => <option key={column.key} value={column.key}>{column.label}</option>)}</select></label><label><span>Direction</span><select value={direction} onChange={(event) => setDirection(event.target.value)}><option value="asc">Ascending</option><option value="desc">Descending</option></select></label></div>
         <footer><button type="button" onClick={onClose}>Cancel</button><button type="button" className="primary" disabled={!columnKey} onClick={() => onApply(columnKey, direction)}>Apply</button></footer>
       </section>
@@ -6003,7 +6003,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         <div className="overlay" onPointerDown={(event) => event.target === event.currentTarget && setDirectorTimingOpen(false)}>
           <div className="modal director-timing-modal" role="dialog" aria-modal="true" aria-label="Report delivery schedules">
             <header>
-              <div className="report-schedule-title"><span><CalendarDays /></span><div><h3>Report delivery schedules</h3><p>{reportAccess.canManageAll ? "Set the default recipients, timing and reports for each user role" : "Choose which reports you receive on WhatsApp and when"}</p></div></div>
+              <button type="button" className="modal-back-button" onClick={() => setDirectorTimingOpen(false)} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><div className="report-schedule-title"><span><CalendarDays /></span><div><h3>Report delivery schedules</h3><p>{reportAccess.canManageAll ? "Set the default recipients, timing and reports for each user role" : "Choose which reports you receive on WhatsApp and when"}</p></div></div>
               <button type="button" onClick={() => setDirectorTimingOpen(false)} aria-label="Close report schedules"><X aria-hidden="true" /></button>
             </header>
             {reportScheduleLoading ? <div className="report-schedule-loading">Loading saved schedules…</div> : <>
@@ -6055,7 +6055,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         <div className="overlay" onPointerDown={(event) => event.target === event.currentTarget && !reportZipDownloading && setReportZipOpen(false)}>
           <div className="modal report-zip-modal" role="dialog" aria-modal="true" aria-label="Download reports as ZIP">
             <header>
-              <div className="report-zip-title"><span><Download /></span><div><h3>Download reports as ZIP</h3><p>Choose reports and receive organised PDF and Excel files in one archive</p></div></div>
+              <button type="button" className="modal-back-button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><div className="report-zip-title"><span><Download /></span><div><h3>Download reports as ZIP</h3><p>Choose reports and receive organised PDF and Excel files in one archive</p></div></div>
               <button type="button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Close ZIP report selection"><X aria-hidden="true" /></button>
             </header>
             <div className="report-zip-range">
@@ -7714,7 +7714,7 @@ function Modal({ title, close, children, className = "", overlayClassName = "" }
     >
       <div ref={dialogRef} tabIndex={-1} className={`modal ${className}`.trim()} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : "Dialog"}>
         <header>
-          <h3>{title}</h3>
+          <button type="button" className="modal-back-button" onClick={close} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><h3>{title}</h3>
           <button type="button" onClick={close} aria-label="Close dialog">
             <X aria-hidden="true" />
           </button>

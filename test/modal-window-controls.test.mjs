@@ -6,8 +6,9 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 const modal = source.slice(source.indexOf("function Modal("), source.indexOf("function requestStartParts"));
 const css = fs.readFileSync(new URL("../src/style.css", import.meta.url), "utf8");
 
-test("shared dialogs keep a close-only title bar", () => {
-  assert.match(modal, /<header>\s*<h3>\{title\}<\/h3>\s*<button type="button" onClick=\{close\} aria-label="Close dialog">/);
+test("shared dialogs offer Back and Close through the same guarded close callback", () => {
+  assert.match(modal, /className="modal-back-button" onClick=\{close\} aria-label="Back"/);
+  assert.match(modal, /<h3>\{title\}<\/h3>\s*<button type="button" onClick=\{close\} aria-label="Close dialog">/);
   assert.doesNotMatch(modal, /modal-window-controls|Minimize window|Maximize window|windowState/);
   assert.doesNotMatch(css, /modal-minimized|modal-maximized|modal-window-controls/);
 });

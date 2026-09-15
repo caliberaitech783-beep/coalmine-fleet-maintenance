@@ -45,7 +45,7 @@ export function RemoteAssistanceRequestDialog({row,token,onClose,onRequested}){
   };
   return createPortal(<div className="remote-assistance-overlay" data-remote-assistance-ui>
     <section className="remote-assistance-dialog" role="dialog" aria-modal="true" aria-labelledby="remote-request-title">
-      <header><span><MonitorUp /></span><div><small>Secure in-app assistance</small><h2 id="remote-request-title">Request access to {row.name||row.login||"user"}&apos;s BDMS tab</h2></div><button type="button" onClick={onClose} aria-label="Close"><X /></button></header>
+      <header><button type="button" className="modal-back-button" onClick={onClose} disabled={sending} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><span><MonitorUp /></span><div><small>Secure in-app assistance</small><h2 id="remote-request-title">Request access to {row.name||row.login||"user"}&apos;s BDMS tab</h2></div><button type="button" onClick={onClose} aria-label="Close"><X /></button></header>
       <form onSubmit={submit}>
         <div className="remote-assistance-recipient"><b>{row.name||"Unknown user"}</b><span>{row.login||"No login"} · {row.location||"Not assigned"}</span><i>Online</i></div>
         <div className="remote-assistance-fields">

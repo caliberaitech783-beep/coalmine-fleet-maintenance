@@ -92,3 +92,9 @@ button.session-state:focus-visible { outline: 2px solid #7043ad; outline-offset:
 .user-session-header-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .session-message-inbox.announcement header{background:linear-gradient(90deg,#5d2a95,#c02b72)}.session-message-inbox-body p{white-space:pre-line}
 .announcement-history{margin:18px 0 0;padding:14px 0 0;border-top:1px solid #dde5ef}.announcement-history h3{margin:0 0 8px;font-size:14px}.announcement-history ul{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:220px;overflow:auto}.announcement-history li{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:10px 12px;border:1px solid #e1e8f2;border-radius:8px;background:#f8fafd}.announcement-history li p{grid-column:1;margin:0;font-size:13px;white-space:pre-line}.announcement-history li small{grid-column:1;color:#64758e;font-size:11px}.announcement-history li button{grid-column:2;grid-row:1/span 2;height:32px;padding:0 12px;border:1px solid #cbd6ec;border-radius:6px;background:#fff;color:#51308d;font-weight:700;font-size:12px}.announcement-history li.withdrawn{opacity:.6}.announcement-history li.withdrawn p{text-decoration:line-through}
+.modal > header > .modal-back-button,
+header > button.modal-back-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 40px; width: 40px; height: 40px; min-width: 40px; padding: 0; margin: 0 12px 0 0; border: 1px solid var(--line, #d7dfeb); border-radius: 8px; color: var(--brand-purple, #522e90); background: var(--surface, #fff); cursor: pointer; }
+.modal-back-button > span { font-size: 26px; line-height: 1; }
+.modal-back-button:focus-visible { outline: 2px solid #7043ad; outline-offset: 3px; }
+.modal-back-button:disabled { opacity: .5; cursor: not-allowed; }
+.modal > header > h3 { flex: 1; min-width: 0; }
