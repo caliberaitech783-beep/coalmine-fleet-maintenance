@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
 import React from "react";
+import {createPortal} from "react-dom";
 import {transformWithOxc} from "vite";
 import * as metrics from "../dashboard-equipment-metrics.mjs";
 import * as movement from "../dashboard-breakdown-movement.mjs";
@@ -11,6 +12,7 @@ import * as dates from "../src/dashboard-request-data.mjs";
 import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
 import * as model from "../src/dashboard-drilldown-model.mjs";
 import * as oemBreakdown from "../src/oem-breakdown-model.mjs";
+import * as oemFilters from "../src/oem-dashboard-filters.mjs";
 import {equipmentGroupValue, normalizeEquipmentGroup} from "../equipment-group.mjs";
 import {dashboardCountScale} from "../src/dashboard-count-scale.mjs";
 import {fleetBarHeightPercent} from "../src/fleet-bar-scale.mjs";
@@ -28,6 +30,10 @@ const componentSource = source.slice(source.indexOf("function Dashboard("), sour
 const dateSource = source.slice(source.indexOf("function dashboardRecordDate("), source.indexOf("function useDashboardEquipment("));
 const sortingSource = source.slice(source.indexOf('const sortCollator ='), source.indexOf('function SortableHeader('));
 const {code} = await transformWithOxc(`${dateSource}\n${sortingSource}\n${componentSource}`, "Dashboard.jsx", {jsx: {runtime: "classic"}});
+const oemChartSource = readFileSync(new URL("../src/oem-breakdown-chart.jsx", import.meta.url), "utf8")
+  .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
+const {code: oemChartCode} = await transformWithOxc(oemChartSource, "OemBreakdownChart.jsx", {jsx: {runtime: "classic"}});
+const OemBreakdownChart = new Function("React", "createPortal", `${oemChartCode}; return OemBreakdownChart;`)(React, createPortal);
 const Null = () => null;
 const componentNames = [...new Set([...componentSource.matchAll(/<([A-Z]\w*)\b/g)].map((match) => match[1]))];
 const text = (node) => Array.isArray(node) ? node.map(text).join("") : React.isValidElement(node)
@@ -38,6 +44,8 @@ const findAll = (tree, predicate) => {
     if (Array.isArray(node)) return node.forEach(visit);
     if (!React.isValidElement(node)) return;
     if (predicate(node)) found.push(node);
+    // Modal renders this supplied subtree before its children.
+    visit(node.props.topBar);
     visit(node.props.children);
   };
   visit(tree);
@@ -46,6 +54,23 @@ const findAll = (tree, predicate) => {
 const byLabel = (tree, label) => findAll(tree, (node) => node.props["aria-label"] === label)[0];
 const byClass = (tree, className) => findAll(tree, (node) => node.props.className === className)[0];
 const button = (tree, label) => findAll(tree, (node) => node.type === "button" && text(node).trim() === label)[0];
+const fleetCount = (tree, label) => findAll(tree, (node) => node.type === "button" && node.props.className === "mine-fleet-toggle-count" && node.props["aria-label"]?.startsWith(`View ${label} list:`))[0];
+const oemChart = (tree) => findAll(tree, (node) => node.type === OemBreakdownChart)[0];
+const renderOemChart = (tree) => OemBreakdownChart(oemChart(tree).props);
+const oemDetails = (tree) => findAll(tree, (node) => node.props.selection?.records && node.props.ActionsTable)[0]?.props;
+const assertOemFilters = (tree, {region, site, oem}) => {
+  for (const [label, value] of [["Region", region], ["Site", site], ["OEM", oem]]) {
+    const controls = findAll(tree, (node) => node.props["aria-label"] === label);
+    assert.ok(controls.length, `${label} is visible`);
+    for (const control of controls) assert.equal(control.props.value, value, `${label} stays shared by the dashboard and dialog`);
+  }
+};
+const clickOem = (control) => {
+  assert.ok(control, "OEM action exists");
+  let stopped = false;
+  control.props.onClick({stopPropagation() { stopped = true; }});
+  assert.ok(stopped, "the chart action stops propagation");
+};
 
 const assets = Object.freeze([1, 2, 3].map((id) => Object.freeze({id, door: `V${id}`, chassisNo: `C${id}`, category: "Vehicle", group: "TIPPER", currentLocation: "Sasti OB", status: "Operational"})));
 const requests = Object.freeze([
@@ -152,9 +177,10 @@ test("every dashboard date filter starts on today, availability follows the To d
   assert.equal(button(tree, "Reset dates").props.disabled, true);
 });
 
-function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}} = {}) {
+function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB"]}], allowedSites = ["Sasti OB"], restrictToScope = true, equipmentState = {}, initialMode = "breakdown"} = {}) {
   const slots = [];
   let cursor = 0;
+  let initialized = false;
   const useState = (initial) => {
     const index = cursor++;
     if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
@@ -165,7 +191,8 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     openHourlyBreakdownTab() {},
     isDurationColumn, compareDurationValues,
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
-    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown,
+    OemBreakdownChart,
+    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters,
     availabilityRequestsForDate, dashboardFleetSnapshot,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
@@ -180,7 +207,20 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     MaintenanceRemarks: Null,
   };
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
-  return {render(rows = requests, props = {}) { cursor = 0; return Dashboard({requests: rows, ...props}); }};
+  return {render(rows = requests, props = {}) {
+    cursor = 0;
+    let tree = Dashboard({requests: rows, ...props});
+    if (!initialized) {
+      initialized = true;
+      // Existing breakdown tests enter that view through its normal label action.
+      if (initialMode !== "oem") {
+        button(byLabel(tree, "Fleet chart view"), initialMode === "total" ? "Total" : "Breakdown").props.onClick();
+        cursor = 0;
+        tree = Dashboard({requests: rows, ...props});
+      }
+    }
+    return tree;
+  }};
 }
 
 for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} failure keeps cards, filters and drilldown mounted without a Live label`, () => {
@@ -190,7 +230,7 @@ for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} fa
   let tree = view.render(requests, props);
   byLabel(tree, "Region").props.onChange({target: {value: "WCL"}});
   tree = view.render(requests, props);
-  byClass(tree, "mine-fleet-chart-title").props.onClick();
+  fleetCount(tree, "Total").props.onClick();
   tree = view.render(requests, props);
   const originalRows = detailView(tree).rows;
   assert.match(text(byClass(tree, "mine-updated")), /Live/);
@@ -211,22 +251,176 @@ for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} fa
   assert.equal(findAll(tree, (node) => typeof node.props.retry === "function" && node.props.updatedAt).length, 0);
 });
 
-test("OEM chart clicks keep the exact selection in the shared list after a background refresh", () => {
-  const view = harness({equipment: assets.map((asset, index) => ({...asset, make: index === 0 ? "Tata" : "Volvo"}))});
-  let tree = view.render();
-  findAll(tree, node => node.type === "button" && text(node).startsWith("OEM BD"))[0].props.onClick({});
-  tree = view.render();
+const oemEquipment = [
+  ["Sasti OB", "Tata"], ["Sasti OB", "Volvo"], ["Majri OB", "Volvo"],
+  ["Jayant OB", "Tata"], ["Jayant OB", "Volvo"], ["Sasti OB", "Tata"], ["Sasti OB", "Tata"],
+].map(([currentLocation, make], index) => Object.freeze({...assets[0], id: index + 1, door: `V${index + 1}`, chassisNo: `C${index + 1}`, currentLocation, make}));
+const oemRequests = [...oemEquipment.slice(0, 5).map(asset => Object.freeze({
+  ref: `BD-${asset.id}`, door: asset.door, chassis: asset.chassisNo, site: asset.currentLocation,
+  category: "Breakdown", status: "Open", start: "2026-09-01 09:00:00",
+})), Object.freeze({ref: "HISTORICAL", door: "V7", chassis: "C7", site: "Sasti OB", category: "Breakdown", status: "Closed", start: "2026-09-08 09:00:00", closedAt: "2026-09-09 12:00:00"})];
+const oemHarnessOptions = {equipment: oemEquipment, regions: [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: [], restrictToScope: false, initialMode: "oem"};
+
+test("dashboard opens in OEM by default with today's shared filters and separate label and count actions", () => {
+  const view = harness({...oemHarnessOptions, initialMode: "oem"});
+  let tree = view.render(oemRequests);
+  assertOemFilters(tree, {region: "all", site: "all", oem: "all"});
+  assert.equal(byLabel(tree, "Dashboard from date").props.value, todayKey);
+  assert.equal(byLabel(tree, "Dashboard to date").props.value, todayKey);
+  assert.equal(button(byLabel(tree, "Fleet chart view"), "OEM BD").props["aria-pressed"], true);
+  assert.equal(oemChart(tree).props.chart.rows.length, 5);
+  assert.equal(text(fleetCount(tree, "OEM BD")), "5");
+  assert.equal(text(fleetCount(tree, "Total")), "7");
   assert.equal(byClass(tree, "mine-panel mine-request-lifecycle"), undefined);
-  const chart = findAll(tree, node => node.props.chart && node.props.onSelect)[0];
-  chart.props.onSelect({site: "Sasti OB", oem: "tata"});
-  tree = view.render();
-  const details = () => findAll(tree, node => node.props.selection?.records && node.props.ActionsTable)[0].props;
-  assert.equal(details().selection.label, "Tata");
-  assert.deepEqual(details().selection.records.map(row => row.requestReference), ["OLD-OPEN"]);
-  assert.ok(details().title.includes("Sasti OB"));
-  assert.ok(findAll(tree, node => node.props.overlayClassName === "dashboard-asset-overlay").length);
-  tree = view.render([...requests, {...requests[0], ref: "LATER"}]);
-  assert.deepEqual(details().selection.records.map(row => row.requestReference), ["OLD-OPEN"]);
+  assert.equal(byLabel(tree, "Tracking vehicle throughput"), undefined);
+  assert.equal(oemDetails(tree), undefined);
+  for (const label of ["Total", "Breakdown", "OEM BD"]) {
+    button(byLabel(tree, "Fleet chart view"), label).props.onClick();
+    tree = view.render(oemRequests);
+    assert.equal(button(byLabel(tree, "Fleet chart view"), label).props["aria-pressed"], true);
+    assert.equal(oemDetails(tree), undefined, "view labels do not open a list");
+    assert.equal(byClass(tree, "dashboard-asset-modal"), undefined);
+    assert.equal(tree.props.onBack, undefined, "view labels do not open hourly activity");
+  }
+});
+
+test("OEM segments, site totals and legend actions update the shared region, site and OEM filters", () => {
+  const cases = [
+    ["Sasti OB · Tata: 1 breakdown assets, view details", "WCL", "Sasti OB", "tata", ["BD-1"]],
+    ["Sasti OB · Volvo: 1 breakdown assets, view details", "WCL", "Sasti OB", "volvo", ["BD-2"]],
+    ["Majri OB · Volvo: 1 breakdown assets, view details", "WCL", "Majri OB", "volvo", ["BD-3"]],
+    ["Jayant OB · Tata: 1 breakdown assets, view details", "NCL", "Jayant OB", "tata", ["BD-4"]],
+    ["Jayant OB · Volvo: 1 breakdown assets, view details", "NCL", "Jayant OB", "volvo", ["BD-5"]],
+    ["Sasti OB: 2 breakdown assets, view all OEMs", "WCL", "Sasti OB", "all", ["BD-1", "BD-2"]],
+    ["Volvo: 3 breakdown assets, view details", "all", "all", "volvo", ["BD-2", "BD-3", "BD-5"]],
+  ];
+  for (const [label, region, site, oem, references] of cases) {
+    const view = harness(oemHarnessOptions);
+    let tree = view.render(oemRequests);
+    clickOem(byLabel(renderOemChart(tree), label));
+    tree = view.render(oemRequests);
+    assertOemFilters(tree, {region, site, oem});
+    assert.equal(findAll(tree, node => node.props["aria-label"] === "OEM").length, 2, "the open list exposes the same header filters");
+    assert.deepEqual(oemDetails(tree).selection.records.map(row => row.requestReference), references);
+    assert.equal(oemDetails(tree).selection.rows.length, references.length);
+    assert.equal(oemChart(tree).props.chart.rows.length, references.length);
+    assert.equal(text(fleetCount(tree, "OEM BD")), String(references.length));
+    assert.ok(oemDetails(tree).title.includes(site === "all" ? "All selected sites" : site));
+  }
+});
+
+test("an open OEM list follows refreshed requests and shared OEM, site, region and date changes", () => {
+  const view = harness(oemHarnessOptions);
+  let tree = view.render(oemRequests);
+  clickOem(byLabel(renderOemChart(tree), "Sasti OB · Tata: 1 breakdown assets, view details"));
+  tree = view.render(oemRequests);
+  const assertReferences = expected => assert.deepEqual(oemDetails(tree).selection.records.map(row => row.requestReference), expected);
+  assertReferences(["BD-1"]);
+  const refreshed = [...oemRequests, {...oemRequests[0], ref: "LATER"}];
+  tree = view.render(refreshed);
+  assertReferences(["BD-1", "LATER"]);
+  assert.equal(oemDetails(tree).selection.rows.length, 1, "multiple requests keep a single counted asset");
+  assert.equal(text(fleetCount(tree, "OEM BD")), "1");
+
+  tree = setDashboardDate(view, "2026-09-08", refreshed);
+  assertReferences(["BD-1", "LATER", "HISTORICAL"]);
+  assert.equal(oemDetails(tree).selection.periodLabel, "08-09-2026");
+  assert.equal(text(fleetCount(tree, "OEM BD")), "2");
+  tree = setDashboardDate(view, todayKey, refreshed);
+  assertReferences(["BD-1", "LATER"]);
+
+  byLabel(tree, "OEM").props.onChange({target: {value: "volvo"}});
+  tree = view.render(refreshed);
+  assertOemFilters(tree, {region: "WCL", site: "Sasti OB", oem: "volvo"});
+  assertReferences(["BD-2"]);
+  byLabel(tree, "Site").props.onChange({target: {value: "Majri OB"}});
+  tree = view.render(refreshed);
+  assertReferences(["BD-3"]);
+  byLabel(tree, "Region").props.onChange({target: {value: "NCL"}});
+  tree = view.render(refreshed);
+  assertOemFilters(tree, {region: "NCL", site: "all", oem: "volvo"});
+  assertReferences(["BD-5"]);
+  // Editing the dialog's copy also changes the dashboard header and chart.
+  const dialogOem = findAll(tree, node => node.props["aria-label"] === "OEM").at(-1);
+  dialogOem.props.onChange({target: {value: "tata"}});
+  tree = view.render(refreshed);
+  assertOemFilters(tree, {region: "NCL", site: "all", oem: "tata"});
+  assertReferences(["BD-4"]);
+  const closed = refreshed.map(row => row.ref === "BD-4" ? {...row, status: "Closed", closedAt: "2026-09-10 12:00:00"} : row);
+  tree = view.render(closed);
+  assertReferences([]);
+  assert.equal(text(fleetCount(tree, "OEM BD")), "0");
+});
+
+test("OEM full-list and numeric count actions preserve shared filters and open the displayed assets", () => {
+  const controls = [
+    [tree => button(renderOemChart(tree), "View full list 2"), false, true],
+    [tree => byClass(renderOemChart(tree), "mine-oem-all"), false, true],
+    [tree => fleetCount(tree, "OEM BD"), false, false],
+    [tree => fleetCount(tree, "Breakdown"), false, false],
+    [tree => fleetCount(tree, "Total"), true, false],
+    [tree => byLabel(renderOemChart(tree), "Sasti OB: 2 breakdown assets, view details"), false, true],
+  ];
+  for (const [control, fleetOnly, chartAction] of controls) {
+    const view = harness(oemHarnessOptions);
+    let tree = setDashboardDate(view, "2026-09-08", oemRequests);
+    byLabel(tree, "Site").props.onChange({target: {value: "Sasti OB"}});
+    tree = view.render(oemRequests);
+    byLabel(tree, "OEM").props.onChange({target: {value: "tata"}});
+    tree = view.render(oemRequests);
+    assertOemFilters(tree, {region: "all", site: "Sasti OB", oem: "tata"});
+    assert.equal(oemDetails(tree), undefined, "filter changes alone do not open a list");
+    const action = control(tree);
+    if (chartAction) clickOem(action);
+    else {
+      assert.equal(text(action), fleetOnly ? "3" : "2");
+      action.props.onClick();
+    }
+    tree = view.render(oemRequests);
+    const isSiteTotal = action.props.className === "mine-oem-total";
+    assertOemFilters(tree, {region: isSiteTotal ? "WCL" : "all", site: "Sasti OB", oem: "tata"});
+    assert.equal(byLabel(tree, "Dashboard from date").props.value, "2026-09-08");
+    assert.equal(byLabel(tree, "Dashboard to date").props.value, "2026-09-08");
+    assert.equal(button(byLabel(tree, "Fleet chart view"), "OEM BD").props["aria-pressed"], true);
+    assert.equal(tree.props.onBack, undefined, "OEM counts keep the dashboard open");
+    const selection = oemDetails(tree).selection;
+    assert.equal(selection.fleetOnly, fleetOnly);
+    assert.equal(selection.rows.length, fleetOnly ? 3 : 2);
+    assert.ok(selection.records.every(row => row.make === "Tata"));
+    if (fleetOnly) {
+      assert.deepEqual(selection.records.map(row => row.door), ["V1", "V6", "V7"]);
+      assert.ok(selection.records.every(row => row.currentLocation === "Sasti OB"));
+    } else {
+      assert.ok(selection.records.every(row => row.requestSite === "Sasti OB"));
+      assert.deepEqual(selection.records.map(row => row.requestReference), ["BD-1", "HISTORICAL"]);
+    }
+  }
+});
+
+test("OEM panel, plain heading and chart backgrounds have no list action; its count opens the list from Breakdown", () => {
+  const view = harness(oemHarnessOptions);
+  let tree = view.render(oemRequests);
+  const panel = byLabel(tree, "OEM breakdown by region and site graph");
+  const heading = findAll(panel, node => node.type === "h2")[0];
+  assert.equal(text(heading), "OEM BD");
+  assert.equal(byClass(tree, "mine-fleet-chart-title"), undefined);
+  const chart = renderOemChart(tree);
+  const backgrounds = [panel, heading, ...findAll(panel, node => node.type === "header" || node.props.className === "mine-fleet-chart-heading"), chart,
+    ...findAll(chart, node => ["mine-oem-chart-layout", "mine-oem-sites", "mine-oem-grid", "mine-oem-bar-track", "mine-oem-stack"].includes(node.props.className))];
+  assert.ok(backgrounds.length > 8);
+  for (const background of backgrounds) {
+    assert.equal(background.props.onClick, undefined);
+    assert.equal(background.props.onKeyDown, undefined);
+    assert.equal(background.props["data-dashboard-list"], undefined);
+    assert.notEqual(background.props.role, "button");
+  }
+  assert.equal(oemDetails(view.render(oemRequests)), undefined);
+  button(byLabel(tree, "Fleet chart view"), "Breakdown").props.onClick();
+  tree = view.render(oemRequests);
+  fleetCount(tree, "OEM BD").props.onClick();
+  tree = view.render(oemRequests);
+  assert.equal(button(byLabel(tree, "Fleet chart view"), "OEM BD").props["aria-pressed"], true);
+  assert.deepEqual(oemDetails(tree).selection.records.map(row => row.requestReference), ["BD-1", "BD-2", "BD-3", "BD-4", "BD-5"]);
 });
 
 // Check the actual final browser filtering, not just the Dashboard's input props.
@@ -502,8 +696,7 @@ test("compiled Dashboard retains older open and Idle assets in live status after
   const summary = byClass(tree, "mine-site-road-summary");
   assert.equal(text(byClass(summary, "offroad")), "Off road1");
   assert.equal(text(byClass(summary, "idle")), "Idle1");
-  const breakdown = findAll(tree, (node) => node.type === "button" && node.props.className === "breakdown" && node.props["aria-controls"] === "fleet-region-plot")[0];
-  assert.equal(text(breakdown), "Breakdown 1");
+  assert.equal(text(fleetCount(tree, "Breakdown")), "1");
   assert.equal(requests[0].start, "2026-09-01 09:00:00");
 });
 
@@ -553,8 +746,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   assert.equal(text(byLabel(tree, "Availability table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
   // The independent top-level date and live fleet chart are not changed.
   assert.equal(byLabel(tree, "Dashboard to date").props.value, "2026-09-09");
-  const breakdown = findAll(tree, (node) => node.type === "button" && node.props.className === "breakdown" && node.props["aria-controls"] === "fleet-region-plot")[0];
-  assert.equal(text(breakdown), "Breakdown 1");
+  assert.equal(text(fleetCount(tree, "Breakdown")), "1");
 });
 
 test("site-wise range allows one day, keeps dates ordered, rejects future dates and resets", () => {
@@ -801,14 +993,14 @@ test("every site equipment and vehicle total opens exactly its registered assets
   for (const mode of ["breakdown", "total"]) {
     const view = harness({equipment, allowedSites, regions: [{code: "WCL", sites: sites.map(({site}) => site)}]});
     let tree = view.render(rows);
-    const modePill = () => findAll(tree, (node) => node.type === "button" && node.props["aria-controls"] === "fleet-region-plot" && String(node.props.className).startsWith(mode))[0];
-    modePill().props.onClick({target: {closest: () => null}});
+    const modePill = () => button(byLabel(tree, "Fleet chart view"), mode === "total" ? "Total" : "Breakdown");
+    modePill().props.onClick();
     tree = view.render(rows);
     assert.equal(tree.props.onBack, undefined, `clicking the ${mode} pill keeps the dashboard open`);
     assert.equal(modePill().props["aria-pressed"], true);
     if (mode === "breakdown") {
-      // The breakdown number opens all current breakdown assets before hourly activity.
-      modePill().props.onClick({target: {closest: (selector) => selector === ".mine-fleet-toggle-count" ? {} : null}});
+      // Only the breakdown number opens the current breakdown list.
+      fleetCount(tree, "Breakdown").props.onClick();
       tree = view.render(rows);
       assert.equal(detailView(tree).rows.length, 15);
       findAll(tree, (node) => typeof node.props.onHourlyReport === "function")[0].props.onHourlyReport();

@@ -1,3 +1,5 @@
+.mine-oem-dashboard { --mine-oem-chart-headroom: 36px; --mine-oem-chart-caption: 68px; cursor: default; }
+.mine-oem-dashboard b { font-weight: 800; font-variant-numeric: tabular-nums; }
 .mine-oem-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px 10px; }
 .mine-oem-summary h3 { margin: 0 0 6px; color: var(--mine-text); font-size: 18px; }
 .mine-oem-summary p { margin: 0; color: var(--mine-muted); font-size: 13px; line-height: 1.5; }
@@ -7,26 +9,42 @@
 .mine-oem-legend { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 20px 18px; }
 .mine-oem-legend button { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 13px; cursor: pointer; }
 .mine-oem-legend i { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-.mine-oem-legend b { padding-left: 4px; }
+.mine-oem-legend b { padding-left: 4px; font-size: 15px; }
+.mine-oem-legend .mine-oem-all { border-color: var(--brand-purple); color: var(--brand-purple); font-weight: 700; }
+.mine-oem-all b, .mine-oem-actions b { font-size: 16px; }
+.mine-oem-legend button:hover, .mine-oem-actions button:hover { border-color: var(--brand-purple); box-shadow: inset 0 0 0 1px var(--brand-purple); }
 .mine-oem-chart-layout { display: grid; grid-template-columns: 55px minmax(0, 1fr); padding: 0 16px; }
-.mine-oem-axis { position: relative; display: flex; flex-direction: column; justify-content: space-between; height: 352px; padding: 24px 10px 68px 0; color: var(--mine-muted); font-size: 12px; text-align: right; }
+.mine-oem-axis { box-sizing: border-box; position: relative; display: flex; flex-direction: column; justify-content: space-between; height: calc(var(--mine-oem-chart-headroom) + var(--mine-oem-plot-height) + var(--mine-oem-chart-caption)); padding: var(--mine-oem-chart-headroom) 10px var(--mine-oem-chart-caption) 0; color: var(--mine-muted); font-size: 12px; text-align: right; }
 .mine-oem-axis > b { position: absolute; top: 140px; left: -16px; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; }
 .mine-oem-axis > span { line-height: 0; }
 .mine-oem-scroll { overflow-x: auto; min-width: 0; }
-.mine-oem-sites { position: relative; display: flex; height: 352px; }
-.mine-oem-grid { position: absolute; inset: 24px 0 68px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.mine-oem-sites { position: relative; display: flex; height: calc(var(--mine-oem-chart-headroom) + var(--mine-oem-plot-height) + var(--mine-oem-chart-caption)); }
+.mine-oem-grid { position: absolute; inset: var(--mine-oem-chart-headroom) 0 var(--mine-oem-chart-caption); display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
 .mine-oem-grid i { border-top: 1px dashed var(--mine-line); }
-.mine-oem-site { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) 68px; flex: 1 0 130px; min-width: 0; padding-top: 24px; border-left: 1px solid var(--mine-line); }
+.mine-oem-site { box-sizing: border-box; position: relative; display: grid; grid-template-rows: minmax(0, 1fr) var(--mine-oem-chart-caption); flex: 1 0 144px; min-width: 0; padding-top: var(--mine-oem-chart-headroom); border-left: 1px solid var(--mine-line); }
 .mine-oem-bar-track { display: flex; justify-content: center; align-items: end; min-height: 0; }
-.mine-oem-stack { position: relative; display: flex; flex-direction: column-reverse; width: 54px; }
-.mine-oem-segment { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 100%; min-height: 0; padding: 0; border: 0; box-shadow: inset 0 1px #ffffff55; color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+.mine-oem-stack { position: relative; display: flex; flex-direction: column-reverse; width: 92px; }
+.mine-oem-segment { box-sizing: border-box; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; overflow: hidden; box-shadow: inset 0 1px #ffffff55; color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+.mine-oem-segment-label { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; min-width: 0; max-height: 100%; padding: 2px 4px; overflow: hidden; pointer-events: none; }
+.mine-oem-segment-label > span { display: block; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 700; line-height: 14px; }
+.mine-oem-segment-label b { font-size: 14px; line-height: 16px; }
 .mine-oem-segment:last-child { border-radius: 5px 5px 0 0; }
-.mine-oem-total { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); padding: 0 4px; border: 0; background: transparent; color: var(--mine-text); font: inherit; font-size: 17px; font-weight: 800; cursor: pointer; }
-.mine-oem-site-label { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; width: 100%; padding: 8px 6px; border: 0; border-top: 2px solid var(--brand-purple); background: transparent; color: var(--mine-text); font: inherit; font-size: 13px; cursor: pointer; }
+.mine-oem-total { position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); min-width: 0; min-height: 0; padding: 1px 4px; border: 0; border-radius: 3px; background: var(--mine-panel); color: var(--mine-text); font: inherit; font-size: 21px; font-weight: 800; line-height: 26px; white-space: nowrap; cursor: pointer; }
+.mine-oem-site-caption { display: flex; align-items: flex-start; justify-content: center; min-width: 0; padding: 8px 6px; border-top: 2px solid var(--brand-purple); }
+.mine-oem-site-label { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; max-width: 100%; min-width: 0; min-height: 0; padding: 2px 4px; border: 0; border-radius: 3px; background: transparent; color: var(--mine-text); font: inherit; font-size: 13px; line-height: 16px; cursor: pointer; }
 .mine-oem-site-label b { max-width: 100%; overflow-wrap: anywhere; }
 .mine-oem-site-label small { color: var(--mine-muted); font-size: 12px; }
 .mine-oem-dashboard button:focus-visible, .mine-oem-scroll:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 3px; }
-.mine-oem-segment:hover { filter: brightness(1.15); }
+.mine-oem-segment:focus-visible { position: relative; z-index: 1; }
+.mine-oem-segment:hover { box-shadow: inset 0 0 0 1px #fff; }
+.mine-oem-total:hover, .mine-oem-site-label:hover { text-decoration: underline; text-underline-offset: 3px; }
+.mine-oem-tooltip { box-sizing: border-box; position: fixed; z-index: 10000; width: min(240px, calc(100vw - 16px)); max-height: calc(100vh - 16px); padding: 12px 14px; border: 1px solid #d8d1e5; border-radius: 8px; overflow: hidden; background: #fff; color: #142943; box-shadow: 0 6px 24px #14294330; font-family: inherit; font-size: 13px; line-height: 1.5; pointer-events: none; }
+.mine-oem-tooltip-heading { display: flex; align-items: center; gap: 8px; }
+.mine-oem-tooltip-heading i { flex: 0 0 12px; height: 12px; border-radius: 3px; }
+.mine-oem-tooltip-heading strong { min-width: 0; overflow-wrap: anywhere; font-weight: 800; }
+.mine-oem-tooltip-count { margin-top: 6px; }
+.mine-oem-tooltip-count b { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.mine-oem-tooltip-site { margin-top: 4px; color: #52647a; overflow-wrap: anywhere; }
 .mine-oem-error { padding: 16px 20px; color: #c63742; }
 .mine-oem-filter select { max-width: 230px; }
 .mine-oem-details { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }

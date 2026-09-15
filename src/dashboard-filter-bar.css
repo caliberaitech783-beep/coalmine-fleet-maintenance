@@ -1,0 +1,40 @@
+.mine-dashboard > .dashboard-filter-bar { position: sticky; top: var(--dashboard-sticky-top, 0px); z-index: 30; }
+.mine-dashboard > .dashboard-filter-bar .mine-head-actions { flex: 1 1 auto; }
+.mine-dashboard > .dashboard-filter-bar .mine-head-actions > label { flex: 1 1 130px; }
+.mine-dashboard > .dashboard-filter-bar .mine-head-actions :is(input, select) { min-width: 130px; width: 100%; }
+.dashboard-filter-bar.in-dialog { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; padding: 14px 18px; border-radius: 0; background: linear-gradient(110deg, #522e90, #f04e53); color: #fff; }
+.dashboard-filter-bar.in-dialog > div:first-child { flex: 1 1 280px; display: flex; align-items: center; gap: 12px; }
+.dashboard-filter-bar.in-dialog .mine-brandmark { width: 72px; height: auto; background: none; border-radius: 0; }
+.dashboard-filter-bar.in-dialog h1 { font-size: 24px; line-height: 1.2; margin: 4px 0; color: #fff; }
+.dashboard-filter-bar.in-dialog p { font-size: 12px; margin: 0; color: #fff; }
+.dashboard-filter-bar.in-dialog .mine-eyebrow { color: #fff; font-size: 11px; }
+.dashboard-filter-bar.in-dialog .mine-head-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.dashboard-filter-bar.in-dialog .mine-head-actions label > span { color: #fff; font-size: 12px; }
+.dashboard-filter-bar.in-dialog .mine-head-actions :is(select, input) { min-width: 136px; min-height: 42px; padding: 8px 10px; color: #fff; background: #ffffff16; border: 1px solid #ffffff66; font-size: 14px; color-scheme: dark; }
+.dashboard-filter-bar .mine-head-actions select option { background: var(--panel, #fff); color: var(--ink, #142943); }
+.dashboard-filter-bar.in-dialog .mine-updated { font-size: 12px; }
+.mine-fleet-chart-toggle .mine-fleet-view-option { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 8px; }
+.mine-fleet-chart-toggle .mine-fleet-view-option.active { background: var(--brand-purple, #522e90); color: #fff; }
+.mine-fleet-chart-toggle .mine-fleet-view-option > button { min-width: 0; min-height: 34px; padding: 3px 5px; color: inherit; background: transparent; box-shadow: none; }
+.mine-fleet-chart-toggle .mine-fleet-view-option > .mine-fleet-toggle-count { padding: 4px 8px; font-size: 22px !important; font-weight: 900 !important; font-variant-numeric: tabular-nums; background: #522e9010; }
+.mine-fleet-chart-toggle .mine-fleet-view-option.active > .mine-fleet-toggle-count { background: #ffffff26; }
+.mine-fleet-chart-toggle .mine-fleet-view-option.trend-up > .mine-fleet-toggle-count { background: #c62828; color: #fff; }
+.mine-fleet-chart-toggle .mine-fleet-view-option.trend-down > .mine-fleet-toggle-count { background: #2e7d32; color: #fff; }
+.mine-fleet-chart-toggle .mine-fleet-view-option button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.mine-fleet-chart-toggle .mine-fleet-view-option > .mine-fleet-toggle-count:hover { text-decoration: underline; text-underline-offset: 4px; }
+.mine-oem-detail-search .mine-oem-local-filter { min-width: 140px; }
+@media (max-width: 700px) {
+  .mine-dashboard > .dashboard-filter-bar { padding: 10px !important; gap: 8px; }
+  .mine-dashboard > .dashboard-filter-bar > div:first-child { flex-basis: 100%; }
+  .mine-dashboard > .dashboard-filter-bar h1 { font-size: 22px !important; }
+  .mine-dashboard > .dashboard-filter-bar p, .dashboard-filter-bar.in-dialog > div:first-child { display: none; }
+  .dashboard-filter-bar .mine-head-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; margin-top: 0; }
+  .dashboard-filter-bar.in-dialog .mine-head-actions { display: grid; }
+  .dashboard-filter-bar .mine-head-actions label { min-width: 0; }
+  .dashboard-filter-bar.in-dialog .mine-head-actions :is(select, input), .mine-dashboard .dashboard-filter-bar .mine-head-actions :is(select, input) { min-width: 0; width: 100%; font-size: 13px !important; min-height: 36px; padding: 6px; }
+  .dashboard-filter-bar.in-dialog { padding: 8px 10px; }
+  .dashboard-filter-bar.in-dialog .mine-updated { display: none; }
+  .dashboard-filter-bar.in-dialog .dashboard-export-trigger:not(.dashboard-filter-reset) { display: none; }
+  .mine-fleet-chart-toggle .mine-fleet-view-option { flex: 1; padding: 3px; gap: 2px; flex-wrap: wrap; justify-content: center; }
+  .mine-fleet-chart-toggle .mine-fleet-view-option > .mine-fleet-toggle-count { font-size: 20px !important; }
+}

@@ -110,8 +110,8 @@ export function selectOemBreakdownRows(rows, selection = {}) {
   return rows.filter((row) => (!selection.oem || row.oemKey === selection.oem) && (!selection.site || recordBelongsToSite({ site: row.site }, selection.site)));
 }
 
-// Capture the chart's selected rows at click time. Polling may update the chart,
-// but it must not replace the list the user is inspecting.
+// Project a chart selection into the shared table. The dashboard calls this
+// again when its filters or source records change, keeping counts in sync.
 export function createOemBreakdownSelection(chart, selection = {}) {
   const oem = selection.oem || (chart.selectedOem !== "all" ? chart.selectedOem : "");
   const rows = selectOemBreakdownRows(chart.rows, { ...selection, oem });
@@ -119,6 +119,7 @@ export function createOemBreakdownSelection(chart, selection = {}) {
   const records = rows.flatMap(row => row.requests.map((request, index) => ({
     ...row.record,
     id: `${row.id}:${index}`,
+    assetId: row.id,
     make: row.oem,
     door: request.door || row.record.door,
     model: request.model || row.record.model,
@@ -131,6 +132,8 @@ export function createOemBreakdownSelection(chart, selection = {}) {
     requestStart: request.start || request.startedAt || request.createdAt || "",
     requestClosed: request.closedAt || request.completedAt || "",
     repairCategory: request.category || "—",
+    delayedReason: request.delayedReason || "—",
+    breakdownReason: request.complaint || "—",
     requestDetails: request,
   })));
   return { ...selection, oem, rows, records, label: selected?.label || "All OEMs", color: selected?.color || "", regions: chart.sites.reduce((regions, site) => {

@@ -15,7 +15,7 @@ test('all master and user report exports offer PDF, Excel, and print',()=>{
   assert.match(source,/exportFileName\(title, "xlsx"\)/);
   assert.match(source,/\[Content_Types\]\.xml/);
   assert.match(source,/xl\/worksheets\/sheet1\.xml/);
-  assert.match(source,/<Printer \/> Print<\/button>/);
+  assert.match(source,/<Printer \/> Smart Print<\/button>/);
   assert.doesNotMatch(source,/window\.open\("", "_blank"/);
   assert.match(source,/document\.createElement\("iframe"\)/);
   assert.match(source,/frame\.contentWindow\?\.print\(\)/);

@@ -8,12 +8,12 @@ const brandStyles = fs.readFileSync(new URL("../src/brand-theme.css", import.met
 
 test("dashboard region selection exposes its sites and filters every scoped data source", () => {
   assert.match(source, /const \[dashboardSite, setDashboardSite\] = useState\("all"\)/);
-  assert.match(source, /const selectedSites = \(selectedRegion\?\.sites \|\| \[\]\)\.filter/);
+  assert.match(source, /const selectedSites = \(selectedRegion\?\.sites \|\|/);
   assert.match(source, /const activeSites = dashboardSite !== "all" \? \[dashboardSite\] : selectedSites/);
-  assert.match(source, /visibleEquipment = selectedRegion \? scopedEquipment\.filter\(\(record\) => activeSites\.some/);
+  assert.match(source, /visibleEquipment = selectedRegion \|\| dashboardSite !== "all" \? scopedEquipment\.filter\(\(record\) => activeSites\.some/);
   assert.doesNotMatch(source, /visibleUsers = selectedRegion/);
-  assert.match(source, /locationBreakdowns = selectedRegion \? scopedBreakdowns\.filter\(\(record\) => activeSites\.some/);
-  assert.match(source, /selectedRegion && <label className="mine-site-filter">/);
+  assert.match(source, /locationBreakdowns = selectedRegion \|\| dashboardSite !== "all" \? scopedBreakdowns\.filter\(\(record\) => activeSites\.some/);
+  assert.doesNotMatch(source, /selectedRegion && <label className="mine-site-filter">/);
   assert.match(source, /<select aria-label="Site" value=\{dashboardSite\}/);
   assert.match(source, /selectedSites\.map\(\(site\) => <option key=\{site\} value=\{site\}>\{site\}<\/option>\)/);
 });

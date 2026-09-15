@@ -7,15 +7,17 @@ import { tableElements, tableCellText, tableModel, projectTableRow, selectTableR
 import "./table-actions.css";
 import "./sortable-table.css";
 
-export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, preserveColumnOrder = false, ...tableProps }) {
+const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
+
+export default function SharedActionsTable({ children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, showRowNumbers = false, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, tableProps }} />;
 }
 
-function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, tableProps }) {
+function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, tableProps }) {
   const [visible, setVisible] = useState(columns.map((column) => column.key));
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "", direction: "asc" });
@@ -32,10 +34,14 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   }, [openFilter]);
   const indices = visible.map((key) => columns.find((column) => column.key === key)?.index).filter((index) => index !== undefined);
   const rows = sections.filter((section) => section.type === "tbody").flatMap((section) => tableElements(section.props.children));
-  const dataRows = rows.filter((row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1));
+  const dataRows = rows.filter(isDataRow);
+  const dateColumn = primaryRecordDateColumn(columns);
+  const disabledDateKey = disableDateColumnFilter ? dateColumn?.key : undefined;
+  const filterableColumns = columns.filter((column) => column.key !== disabledDateKey);
   const externalSort = columns.find((column) => column.header.props.sort)?.header.props.sort;
-  const effectiveFilters = Object.fromEntries(columns.map((column) => [column.key, column.header.props.onFilterChange ? column.header.props.filterValue || "" : filters[column.key] || ""]));
+  const effectiveFilters = Object.fromEntries(filterableColumns.map((column) => [column.key, column.header.props.onFilterChange ? column.header.props.filterValue || "" : filters[column.key] || ""]));
   const updateFilter = (key, value) => {
+    if (key === disabledDateKey) return;
     const column = columns.find((item) => item.key === key);
     if (column?.header.props.onFilterChange) column.header.props.onFilterChange(value);
     else setFilters((current) => ({ ...current, [key]: value }));
@@ -51,7 +57,15 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
     else setSort({ key, direction });
     setDialog("");
   };
-  const localFilters = Object.fromEntries(columns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]]));
+  const localFilters = Object.fromEntries(filterableColumns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]]));
+  const bodySelections = new Map(sections.filter((section) => section.type === "tbody").map((section) => {
+    const sectionRows = tableElements(section.props.children), actual = sectionRows.filter(isDataRow);
+    return [section, actual.length ? selectTableRows(actual, columns, localFilters, sort) : sectionRows];
+  }));
+  // Number the final displayed order, including tables with more than one body.
+  // Keep this presentation column out of the data's sort/filter/column indices.
+  const numberedRows = showRowNumbers ? [...bodySelections.values()].flat().filter(isDataRow) : [];
+  const rowNumbers = new Map(numberedRows.map((row, index) => [row, index + 1]));
   // Distinct values per column for the heading filter popovers, taken from the full (unfiltered) table.
   const columnValues = useMemo(() => {
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -60,11 +74,18 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const exportData = ExportMenu && exportTitle ? tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
   const printData = ExportMenu && printTitle ? exportData || tableExportModel(dataRows, columns, visible, localFilters, sort) : null;
   const smartPrintData = ExportMenu && (printTitle || exportTitle) ? tableExportModel(dataRows, columns, columns.map(column => column.key), localFilters, sort) : null;
+  if (showRowNumbers) {
+    const numberColumn = { key: "__rowNumber", label: "No.", value: (row) => rowNumbers.get(row) };
+    // Print can reuse the export model; decorate each distinct model just once.
+    for (const data of new Set([exportData, printData, smartPrintData])) if (data) {
+      data.columns = [numberColumn, ...data.columns];
+      data.rows = numberedRows;
+    }
+  }
   // Include the existing header's complete value list, not only currently filtered rows.
-  const filterRows = columns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
-  const filterColumns = columns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
+  const filterRows = filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
+  const filterColumns = filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
   const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
-  const dateColumn = primaryRecordDateColumn(columns);
   const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
   const dateRangeControl = dateControl && <RecordDateRange {...dateControl} />;
   // Plain <th> headings become sort-and-filter headers (or sort buttons when no FilterableHeader is supplied);
@@ -78,7 +99,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
       const column = columns.find((item) => item.index === index);
       if (cell.type !== "th" || !column || span > 1 || cell.props.onSort || !tableCellText(cell).trim() || column.label === "Actions") return cell;
       const active = sort.key === column.key;
-      if (FilterableHeader) {
+      if (FilterableHeader && column.key !== disabledDateKey) {
         return <FilterableHeader key={cell.key ?? column.key} label={column.label} sortKey={column.key} sort={sort} onSort={applySort}
           open={openFilter === column.key} onToggle={(key) => setOpenFilter((current) => current === key ? null : key)}
           values={columnValues[column.key] || []} filterValue={filters[column.key] || ""} onFilterChange={(value) => updateFilter(column.key, value)}
@@ -106,17 +127,24 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   return <>
     {toolbarTarget ? createPortal(actionsToolbar, toolbarTarget) : toolbarPortal ? null : actionsToolbar}
     <table {...tableProps}>{sections.map((section) => {
+      if (showRowNumbers && section.type === "colgroup") return React.cloneElement(section, {}, <col key="row-number" />, section.props.children);
       if (!["thead", "tbody", "tfoot"].includes(section.type)) return section;
       let sectionRows = tableElements(section.props.children);
       if (section.type === "thead") sectionRows = sectionRows.map((row, position) => position === sectionRows.length - 1 ? sortableHeaderRow(row) : row);
       if (section.type === "tbody") {
-        const actual = sectionRows.filter((row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1));
-        if (actual.length) {
-          sectionRows = selectTableRows(actual, columns, localFilters, sort);
-          if (!sectionRows.length) return React.cloneElement(section, {}, <tr><td colSpan={Math.max(1, indices.length)} className="empty-state">No matching records</td></tr>);
-        }
+        const hadData = sectionRows.some(isDataRow);
+        sectionRows = bodySelections.get(section);
+        if (hadData && !sectionRows.length) return React.cloneElement(section, {}, <tr><td colSpan={Math.max(1, indices.length + (showRowNumbers ? 1 : 0))} className="empty-state">No matching records</td></tr>);
       }
-      return React.cloneElement(section, {}, sectionRows.map((row) => projectTableRow(row, indices)));
+      return React.cloneElement(section, {}, sectionRows.map((row, position) => {
+        const projected = projectTableRow(row, indices);
+        if (!showRowNumbers) return projected;
+        const cells = tableElements(projected.props.children);
+        if (section.type === "thead") return position === 0 ? React.cloneElement(projected, {},
+          <th key="row-number" scope="col" rowSpan={sectionRows.length > 1 ? sectionRows.length : undefined}>No.</th>, cells) : projected;
+        if (!isDataRow(row)) return React.cloneElement(projected, {}, cells.map((cell) => React.cloneElement(cell, { colSpan: Math.max(1, indices.length + 1) })));
+        return React.cloneElement(projected, {}, <td key="row-number">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
+      }));
     })}</table>
   </>;
 }

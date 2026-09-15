@@ -2,32 +2,136 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
 import React from "react";
+import {createPortal} from "react-dom";
+import {renderToStaticMarkup} from "react-dom/server";
 import {transformWithOxc} from "vite";
 import {buildOemBreakdownRows, buildOemBreakdownChart, createOemBreakdownSelection} from "../src/oem-breakdown-model.mjs";
 
 const source = readFileSync(new URL("../src/oem-breakdown-chart.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
 const {code} = await transformWithOxc(source, "OemChart.jsx", {jsx: {runtime: "classic"}});
-const Chart = new Function("React", `${code}; return OemBreakdownChart;`)(React);
+const Chart = new Function("React", "createPortal", `${code}; return OemBreakdownChart;`)(React, createPortal);
 const descendants = (node, predicate) => Array.isArray(node) ? node.flatMap(child => descendants(child, predicate)) : React.isValidElement(node) ? [...(predicate(node) ? [node] : []), ...descendants(node.props.children, predicate)] : [];
+const textOf = node => Array.isArray(node) ? node.map(textOf).join("") : React.isValidElement(node) ? textOf(node.props.children) : typeof node === "string" || typeof node === "number" ? String(node) : "";
 
-test("every coloured segment and OEM legend button opens exactly its displayed site's and OEM's records", () => {
+function makeChart({oem = "all", sites = ["Sasti OB", "Majri OB", "Empty site"]} = {}) {
   const equipment = Array.from({length: 12}, (_, id) => ({id, make: `OEM ${id % 10}`, door: `V${id}`, currentLocation: id < 6 ? "Sasti OB" : "Majri OB", category: "Vehicle"}));
   const requests = equipment.map(asset => ({ref: `BD${asset.id}`, door: asset.door, site: asset.currentLocation, status: "Open", start: "2026-09-10 08:00"}));
-  const chart = buildOemBreakdownChart({rows: buildOemBreakdownRows({equipment, requests}), equipment, regions: [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}]});
+  const rows = buildOemBreakdownRows({equipment, requests}).filter(row => sites.includes(row.site));
+  return buildOemBreakdownChart({rows, equipment, regions: [{code: "WCL", sites}], oem});
+}
+
+function assertTooltip(control, {label, color}, count, site) {
+  assert.ok(control.props["data-oem-tooltip"]);
+  assert.equal(control.props["aria-describedby"], control.props["data-oem-tooltip"]);
+  assert.equal(control.props["data-oem-name"], label);
+  assert.equal(control.props["data-oem-color"], color);
+  assert.equal(control.props["data-oem-count"], count);
+  assert.equal(control.props["data-oem-site"], site);
+}
+
+test("every coloured segment and OEM legend button opens exactly its displayed site's and OEM's records", () => {
+  const chart = makeChart();
   let selected, stopped;
   const tree = Chart({chart, onSelect: selection => {selected = createOemBreakdownSelection(chart, selection);}});
   const controls = descendants(tree, node => node.type === "button");
   const click = control => {stopped = false; control.props.onClick({stopPropagation() {stopped = true;}}); assert.ok(stopped, "nested click must not open the whole chart");};
   for (const site of chart.sites) for (const segment of site.segments) {
-    click(controls.find(control => control.props["aria-label"] === `${site.name} · ${segment.label}: ${segment.rows.length} breakdown assets, view details`));
+    const control = controls.find(control => control.props["aria-label"] === `${site.name} · ${segment.label}: ${segment.rows.length} breakdown assets, view details`);
+    assertTooltip(control, segment, segment.rows.length, site.name);
+    click(control);
     assert.equal(selected.records.length, segment.rows.length);
     assert.deepEqual(selected.records.map(record => record.requestReference), segment.rows.flatMap(row => row.requests.map(request => request.ref)));
     assert.ok(selected.records.every(record => record.make === segment.label && record.requestSite === site.name));
   }
   for (const oem of chart.oems) {
     const count = chart.rows.filter(row => row.oemKey === oem.key).length;
-    click(controls.find(control => control.props["aria-label"] === `${oem.label}: ${count} breakdown assets, view details`));
+    const control = controls.find(control => control.props["aria-label"] === `${oem.label}: ${count} breakdown assets, view details`);
+    assertTooltip(control, oem, count, "Sites matching current filters");
+    click(control);
     assert.equal(selected.rows.length, count);
     assert.ok(selected.records.every(record => record.make === oem.label));
   }
+});
+
+test("All and View full list preserve the current OEM and site filters with an empty selection", () => {
+  for (const oem of ["all", "oem 0"]) {
+    const chart = makeChart({oem, sites: ["Sasti OB"]});
+    let payload, selected;
+    const tree = Chart({chart, onSelect: selection => {payload = selection; selected = createOemBreakdownSelection(chart, selection);}, onReset: () => assert.fail("list controls must not reset filters")});
+    const legend = descendants(tree, node => node.props.className === "mine-oem-legend")[0];
+    const legendControls = descendants(legend, node => node.type === "button");
+    assert.equal(legendControls.at(-1).props.className, "mine-oem-all", "All follows the OEM legend entries");
+    const fullList = descendants(tree, node => node.type === "button" && (node.props.className === "mine-oem-all" || textOf(node).startsWith("View full list")));
+    assert.equal(fullList.length, 2);
+    for (const control of fullList) {
+      let stopped = false;
+      control.props.onClick({stopPropagation() {stopped = true;}});
+      assert.ok(stopped);
+      assert.deepEqual(payload, {});
+      assert.deepEqual(selected.rows, chart.rows);
+      assert.ok(selected.records.every(record => record.requestSite === "Sasti OB"));
+      assert.equal(control.props["data-oem-count"], chart.rows.length);
+      assert.equal(control.props["data-oem-site"], "Sasti OB");
+      if (oem !== "all") {
+        assert.equal(selected.oem, oem);
+        assertTooltip(control, chart.oems.find(item => item.key === oem), chart.rows.length, "Sasti OB");
+      } else {
+        assert.equal(control.props["data-oem-name"], "All OEMs");
+        for (const segment of chart.sites[0].segments) assert.ok(control.props["data-oem-color"].includes(segment.color));
+      }
+    }
+  }
+});
+
+test("site totals retain the selected OEM and describe the actual list scope including zero counts", () => {
+  for (const oem of ["all", "oem 0"]) {
+    const chart = makeChart({oem});
+    let payload, selected;
+    const tree = Chart({chart, onSelect: selection => {payload = selection; selected = createOemBreakdownSelection(chart, selection);}});
+    const sites = descendants(tree, node => node.type === "section");
+    sites.forEach((siteTree, index) => {
+      const site = chart.sites[index];
+      const controls = descendants(siteTree, node => ["mine-oem-total", "mine-oem-site-label"].includes(node.props.className));
+      assert.equal(controls.length, 2);
+      const total = controls.find(control => control.props.className === "mine-oem-total");
+      assert.equal(total.props["aria-label"], `${site.name}: ${site.total} breakdown assets, ${oem === "all" ? "view all OEMs" : "view details"}`);
+      for (const control of controls) {
+        let stopped = false;
+        control.props.onClick({stopPropagation() {stopped = true;}});
+        assert.ok(stopped);
+        assert.deepEqual(payload, {site: site.name});
+        assert.equal(selected.rows.length, site.total);
+        assert.ok(selected.records.every(record => record.requestSite === site.name));
+        assert.equal(control.props["data-oem-count"], site.total);
+        assert.equal(control.props["data-oem-site"], site.name);
+        if (oem !== "all") {
+          assert.equal(selected.oem, oem);
+          assertTooltip(control, chart.oems.find(item => item.key === oem), site.total, site.name);
+          assert.doesNotMatch(control.props.title, /all OEM/);
+        } else {
+          assert.equal(control.props["data-oem-name"], "All OEMs");
+          assert.ok(control.props["data-oem-color"]);
+          for (const segment of site.segments) assert.ok(control.props["data-oem-color"].includes(segment.color));
+        }
+      }
+    });
+    const targets = descendants(tree, node => node.props["data-oem-tooltip"]);
+    assert.equal(new Set(targets.map(node => node.props["data-oem-tooltip"])).size, targets.length, "each tooltip target needs a distinct description id");
+    for (const target of targets) assert.equal(target.props["aria-describedby"], target.props["data-oem-tooltip"]);
+  }
+});
+
+test("the tooltip wrapper renders an inert chart surface and tiny segments keep their real proportions", () => {
+  const equipment = Array.from({length: 100}, (_, id) => ({id, make: id ? "Large OEM" : "Tiny OEM", door: `V${id}`, currentLocation: "Sasti OB", status: "Breakdown"}));
+  const chart = buildOemBreakdownChart({rows: buildOemBreakdownRows({equipment}), equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}]});
+  const tree = Chart({chart, onSelect: () => assert.fail("rendering and blank areas must not select records")});
+  const tiny = descendants(tree, node => node.props.className === "mine-oem-segment" && node.props["data-oem-name"] === "Tiny OEM")[0];
+  assert.equal(tiny.props.style.height, "1%");
+  assert.equal(textOf(tiny), "", "tiny segments must not force in overlapping labels");
+  assertTooltip(tiny, chart.oems.find(oem => oem.label === "Tiny OEM"), 1, "Sasti OB");
+  for (const node of descendants(tree, node => node.type !== "button")) assert.equal(node.props.onClick, undefined);
+  const markup = renderToStaticMarkup(tree);
+  assert.match(markup, /^<div class="mine-oem-dashboard" id="oem-breakdown-plot"/);
+  assert.doesNotMatch(markup, /role="button"/);
+  assert.match(markup, /aria-describedby="oem-breakdown-tooltip-all"/);
 });

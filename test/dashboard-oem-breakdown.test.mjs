@@ -132,10 +132,11 @@ test("OEM dashboard sits between Total and Breakdown and shares the existing fil
   assert.ok(source.includes('const oemTo = oemLive ? "" : dashboardTo;'));
   assert.ok(source.includes('regions: fleetRegionInsights, oem: dashboardOem'));
   assert.ok(source.includes('<select aria-label="OEM"'));
-  assert.ok(source.includes('<OemBreakdownDetails selection={oemDrilldown}'));
+  assert.match(source, /<OemBreakdownDetails[^>]+selection=\{oemDrilldown\}/);
   const details = readFileSync(new URL("../src/oem-breakdown-details.jsx", import.meta.url), "utf8");
   assert.ok(details.includes('<DashboardRecordBrowser'));
-  assert.ok(details.includes('requestRecords extraColumns={columns}'));
+  assert.ok(details.includes('requestRecords={!selection.fleetOnly}'));
+  assert.ok(details.includes('showDateFilter={false} showRowNumbers'));
 });
 
 test("OEM colours never cycle and stay consistent between the legend, site segments and filters", () => {

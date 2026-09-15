@@ -21,7 +21,7 @@ test("fleet intelligence connects category and group drilldowns without a region
   assert.match(source, /region\.sites\.map/);
   assert.match(source, /fleetChartMode === "total" \? "site" : "offroad-site"/);
   assert.match(source, /const liveBreakdownAssetCount = liveFleetCounts\.breakdown\.total/);
-  assert.match(source, /mode === "total" \? assetCounts\.total : liveBreakdownAssetCount/);
+  assert.match(source, /mode === "total" \? \(showOemBreakdowns \? oemFleetEquipment\.length : assetCounts\.total\)/);
   assert.match(source, /region\.total\.toLocaleString\(\)\} fleet/);
   assert.match(source, /const siteRequests = liveBreakdowns\.filter\(\(request\) => recordBelongsToSite\(request, site\)\);/);
   assert.match(source, /\.\.\.fleetChartCounts\(records, siteRequests\)/);
@@ -58,12 +58,12 @@ test("total fleet renders a region-grouped site count graph", () => {
   assert.match(source, /<FleetSiteBars site=\{site\} axisMax=\{fleetChartAxisMax\} showBreakdown=\{showFleetBreakdowns\}/);
   assert.match(source, /className="mine-fleet-chart-toggle"/);
   assert.match(css, /\.mine-fleet-region-chart\s*\{/);
-  assert.match(source, /<h2>Total Fleet<\/h2>/);
+  assert.match(source, /<h2>\{showOemBreakdowns \? "OEM BD" : "Total Fleet"\}<\/h2>/);
   assert.match(css, /\.mine-fleet-chart-regions\s*\{/);
 });
 
-test("dashboard opens in Breakdown fleet mode by default", () => {
-  assert.match(source, /const \[fleetChartMode, setFleetChartMode\] = useState\("breakdown"\);/);
+test("dashboard opens in site-wise OEM breakdown mode by default", () => {
+  assert.match(source, /const \[fleetChartMode, setFleetChartMode\] = useState\("oem"\);/);
 });
 
 test("breakdown mode keeps total counts and green segments on one common scale", () => {
@@ -155,9 +155,10 @@ test("breakdown trend chart drops the forecast legend, view toggle and wording",
   assert.match(source, /day recorded breakdown chart`\}/);
 });
 
-test("the region and site graph panel is titled only Total Fleet", () => {
-  assert.match(source, /<h2>Total Fleet<\/h2>/);
-  assert.match(source, /className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick=\{\(\) => openAssetDrilldown\(fleetChartAllKey\)\}/);
+test("the region and site graph title identifies the current view and only counts open lists", () => {
+  assert.match(source, /<h2>\{showOemBreakdowns \? "OEM BD" : "Total Fleet"\}<\/h2>/);
+  assert.doesNotMatch(source, /className="mine-fleet-chart-title"/);
+  assert.match(source, /className="mine-fleet-toggle-count"/);
   assert.doesNotMatch(source, /className="mine-fleet-chart-y"/);
   assert.doesNotMatch(source, /fleet-muted/);
   assert.doesNotMatch(source, /Total fleet by region and site<\/h2>/);

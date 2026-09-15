@@ -51,12 +51,13 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   </div>;
 }
 
-export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, onHourlyReport = null, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
+export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", summaryLabel = "", initialRegion = "", initialSite = "", hideHierarchyFilters = false, showDateFilter = true, showRowNumbers = false, hideCurrentLocation = false, hideSiteColumn = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, onHourlyReport = null, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const [recordDateRange, setRecordDateRange] = useState("");
-  const datedRows = filterRecordsByDate(rows, recordDateRange, (record) => record.requestStart);
-  const view = drilldownView(datedRows, regions, filters, { rowsAreScoped });
+  const datedRows = showDateFilter ? filterRecordsByDate(rows, recordDateRange, (record) => record.requestStart) : rows;
+  // With no internal hierarchy, the parent supplies the complete filtered selection.
+  const view = drilldownView(datedRows, regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped });
   const id = useId();
   const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);
@@ -76,7 +77,7 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
   const listRef = useRef(null);
   // Every new selection shows its fleet list from the top, not where the previous list was scrolled.
   useEffect(() => { if (listRef.current) listRef.current.scrollTop = 0; }, [tableKey]);
-  const showLocationColumn = requestRecords || !hideCurrentLocation;
+  const showLocationColumn = !hideSiteColumn && (requestRecords || !hideCurrentLocation);
   const showCategoryColumn = requestRecords || !hideEquipmentCategory;
   const showClosedColumn = lifecycleRecords && !["idle", "opened"].includes(lifecycleEvent);
   const showVerificationColumns = lifecycleRecords && !["production", "closed", "idle", "opened"].includes(lifecycleEvent);
@@ -97,8 +98,8 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
       ? <RequestTimelineButton reference={reference} token={timelineToken} Dialog={Dialog} label={label} />
       : <b>{label}</b>;
   };
-  return <div className="dashboard-record-browser">
-    <details className="dashboard-record-controls">
+  return <div className="dashboard-record-browser" style={hideHierarchyFilters ? { gridTemplateRows: "minmax(0, 1fr)" } : undefined}>
+    {!hideHierarchyFilters && <details className="dashboard-record-controls">
       <summary className={`dashboard-record-filter-summary${onHourlyReport ? " has-hourly-report" : ""}`}>
         <b>Filters</b>
         <span>{[view.regionLabel, view.selection.site, categoryName(view.selection.category), view.selection.group].filter(Boolean).join(" · ")}</span>
@@ -111,17 +112,17 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
           {view.regions.map((region, index) => <button key={region.code} type="button" role="tab" id={`${id}-${region.code}`} aria-selected={view.selection.region === region.code} aria-controls={`${id}-records`} tabIndex={view.selection.region === region.code ? 0 : -1}
             onClick={() => choose("region", region.code)} onKeyDown={(event) => moveBetweenTabs(event, index, view.regions.map((item) => ({ value: item.code })), (next) => choose("region", next), '[role="tab"]')}><span>{region.label}</span><b>{region.rows.length.toLocaleString()}</b></button>)}
         </div>
-        <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!recordDateRange && !activeFilterCount && visibleLevel <= selectedLevel}><RotateCcw size={14} />Reset selection</button>
+        <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!(showDateFilter && recordDateRange) && !activeFilterCount && visibleLevel <= selectedLevel}><RotateCcw size={14} />Reset selection</button>
       </div>
       {visibleLevel === 0 && <p className="dashboard-record-hierarchy-hint">No regions available in your current scope.</p>}
       <div className="dashboard-record-hierarchy">
         {fields.slice(0, visibleLevel).map(([name, label, allLabel], index) => (index === 0 || view.options[fields[index - 1][0]].length > 0) && <FilterTabRow key={`${name}-${levels.slice(0, index + 1).map((parent) => view.selection[parent]).join("|")}`} name={name} label={label} allLabel={allLabel} options={view.options[name]} value={view.selection[name]} choose={choose} resultsId={`${id}-records`} />)}
       </div>
-    </details>
-    <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={view.selection.region ? `${id}-${view.selection.region}` : undefined}>
-      <div className="dashboard-record-summary"><h4>{view.regionLabel} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
+    </details>}
+    <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-label={hideHierarchyFilters ? `${title} records` : undefined} aria-labelledby={!hideHierarchyFilters && view.selection.region ? `${id}-${view.selection.region}` : undefined}>
+      <div className="dashboard-record-summary"><h4>{summaryLabel || `${view.regionLabel} ${requestRecords ? "requests" : "fleet list"}`}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
       <div className="dashboard-asset-list" ref={listRef}>
-        <ActionsTable key={tableKey} exportTitle={`${title} · ${view.regionLabel}`} preserveColumnOrder printTitle={`${title} · ${view.regionLabel}`} recordDateFilter={{ label: "Started", value: recordDateRange, onChange: setRecordDateRange }}>
+        <ActionsTable key={tableKey} exportTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} preserveColumnOrder printTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} showRowNumbers={showRowNumbers} disableDateColumnFilter={!showDateFilter} recordDateFilter={showDateFilter ? { label: "Started", value: recordDateRange, onChange: setRecordDateRange } : false}>
           <thead><tr>{requestRecords && <th>Job reference</th>}<th>Status</th><th>Days of breakdown</th><th data-filter-mode={requestRecords ? undefined : "date-sort"}>Started</th>{showBdClosingTime && <th>BD closing time</th>}<th>Machine / Door no.</th>{showCategoryColumn && <th>Equipment category</th>}<th>Equipment group</th><th>Model</th>{showLocationColumn && <th>{requestRecords ? "Request site" : "Current location"}</th>}<th>Serial / chassis no.</th>{requestRecords && <><th>Breakdown type</th><th>Delayed reason</th><th>Breakdown reason</th></>}{showClosedColumn && <th>Closed</th>}{showVerificationColumns && <><th>MIS verified at</th><th>First trip time</th></>}{extraColumns.map(column => <th key={column.key}>{column.label}</th>)}</tr></thead>
           <tbody>{view.rows.length ? view.rows.map((record, index) => <tr key={record.id || `${record.equipmentName}-${index}`}>
             {requestRecords && <td><b>{record.requestReference}</b></td>}<td data-sort-value={requestStatusSortRank(record.requestStatus)}><Status>{record.requestStatus || "—"}</Status></td><td data-sort-value={calculateBreakdownMinutes(record.requestStart, record.requestClosed, now)}>{breakdownCell(record)}</td><td data-sort-value={sortableDate(record.requestStart)}>{formatDate(record.requestStart)}</td>{showBdClosingTime && <td data-sort-value={sortableDate(record.requestClosed)}>{sortableDate(record.requestClosed) ? formatDate(record.requestClosed) : "Not recorded"}</td>}<td>{equipmentMachineLabel(record)}</td>{showCategoryColumn && <td>{categoryName(equipmentCategoryLabel(record))}</td>}<td>{equipmentGroupLabel(record)}</td><td>{record.model || "—"}</td>{showLocationColumn && <td>{record.requestSite || record.currentLocation || record.location || record.site || "—"}</td>}<td>{record.manufacturerSerialNo || record.chassisNo || "—"}</td>
