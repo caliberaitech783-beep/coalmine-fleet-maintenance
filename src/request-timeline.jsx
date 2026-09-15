@@ -24,9 +24,9 @@ const stageDefinitions = [
   ["verificationLag", "Verification after first trip", "firstTripAt", "verifiedAt"],
 ];
 
-// Equipment group and door number that identify the machine, shown with the request number everywhere in the time breakdown.
+// Equipment group, door number and location that identify the machine, shown with the request number everywhere in the time breakdown.
 export function requestTimelineIdentity(request = {}) {
-  return [request.equipmentGroup || request.equipment, request.door || request.reg].map(value => String(value || "").trim()).filter(Boolean).join(" · ");
+  return [request.equipmentGroup || request.equipment, request.door || request.reg, request.site || request.location].map(value => String(value || "").trim()).filter(Boolean).join(" · ");
 }
 
 export function RequestTimelineView({data}) {
@@ -38,7 +38,7 @@ export function RequestTimelineView({data}) {
   const idleApproval = Boolean(data.request?.idealApprovedAt || data.request?.idealApprovedBy);
   const identity = requestTimelineIdentity(request);
   return <div className="request-timeline-content">
-    {identity && <p className="request-timeline-identity"><b>{identity}</b>{request.site ? <span> · {request.site}</span> : null}<span> · {data.reference}</span></p>}
+    {identity && <p className="request-timeline-identity"><b>{identity}</b><span> · {data.reference}</span></p>}
     <p>Each duration uses the two recorded event times shown below. The three workflow stages do not overlap. Verification is shown separately, not added to the total.</p>
     {idleApproval && <p className="request-timeline-note">This request closed through a manager’s on-road approval. Its closure is not a separately recorded repair-completion time. The maintenance interval can include idle waiting.</p>}
     <div className="request-timeline-stages">
