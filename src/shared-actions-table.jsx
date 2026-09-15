@@ -9,12 +9,12 @@ import "./sortable-table.css";
 
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
 
-export default function SharedActionsTable({ closedByAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, showRowNumbers = false, ...tableProps }) {
+export default function SharedActionsTable({ closedTimeAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, showRowNumbers = false, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
-  if (closedByAfterStarted) {
-    const closed = columns.findIndex(column => column.label.trim().toLowerCase() === "closed by");
+  if (closedTimeAfterStarted) {
+    const closed = columns.findIndex(column => column.label.trim().toLowerCase() === "closed time");
     if (closed >= 0 && columns.some(column => column.label.trim().toLowerCase() === "started")) {
       const [column] = columns.splice(closed, 1);
       columns.splice(columns.findIndex(item => item.label.trim().toLowerCase() === "started") + 1, 0, column);
