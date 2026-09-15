@@ -228,6 +228,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       requestStatus,
       requestStart: current?.start || "—",
       requestClosed: "—",
+      // BD Balance shows the linked request's readings, falling back to the fleet record.
       hmr: current?.hmr ?? record.hmr,
       kmr: current?.kmr ?? record.kmr,
       repairCategory: current?.category || "—",
