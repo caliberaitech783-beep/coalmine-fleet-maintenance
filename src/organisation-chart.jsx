@@ -10,8 +10,24 @@ const countLabel = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 const Node = ({ tag, tagClass = "", title, subtitle, children }) => <span className="org-node">{tag && <i className={`org-tag ${tagClass}`}>{tag}</i>}<b>{title}</b>{subtitle && <small>{subtitle}</small>}{children}</span>;
 
 /** Read-only organisation chart: three trees built from the masters. */
+const ROLE_LABEL = {
+  director: "Director", projectManager: "Project Manager", productionManager: "Production Manager", maintenanceManager: "Maintenance Manager", misManager: "MIS Manager",
+  productionSupervisor: "Production Incharge / Supervisor", maintenanceSupervisor: "Maintenance Incharge / Supervisor", misSupervisor: "MIS Incharge / Supervisor",
+  oemNationalHead: "National Head", oemRegionalHead: "Regional / Zonal Head", oemAreaServiceEngineer: "Area Service Engineer", oemServiceEngineer: "Service Engineer", superAdmin: "Super Admin", admin: "Admin",
+};
+const roleClass = (key) => key === "projectManager" ? "t-level" : /Manager$/.test(key) ? "t-mgr" : /Supervisor$/.test(key) ? "t-mobile" : key?.startsWith("oem") ? "t-oem" : "t-none";
+function ReportingNode({ tree }) {
+  const { person, explicit, superiorText, children } = tree;
+  const note = explicit ? "" : superiorText ? `Superior "${superiorText}" not found · placed by designation and site` : "no Superior set · placed by designation and site";
+  return <li className={explicit ? "" : "org-inferred"}>
+    <Node tag={ROLE_LABEL[person.designationKey] || "Staff"} tagClass={roleClass(person.designationKey)} title={person.name} subtitle={[person.login, person.site || person.sites.join(", ")].filter(Boolean).join(" · ")} />
+    {note && <small className="org-note" title={note}>{note}</small>}
+    {children.length > 0 && <ul>{children.map((child) => <ReportingNode key={`${child.person.login}|${child.person.name}`} tree={child} />)}</ul>}
+  </li>;
+}
+
 export default function OrganisationChartView({ chart, loading = false, error = "", updatedAt = 0, onRefresh }) {
-  const { access, levels, peopleTree, unassigned, summary } = chart;
+  const { access, levels, peopleTree, reporting, unassigned, summary } = chart;
   const updated = updatedAt ? new Date(updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
   return <section className="panel pagepanel organisation-chart" aria-busy={loading}>
     <header><div><span className="page-eyebrow">Masters · read only</span><h1>Organisation chart</h1><p>Who is who, drawn from Users &amp; employees, Privilege and Hierarchy master. It refreshes itself whenever those masters change.</p></div>
@@ -53,6 +69,20 @@ export default function OrganisationChartView({ chart, loading = false, error = 
           <ul>{designations.map((designation) => <li key={designation.key}><Node tag={`L${designation.level}`} tagClass={section === "OEM" ? "t-oem" : "t-level"} title={designation.people.length ? `${designation.label} (${designation.people.map((person) => person.name).join(", ")})` : designation.label} subtitle={designation.configured?.schedule || (designation.configured ? undefined : "not in Hierarchy master")} /><People people={designation.people} empty="Nobody holds this designation" /></li>)}</ul></li>)}
           {unassigned.length > 0 && <li className="org-root"><Node title="No designation" subtitle="add a designation, department or role to place them" /><People people={unassigned} /></li>}
         </ul></div>
+      </article>
+      <article className="org-panel org-panel-wide"><h2>4 · Reporting lines, site-wise</h2><p className="org-hint">From the Superior field in Users &amp; employees: Directors on top, then each site's Project Manager, the department managers under them and the incharges and supervisors under each manager. Faded entries have no matching Superior and are placed by designation and site.</p>
+        <div className="org-directors">
+          <span className="org-directors-label">Directors</span>
+          {reporting.directors.length ? reporting.directors.map((director) => <span key={`${director.login}|${director.name}`} className="org-director"><b>{director.name}</b><small>{director.login || "Director"}</small></span>) : <span className="org-empty">No director found. Give the director records the designation "Director".</span>}
+        </div>
+        <div className="org-sites">
+          {reporting.sites.length ? reporting.sites.map(({ site, pms, trees }) => <section key={site} className="org-site">
+            <h3><span className="org-tag t-type">SITE</span>{site}<small>{pms.length ? `${pms.length} PM` : "no Project Manager"}</small></h3>
+            {trees.length ? <div className="org-tree"><ul>{trees.map((tree) => <ReportingNode key={`${tree.person.login}|${tree.person.name}`} tree={tree} />)}</ul></div> : <p className="org-empty">Nobody is placed at this site yet.</p>}
+          </section>) : <p className="org-empty">No sites yet. Fill Location or manager sites in Users &amp; employees.</p>}
+        </div>
+        {reporting.unplaced.length > 0 && <div className="org-unplaced"><b>Not placed on any site ({reporting.unplaced.length})</b><small>Fill Location and Superior in Users &amp; employees to place them.</small><People people={reporting.unplaced} /></div>}
+        <p className="org-hint">{reporting.linkedCount} reporting link{reporting.linkedCount === 1 ? "" : "s"} come from the Superior field{reporting.inferredCount ? `; ${reporting.inferredCount} placed by designation and site` : ""}.</p>
       </article>
     </div>
   </section>;

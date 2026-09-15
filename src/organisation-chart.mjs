@@ -106,7 +106,85 @@ export function chartPerson(user = {}, privileges = []) {
     managerRoles: permissions.managerRoles || [],
     assignedRole: profile.assignedRole || "",
     designationKey: chartDesignationKey(user, profile),
+    superiors: listText(user.superior),
   };
+}
+
+const DEPARTMENT_OF = {
+  productionManager: "Production", productionSupervisor: "Production",
+  maintenanceManager: "Maintenance", maintenanceSupervisor: "Maintenance",
+  misManager: "MIS", misSupervisor: "MIS",
+};
+const MANAGER_KEYS = ["productionManager", "maintenanceManager", "misManager"];
+const SUPERVISOR_KEYS = ["productionSupervisor", "maintenanceSupervisor", "misSupervisor"];
+const ALL_SITES = "All sites";
+
+/** The sites a person belongs to: manager site list, else their own location. */
+export function personSites(person = {}) {
+  const sites = (person.sites || []).length ? person.sites : person.site ? [person.site] : [];
+  return [...new Set(sites.map(clean).filter(Boolean))];
+}
+
+/**
+ * Reporting lines, site-wise, from the Superior field of Users & employees.
+ * Directors sit on top. Each site shows its Project Manager(s), the department
+ * managers under them and the incharges / supervisors under each manager.
+ * A person whose Superior is empty or unknown is placed by designation and site
+ * and flagged as inferred, so the chart never loses anyone.
+ */
+export function buildReportingLines(people = []) {
+  const byKey = new Map();
+  people.forEach((person) => {
+    [person.login, person.name].map(words).filter(Boolean).forEach((key) => { if (!byKey.has(key)) byKey.set(key, person); });
+  });
+  const resolve = (text) => byKey.get(words(text)) || null;
+  const directors = people.filter((person) => person.designationKey === "director");
+  const pms = people.filter((person) => person.designationKey === "projectManager");
+  const managers = people.filter((person) => MANAGER_KEYS.includes(person.designationKey));
+  const supervisors = people.filter((person) => SUPERVISOR_KEYS.includes(person.designationKey));
+  // A candidate superior covers the person when they share a site; a superior with
+  // no site list (e.g. a PM over all sites) covers everyone, but a person with no
+  // site at all is never placed by guesswork.
+  const sharesSite = (candidate, person) => { const own = personSites(person); if (!own.length) return false; const covers = personSites(candidate); return !covers.length || covers.some((site) => own.includes(site)); };
+  const inferred = (person) => {
+    if (SUPERVISOR_KEYS.includes(person.designationKey)) {
+      return managers.find((manager) => DEPARTMENT_OF[manager.designationKey] === DEPARTMENT_OF[person.designationKey] && sharesSite(manager, person))
+        || pms.find((pm) => sharesSite(pm, person)) || null;
+    }
+    if (MANAGER_KEYS.includes(person.designationKey)) return pms.find((pm) => sharesSite(pm, person)) || null;
+    return null;
+  };
+  const links = new Map();
+  people.forEach((person) => {
+    if (person.designationKey === "director") return;
+    const explicit = person.superiors.map(resolve).find((found) => found && found !== person) || null;
+    const parent = explicit || inferred(person);
+    links.set(person, { parent, explicit: Boolean(explicit), superiorText: person.superiors.join(", ") });
+  });
+  const childrenOf = (parent) => people.filter((person) => links.get(person)?.parent === parent).sort(byName);
+  const node = (person, depth = 0, seen = new Set()) => {
+    const link = links.get(person) || {};
+    const children = depth < 8 && !seen.has(person) ? childrenOf(person).map((child) => node(child, depth + 1, new Set([...seen, person]))) : [];
+    return { person, explicit: Boolean(link.explicit), superiorText: link.superiorText || "", children };
+  };
+  const siteNames = [...new Set(people.filter((person) => person.designationKey !== "director").flatMap(personSites))].sort((a, b) => a.localeCompare(b));
+  const placed = new Set();
+  const collect = (tree) => { placed.add(tree.person); tree.children.forEach(collect); };
+  const siteFor = (site) => {
+    const sitePms = pms.filter((pm) => { const sites = personSites(pm); return sites.includes(site) || (!sites.length && site === ALL_SITES); });
+    // People who report to no one reachable from a PM but belong to this site sit directly under the site.
+    const roots = [...sitePms, ...people.filter((person) => person.designationKey !== "director" && !pms.includes(person) && !links.get(person)?.parent && personSites(person).includes(site))];
+    const trees = [...new Set(roots)].map((person) => node(person));
+    trees.forEach(collect);
+    return { site, pms: sitePms, trees };
+  };
+  const sites = siteNames.map(siteFor);
+  const withoutSite = pms.filter((pm) => !personSites(pm).length);
+  if (withoutSite.length) sites.unshift(siteFor(ALL_SITES));
+  directors.forEach((director) => placed.add(director));
+  const unplaced = people.filter((person) => !placed.has(person) && !["superAdmin", "admin"].includes(person.designationKey)).sort(byName);
+  const inferredCount = [...links.values()].filter((link) => link.parent && !link.explicit).length;
+  return { directors, sites, unplaced, inferredCount, linkedCount: [...links.values()].filter((link) => link.explicit).length };
 }
 
 const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
@@ -146,11 +224,13 @@ export function buildOrganisationChart({ users = [], privileges = [], hierarchy 
   }));
   const peopleTree = CHART_SECTIONS.map((section) => ({ section, designations: designations.filter((designation) => designation.section === section) }));
   const unassigned = people.filter((person) => !person.designationKey);
+  const reporting = buildReportingLines(people);
   return {
     people,
     access,
     levels,
     peopleTree,
+    reporting,
     unassigned,
     summary: {
       people: people.length,

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildOrganisationChart, chartDesignationKey, chartPerson, CHART_DESIGNATIONS, ORGANISATION_CHART_PAGE } from "../src/organisation-chart.mjs";
+import { buildOrganisationChart, buildReportingLines, chartDesignationKey, chartPerson, personSites, CHART_DESIGNATIONS, ORGANISATION_CHART_PAGE } from "../src/organisation-chart.mjs";
 import { flowDesignationForUser } from "../hierarchy-report-flow.mjs";
 import { resolveMobileAccess } from "../mobile-access.mjs";
 import { masterAccessAllows } from "../admin-access.mjs";
@@ -102,4 +102,57 @@ test("the page sits in the Masters menu for Admin and Super Admin only and is re
   assert.equal(masterAccessAllows({ adminLevel: "Manager" }, "Organisation chart"), false);
   assert.doesNotMatch(view, /onAdd|onEdit|onDelete|<input|<textarea|<select/, "the view has no editing controls");
   assert.match(view, /Director's \(Mohit Chadda\) and Project Manager \(Vivek\)/);
+});
+
+test("reporting lines put the directors on top and build each site from PM to managers to supervisors using the Superior field", () => {
+  const staff = [
+    { login: "mohit", employee: "Mohit Chadda", userType: "Super User", adminLevel: "Super Admin", designation: "Director" },
+    { login: "manish", employee: "Manish Chadda", userType: "Super User", adminLevel: "Super Admin", designation: "Director" },
+    { login: "rahul", employee: "Rahul Chadda", userType: "Super User", adminLevel: "Super Admin", designation: "Director" },
+    { login: "vivek", employee: "Vivek", userType: "Super User", adminLevel: "Manager", managerRole: "Project Manager", managerSites: "Sasti OB", superior: "Mohit Chadda|Manish Chadda|Rahul Chadda" },
+    { login: "ajay", employee: "Ajay Singh", userType: "Super User", adminLevel: "Manager", managerRole: "Project Manager", managerSites: "Majri OB", superior: "Mohit Chadda" },
+    { login: "priyank", employee: "Priyank Rao", userType: "Super User", adminLevel: "Manager", managerRole: "Production Manager", managerSites: "Sasti OB", superior: "Vivek" },
+    { login: "rajesh", employee: "Rajesh More", userType: "Super User", adminLevel: "Manager", managerRole: "Maintenance Manager", managerSites: "Sasti OB", superior: "vivek" },
+    { login: "neha", employee: "Neha Kulkarni", userType: "Super User", adminLevel: "Manager", managerRole: "MIS Manager", managerSites: "Sasti OB" },
+    { login: "ramesh", employee: "Ramesh Kumar", userType: "Mobile User", userGroup: "Production User", site: "Sasti OB", superior: "Priyank Rao" },
+    { login: "suresh", employee: "Suresh Patil", userType: "Mobile User", userGroup: "Maintenance User", site: "Sasti OB" },
+    { login: "priya", employee: "Priya Deshmukh", userType: "Mobile User", userGroup: "MIS User", site: "Sasti OB", superior: "Somebody Unknown" },
+    { login: "dinesh", employee: "Dinesh Pawar", userType: "Mobile User", userGroup: "Production User", site: "Majri OB", superior: "Ajay Singh" },
+    { login: "lost", employee: "Lost Person", userType: "Mobile User", userGroup: "Production User" },
+    { login: "anoop", employee: "Anoop Paul", userType: "Super User", adminLevel: "Admin" },
+  ];
+  const chart = buildOrganisationChart({ users: staff });
+  const { reporting } = chart;
+  assert.deepEqual(reporting.directors.map((person) => person.name), ["Manish Chadda", "Mohit Chadda", "Rahul Chadda"]);
+  assert.deepEqual(reporting.sites.map((site) => site.site), ["Majri OB", "Sasti OB"]);
+  const sasti = reporting.sites.find((site) => site.site === "Sasti OB");
+  assert.deepEqual(sasti.pms.map((person) => person.name), ["Vivek"]);
+  const outline = (tree, depth = 0) => [`${"  ".repeat(depth)}${tree.person.name}${tree.explicit ? "" : " *"}`, ...tree.children.flatMap((child) => outline(child, depth + 1))];
+  assert.deepEqual(sasti.trees.flatMap((tree) => outline(tree)), [
+    "Vivek",
+    "  Neha Kulkarni *",
+    "    Priya Deshmukh *",
+    "  Priyank Rao",
+    "    Ramesh Kumar",
+    "  Rajesh More",
+    "    Suresh Patil *",
+  ], "explicit superiors are used; missing or unknown ones fall back to the department manager of the site and are flagged");
+  const majri = reporting.sites.find((site) => site.site === "Majri OB");
+  assert.deepEqual(majri.trees.flatMap((tree) => outline(tree)), ["Ajay Singh", "  Dinesh Pawar"]);
+  assert.deepEqual(reporting.unplaced.map((person) => person.name), ["Lost Person"], "people without a site or a superior are listed, not lost; admins are not reporting-line staff");
+  assert.equal(reporting.linkedCount, 6);
+  assert.equal(reporting.inferredCount, 3);
+  assert.deepEqual(personSites({ sites: ["A", "B"], site: "C" }), ["A", "B"]);
+  assert.deepEqual(personSites({ site: "C" }), ["C"]);
+  const alone = buildReportingLines([]);
+  assert.deepEqual([alone.directors, alone.sites, alone.unplaced], [[], [], []]);
+});
+
+test("the reporting panel renders directors, per-site trees and flags inferred placements", () => {
+  assert.match(view, /4 · Reporting lines, site-wise/);
+  assert.match(view, /function ReportingNode\(\{ tree \}\)/);
+  assert.match(view, /placed by designation and site/);
+  assert.match(view, /reporting\.directors\.map\(\(director\) =>/);
+  assert.match(view, /reporting\.sites\.map\(\(\{ site, pms, trees \}\) =>/);
+  assert.match(view, /Not placed on any site/);
 });
