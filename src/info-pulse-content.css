@@ -112,7 +112,7 @@
 .pulse-meta { position: relative; align-items: center; }
 .pulse-meta-context { display: inline-flex; align-items: center; gap: 6px; }
 .pulse-content .pulse-toolbar .pulse-meta { margin: 0; align-self: center; }
-.pulse-refresh-group { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.pulse-refresh-group { margin-left: auto; display: flex; flex-direction: row; align-items: center; gap: 10px; }
 .pulse-updated { font-size: 12px; color: #536179; }
 .pulse-content .pulse-issue-filter .pulse-results-line { margin: 0 0 0 auto; padding-left: 10px; flex-shrink: 0; gap: 16px; white-space: nowrap; }
 .pulse-toolbar { margin-bottom: 8px; }
