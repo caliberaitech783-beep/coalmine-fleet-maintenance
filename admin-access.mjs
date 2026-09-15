@@ -50,6 +50,8 @@ export function accessAllows(selection, name) {
 export function masterAccessAllows(permissions = {}, name, selectionKey = "masterAccess") {
   if (name === "Delayed Reason" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
   if (name === "Shift Master" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
+  // The organisation chart is a fixed read-only view for Admin and Super Admin only.
+  if (name === "Organisation chart") return normalizeAdminLevel(permissions.adminLevel) !== "Manager";
   return accessAllows(permissions[selectionKey], name);
 }
 
