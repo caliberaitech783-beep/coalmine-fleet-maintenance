@@ -27,7 +27,7 @@ test("target loading is abortable and ignores stale click responses", () => {
   assert.match(bell, /entrySequenceRef\.current \+= 1;[\s\S]*entryControllerRef\.current\?\.abort\(\)/);
 });
 
-test("the exact entry dialog has accessible loading, generic error, request, and ticket states", () => {
+test("the exact entry dialog has accessible loading, generic error, request, ticket, and transfer states", () => {
   const dialog = source.slice(source.indexOf("function NotificationEntryField("), source.indexOf("function NotificationBell("));
   assert.match(dialog, /function NotificationEntryDialog/);
   assert.match(dialog, /createPortal\(<Modal[\s\S]*className="notification-entry-modal"/);
@@ -36,6 +36,7 @@ test("the exact entry dialog has accessible loading, generic error, request, and
   assert.match(dialog, /This entry is no longer available or is outside your assigned access\./);
   assert.match(dialog, /target\?\.kind === "request"[\s\S]*<NotificationRequestEntry/);
   assert.match(dialog, /target\?\.kind === "ticket"[\s\S]*<NotificationTicketEntry/);
+  assert.match(dialog, /target\?\.kind === "transfer"[\s\S]*<NotificationVehicleTransferEntry/);
   assert.match(dialog, /<MaintenanceRemarks remarks=\{request\.dailyRemarks\}/);
   assert.match(dialog, /request\.openingMeterFileUploaded \? "Evidence uploaded"/);
   assert.doesNotMatch(dialog, /<MeterFileCell/);
@@ -44,7 +45,7 @@ test("the exact entry dialog has accessible loading, generic error, request, and
 });
 
 test("only a validated server kind drives broad navigation after the dialog opens", () => {
-  assert.match(openEntry, /\["request", "ticket"\]\.includes\(kind\)/);
+  assert.match(openEntry, /\["request", "ticket", "transfer"\]\.includes\(kind\)/);
   assert.match(openEntry, /setEntryState\(\{phase: "ready", target\}\);[\s\S]*onOpenEntryRef\.current\?\.\(target\)/);
   assert.equal(source.match(/<NotificationBell\b/g)?.length, 2);
   const uses = source.split(/\r?\n/).filter((line) => line.includes("<NotificationBell"));

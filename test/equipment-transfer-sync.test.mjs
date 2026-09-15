@@ -12,6 +12,8 @@ test("maps Oracle equipment transfers to the Vehicle transfers master", () => {
     transferNo: "ETR-1", transferDate: "2026-08-22", source: "Sasti OB", destination: "Majri OB",
     equipment: "D37-7585", modelNo: "D37", manufacturerSerialNo: "SER-1", lastMaintenanceDate: "",
     driver: "Santosh", chassisNo: "CH-1", dieselQty: "5", kmr: "10", hmr: "20",
+    status: "Completed", submittedBy: "Oracle import", sourceApprovedBy: "Oracle import",
+    destinationAcceptedBy: "Oracle import",
     oracleSource: "EQUIPMENTTRANSFER", oracleTno: "10", oracleEquipmentTno: "20",
   });
 });

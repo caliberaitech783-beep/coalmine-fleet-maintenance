@@ -16,6 +16,7 @@ import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import BackupAdministration from "./backup-administration.jsx";
+import VehicleTransferWorkflow from "./vehicle-transfer-workflow.jsx";
 import {RemoteAssistanceAction, RemoteAssistanceAgent} from "./remote-assistance.jsx";
 import HelpTraining from "./help-training.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
@@ -774,10 +775,16 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     closeMenus();
   }, [active]);
   const viewPermissions=navigationPermissionsForView(permissions,responsiveMobile);
-  const visibleMasterNav = masterNav.filter(([name]) => masterAccessAllows(viewPermissions, name));
+  const activeManagerRoles=Array.isArray(permissions.managerRoles)&&permissions.managerRoles.length
+    ?permissions.managerRoles:[permissions.managerRole].filter(Boolean);
+  const vehicleTransferDirectAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.includes("MIS Manager");
+  const vehicleTransferMasterAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.includes("Project Manager");
+  const vehicleTransferRoleAccess=vehicleTransferDirectAccess||vehicleTransferMasterAccess;
+  const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
+  const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
   const visibleNav = nav.filter(([name]) => (name==="Dashboard"&&permissions.adminLevel==="Manager") || (accessAllows(viewPermissions.tabAccess, name) && accessAllows(viewPermissions[directMenuAccess[name]], name)));
-  const canViewMasters = accessAllows(viewPermissions.tabAccess, "Masters") && visibleMasterNav.length > 0;
+  const canViewMasters = (standardMastersAccess||vehicleTransferRoleAccess) && visibleMasterNav.length > 0;
   const visibleWhatsAppNav = whatsappNav.filter(([name]) => name !== "Meta API setup" || permissions.adminLevel !== "Manager").filter(([name]) => accessAllows(viewPermissions.whatsappAccess, name));
   const canViewWhatsApp = accessAllows(viewPermissions.tabAccess, "WhatsApp Integration") && visibleWhatsAppNav.length > 0;
   const visibleReportCategoryIds = reportCategoryIdsForUser(viewPermissions, session);
@@ -919,6 +926,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <span className="nav-label">{n}</span>
           </button></div>
         ))}
+        {vehicleTransferDirectAccess&&<div className="nav-config-row"><button className={active==="Vehicle transfers"?"active":""} onClick={()=>selectPage("Vehicle transfers")}><ArrowRightLeft /><span className="nav-label">Vehicle Transfer</span></button></div>}
         {canViewAdmin && <div
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
@@ -8671,6 +8679,30 @@ function NotificationTicketEntry({ reference, ticket = {} }) {
   </div>;
 }
 
+function NotificationVehicleTransferEntry({reference, transfer = {}}) {
+  return <div className="notification-entry-record">
+    <div className="notification-entry-hero">
+      <div><span>Vehicle transfer</span><h2>{reference}</h2><p>{transfer.equipment || transfer.door || "Vehicle not recorded"}</p></div>
+      <Status>{transfer.status || "Awaiting source approval"}</Status>
+    </div>
+    <dl className="notification-entry-fields">
+      <NotificationEntryField label="From site" value={transfer.source} />
+      <NotificationEntryField label="To site" value={transfer.destination} />
+      <NotificationEntryField label="Transfer date" value={formatDisplayDate(transfer.transferDate)} />
+      <NotificationEntryField label="Vehicle / equipment" value={transfer.equipment || transfer.door} />
+      <NotificationEntryField label="Model" value={transfer.modelNo} />
+      <NotificationEntryField label="Chassis number" value={transfer.chassisNo} />
+      <NotificationEntryField label="Submitted by MIS" value={transfer.submittedBy} />
+      <NotificationEntryField label="Submitted" value={formatDisplayDateTime(transfer.submittedAt)} />
+      <NotificationEntryField label="Source PM approval" value={transfer.sourceApprovedBy ? transfer.sourceApprovedBy + " · " + formatDisplayDateTime(transfer.sourceApprovedAt) : "Pending"} />
+      <NotificationEntryField label="Destination MIS verification" value={transfer.destinationMisVerifiedBy ? transfer.destinationMisVerifiedBy + " · " + formatDisplayDateTime(transfer.destinationMisVerifiedAt) : "Pending"} />
+      <NotificationEntryField label="Destination PM acceptance" value={transfer.destinationAcceptedBy ? transfer.destinationAcceptedBy + " · " + formatDisplayDateTime(transfer.destinationAcceptedAt) : "Pending"} />
+      <NotificationEntryField label="Vehicle Master" value={transfer.vehicleMasterUpdatedAt ? "Updated · " + formatDisplayDateTime(transfer.vehicleMasterUpdatedAt) : "Updates after destination acceptance"} wide />
+      <NotificationEntryField label="Remarks" value={transfer.remarks} wide />
+    </dl>
+  </div>;
+}
+
 function NotificationEntryDialog({ state, onClose }) {
   if (!state) return null;
   const target = state.target;
@@ -8678,12 +8710,13 @@ function NotificationEntryDialog({ state, onClose }) {
     ? "Opening notification entry"
     : state.phase === "error"
       ? "Notification entry unavailable"
-      : `${target.kind === "ticket" ? "Ticket" : "Request"} · ${target.reference}`;
+      : `${target.kind === "ticket" ? "Ticket" : target.kind === "transfer" ? "Vehicle transfer" : "Request"} · ${target.reference}`;
   return createPortal(<Modal title={title} close={onClose} className="notification-entry-modal">
     {state.phase === "loading" && <div className="notification-entry-state loading" role="status" aria-live="polite" aria-busy="true"><Clock /><div><b>Loading the exact entry…</b><p>Checking your current access and retrieving the latest record.</p></div></div>}
     {state.phase === "error" && <div className="notification-entry-state error" role="alert"><AlertTriangle /><div><b>Entry unavailable</b><p>This entry is no longer available or is outside your assigned access.</p><button type="button" onClick={onClose}>Close</button></div></div>}
     {state.phase === "ready" && target?.kind === "request" && <NotificationRequestEntry reference={target.reference} request={target.record} />}
     {state.phase === "ready" && target?.kind === "ticket" && <NotificationTicketEntry reference={target.reference} ticket={target.record} />}
+    {state.phase === "ready" && target?.kind === "transfer" && <NotificationVehicleTransferEntry reference={target.reference} transfer={target.record} />}
   </Modal>, document.body);
 }
 
@@ -8818,7 +8851,7 @@ function NotificationBell({ session, onOpenEntry }) {
       const kind = body?.kind;
       const reference = String(body?.reference ?? "").trim();
       const record = body?.record;
-      if (!(["request", "ticket"].includes(kind) && reference && record && typeof record === "object" && !Array.isArray(record))) throw new Error("Invalid notification entry");
+      if (!(["request", "ticket", "transfer"].includes(kind) && reference && record && typeof record === "object" && !Array.isArray(record))) throw new Error("Invalid notification entry");
       if (sequence !== entrySequenceRef.current) return;
       const target = {kind, reference, record};
       entryControllerRef.current = null;
@@ -8888,11 +8921,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     history: isProduction ? "Closed Production Requests" : isMaintenance ? "Closed Maintenance Requests" : "Closed MIS Requests",
     idle: "Idle Vehicles",
     close: "Maintenance Close Request Form",
+    transfers: "Vehicle Transfer Control",
   };
   const canCreate = isProduction || isMaintenance;
   const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets");
   useEffect(()=>{
-    const allowed=tab==="tickets"?showTicketsMenu:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
+    const allowed=tab==="tickets"?showTicketsMenu:tab==="transfers"?isMis:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
     if(allowed)return;
     if(showRequestsMenu&&canSeeRequestMenu("View requests"))setTab("requests");
     else if(showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU))setTab("verify");
@@ -8979,11 +9013,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><HelpTraining role={mobileRole} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;setSection(ticket?"tickets":"profile");if(!ticket)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><HelpTraining role={mobileRole} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;setSection(ticket?"tickets":transfer?"transfers":"profile");if(!ticket&&!transfer)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardState.error} requestsUpdatedAt={dashboardState.updatedAt} onRefreshRequests={()=>dashboardLoader.current?.load(session?.token)} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
       {!embedded&&section==="reports"&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&<TicketPage session={session} />}
+      {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
       {(embedded||section==="profile")&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
@@ -9091,6 +9126,8 @@ function App() {
     };
   },[session?.token]);
   const isAdministrator=session?.role==='super'&&['admin','super admin'].includes(String(adminPermissions.adminLevel||'').trim().toLowerCase());
+  const vehicleTransferRoleAccess=adminPermissions.adminLevel==='Manager'&&managerRoleSelection(adminPermissions.managerRoles?.length?adminPermissions.managerRoles:adminPermissions.managerRole)
+    .some((role)=>['MIS Manager','Project Manager'].includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return isAdministrator;
@@ -9100,7 +9137,8 @@ function App() {
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
     if (operationalWorkspaceNav.some(([workspace]) => workspace === name)) return adminPermissions.adminLevel !== "Manager";
-    if (masterNav.some(([master]) => master === name)) return accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name);
+    if (masterNav.some(([master]) => master === name)) return (name==='Vehicle transfers'&&vehicleTransferRoleAccess)
+      || (accessAllows(activeNavigationPermissions.tabAccess, "Masters") && masterAccessAllows(activeNavigationPermissions, name));
     if (whatsappNav.some(([page]) => page === name)) return (name !== "Meta API setup" || adminPermissions.adminLevel !== "Manager") && accessAllows(activeNavigationPermissions.tabAccess, "WhatsApp Integration") && accessAllows(activeNavigationPermissions.whatsappAccess, name);
     if (name === "Reports") return reportCategoryIdsForUser(activeNavigationPermissions, session).length > 0;
     const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
@@ -9425,7 +9463,7 @@ function App() {
             <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <Search />
             </button>
-            <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "ticket" ? "Tickets" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
+            <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "ticket" ? "Tickets" : target?.kind === "transfer" ? "Vehicle transfers" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
           </div>
         </div>
         <div className="body">
@@ -9441,6 +9479,8 @@ function App() {
             <UserSessionsPage session={session} />
           ) : backupAdminPages.has(active) ? (
             <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
+          ) : active === "Vehicle transfers" ? (
+            <VehicleTransferWorkflow session={session} Dialog={Modal} />
           ) : active === "Equipment master" ? (
             <Equipment
               initialFilter={equipmentFilter}

@@ -48,7 +48,7 @@ import {normalizeSessionMessage,sessionMessagePayloadValidationError} from './se
 import {BACKUP_FORMAT,backupFileName,exportDatabase,readBackupRecords,restoreDatabase} from './database-backup.mjs';
 import {BACKUP_SETTING_KEY,DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './backup-settings.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
-import {displaySiteName,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
+import {REGION_DATA,displaySiteName,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf,buildTableBundlePdf} from './table-export-pdf.mjs';
@@ -66,6 +66,7 @@ import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mj
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
+import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -2778,6 +2779,244 @@ async function sendGenericWhatsAppAlertBestEffort(recipients,reference,message,t
 }
 
 let consolidatedReportRunning=false;
+
+function vehicleTransferManagerRoles(session={}){
+  return managerRoleSelection(session.permissions?.managerRoles?.length
+    ?session.permissions.managerRoles:session.permissions?.managerRole);
+}
+
+async function vehicleTransferAccessContext(session,client=pool){
+  const user=await currentUserRecord(session,client);
+  const managerRoles=vehicleTransferManagerRoles(session);
+  const adminLevel=String(session?.permissions?.adminLevel||'').trim().toLowerCase();
+  const administrator=session?.role==='super'&&['admin','super admin'].includes(adminLevel);
+  const manager=session?.role==='super'&&adminLevel==='manager';
+  const misUser=session?.role==='normal'&&session.assignedRole==='MIS User';
+  const misManager=manager&&managerRoles.includes('MIS Manager');
+  const pmManager=manager&&managerRoles.includes('Project Manager');
+  const assignedSite=canonicalSiteName(assignedUserSiteName(user));
+  const scope=manager?managerReportScope(user):null;
+  return {user,administrator,manager,misUser,misManager,pmManager,assignedSite,scope,
+    canView:administrator||misUser||misManager||pmManager,
+    canSubmit:misUser||misManager};
+}
+
+function transferVisibleToContext(record,context){
+  if(context.administrator)return true;
+  if(context.misUser)return [record.source,record.destination].some((site)=>canonicalSiteName(site)===context.assignedSite);
+  if(context.manager)return [record.source,record.destination].some((site)=>reportScopeIncludesSite(context.scope,site));
+  return false;
+}
+
+function transferSiteActionAllowed(context,site){
+  return context.pmManager&&reportScopeIncludesSite(context.scope,site);
+}
+
+function transferMisVerificationAllowed(context,site){
+  if(context.misUser)return canonicalSiteName(site)===context.assignedSite;
+  return context.misManager&&reportScopeIncludesSite(context.scope,site);
+}
+
+async function vehicleTransferPmLogins(client,site){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const logins=[];
+  for(const row of rows){
+    const user=row.record_data||{};
+    const login=String(user.login||'').trim().toLowerCase();
+    if(!login)continue;
+    const profile=resolveMobileAccess({user});
+    if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'
+      &&profile.permissions.managerRoles.includes('Project Manager')
+      &&userManagesSite(user,site))logins.push(login);
+  }
+  return [...new Set(logins)];
+}
+
+async function vehicleTransferMisLogins(client,site){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const logins=[];
+  for(const row of rows){
+    const user=row.record_data||{};
+    const login=String(user.login||'').trim().toLowerCase();
+    if(!login)continue;
+    const profile=resolveMobileAccess({user});
+    const siteMatches=canonicalSiteName(assignedUserSiteName(user))===canonicalSiteName(site);
+    const isSiteMisUser=profile.sessionRole==='normal'&&profile.assignedRole==='MIS User'&&siteMatches;
+    const isSiteMisManager=profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'
+      &&profile.permissions.managerRoles.includes('MIS Manager')&&userManagesSite(user,site);
+    if(isSiteMisUser||isSiteMisManager)logins.push(login);
+  }
+  return [...new Set(logins)];
+}
+
+async function vehicleTransferSiteOptions(client=pool){
+  const {rows}=await client.query(`SELECT master_name,record_data FROM master_records
+    WHERE master_name IN ('Region master','Equipment master') ORDER BY created_at ASC`);
+  const configured=REGION_DATA.flatMap((region)=>region.sites);
+  for(const row of rows){
+    if(row.master_name==='Region master')configured.push(...String(row.record_data?.sites||'').split(/\s*\|\s*/));
+    else configured.push(row.record_data?.currentLocation||row.record_data?.location||row.record_data?.site||'');
+  }
+  return [...new Map(configured.map(displaySiteName).filter(Boolean).map((site)=>[canonicalSiteName(site),site])).values()];
+}
+
+app.get('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
+  try{
+    const context=await vehicleTransferAccessContext(req.session);
+    if(!context.canView)return res.status(403).json({error:'Only MIS users, MIS managers, assigned Project Managers, and administrators can view vehicle transfers.'});
+    const [{rows:transferRows},{rows:equipmentRows},sites]=await Promise.all([
+      pool.query(`SELECT id,record_data,created_at FROM master_records WHERE master_name='Vehicle transfers' ORDER BY created_at DESC,id DESC`),
+      pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Equipment master' ORDER BY created_at ASC`),
+      vehicleTransferSiteOptions(),
+    ]);
+    const records=transferRows.map((row)=>({id:row.id,...row.record_data,
+      submittedAt:row.record_data.submittedAt||row.created_at,
+      status:vehicleTransferStatus(row.record_data)}))
+      .filter((record)=>transferVisibleToContext(record,context))
+      .map((record)=>({...record,
+        canApproveSource:vehicleTransferStatus(record)===VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL&&transferSiteActionAllowed(context,record.source),
+        canVerifyDestination:vehicleTransferStatus(record)===VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION&&transferMisVerificationAllowed(context,record.destination),
+        canAcceptDestination:vehicleTransferStatus(record)===VEHICLE_TRANSFER_STATUS.DESTINATION_ACCEPTANCE&&transferSiteActionAllowed(context,record.destination),
+      }));
+    const equipment=equipmentRows.map((row)=>({id:row.id,...row.record_data})).filter((record)=>{
+      if(!context.canSubmit)return false;
+      const site=record.currentLocation||record.location||record.site;
+      return context.misUser?canonicalSiteName(site)===context.assignedSite:reportScopeIncludesSite(context.scope,site);
+    });
+    res.set('Cache-Control','private, no-store');
+    res.json({records,equipment,sites,capabilities:{canSubmit:context.canSubmit,canApproveSource:context.pmManager,
+      canVerifyDestination:context.misUser||context.misManager,canAcceptDestination:context.pmManager}});
+  }catch(error){next(error)}
+});
+
+app.post('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const context=await vehicleTransferAccessContext(req.session,client);
+    if(!context.canSubmit)return res.status(403).json({error:'Only an MIS User or MIS Manager can submit a vehicle transfer.'});
+    const equipmentId=Number(req.body?.equipmentMasterId);
+    await client.query('BEGIN');
+    const {rows:equipmentRows}=await client.query(`SELECT id,record_data FROM master_records
+      WHERE master_name='Equipment master' AND id=$1 FOR UPDATE`,[equipmentId]);
+    const equipmentRow=equipmentRows[0];
+    if(!equipmentRow){await client.query('ROLLBACK');return res.status(404).json({error:'The selected vehicle is no longer available in Vehicle Master.'})}
+    const equipment={id:equipmentRow.id,...equipmentRow.record_data};
+    const source=displaySiteName(equipment.currentLocation||equipment.location||equipment.site||'');
+    const permittedSource=context.misUser?canonicalSiteName(source)===context.assignedSite:reportScopeIncludesSite(context.scope,source);
+    if(!permittedSource){await client.query('ROLLBACK');return res.status(403).json({error:'You can submit transfers only for vehicles at your assigned locations.'})}
+    const transferNo=String(req.body?.transferNo||'').trim().slice(0,80)||`VT-${Date.now()}-${randomUUID().slice(0,4).toUpperCase()}`;
+    const record=normalizeOperationalSiteFields({
+      transferNo,transferDate:String(req.body?.transferDate||'').trim(),source,
+      destination:String(req.body?.destination||'').trim(),equipmentMasterId:equipmentRow.id,
+      equipment:equipment.door||equipment.reg||equipment.equipmentName||equipment.itemName||'',door:equipment.door||'',reg:equipment.reg||'',
+      modelNo:equipment.modelNo||equipment.model||'',manufacturerSerialNo:equipment.manufacturerSerialNo||'',lastMaintenanceDate:equipment.lastMaintenanceDate||'',
+      chassisNo:equipment.chassisNo||'',driver:String(req.body?.driver||'').trim().slice(0,160),
+      dieselQty:String(req.body?.dieselQty||'').trim().slice(0,80),kmr:String(req.body?.kmr||'').trim().slice(0,80),hmr:String(req.body?.hmr||'').trim().slice(0,80),
+      remarks:String(req.body?.remarks||'').trim().slice(0,1000),status:VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL,
+      submittedBy:req.session.name||req.session.login||'MIS',submittedLogin:String(req.session.login||'').trim().toLowerCase(),submittedAt:new Date().toISOString(),
+    });
+    const validationError=vehicleTransferValidationError(record);
+    if(validationError){await client.query('ROLLBACK');return res.status(400).json({error:validationError})}
+    const duplicate=await client.query(`SELECT id,record_data FROM master_records WHERE master_name='Vehicle transfers'
+      AND lower(record_data->>'transferNo')=lower($1) LIMIT 1`,[transferNo]);
+    if(duplicate.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'This transfer number already exists.'})}
+    const pending=await client.query(`SELECT id FROM master_records WHERE master_name='Vehicle transfers'
+      AND record_data->>'equipmentMasterId'=$1 AND record_data->>'status'=ANY($2::text[]) LIMIT 1`,[
+        String(equipmentRow.id),[VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL,VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION,VEHICLE_TRANSFER_STATUS.DESTINATION_ACCEPTANCE]
+      ]);
+    if(pending.rowCount){await client.query('ROLLBACK');return res.status(409).json({error:'This vehicle already has a transfer awaiting approval or acceptance.'})}
+    const {rows}=await client.query(`INSERT INTO master_records (master_name,record_data) VALUES ('Vehicle transfers',$1::jsonb)
+      RETURNING id,record_data,created_at`,[JSON.stringify(record)]);
+    await client.query('COMMIT');
+    const saved={id:rows[0].id,...rows[0].record_data,submittedAt:rows[0].record_data.submittedAt||rows[0].created_at,status:VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL};
+    const recipients=await vehicleTransferPmLogins(pool,saved.source);
+    await addTicketNotificationsBestEffort(pool,recipients,saved.transferNo,`Vehicle transfer ${saved.transferNo} for ${saved.equipment} is awaiting source-site PM dispatch approval from ${saved.source} to ${saved.destination}.`,null,{whatsapp:false});
+    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Submit vehicle transfer',targetType:'Vehicle transfer',targetReference:saved.transferNo,
+      reason:`Sent from ${saved.source} to ${saved.destination} for source PM approval`,changedFields:[{field:'status',before:'Draft',after:saved.status}]};
+    res.status(201).json(saved);
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+
+app.patch('/api/vehicle-transfers/:id/source-approval',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const context=await vehicleTransferAccessContext(req.session,client);
+    const id=Number(req.params.id);
+    if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid vehicle transfer is required.'});
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT record_data FROM master_records WHERE id=$1 AND master_name='Vehicle transfers' FOR UPDATE`,[id]);
+    const before=rows[0]?.record_data;
+    if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'Vehicle transfer not found.'})}
+    if(!transferSiteActionAllowed(context,before.source)){await client.query('ROLLBACK');return res.status(403).json({error:'Only the assigned source-site Project Manager can approve dispatch.'})}
+    if(vehicleTransferStatus(before)!==VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL){await client.query('ROLLBACK');return res.status(409).json({error:'This transfer is no longer awaiting source approval.'})}
+    const updated={...before,status:VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION,sourceApprovedBy:req.session.name||req.session.login||'PM',sourceApprovedLogin:String(req.session.login||'').trim().toLowerCase(),sourceApprovedAt:new Date().toISOString()};
+    await client.query(`UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name='Vehicle transfers'`,[JSON.stringify(updated),id]);
+    await client.query('COMMIT');
+    const recipients=await vehicleTransferMisLogins(pool,updated.destination);
+    await addTicketNotificationsBestEffort(pool,recipients,updated.transferNo,`Vehicle transfer ${updated.transferNo} for ${updated.equipment} was dispatched from ${updated.source}. Destination-site MIS verification is required at ${updated.destination}.`,null,{whatsapp:false});
+    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Approve vehicle dispatch',targetType:'Vehicle transfer',targetReference:updated.transferNo,
+      reason:`Source PM approved dispatch from ${updated.source} to ${updated.destination}`,changedFields:[{field:'status',before:before.status||VEHICLE_TRANSFER_STATUS.SOURCE_APPROVAL,after:updated.status}]};
+    res.json({id,...updated});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+
+app.patch('/api/vehicle-transfers/:id/destination-verification',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const context=await vehicleTransferAccessContext(req.session,client);
+    const id=Number(req.params.id);
+    if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid vehicle transfer is required.'});
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT record_data FROM master_records WHERE id=$1 AND master_name='Vehicle transfers' FOR UPDATE`,[id]);
+    const before=rows[0]?.record_data;
+    if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'Vehicle transfer not found.'})}
+    if(!transferMisVerificationAllowed(context,before.destination)){await client.query('ROLLBACK');return res.status(403).json({error:'Only an assigned destination-site MIS User or MIS Manager can verify this vehicle.'})}
+    if(vehicleTransferStatus(before)!==VEHICLE_TRANSFER_STATUS.MIS_VERIFICATION){await client.query('ROLLBACK');return res.status(409).json({error:'This transfer is not awaiting destination MIS verification.'})}
+    const updated={...before,status:VEHICLE_TRANSFER_STATUS.DESTINATION_ACCEPTANCE,
+      destinationMisVerifiedBy:req.session.name||req.session.login||'MIS',destinationMisVerifiedLogin:String(req.session.login||'').trim().toLowerCase(),destinationMisVerifiedAt:new Date().toISOString()};
+    await client.query(`UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name='Vehicle transfers'`,[JSON.stringify(updated),id]);
+    await client.query('COMMIT');
+    const recipients=await vehicleTransferPmLogins(pool,updated.destination);
+    await addTicketNotificationsBestEffort(pool,recipients,updated.transferNo,`Destination MIS verified vehicle transfer ${updated.transferNo} for ${updated.equipment} at ${updated.destination}. Destination Project Manager acceptance is now required.`,null,{whatsapp:false});
+    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Verify destination vehicle transfer',targetType:'Vehicle transfer',targetReference:updated.transferNo,
+      reason:`Destination MIS verified the vehicle at ${updated.destination} before PM acceptance`,changedFields:[{field:'status',before:before.status,after:updated.status}]};
+    res.json({id,...updated});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+
+app.patch('/api/vehicle-transfers/:id/destination-acceptance',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const context=await vehicleTransferAccessContext(req.session,client);
+    const id=Number(req.params.id);
+    if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid vehicle transfer is required.'});
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT record_data FROM master_records WHERE id=$1 AND master_name='Vehicle transfers' FOR UPDATE`,[id]);
+    const before=rows[0]?.record_data;
+    if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'Vehicle transfer not found.'})}
+    if(!transferSiteActionAllowed(context,before.destination)){await client.query('ROLLBACK');return res.status(403).json({error:'Only the assigned destination-site Project Manager can accept this vehicle.'})}
+    if(vehicleTransferStatus(before)!==VEHICLE_TRANSFER_STATUS.DESTINATION_ACCEPTANCE){await client.query('ROLLBACK');return res.status(409).json({error:'This transfer is not awaiting destination PM acceptance.'})}
+    if(!before.destinationMisVerifiedAt){await client.query('ROLLBACK');return res.status(409).json({error:'Destination MIS verification must be completed before PM acceptance.'})}
+    const equipmentRows=await client.query(`SELECT id,record_data FROM master_records WHERE master_name='Equipment master' FOR UPDATE`);
+    const equipmentRow=equipmentRows.rows.find((row)=>transferMatchesEquipment(before,{id:row.id,...row.record_data}));
+    if(!equipmentRow){await client.query('ROLLBACK');return res.status(409).json({error:'The matching vehicle was not found in Vehicle Master. Update the master identity before accepting.'})}
+    const acceptedAt=new Date().toISOString(),acceptedBy=req.session.name||req.session.login||'PM';
+    const updatedEquipment=applyAcceptedVehicleTransfer(equipmentRow.record_data,before,{acceptedAt,acceptedBy});
+    const updated={...before,status:VEHICLE_TRANSFER_STATUS.COMPLETED,destinationAcceptedBy:acceptedBy,destinationAcceptedLogin:String(req.session.login||'').trim().toLowerCase(),destinationAcceptedAt:acceptedAt,vehicleMasterUpdatedAt:acceptedAt,vehicleMasterRecordId:equipmentRow.id};
+    await client.query(`UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name='Equipment master'`,[JSON.stringify(updatedEquipment),equipmentRow.id]);
+    await client.query(`UPDATE master_records SET record_data=$1::jsonb WHERE id=$2 AND master_name='Vehicle transfers'`,[JSON.stringify(updated),id]);
+    await client.query('COMMIT');
+    const [sourceRecipients,destinationMisRecipients]=await Promise.all([
+      vehicleTransferPmLogins(pool,updated.source),vehicleTransferMisLogins(pool,updated.destination),
+    ]);
+    const recipients=[updated.submittedLogin,...sourceRecipients,...destinationMisRecipients].filter(Boolean);
+    await addTicketNotificationsBestEffort(pool,recipients,updated.transferNo,`Vehicle transfer ${updated.transferNo} was accepted at ${updated.destination}. Vehicle Master now shows ${updated.equipment} at ${updated.destination}.`,null,{whatsapp:false});
+    req.audit={eventType:'Workflow',module:'Vehicle transfers',action:'Accept vehicle transfer',targetType:'Vehicle transfer',targetReference:updated.transferNo,
+      reason:`Destination PM accepted the vehicle and Vehicle Master was updated`,changedFields:[{field:'status',before:before.status,after:updated.status},{field:'Vehicle Master location',before:before.source,after:before.destination}]};
+    res.json({id,...updated});
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+
 async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
   if(!databaseReady||consolidatedReportRunning)return {skipped:true};
   return {skipped:true,reason:'Fleet consolidated schedule is handled by the hierarchy report flow'};
@@ -3401,11 +3640,15 @@ app.get('/api/notifications',requireSession,async(req,res,next)=>{
     if(req.query.wait==='1')subscription=await waitForNotification(login,res);
     const read=async()=>{
       const {rows}=await pool.query(`SELECT n.id,n.ticket_reference AS "ticketReference",n.message,n.is_read AS "isRead",
-        COALESCE(NULLIF(r.site,''),t.site,'') AS site,COALESCE(r.door_number,'') AS door,COALESCE(t.category,'') AS "ticketCategory",
+        COALESCE(NULLIF(r.site,''),t.site,transfer.record_data->>'destination','') AS site,
+        COALESCE(r.door_number,transfer.record_data->>'door',transfer.record_data->>'equipment','') AS door,
+        COALESCE(t.category,CASE WHEN transfer.id IS NOT NULL THEN 'Vehicle transfer' END,'') AS "ticketCategory",
         to_char(n.created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
         FROM crm_notifications n
         LEFT JOIN maintenance_requests r ON r.reference=n.ticket_reference
         LEFT JOIN crm_tickets t ON t.reference=n.ticket_reference
+        LEFT JOIN master_records transfer ON transfer.master_name='Vehicle transfers'
+          AND transfer.record_data->>'transferNo'=n.ticket_reference
         WHERE n.recipient_login=$1 ORDER BY n.created_at DESC,n.id DESC LIMIT 50`,[login]);
       return rows;
     };
@@ -3437,11 +3680,12 @@ app.get('/api/notifications/:id/target',requireSession,async(req,res,next)=>{
     const reference=String(notifications[0]?.reference||'').trim();
     if(!reference)return unavailable();
 
-    const [ticketResult,requestResult]=await Promise.all([
+    const [ticketResult,requestResult,transferResult]=await Promise.all([
       pool.query(`SELECT ${ticketProjection()} FROM crm_tickets WHERE reference=$1`,[reference]),
       pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]),
+      pool.query(`SELECT id,record_data FROM master_records WHERE master_name='Vehicle transfers' AND record_data->>'transferNo'=$1 ORDER BY created_at DESC LIMIT 1`,[reference]),
     ]);
-    if(ticketResult.rows.length&&requestResult.rows.length)return unavailable();
+    if([ticketResult,requestResult,transferResult].filter((result)=>result.rows.length).length>1)return unavailable();
 
     if(ticketResult.rows.length){
       const ticket=ticketResult.rows[0];
@@ -3473,6 +3717,13 @@ app.get('/api/notifications/:id/target',requireSession,async(req,res,next)=>{
       const [record]=await attachDailyRemarks(visibleRows);
       if(!record)return unavailable();
       return res.json({kind:'request',reference,record});
+    }
+
+    if(transferResult.rows.length){
+      const transfer={id:transferResult.rows[0].id,...transferResult.rows[0].record_data};
+      const context=await vehicleTransferAccessContext(req.session);
+      if(!context.canView||!transferVisibleToContext(transfer,context))return unavailable();
+      return res.json({kind:'transfer',reference,record:{...transfer,status:vehicleTransferStatus(transfer)}});
     }
 
     return unavailable();
@@ -4388,6 +4639,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
 app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
+    if(master==='Vehicle transfers')return res.status(409).json({error:'Use the controlled Vehicle transfers workflow so both PM approvals and the Vehicle Master update are recorded.'});
     const records=Array.isArray(req.body)?req.body:[req.body];
     if(!master||!records.length||records.some(record=>!record||typeof record!=='object'||Array.isArray(record)))
       return res.status(400).json({error:'A master name and one or more records are required.'});
@@ -4562,6 +4814,7 @@ app.post('/api/masters/:master/:id/password',requireSuper,async(req,res,next)=>{
 app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
   try{
     const master=decodeURIComponent(req.params.master);
+    if(master==='Vehicle transfers')return res.status(409).json({error:'Vehicle transfer workflow records cannot be edited directly.'});
     const id=Number(req.params.id);
     const record=req.body;
     if(!master||!Number.isInteger(id)||id<=0||!record||typeof record!=='object'||Array.isArray(record))
