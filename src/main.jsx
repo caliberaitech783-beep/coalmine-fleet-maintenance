@@ -294,6 +294,9 @@ const nav = [
 ];
 const adminNav = [
   ["User Sessions", UserRound],
+  ["Access structure", Users],
+  ["Hierarchy levels", Network],
+  ["Reporting structure", Building2],
   ["Backup", HardDrive],
   ["Export Backup", Download],
   ["Import Backup", Upload],
@@ -311,9 +314,6 @@ const masterNav = [
   ["Delayed Reason", Clock],
   ["Vehicle transfers", ArrowRightLeft],
   ["Hierarchy master", Network],
-  ["Access structure", Users],
-  ["Hierarchy levels", Network],
-  ["Reporting structure", Building2],
   ["OEM master", ShieldCheck],
 ];
 const whatsappNav = [

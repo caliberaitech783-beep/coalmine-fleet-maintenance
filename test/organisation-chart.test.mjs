@@ -91,18 +91,16 @@ test("the chart resolves designations like the WhatsApp report flow, except that
   assert.equal(chartPerson({}).name, "Unnamed");
 });
 
-test("three read-only pages sit in the Masters menu for Admin and Super Admin only", () => {
+test("three read-only pages sit in the Administration menu for Admin and Super Admin only", () => {
   assert.deepEqual(ORGANISATION_PAGE_NAMES, ["Access structure", "Hierarchy levels", "Reporting structure"]);
   assert.equal(ORGANISATION_PAGES.reporting, "Reporting structure");
-  assert.match(main, /\["Hierarchy master", Network\],\n  \["Access structure", Users\],\n  \["Hierarchy levels", Network\],\n  \["Reporting structure", Building2\],/);
+  assert.match(main, /const adminNav = \[\n  \["User Sessions", UserRound\],\n  \["Access structure", Users\],\n  \["Hierarchy levels", Network\],\n  \["Reporting structure", Building2\],/, "the pages sit in the Administration dropdown, after User Sessions");
+  assert.doesNotMatch(main, /\["Hierarchy master", Network\],\n  \["Access structure"/, "and no longer in Masters");
   assert.match(main, /if\(ORGANISATION_PAGE_NAMES\.includes\(name\)\)return isAdministrator;/);
   assert.match(main, /ORGANISATION_PAGE_NAMES\.includes\(active\) \? \(\n\s+<OrganisationChartPage view=\{Object\.keys\(ORGANISATION_PAGES\)\.find\(\(key\) => ORGANISATION_PAGES\[key\] === active\)\} \/>/);
   assert.match(main, /useMasterRecords\("Users & employees"\);\n\s+const \[privileges, , privilegesLoaded, , , , privilegesError, refreshPrivileges\] = useMasterRecords\("Privilege"\);\n\s+const \[hierarchy, , hierarchyLoaded, , , , hierarchyError, refreshHierarchy\] = useMasterRecords\("Hierarchy master"\);/, "all three masters feed the pages and revalidate on their own");
-  for (const name of ORGANISATION_PAGE_NAMES) {
-    assert.equal(masterAccessAllows({ adminLevel: "Super Admin", masterAccess: ["Equipment master"] }, name), true, `${name}: not switchable off in Privilege`);
-    assert.equal(masterAccessAllows({ adminLevel: "Admin" }, name), true);
-    assert.equal(masterAccessAllows({ adminLevel: "Manager" }, name), false);
-  }
+  assert.match(main, /\{canViewAdmin && <div/, "the Administration dropdown itself is limited to Admin and Super Admin");
+  assert.equal(masterAccessAllows({ adminLevel: "Manager", masterAccess: ["Equipment master"] }, "Reporting structure"), false, "no Masters-menu exception remains for these pages");
   assert.doesNotMatch(view, /onAdd|onEdit|onDelete|<input|<textarea|<select/, "the views have no editing controls");
   assert.match(view, /role="tablist" aria-label="Sites"/, "every page has an All sites / per-site switch");
 });

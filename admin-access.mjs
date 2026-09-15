@@ -50,11 +50,10 @@ export function accessAllows(selection, name) {
 export function masterAccessAllows(permissions = {}, name, selectionKey = "masterAccess") {
   if (name === "Delayed Reason" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
   if (name === "Shift Master" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
-  // The organisation pages are fixed read-only views for Admin and Super Admin only.
-  if (ORGANISATION_PAGE_NAMES.includes(name)) return normalizeAdminLevel(permissions.adminLevel) !== "Manager";
   return accessAllows(permissions[selectionKey], name);
 }
 
+/** Read-only organisation pages in the Administration menu (Admin and Super Admin only). */
 export const ORGANISATION_PAGE_NAMES = ["Access structure", "Hierarchy levels", "Reporting structure"];
 export const MANAGER_ROLE_OPTIONS = ["Project Manager", "Production Manager", "Maintenance Manager", "MIS Manager"];
 
