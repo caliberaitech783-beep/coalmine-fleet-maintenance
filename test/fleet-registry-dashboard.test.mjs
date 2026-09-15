@@ -63,7 +63,7 @@ test("total fleet renders a region-grouped site count graph", () => {
 });
 
 test("dashboard opens in site-wise OEM breakdown mode by default", () => {
-  assert.match(source, /const \[fleetChartMode, setFleetChartMode\] = useState\("oem"\);/);
+  assert.match(source, /const \[fleetChartMode, setFleetChartMode\] = useState\("breakdown"\);/);
 });
 
 test("breakdown mode keeps total counts and green segments on one common scale", () => {
