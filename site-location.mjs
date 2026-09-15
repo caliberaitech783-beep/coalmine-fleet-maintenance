@@ -7,6 +7,7 @@ const SITE_ALIASES = new Map([
   ["dhoptala ii", "dhoptala ob 2nd"],
   ["dhoptala ob", "dhoptala ob 2nd"],
   ["gauri pauni", "gauri pauni ob 2nd"],
+  ["gouri ob", "gauri pauni ob 2nd"],
   ["gouri pouni", "gauri pauni ob 2nd"],
   ["gouri pouni ob 2nd", "gauri pauni ob 2nd"],
   ["lalpeth", "lalpeth ob"],

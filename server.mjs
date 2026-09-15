@@ -70,6 +70,7 @@ import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-vi
 import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
+import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -851,6 +852,16 @@ async function migrate(){
           WHERE master_name='Delayed Reason'
             AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
         )`,[JSON.stringify({delayedReason}),delayedReason]);
+    }
+    const {rows:shiftSeed}=await client.query("SELECT value FROM app_metadata WHERE key='shift_master_defaults_seeded_v1' FOR UPDATE");
+    if(!shiftSeed.length){
+      for(const defaultRecord of SHIFT_MASTER_DEFAULTS){
+        const record=normalizeOperationalSiteFields(normalizeShiftRecord(defaultRecord));
+        await client.query(`INSERT INTO master_records (master_name,record_data) VALUES ('Shift Master',$1::jsonb)`,[JSON.stringify(record)]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('shift_master_defaults_seeded_v1','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
     }
     // Privileged accounts must be provisioned explicitly by an authorized
     // administrator, never recreated with a known password during startup.
@@ -4753,6 +4764,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
     try{
       prepared=records.map((record,index)=>{
         try{
+          if(master==='Shift Master')return normalizeOperationalSiteFields(normalizeShiftRecord(record));
           if(master!=='Users & employees')return normalizeOperationalSiteFields(record);
           record.login=String(record.login||'').trim().toUpperCase();
           record.employee=String(record.employee||'').trim().toUpperCase();
@@ -4785,7 +4797,7 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
         await client.query('ROLLBACK').catch(()=>{});
         throw error;
       }finally{client.release()}
-    }else if(master==='Equipment master'){
+    }else if(master==='Equipment master'||master==='Shift Master'){
       const client=await pool.connect();
       try{
         await client.query('BEGIN');
@@ -4793,12 +4805,11 @@ app.post('/api/masters/:master',requireSuper,async(req,res,next)=>{
           'SELECT id,record_data FROM master_records WHERE master_name=$1 FOR UPDATE',
           [master]
         );
-        const byIdentity=new Map(
-          existing.rows.map(row=>[equipmentIdentity(row.record_data),row]).filter(([identity])=>identity)
-        );
+        const identityFor=master==='Equipment master'?equipmentIdentity:shiftIdentity;
+        const byIdentity=new Map(existing.rows.map(row=>[identityFor(row.record_data),row]).filter(([identity])=>identity));
         rows=[];
         for(const record of prepared){
-          const identity=equipmentIdentity(record);
+          const identity=identityFor(record);
           const match=identity&&byIdentity.get(identity);
           if(match){
             const updated=await client.query(
@@ -4926,7 +4937,9 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
     const existingSnapshot=await pool.query('SELECT record_data FROM master_records WHERE id=$1 AND master_name=$2',[id,master]);
     if(!existingSnapshot.rows.length)return res.status(404).json({error:'Master record not found.'});
     const previousRecord=existingSnapshot.rows[0].record_data;
-    let storedRecord=normalizeOperationalSiteFields(record);
+    let storedRecord=master==='Shift Master'
+      ?normalizeOperationalSiteFields(normalizeShiftRecord(record))
+      :normalizeOperationalSiteFields(record);
     if(master==='Users & employees'){
       if((isTrueSuperAdmin(record)||isTrueSuperAdmin(previousRecord))&&!isTrueSuperAdmin(req.session.permissions))
         return res.status(403).json({error:'Only a Super Admin can manage Super Admin accounts.'});
@@ -5002,7 +5015,7 @@ app.put('/api/masters/:master/:id',requireSuper,async(req,res,next)=>{
       [JSON.stringify(storedRecord),id,master]
     );
     if(!rows.length)return res.status(404).json({error:'Master record not found.'});
-    req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:String(storedRecord.login||storedRecord.employee||storedRecord.door||storedRecord.repairType||id),changedFields:auditChangedFields(previousRecord,storedRecord)};
+    req.audit={eventType:'Master data',module:master,action:'Edit record',targetType:master,targetReference:String(storedRecord.login||storedRecord.employee||storedRecord.door||storedRecord.repairType||storedRecord.shiftCode||id),changedFields:auditChangedFields(previousRecord,storedRecord)};
     res.json({id:rows[0].id,...(master==='Users & employees'?publicUserRecord(rows[0].record_data):rows[0].record_data)});
   }catch(error){next(error)}
 });

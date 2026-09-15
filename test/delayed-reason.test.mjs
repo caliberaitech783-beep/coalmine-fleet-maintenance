@@ -95,8 +95,8 @@ test('Delayed Reason master, close form, and server validation are connected',()
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const access=fs.readFileSync(new URL('../admin-access.mjs',import.meta.url),'utf8');
-  assert.match(access,/"Region master",\s*"Delayed Reason",\s*"Vehicle transfers"/);
-  assert.match(client,/\["Region master", Building2\],\s*\["Delayed Reason", Clock\],\s*\["Vehicle transfers", ArrowRightLeft\]/);
+  assert.match(access,/"Region master",\s*"Shift Master",\s*"Delayed Reason",\s*"Vehicle transfers"/);
+  assert.match(client,/\["Region master", Building2\],\s*\["Shift Master", Clock\],\s*\["Delayed Reason", Clock\],\s*\["Vehicle transfers", ArrowRightLeft\]/);
   assert.match(client,/useMasterRecords\("Delayed Reason"\)/);
   assert.match(client,/masterAccessAllows\(viewPermissions, name\)/);
   assert.match(server,/masterAccessAllows\(session\.permissions,requestedMaster\)/);

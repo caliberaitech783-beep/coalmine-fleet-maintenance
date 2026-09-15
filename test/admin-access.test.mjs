@@ -67,3 +67,18 @@ test("existing administrators can open the newly introduced Delayed Reason maste
   assert.equal(masterAccessAllows(manager, "Delayed Reason"), false);
   assert.equal(masterAccessAllows({...manager, masterAccess:["Delayed Reason"]}, "Delayed Reason"), true);
 });
+
+test("existing administrators can open Shift Master while manager access remains assignable", () => {
+  const legacyAdmin = adminAccessPermissions({
+    adminLevel: "Admin",
+    masterAccess: "Users & employees | Region master",
+  });
+  const manager = adminAccessPermissions({
+    adminLevel: "Manager",
+    masterAccess: "Region master",
+  });
+  assert.equal(ADMIN_MASTER_OPTIONS.includes("Shift Master"), true);
+  assert.equal(masterAccessAllows(legacyAdmin, "Shift Master"), true);
+  assert.equal(masterAccessAllows(manager, "Shift Master"), false);
+  assert.equal(masterAccessAllows({...manager, masterAccess:["Shift Master"]}, "Shift Master"), true);
+});

@@ -4,6 +4,7 @@ export const ADMIN_MASTER_OPTIONS = [
   "Breakdown master",
   "Repair type master",
   "Region master",
+  "Shift Master",
   "Delayed Reason",
   "Vehicle transfers",
   "Hierarchy master",
@@ -48,6 +49,7 @@ export function accessAllows(selection, name) {
 
 export function masterAccessAllows(permissions = {}, name, selectionKey = "masterAccess") {
   if (name === "Delayed Reason" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
+  if (name === "Shift Master" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
   return accessAllows(permissions[selectionKey], name);
 }
 

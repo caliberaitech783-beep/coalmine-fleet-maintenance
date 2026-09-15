@@ -303,6 +303,7 @@ const masterNav = [
   ["Breakdown master", Wrench],
   ["Repair type master", Wrench],
   ["Region master", Building2],
+  ["Shift Master", Clock],
   ["Delayed Reason", Clock],
   ["Vehicle transfers", ArrowRightLeft],
   ["Hierarchy master", Network],
@@ -1065,10 +1066,14 @@ const dashboardKpiExportColumns = [
   { label: "Details", value: (row) => row.details },
 ];
 const masterDateFields = new Set(["acquisitionDate", "transferDate", "lastMaintenanceDate"]);
+masterDateFields.add("effectiveFrom");
+masterDateFields.add("effectiveTo");
 const masterDateTimeFields = new Set(["start", "createdAt", "updatedAt", "closedAt", "verifiedAt"]);
+const masterTimeFields = new Set(["startTime", "endTime"]);
 function formatMasterFieldValue(key, value) {
   if (masterDateTimeFields.has(key)) return formatDisplayDateTime(value);
   if (masterDateFields.has(key)) return formatDisplayDate(value);
+  if (masterTimeFields.has(key)) return formatDisplayTime(value);
   return value;
 }
 
@@ -2192,6 +2197,17 @@ const masterFields = {
   ],
   "Delayed Reason": [
     ["delayedReason", "Delayed reason"],
+  ],
+  "Shift Master": [
+    ["site", "Site Name", "site-select"],
+    ["shiftName", "Shift"],
+    ["shiftCode", "Shift Code"],
+    ["startTime", "Start", "time"],
+    ["endTime", "End", "time"],
+    ["effectiveFrom", "Effective From", "date"],
+    ["effectiveTo", "Effective To", "date"],
+    ["status", "Status", "shift-status"],
+    ["remarks", "Remarks"],
   ],
   "Users & employees": [
     ["login", "Login name"],
@@ -3525,16 +3541,14 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
     if (syncingOracle) return;
     setSyncingOracle(true);
     try {
-      const response = await fetch(name === "Equipment master" ? "/api/oracle/equipment/sync" : "/api/oracle/equipment-transfers/sync", {
+      const response = await fetch("/api/oracle/equipment-transfers/sync", {
         method: "POST",
         headers: { Authorization: `Bearer ${authToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
       const details = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(details.error || "Could not synchronize equipment transfers.");
-      alert(name === "Equipment master"
-        ? `${details.equipmentImported || 0} Oracle equipment records synchronized. ${details.equipmentUpdated || 0} updated and ${details.equipmentInserted || 0} added.`
-        : `${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
+      alert(`${details.transfersImported || 0} Oracle transfers imported. ${details.equipmentUpdated || 0} Equipment Master locations updated.`);
       window.location.reload();
     } catch (error) {
       alert(error.message || "Could not synchronize equipment transfers.");
@@ -3544,7 +3558,7 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
   return (
     <>
       <div className="master-actions">
-        {["Equipment master", "Vehicle transfers"].includes(name) && (
+        {name === "Vehicle transfers" && (
           <button className="secondary" type="button" onClick={syncOracle} disabled={syncingOracle}>
             <RefreshCw /> {syncingOracle ? "Syncing Oracle..." : "Sync Oracle"}
           </button>
@@ -3641,6 +3655,12 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                       <option value="" disabled>Select a site</option>
                       {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
                     </select></>
+                  ) : type === "time" ? (
+                    <>{label} *<input type="time" step="1" name={key} required /></>
+                  ) : type === "date" ? (
+                    <>{label}<input type="date" name={key} /></>
+                  ) : type === "shift-status" ? (
+                    <>{label} *<select name={key} required defaultValue="Active"><option>Active</option><option>Inactive</option></select></>
                   ) : type === "user-select" ? (
                     <>{label} *
                     <select name={key} required defaultValue="">
@@ -6234,7 +6254,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const fields = masterFields[name],
     editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
-    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Delayed Reason",
+    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Delayed Reason" || name === "Shift Master",
     masterValue = (record, key) => {
       if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];
@@ -6324,7 +6344,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
     } catch (error) { alert(error.message); }
   };
   const deleteRow = async (record) => {
-    const recordName = record.oem || record.employee || record.login || record.username || "this record";
+    const recordName = record.oem || record.employee || record.login || record.username || [record.site,record.shiftName].filter(Boolean).join(" · ") || "this record";
     if (!confirm(`Delete ${recordName}? This cannot be undone.`)) return;
     const reason = window.prompt(`Enter the reason for deleting ${recordName}:`, "");
     if (reason === null) return;
@@ -6507,9 +6527,9 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                     <td className="row-actions">
                       {name === "Users & employees" && <button aria-label={`Change password for ${row.employee || row.login || "employee"}`} onClick={() => setChangingPassword(row)}><LockKeyhole /> Change password</button>}
                       {name !== "Privilege" && (
-                        <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
+                        <button aria-label={`Edit ${row.oem || row.employee || row.login || row.username || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => setEditing(row)}><Pencil /> Edit</button>
                       )}
-                      <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
+                      <button className="delete" aria-label={`Delete ${row.oem || row.employee || row.login || row.username || [row.site,row.shiftName].filter(Boolean).join(" ") || "record"}`} onClick={() => deleteRow(row)}><Trash2 /> Delete</button>
                     </td>
                   )}
                 </tr>
@@ -6554,6 +6574,12 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 <label key={key}>{label} *<select name={key} required defaultValue={privilegeSelectionValue(editing[key])}><option value="" disabled>Not assigned</option>{mobileUserRoleOptions.map((option) => <option key={option} value={option}>{option} — {mobileRoleAuthority[option]}</option>)}</select></label>
               ) : type === "site-select" ? (
                 <label key={key}>{label} *<select name={key} required defaultValue={privilegeSelectionValue(editing[key])}><option value="" disabled>Select site</option>{privilegeSelectionValue(editing[key]) && !siteOptions.includes(privilegeSelectionValue(editing[key])) && <option value={privilegeSelectionValue(editing[key])}>{privilegeSelectionValue(editing[key])}</option>}{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
+              ) : type === "time" ? (
+                <label key={key}>{label} *<input type="time" step="1" name={key} required defaultValue={editing[key] || ""} /></label>
+              ) : type === "date" ? (
+                <label key={key}>{label}<input type="date" name={key} defaultValue={editing[key] || ""} /></label>
+              ) : type === "shift-status" ? (
+                <label key={key}>{label} *<select name={key} required defaultValue={editing[key] || "Active"}><option>Active</option><option>Inactive</option></select></label>
               ) : (
               <label key={key}>{label}{type !== "checkbox" && (type === "user-select" || key === "level" || key === fields[0][0] || (name === "Users & employees" && ["site", "userType"].includes(key))) ? " *" : ""}
                 {type === "checkbox" ? (
@@ -7621,7 +7647,7 @@ Generic = function GenericWithMasters(props) {
         ...privilegeSiteOptions,
         ...records.map((record) => displaySiteName(record.site)).filter(Boolean),
       ])]
-    : [];
+    : name === "Shift Master" ? privilegeSiteOptions : [];
   if (masterFields[name] && loadError && !loaded) return <MasterLoadError name={name} error={loadError} retry={retryLoad} />;
   if (masterFields[name] && !loaded) return <MasterLoader name={name} />;
   return masterFields[name] ? (
