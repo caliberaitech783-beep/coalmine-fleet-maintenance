@@ -1747,7 +1747,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article {...(showOemBreakdowns ? dashboardListTrigger(() => openOemDrilldown(), "oem", "OEM BD. Open full list", equipmentLoaded, "group") : cardAction(fleetChartAllKey, showFleetBreakdowns ? "Breakdown fleet" : "Total Fleet"))} className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
-          <header>
+          <header onClick={(event) => event.stopPropagation()} style={{ cursor: "default" }}>
             <div className="mine-fleet-chart-heading">
               {showOemBreakdowns ? <button type="button" className="mine-fleet-chart-title" aria-label="Drill down OEM breakdown fleet" onClick={() => openOemDrilldown()}><h2>OEM BD</h2></button> : <button type="button" className="mine-fleet-chart-title" aria-label="Drill down Total Fleet" onClick={() => openAssetDrilldown(fleetChartAllKey)}><h2>Total Fleet</h2></button>}
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
