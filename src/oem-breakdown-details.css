@@ -1,9 +1,10 @@
-.mine-oem-site-tables { flex: 1; min-height: 0; overflow: auto; padding: 12px; background: var(--bg, #f7f8fc); }
+.mine-oem-site-tables { flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; padding: 12px; background: var(--bg, #f7f8fc); }
 .mine-oem-site-section { margin-bottom: 18px; border: 1px solid var(--line, #dde6f2); border-radius: 10px; background: var(--panel, #fff); overflow: hidden; }
 .mine-oem-site-section:last-child { margin-bottom: 0; }
 .mine-oem-modal .mine-oem-site-section .dashboard-record-browser { display: block; overflow: visible; }
 .mine-oem-modal .mine-oem-site-section .dashboard-record-results { display: block; overflow: visible; }
-.mine-oem-modal .mine-oem-site-section .dashboard-asset-list { overflow-x: auto; overflow-y: visible; max-height: none; }
+/* Horizontal table scrollers must pass wheel/touch movement up to the site list. */
+.mine-oem-modal .mine-oem-site-section .dashboard-asset-list { overflow-x: auto; overflow-y: visible; max-height: none; overscroll-behavior-x: contain; overscroll-behavior-y: auto; }
 .mine-oem-site-section .dashboard-record-summary { padding: 14px 16px; border-left: 4px solid var(--brand-purple, #522e90); background: color-mix(in srgb, var(--brand-purple, #522e90) 8%, var(--panel, #fff)); }
 .mine-oem-site-section .dashboard-record-summary h4 { color: var(--brand-purple, #522e90); font-size: 17px; }
 .mine-oem-site-section .dashboard-record-summary > span { font-weight: 700; }

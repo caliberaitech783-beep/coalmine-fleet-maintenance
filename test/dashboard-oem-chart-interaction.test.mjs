@@ -127,11 +127,55 @@ test("the tooltip wrapper renders an inert chart surface and tiny segments keep 
   const tree = Chart({chart, onSelect: () => assert.fail("rendering and blank areas must not select records")});
   const tiny = descendants(tree, node => node.props.className === "mine-oem-segment" && node.props["data-oem-name"] === "Tiny OEM")[0];
   assert.equal(tiny.props.style.height, "1%");
-  assert.equal(textOf(tiny), "", "tiny segments must not force in overlapping labels");
+  assert.equal(textOf(tiny), "1", "one-asset segments always show their exact count");
+  assert.equal(tiny.props["data-count-callout"], true, "a count too small for the bar gets a connected badge");
   assertTooltip(tiny, chart.oems.find(oem => oem.label === "Tiny OEM"), 1, "Sasti OB");
   for (const node of descendants(tree, node => node.type !== "button")) assert.equal(node.props.onClick, undefined);
   const markup = renderToStaticMarkup(tree);
   assert.match(markup, /^<div class="mine-oem-dashboard" id="oem-breakdown-plot"/);
   assert.doesNotMatch(markup, /role="button"/);
   assert.match(markup, /aria-describedby="oem-breakdown-tooltip-all"/);
+});
+
+test("every coloured slice shows its count, and normal one-asset slices fit inside the bar", () => {
+  const equipment = Array.from({length: 28}, (_, id) => ({id, make: id < 4 ? `Single ${id}` : "Large OEM", door: `V${id}`, currentLocation: "Sasti OB", status: "Breakdown"}));
+  const chart = buildOemBreakdownChart({rows: buildOemBreakdownRows({equipment}), equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}]});
+  const tree = Chart({chart, onSelect: () => {}});
+  assert.equal(tree.props.plotHeight, 420);
+  for (const segment of descendants(tree, node => node.props.className === "mine-oem-segment")) {
+    const label = descendants(segment, node => node.type === "b")[0];
+    assert.equal(textOf(label), String(segment.props["data-oem-count"]));
+    assert.equal(segment.props["data-count-callout"], undefined);
+    assert.ok(segment.props["data-oem-count"] / chart.axisMax * tree.props.plotHeight >= 14);
+  }
+});
+
+test("crowded tiny counts remain separate and connected without distorting the stacked chart", () => {
+  const equipment = Array.from({length: 500}, (_, id) => ({id, make: id < 7 ? `A Single ${id}` : id >= 493 ? `Z Single ${id}` : "Middle OEM", door: `V${id}`, currentLocation: "Sasti OB", status: "Breakdown"}));
+  const chart = buildOemBreakdownChart({rows: buildOemBreakdownRows({equipment}), equipment, regions: [{code: "WCL", sites: ["Sasti OB"]}]});
+  let selected;
+  const tree = Chart({chart, onSelect: value => { selected = value; }});
+  assert.equal(tree.props.plotHeight, 560);
+  const segments = descendants(tree, node => node.props.className === "mine-oem-segment");
+  let bottom = 0;
+  const labelCenters = [];
+  for (const segment of segments) {
+    const count = segment.props["data-oem-count"];
+    assert.equal(segment.props.style.height, `${count / 500 * 100}%`);
+    if (segment.props["data-count-callout"]) {
+      const label = descendants(segment, node => node.props.className === "mine-oem-segment-label")[0];
+      assert.equal(textOf(label), "1");
+      assert.equal(label.props.style.background, segment.props.style.background);
+      assert.equal(descendants(segment, node => node.type === "line").length, 1);
+      labelCenters.push(bottom + parseFloat(label.props.style.bottom) + 7);
+      segment.props.onClick({stopPropagation() {}});
+      assert.equal(createOemBreakdownSelection(chart, selected).rows.length, 1);
+    }
+    bottom += count / chart.axisMax * tree.props.plotHeight;
+  }
+  assert.equal(labelCenters.length, 14);
+  labelCenters.forEach((center, index) => {
+    assert.ok(center >= 7 && center <= tree.props.plotHeight - 7);
+    if (index) assert.ok(center - labelCenters[index - 1] >= 18 - 1e-6);
+  });
 });
