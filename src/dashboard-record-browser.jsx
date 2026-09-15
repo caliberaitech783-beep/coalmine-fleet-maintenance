@@ -51,7 +51,7 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   </div>;
 }
 
-export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
+export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, onHourlyReport = null, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const [recordDateRange, setRecordDateRange] = useState("");
@@ -99,9 +99,10 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
   };
   return <div className="dashboard-record-browser">
     <details className="dashboard-record-controls">
-      <summary className="dashboard-record-filter-summary">
+      <summary className={`dashboard-record-filter-summary${onHourlyReport ? " has-hourly-report" : ""}`}>
         <b>Filters</b>
         <span>{[view.regionLabel, view.selection.site, categoryName(view.selection.category), view.selection.group].filter(Boolean).join(" · ")}</span>
+        {onHourlyReport && <button type="button" className="dashboard-hourly-report-button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onHourlyReport(); }}>Hourly In/Out report</button>}
         <span className="dashboard-record-show-filters">Show filters</span>
         <span className="dashboard-record-hide-filters">Hide filters</span>
       </summary>

@@ -1057,7 +1057,10 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-breakdown-day-table .dashboard-breakdown-day-link:hover { background: color-mix(in srgb, var(--brand-purple) 8%, transparent); text-decoration: underline; }
 .dashboard-breakdown-day-table .dashboard-breakdown-day-link:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 2px; }
 .dashboard-breakdown-day-back { margin: 0 0 12px; padding: 8px 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--brand-purple); font: inherit; cursor: pointer; }
-.dashboard-asset-modal .dashboard-hourly-report-button { background: #522e90; color: #fff; border-color: #522e90; font-weight: 800; }
+.dashboard-asset-modal .dashboard-hourly-report-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: auto; min-height: 32px; margin: 0; padding: 6px 12px; border: 1px solid #522e90; border-radius: 6px; background: #522e90; color: #fff; font-family: inherit; font-weight: 800; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.dashboard-record-filter-summary.has-hourly-report { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); }
+.dashboard-record-filter-summary.has-hourly-report .dashboard-record-show-filters, .dashboard-record-filter-summary.has-hourly-report .dashboard-record-hide-filters { justify-self: end; }
+@media (max-width: 600px) { .dashboard-record-filter-summary.has-hourly-report { display: flex; flex-wrap: wrap; } }
 .mine-dashboard-grid { gap: 7px; }
 .mine-panel { border-radius: 6px; }
 .mine-dashboard [data-dashboard-list][tabindex="0"],

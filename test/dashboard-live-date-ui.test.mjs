@@ -811,7 +811,7 @@ test("every site equipment and vehicle total opens exactly its registered assets
       modePill().props.onClick({target: {closest: (selector) => selector === ".mine-fleet-toggle-count" ? {} : null}});
       tree = view.render(rows);
       assert.equal(detailView(tree).rows.length, 15);
-      button(tree, "Hourly In/Out report").props.onClick();
+      findAll(tree, (node) => typeof node.props.onHourlyReport === "function")[0].props.onHourlyReport();
       tree = view.render(rows);
       assert.equal(typeof tree.props.onBack, "function");
       assert.equal(typeof tree.props.ActionsTable, "function");
