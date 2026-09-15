@@ -1,3 +1,4 @@
+import {GENERAL_USER_ROLE,generalUserCanAccessMenu} from './mobile-access.mjs';
 import {accessAllows} from './admin-access.mjs';
 import {assignedUserSiteName,canonicalSiteName,equipmentSiteName} from './site-location.mjs';
 import {REGION_DATA,managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
@@ -32,6 +33,7 @@ export function dashboardSessionFromProfile(profile={}){
 }
 
 export function canReadDashboardEquipment(session={}){
+  if(session.role==='normal'&&session.assignedRole===GENERAL_USER_ROLE)return generalUserCanAccessMenu(session,'Dashboard');
   if(session.role==='normal')return OPERATIONAL_DASHBOARD_ROLES.has(session.assignedRole);
   if(session.role!=='super')return false;
   if(session.permissions?.adminLevel==='Manager')return true;

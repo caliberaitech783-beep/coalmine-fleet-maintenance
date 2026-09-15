@@ -13,7 +13,7 @@ test("User Master displays each saved department manager role", () => {
 });
 
 test("User Master displays specific operational user roles and retains admin authority", () => {
-  for (const userGroup of ["Production User", "Maintenance User", "MIS User"]) {
+  for (const userGroup of ["Production User", "Maintenance User", "MIS User", "General User"]) {
     assert.equal(userMasterRole({userType:"Mobile User",userGroup}), userGroup);
   }
   for (const adminLevel of ["Admin", "Super Admin"]) {

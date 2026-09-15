@@ -111,6 +111,9 @@ New application users receive their registered phone number as the initial passw
 
 ### Mobile permissions
 
+**General User** is available under **Team User** when adding or editing Users & employees. Its desktop and mobile menu selections default to **Dashboard** and **Tickets** only. **Requests** and **Reports** are available as unchecked options; selecting them grants read-only access to the assigned location. Saved selections, including an empty selection, are retained. Switching another role to General User starts with the General User defaults. General User never receives request creation, editing, deletion, closure, verification, or master administration permissions. The API checks the union of the configured desktop/mobile menus; dashboard data uses `GET /api/requests?scope=dashboard` and remains site-scoped.
+
+
 | Mobile role | Request visibility | Create | Edit | Delete | Close | Verify / first trip | Equipment master |
 |---|---|---:|---:|---:|---:|---:|---:|
 | Production User | Own requests | Yes | No | No | No | No | Read |

@@ -28,7 +28,7 @@ test("user modal uses one role selector with role-specific sections", () => {
   assert.match(source, /Included sites[\s\S]*name="managerSites"/);
   assert.match(source, /accountRole && !isDesktopUser && <label>Location \*[\s\S]*name="site"/);
   assert.doesNotMatch(source, /\(!isDesktopUser \|\| isManager\) && <label>Location/);
-  assert.match(source, /accountRole && !isDesktopUser && <UserPrivilegeFields/);
+  assert.match(source, /accountRole && !isDesktopUser && accountRole !== GENERAL_USER_ROLE && <UserPrivilegeFields/);
   assert.match(source, /isAdmin && <div className="super-role-summary full"/);
   assert.match(source, /isDesktopUser && <>[\s\S]*Selected menus for each view/);
   assert.match(source, /accountRole && !isDesktopUser && <>[\s\S]*OperationalViewMenuFields/);

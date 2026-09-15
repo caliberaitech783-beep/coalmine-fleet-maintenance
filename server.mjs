@@ -18,7 +18,7 @@ import {hashPassword,initializeUserCredentials,publicUserRecord,verifyPassword} 
 import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_REQUESTS_PER_HOUR,PASSWORD_RESET_OTP_TTL_MINUTES,passwordResetValidationError,validPasswordResetOtp} from './password-reset.mjs';
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
-import {loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
+import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
@@ -1356,7 +1356,7 @@ app.post('/api/login',async(req,res,next)=>{
       changedFields:[],
     };
     if(!profile.userType)return res.status(403).json({error:'This account does not have an application user type. Set it to Super User or Mobile User in Users & employees.'});
-    if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, or MIS User in Users & employees.'});
+    if(profile.userType==='Mobile User'&&!profile.assignedRole)return res.status(403).json({error:'This Mobile User does not have an assigned User Group. Set Production User, Maintenance User, MIS User, or General User in Users & employees.'});
     if(!ADMIN_LOCK_POLICY_PAUSED&&profile.sessionRole==='super'&&isLockableAdmin(profile.permissions)){
       const incidents=await activeAdminLockIncidents();
       if(incidents.length)return res.status(423).json({error:`This admin account is locked because CRM ticket ${incidents[0].ticketReference} has remained open for 72 hours. Contact a Super Admin.`});
@@ -1561,6 +1561,14 @@ async function requireSession(req,res,next){
     req.session=session;
     req.auditSessionId=session.sessionId;
     if(typeof touchUserSessionActivity==='function')void touchUserSessionActivity(req,session).catch(error=>console.error('User session activity could not be recorded:',error.message));
+    if(session.assignedRole==='General User'){
+      const menu=req.path.startsWith('/api/tickets')?'Tickets'
+        :req.path.startsWith('/api/report')?'Reports'
+        :req.path==='/api/requests'&&req.method==='GET'
+          ?req.query.scope==='dashboard'?'Dashboard':req.query.scope==='reports'?'Reports':'Requests'
+        :req.path.startsWith('/api/requests/')||req.path==='/api/oracle/driver'?'Requests':null;
+      if(menu&&!generalUserCanAccessMenu(session,menu))return res.status(403).json({error:`You do not have access to ${menu}.`});
+    }
     next();
   }catch(error){next(error)}
 }
@@ -3893,7 +3901,8 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
   res.set('Cache-Control','no-store');
   try{
     const operationalRole=req.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(req.session.assignedRole);
-    if(req.session.role!=='super'&&!operationalRole&&req.session.permissions?.readRequests!==true)
+    const generalDashboard=req.session.assignedRole==='General User'&&req.query.scope==='dashboard'&&req.session.permissions?.viewDashboardRequests===true;
+    if(req.session.role!=='super'&&!operationalRole&&!generalDashboard&&req.session.permissions?.readRequests!==true)
       return res.status(403).json({error:'Your assigned role is not authorized to view maintenance requests.'});
     const requesterLogin=String(req.session.login||'').trim().toLowerCase();
     const dashboardScope=req.query.scope==='dashboard';
@@ -3901,7 +3910,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
-    if(req.session.role==='normal'&&(dashboardScope||req.session.assignedRole==='MIS User'||req.session.assignedRole==='Maintenance User')){
+    if(req.session.role==='normal'&&(dashboardScope||req.session.assignedRole==='MIS User'||req.session.assignedRole==='Maintenance User'||req.session.assignedRole==='General User')){
       const operationalUser=await currentUserRecord(req.session);
       scopedSite=assignedUserSiteName(operationalUser);
     }
@@ -4579,7 +4588,7 @@ app.get('/api/reports/master-data',requireSession,async(req,res,next)=>{
     if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
     const {session,user}=authorization;
     const allowed=session.role==='normal'
-      ? ['Production User','Maintenance User','MIS User'].includes(session.assignedRole)
+      ? ['Production User','Maintenance User','MIS User'].includes(session.assignedRole)||(session.assignedRole==='General User'&&generalUserCanAccessMenu(session,'Reports'))
       : session.role==='super'&&(accessAllows(session.permissions?.tabAccess,'Reports')||accessAllows(session.permissions?.mobileTabAccess,'Reports'));
     if(!allowed)return res.status(403).json({error:'Your assigned role is not authorized to view reports.'});
     const scope=dashboardEquipmentScope(session,user);

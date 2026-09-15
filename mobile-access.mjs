@@ -2,7 +2,27 @@ export const MOBILE_USER_ROLES = [
   "Production User",
   "Maintenance User",
   "MIS User",
+  "General User",
 ];
+
+export const GENERAL_USER_ROLE = "General User";
+export const GENERAL_USER_MENU_OPTIONS = ["Dashboard", "Requests", "Reports", "Tickets"];
+export const GENERAL_USER_DEFAULT_MENUS = ["Dashboard", "Tickets"];
+
+export function generalUserMenuSelection(record = {}, view = "desktop") {
+  const field = `${view}UserMenuAccess`;
+  if (!Object.hasOwn(record, field)) {
+    return view === "mobile" ? generalUserMenuSelection(record, "desktop") : [...GENERAL_USER_DEFAULT_MENUS];
+  }
+  const values = Array.isArray(record[field]) ? record[field] : String(record[field] || "").split(/\s*[|,]\s*/);
+  return [...new Set(values.map((value) => String(value).trim()).filter((value) => GENERAL_USER_MENU_OPTIONS.includes(value)))];
+}
+
+// API access is the union of the configured desktop and mobile menus.
+export function generalUserCanAccessMenu(session = {}, menu) {
+  if (session.assignedRole !== GENERAL_USER_ROLE) return true;
+  return ["desktop", "mobile"].some((view) => generalUserMenuSelection(session.permissions || {}, view).includes(menu));
+}
 
 export function permissionEnabled(value) {
   return value === true || ["true", "yes", "1", "enabled", "checked"].includes(
@@ -23,6 +43,7 @@ export function normalizeMobileUserRole(value) {
   if (text.includes("head")) return "";
   if (text.includes("maintenance")) return "Maintenance User";
   if (text === "mis" || text.includes("mis user") || text.includes("management information")) return "MIS User";
+  if (text === "general" || text === "general user") return GENERAL_USER_ROLE;
   return "";
 }
 
@@ -100,6 +121,39 @@ export function resolveMobileAccess({ user = {}, privilege = {} } = {}) {
   }
 
   const maintenance = assignedRole === "Maintenance User";
+  if (assignedRole === GENERAL_USER_ROLE) {
+    const desktopUserMenuAccess = generalUserMenuSelection(user);
+    const mobileUserMenuAccess = generalUserMenuSelection(user, "mobile");
+    const hasMenu = (menu) => desktopUserMenuAccess.includes(menu) || mobileUserMenuAccess.includes(menu);
+    const requestMenus = (view) => {
+      const field = `${view}UserRequestAccess`;
+      if (!Object.hasOwn(user, field)) return view === "mobile" ? requestMenus("desktop") : ["View requests", "Closed history"];
+      const values = Array.isArray(user[field]) ? user[field] : String(user[field] || "").split(/\s*[|,]\s*/);
+      return [...new Set(values.map(normalizeRequestMenuLabel).filter((value) => ["View requests", "Closed history"].includes(value)))];
+    };
+    const viewFleetData = ["Dashboard", "Requests", "Reports"].some(hasMenu);
+    return {
+      sessionRole: "normal",
+      userType: "Mobile User",
+      assignedRole,
+      permissions: {
+        readRequests: hasMenu("Requests") || hasMenu("Reports"),
+        viewDashboardRequests: hasMenu("Dashboard"),
+        viewAllRequests: true,
+        createRequests: false,
+        editRequests: false,
+        deleteRequests: false,
+        closeRequests: false,
+        verifyRequests: false,
+        viewEquipment: viewFleetData,
+        viewRepairTypes: viewFleetData,
+        desktopUserMenuAccess,
+        mobileUserMenuAccess,
+        desktopUserRequestAccess: desktopUserMenuAccess.includes("Requests") ? requestMenus("desktop") : [],
+        mobileUserRequestAccess: mobileUserMenuAccess.includes("Requests") ? requestMenus("mobile") : [],
+      },
+    };
+  }
   const accessList=(key,fallback=[])=>Object.hasOwn(user,key)
     ? [...new Set(String(user[key]||"").split(/\s*[|,]\s*/).map(normalizeRequestMenuLabel).filter(Boolean))]
     : fallback;

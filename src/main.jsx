@@ -86,7 +86,7 @@ import { submitMaintenanceRequest } from "../request-submit.mjs";
 import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, masterAccessAllows, navigationPermissionsForView} from "../admin-access.mjs";
 import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, sitesForManagerRegions} from "../region-scope.mjs";
-import {MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
+import {MOBILE_USER_ROLES, GENERAL_USER_ROLE, GENERAL_USER_MENU_OPTIONS, generalUserMenuSelection, generalUserCanAccessMenu, MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
@@ -2241,11 +2241,12 @@ const masterFields = {
 const isCheckedValue = (value) =>
   value === true || ["true", "yes", "1", "enabled", "checked"].includes(String(value || "").trim().toLowerCase());
 const privilegeAccessOptions = ["Super User", "Mobile User"];
-const mobileUserRoleOptions = ["Production User", "Maintenance User", "MIS User"];
+const mobileUserRoleOptions = MOBILE_USER_ROLES;
 const mobileRoleAuthority = {
   "Production User": "Create request only",
   "Maintenance User": "Edit and delete requests",
   "MIS User": "Verify requests only",
+  "General User": "Dashboard and tickets by default",
 };
 const accountRoleOptions = ["User", ...mobileUserRoleOptions];
 const userAuthorityOptions = ["Admin", "Manager"];
@@ -2279,6 +2280,7 @@ const operationalRequestOptions={
   "Production User":["View requests","Create request","Closed history"],
   "Maintenance User":["View requests","Create request","Close request form","Closed history"],
   "MIS User":["View requests",MIS_VERIFICATION_MENU,"Closed history"],
+  "General User":["View requests","Closed history"],
 };
 const userAccessOptions = {
   masterAccess: ADMIN_MASTER_OPTIONS,
@@ -2286,8 +2288,8 @@ const userAccessOptions = {
   ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [field, options])),
   mobileTabAccess: ADMIN_TAB_OPTIONS,
   ...Object.fromEntries(Object.values(ADMIN_SUBMENU_OPTIONS).map(({field, options}) => [mobileAccessKey(field), options])),
-  desktopUserMenuAccess:operationalMenuOptions,
-  mobileUserMenuAccess:operationalMenuOptions,
+  desktopUserMenuAccess:GENERAL_USER_MENU_OPTIONS,
+  mobileUserMenuAccess:GENERAL_USER_MENU_OPTIONS,
   desktopUserRequestAccess:[...new Set(Object.values(operationalRequestOptions).flat())],
   mobileUserRequestAccess:[...new Set(Object.values(operationalRequestOptions).flat())],
 };
@@ -3190,12 +3192,15 @@ function UserViewMenuFields({record={},view="desktop",visibleTabs,setVisibleTabs
 function OperationalViewMenuFields({record={},view="desktop",role=""}){
   const menuField=view==="mobile"?"mobileUserMenuAccess":"desktopUserMenuAccess";
   const requestField=view==="mobile"?"mobileUserRequestAccess":"desktopUserRequestAccess";
-  const [menus,setMenus]=useState(selectedAccessValues(record,menuField));
+  const isGeneral = role === GENERAL_USER_ROLE;
+  const roleRecord = privilegeSelectionValue(record.userGroup) === role ? record : {};
+  const menuOptions = isGeneral ? GENERAL_USER_MENU_OPTIONS : operationalMenuOptions;
+  const [menus,setMenus]=useState(() => isGeneral ? generalUserMenuSelection(roleRecord, view) : Object.hasOwn(roleRecord,menuField) ? selectedAccessValues(roleRecord,menuField).filter((option)=>menuOptions.includes(option)) : operationalMenuOptions);
   const requestOptions=operationalRequestOptions[role]||[];
-  const selectedRequests=selectedAccessValues(record,requestField).filter((option)=>requestOptions.includes(option));
+  const selectedRequests=selectedAccessValues(roleRecord,requestField).filter((option)=>requestOptions.includes(option));
   return <section className={`view-menu-access full ${view}-view-access`}>
     <header><div><b>{view==="mobile"?"Mobile View":"Desktop View"}</b><small>{view==="mobile"?"Menus shown at responsive mobile width":"Menus shown on desktop and laptop screens"}</small></div><span>{menus.length} selected</span></header>
-    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><div>{operationalMenuOptions.map((option)=><label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{option}</span></label>)}</div></fieldset>
+    <fieldset className="user-access-field access-section-card"><legend>Selected menus</legend><div>{menuOptions.map((option)=><label key={option}><input type="checkbox" name={menuField} value={option} checked={menus.includes(option)} onChange={(event)=>setMenus((current)=>event.target.checked?[...new Set([...current,option])]:current.filter((item)=>item!==option))}/><span>{option}</span></label>)}</div></fieldset>
     {menus.includes("Requests")&&<fieldset className="user-access-field access-section-card access-submenu-card"><legend>Requests · Submenus</legend><div>{requestOptions.map((option)=><label key={option}><input type="checkbox" name={requestField} value={option} defaultChecked={selectedRequests.includes(option)}/><span>{option}</span></label>)}</div></fieldset>}
   </section>;
 }
@@ -3286,11 +3291,11 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
       <UserViewMenuFields record={record} view="mobile" visibleTabs={mobileVisibleTabs} setVisibleTabs={setMobileVisibleTabs} isManager />
     </>}
     {accountRole && !isDesktopUser && <>
-      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Choose this {accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.</p></div>
+      <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>{accountRole === GENERAL_USER_ROLE ? "Only Dashboard and Tickets are selected by default. Select Requests or Reports to grant additional read-only access." : `Choose this ${accountRole} account’s menus and request actions separately for desktop and responsive mobile screens.`}</p></div>
       <OperationalViewMenuFields key={`${accountRole}-desktop`} record={record} view="desktop" role={accountRole}/>
       <OperationalViewMenuFields key={`${accountRole}-mobile`} record={record} view="mobile" role={accountRole}/>
     </>}
-    {accountRole && !isDesktopUser && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
+    {accountRole && !isDesktopUser && accountRole !== GENERAL_USER_ROLE && <UserPrivilegeFields record={record} siteOptions={siteOptions} />}
   </>;
 }
 
@@ -3359,9 +3364,15 @@ function applyUserRoleDefaults(record) {
     Object.values(ADMIN_SUBMENU_OPTIONS).forEach(({field}) => { record[mobileAccessKey(field)] = ""; });
     for(const view of ["desktop","mobile"]){
       const menuField=`${view}UserMenuAccess`,requestField=`${view}UserRequestAccess`;
-      if(!record[menuField])record[menuField]=operationalMenuOptions.join(" | ");
-      if(!record[requestField])record[requestField]=(operationalRequestOptions[role]||[]).join(" | ");
+      if(role === GENERAL_USER_ROLE){
+        record[menuField]=generalUserMenuSelection(record,view).join(" | ");
+        if(!Object.hasOwn(record,requestField))record[requestField]=operationalRequestOptions[role].join(" | ");
+      }else{
+        if(!record[menuField])record[menuField]=operationalMenuOptions.join(" | ");
+        if(!record[requestField])record[requestField]=(operationalRequestOptions[role]||[]).join(" | ");
+      }
     }
+    if(role === GENERAL_USER_ROLE)for(const key of ["read","edit","delete","verify","print"])record[key]=false;
   }
   return record;
 }
@@ -8924,6 +8935,7 @@ function NotificationBell({ session, onOpenEntry }) {
 function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const mobileRole = session?.assignedRole || "Mobile User";
+  const isGeneral = mobileRole === "General User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
@@ -8933,8 +8945,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardState,setDashboardState]=useState({token:"",records:[],loaded:false,error:"",updatedAt:0});
   const dashboardLoader=useRef(null);
-  const dashboardRequests=embedded ? requests : dashboardState.records;
-  const dashboardRequestsReady=embedded || (dashboardState.token === session?.token && dashboardState.loaded);
+  const dashboardRequests=embedded || isGeneral ? requests : dashboardState.records;
+  const dashboardRequestsReady=embedded || isGeneral || (dashboardState.token === session?.token && dashboardState.loaded);
   const [createdRequestRef, setCreatedRequestRef] = useState("");
   useEffect(() => {
     if (!createdRequestRef) return undefined;
@@ -8944,7 +8956,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const permissions = session?.permissions || {};
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
-  const visibleUserMenus=responsiveMobile?permissions.mobileUserMenuAccess:permissions.desktopUserMenuAccess;
+  const visibleUserMenus=isGeneral?generalUserMenuSelection(permissions,responsiveMobile?"mobile":"desktop"):responsiveMobile?permissions.mobileUserMenuAccess:permissions.desktopUserMenuAccess;
   const visibleRequestMenus=responsiveMobile?permissions.mobileUserRequestAccess:permissions.desktopUserRequestAccess;
   const canSeeUserMenu=(name)=>!Array.isArray(visibleUserMenus)||visibleUserMenus.includes(name);
   const canSeeRequestMenu=(name)=>!Array.isArray(visibleRequestMenus)||visibleRequestMenus.includes(name);
@@ -8955,13 +8967,19 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const workspaceReportTitles = {
     requests: isProduction ? "Active Production Requests" : isMaintenance ? "Active Maintenance Requests" : "MIS Requests Awaiting Verification",
     verify: "MIS Verification Requests",
-    history: isProduction ? "Closed Production Requests" : isMaintenance ? "Closed Maintenance Requests" : "Closed MIS Requests",
+    history: isGeneral ? "Closed Request History" : isProduction ? "Closed Production Requests" : isMaintenance ? "Closed Maintenance Requests" : "Closed MIS Requests",
     idle: "Idle Vehicles",
     close: "Maintenance Close Request Form",
     transfers: "Vehicle Transfer Control",
   };
   const canCreate = isProduction || isMaintenance;
   const showRequestsMenu=canSeeUserMenu("Requests"),showTicketsMenu=canSeeUserMenu("Tickets");
+  const showDashboardMenu=!isGeneral||canSeeUserMenu("Dashboard"),showReportsMenu=!isGeneral||canSeeUserMenu("Reports");
+  useEffect(()=>{
+    if(!isGeneral||embedded)return;
+    const allowed={dashboard:showDashboardMenu,profile:showRequestsMenu,reports:showReportsMenu,tickets:showTicketsMenu};
+    if(!allowed[section])setSection(Object.keys(allowed).find((key)=>allowed[key])||"");
+  },[isGeneral,embedded,section,showDashboardMenu,showRequestsMenu,showReportsMenu,showTicketsMenu]);
   useEffect(()=>{
     const allowed=tab==="tickets"?showTicketsMenu:tab==="transfers"?isMis:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
     if(allowed)return;
@@ -8975,12 +8993,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [repairTypeRecords, , repairTypesLoaded, , , , , refreshRepairTypes] = useMasterRecords("Repair type master");
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
-    if (embedded) return undefined;
+    if (embedded || isGeneral) return undefined;
     const loader=createDashboardRequestLoader({onState:setDashboardState});
     dashboardLoader.current=loader;
     const stop=watchRequestRefresh(()=>loader.load(session?.token||authToken),{win:window,doc:document,initial:true});
     return()=>{stop();loader.cancel();dashboardLoader.current=null;};
-  },[session?.token,session?.assignedRole,embedded]);
+  },[session?.token,session?.assignedRole,embedded,isGeneral]);
   useEffect(() => {
     let active = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session?.token || authToken}`}})
@@ -9050,14 +9068,15 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav"><button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {mobileRole}</button>}<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions"><HelpTraining role={mobileRole} /><NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;setSection(ticket?"tickets":transfer?"transfers":"profile");if(!ticket&&!transfer)setTab("requests")}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardState.error} requestsUpdatedAt={dashboardState.updatedAt} onRefreshRequests={()=>dashboardLoader.current?.load(session?.token)} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
-      {!embedded&&section==="reports"&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
-      {!embedded&&section==="tickets"&&<TicketPage session={session} />}
+      {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardState.error} requestsUpdatedAt={dashboardState.updatedAt} onRefreshRequests={()=>dashboardLoader.current?.load(session?.token)} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
+      {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
+      {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
-      {(embedded||section==="profile")&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
-      <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
+      {!embedded&&!showDashboardMenu&&!showRequestsMenu&&!showReportsMenu&&!showTicketsMenu&&<section className="panel"><h2>No menus assigned</h2><p>Contact your administrator to enable access.</p></section>}
+      {(embedded||section==="profile")&&showRequestsMenu&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
+      <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isGeneral ? "Requests" : isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isGeneral ? "View requests for your assigned location." : isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button className="primary" onClick={() => {refreshEquipmentRecords();refreshRepairTypes();setShow(true);}}><Plus /> Create request</button>}
@@ -9069,12 +9088,13 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
+      {isGeneral && tab === "requests" && canSeeRequestMenu("View requests") && <><h3 className="sectiontitle">Active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} onDelayedReason={permissions.editRequests ? setDelaying : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
-      {tab === "history" && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}
-      {tab === "idle" && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
+      {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}
+      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
       </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
@@ -9287,10 +9307,15 @@ function App() {
       if (loadSequence === requestLoadSequence.current) setRequests([]);
       return [];
     }
+    const generalScope=session.assignedRole==="General User"?["Dashboard","Requests","Reports"].find((menu)=>generalUserCanAccessMenu(session,menu)):null;
+    if(session.assignedRole==="General User"&&!generalScope){
+      if(loadSequence===requestLoadSequence.current){setRequests([]);setRequestState({token:session.token,loaded:true,error:"",updatedAt:Date.now()});}
+      return [];
+    }
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     try {
-      const response = await fetch(`/api/requests?t=${Date.now()}`, {
+      const response = await fetch(`/api/requests?t=${Date.now()}${generalScope?`&scope=${generalScope.toLowerCase()}`:""}`, {
         cache: "no-store",
         signal: controller.signal,
         headers: { Authorization: `Bearer ${session.token}` },
