@@ -213,8 +213,8 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     if (!initialized) {
       initialized = true;
       // Existing breakdown tests enter that view through its normal label action.
-      if (initialMode !== "oem") {
-        button(byLabel(tree, "Fleet chart view"), initialMode === "total" ? "Total" : "Breakdown").props.onClick();
+      if (initialMode) {
+        button(byLabel(tree, "Fleet chart view"), initialMode === "oem" ? "OEM BD" : initialMode === "total" ? "Total" : "Breakdown").props.onClick();
         cursor = 0;
         tree = Dashboard({requests: rows, ...props});
       }
@@ -261,7 +261,13 @@ const oemRequests = [...oemEquipment.slice(0, 5).map(asset => Object.freeze({
 })), Object.freeze({ref: "HISTORICAL", door: "V7", chassis: "C7", site: "Sasti OB", category: "Breakdown", status: "Closed", start: "2026-09-08 09:00:00", closedAt: "2026-09-09 12:00:00"})];
 const oemHarnessOptions = {equipment: oemEquipment, regions: [{code: "WCL", sites: ["Sasti OB", "Majri OB"]}, {code: "NCL", sites: ["Jayant OB"]}], allowedSites: [], restrictToScope: false, initialMode: "oem"};
 
-test("dashboard opens in OEM by default with today's shared filters and separate label and count actions", () => {
+test("dashboard opens in Breakdown by default", () => {
+  const view = harness({...oemHarnessOptions, initialMode: null});
+  const tree = view.render(oemRequests);
+  assert.equal(button(byLabel(tree, "Fleet chart view"), "Breakdown").props["aria-pressed"], true);
+});
+
+test("OEM view retains today's shared filters and separate label and count actions", () => {
   const view = harness({...oemHarnessOptions, initialMode: "oem"});
   let tree = view.render(oemRequests);
   assertOemFilters(tree, {region: "all", site: "all", oem: "all"});

@@ -1259,7 +1259,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownTrendAnchor, setBreakdownTrendAnchor] = useState(() => localDateKey(new Date()));
   const [breakdownTrendFrom, setBreakdownTrendFrom] = useState(() => localDateKey(new Date()));
   const [breakdownTrendRangeError, setBreakdownTrendRangeError] = useState("");
-  const [fleetChartMode, setFleetChartMode] = useState("oem");
+  const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
   const [breakdownCountChange, setBreakdownCountChange] = useState(null);
