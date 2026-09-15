@@ -48,7 +48,7 @@ test("MIS users and managers use location-scoped requests, TAT, and partitioned 
   assert.match(source,/isMis[\s\S]*<MobileWorkflowTable rows=\{visibleRows\} exportTitle=\{workspaceReportTitles.verify\} showMakeModel showTurnaroundTime/);
 });
 
-test("MIS tables show Started, Closed by, Verified by, then Verified date & time", () => {
+test("MIS request and history tables preserve their intended workflow timestamp order", () => {
   const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   assert.match(source, /startedFirst = false, [^)]*onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark \}\) \{/);
   assert.match(source, /\.\.\.\(startedFirst \? \[startedColumn, \.\.\.closedByColumns, \.\.\.verifiedColumns\] : \[\.\.\.verifiedColumns, \.\.\.closedByColumns, startedColumn\]\),/);

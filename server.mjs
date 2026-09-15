@@ -67,6 +67,7 @@ import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mj
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
+import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -904,6 +905,42 @@ async function migrate(){
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('sasti_site_name_normalized_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
+    }
+    // Repair the legacy ETC values that were saved before the future-only
+    // selector and server guard existed. Exact AM/PM inversions retain the
+    // intended clock time. Every other impossible value moves to the first
+    // full minute after the breakdown, which is the approved deterministic
+    // fallback. Each correction is recorded in the request timeline.
+    const {rows:legacyEtcRepairMarker}=await client.query("SELECT value FROM app_metadata WHERE key='legacy_etc_backdates_repaired_v1' FOR UPDATE");
+    if(!legacyEtcRepairMarker.length){
+      const {rows:invalidEtcRows}=await client.query(`SELECT id,reference,started_at,expected_completion_at
+        FROM maintenance_requests
+        WHERE expected_completion_at IS NOT NULL AND expected_completion_at<=started_at
+        ORDER BY id ASC FOR UPDATE`);
+      const repairCounts={corrected:0,amPmInversion:0,firstValidMinute:0};
+      for(const row of invalidEtcRows){
+        const plan=legacyEtcRepairPlan(row.started_at,row.expected_completion_at);
+        if(!plan)continue;
+        const result=await client.query(`UPDATE maintenance_requests SET expected_completion_at=$1
+          WHERE id=$2 AND started_at=$3 AND expected_completion_at=$4 RETURNING id`,
+          [plan.after,row.id,row.started_at,row.expected_completion_at]);
+        if(!result.rowCount)continue;
+        const reason=legacyEtcRepairReason(plan.strategy);
+        const changes=buildRequestTimelineChanges(
+          {expectedCompletionAt:plan.before},
+          {expectedCompletionAt:plan.after},
+          {events:['expectedCompletionAt'],sources:{expectedCompletionAt:'system'},now:new Date(),actorLogin:'system',actorName:'System migration',reason,requireCorrectionReason:['expectedCompletionAt']},
+        ).map(change=>({...change,requestId:String(row.id),repairStrategy:plan.strategy}));
+        await client.query(`INSERT INTO audit_events (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields)
+          VALUES ('Workflow timeline','Success','system','System migration','System','Maintenance Requests','Record workflow timestamps','Maintenance request',$1,$2,$3::jsonb)`,
+          [row.reference,reason,JSON.stringify(changes)]);
+        repairCounts.corrected+=1;
+        if(plan.strategy==='am-pm-inversion')repairCounts.amPmInversion+=1;
+        else repairCounts.firstValidMinute+=1;
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('legacy_etc_backdates_repaired_v1',$1,NOW())
+        ON CONFLICT (key) DO NOTHING`,[JSON.stringify(repairCounts)]);
     }
     await client.query('COMMIT');
   }catch(error){
