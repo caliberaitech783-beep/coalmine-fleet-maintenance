@@ -44,10 +44,11 @@ test('Delayed Reason master contains the approved starting values',()=>{
   ]);
 });
 
-test('a delayed reason becomes mandatory four hours after ETC',()=>{
+test('a delayed reason applies as soon as the current time passes ETC, with no grace period',()=>{
   const etc='2026-09-06 10:00';
-  assert.equal(delayedReasonRequired(etc,'2026-09-06 13:59'),false);
-  assert.equal(delayedReasonRequired(etc,'2026-09-06 14:00'),true);
+  assert.equal(delayedReasonRequired(etc,'2026-09-06 09:59'),false);
+  assert.equal(delayedReasonRequired(etc,'2026-09-06 10:00'),true);
+  assert.equal(delayedReasonRequired(etc,'2026-09-06 13:59'),true);
   assert.equal(delayedReasonRequired('',new Date()),false);
 });
 
@@ -61,8 +62,9 @@ test('the Delayed reason column only appears once ETC has passed and the close f
   assert.match(client,/showDelayedReason = Boolean\(onDelayedReason\) && rows\.some\(delayedReasonDue\)/);
   assert.match(client,/showDelayedReason && workflowHeader\("delayedReason", "Delayed reason"\)/);
   assert.doesNotMatch(client,/name="delayedReason"/);
+  assert.doesNotMatch(client,/delayedReasonNeeded/);
   assert.match(client,/delayedReason: storedDelayedReason/);
-  assert.match(client,/disabled=\{submitting\|\|delayedReasonMissing\}/);
+  assert.doesNotMatch(server,/Select a delayed reason because/);
   assert.match(server,/expected_completion_at,delayed_reason FROM maintenance_requests/);
   assert.match(server,/const effectiveDelayedReason=delayedReason\|\|String\(meterRows\[0\]\.delayed_reason\|\|''\)\.trim\(\)/);
   assert.doesNotMatch(server,/delayed_reason='',status/);
@@ -77,10 +79,8 @@ test('Delayed Reason master, close form, and server validation are connected',()
   assert.match(client,/useMasterRecords\("Delayed Reason"\)/);
   assert.match(client,/masterAccessAllows\(viewPermissions, name\)/);
   assert.match(server,/masterAccessAllows\(session\.permissions,requestedMaster\)/);
-  assert.match(client,/delayedReasonRequired\(request\.expectedCompletionAt,closingAt\)/);
   assert.match(server,/delayed_reason TEXT NOT NULL DEFAULT ''/);
   assert.match(server,/delayedReasonRequired\(meterRows\[0\]\.expected_completion_at,closedAt\)/);
-  assert.match(server,/Select a delayed reason because this request is being closed at least 4 hours after ETC/);
   assert.match(server,/INSERT INTO master_records \(master_name,record_data\)[\s\S]*SELECT 'Delayed Reason'/);
   assert.match(server,/canViewDelayedReasons[\s\S]*permissions\?\.closeRequests===true/);
 });

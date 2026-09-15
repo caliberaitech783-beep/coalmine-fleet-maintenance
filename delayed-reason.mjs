@@ -1,4 +1,5 @@
-export const DELAYED_REASON_THRESHOLD_HOURS = 4;
+// A delayed reason applies as soon as the current time passes the ETC; there is no grace period.
+export const DELAYED_REASON_THRESHOLD_HOURS = 0;
 
 export const DELAYED_REASON_DEFAULTS = [
   'Parts - OEM',

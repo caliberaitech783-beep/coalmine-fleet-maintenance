@@ -8065,9 +8065,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
   const openedAt=new Date(`${opened.date}T${opened.time}+05:30`),closingAt=new Date(`${closingDate}T${time}+05:30`),tatMilliseconds=Math.max(0,closingAt-openedAt);
   const tatDays=Math.floor(tatMilliseconds/86400000),tatHours=Math.floor((tatMilliseconds%86400000)/3600000),tatMinutes=Math.floor((tatMilliseconds%3600000)/60000);
   const turnaroundTime=`${tatDays}d ${tatHours}h ${tatMinutes}m`;
-  const delayedReasonNeeded=!ideal&&status==="Closed"&&delayedReasonRequired(request.expectedCompletionAt,closingAt);
   const storedDelayedReason=String(request.delayedReason||"").trim();
-  const delayedReasonMissing=delayedReasonNeeded&&!storedDelayedReason;
   return <Modal title={<span className="close-request-title">Close request {request.ref}</span>} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
@@ -8134,7 +8132,6 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
             </div>
           </>}
         </fieldset>
-        {delayedReasonNeeded&&<fieldset className="delayed-reason-field full"><legend>Delayed reason</legend>{storedDelayedReason?<p>Recorded delayed reason: <b>{storedDelayedReason}</b></p>:<p>This request is being closed at least 4 hours after ETC. Select the delayed reason from the Delayed reason column in Active Maintenance Requests before closing it.</p>}</fieldset>}
         <EnhancedSpeechComplaint
           label="Things done in maintenance *"
           name="maintenanceWork"
@@ -8144,7 +8141,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         />
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
-      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting||delayedReasonMissing}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "Save maintenance update"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }

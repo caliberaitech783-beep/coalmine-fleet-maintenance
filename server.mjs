@@ -3827,8 +3827,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     const {rows:meterRows}=await client.query(`SELECT meter_type,opening_meter_reading,opening_meter_file,expected_completion_at,delayed_reason FROM maintenance_requests WHERE reference=$1 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}`,[reference]);
     if(!meterRows.length)throw arrivalRedFlagError();
     const delayedClosure=!ideal&&status==='Closed'&&delayedReasonRequired(meterRows[0].expected_completion_at,closedAt);
+    // Closing is never blocked for a missing delayed reason; the reason recorded from the Delayed reason column is kept as is.
     const effectiveDelayedReason=delayedReason||String(meterRows[0].delayed_reason||'').trim();
-    if(delayedClosure&&!effectiveDelayedReason)throw Object.assign(new Error('Select a delayed reason because this request is being closed at least 4 hours after ETC. Use the Delayed reason column in Active Maintenance Requests.'),{status:400});
     if(openingMeterReading&&!validMeterReading(openingMeterReading))throw Object.assign(new Error(`Enter a valid opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} reading.`),{status:400});
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))throw Object.assign(new Error(`Upload an opening ${meterType||meterRows[0].meter_type||'KMR/HMR'} JPEG, PNG, WebP, or PDF up to 5 MB.`),{status:400});
     if(!validMeterReadings(openingMeterReadings)||!validMeterReadings(closingMeterReadings))throw Object.assign(new Error('Enter valid HMR and KMR readings.'),{status:400});
@@ -3866,7 +3866,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
-    if(delayedClosure&&delayedReason){
+    if(delayedReason){
       await client.query(`INSERT INTO master_records (master_name,record_data)
         SELECT 'Delayed Reason',$1::jsonb
         WHERE NOT EXISTS (
