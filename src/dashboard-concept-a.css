@@ -1057,6 +1057,7 @@ button.mine-primary-kpi-card:focus-visible,
 .dashboard-breakdown-day-table .dashboard-breakdown-day-link:hover { background: color-mix(in srgb, var(--brand-purple) 8%, transparent); text-decoration: underline; }
 .dashboard-breakdown-day-table .dashboard-breakdown-day-link:focus-visible { outline: 2px solid var(--brand-purple); outline-offset: 2px; }
 .dashboard-breakdown-day-back { margin: 0 0 12px; padding: 8px 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--brand-purple); font: inherit; cursor: pointer; }
+.dashboard-asset-modal .dashboard-hourly-report-button { background: #522e90; color: #fff; border-color: #522e90; font-weight: 800; }
 .mine-dashboard-grid { gap: 7px; }
 .mine-panel { border-radius: 6px; }
 .mine-dashboard [data-dashboard-list][tabindex="0"],
