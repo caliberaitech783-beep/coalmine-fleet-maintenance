@@ -22,7 +22,7 @@ export default function DashboardFilterBar({ children, inDialog = false, bannerR
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
   }, [inDialog]);
   return <header ref={ref} className={`mine-dashboard-head dashboard-filter-bar${inDialog ? " in-dialog" : ""}`}>
-    <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1><p>Maintenance, availability and site performance command center.</p></div></div>
+    <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1></div></div>
     <div className="mine-head-actions">{children}</div>
   </header>;
 }
