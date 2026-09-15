@@ -2,7 +2,7 @@ import React, {useEffect, useMemo, useState} from 'react';
 import {ArrowRightLeft, CheckCircle2, Clock, MapPin, Plus, RefreshCw, Search, Send, ShieldCheck, Truck, X} from 'lucide-react';
 import {formatDisplayDate, formatDisplayDateTime} from '../date-time-format.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
-import {VEHICLE_TRANSFER_STATUS, vehicleTransferProgress, vehicleTransferStatus} from '../vehicle-transfer-workflow.mjs';
+import {VEHICLE_TRANSFER_STATUS, VEHICLE_TRANSFER_VIEW, vehicleTransferProgress, vehicleTransferStatus, vehicleTransferViewRecords} from '../vehicle-transfer-workflow.mjs';
 import './vehicle-transfer-workflow.css';
 
 const indiaDateInput = () => {
@@ -102,6 +102,7 @@ function TransferForm({Dialog, equipment, sites, token, onClose, onSaved}) {
 export default function VehicleTransferWorkflow({session, Dialog, embedded = false}) {
   const [state, setState] = useState({records: [], equipment: [], sites: [], capabilities: {}, loading: true, error: ''});
   const [query, setQuery] = useState('');
+  const [activeView, setActiveView] = useState(VEHICLE_TRANSFER_VIEW.ALL);
   const [showForm, setShowForm] = useState(false);
   const [workingId, setWorkingId] = useState('');
   const [notice, setNotice] = useState('');
@@ -119,7 +120,7 @@ export default function VehicleTransferWorkflow({session, Dialog, embedded = fal
   };
   useEffect(() => { void load(); }, [token]);
   const act = async (record, action) => {
-    const verbs = {'source-approval': 'approve dispatch', 'destination-verification': 'verify this vehicle at the destination', 'destination-acceptance': 'accept this vehicle'};
+    const verbs = {'source-approval': 'release this vehicle', 'destination-verification': 'verify this vehicle at the destination', 'destination-acceptance': 'accept this vehicle'};
     const verb = verbs[action] || 'update this transfer';
     if (!window.confirm(`${verb[0].toUpperCase()}${verb.slice(1)} for transfer ${record.transferNo}?`)) return;
     setWorkingId(String(record.id));
@@ -128,7 +129,7 @@ export default function VehicleTransferWorkflow({session, Dialog, embedded = fal
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || 'Could not update the transfer.');
       setNotice(action === 'source-approval'
-        ? 'Dispatch approved. The destination-site MIS team has been notified.'
+        ? 'Vehicle released. The destination-site MIS team has been notified.'
         : action === 'destination-verification'
           ? 'Destination MIS verification completed. The destination Project Manager has been notified.'
           : 'Vehicle accepted. Vehicle Master location has been updated.');
@@ -139,7 +140,12 @@ export default function VehicleTransferWorkflow({session, Dialog, embedded = fal
       setWorkingId('');
     }
   };
-  const records = useMemo(() => state.records.filter((record) => JSON.stringify(record).toLowerCase().includes(query.trim().toLowerCase())), [state.records, query]);
+  const searchedRecords = useMemo(() => state.records.filter((record) => JSON.stringify(record).toLowerCase().includes(query.trim().toLowerCase())), [state.records, query]);
+  const records = useMemo(() => vehicleTransferViewRecords(searchedRecords, activeView), [searchedRecords, activeView]);
+  const isProjectManager = Boolean(state.capabilities.canApproveSource || state.capabilities.canAcceptDestination);
+  useEffect(() => {
+    if (!isProjectManager && activeView !== VEHICLE_TRANSFER_VIEW.ALL) setActiveView(VEHICLE_TRANSFER_VIEW.ALL);
+  }, [activeView, isProjectManager]);
   const counts = state.records.reduce((summary, record) => {
     const status = vehicleTransferStatus(record);
     summary.total += 1;
@@ -149,6 +155,8 @@ export default function VehicleTransferWorkflow({session, Dialog, embedded = fal
     else summary.completed += 1;
     return summary;
   }, {total: 0, source: 0, mis: 0, destination: 0, completed: 0});
+  const releaseCount = vehicleTransferViewRecords(state.records, VEHICLE_TRANSFER_VIEW.RELEASE).length;
+  const acceptCount = vehicleTransferViewRecords(state.records, VEHICLE_TRANSFER_VIEW.ACCEPT).length;
   return <section className={`vehicle-transfer-workflow${embedded ? ' embedded' : ''}`}>
     <header className="vehicle-transfer-heading"><div><span>CONTROLLED VEHICLE MOVEMENT</span><h1>Vehicle transfers</h1><p>MIS submission, source PM approval, destination MIS verification, PM acceptance, and Vehicle Master update in one register.</p></div><div><button type="button" className="secondary" onClick={load} disabled={state.loading}><RefreshCw /> Refresh</button>{state.capabilities.canSubmit && <button type="button" className="primary" onClick={() => setShowForm(true)}><Plus /> New transfer</button>}</div></header>
     <div className="vehicle-transfer-kpis">
@@ -160,14 +168,19 @@ export default function VehicleTransferWorkflow({session, Dialog, embedded = fal
     </div>
     {notice && <div className="vehicle-transfer-notice" role="status"><CheckCircle2 /><span>{notice}</span><button type="button" aria-label="Dismiss" onClick={() => setNotice('')}><X /></button></div>}
     <div className="vehicle-transfer-guide"><ShieldCheck /><p><b>How acceptance is checked:</b> each row shows all four stages, the responsible person and time. The destination PM button remains locked until destination MIS verification is complete. “Completed” confirms acceptance and the Vehicle Master location update.</p></div>
+    {isProjectManager && <div className="vehicle-transfer-tabs" role="tablist" aria-label="Project Manager vehicle transfer work queues">
+      <button type="button" role="tab" aria-selected={activeView === VEHICLE_TRANSFER_VIEW.ALL} className={activeView === VEHICLE_TRANSFER_VIEW.ALL ? 'active' : ''} onClick={() => setActiveView(VEHICLE_TRANSFER_VIEW.ALL)}><ArrowRightLeft /> All Transfers <b>{counts.total}</b></button>
+      <button type="button" role="tab" aria-selected={activeView === VEHICLE_TRANSFER_VIEW.RELEASE} className={activeView === VEHICLE_TRANSFER_VIEW.RELEASE ? 'active' : ''} onClick={() => setActiveView(VEHICLE_TRANSFER_VIEW.RELEASE)}><Send /> Release Vehicle <b>{releaseCount}</b></button>
+      <button type="button" role="tab" aria-selected={activeView === VEHICLE_TRANSFER_VIEW.ACCEPT} className={activeView === VEHICLE_TRANSFER_VIEW.ACCEPT ? 'active' : ''} onClick={() => setActiveView(VEHICLE_TRANSFER_VIEW.ACCEPT)}><CheckCircle2 /> Accept Vehicle <b>{acceptCount}</b></button>
+    </div>}
     <div className="vehicle-transfer-toolbar"><label><Search /><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search transfer, vehicle, site, or approver" /></label><span>{records.length} visible</span></div>
     {state.error ? <div className="vehicle-transfer-empty"><X /><b>{state.error}</b><button type="button" onClick={load}>Try again</button></div> : state.loading && !state.records.length ? <div className="vehicle-transfer-empty"><RefreshCw className="spin" /><b>Loading vehicle transfers…</b></div> : <div className="vehicle-transfer-list">
       {records.length ? records.map((record) => <article className="vehicle-transfer-row" key={record.id}>
         <div className="vehicle-transfer-summary"><div className="vehicle-transfer-id"><Truck /><span><b>{record.transferNo || `Transfer ${record.id}`}</b><small>{record.equipment || record.door || 'Vehicle'} · {record.modelNo || 'Model not recorded'}</small></span></div><div className="vehicle-transfer-route"><span><small>FROM</small><b>{record.source || 'Not recorded'}</b></span><ArrowRightLeft /><span><small>TO</small><b>{record.destination || 'Not recorded'}</b></span></div><div><TransferStatus record={record} /><small className="vehicle-transfer-date">Transfer date: {formatDisplayDate(record.transferDate)}</small></div></div>
         <TransferProgress record={record} />
         <div className="vehicle-transfer-meta"><span>Submitted: <b>{record.submittedBy || 'Imported record'}</b>{record.submittedAt ? ` · ${formatDisplayDateTime(record.submittedAt)}` : ''}</span><span>Chassis: <b>{record.chassisNo || 'Not recorded'}</b></span>{record.vehicleMasterUpdatedAt && <span className="master-updated"><CheckCircle2 /> Vehicle Master updated {formatDisplayDateTime(record.vehicleMasterUpdatedAt)}</span>}</div>
-        {(record.canApproveSource || record.canVerifyDestination || record.canAcceptDestination) && <div className="vehicle-transfer-actions">{record.canApproveSource && <button type="button" className="primary" disabled={workingId === String(record.id)} onClick={() => act(record, 'source-approval')}><ShieldCheck /> {workingId === String(record.id) ? 'Approving…' : 'Approve dispatch'}</button>}{record.canVerifyDestination && <button type="button" className="primary verify" disabled={workingId === String(record.id)} onClick={() => act(record, 'destination-verification')}><ShieldCheck /> {workingId === String(record.id) ? 'Verifying…' : 'Verify at destination'}</button>}{record.canAcceptDestination && <button type="button" className="primary accept" disabled={workingId === String(record.id)} onClick={() => act(record, 'destination-acceptance')}><CheckCircle2 /> {workingId === String(record.id) ? 'Accepting…' : 'Accept vehicle'}</button>}</div>}
-      </article>) : <div className="vehicle-transfer-empty"><Search /><b>No transfers match this view.</b></div>}
+        {(record.canApproveSource || record.canVerifyDestination || record.canAcceptDestination) && <div className="vehicle-transfer-actions">{record.canApproveSource && <button type="button" className="primary" disabled={workingId === String(record.id)} onClick={() => act(record, 'source-approval')}><Send /> {workingId === String(record.id) ? 'Releasing…' : 'Release vehicle'}</button>}{record.canVerifyDestination && <button type="button" className="primary verify" disabled={workingId === String(record.id)} onClick={() => act(record, 'destination-verification')}><ShieldCheck /> {workingId === String(record.id) ? 'Verifying…' : 'Verify at destination'}</button>}{record.canAcceptDestination && <button type="button" className="primary accept" disabled={workingId === String(record.id)} onClick={() => act(record, 'destination-acceptance')}><CheckCircle2 /> {workingId === String(record.id) ? 'Accepting…' : 'Accept vehicle'}</button>}</div>}
+      </article>) : <div className="vehicle-transfer-empty"><Search /><b>{activeView === VEHICLE_TRANSFER_VIEW.RELEASE ? 'No vehicles are waiting for release at your sites.' : activeView === VEHICLE_TRANSFER_VIEW.ACCEPT ? 'No vehicles are waiting for acceptance at your sites.' : 'No transfers match this view.'}</b></div>}
     </div>}
     {showForm && Dialog && <TransferForm Dialog={Dialog} equipment={state.equipment || []} sites={state.sites || []} token={token} onClose={() => setShowForm(false)} onSaved={() => { setNotice('Transfer submitted. The source-site PM has been notified.'); void load(); }} />}
   </section>;

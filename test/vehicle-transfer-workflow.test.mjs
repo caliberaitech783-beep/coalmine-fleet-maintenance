@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {
   VEHICLE_TRANSFER_STATUS,
+  VEHICLE_TRANSFER_VIEW,
   applyAcceptedVehicleTransfer,
   transferMatchesEquipment,
   vehicleTransferProgress,
   vehicleTransferStatus,
   vehicleTransferValidationError,
+  vehicleTransferViewRecords,
 } from '../vehicle-transfer-workflow.mjs';
 
 test('vehicle transfer lifecycle exposes each accountable stage',()=>{
@@ -42,6 +44,17 @@ test('destination acceptance changes only the Vehicle Master location and transf
   assert.equal(updated.lastTransferAcceptedBy,'Destination PM');
 });
 
+test('Project Manager tabs separate release and acceptance work queues',()=>{
+  const records=[
+    {id:1,canApproveSource:true,canAcceptDestination:false},
+    {id:2,canApproveSource:false,canAcceptDestination:true},
+    {id:3,canApproveSource:false,canAcceptDestination:false},
+  ];
+  assert.deepEqual(vehicleTransferViewRecords(records,VEHICLE_TRANSFER_VIEW.ALL).map(({id})=>id),[1,2,3]);
+  assert.deepEqual(vehicleTransferViewRecords(records,VEHICLE_TRANSFER_VIEW.RELEASE).map(({id})=>id),[1]);
+  assert.deepEqual(vehicleTransferViewRecords(records,VEHICLE_TRANSFER_VIEW.ACCEPT).map(({id})=>id),[2]);
+});
+
 test('server and interface wire submission, both PM actions, audit, notifications and master update',()=>{
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   const client=readFileSync(new URL('../src/vehicle-transfer-workflow.jsx',import.meta.url),'utf8');
@@ -60,7 +73,12 @@ test('server and interface wire submission, both PM actions, audit, notification
   assert.match(client,/Source approval pending/);
   assert.match(client,/Destination MIS verification/);
   assert.match(client,/Destination PM acceptance/);
+  assert.match(client,/Project Manager vehicle transfer work queues/);
+  assert.match(client,/Release Vehicle/);
+  assert.match(client,/Accept Vehicle/);
+  assert.match(client,/Release vehicle/);
   assert.match(client,/Vehicle Master updated/);
+  assert.match(styles,/\.vehicle-transfer-tabs\{/);
   assert.match(styles,/\.modal\.vehicle-transfer-form-modal\{width:min\(980px/);
   assert.match(styles,/\.vehicle-transfer-form \.formgrid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(styles,/\.vehicle-transfer-form \.formgrid>label\{display:grid/);

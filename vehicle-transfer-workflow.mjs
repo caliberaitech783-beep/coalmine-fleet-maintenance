@@ -7,6 +7,12 @@ export const VEHICLE_TRANSFER_STATUS = Object.freeze({
   COMPLETED: 'Completed',
 });
 
+export const VEHICLE_TRANSFER_VIEW = Object.freeze({
+  ALL: 'all',
+  RELEASE: 'release',
+  ACCEPT: 'accept',
+});
+
 export function vehicleTransferStatus(record = {}) {
   const value = String(record.status || '').trim();
   if (Object.values(VEHICLE_TRANSFER_STATUS).includes(value)) return value;
@@ -55,4 +61,10 @@ export function vehicleTransferProgress(record = {}) {
     {key: 'mis', label: 'Destination MIS verified', complete: [VEHICLE_TRANSFER_STATUS.DESTINATION_ACCEPTANCE, VEHICLE_TRANSFER_STATUS.COMPLETED].includes(status), detail: record.destinationMisVerifiedBy || ''},
     {key: 'destination', label: 'Destination PM accepted', complete: status === VEHICLE_TRANSFER_STATUS.COMPLETED, detail: record.destinationAcceptedBy || ''},
   ];
+}
+
+export function vehicleTransferViewRecords(records = [], view = VEHICLE_TRANSFER_VIEW.ALL) {
+  if (view === VEHICLE_TRANSFER_VIEW.RELEASE) return records.filter((record) => record.canApproveSource);
+  if (view === VEHICLE_TRANSFER_VIEW.ACCEPT) return records.filter((record) => record.canAcceptDestination);
+  return records;
 }
