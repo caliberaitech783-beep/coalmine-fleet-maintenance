@@ -25,7 +25,7 @@ test('ETC remains required and submits the existing field name without incomplet
   assert.match(source, /type="hidden" name="expectedCompletionAt"/);
   assert.equal((source.match(/<input type="date" required|<select required/g)||[]).length, 4);
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  assert.match(main, /<MaintenanceEtcInput value=\{expectedCompletionAt\} onChange=\{setExpectedCompletionAt\}/);
+  assert.match(main, /<MaintenanceEtcInput value=\{expectedCompletionAt\} displayValue=\{displayedInitialEtc\} onChange=\{setExpectedCompletionAt\}/);
   assert.match(main, /expectedCompletionAt: form.get\("expectedCompletionAt"\)/);
 });
 
@@ -50,8 +50,11 @@ test('past ETC dates, periods, hours and minutes are closed using the current IS
 
 test('elapsed existing ETC stays auditable and locked until replacement is chosen', () => {
   const now = new Date('2026-09-15T10:52:31Z');
-  const locked = renderToStaticMarkup(React.createElement(MaintenanceEtcInput, {value: '2026-09-15T15:00', onChange() {}, now}));
-  assert.match(locked, /name="expectedCompletionAt" value="2026-09-15T15:00"/);
+  const locked = renderToStaticMarkup(React.createElement(MaintenanceEtcInput, {value: '2026-09-15T04:04', displayValue: '2026-09-15T16:04', onChange() {}, now}));
+  assert.match(locked, /<option selected="">PM<\/option>/);
+  assert.equal((locked.match(/<option[^>]*selected=""[^>]*>04<\/option>/g) || []).length, 2);
+  assert.match(locked, /name="expectedCompletionAt" value="2026-09-15T04:04"/);
+  assert.doesNotMatch(locked, /name="expectedCompletionAt" value="2026-09-15T16:04"/);
   assert.match(locked, /<button type="button" class="etc-replace-button">Change to a future ETC<\/button>/);
   assert.match(locked, /<input type="date"[^>]*disabled=""/);
   const fresh = renderToStaticMarkup(React.createElement(MaintenanceEtcInput, {value: '', onChange() {}, now}));

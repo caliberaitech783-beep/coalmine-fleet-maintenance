@@ -68,6 +68,7 @@ import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownOpenedDate, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
 import { buildInfoPulseCases } from "../info-pulse-data.mjs";
+import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
 import InfoPulseContent from "./info-pulse-content.jsx";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
@@ -8008,6 +8009,9 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   const [time, setTime] = useState(parts.time);
   const acceptanceTime = request.acceptedAt;
   const initialEtc = String(request.expectedCompletionAt || "").replace(" ", "T").slice(0,16);
+  const effectiveEtcTimestamp = effectiveInfoPulseEtcTimestamp(request);
+  const displayedInitialEtc = Number.isFinite(effectiveEtcTimestamp) ? indiaDateTimeInputValue(effectiveEtcTimestamp) : initialEtc;
+  const displayedInitialEtcLabel = Number.isFinite(effectiveEtcTimestamp) ? new Date(effectiveEtcTimestamp).toISOString() : request.expectedCompletionAt;
   const [expectedCompletionAt,setExpectedCompletionAt] = useState(initialEtc);
   const [formError,setFormError] = useState("");
   const etcChanged = Boolean(initialEtc && expectedCompletionAt.slice(0,16) !== initialEtc);
@@ -8060,8 +8064,8 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Date *<input name="date" type="date" required defaultValue={parts.date} readOnly aria-readonly="true" /></label>
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (12-hour with seconds)<input name="time" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
         {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
-        <MaintenanceEtcInput value={expectedCompletionAt} onChange={setExpectedCompletionAt} />
-        {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(request.expectedCompletionAt)}. Both values, your name and this reason will be retained.</small></label>}
+        <MaintenanceEtcInput value={expectedCompletionAt} displayValue={displayedInitialEtc} onChange={setExpectedCompletionAt} />
+        {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(displayedInitialEtcLabel)}. Both values, your name and this reason will be retained.</small></label>}
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} />
         <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /><TranslatedText text={request.complaint} language={request.complaintLanguage} helper /></label>

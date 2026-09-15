@@ -32,7 +32,7 @@ test("request forms expose elapsed time, site/group-scoped equipment search, and
 test("Maintenance User edits ETC instead of entering it in the close form", () => {
   const editForm = ui.slice(ui.indexOf("function RequestEditForm"), ui.indexOf("function CloseRequestForm"));
   const closeForm = ui.slice(ui.indexOf("function CloseRequestForm"), ui.indexOf("function VerifyRequestForm"));
-  assert.match(editForm, /<MaintenanceEtcInput value=\{expectedCompletionAt\} onChange=\{setExpectedCompletionAt\}/);
+  assert.match(editForm, /<MaintenanceEtcInput value=\{expectedCompletionAt\} displayValue=\{displayedInitialEtc\} onChange=\{setExpectedCompletionAt\}/);
   assert.match(editForm, /expectedCompletionAt: form\.get\("expectedCompletionAt"\)/);
   assert.doesNotMatch(closeForm, /name="expectedCompletionAt"/);
   assert.match(server, /requestExpectedCompletionValue\(before\.expectedCompletionAt,expectedCompletionAt\)/);

@@ -25,6 +25,7 @@ const forms = evaluate(transformed.code + "\nreturn {RequestEditForm, CloseReque
   EnhancedSpeechComplaint: () => null,
   TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
   requestStartParts: () => ({date: "2026-09-09", time: "12:00:00"}),
+  effectiveInfoPulseEtcTimestamp: () => Number.NaN, indiaDateTimeInputValue: () => "",
   TIME_24H_PATTERN: ".*",
   FormData: class { constructor(values) { this.values = values; } get(key) { return this.values[key] ?? null; } },
   alert: message => { throw new Error(message); },

@@ -53,7 +53,7 @@ function harness(){
     calculateBreakdownDaysFromStart:()=>1,...requestAcceptance,normalizeEquipmentGroup,elapsedLabel:()=>'',
     RequestEditForm,DailyRemarkForm,CloseRequestForm,VerifyRequestForm,RequestTimelineButton:({reference})=>React.createElement('b',{},reference),authToken:'fixture',alert:()=>{},
     requestStartParts:start=>({date:String(start).slice(0,10),time:String(start).slice(11)}),
-    requestMeterTypeForRequest:()=> 'HMR',indiaDateTimeInputValue:()=> '2026-09-08T10:59:00',TIME_24H_PATTERN:'.*',
+    requestMeterTypeForRequest:()=> 'HMR',effectiveInfoPulseEtcTimestamp:()=>Number.NaN,indiaDateTimeInputValue:()=> '2026-09-08T10:59:00',TIME_24H_PATTERN:'.*',
     FormData:class{constructor(values){this.values=values;}get(name){return this.values[name];}},readMeterEvidence:async file=>file.evidence,
     window:{matchMedia:()=>({matches:false})},useMasterRecords:()=>[[],null,true],vehicles:[],MIS_VERIFICATION_MENU:'MIS verification',
     recordsForSite:rows=>rows,requestWithEquipmentMasterDetails:row=>row,visibleInOperationalUserRequests:()=>true,requestsVisibleToMisWorkspace,

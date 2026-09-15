@@ -47,13 +47,14 @@ export function etcMinuteDisabled(parts, minute, minimum) {
   return isEtcBackdated(etcValue({...parts, minute}), minimum);
 }
 
-export default function MaintenanceEtcInput({value, onChange, now = Date.now()}) {
+export default function MaintenanceEtcInput({value, displayValue = value, onChange, now = Date.now()}) {
   const initialValue = String(value || '').slice(0, 16);
+  const initialDisplayValue = String(displayValue || value || '').replace(' ', 'T').slice(0, 16);
   const initialMinimum = etcMinimum(now);
-  const [parts, setParts] = useState(() => etcParts(value));
+  const [parts, setParts] = useState(() => etcParts(initialDisplayValue));
   const [editing, setEditing] = useState(() => !isEtcBackdated(initialValue, initialMinimum));
   const minimum = etcMinimum(now);
-  const currentValue = etcValue(parts);
+  const currentValue = editing ? etcValue(parts) : initialValue;
   function change(key, next) {
     let updated = {...parts, [key]: next};
     if (key === 'date' && next < minimum.slice(0, 10)) return;

@@ -65,7 +65,7 @@ function harness(name, extra = {}) {
     Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, MaintenanceEtcInput: Null,
     TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
     requestStartParts: () => ({date: "2026-09-08", time: "14:00:00"}), requestMeterTypeForRequest: () => "HMR",
-    indiaDateTimeInputValue: () => "2026-09-08T14:00:00", formatTwelveHourDateTime: value => value || "—",
+    effectiveInfoPulseEtcTimestamp: () => Number.NaN, indiaDateTimeInputValue: () => "2026-09-08T14:00:00", formatTwelveHourDateTime: value => value || "—",
     normalizeEquipmentGroup: value => value, TIME_24H_PATTERN: ".*", delayedReasonRequired: () => false,
     readMeterEvidence: async file => file.evidence, alert: () => {}, URL: {createObjectURL: () => "fixture:trip-card", revokeObjectURL() {}},
     FileReader: class { readAsDataURL() { this.result = "data:image/png;base64,dGVzdA=="; this.onload(); } },
