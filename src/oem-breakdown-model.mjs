@@ -2,11 +2,12 @@ import { createFleetAssetResolver, equipmentRoadStatus } from "../dashboard-equi
 import { indiaDateTimeEpoch } from "../report-date-range.mjs";
 import { parseReportTimestamp } from "../report-metrics.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
+import { requestStatusLabel } from "./request-status.mjs";
 
 const text = (value) => String(value ?? "").trim();
 const normalize = (value) => text(value).toLowerCase();
 const idle = (request) => ["idle", "ideal"].includes(normalize(request.status));
-export const OEM_COLORS = ["#522e90", "#f04e53", "#237d96", "#b55d13", "#39734c", "#a23578", "#5268bd", "#746042"];
+export const OEM_COLORS = ["#522e90", "#c93e47", "#237d96", "#b55d13", "#39734c", "#a23578", "#5268bd", "#746042", "#146c68", "#9c3c25", "#7553a6", "#536d24", "#235ea8", "#b04065", "#62636a", "#866213", "#337345", "#9b427f", "#436273", "#7e4435", "#654fa0", "#256b80", "#886432", "#845069"];
 export const oemLabel = (record = {}) => text(record.make) || text(record.oem) || "OEM not specified";
 
 export function oemDateRangeError(from, to) {
@@ -83,7 +84,7 @@ export function buildOemBreakdownChart({ rows = [], equipment = [], regions = []
   [...equipment.map(oemLabel), ...rows.map((row) => row.oem)].forEach((label) => {
     if (!labels.has(normalize(label))) labels.set(normalize(label), label);
   });
-  const oems = [...labels].sort((a, b) => a[1].localeCompare(b[1])).map(([key, label], index) => ({ key, label, color: OEM_COLORS[index % OEM_COLORS.length] }));
+  const oems = [...labels].sort((a, b) => a[1].localeCompare(b[1])).map(([key, label], index) => ({ key, label, color: OEM_COLORS[index] || `hsl(${(index * 137.508) % 360} 56% 36%)` }));
   const filteredRows = rows.filter((row) => oem === "all" || row.oemKey === oem);
   const siteGroups = regions.flatMap((region) => region.sites.map((site) => ({ region: region.code, name: typeof site === "string" ? site : site.name, rows: [] })));
   filteredRows.forEach((row) => {
@@ -102,9 +103,40 @@ export function buildOemBreakdownChart({ rows = [], equipment = [], regions = []
   const maximum = Math.max(1, ...sites.map((site) => site.total));
   const step = Math.max(1, Math.ceil(maximum / 5));
   const axisMax = step * 5;
-  return { rows: filteredRows, oems, sites, axisMax, ticks: [5, 4, 3, 2, 1, 0].map((tick) => tick * step) };
+  return { rows: filteredRows, oems, selectedOem: oem, sites, axisMax, ticks: [5, 4, 3, 2, 1, 0].map((tick) => tick * step) };
 }
 
 export function selectOemBreakdownRows(rows, selection = {}) {
   return rows.filter((row) => (!selection.oem || row.oemKey === selection.oem) && (!selection.site || recordBelongsToSite({ site: row.site }, selection.site)));
+}
+
+// Capture the chart's selected rows at click time. Polling may update the chart,
+// but it must not replace the list the user is inspecting.
+export function createOemBreakdownSelection(chart, selection = {}) {
+  const oem = selection.oem || (chart.selectedOem !== "all" ? chart.selectedOem : "");
+  const rows = selectOemBreakdownRows(chart.rows, { ...selection, oem });
+  const selected = chart.oems.find(item => item.key === oem);
+  const records = rows.flatMap(row => row.requests.map((request, index) => ({
+    ...row.record,
+    id: `${row.id}:${index}`,
+    make: row.oem,
+    door: request.door || row.record.door,
+    model: request.model || row.record.model,
+    category: row.record.category || request.equipmentCategory,
+    group: request.equipmentGroup || row.record.group,
+    manufacturerSerialNo: request.chassis || row.record.manufacturerSerialNo || row.record.chassisNo,
+    requestSite: row.site,
+    requestReference: request.ref?.startsWith("Asset ") ? "" : request.ref || "",
+    requestStatus: requestStatusLabel(request),
+    requestStart: request.start || request.startedAt || request.createdAt || "",
+    requestClosed: request.closedAt || request.completedAt || "",
+    repairCategory: request.category || "—",
+    requestDetails: request,
+  })));
+  return { ...selection, oem, rows, records, label: selected?.label || "All OEMs", color: selected?.color || "", regions: chart.sites.reduce((regions, site) => {
+    let region = regions.find(item => item.code === site.region);
+    if (!region) { region = { code: site.region, sites: [] }; regions.push(region); }
+    region.sites.push(site.name);
+    return regions;
+  }, []) };
 }

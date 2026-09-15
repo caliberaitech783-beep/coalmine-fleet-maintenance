@@ -51,7 +51,7 @@ function FilterTabRow({ name, label, allLabel, options, value, choose, resultsId
   </div>;
 }
 
-export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
+export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = false, title = "Chart records", initialRegion = "", initialSite = "", hideCurrentLocation = false, hideEquipmentCategory = false, requestRecords = false, lifecycleRecords = false, lifecycleEvent = "", showBdClosingTime = false, extraColumns = [], ActionsTable, Status, formatDate, RequestTimelineButton = null, timelineToken = "", Dialog = null }) {
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const [recordDateRange, setRecordDateRange] = useState("");
@@ -80,7 +80,7 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
   const showCategoryColumn = requestRecords || !hideEquipmentCategory;
   const showClosedColumn = lifecycleRecords && !["idle", "opened"].includes(lifecycleEvent);
   const showVerificationColumns = lifecycleRecords && !["production", "closed", "idle", "opened"].includes(lifecycleEvent);
-  const columnCount = 9 + (requestRecords ? 2 : 0) + (showClosedColumn ? 1 : 0) + (showVerificationColumns ? 2 : 0) + (showBdClosingTime ? 1 : 0) - (showLocationColumn ? 0 : 1) - (showCategoryColumn ? 0 : 1);
+  const columnCount = 9 + (requestRecords ? 2 : 0) + (showClosedColumn ? 1 : 0) + (showVerificationColumns ? 2 : 0) + (showBdClosingTime ? 1 : 0) - (showLocationColumn ? 0 : 1) - (showCategoryColumn ? 0 : 1) + extraColumns.length;
   // Open requests keep counting: refresh the days-of-breakdown clock every minute.
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -121,10 +121,11 @@ export default function DashboardRecordBrowser({ rows, regions, rowsAreScoped = 
       <div className="dashboard-record-summary"><h4>{view.regionLabel} {requestRecords ? "requests" : "fleet list"}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} of {view.regionTotal.toLocaleString()} records</span></div>
       <div className="dashboard-asset-list" ref={listRef}>
         <ActionsTable key={tableKey} exportTitle={`${title} · ${view.regionLabel}`} preserveColumnOrder printTitle={`${title} · ${view.regionLabel}`} recordDateFilter={{ label: "Started", value: recordDateRange, onChange: setRecordDateRange }}>
-          <thead><tr>{requestRecords && <th>Job reference</th>}<th>Status</th><th>Days of breakdown</th><th data-filter-mode={requestRecords ? undefined : "date-sort"}>Started</th>{showBdClosingTime && <th>BD closing time</th>}<th>Machine / Door no.</th>{showCategoryColumn && <th>Equipment category</th>}<th>Equipment group</th><th>Model</th>{showLocationColumn && <th>{requestRecords ? "Request site" : "Current location"}</th>}<th>Serial / chassis no.</th>{requestRecords && <th>Repair category</th>}{showClosedColumn && <th>Closed</th>}{showVerificationColumns && <><th>MIS verified at</th><th>First trip time</th></>}</tr></thead>
+          <thead><tr>{requestRecords && <th>Job reference</th>}<th>Status</th><th>Days of breakdown</th><th data-filter-mode={requestRecords ? undefined : "date-sort"}>Started</th>{showBdClosingTime && <th>BD closing time</th>}<th>Machine / Door no.</th>{showCategoryColumn && <th>Equipment category</th>}<th>Equipment group</th><th>Model</th>{showLocationColumn && <th>{requestRecords ? "Request site" : "Current location"}</th>}<th>Serial / chassis no.</th>{requestRecords && <th>Repair category</th>}{showClosedColumn && <th>Closed</th>}{showVerificationColumns && <><th>MIS verified at</th><th>First trip time</th></>}{extraColumns.map(column => <th key={column.key}>{column.label}</th>)}</tr></thead>
           <tbody>{view.rows.length ? view.rows.map((record, index) => <tr key={record.id || `${record.equipmentName}-${index}`}>
             {requestRecords && <td><b>{record.requestReference}</b></td>}<td data-sort-value={requestStatusSortRank(record.requestStatus)}><Status>{record.requestStatus || "—"}</Status></td><td data-sort-value={calculateBreakdownMinutes(record.requestStart, record.requestClosed, now)}>{breakdownCell(record)}</td><td data-sort-value={sortableDate(record.requestStart)}>{formatDate(record.requestStart)}</td>{showBdClosingTime && <td data-sort-value={sortableDate(record.requestClosed)}>{sortableDate(record.requestClosed) ? formatDate(record.requestClosed) : "Not recorded"}</td>}<td>{equipmentMachineLabel(record)}</td>{showCategoryColumn && <td>{categoryName(equipmentCategoryLabel(record))}</td>}<td>{equipmentGroupLabel(record)}</td><td>{record.model || "—"}</td>{showLocationColumn && <td>{record.requestSite || record.currentLocation || record.location || record.site || "—"}</td>}<td>{record.manufacturerSerialNo || record.chassisNo || "—"}</td>
             {requestRecords && <td>{record.repairCategory}</td>}{showClosedColumn && <td data-sort-value={sortableDate(record.requestClosed)}>{formatDate(record.requestClosed)}</td>}{showVerificationColumns && <><td data-sort-value={sortableDate(record.requestVerified)}>{formatDate(record.requestVerified, true)}</td><td data-sort-value={sortableDate(record.requestFirstTrip)}>{formatDate(record.requestFirstTrip, true)}</td></>}
+            {extraColumns.map(column => <td key={column.key}>{column.render(record)}</td>)}
           </tr>) : <tr><td colSpan={columnCount}><div className="dashboard-record-empty"><b>No matching {requestRecords ? "requests" : "fleet records"}</b><span>{view.selection.region ? `No records for ${view.regionLabel} in this chart selection.` : "No regions available in your current scope."}</span></div></td></tr>}</tbody>
         </ActionsTable>
       </div>

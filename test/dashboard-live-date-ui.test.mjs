@@ -177,6 +177,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     formatTwelveHourDateTime: displayDates.formatDisplayDateTime,
     Status: Null,
     RequestTimelineButton: Null, authToken: "",
+    MaintenanceRemarks: Null,
   };
   const Dashboard = new Function(...Object.keys(dependencies), `${code}; return Dashboard;`)(...Object.values(dependencies));
   return {render(rows = requests, props = {}) { cursor = 0; return Dashboard({requests: rows, ...props}); }};
@@ -208,6 +209,24 @@ for (const resource of ["requests", "equipment"]) test(`dashboard ${resource} fa
   assert.match(text(byClass(tree, "mine-updated")), /Live/);
   assert.deepEqual(detailView(tree).rows, originalRows);
   assert.equal(findAll(tree, (node) => typeof node.props.retry === "function" && node.props.updatedAt).length, 0);
+});
+
+test("OEM chart clicks keep the exact selection in the shared list after a background refresh", () => {
+  const view = harness({equipment: assets.map((asset, index) => ({...asset, make: index === 0 ? "Tata" : "Volvo"}))});
+  let tree = view.render();
+  findAll(tree, node => node.type === "button" && text(node).startsWith("OEM BD"))[0].props.onClick({});
+  tree = view.render();
+  assert.equal(byClass(tree, "mine-panel mine-request-lifecycle"), undefined);
+  const chart = findAll(tree, node => node.props.chart && node.props.onSelect)[0];
+  chart.props.onSelect({site: "Sasti OB", oem: "tata"});
+  tree = view.render();
+  const details = () => findAll(tree, node => node.props.selection?.records && node.props.ActionsTable)[0].props;
+  assert.equal(details().selection.label, "Tata");
+  assert.deepEqual(details().selection.records.map(row => row.requestReference), ["OLD-OPEN"]);
+  assert.ok(details().title.includes("Sasti OB"));
+  assert.ok(findAll(tree, node => node.props.overlayClassName === "dashboard-asset-overlay").length);
+  tree = view.render([...requests, {...requests[0], ref: "LATER"}]);
+  assert.deepEqual(details().selection.records.map(row => row.requestReference), ["OLD-OPEN"]);
 });
 
 // Check the actual final browser filtering, not just the Dashboard's input props.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { buildOemBreakdownRows, buildOemBreakdownChart, selectOemBreakdownRows, oemDateRangeError } from "../src/oem-breakdown-model.mjs";
+import { buildOemBreakdownRows, buildOemBreakdownChart, selectOemBreakdownRows, createOemBreakdownSelection, oemDateRangeError } from "../src/oem-breakdown-model.mjs";
 
 const now = Date.parse("2026-09-14T12:00:00+05:30");
 const equipment = [
@@ -132,6 +132,34 @@ test("OEM dashboard sits between Total and Breakdown and shares the existing fil
   assert.ok(source.includes('const oemTo = oemLive ? "" : dashboardTo;'));
   assert.ok(source.includes('regions: fleetRegionInsights, oem: dashboardOem'));
   assert.ok(source.includes('<select aria-label="OEM"'));
-  assert.ok(source.includes('<BreakdownTable rows={oemDetailRequests}'));
-  assert.ok(source.includes('showMakeModel showTurnaroundTime showReadOnlyAction'));
+  assert.ok(source.includes('<OemBreakdownDetails selection={oemDrilldown}'));
+  const details = readFileSync(new URL("../src/oem-breakdown-details.jsx", import.meta.url), "utf8");
+  assert.ok(details.includes('<DashboardRecordBrowser'));
+  assert.ok(details.includes('requestRecords extraColumns={columns}'));
+});
+
+test("OEM colours never cycle and stay consistent between the legend, site segments and filters", () => {
+  const catalogue = Array.from({length: 40}, (_, id) => ({id, make: `OEM ${String(id).padStart(2, "0")}`, door: `V${id}`, currentLocation: "Sasti OB", status: "Breakdown"}));
+  const rows = build({equipment: catalogue, requests: []});
+  const all = buildOemBreakdownChart({rows, equipment: catalogue, regions});
+  assert.equal(new Set(all.oems.map(oem => oem.color)).size, 40);
+  for (const oem of all.oems) {
+    const filtered = buildOemBreakdownChart({rows, equipment: catalogue, regions, oem: oem.key});
+    assert.equal(filtered.sites[0].segments[0].color, oem.color);
+    assert.equal(filtered.oems.find(item => item.key === oem.key).color, oem.color);
+  }
+});
+
+test("OEM selections retain every linked request and do not change when the live chart refreshes", () => {
+  const chart = buildOemBreakdownChart({rows: build(), equipment, regions});
+  const selected = createOemBreakdownSelection(chart, {site: "Sasti OB", oem: "tata"});
+  assert.equal(selected.rows.length, 1);
+  assert.equal(selected.label, "Tata");
+  assert.deepEqual(selected.records.map(record => record.requestReference), ["BD1", "BD2"]);
+  assert.ok(selected.records.every(record => record.make === "Tata" && record.requestSite === "Sasti OB"));
+  assert.equal(selected.records[0].requestDetails.complaint, "Hydraulics");
+  chart.rows = [];
+  assert.equal(selected.records.length, 2);
+  const filtered = buildOemBreakdownChart({rows: build(), equipment, regions, oem: "komatsu"});
+  assert.equal(createOemBreakdownSelection(filtered).label, "Komatsu");
 });

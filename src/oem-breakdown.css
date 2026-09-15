@@ -29,7 +29,12 @@
 .mine-oem-segment:hover { filter: brightness(1.15); }
 .mine-oem-error { padding: 16px 20px; color: #c63742; }
 .mine-oem-filter select { max-width: 230px; }
-.mine-oem-detail-context { margin: 0 0 16px; color: var(--mine-muted, #647892); line-height: 1.5; }
+.mine-oem-details { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.mine-oem-detail-context { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 10px 16px; border-bottom: 1px solid var(--line, #e8e4ef); color: var(--muted, #647892); font-size: 13px; line-height: 1.5; }
+.mine-oem-selection { display: inline-flex; align-items: center; gap: 8px; color: var(--ink, #142943); font-weight: 800; }
+.mine-oem-selection i { width: 12px; height: 12px; border-radius: 3px; }
+.mine-oem-details .mine-oem-detail-search { flex-shrink: 0; margin: 0; padding: 10px 16px; border-bottom: 1px solid var(--line, #e8e4ef); }
+.mine-oem-reason { width: 320px; max-width: 45vw; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
 @media (max-width: 1500px) and (min-width: 701px) {
   .mine-fleet-region-chart > header:has(.mine-oem-tab) { grid-template-columns: minmax(0, 1fr) auto; }
   .mine-fleet-region-chart:has(.mine-oem-tab) .mine-fleet-chart-toggle { grid-column: 1 / -1; grid-row: 2; }
