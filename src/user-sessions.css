@@ -87,3 +87,8 @@ button.session-state:focus-visible { outline: 2px solid #7043ad; outline-offset:
 .login-activity-scroll tbody tr:nth-child(even) { background: color-mix(in srgb, #7043ad 3%, var(--surface, #fff)); }
 .login-activity-scroll tbody tr:hover { background: color-mix(in srgb, #7043ad 7%, var(--surface, #fff)); }
 @media(max-width:700px) { .login-activity-heading h2 { font-size: 20px; } .login-activity-controls label { min-width: 0; } .login-activity-scroll { max-height: 65dvh; } }
+
+/* Announcements: admin composer and the shared popup */
+.user-session-header-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.session-message-inbox.announcement header{background:linear-gradient(90deg,#5d2a95,#c02b72)}.session-message-inbox-body p{white-space:pre-line}
+.announcement-history{margin:18px 0 0;padding:14px 0 0;border-top:1px solid #dde5ef}.announcement-history h3{margin:0 0 8px;font-size:14px}.announcement-history ul{list-style:none;margin:0;padding:0;display:grid;gap:8px;max-height:220px;overflow:auto}.announcement-history li{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:10px 12px;border:1px solid #e1e8f2;border-radius:8px;background:#f8fafd}.announcement-history li p{grid-column:1;margin:0;font-size:13px;white-space:pre-line}.announcement-history li small{grid-column:1;color:#64758e;font-size:11px}.announcement-history li button{grid-column:2;grid-row:1/span 2;height:32px;padding:0 12px;border:1px solid #cbd6ec;border-radius:6px;background:#fff;color:#51308d;font-weight:700;font-size:12px}.announcement-history li.withdrawn{opacity:.6}.announcement-history li.withdrawn p{text-decoration:line-through}

@@ -29,6 +29,7 @@ import {transferSyncDate} from './transfer-sync-date.mjs';
 import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTransferByEquipment,oracleEquipmentMasterRecord,transferMasterRecord} from './equipment-transfer-sync.mjs';
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
+import {ANNOUNCEMENT_ACTIVE_DAYS,announcementReaderKey,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
 import {buildUserActivitySummary,totalUserWorkedMinutes} from './user-activity-report.mjs';
@@ -516,6 +517,23 @@ async function migrate(){
     ALTER TABLE session_messages ADD COLUMN IF NOT EXISTS audio_data TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS session_messages_target_idx ON session_messages (target_session_public_id, dismissed_at, created_at);
     CREATE INDEX IF NOT EXISTS session_messages_created_idx ON session_messages (created_at DESC);
+    CREATE TABLE IF NOT EXISTS announcements (
+      id BIGSERIAL PRIMARY KEY,
+      message TEXT NOT NULL,
+      sender_login TEXT NOT NULL DEFAULT '',
+      sender_name TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      withdrawn_at TIMESTAMPTZ,
+      withdrawn_by TEXT NOT NULL DEFAULT ''
+    );
+    CREATE TABLE IF NOT EXISTS announcement_acknowledgements (
+      announcement_id BIGINT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+      reader_key TEXT NOT NULL,
+      reader_name TEXT NOT NULL DEFAULT '',
+      acknowledged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (announcement_id, reader_key)
+    );
+    CREATE INDEX IF NOT EXISTS announcements_active_idx ON announcements (withdrawn_at, created_at DESC);
     CREATE TABLE IF NOT EXISTS remote_assistance_sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       target_session_public_id TEXT NOT NULL,
@@ -1596,6 +1614,71 @@ app.patch('/api/session-messages/:messageId/dismiss',requireSession,async(req,re
       WHERE id=$1 AND target_session_public_id=$2 AND dismissed_at IS NULL RETURNING id`,[messageId,req.session.sessionId]);
     if(!result.rowCount)return res.status(404).json({error:'This message is no longer active.'});
     req.audit={eventType:'Security',module:'User sessions',action:'Close session message',targetType:'Session message',targetReference:String(messageId),changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+
+// Announcements: an Admin or Super Admin broadcasts a short text to every user.
+// Each user sees it as a blocking popup until they close it; closing is stored
+// per user (login), so it does not come back on another device.
+app.get('/api/announcements/pending',requireSession,async(req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT a.id,a.message,a.sender_name AS "senderName",a.sender_login AS "senderLogin",a.created_at AS "createdAt"
+      FROM announcements a
+      WHERE a.withdrawn_at IS NULL AND a.created_at>NOW()-make_interval(days => $2::int)
+        AND NOT EXISTS (SELECT 1 FROM announcement_acknowledgements k WHERE k.announcement_id=a.id AND k.reader_key=$1)
+      ORDER BY a.created_at ASC,a.id ASC`,[announcementReaderKey(req.session),ANNOUNCEMENT_ACTIVE_DAYS]);
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json({announcements:rows});
+  }catch(error){next(error)}
+});
+
+app.patch('/api/announcements/:announcementId/acknowledge',requireSession,async(req,res,next)=>{
+  try{
+    const announcementId=Number(req.params.announcementId);
+    if(!Number.isSafeInteger(announcementId)||announcementId<1)return res.status(400).json({error:'Invalid announcement.'});
+    const active=await pool.query('SELECT id FROM announcements WHERE id=$1 AND withdrawn_at IS NULL',[announcementId]);
+    if(!active.rowCount)return res.status(404).json({error:'This announcement is no longer active.'});
+    await pool.query(`INSERT INTO announcement_acknowledgements (announcement_id,reader_key,reader_name)
+      VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,[announcementId,announcementReaderKey(req.session),String(req.session.name||'')]);
+    req.audit={eventType:'Security',module:'Announcements',action:'Close announcement',targetType:'Announcement',targetReference:String(announcementId),changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+
+app.get('/api/announcements',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const {rows}=await pool.query(`SELECT a.id,a.message,a.sender_name AS "senderName",a.sender_login AS "senderLogin",a.created_at AS "createdAt",
+      a.withdrawn_at AS "withdrawnAt",a.withdrawn_by AS "withdrawnBy",
+      (SELECT COUNT(*)::int FROM announcement_acknowledgements k WHERE k.announcement_id=a.id) AS "acknowledgedCount"
+      FROM announcements a ORDER BY a.created_at DESC,a.id DESC LIMIT 20`);
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json({announcements:rows});
+  }catch(error){next(error)}
+});
+
+app.post('/api/announcements',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const message=normalizeAnnouncement(req.body?.message);
+    const validationError=announcementValidationError(message);
+    if(validationError)return res.status(400).json({error:validationError});
+    const {rows}=await pool.query(`INSERT INTO announcements (message,sender_login,sender_name) VALUES ($1,$2,$3)
+      RETURNING id,created_at AS "createdAt"`,[message,String(req.session.login||''),String(req.session.name||'')]);
+    req.audit={eventType:'Security',module:'Announcements',action:'Send announcement',targetType:'Announcement',targetReference:String(rows[0].id),reason:`Announcement to all users (${message.length} characters)`,changedFields:[]};
+    res.status(201).json({id:rows[0].id,createdAt:rows[0].createdAt});
+  }catch(error){next(error)}
+});
+
+app.patch('/api/announcements/:announcementId/withdraw',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const announcementId=Number(req.params.announcementId);
+    if(!Number.isSafeInteger(announcementId)||announcementId<1)return res.status(400).json({error:'Invalid announcement.'});
+    const result=await pool.query(`UPDATE announcements SET withdrawn_at=NOW(),withdrawn_by=$2
+      WHERE id=$1 AND withdrawn_at IS NULL RETURNING id`,[announcementId,String(req.session.name||req.session.login||'')]);
+    if(!result.rowCount)return res.status(404).json({error:'This announcement is already withdrawn.'});
+    req.audit={eventType:'Security',module:'Announcements',action:'Withdraw announcement',targetType:'Announcement',targetReference:String(announcementId),changedFields:[]};
     res.status(204).end();
   }catch(error){next(error)}
 });

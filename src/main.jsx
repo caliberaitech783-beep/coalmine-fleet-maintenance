@@ -5346,6 +5346,55 @@ function SessionMessageComposer({row,session,onClose,onSent}) {
   </Modal>;
 }
 
+function AnnouncementComposer({session,onClose,onSent}) {
+  const [message,setMessage]=useState("");
+  const [sending,setSending]=useState(false);
+  const [error,setError]=useState("");
+  const [history,setHistory]=useState([]);
+  const [withdrawingId,setWithdrawingId]=useState("");
+  const token=session?.token||authToken;
+  const loadHistory=async()=>{
+    try{
+      const response=await fetch('/api/announcements',{cache:'no-store',headers:{Authorization:`Bearer ${token}`}});
+      const result=await response.json().catch(()=>({}));
+      if(response.ok)setHistory(Array.isArray(result.announcements)?result.announcements:[]);
+    }catch(loadError){console.warn('Announcement history could not be loaded.',loadError);}
+  };
+  useEffect(()=>{void loadHistory();},[]);
+  const send=async(event)=>{
+    event.preventDefault();
+    const text=message.trim();
+    if(!text){setError('Write the announcement before sending.');return;}
+    setSending(true);setError("");
+    try{
+      const response=await fetch('/api/announcements',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},body:JSON.stringify({message:text})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'Could not send the announcement.');
+      onSent?.(result);
+    }catch(sendError){setError(sendError.message||'Could not send the announcement.');}
+    finally{setSending(false);}
+  };
+  const withdraw=async(row)=>{
+    if(!window.confirm('Withdraw this announcement? Users who have not closed it yet will stop seeing it.'))return;
+    setWithdrawingId(String(row.id));setError("");
+    try{
+      const response=await fetch(`/api/announcements/${encodeURIComponent(row.id)}/withdraw`,{method:'PATCH',headers:{Authorization:`Bearer ${token}`}});
+      if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||'Could not withdraw the announcement.');}
+      await loadHistory();
+    }catch(withdrawError){setError(withdrawError.message||'Could not withdraw the announcement.');}
+    finally{setWithdrawingId("");}
+  };
+  return <Modal title="Announce to all users" close={onClose}>
+    <form className="form announcement-compose" onSubmit={send}>
+      <div className="session-message-recipient"><span><Users /></span><div><small>Send to</small><b>All users</b><p>Every signed-in user sees this as a popup until they close it. Users who sign in later also see it, for 30 days.</p></div></div>
+      <label><span>Announcement</span><textarea autoFocus rows="5" maxLength="500" value={message} onChange={(event)=>{setMessage(event.target.value);setError("");}} placeholder="Write a short, clear announcement for everyone..." /></label>
+      <div className="session-message-compose-meta"><span>{message.length} / 500 characters</span>{error&&<b role="alert">{error}</b>}</div>
+      <footer><button type="button" onClick={onClose} disabled={sending}>Cancel</button><button type="submit" className="primary" disabled={sending||!message.trim()}><Send />{sending?'Sending...':'Send to all users'}</button></footer>
+    </form>
+    {history.length>0&&<section className="announcement-history"><h3>Recent announcements</h3><ul>{history.map((row)=><li key={row.id} className={row.withdrawnAt?'withdrawn':''}><p>{row.message}</p><small>{formatTwelveHourDateTime(row.createdAt)} · {row.senderName||row.senderLogin||'Administrator'} · closed by {Number(row.acknowledgedCount||0).toLocaleString('en-IN')} {Number(row.acknowledgedCount||0)===1?'user':'users'}{row.withdrawnAt?` · withdrawn ${formatTwelveHourDateTime(row.withdrawnAt)}`:''}</small>{!row.withdrawnAt&&<button type="button" onClick={()=>withdraw(row)} disabled={withdrawingId===String(row.id)}>{withdrawingId===String(row.id)?'Withdrawing...':'Withdraw'}</button>}</li>)}</ul></section>}
+  </Modal>;
+}
+
 function SessionMessageInbox({session}) {
   const [messages,setMessages]=useState([]);
   const [closingId,setClosingId]=useState("");
@@ -5356,10 +5405,20 @@ function SessionMessageInbox({session}) {
     let timer;
     const load=async()=>{
       try{
-        const response=await fetch('/api/session-messages',{cache:'no-store',signal:controller.signal,headers:{Authorization:`Bearer ${session.token}`}});
-        const result=await response.json().catch(()=>({}));
-        if(!response.ok)throw new Error(result.error||'Could not check session messages.');
-        if(!controller.signal.aborted)setMessages(Array.isArray(result.messages)?result.messages:[]);
+        const headers={Authorization:`Bearer ${session.token}`};
+        const [messageResponse,announcementResponse]=await Promise.all([
+          fetch('/api/session-messages',{cache:'no-store',signal:controller.signal,headers}),
+          fetch('/api/announcements/pending',{cache:'no-store',signal:controller.signal,headers}),
+        ]);
+        const messageResult=await messageResponse.json().catch(()=>({}));
+        const announcementResult=await announcementResponse.json().catch(()=>({}));
+        if(!messageResponse.ok)throw new Error(messageResult.error||'Could not check session messages.');
+        if(!announcementResponse.ok)throw new Error(announcementResult.error||'Could not check announcements.');
+        // Direct messages first (they name one person), then announcements for everyone.
+        if(!controller.signal.aborted)setMessages([
+          ...(Array.isArray(messageResult.messages)?messageResult.messages:[]).map((item)=>({...item,kind:'message'})),
+          ...(Array.isArray(announcementResult.announcements)?announcementResult.announcements:[]).map((item)=>({...item,kind:'announcement'})),
+        ]);
       }catch(loadError){if(loadError.name!=='AbortError')console.warn('Session message check failed.',loadError);}
       finally{if(!controller.signal.aborted)timer=window.setTimeout(load,3000);}
     };
@@ -5368,19 +5427,21 @@ function SessionMessageInbox({session}) {
   },[session?.token]);
   const current=messages[0];
   if(!current)return null;
+  const isAnnouncement=current.kind==='announcement';
   const dismiss=async()=>{
     setClosingId(String(current.id));setError("");
     try{
-      const response=await fetch(`/api/session-messages/${encodeURIComponent(current.id)}/dismiss`,{method:'PATCH',headers:{Authorization:`Bearer ${session.token}`}});
+      const endpoint=isAnnouncement?`/api/announcements/${encodeURIComponent(current.id)}/acknowledge`:`/api/session-messages/${encodeURIComponent(current.id)}/dismiss`;
+      const response=await fetch(endpoint,{method:'PATCH',headers:{Authorization:`Bearer ${session.token}`}});
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||'Could not close the message.');
-      setMessages((items)=>items.filter((item)=>String(item.id)!==String(current.id)));
+      setMessages((items)=>items.filter((item)=>!(item.kind===current.kind&&String(item.id)===String(current.id))));
     }catch(closeError){setError(closeError.message||'Could not close the message. Please try again.');}
     finally{setClosingId("");}
   };
   return createPortal(<div className="session-message-inbox-overlay">
-    <section className="session-message-inbox" role="alertdialog" aria-modal="true" aria-labelledby="session-message-title" aria-describedby="session-message-body">
-      <header><span><MessageCircle /></span><div><small>Direct message</small><h2 id="session-message-title">Message from {current.senderName||current.senderLogin||'Administrator'}</h2></div>{messages.length>1&&<b>{messages.length} messages</b>}</header>
+    <section className={`session-message-inbox${isAnnouncement?' announcement':''}`} role="alertdialog" aria-modal="true" aria-labelledby="session-message-title" aria-describedby="session-message-body">
+      <header><span><MessageCircle /></span><div><small>{isAnnouncement?'Announcement to all users':'Direct message'}</small><h2 id="session-message-title">{isAnnouncement?'Announcement':'Message'} from {current.senderName||current.senderLogin||'Administrator'}</h2></div>{messages.length>1&&<b>{messages.length} messages</b>}</header>
       <div className="session-message-inbox-body" id="session-message-body">{current.message&&<p>{current.message}</p>}{current.audioData&&<audio controls preload="metadata" src={current.audioData}>Voice message from the administrator</audio>}<small>Sent {formatTwelveHourDateTime(current.createdAt)}</small></div>
       {error&&<div className="session-message-inbox-error" role="alert"><AlertTriangle />{error}</div>}
       <footer><span>This message will remain open until you close it.</span><button type="button" onClick={dismiss} disabled={closingId===String(current.id)}><X />{closingId===String(current.id)?'Closing...':'Close message'}</button></footer>
@@ -5390,6 +5451,7 @@ function SessionMessageInbox({session}) {
 
 function UserSessionsPage({session}) {
   const [historyTarget,setHistoryTarget]=useState(null);
+  const [announcing,setAnnouncing]=useState(false);
   const [sessions,setSessions]=useState([]);
   const [summary,setSummary]=useState({active:0,online:0,users:0,devices:0});
   const [loading,setLoading]=useState(true);
@@ -5436,7 +5498,7 @@ function UserSessionsPage({session}) {
       && matchesSmartSearch(query,row.name,row.login,row.roleLabel,row.location,row.ipAddress,row.deviceId,device.type,device.platform,device.browser);
   });
   return <section className="panel pagepanel user-sessions-page">
-    <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See live users, send messages, request approved BDMS-tab assistance, and securely close sessions.</p></div><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button></header>
+    <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See live users, send messages, request approved BDMS-tab assistance, and securely close sessions.</p></div><div className="user-session-header-actions"><button type="button" className="primary" onClick={()=>setAnnouncing(true)}><MessageCircle /> Announce to all users</button><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button></div></header>
     <div className="user-session-summary" aria-label="Session summary">
       <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
       <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Closes after 15 minutes idle</p></div></article>
@@ -5450,6 +5512,7 @@ function UserSessionsPage({session}) {
     <footer className="user-session-note"><ShieldCheck /><span>Remote assistance starts only after user approval, stays inside the BDMS tab, and ends automatically after the selected duration. Sessions still close after 15 minutes without user activity.</span></footer>
     {historyTarget&&<UserLoginHistory token={session?.token||authToken} row={historyTarget} Modal={Modal} Table={ActionsTable} formatDate={formatTwelveHourDateTime} deviceDetails={auditDeviceDetails} onClose={()=>setHistoryTarget(null)} />}
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
+    {announcing&&<AnnouncementComposer session={session} onClose={()=>setAnnouncing(false)} onSent={()=>{setAnnouncing(false);setMessageNotice('Announcement sent to all users. Each user will see it until they close it.');}} />}
   </section>;
 }
 function reportCategoryIdsForUser(permissions = {}, session = {}) {
