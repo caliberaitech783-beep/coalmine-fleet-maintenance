@@ -43,3 +43,29 @@
 button.session-state { border: 0; cursor: pointer; font: inherit; }
 button.session-state:focus-visible { outline: 2px solid #7043ad; outline-offset: 3px; }
 @media(max-width:700px) { .login-activity-panel { padding: 12px; } .login-activity-controls label { width: 100%; } }
+.modal.login-history-modal { width: min(1600px, calc(100vw - 40px)); max-width: calc(100vw - 40px); height: 90dvh; max-height: calc(100dvh - 32px); border-radius: 16px; resize: none; }
+.modal.login-history-modal > header { position: sticky; top: 0; z-index: 5; padding: 22px 28px; background: var(--surface, #fff); border-bottom: 1px solid var(--line, #e5e9f1); gap: 20px; }
+.modal.login-history-modal > header h3 { flex: 1; min-width: 0; margin: 0; }
+.login-history-modal .login-history-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px 28px; }
+.login-history-eyebrow { display: block; font-size: 13px; font-weight: 600; color: var(--muted, #71809d); margin-bottom: 6px; }
+.login-history-name { display: block; font-size: 24px; font-weight: 800; }
+.login-history-modal .login-history-total { display: grid; gap: 4px; padding: 12px 20px; border: 1px solid #7043ad40; border-radius: 12px; background: color-mix(in srgb, #7043ad 8%, var(--surface, #fff)); font-size: 13px; }
+.login-history-modal .login-history-total strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+.login-history-content { padding: 18px 28px 24px; }
+.login-history-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.login-history-controls p { margin: 4px 0 0; color: var(--muted, #71809d); }
+.login-history-help { margin-top: 12px; font-size: 13px; color: var(--muted, #71809d); }
+.login-history-help summary { cursor: pointer; }
+.login-history-modal .login-history-table { border: 1px solid var(--line, #e5e9f1); border-radius: 10px; }
+.login-history-modal .login-history-table table { width: 100%; min-width: 980px; }
+.login-history-modal .login-history-table :is(th, td) { padding: 14px 16px; }
+.login-history-modal .login-history-table td:nth-last-child(-n+2) { overflow-wrap: anywhere; white-space: normal; }
+.login-history-content > p:last-child { font-size: 12px; color: var(--muted, #71809d); margin-bottom: 0; }
+@media(max-width:700px) {
+  .modal.login-history-modal { width: calc(100vw - 16px); max-width: calc(100vw - 16px); height: 94dvh; min-width: 0; }
+  .modal.login-history-modal > header { padding: 16px; align-items: flex-start; }
+  .login-history-content { padding: 14px; }
+  .login-history-name { font-size: 20px; }
+  .login-history-modal .login-history-total { padding: 10px 12px; }
+  .login-history-modal .login-history-total strong { font-size: 24px; }
+}
