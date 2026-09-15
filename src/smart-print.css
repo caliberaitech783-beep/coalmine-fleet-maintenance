@@ -11,6 +11,7 @@
 .smart-print-dialog button,.smart-print-dialog select { padding: 10px 14px; min-height: 42px; border: 1px solid #d7dfeb; border-radius: 7px; background: var(--surface,#fff); color: inherit; cursor: pointer; }
 .smart-print-dialog button.primary { background: #522e90; color: #fff; }
 .smart-print-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.smart-print-dialog :is(button,select,input):focus-visible { outline: 3px solid #8060be; outline-offset: 3px; }
 .smart-print-columns { display: grid; grid-template-columns: repeat(auto-fit,minmax(210px,1fr)); gap: 10px; margin: 16px 0; }
 .smart-print-columns label { display: flex; align-items: center; gap: 9px; padding: 12px; border: 1px solid #d7dfeb; border-radius: 7px; cursor: pointer; }
 .smart-print-columns input { width: 18px; height: 18px; accent-color: #522e90; }

@@ -14,7 +14,7 @@ test("all dashboard families expose Print, PDF, and Excel for their scoped KPI d
   assert.equal((source.match(/label="Export KPIs"/g) || []).length, 2);
   assert.match(source, /Download as PDF/);
   assert.match(source, /Download as Excel/);
-  assert.match(source, /<Printer \/> Print/);
+  assert.match(source, /<Printer \/> Smart Print/);
   assert.match(styles, /\.mine-head-actions \.dashboard-export-trigger/);
 });
 
