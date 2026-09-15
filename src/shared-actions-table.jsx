@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import RecordDateRange from "./record-date-range.jsx";
@@ -9,7 +9,7 @@ import "./sortable-table.css";
 
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
 
-export default function SharedActionsTable({ closedTimeAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, showRowNumbers = true, ...tableProps }) {
+export default function SharedActionsTable({ closedTimeAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -21,14 +21,16 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, chi
     }
   }
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
 }
 
-function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, tableProps }) {
+function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }) {
   const [visible, setVisible] = useState(columns.map((column) => column.key));
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "", direction: "asc" });
   const [dialog, setDialog] = useState("");
+  // "save" | "saved" while a saved-report dialog is open (see SavedReports).
+  const [savedReportDialog, setSavedReportDialog] = useState("");
   // Which plain column heading currently shows its sort-and-filter popover.
   const [openFilter, setOpenFilter] = useState(null);
   useEffect(() => {
@@ -95,6 +97,27 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
   const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
   const dateRangeControl = dateControl && <RecordDateRange {...dateControl} />;
+  // Saved reports: named views of this table (visible columns, filters, sort, date range).
+  // The SavedReports panel owns storage and dialogs; this table only exposes its view.
+  const reportTitle = printTitle || exportTitle || "";
+  const canPrintReport = Boolean(printReport && smartPrintData);
+  const printModelRef = useRef(null);
+  printModelRef.current = { title: reportTitle, columns: smartPrintData?.columns || [], rows: smartPrintData?.rows || [] };
+  const printCurrentView = () => { if (canPrintReport) printReport(printModelRef.current); };
+  const currentView = () => ({ visible, filters: effectiveFilters, sort: sort.key ? sort : externalSort || sort, dateRange: dateControl?.value || "" });
+  const applySavedView = (view) => {
+    setVisible(view.visible.length ? view.visible : columns.map((column) => column.key));
+    const localOnly = {};
+    columns.forEach((column) => {
+      if (column.key === disabledDateKey) return;
+      const value = view.filters[column.key] || "";
+      if (column.header.props.onFilterChange) column.header.props.onFilterChange(value);
+      else if (value) localOnly[column.key] = value;
+    });
+    setFilters(localOnly);
+    applySort(view.sort.key, view.sort.direction);
+    if (recordDateFilter !== false && dateControl) dateControl.onChange(view.dateRange || "");
+  };
   // Plain <th> headings become sort-and-filter headers (or sort buttons when no FilterableHeader is supplied);
   // headers that bring their own sorting (onSort) are left untouched.
   const sortableHeaderRow = (row) => {
@@ -124,11 +147,12 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
       <span className="shared-table-record-count" role="status">{[...bodySelections.values()].flat().filter(isDataRow).length} of {dataRows.length} records</span>
       {printData && dateRangeControl}
       {printData && <ExportMenu printOnly title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
-      <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} />
+      <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} onSaveReport={SavedReports ? () => setSavedReportDialog("save") : undefined} onSavedReports={SavedReports ? () => setSavedReportDialog("saved") : undefined} />
       {!printData && dateRangeControl}
       {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
       {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
       {dialog === "sort" && <SortDialog columns={columns} sort={sort.key ? sort : externalSort || sort} onApply={applySort} onClose={() => setDialog("")} />}
+      {SavedReports && <SavedReports title={reportTitle} tableKey={tableProps.className || ""} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentView} onApply={applySavedView} canPrint={canPrintReport} onPrint={printCurrentView} />}
       <FilterDialog columns={filterColumns} rows={[...dataRows, ...filterRows]} filters={effectiveFilters} onFilterChange={updateFilter} onClearFilters={clearFilters} open={dialog === "filter"} onOpenChange={(open) => setDialog(open ? "filter" : "")} hideTrigger dialogMode />
     </div>
   );

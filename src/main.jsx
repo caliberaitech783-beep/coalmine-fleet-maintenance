@@ -1,5 +1,6 @@
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint } from "./smart-print.mjs";
+import { SavedReportsPanel } from "./saved-reports.jsx";
 import "./smart-print.css";
 import HourlyBreakdownView from "./hourly-breakdown-view.jsx";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
@@ -158,6 +159,7 @@ import {
   RefreshCw,
   ListFilter,
   Printer,
+  FolderOpen,
   Columns3,
   RotateCcw,
   Monitor,
@@ -2957,15 +2959,18 @@ function ReportSortDialog({ columns = [], sort = {}, onApply, onClose }) {
     document.body,
   );
 }
-function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort, onClearSort, onReset, resetLabel = "Reset report" }) {
+function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort, onClearSort, onReset, resetLabel = "Reset report", onSaveReport, onSavedReports }) {
   const [open, setOpen] = useState(false);
   const [dataOpen, setDataOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const reportTriggerRef = useRef(null);
   const [submenuSide, setSubmenuSide] = useState("right");
   const triggerRef = useRef(null), popoverRef = useRef(null), dataTriggerRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const close = ({restoreFocus = false} = {}) => {
     setOpen(false);
     setDataOpen(false);
+    setReportOpen(false);
     if (restoreFocus) triggerRef.current?.focus();
   };
   useEffect(() => {
@@ -3009,13 +3014,16 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
     }
     if (event.key === "ArrowLeft" && event.target.closest?.(".report-actions-submenu")) {
       event.preventDefault();
+      const parent = reportOpen ? reportTriggerRef : dataTriggerRef;
       setDataOpen(false);
-      dataTriggerRef.current?.focus();
+      setReportOpen(false);
+      parent.current?.focus();
       return;
     }
-    if (event.key === "ArrowRight" && event.target === dataTriggerRef.current) {
+    if (event.key === "ArrowRight" && (event.target === dataTriggerRef.current || event.target === reportTriggerRef.current)) {
       event.preventDefault();
-      setDataOpen(true);
+      if (event.target === dataTriggerRef.current) { setDataOpen(true); setReportOpen(false); }
+      else { setReportOpen(true); setDataOpen(false); }
       window.requestAnimationFrame(() => popoverRef.current?.querySelector('.report-actions-submenu [role="menuitem"]')?.focus());
       return;
     }
@@ -3030,25 +3038,32 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
     event.preventDefault();
     items[nextIndex]?.focus();
   };
-  const run = (callback) => { setOpen(false); setDataOpen(false); callback(); };
+  const run = (callback) => { setOpen(false); setDataOpen(false); setReportOpen(false); callback(); };
   return <div className="report-actions-menu">
     <button ref={triggerRef} type="button" className="report-actions-trigger" onClick={() => { if (open) close(); else setOpen(true); }} aria-expanded={open} aria-haspopup="menu"><span>Actions</span><ChevronDown /></button>
     {open && createPortal(<div ref={popoverRef} className="report-actions-popover" style={position} role="menu" aria-label="Report actions" onKeyDown={handleMenuKeyDown}>
       <button type="button" role="menuitem" onClick={() => run(onColumns)}><Columns3 /><span>Columns</span></button>
       <button type="button" role="menuitem" onClick={() => run(onFilter)}><ListFilter /><span>Filter</span>{activeFilterCount > 0 && <b>{activeFilterCount}</b>}</button>
       <div className="report-actions-divider" />
-      <button ref={dataTriggerRef} type="button" role="menuitem" aria-haspopup="menu" aria-expanded={dataOpen} onClick={() => setDataOpen((current) => !current)}><ArrowUpDown /><span>Data</span><ChevronRight /></button>
+      <button ref={dataTriggerRef} type="button" role="menuitem" aria-haspopup="menu" aria-expanded={dataOpen} onClick={() => { setDataOpen((current) => !current); setReportOpen(false); }}><ArrowUpDown /><span>Data</span><ChevronRight /></button>
       {dataOpen && <div className={`report-actions-submenu open-${submenuSide}`} role="menu" aria-label="Report data actions"><button type="button" role="menuitem" onClick={() => run(onSort)}><ArrowUpDown /><span>Sort</span></button><button type="button" role="menuitem" onClick={() => run(onClearSort)}><X /><span>Clear sort</span></button></div>}
+      {onSaveReport && <>
+        <div className="report-actions-divider" />
+        <button ref={reportTriggerRef} type="button" role="menuitem" aria-haspopup="menu" aria-expanded={reportOpen} onClick={() => { setReportOpen((current) => !current); setDataOpen(false); }}><Save /><span>Report</span><ChevronRight /></button>
+        {reportOpen && <div className={`report-actions-submenu open-${submenuSide}`} role="menu" aria-label="Saved report actions"><button type="button" role="menuitem" onClick={() => run(onSaveReport)}><Save /><span>Save report…</span></button><button type="button" role="menuitem" onClick={() => run(onSavedReports)}><FolderOpen /><span>Saved reports</span></button></div>}
+      </>}
       <div className="report-actions-divider" />
       <button type="button" role="menuitem" onClick={() => run(onReset)}><RotateCcw /><span>{resetLabel}</span></button>
     </div>, document.body)}
   </div>;
 }
+const printSavedReport = ({ title, columns, rows }) => openSmartPrint({ title, columns, rows, onPrint: printTableReport, formatCell: exportCellText });
 function ActionsTable(props) {
-  return <SharedActionsTable {...props} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
+  return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
-function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false }) {
+function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "" }) {
   const [columnFilters, setColumnFilters] = useState({});
+  const [savedReportDialog, setSavedReportDialog] = useState("");
   const [openFilter, setOpenFilter] = useState(null);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
@@ -3099,10 +3114,22 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
     document.addEventListener("pointerdown", closeFilter);
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
+  // Saved reports for this Reports-page table: columns, filters, sort and rows per page.
+  const reportTitle = title || (typeof document !== "undefined" ? document.title : "") || "Report";
+  const currentSavedView = () => ({ visible: displayedColumns.map((column) => column.key), filters: columnFilters, sort, pageSize });
+  const applySavedView = (view) => {
+    onVisibleColumnsChange?.(view.visible.length ? view.visible : columns.map((column) => column.key));
+    setColumnFilters(view.filters);
+    changeSort(view.sort.key, view.sort.direction);
+    if (view.pageSize) setPageSize(view.pageSize);
+    setPage(0);
+  };
+  const printSavedView = () => openSmartPrint({ title: reportTitle, columns: displayedColumns, rows: sortedRows, onPrint: printTableReport, formatCell: exportCellText });
   const reportTableToolbar = (
       <div className="report-table-filter-toolbar">
         <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
-        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); changeSort("", "asc"); setPageSize(50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} />
+        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); changeSort("", "asc"); setPageSize(50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
+        <SavedReportsPanel title={reportTitle} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentSavedView} onApply={applySavedView} canPrint onPrint={printSavedView} />
         {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
       </div>
   );

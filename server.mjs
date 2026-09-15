@@ -31,6 +31,7 @@ import {applyLatestTransfer,equipmentMatchKeys,isAllowedOracleEquipment,latestTr
 import {sendTicketRaisedEmail} from './ticket-email.mjs';
 import {MAX_TRANSLATION_CHARS,normalizeLanguage,translationCacheKey,translatorFromEnvironment} from './text-translation.mjs';
 import {ANNOUNCEMENT_ACTIVE_DAYS,announcementReaderKey,announcementValidationError,normalizeAnnouncement} from './announcement.mjs';
+import {normalizeSavedReportName,savedReportUserKey,savedReportValidationError,serializeTableView} from './src/saved-reports.mjs';
 import {sendDirectorReportEmail} from './director-report-email.mjs';
 import {auditLogExportDue,auditLogExportSlot,sendAuditLogExportEmail} from './audit-log-export.mjs';
 import {buildUserActivitySummary,totalUserWorkedMinutes} from './user-activity-report.mjs';
@@ -555,6 +556,16 @@ async function migrate(){
       PRIMARY KEY (announcement_id, reader_key)
     );
     CREATE INDEX IF NOT EXISTS announcements_active_idx ON announcements (withdrawn_at, created_at DESC);
+    CREATE TABLE IF NOT EXISTS saved_table_reports (
+      id BIGSERIAL PRIMARY KEY,
+      user_key TEXT NOT NULL,
+      report_key TEXT NOT NULL,
+      name TEXT NOT NULL,
+      state JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (user_key, report_key, name)
+    );
     CREATE TABLE IF NOT EXISTS remote_assistance_sessions (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       target_session_public_id TEXT NOT NULL,
@@ -1756,6 +1767,46 @@ app.patch('/api/announcements/:announcementId/withdraw',requireSuper,requireAdmi
       WHERE id=$1 AND withdrawn_at IS NULL RETURNING id`,[announcementId,String(req.session.name||req.session.login||'')]);
     if(!result.rowCount)return res.status(404).json({error:'This announcement is already withdrawn.'});
     req.audit={eventType:'Security',module:'Announcements',action:'Withdraw announcement',targetType:'Announcement',targetReference:String(announcementId),changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+
+// Saved table reports: a user's named views (columns, filters, sort, date range)
+// of any Actions table, kept per user so they follow the user to every device.
+app.get('/api/saved-reports',requireSession,async(req,res,next)=>{
+  try{
+    const key=String(req.query.key||'').trim().slice(0,400);
+    if(!key)return res.status(400).json({error:'A table key is required.'});
+    const {rows}=await pool.query(`SELECT id,name,state,created_at AS "createdAt",updated_at AS "updatedAt"
+      FROM saved_table_reports WHERE user_key=$1 AND report_key=$2 ORDER BY lower(name) ASC`,[savedReportUserKey(req.session),key]);
+    req.audit=false;
+    res.set('Cache-Control','no-store');
+    res.json({reports:rows});
+  }catch(error){next(error)}
+});
+
+app.post('/api/saved-reports',requireSession,async(req,res,next)=>{
+  try{
+    const key=String(req.body?.key||'').trim().slice(0,400);
+    const name=normalizeSavedReportName(req.body?.name);
+    const state=serializeTableView(req.body?.state||{});
+    const validationError=savedReportValidationError({name,key,state});
+    if(validationError)return res.status(400).json({error:validationError});
+    const {rows}=await pool.query(`INSERT INTO saved_table_reports (user_key,report_key,name,state) VALUES ($1,$2,$3,$4::jsonb)
+      ON CONFLICT (user_key,report_key,name) DO UPDATE SET state=EXCLUDED.state,updated_at=NOW()
+      RETURNING id,name,(xmax=0) AS created`,[savedReportUserKey(req.session),key,name,JSON.stringify(state)]);
+    req.audit={eventType:'Data',module:'Reports',action:rows[0].created?'Save table report':'Replace table report',targetType:'Saved report',targetReference:name,changedFields:[]};
+    res.status(rows[0].created?201:200).json({id:rows[0].id,name:rows[0].name,replaced:!rows[0].created});
+  }catch(error){next(error)}
+});
+
+app.delete('/api/saved-reports/:reportId',requireSession,async(req,res,next)=>{
+  try{
+    const reportId=Number(req.params.reportId);
+    if(!Number.isSafeInteger(reportId)||reportId<1)return res.status(400).json({error:'Invalid saved report.'});
+    const result=await pool.query('DELETE FROM saved_table_reports WHERE id=$1 AND user_key=$2 RETURNING name',[reportId,savedReportUserKey(req.session)]);
+    if(!result.rowCount)return res.status(404).json({error:'This saved report no longer exists.'});
+    req.audit={eventType:'Data',module:'Reports',action:'Delete table report',targetType:'Saved report',targetReference:result.rows[0].name,changedFields:[]};
     res.status(204).end();
   }catch(error){next(error)}
 });
