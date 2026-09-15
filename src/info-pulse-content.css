@@ -111,6 +111,12 @@
 .pulse-meta { font-size: 12px; margin-bottom: 16px; }
 .pulse-meta { position: relative; align-items: center; }
 .pulse-meta-context { display: inline-flex; align-items: center; gap: 6px; }
+.pulse-content .pulse-toolbar .pulse-meta { margin: 0; align-self: center; }
+.pulse-refresh-group { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.pulse-updated { font-size: 12px; color: #536179; }
+.pulse-content .pulse-issue-filter .pulse-results-line { margin: 0 0 0 auto; padding-left: 10px; flex-shrink: 0; gap: 16px; white-space: nowrap; }
+.pulse-toolbar { margin-bottom: 8px; }
+.pulse-content .pulse-toolbar .pulse-help-trigger { min-height: 0; min-width: 0; padding: 0; border: 0; background: transparent; }
 .pulse-count-help { display: inline-flex; }
 .pulse-help-trigger { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; color: #76518f; background: transparent; cursor: help; }
 .pulse-help-trigger:hover, .pulse-help-trigger:focus-visible { color: #522e90; background: #ede7f6; }

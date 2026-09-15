@@ -80,8 +80,6 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
       <label>Request date from<input type="date" value={filters.from} max={filters.to || undefined} onChange={event => changeFilter('from', event.target.value)} /></label>
       <label>Request date to<input type="date" value={filters.to} min={filters.from || undefined} onChange={event => changeFilter('to', event.target.value)} /></label>
       {Object.values(filters).some(Boolean) && <button type="button" className="pulse-reset" onClick={() => {setFilters(EMPTY_FILTERS); setExpanded(''); setPage(0);}}>Reset</button>}
-      <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
-    </div>
     <div className="pulse-meta"><div className="pulse-meta-context"><span>{!filters.from && !filters.to ? 'All request dates' : `${filters.from ? formatDisplayDate(filters.from) : 'Earliest'} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`}</span>
       <div className="pulse-count-help" onMouseEnter={showCountHelp} onMouseLeave={event => {if (!event.currentTarget.contains(event.currentTarget.ownerDocument.activeElement)) setCountHelp(null);}} onFocus={showCountHelp} onBlur={event => {if (!event.currentTarget.contains(event.relatedTarget)) setCountHelp(null);}} onKeyDown={event => {if (event.key === 'Escape') {event.stopPropagation(); setCountHelp(null);}}}>
         <button type="button" className="pulse-help-trigger" aria-label="What these counts mean" aria-describedby={countHelp ? 'pulse-count-explanation' : undefined} onClick={showCountHelp}><Info size={15} aria-hidden="true" /></button>
@@ -96,7 +94,10 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
           <p>Each row shows the site, equipment, status, alerts, standing time and ETC. Expand a row for the complaint, recorded reasons, daily updates and full details. <b>{PAGE_SIZE} cases per page · IST · Refreshes every 30 seconds.</b></p>
         </div>}
       </div>
-    </div><span>{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span></div>
+    </div></div>
+    <div className="pulse-refresh-group"><span className="pulse-updated">{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Dates and times in IST'}</span>
+      <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+    </div></div>
     {error && <div className="pulse-message pulse-error" role="alert">{ready ? 'Refresh failed. Showing the last loaded counts.' : 'Could not load site counts.'} <button type="button" disabled={refreshing} onClick={onRefresh}>Retry</button></div>}
     {!ready ? <p className="pulse-message" role="status">{error ? 'Counts unavailable.' : 'Loading site counts…'}</p> : summary.invalidRange ? <p className="pulse-message pulse-error" role="alert">From date must be on or before To date.</p> : <>
       {(() => { const total = (
@@ -112,8 +113,8 @@ export default function InfoPulseContent({cases = [], requests = [], scope, role
           const count = column.key ? issueSummary.totals.counts[column.key] : issueSummary.totals.total;
           return <button type="button" key={column.key} className={`pulse-issue-option ${column.tone}`} aria-pressed={!breakdownsView && filters.type === column.key} aria-label={`Filter issue: ${column.label}`} disabled={Boolean(column.key) && !count && filters.type !== column.key} onClick={() => changeFilter('type', column.key)}><span>{column.label}</span><b>{count}</b></button>;
         })}
-      </div>
       <div className="pulse-results-line"><h3>{selectedSite} <span>/ {breakdownsView ? 'All breakdowns' : [severityLabels[filters.severity], labels[filters.type]].filter(Boolean).join(' · ') || 'All cases'}</span></h3><span role="status">{detail.rows.length} {breakdownsView ? 'breakdowns' : 'cases'}</span></div>
+      </div>
         <div key={`cases:${filters.view}:${filters.site}:${filters.from}:${filters.to}:${filters.type}:${filters.severity}:${currentPage}`} className="pulse-case-list" tabIndex={0} role="region" aria-label="Matching case records">
           {rows.length ? rows.map(row => {
               const request = row.request;
