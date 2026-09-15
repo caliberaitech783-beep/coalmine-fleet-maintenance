@@ -7918,7 +7918,7 @@ function MobileWorkflowTable({ rows = [], showActions = false, actionsFirst = tr
               <td>{row.door || "—"}</td>
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
-              {onDelayedReason && <td><button type="button" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button></td>}
+              {onDelayedReason && <td><button type="button" className="delayed-reason-compact" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button></td>}
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
               <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
