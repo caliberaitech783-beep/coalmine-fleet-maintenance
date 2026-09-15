@@ -80,7 +80,9 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
   const ordered = jobReferenceColumnsLast(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b)), false));
   if (!actionsFirst) return ordered;
   const isActions = (column) => column.label.trim().toLowerCase() === "actions";
-  return [...ordered.filter(isActions), ...ordered.filter((column) => !isActions(column))];
+  const isDelayedReason = (column) => column.label.trim().toLowerCase() === "delayed reason";
+  if (!ordered.some(isActions)) return ordered;
+  return [...ordered.filter(isActions), ...ordered.filter(isDelayedReason), ...ordered.filter((column) => !isActions(column) && !isDelayedReason(column))];
 }
 
 export function jobReferenceColumnsLast(columns) {
