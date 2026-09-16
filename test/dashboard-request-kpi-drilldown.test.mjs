@@ -40,7 +40,7 @@ test("repair and event chart context stays applied before the list filters", () 
 });
 
 test("the time breakdown opens from the Days of breakdown value in every list, and job references stay plain", () => {
-  assert.match(source, /RequestTimelineButton=\{RequestTimelineButton\} timelineToken=\{authToken\} Dialog=\{Modal\} \/>/);
+  assert.match(source, /RequestTimelineButton=\{RequestTimelineButton\} timelineToken=\{authToken\} Dialog=\{Modal\} Remarks=\{MaintenanceRemarks\} \/>/);
   assert.match(browser, /\{requestRecords && <td><b>\{record\.requestReference\}<\/b><\/td>\}<td data-sort-value=\{requestStatusSortRank\(record\.requestStatus\)\}>/);
   assert.match(source, /const assetDrilldownRows = requestDrilldownKey\(assetDrilldown\) \? rowsForAssetDrilldown\(assetDrilldown\) : fleetAssetRequestDetails\(rowsForAssetDrilldown\(assetDrilldown\), fleetDrilldownRequests\(assetDrilldown\)\)/);
   assert.match(source, /const requestDrilldownKey = \(key = ""\) => key === "open-cases" \|\| \["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"\]/);
@@ -63,4 +63,16 @@ test("status columns sort in lifecycle order and duration columns sort by elapse
   assert.match(source, /key === "breakdownDays" \? calculateBreakdownMinutes\(row\.start, row\.closedAt, now\)/);
   assert.match(source, /key === "acceptedTime" \? \(elapsedMilliseconds\(row\.start, row\.acceptedAt\) \?\? -1\)/);
   assert.match(source, /sortValue: \(request\) => requestStatusSortRank\(reportRequestStatus\(request\)\)/);
+});
+
+test("dashboard drilldowns show the request's daily updates inline", () => {
+  assert.match(browser, /Remarks = null \}\) \{/);
+  assert.match(browser, /const showUpdatesColumn = Boolean\(Remarks\) && \(requestRecords \|\| bdBalanceColumns\);/);
+  assert.match(browser, /\{showUpdatesColumn && bdBalanceColumns && <th>Daily updates<\/th>\}<th>Equipment group<\/th>/);
+  assert.match(browser, /\{showUpdatesColumn && !bdBalanceColumns && <th>Daily updates<\/th>\}\{showClosedColumn && <th>Closed<\/th>\}/);
+  assert.equal((browser.match(/<td><Remarks remarks=\{record\.dailyRemarks\} \/><\/td>/g) || []).length, 2);
+  assert.match(source, /dailyRemarks: Array\.isArray\(request\.dailyRemarks\) \? request\.dailyRemarks : \[\],/);
+  assert.ok((source.match(/<DashboardRecordBrowser [^\n]*?Remarks=\{MaintenanceRemarks\} \/>/g) || []).length >= 2, "both drilldown hosts pass the updates cell");
+  const metrics = fs.readFileSync(new URL("../dashboard-equipment-metrics.mjs", import.meta.url), "utf8");
+  assert.match(metrics, /dailyRemarks: Array\.isArray\(current\?\.dailyRemarks\) \? current\.dailyRemarks : \[\],/);
 });

@@ -62,7 +62,7 @@ function managerHarness(equipment, equipmentState = {}) {
     equipmentGroupLabel: (row) => row.group || row.category || "Unspecified",
     useDashboardEquipment: () => ({ records: equipment, loaded: true, scope: { restrictToScope: true, allowedSites: ["Sasti OB"] }, ...equipmentState }),
     preventTableAutoScroll: () => {}, BreakdownTable, MobileWorkflowTable, DashboardRecordBrowser, Modal, RequestDataState, FleetDataState, ManagerIdleConfirmation, ConnectionRecoveryNotice: DashboardConnectionNotice,
-    ActionsTable: Null, Status: Null, RequestTimelineButton: Null, REGION_DATA: [], formatTwelveHourDateTime: (value) => value, authToken: "fixture-token",
+    ActionsTable: Null, Status: Null, RequestTimelineButton: Null, MaintenanceRemarks: Null, REGION_DATA: [], formatTwelveHourDateTime: (value) => value, authToken: "fixture-token",
     ShieldCheck: Null, ChevronRight: Null,
   };
   const component = new Function(...Object.keys(scope), `${managerCode}; return ManagerDashboard;`)(...Object.values(scope));

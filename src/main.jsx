@@ -1252,7 +1252,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     </button>)}</div>
     {managerDataReady&&managerDrilldownCard&&<Modal className="dashboard-asset-modal manager-kpi-modal" overlayClassName="dashboard-asset-overlay" title={`${managerDrilldownCard[0]} · ${managerDrilldownAction.kind==="fleet"?managerFleetDrilldownRows.length:managerRequestDrilldownRows.length} records`} close={()=>setManagerDrilldown("")}>
       {managerDrilldownAction.kind==="fleet"
-        ? <DashboardRecordBrowser key={managerDrilldown} rows={managerFleetDrilldownRows} regions={REGION_DATA} rowsAreScoped title={`${title} · ${managerDrilldownCard[0]}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} />
+        ? <DashboardRecordBrowser key={managerDrilldown} rows={managerFleetDrilldownRows} regions={REGION_DATA} rowsAreScoped title={`${title} · ${managerDrilldownCard[0]}`} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} Remarks={MaintenanceRemarks} />
         : activeManagerRole==="MIS Manager"
           ? <MobileWorkflowTable rows={managerRequestDrilldownRows} exportTitle={`${title} · ${managerDrilldownCard[0]}`} showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance Closing Time" showVerifiedBy showVerifiedAt showTripCard showMeterData showTurnaroundTime startedFirst />
           : <BreakdownTable rows={managerRequestDrilldownRows} exportTitle={`${title} · ${managerDrilldownCard[0]}`} showMakeModel showReason showClosedBy showBreakdownDays={managerDrilldownAction.key!=="maintenance-completed"} />}
@@ -1626,6 +1626,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       repairCategory: request.category || "—",
       delayedReason: request.delayedReason || "—",
       breakdownReason: request.complaint || "—",
+      dailyRemarks: Array.isArray(request.dailyRemarks) ? request.dailyRemarks : [],
       requestStart: request.start || "—",
       requestClosed: request.closedAt || request.completedAt || "—",
       requestVerified: request.verifiedAt || "—",
@@ -2005,7 +2006,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
-        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={assetDrilldown === "fleet-breakdown:all" ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} />
+        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={assetDrilldown === "fleet-breakdown:all" ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks} />
       </Modal>}
       {!showOemBreakdowns && <section className="mine-dashboard-lower-grid">
       <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">

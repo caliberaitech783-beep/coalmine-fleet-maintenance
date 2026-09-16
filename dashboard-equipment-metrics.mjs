@@ -236,6 +236,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       kmr: current ? openingReadings.KMR || undefined : record.kmr,
       repairCategory: current?.category || "—",
       breakdownReason: current?.complaint || "—",
+      dailyRemarks: Array.isArray(current?.dailyRemarks) ? current.dailyRemarks : [],
     };
   });
 }
