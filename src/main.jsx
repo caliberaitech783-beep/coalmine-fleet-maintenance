@@ -1544,6 +1544,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   }));
   const requestLifecycleRegion = requestLifecycleRegions.find((region) => region.code === requestTrendRegion);
   const requestLifecycleSite = requestLifecycleRegions.flatMap((region) => region.sites).find((site) => `site:${site}` === requestTrendRegion);
+  // Maintenance count and drilldown share these rows; idle cases have their own card.
   const requestLifecycleRows = {
     production: locationBreakdowns.filter((record) => ["production user", "maintenance user"].includes(String(record.requesterRole || "").trim().toLowerCase()) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
     opened: locationBreakdowns.filter((record) => !["closed", "idle", "ideal"].includes(String(record.status || "").trim().toLowerCase()) && requestEventDate(record, "opened") >= safeTrendStartKey && requestEventDate(record, "opened") <= requestTrendEndKey),
