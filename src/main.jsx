@@ -5659,6 +5659,26 @@ function UserSessionsPage({session}) {
   const [messageTarget,setMessageTarget]=useState(null);
   const [messageNotice,setMessageNotice]=useState("");
   const [actionsToolbarTarget,setActionsToolbarTarget]=useState(null);
+  const [activityPurgeOpen,setActivityPurgeOpen]=useState(false),[activityPurgeDays,setActivityPurgeDays]=useState("2"),[activityPurging,setActivityPurging]=useState(false);
+  const activityPurgeDayCount=Number(activityPurgeDays);
+  const activityPurgeCutoff=Number.isInteger(activityPurgeDayCount)&&activityPurgeDayCount>=1?new Date(Date.now()-activityPurgeDayCount*86400000):null;
+  // Permanently deletes login history and session activity older than the chosen days; the server audits the deletion.
+  const deleteOldActivity=async(event)=>{
+    event.preventDefault();
+    if(!activityPurgeCutoff)return alert("Enter a whole number of days (1 or more).");
+    const dayLabel=`${activityPurgeDayCount} day${activityPurgeDayCount===1?"":"s"}`;
+    if(!window.confirm(`Permanently delete every user activity record older than ${dayLabel} (last active before ${formatTwelveHourDateTime(activityPurgeCutoff)})? This cannot be undone.`))return;
+    setActivityPurging(true);
+    try{
+      const response=await fetch(`/api/user-login-history?olderThanDays=${activityPurgeDayCount}`,{method:"DELETE",cache:"no-store",headers:{Authorization:`Bearer ${session?.token||authToken}`}});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||"Could not delete the old user activity.");
+      setActivityPurgeOpen(false);
+      setMessageNotice(`${Number(result.deleted||0).toLocaleString("en-IN")} user activity record${Number(result.deleted)===1?"":"s"} older than ${dayLabel} deleted.`);
+      load({quiet:true});
+    }catch(error){alert(error.message);}
+    finally{setActivityPurging(false);}
+  };
   const load=async({quiet=false}={})=>{
     if(!quiet)setLoading(true);
     try{
@@ -5695,7 +5715,7 @@ function UserSessionsPage({session}) {
       && matchesSmartSearch(query,row.name,row.login,row.roleLabel,row.location,row.ipAddress,row.deviceId,device.type,device.platform,device.browser);
   });
   return <section className="panel pagepanel user-sessions-page">
-    <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See live users, send messages, request approved BDMS-tab assistance, and securely close sessions.</p></div><div className="user-session-header-actions"><button type="button" className="primary" onClick={()=>setAnnouncing(true)}><MessageCircle /> Announce to all users</button><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button></div></header>
+    <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See live users, send messages, request approved BDMS-tab assistance, and securely close sessions.</p></div><div className="user-session-header-actions"><button type="button" className="primary" onClick={()=>setAnnouncing(true)}><MessageCircle /> Announce to all users</button><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button><button type="button" className="secondary danger" onClick={()=>setActivityPurgeOpen(true)} disabled={loading||activityPurging}><Trash2 /> Delete old activity</button></div></header>
     <div className="user-session-summary" aria-label="Session summary">
       <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
       <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Closes after 15 minutes idle</p></div></article>
@@ -5710,6 +5730,16 @@ function UserSessionsPage({session}) {
     {historyTarget&&<UserLoginHistory token={session?.token||authToken} row={historyTarget} Modal={Modal} Table={ActionsTable} formatDate={formatTwelveHourDateTime} deviceDetails={auditDeviceDetails} onClose={()=>setHistoryTarget(null)} />}
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
     {announcing&&<AnnouncementComposer session={session} onClose={()=>setAnnouncing(false)} onSent={()=>{setAnnouncing(false);setMessageNotice('Announcement sent to all users. Each user will see it until they close it.');}} />}
+    {activityPurgeOpen&&<Modal title="Delete old user activity" close={()=>!activityPurging&&setActivityPurgeOpen(false)} className="audit-purge-modal">
+      <form className="form master-form" onSubmit={deleteOldActivity}>
+        <p className="audit-purge-help">Login history and session activity records last active before the number of days you enter are deleted permanently. Live sessions and the most recent days stay. The deletion itself is recorded in the Audit Trail with the number of records removed.</p>
+        <div className="formgrid">
+          <label>Delete activity older than (days) *<input type="number" min="1" max="3650" step="1" value={activityPurgeDays} onChange={(event)=>setActivityPurgeDays(event.target.value)} required autoFocus /></label>
+        </div>
+        <p className="audit-purge-note">{activityPurgeCutoff?`Everything last active before ${formatTwelveHourDateTime(activityPurgeCutoff)} will be deleted.`:"Enter a whole number of days (1 or more)."}</p>
+        <footer><button type="button" onClick={()=>setActivityPurgeOpen(false)} disabled={activityPurging}>Cancel</button><button className="danger" disabled={activityPurging||!activityPurgeCutoff}><Trash2 /> {activityPurging?"Deleting...":"Delete permanently"}</button></footer>
+      </form>
+    </Modal>}
   </section>;
 }
 function reportCategoryIdsForUser(permissions = {}, session = {}) {

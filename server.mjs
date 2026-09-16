@@ -1125,6 +1125,34 @@ app.delete('/api/audit-events',requireSuper,requireAdministrator,async(req,res,n
   }catch(error){next(error)}
 });
 
+// User activity housekeeping: delete login history and session activity rows
+// whose last activity is more than N days old (N >= 1). Live sessions keep a
+// recent last_seen_at, so they are never touched. The automatic audit
+// middleware records this call; req.audit adds the counts removed.
+app.delete('/api/user-login-history',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const days=Number(req.query.olderThanDays??req.body?.olderThanDays);
+    if(!Number.isInteger(days)||days<1||days>AUDIT_PURGE_MAX_DAYS)return res.status(400).json({error:`Enter how many days of user activity to keep (1 to ${AUDIT_PURGE_MAX_DAYS}).`});
+    const cutoff=new Date(Date.now()-days*86400000);
+    const client=await pool.connect();
+    let deletedHistory=0,deletedActivity=0;
+    try{
+      await client.query('BEGIN');
+      const history=await client.query('DELETE FROM user_login_history WHERE last_seen_at<$1',[cutoff.toISOString()]);
+      const activity=await client.query('DELETE FROM user_session_activity WHERE last_seen_at<$1',[cutoff.toISOString()]);
+      deletedHistory=Number(history.rowCount||0);deletedActivity=Number(activity.rowCount||0);
+      await client.query('COMMIT');
+    }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error}
+    finally{client.release()}
+    req.audit={eventType:'Administration',module:'User activity',action:'Delete old user activity',targetType:'User activity',
+      targetReference:`Older than ${days} day${days===1?'':'s'}`,
+      reason:`Deleted ${deletedHistory} login history and ${deletedActivity} session activity record(s) last active before ${formatDisplayDateTime(cutoff)}`,
+      changedFields:[{field:'Older than (days)',before:'',after:String(days)},{field:'Login history deleted',before:'',after:String(deletedHistory)},{field:'Session activity deleted',before:'',after:String(deletedActivity)}]};
+    res.set('Cache-Control','no-store');
+    res.json({deleted:deletedHistory+deletedActivity,deletedLoginHistory:deletedHistory,deletedSessionActivity:deletedActivity,olderThanDays:days,cutoff:cutoff.toISOString()});
+  }catch(error){next(error)}
+});
+
 // The preferred language chosen at sign-in is remembered on the user record so
 // speech input and complaint translation follow it on every device.
 app.post('/api/preferred-language',requireSession,async(req,res,next)=>{
