@@ -100,9 +100,9 @@ test('text fallback retains the saved request details without a next step',()=>{
   assert.match(text,/Awaiting spare pump/);assert.doesNotMatch(text,/Next step|Verify the closure/);
 });
 
-test('nine selected locations survive consolidation with every file link and no notes',async()=>{
+test('all eight selected locations survive consolidation with every file link and no notes',async()=>{
   const window={start:new Date('2026-09-14T19:00:00+05:30'),end:new Date('2026-09-15T07:00:00+05:30')};
-  const sites=['Sasti OB','Majri OB','Dhoptala OB (2nd)','Gauri Pauni OB (2nd)','Lalpeth OB','Jayant OB','Jayant OB 2nd','Dudhichua OB','Dudhichua East OB'];
+  const sites=['Sasti OB','Majri OB','Dhoptala OB (2nd)','Gauri Pauni OB (2nd)','Lalpeth OB','Jayant OB','Dudhichua OB','Dudhichua East OB'];
   const reports=sites.map((site,index)=>siteReportMessageContext({site,window,count:index,pdfUrl:`https://reports.example/r/pdf_${index}`,xlsxUrl:`https://reports.example/r/xlsx_${index}`}));
   const delivery=recipientReportMessage({window,reports});
   const payloads=[];

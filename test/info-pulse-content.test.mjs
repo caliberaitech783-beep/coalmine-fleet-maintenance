@@ -234,7 +234,7 @@ test('equipment and vehicle classification uses the meter type first and the gro
   assert.equal(data.infoPulseAssetCategory({equipmentGroup: 'Water Tanker'}), 'Vehicles');
   assert.equal(data.infoPulseAssetCategory({equipmentGroup: 'DRILL MACHINE'}), 'Equipment');
   assert.equal(data.infoPulseAssetCategory({}), 'Equipment');
-  assert.deepEqual(data.infoPulseRegions(null).map(region => `${region.code}:${region.sites.length}`), ['WCL:5', 'NCL:4']);
+  assert.deepEqual(data.infoPulseRegions(null).map(region => `${region.code}:${region.sites.length}`), ['WCL:5', 'NCL:3']);
   assert.deepEqual(data.infoPulseRegions(['sasti ob', 'Jayant OB']).map(region => `${region.code}:${region.sites.join('|')}`), ['WCL:Sasti OB', 'NCL:Jayant OB']);
   assert.deepEqual(data.infoPulseRegions([]), []);
 });

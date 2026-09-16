@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {displaySiteName,displaySiteSelection,normalizeOperationalSiteFields,normalizeUserSiteFields} from '../region-scope.mjs';
+import {REGION_DATA,displaySiteName,displaySiteSelection,normalizeOperationalSiteFields,normalizeUserSiteFields} from '../region-scope.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const ui=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
@@ -13,7 +13,7 @@ test('every spelling of a site resolves to the single display name',()=>{
   assert.equal(displaySiteName('Majri'),'Majri OB');
   assert.equal(displaySiteName('dhoptala ob 2nd'),'Dhoptala OB (2nd)');
   assert.equal(displaySiteName('Gouri Pouni'),'Gauri Pauni OB (2nd)');
-  assert.equal(displaySiteName('Jayant OB 2nd'),'Jayant OB 2nd');
+  assert.equal(displaySiteName('Jayant OB 2nd'),'Jayant OB','merged site shows as Jayant OB everywhere');
   assert.equal(displaySiteName('  '),'');
   assert.equal(displaySiteName('Some New Site'),'Some New Site');
 });
@@ -47,6 +47,17 @@ test('server normalises user site names on write and migrates stored users once'
   assert.match(server,/UPDATE maintenance_requests SET site='Sasti OB'/);
   assert.match(server,/UPDATE crm_tickets SET site='Sasti OB'/);
   assert.match(server,/const storedSite=canonicalSiteName\(site\)==='sasti ob'\?'Sasti OB'/);
+  assert.match(server,/key='jayant_ob_sites_merged_v1'/,'stored Jayant OB 2nd data is merged once');
+  assert.match(server,/for\(const table of \['maintenance_requests','crm_tickets','request_corrections'\]\)\r?\n\s+await client\.query\(`UPDATE \$\{table\} SET site='Jayant OB' WHERE/);
+  assert.match(server,/for\(const key of \['sites','siteAccess'\]\)/,'region rows and hierarchy site ticks are rewritten too');
+});
+
+test('Jayant OB 2nd is merged into Jayant OB: NCL has three sites and every list dedupes the old name',()=>{
+  assert.deepEqual(REGION_DATA.find((region)=>region.code==='NCL').sites,['Jayant OB','Dudhichua OB','Dudhichua East OB']);
+  assert.deepEqual(displaySiteSelection('Jayant OB | Jayant OB 2nd | Dudhichua OB | Dudhichua East OB'),['Jayant OB','Dudhichua OB','Dudhichua East OB']);
+  assert.deepEqual(normalizeOperationalSiteFields({site:'Jayant OB 2nd',currentLocation:'JAYANT 2ND'}),{site:'Jayant OB',currentLocation:'Jayant OB'});
+  assert.deepEqual(normalizeUserSiteFields({site:'Jayant OB 2nd',managerSites:'Jayant OB | Jayant OB 2nd'}),{site:'Jayant OB',managerSites:'Jayant OB'});
+  assert.match(ui,/const regionSites = \(record = \{\}\) => displaySiteSelection\(record\.sites\);/,'the Region master tabs dedupe stored site lists');
 });
 
 test('the user form shows the same display names for manager sites and team locations',()=>{

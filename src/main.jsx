@@ -7372,10 +7372,9 @@ function PrivilegeMasterPage(props) {
   if (missingUsers.length && failedSync !== syncKey) return <MasterLoader name="Privilege" />;
   return <MasterPage {...props} userOptions={userOptions} siteOptions={privilegeSiteOptions} />;
 }
-const regionSites = (record = {}) => String(record.sites || "")
-  .split(/\s*\|\s*/)
-  .map((site) => site.trim())
-  .filter(Boolean);
+// One tab per site: stored Region master rows that still list a merged legacy
+// name (e.g. "Jayant OB 2nd") collapse onto the single display name.
+const regionSites = (record = {}) => displaySiteSelection(record.sites);
 const splitPipeValues = (value = "") => String(value || "").split(/\s*\|\s*/).map((item) => item.trim()).filter(Boolean);
 
 function HierarchyMasterPage({ records = [], onAdd, onEdit, onDeleteAll, onOpenReportSettings }) {

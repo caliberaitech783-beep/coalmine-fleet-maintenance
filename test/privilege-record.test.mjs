@@ -15,10 +15,10 @@ test("keeps selected privilege role and site as strings", () => {
 test("uses a later valid selection when a legacy privilege value is boolean", () => {
   const merged = mergePrivilegeRecords(
     { accessType: false, location: true },
-    { accessType: "Super User", location: "Jayant OB 2nd" },
+    { accessType: "Super User", location: "Dudhichua OB" },
   );
   assert.equal(merged.accessType, "Super User");
-  assert.equal(merged.location, "Jayant OB 2nd");
+  assert.equal(merged.location, "Dudhichua OB");
 });
 
 test("ignores legacy checkbox strings when selecting a privilege role or site", () => {

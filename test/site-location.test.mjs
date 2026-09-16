@@ -28,7 +28,8 @@ test("legacy WCL locations match their renamed dashboard sites", () => {
 
 test("legacy NCL locations match once and do not duplicate Jayant", () => {
   assert.equal(canonicalSiteName("Jayant"), canonicalSiteName("Jayant OB"));
-  assert.notEqual(canonicalSiteName("Jayant"), canonicalSiteName("Jayant OB 2nd"));
+  assert.equal(canonicalSiteName("Jayant OB 2nd"), canonicalSiteName("Jayant OB"), "Jayant OB 2nd was merged into Jayant OB");
+  for (const legacy of ["Jayant OB (2nd)", "JAYANT 2ND", "Jayant OB II", "jayant ii", "Jayant OB 2"]) assert.equal(canonicalSiteName(legacy), "jayant ob", legacy);
   assert.equal(
     canonicalSiteName("Dudhichua West"),
     canonicalSiteName("Dudhichua OB"),
@@ -43,7 +44,8 @@ test("site matching accepts equipment and maintenance-request location fields", 
   assert.equal(recordBelongsToSite({ currentLocation: "Sasti II" }, "Sasti OB"), true);
   assert.equal(recordBelongsToSite({ location: "Majri II" }, "Majri OB"), true);
   assert.equal(recordBelongsToSite({ site: "Sasti" }, "Sasti OB"), true);
-  assert.equal(recordBelongsToSite({ currentLocation: "Jayant" }, "Jayant OB 2nd"), false);
+  assert.equal(recordBelongsToSite({ currentLocation: "Jayant OB 2nd" }, "Jayant OB"), true, "old Jayant OB 2nd records now belong to Jayant OB");
+  assert.equal(recordBelongsToSite({ currentLocation: "Jayant" }, "Dudhichua OB"), false);
 });
 
 test("mobile equipment options include only records at the user's current site", () => {

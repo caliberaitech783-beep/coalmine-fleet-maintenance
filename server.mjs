@@ -52,7 +52,7 @@ import {normalizeSessionMessage,sessionMessagePayloadValidationError} from './se
 import {BACKUP_FORMAT,backupFileName,exportDatabase,readBackupRecords,restoreDatabase} from './database-backup.mjs';
 import {BACKUP_SETTING_KEY,DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './backup-settings.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
-import {REGION_DATA,displaySiteName,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite,userSiteScope,userSiteSelection} from './region-scope.mjs';
+import {REGION_DATA,displaySiteName,displaySiteSelection,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite,userSiteScope,userSiteSelection} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf,buildTableBundlePdf} from './table-export-pdf.mjs';
@@ -998,6 +998,29 @@ async function migrate(){
       await client.query("UPDATE crm_tickets SET site='Sasti OB' WHERE regexp_replace(lower(trim(site)),'[^a-z0-9]+','','g') IN ('sasti','sastiii','sastiob')");
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('sasti_site_name_normalized_v1','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
+    // "Jayant OB 2nd" was merged into "Jayant OB" (NCL now has three sites).
+    // One-time rewrite of every stored location so old records, users, region
+    // rows, hierarchy site ticks, requests and CRM tickets all sit under
+    // "Jayant OB". Unrecognised values are kept exactly as entered.
+    const {rows:jayantSitesMerged}=await client.query("SELECT value FROM app_metadata WHERE key='jayant_ob_sites_merged_v1' FOR UPDATE");
+    if(!jayantSitesMerged.length){
+      const {rows:masterRows}=await client.query('SELECT id,master_name,record_data FROM master_records FOR UPDATE');
+      for(const row of masterRows){
+        const normalized=row.master_name==='Users & employees'
+          ? normalizeUserSiteFields(row.record_data)
+          : normalizeOperationalSiteFields(row.record_data);
+        for(const key of ['sites','siteAccess']){
+          if(typeof normalized[key]==='string'&&normalized[key].trim())normalized[key]=displaySiteSelection(normalized[key]).join(' | ');
+        }
+        if(JSON.stringify(normalized)!==JSON.stringify(row.record_data))
+          await client.query('UPDATE master_records SET record_data=$1::jsonb WHERE id=$2',[JSON.stringify(normalized),row.id]);
+      }
+      for(const table of ['maintenance_requests','crm_tickets','request_corrections'])
+        await client.query(`UPDATE ${table} SET site='Jayant OB' WHERE regexp_replace(lower(trim(site)),'[^a-z0-9]+','','g') IN ('jayantob2nd','jayant2nd','jayantob2','jayantii','jayantobii')`);
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('jayant_ob_sites_merged_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     // Repair the legacy ETC values that were saved before the future-only

@@ -10,7 +10,7 @@ test("site aliases merge, permitted zero-count sites remain, and timers stop on 
     {site: "SASTI OB", start: "2026-09-11 11:00", closedAt: "2026-09-11 11:45"},
   ];
   const view = hourlyBreakdownView(requests, 1, "Sasti OB", now, REGION_DATA.flatMap(region => region.sites));
-  assert.equal(view.siteCounts.length, 9);
+  assert.equal(view.siteCounts.length, 8, "five WCL sites and three NCL sites (Jayant OB 2nd merged into Jayant OB)");
   assert.equal(view.siteCounts.filter(row => row.site === "Sasti OB").length, 1);
   assert.equal(view.rows.length, 3);
   assert.equal(view.siteCounts.find(row => row.site === "Lalpeth OB").count, 0);

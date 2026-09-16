@@ -13,6 +13,12 @@ const SITE_ALIASES = new Map([
   ["lalpeth", "lalpeth ob"],
   ["lalpeth ii", "lalpeth ob"],
   ["jayant", "jayant ob"],
+  // "Jayant OB 2nd" was merged into "Jayant OB" on 2026-09-16; every old spelling of it now resolves there.
+  ["jayant ob 2nd", "jayant ob"],
+  ["jayant 2nd", "jayant ob"],
+  ["jayant ob 2", "jayant ob"],
+  ["jayant ii", "jayant ob"],
+  ["jayant ob ii", "jayant ob"],
   ["dudhichua west", "dudhichua ob"],
   ["dudhichua east", "dudhichua east ob"],
 ]);
