@@ -5314,6 +5314,7 @@ function AuditTrailPage({ session }) {
   const [events, setEvents] = useState([]), [summary, setSummary] = useState(null), [nextCursor, setNextCursor] = useState(null), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [purgeOpen, setPurgeOpen] = useState(false), [purgeDays, setPurgeDays] = useState("2"), [purging, setPurging] = useState(false);
   const [purgeMode, setPurgeMode] = useState("days"), [purgeDate, setPurgeDate] = useState(yesterdayDateKey);
+  const [retention, setRetention] = useState(null), [retentionOpen, setRetentionOpen] = useState(false), [retentionDraft, setRetentionDraft] = useState({auditDays:"5", activityDays:"0"}), [savingRetention, setSavingRetention] = useState(false);
   const load = async ({append=false,dateRange=appliedDateRange.current} = {}) => {
     const loadSequence = append ? auditLoadSequence.current : ++auditLoadSequence.current;
     if (append) setLoadingMore(true);
@@ -5406,6 +5407,29 @@ function AuditTrailPage({ session }) {
   const [rows, sort, changeSort] = useSortableRows(filtered, defaultDurationSort(filterColumns), (event, key) => key === "durationMs" ? event.durationMs : key === "occurredAt" ? event.occurredAt : valueFor(event, key));
   const exportColumns = columns.map(([key, label]) => ({label, value:(event) => valueFor(event, key)}));
   const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
+  // Automatic clean-up: the server keeps only the configured days, once per day.
+  const retentionHeaders = {Authorization:`Bearer ${session?.token || authToken}`};
+  useEffect(() => {
+    let active = true;
+    fetch("/api/log-retention", {cache:"no-store", headers:retentionHeaders}).then((response) => response.ok ? response.json() : null)
+      .then((result) => { if (active && result) { setRetention(result); setRetentionDraft({auditDays:String(result.auditDays), activityDays:String(result.activityDays)}); } })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [session?.token]);
+  const retentionLabel = (days) => Number(days) > 0 ? `${Number(days)} day${Number(days) === 1 ? "" : "s"}` : "off";
+  const saveRetention = async (event) => {
+    event.preventDefault();
+    setSavingRetention(true);
+    try {
+      const response = await fetch("/api/log-retention", {method:"PUT", cache:"no-store", headers:{...retentionHeaders, "Content-Type":"application/json"}, body:JSON.stringify({auditDays:Number(retentionDraft.auditDays), activityDays:Number(retentionDraft.activityDays)})});
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not save the automatic clean-up setting.");
+      setRetention(result);
+      setRetentionOpen(false);
+      alert(`Automatic clean-up saved: Audit Trail keeps ${retentionLabel(result.auditDays)}, user activity ${retentionLabel(result.activityDays)}. It runs within a few minutes and then once every day.`);
+    } catch (error) { alert(error.message); }
+    finally { setSavingRetention(false); }
+  };
   // Permanently deletes the entries older than the chosen number of days. The
   // server records the deletion itself as an Audit Trail entry.
   const purgeSelection = purgeWindow({ mode: purgeMode, days: purgeDays, date: purgeDate });
@@ -5425,7 +5449,18 @@ function AuditTrailPage({ session }) {
     finally { setPurging(false); }
   };
   return <section className="panel pagepanel generic audit-page">
-    <header><div><h1>Audit Trail</h1><p>Today’s administration, user changes, account security, backup, and vehicle transfer activity</p></div><div className="audit-header-actions"><button type="button" className="secondary danger" onClick={() => setPurgeOpen(true)} disabled={loading || purging}><Trash2 /> Delete old logs</button><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></div></header>
+    <header><div><h1>Audit Trail</h1><p>Today’s administration, user changes, account security, backup, and vehicle transfer activity</p></div><div className="audit-header-actions"><button type="button" className="secondary" onClick={() => setRetentionOpen(true)} title="Automatic daily clean-up"><Clock /> Auto clean-up{retention ? ` · ${retentionLabel(retention.auditDays)}` : ""}</button><button type="button" className="secondary danger" onClick={() => setPurgeOpen(true)} disabled={loading || purging}><Trash2 /> Delete old logs</button><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></div></header>
+    {retentionOpen && <Modal title="Automatic log clean-up" close={() => !savingRetention && setRetentionOpen(false)} className="audit-purge-modal">
+      <form className="form master-form" onSubmit={saveRetention}>
+        <p className="audit-purge-help">Once a day the system deletes everything older than the number of days you keep. It also runs within a few minutes of saving and after each deployment. Enter 0 to turn a part off. The run is recorded in the Audit Trail.</p>
+        <div className="formgrid">
+          <label>Audit Trail · days to keep *<input type="number" min="0" max="3650" step="1" value={retentionDraft.auditDays} onChange={(event) => setRetentionDraft((current) => ({...current, auditDays:event.target.value}))} required autoFocus /></label>
+          <label>User activity · days to keep *<input type="number" min="0" max="3650" step="1" value={retentionDraft.activityDays} onChange={(event) => setRetentionDraft((current) => ({...current, activityDays:event.target.value}))} required /></label>
+        </div>
+        <p className="audit-purge-note">{retention?.lastRunAt ? `Last automatic run ${formatTwelveHourDateTime(retention.lastRunAt)}.` : "Not run yet."}{retention?.updatedBy ? ` Setting last changed by ${retention.updatedBy}.` : ""}</p>
+        <footer><button type="button" onClick={() => setRetentionOpen(false)} disabled={savingRetention}>Cancel</button><button className="primary" disabled={savingRetention}><Save /> {savingRetention ? "Saving..." : "Save"}</button></footer>
+      </form>
+    </Modal>}
     {purgeOpen && <Modal title="Delete old audit logs" close={() => !purging && setPurgeOpen(false)} className="audit-purge-modal">
       <form className="form master-form" onSubmit={deleteOldLogs}>
         <p className="audit-purge-help">Choose how far back to keep: everything older than a number of days, or everything up to and including a date. Today always stays. The deletion itself is recorded in the Audit Trail with the number of entries removed.</p>

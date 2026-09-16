@@ -1167,6 +1167,71 @@ app.delete('/api/user-login-history',requireSuper,requireAdministrator,async(req
   }catch(error){next(error)}
 });
 
+// Automatic log clean-up. Once per India calendar day (and at the first check
+// after a deploy) the job keeps only the configured number of days of Audit
+// Trail entries and, when enabled, of user activity. 0 turns a part off.
+// Defaults: Audit Trail 5 days, user activity off.
+const LOG_RETENTION_SETTING_KEY='log_retention';
+const LOG_RETENTION_DEFAULTS=Object.freeze({auditDays:5,activityDays:0});
+const retentionDays=(value)=>{const days=Number(value);return Number.isInteger(days)&&days>=0&&days<=AUDIT_PURGE_MAX_DAYS?days:null;};
+async function storedLogRetention(){
+  const {rows}=await pool.query('SELECT setting_value,updated_at FROM app_settings WHERE setting_key=$1',[LOG_RETENTION_SETTING_KEY]);
+  const stored=rows[0]?.setting_value||{};
+  const {rows:last}=await pool.query("SELECT value,updated_at FROM app_metadata WHERE key='log_retention_last_run'");
+  return {
+    auditDays:retentionDays(stored.auditDays)??LOG_RETENTION_DEFAULTS.auditDays,
+    activityDays:retentionDays(stored.activityDays)??LOG_RETENTION_DEFAULTS.activityDays,
+    updatedAt:rows[0]?.updated_at||null,updatedBy:String(stored.updatedBy||''),
+    lastRunDate:last[0]?.value||'',lastRunAt:last[0]?.updated_at||null,maxDays:AUDIT_PURGE_MAX_DAYS,
+  };
+}
+let logRetentionRunning=false;
+async function runLogRetention(now=new Date()){
+  if(logRetentionRunning)return {skipped:true,reason:'already running'};
+  logRetentionRunning=true;
+  try{
+    const retention=await storedLogRetention();
+    if(!retention.auditDays&&!retention.activityDays)return {skipped:true,reason:'automatic clean-up is off'};
+    const todayKey=auditIndiaDateKey(now);
+    if(retention.lastRunDate===todayKey)return {skipped:true,reason:'already ran today'};
+    const result={date:todayKey,auditDays:retention.auditDays,activityDays:retention.activityDays,auditDeleted:0,loginHistoryDeleted:0,sessionActivityDeleted:0};
+    if(retention.auditDays){
+      const cutoff=new Date(now.getTime()-retention.auditDays*86400000).toISOString();
+      const {rowCount}=await pool.query('DELETE FROM audit_events WHERE occurred_at<$1',[cutoff]);
+      result.auditDeleted=Number(rowCount||0);
+    }
+    if(retention.activityDays){
+      const cutoff=new Date(now.getTime()-retention.activityDays*86400000).toISOString();
+      const history=await pool.query('DELETE FROM user_login_history WHERE last_seen_at<$1',[cutoff]);
+      const activity=await pool.query('DELETE FROM user_session_activity WHERE last_seen_at<$1',[cutoff]);
+      result.loginHistoryDeleted=Number(history.rowCount||0);result.sessionActivityDeleted=Number(activity.rowCount||0);
+    }
+    await pool.query(`INSERT INTO app_metadata (key,value,updated_at) VALUES ('log_retention_last_run',$1,NOW())
+      ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[todayKey]);
+    return result;
+  }finally{logRetentionRunning=false}
+}
+app.get('/api/log-retention',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{res.set('Cache-Control','no-store');res.json(await storedLogRetention());}catch(error){next(error)}
+});
+app.put('/api/log-retention',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const auditDays=retentionDays(req.body?.auditDays),activityDays=retentionDays(req.body?.activityDays);
+    if(auditDays==null||activityDays==null)return res.status(400).json({error:`Enter whole numbers of days from 0 (off) to ${AUDIT_PURGE_MAX_DAYS}.`});
+    const before=await storedLogRetention();
+    await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,
+      [LOG_RETENTION_SETTING_KEY,JSON.stringify({auditDays,activityDays,updatedBy:String(req.session?.login||'')})]);
+    // A changed setting applies at the next check today, not tomorrow.
+    await pool.query("DELETE FROM app_metadata WHERE key='log_retention_last_run'");
+    req.audit={eventType:'Configuration',module:'Audit Trail',action:'Update automatic log clean-up',targetType:'Log retention',
+      targetReference:`Audit Trail ${auditDays?`${auditDays} days`:'off'} · user activity ${activityDays?`${activityDays} days`:'off'}`,
+      changedFields:[{field:'Audit Trail days kept',before:String(before.auditDays),after:String(auditDays)},{field:'User activity days kept',before:String(before.activityDays),after:String(activityDays)}]};
+    res.set('Cache-Control','no-store');
+    res.json(await storedLogRetention());
+  }catch(error){next(error)}
+});
+
 // The preferred language chosen at sign-in is remembered on the user record so
 // speech input and complaint translation follow it on every device.
 app.post('/api/preferred-language',requireSession,async(req,res,next)=>{
@@ -5948,6 +6013,13 @@ if(scheduledJobsEnabled){
       .catch(error=>console.error('Scheduled Audit Trail export failed.',error));
   },60*1000);
   auditLogExportTimer.unref?.();
+  const logRetentionTimer=setInterval(()=>{
+    if(!databaseReady)return;
+    void runAuditedBackendProcess({module:'Audit Trail',action:'Automatic log clean-up'},()=>runLogRetention())
+      .then(result=>{if(!result?.skipped)console.log('Automatic log clean-up completed.',result)})
+      .catch(error=>console.error('Automatic log clean-up failed.',error));
+  },5*60*1000);
+  logRetentionTimer.unref?.();
   const databaseBackupTimer=setInterval(()=>{
     void runScheduledBackup()
       .then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)})

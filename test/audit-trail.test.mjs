@@ -149,3 +149,25 @@ test("administrators can delete audit entries older than N days, and the purge i
   assert.match(client, /Delete permanently/);
   assert.match(client, /setPurgeOpen\(false\);\n\s+alert\([\s\S]*?\n\s+load\(\);/, "the list reloads after a purge");
 });
+
+test("the Audit Trail is cleaned up automatically once a day, keeping five days unless an administrator changes it", () => {
+  assert.match(server, /const LOG_RETENTION_DEFAULTS=Object\.freeze\(\{auditDays:5,activityDays:0\}\);/, "five days of Audit Trail by default; user activity clean-up off until switched on");
+  assert.match(server, /async function runLogRetention\(now=new Date\(\)\)/);
+  assert.match(server, /if\(retention\.lastRunDate===todayKey\)return \{skipped:true,reason:'already ran today'\};/, "one run per India calendar day");
+  assert.match(server, /if\(!retention\.auditDays&&!retention\.activityDays\)return \{skipped:true,reason:'automatic clean-up is off'\};/);
+  assert.match(server, /retention\.auditDays\*86400000\)\.toISOString\(\);\r?\n\s+const \{rowCount\}=await pool\.query\('DELETE FROM audit_events WHERE occurred_at<\$1',\[cutoff\]\);/);
+  assert.match(server, /DELETE FROM user_login_history WHERE last_seen_at<\$1',\[cutoff\]\);\r?\n\s+const activity=await pool\.query\('DELETE FROM user_session_activity WHERE last_seen_at<\$1',\[cutoff\]\);/);
+  assert.match(server, /VALUES \('log_retention_last_run',\$1,NOW\(\)\)/);
+  assert.match(server, /const logRetentionTimer=setInterval\(\(\)=>\{\r?\n\s+if\(!databaseReady\)return;\r?\n\s+void runAuditedBackendProcess\(\{module:'Audit Trail',action:'Automatic log clean-up'\},\(\)=>runLogRetention\(\)\)/, "every run is itself an audit entry");
+  assert.match(server, /\},5\*60\*1000\);\r?\n\s+logRetentionTimer\.unref\?\.\(\);/);
+  assert.match(server, /app\.get\('\/api\/log-retention',requireSuper,requireAdministrator/);
+  assert.match(server, /app\.put\('\/api\/log-retention',requireSuper,requireAdministrator/);
+  assert.match(server, /if\(auditDays==null\|\|activityDays==null\)return res\.status\(400\)/);
+  assert.match(server, /DELETE FROM app_metadata WHERE key='log_retention_last_run'/, "a saved change applies the same day");
+  assert.match(server, /action:'Update automatic log clean-up'/);
+  assert.match(client, /<Clock \/> Auto clean-up\{retention \? ` · \$\{retentionLabel\(retention\.auditDays\)\}` : ""\}/);
+  assert.match(client, /<Modal title="Automatic log clean-up"/);
+  assert.match(client, /fetch\("\/api\/log-retention", \{method:"PUT"/);
+  assert.match(client, /Audit Trail · days to keep/);
+  assert.match(client, /User activity · days to keep/);
+});
