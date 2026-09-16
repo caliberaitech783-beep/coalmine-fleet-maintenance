@@ -30,7 +30,8 @@ function ChipRow({name, label, allLabel, options, value, choose}) {
 // and one ranked list of open breakdowns, longest standing first.
 export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh}) {
   const today = infoPulseDate(new Date(now ?? Date.now()).toISOString());
-  const defaults = {region: 'all', site: '', category: '', from: today, to: today};
+  // BD balance as of today: every open breakdown started on or before today.
+  const defaults = {region: 'all', site: '', category: '', from: '', to: today};
   const [tier, setTier] = useState('all');
   const [filters, setFilters] = useState(defaults);
   const regions = infoPulseRegions(scope?.sites);
@@ -44,7 +45,8 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
   const changed = Object.keys(defaults).some(key => filters[key] !== defaults[key]);
   const choose = (name, value) => setFilters(current => ({...current, [name]: value, ...(name === 'region' ? {site: '', category: ''} : name === 'site' ? {category: ''} : {})}));
   const preset = days => setFilters(current => ({...current, from: infoPulseDate(new Date(now - (days - 1) * DAY).toISOString()), to: today}));
-  const dateCaption = !filters.from && !filters.to ? 'All dates' : filters.from === filters.to ? formatDisplayDate(filters.from) : `${filters.from ? formatDisplayDate(filters.from) : 'Earliest'} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`;
+  const untilToday = !filters.from && filters.to === today;
+  const dateCaption = !filters.from && !filters.to ? 'All dates' : !filters.from ? `Until ${formatDisplayDate(filters.to)}` : filters.from === filters.to ? formatDisplayDate(filters.from) : `${formatDisplayDate(filters.from)} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`;
   const siteLabel = view.selection.site ? view.sites.find(site => site.key === view.selection.site)?.label || '' : '';
   const regionLabel = view.selection.region === 'all' && regions.length === 1 ? regions[0].label : view.regionLabel;
   const placeCaption = [regionLabel, siteLabel, view.selection.category].filter(Boolean).join(' · ');
@@ -70,7 +72,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
         <span className="pulse-filter-dates-label">Started</span>
         <label><span>From</span><input type="date" aria-label="Info Pulse from date" value={filters.from} max={filters.to || undefined} onChange={event => choose('from', event.target.value)} /></label>
         <label><span>To</span><input type="date" aria-label="Info Pulse to date" value={filters.to} min={filters.from || undefined} onChange={event => choose('to', event.target.value)} /></label>
-        <div className="pulse-period" role="group" aria-label="Info Pulse period">{PERIODS.map(days => <button type="button" key={days} aria-pressed={periodDays === days} className={periodDays === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}<button type="button" aria-pressed={!filters.from && !filters.to} className={!filters.from && !filters.to ? 'active' : ''} onClick={() => setFilters(current => ({...current, from: '', to: ''}))}>All dates</button></div>
+        <div className="pulse-period" role="group" aria-label="Info Pulse period"><button type="button" aria-pressed={untilToday} className={untilToday ? 'active' : ''} onClick={() => setFilters(current => ({...current, from: '', to: today}))}>Until today</button>{PERIODS.map(days => <button type="button" key={days} aria-pressed={periodDays === days} className={periodDays === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}<button type="button" aria-pressed={!filters.from && !filters.to} className={!filters.from && !filters.to ? 'active' : ''} onClick={() => setFilters(current => ({...current, from: '', to: ''}))}>All dates</button></div>
         <span className="pulse-filter-caption">{dateCaption}</span>
       </div>
     </details>
@@ -112,7 +114,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
             </dl>
           </li>;
         })}
-      </ol> : <p className="pulse-empty">{changed || tier !== 'all' ? 'No breakdowns match this selection.' : 'No open breakdowns started today. BD balance is 0.'}</p>}
+      </ol> : <p className="pulse-empty">{changed || tier !== 'all' ? 'No breakdowns match this selection.' : 'No open breakdowns. BD balance is 0.'}</p>}
     </>}
   </div>;
 }

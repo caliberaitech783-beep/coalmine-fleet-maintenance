@@ -155,7 +155,8 @@ const countBy = (rows, keyOf, labelOf = keyOf) => {
 // Invalid selections fall back to "all" instead of hiding every record.
 export function infoPulseFilterView(rows = [], {region = 'all', site = '', category = '', from = '', to = ''} = {}, regions = infoPulseRegions()) {
   const invalidRange = Boolean(from && to && from > to);
-  const dated = invalidRange ? [] : rows.filter(row => !(from || to) || (row.date && (!from || row.date >= from) && (!to || row.date <= to)));
+  // Undated rows cannot be proven to start after "to", so only a "from" bound excludes them.
+  const dated = invalidRange ? [] : rows.filter(row => !(from || to) || (!row.date ? !from : (!from || row.date >= from) && (!to || row.date <= to)));
   const entries = dated.map(row => ({row, region: regionOfSite(regions, row.siteKey), category: infoPulseAssetCategory(row.request)}));
   const regionOptions = [{code: 'all', label: 'All regions', count: entries.length}, ...regions.map(item => ({code: item.code, label: item.label, count: entries.filter(entry => entry.region === item.code).length}))];
   if (entries.some(entry => entry.region === 'unmapped')) regionOptions.push({code: 'unmapped', label: 'Other / unassigned', count: entries.filter(entry => entry.region === 'unmapped').length});

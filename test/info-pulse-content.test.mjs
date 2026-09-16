@@ -67,21 +67,31 @@ function allDates(overrides = {}) {
   return {app, tree: app.render(overrides)};
 }
 
-test('opens on today in IST with BD balance selected, the Today preset active and the record count shown', () => {
+test('opens as the BD balance until today in IST: no From, To = today, every open breakdown started on or before today', () => {
   const tree = render();
-  assert.deepEqual([byLabel(tree, 'Info Pulse from date').props.value, byLabel(tree, 'Info Pulse to date').props.value], ['2026-09-16', '2026-09-16']);
-  assert.equal(chip(tree, 'Info Pulse period', 'Today').props['aria-pressed'], true);
+  assert.deepEqual([byLabel(tree, 'Info Pulse from date').props.value, byLabel(tree, 'Info Pulse to date').props.value], ['', '2026-09-16']);
+  assert.equal(chip(tree, 'Info Pulse period', 'Until today').props['aria-pressed'], true);
+  assert.equal(chip(tree, 'Info Pulse period', 'Today').props['aria-pressed'], false);
   assert.equal(chip(tree, 'Info Pulse period', 'All dates').props['aria-pressed'], false);
-  assert.equal(byLabel(tree, 'BD balance: 3').props['aria-pressed'], true);
-  assert.deepEqual(kpiCounts(tree), {'BD balance': 3, Critical: 0, Warning: 0, Open: 3});
-  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['J9', 'V167', 'S145']);
-  assert.match(html(tree), /3 of 5 records/);
-  assert.match(html(tree), /Filters All regions · 16-09-2026/);
+  assert.equal(byLabel(tree, 'BD balance: 5').props['aria-pressed'], true);
+  assert.deepEqual(kpiCounts(tree), {'BD balance': 5, Critical: 1, Warning: 1, Open: 3});
+  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['D38', 'W1', 'J9', 'V167', 'S145']);
+  assert.match(html(tree), /5 of 5 records/);
+  assert.match(html(tree), /Filters All regions · Until 16-09-2026/);
   assert.equal(descendants(tree, node => node.props.className === 'pulse-reset')[0].props.disabled, true);
-  // Reopening on another day defaults to that day.
+  // A breakdown dated after "today" (clock skew) stays out; reopening on another day moves the bound to that day.
+  const future = render({requests: [...REQUESTS, {ref: 'REQ-FUTURE', door: 'F1', site: 'Sasti OB', status: 'Open', start: '2026-09-17 01:00', complaint: 'Clock skew'}]});
+  assert.ok(byLabel(future, 'BD balance: 5'));
   const later = render({now: NOW + 86_400_000});
-  assert.deepEqual([byLabel(later, 'Info Pulse from date').props.value, byLabel(later, 'Info Pulse to date').props.value], ['2026-09-17', '2026-09-17']);
-  assert.match(html(later), /No open breakdowns started today\. BD balance is 0\./);
+  assert.deepEqual([byLabel(later, 'Info Pulse from date').props.value, byLabel(later, 'Info Pulse to date').props.value], ['', '2026-09-17']);
+  assert.ok(byLabel(later, 'BD balance: 5'));
+  // Started today is still one click away.
+  const app = harness();
+  chip(app.render(), 'Info Pulse period', 'Today').props.onClick();
+  const todayTree = app.render();
+  assert.deepEqual([byLabel(todayTree, 'Info Pulse from date').props.value, byLabel(todayTree, 'Info Pulse to date').props.value], ['2026-09-16', '2026-09-16']);
+  assert.deepEqual(vehicles(byLabel(todayTree, 'BD balance breakdowns, longest standing first')), ['J9', 'V167', 'S145']);
+  assert.match(html(todayTree), /3 of 5 records/);
 });
 
 test('All dates lists every open breakdown longest standing first with its reason, excluding idle, closed and verified', () => {
@@ -164,12 +174,12 @@ test('region tabs, site chips and equipment/vehicle chips cascade with counts li
   assert.deepEqual(chips(tree, 'Equipment / Vehicle choices'), ['All equipment & vehicles:1', 'Equipment:1']);
   assert.equal(byLabel(tree, 'Site choices'), undefined, 'one site in NCL needs no site chips');
   assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['J9']);
-  // Reset selection restores every region and today's date.
+  // Reset selection restores every region and the balance until today.
   descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
   tree = app.render();
   assert.equal(chip(tree, 'Breakdowns by region', 'All regions').props['aria-selected'], true);
-  assert.equal(chip(tree, 'Info Pulse period', 'Today').props['aria-pressed'], true);
-  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['J9', 'V167', 'S145']);
+  assert.equal(chip(tree, 'Info Pulse period', 'Until today').props['aria-pressed'], true);
+  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['D38', 'W1', 'J9', 'V167', 'S145']);
 });
 
 test('single-region and single-site scopes hide the region tabs and site chips but keep the date and category filters', () => {
@@ -177,12 +187,12 @@ test('single-region and single-site scopes hide the region tabs and site chips b
   const tree = render({requests: single, scope: {label: 'Sasti OB', sites: ['Sasti OB']}});
   assert.equal(byLabel(tree, 'Breakdowns by region'), undefined);
   assert.equal(byLabel(tree, 'Site choices'), undefined);
-  assert.match(html(tree), /Filters WCL · 16-09-2026/);
+  assert.match(html(tree), /Filters WCL · Until 16-09-2026/);
   assert.deepEqual(chips(tree, 'Equipment / Vehicle choices'), ['All equipment & vehicles:1', 'Vehicles:1']);
   assert.ok(byLabel(tree, 'Info Pulse from date') && byLabel(tree, 'Info Pulse to date'));
   const wcl = render({requests: REQUESTS.filter(request => request.site !== 'Jayant OB'), scope: {label: 'WCL', sites: ['Sasti OB', 'Majri OB', 'Dhoptala OB (2nd)']}});
   assert.equal(byLabel(wcl, 'Breakdowns by region'), undefined);
-  assert.deepEqual(chips(wcl, 'Site choices'), ['All sites:2', 'Dhoptala OB (2nd):1', 'Sasti OB:1']);
+  assert.deepEqual(chips(wcl, 'Site choices'), ['All sites:4', 'Dhoptala OB (2nd):1', 'Majri OB:2', 'Sasti OB:1']);
 });
 
 test('the started-date range is inclusive on IST days, presets set today-anchored ranges, and a reversed range is flagged', () => {
@@ -259,8 +269,11 @@ test('missing start, unparseable ETC and missing complaint render explicit place
   assert.equal(annotated.etcState, 'unknown');
   assert.equal(annotated.tier, 'open');
   assert.ok(byLabel(tree, 'BD balance: 1') && byLabel(tree, 'Open: 1'));
-  // With today's range a request without a start date is not dated, so it stays out until All dates is chosen.
-  assert.ok(byLabel(render({requests}), 'BD balance: 0'));
+  // Without a From bound an undated request still counts in the balance until today; a From bound excludes it.
+  assert.ok(byLabel(render({requests}), 'BD balance: 1'));
+  const bounded = harness();
+  byLabel(bounded.render({requests}), 'Info Pulse from date').props.onChange({target: {value: '2026-09-01'}});
+  assert.ok(byLabel(bounded.render({requests}), 'BD balance: 0'));
 });
 
 test('loading, failures and an empty balance never render a misleading count and retry is actionable', () => {
@@ -278,10 +291,10 @@ test('loading, failures and an empty balance never render a misleading count and
   assert.equal(refreshes, 1);
   tree = render({error: 'offline', onRefresh});
   assert.match(text(descendants(tree, node => node.props.role === 'alert')[0]), /Refresh failed\. Showing the last loaded breakdowns\./);
-  assert.ok(byLabel(tree, 'BD balance: 3'));
+  assert.ok(byLabel(tree, 'BD balance: 5'));
   tree = render({requests: [REQUESTS[5], REQUESTS[6]], updatedAt: 0});
   assert.ok(byLabel(tree, 'BD balance: 0') && byLabel(tree, 'Critical: 0'));
-  assert.match(html(tree), /No open breakdowns started today\. BD balance is 0\./);
+  assert.match(html(tree), /No open breakdowns\. BD balance is 0\./);
   assert.match(html(tree), /Not refreshed yet/);
 });
 
