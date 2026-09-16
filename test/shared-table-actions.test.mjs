@@ -194,3 +194,15 @@ test("column arrangements are remembered per table and cleared by Reset table", 
     assert.deepEqual(restoreColumnOrder("t", defaults), defaults, "corrupt storage falls back to the default");
   } finally { delete globalThis.localStorage; }
 });
+
+test("shared Actions tables and column popovers accept several values per column", () => {
+  const {columns} = tableModel(headers);
+  const rows = [row("e", "Alpha", "EICHER TIPPERS"), row("v", "Beta", "VOLVO TIPPERS"), row("x", "Gamma", "EXCAVATOR")];
+  const both = "__any__:" + JSON.stringify(["EICHER TIPPERS", "VOLVO TIPPERS"]);
+  assert.deepEqual(selectTableRows(rows, columns, {[columns[1].key]: both}, {}).map(r => r.key), ["e", "v"]);
+  assert.deepEqual(selectTableRows(rows, columns, {[columns[1].key]: "EXCAVATOR"}, {}).map(r => r.key), ["x"], "single values still work");
+  const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.match(main, /onClick=\{\(\) => onFilterChange\(toggleFilterValue\(filterValue, value \|\| EMPTY_TABLE_FILTER_VALUE\)\)\}/);
+  assert.match(main, /return cellMatchesFilterValues\(value, selected\);/);
+  assert.match(main, /parseFilterValues\(filters\[column\.key\]\)\.length > 1 && <option value=\{filters\[column\.key\]\}>/);
+});

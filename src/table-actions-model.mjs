@@ -1,6 +1,7 @@
 import React from "react";
 import { reportTime12 } from "../report-time-format.mjs";
 import { matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
+import { cellMatchesFilterValues } from "./multi-value-filter.mjs";
 import { recordDateKey } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
 
@@ -148,7 +149,7 @@ export function selectTableRows(rows, columns, filters, sort) {
     if (!expected) return true;
     const range = parseDateRange(expected);
     if (range) return matchesDateRange(recordDateKey(column.sortValue?.(row)) || recordDateKey(column.value(row)), range);
-    return column.value(row) === (expected === "__empty_table_filter_value__" ? "" : expected);
+    return cellMatchesFilterValues(column.value(row), expected);
   }));
   const column = columns.find((item) => item.key === sort.key);
   if (!column) return filtered;

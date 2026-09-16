@@ -104,3 +104,6 @@
 .column-filter-range input{width:100%;min-width:0;height:30px;box-sizing:border-box;border:1px solid #dfe5ef;border-radius:4px;padding:0 6px;font-size:11px;color:#34425a;background:#fff}
 .column-filter-range input:focus{border-color:#7f9fda;outline:0;box-shadow:0 0 0 3px #315fd318}
 .column-filter-range:last-child{border-bottom:0;margin-bottom:0;padding-bottom:2px}
+.column-filter-values button.selected{position:relative;padding-right:26px;font-weight:700}
+.column-filter-values button.selected::after{content:"\2713";position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#2458d3;font-size:12px}
+.column-filter-selection-note{display:block;padding:0 6px 5px;color:#63738d;font-size:10px}

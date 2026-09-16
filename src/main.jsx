@@ -6,6 +6,7 @@ import { ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES, buildOrganisationChart } f
 import "./smart-print.css";
 import HourlyBreakdownView from "./hourly-breakdown-view.jsx";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
+import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, parseFilterValues, toggleFilterValue } from "./multi-value-filter.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
@@ -2554,9 +2555,10 @@ function FilterableHeader({
             <input data-smart-search autoFocus value={valueSearch} onChange={(event) => setValueSearch(event.target.value)} placeholder="Filter..." />
           </label>
           <button type="button" className={`column-filter-all ${!filterValue ? "selected" : ""}`} onClick={() => onFilterChange("")}>All values</button>
+          {parseFilterValues(filterValue).length > 1 && <span className="column-filter-selection-note">{describeFilterValues(filterValue)} · tap a value to add or remove it</span>}
           <div className="column-filter-values">
             {visibleValues.length ? visibleValues.map((value) => (
-              <button type="button" key={value || "__blank__"} className={filterValue === value ? "selected" : ""} onClick={() => onFilterChange(filterValue === value ? "" : value)}>
+              <button type="button" key={value || "__blank__"} className={filterValueSelected(filterValue, value || EMPTY_TABLE_FILTER_VALUE) ? "selected" : ""} aria-pressed={filterValueSelected(filterValue, value || EMPTY_TABLE_FILTER_VALUE)} onClick={() => onFilterChange(toggleFilterValue(filterValue, value || EMPTY_TABLE_FILTER_VALUE))}>
                 {value || "(Blank)"}
               </button>
             )) : <span className="column-filter-empty">No matching values</span>}
@@ -2580,7 +2582,7 @@ function tableRowMatchesFilters(row, columns, filters) {
     const value = tableFilterText(column.value?.(row));
     const range = parseDateRange(selected);
     if (range) return matchesDateRange(value, range);
-    return selected === EMPTY_TABLE_FILTER_VALUE ? !value : value === selected;
+    return cellMatchesFilterValues(value, selected);
   });
 }
 function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterChange, onClearFilters, label = "Filter", open: controlledOpen, onOpenChange, hideTrigger = false, dialogMode = false }) {
@@ -2638,6 +2640,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
           <label key={column.key}><span>{column.label}</span><select value={filters[column.key] || ""} onChange={(event) => onFilterChange(column.key, event.target.value)}>
             <option value="">All {column.label}</option>
             {parseDateRange(filters[column.key]) && <option value={filters[column.key]}>{describeDateRange(parseDateRange(filters[column.key]))}</option>}
+            {parseFilterValues(filters[column.key]).length > 1 && <option value={filters[column.key]}>{describeFilterValues(filters[column.key])}</option>}
             {columnValues[column.key].map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
           </select></label>
         ))}
