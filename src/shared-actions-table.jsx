@@ -34,6 +34,11 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, chi
       columns.splice(columns.findIndex(item => item.label.trim().toLowerCase() === "started") + 1, 0, column);
     }
   }
+  if (tableProps["data-verification-last"] === "true") {
+    const verification = ["mis verified at", "first trip time"].flatMap(label => columns.filter(column => column.label.trim().toLowerCase() === label));
+    for (const column of verification) columns.splice(columns.indexOf(column), 1);
+    columns.push(...verification);
+  }
   const schema = columns.map((column) => column.key).join("|");
   return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
 }
