@@ -9203,7 +9203,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
       {!embedded&&!showDashboardMenu&&!showRequestsMenu&&!showReportsMenu&&!showTicketsMenu&&<section className="panel"><h2>No menus assigned</h2><p>Contact your administrator to enable access.</p></section>}
-      {(embedded||section==="profile")&&showRequestsMenu&&<div className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
+      {(embedded||section==="profile")&&showRequestsMenu&&<div data-operational={isProduction || isMaintenance || isMis ? "true" : undefined} data-active-tab={tab} className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isGeneral ? "Requests" : isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isGeneral ? "View requests for your assigned location." : isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
