@@ -1,3 +1,5 @@
+import {adaptiveRefreshInterval} from "./mobile-performance.mjs";
+
 export const REQUEST_CHANGE_STORAGE_KEY = "bdms:requests:changed";
 export const REQUEST_CHANGE_EVENT = "bdms:requests-changed";
 
@@ -69,7 +71,7 @@ export function watchRequestRefresh(refresh, {
   doc.addEventListener("visibilitychange", visibilityChanged);
   win.addEventListener("storage", changedElsewhere);
   win.addEventListener(REQUEST_CHANGE_EVENT, revalidate);
-  const timer = win.setInterval(() => { void revalidate(); }, intervalMs);
+  const timer = win.setInterval(() => { void revalidate(); }, adaptiveRefreshInterval(win, intervalMs));
   if (initial) void revalidate();
   return () => {
     disposed = true;

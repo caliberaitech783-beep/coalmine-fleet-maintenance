@@ -62,6 +62,7 @@ export function createDashboardRequestLoader({
   let state = initialState();
   let sequence = 0;
   let currentToken = "";
+  let currentEtag = "";
   let activeController = null;
   const getState = () => ({...state, records: [...state.records]});
   const publish = (next) => {
@@ -80,7 +81,7 @@ export function createDashboardRequestLoader({
     const attempt = ++sequence;
     activeController?.abort();
     const authToken = String(token ?? "").trim();
-    if (authToken !== currentToken) state = initialState(authToken);
+    if (authToken !== currentToken) { state = initialState(authToken); currentEtag = ""; }
     currentToken = authToken;
     if (!authToken) {
       activeController = null;
@@ -108,8 +109,9 @@ export function createDashboardRequestLoader({
           method: "GET",
           cache: "no-store",
           signal: controller.signal,
-          headers: {Authorization: `Bearer ${authToken}`},
+          headers: {Authorization: `Bearer ${authToken}`, ...(currentEtag ? {"If-None-Match": currentEtag} : {})},
         });
+        if (response.status === 304) return {notModified: true, records: state.records};
         let body;
         try { body = await response.json(); }
         catch { throw Object.assign(new Error("Dashboard request data could not be read. Please retry."), {status: response.status}); }
@@ -117,14 +119,16 @@ export function createDashboardRequestLoader({
           typeof body?.error === "string" && body.error.trim() ? body.error : "Could not load dashboard requests. Please retry.",
         ), {status: response.status});
         if (!Array.isArray(body)) throw new Error("Dashboard request data is invalid. Please retry.");
-        return body;
+        currentEtag = response.headers?.get?.("etag") || "";
+        return {notModified: false, records: body};
       };
-      const records = await Promise.race([request(), aborted]);
+      const result = await Promise.race([request(), aborted]);
       if (attempt !== sequence || controller.signal.aborted) return getState();
-      publish({token: authToken, records, loaded: true, loading: false, error: "", updatedAt: now()});
+      publish({token: authToken, records: result.records, loaded: true, loading: false, error: "", updatedAt: now()});
     } catch (error) {
       if (attempt !== sequence || (controller.signal.aborted && !timedOut)) return getState();
       // Do not retain another account's or newly unauthorised request data.
+      if ([401, 403].includes(error?.status)) currentEtag = "";
       const previous = [401, 403].includes(error?.status) ? initialState(authToken) : state;
       publish({...previous, loading: false, error: timedOut
         ? "Dashboard request loading timed out. Please retry."

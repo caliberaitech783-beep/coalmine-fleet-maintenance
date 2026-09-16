@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createDashboardRequestLoader, requestDateKey, requestEventDate, splitDashboardRequests} from "../src/dashboard-request-data.mjs";
 
-const response = (body, {ok = true, status = 200} = {}) => ({ok, status, json: async () => body});
+const response = (body, {ok = true, status = 200, etag = ""} = {}) => ({ok, status, headers: {get: (name) => String(name).toLowerCase() === "etag" ? etag : null}, json: async () => body});
 const deferred = () => {
   let resolve;
   let reject;
@@ -150,6 +150,26 @@ test("same-session refresh errors retain previously loaded records and expose fa
   assert.equal(state.loaded, true);
   assert.equal(state.error, "Database unavailable");
   assert.equal(state.updatedAt, 10);
+});
+
+test("same-session refresh sends an entity tag and a 304 keeps records without downloading JSON", async () => {
+  const rows = [{ref: "UNCHANGED"}];
+  const calls = [];
+  let jsonReads = 0;
+  const loader = createDashboardRequestLoader({now: () => 50, fetchImpl: async (_, options) => {
+    calls.push(options);
+    if (calls.length === 1) return response(rows, {etag: '"requests-v1"'});
+    return {ok: false, status: 304, headers: {get: () => null}, json: async () => { jsonReads += 1; throw new Error("304 body must not be read"); }};
+  }});
+  await loader.load("demo");
+  const state = await loader.load("demo");
+  assert.equal(calls[0].headers["If-None-Match"], undefined);
+  assert.equal(calls[1].headers["If-None-Match"], '"requests-v1"');
+  assert.equal(jsonReads, 0);
+  assert.deepEqual(state.records, rows);
+  assert.equal(state.loaded, true);
+  assert.equal(state.error, "");
+  assert.equal(state.updatedAt, 50);
 });
 
 test("changed account clears old records immediately and an aborted stale response cannot overwrite its result", async () => {

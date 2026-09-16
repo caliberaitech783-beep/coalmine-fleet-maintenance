@@ -4,10 +4,12 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import RecordDateRange from "./record-date-range.jsx";
 import { primaryRecordDateColumn } from "./record-date-range.mjs";
 import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder } from "./table-actions-model.mjs";
+import { mobileTablePageSize } from "./mobile-performance.mjs";
 import "./table-actions.css";
 import "./sortable-table.css";
 
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
+const sharedTablePageSize = () => typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0;
 
 export default function SharedActionsTable({ closedTimeAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
@@ -36,6 +38,8 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const [savedReportDialog, setSavedReportDialog] = useState("");
   // Which plain column heading currently shows its sort-and-filter popover.
   const [openFilter, setOpenFilter] = useState(null);
+  const [pageSize] = useState(sharedTablePageSize);
+  const [visibleRowLimit, setVisibleRowLimit] = useState(sharedTablePageSize);
   useEffect(() => {
     if (!openFilter) return undefined;
     const closeFilter = (event) => {
@@ -74,9 +78,23 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
     const sectionRows = tableElements(section.props.children), actual = sectionRows.filter(isDataRow);
     return [section, actual.length ? selectTableRows(actual, columns, localFilters, sort) : sectionRows];
   }));
+  const selectedRows = [...bodySelections.values()].flat().filter(isDataRow);
+  const filterSignature = JSON.stringify(effectiveFilters);
+  useEffect(() => {
+    if (pageSize) setVisibleRowLimit(pageSize);
+  }, [pageSize, filterSignature, sort.key, sort.direction]);
+  let remainingRows = pageSize ? visibleRowLimit : Number.POSITIVE_INFINITY;
+  const renderedBodySelections = new Map([...bodySelections].map(([section, selected]) => {
+    const actual = selected.filter(isDataRow);
+    if (!actual.length) return [section, selected];
+    const rendered = actual.slice(0, Math.max(0, remainingRows));
+    remainingRows -= rendered.length;
+    return [section, rendered];
+  }));
+  const renderedRowCount = [...renderedBodySelections.values()].flat().filter(isDataRow).length;
   // Number the final displayed order, including tables with more than one body.
   // Keep this presentation column out of the data's sort/filter/column indices.
-  const numberedRows = showRowNumbers ? [...bodySelections.values()].flat().filter(isDataRow) : [];
+  const numberedRows = showRowNumbers ? selectedRows : [];
   const rowNumbers = new Map(numberedRows.map((row, index) => [row, index + 1]));
   // Distinct values per column for the heading filter popovers, taken from the full (unfiltered) table.
   const columnValues = useMemo(() => {
@@ -147,9 +165,10 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   };
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
-      <span className="shared-table-record-count" role="status">{[...bodySelections.values()].flat().filter(isDataRow).length} of {dataRows.length} records</span>
+      <span className="shared-table-record-count" role="status">{selectedRows.length} of {dataRows.length} records</span>
       {printData && dateRangeControl}
       {printData && <ExportMenu printOnly title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
+      <button type="button" className="mobile-columns-trigger" onClick={() => setDialog("columns")} aria-label="Choose visible table columns"><span>Columns</span></button>
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} onSaveReport={SavedReports ? () => setSavedReportDialog("save") : undefined} onSavedReports={SavedReports ? () => setSavedReportDialog("saved") : undefined} />
       {!printData && dateRangeControl}
       {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
@@ -168,8 +187,9 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
       if (section.type === "thead") sectionRows = sectionRows.map((row, position) => position === sectionRows.length - 1 ? sortableHeaderRow(row) : row);
       if (section.type === "tbody") {
         const hadData = sectionRows.some(isDataRow);
-        sectionRows = bodySelections.get(section);
-        if (hadData && !sectionRows.length) return React.cloneElement(section, {}, <tr><td colSpan={Math.max(1, indices.length + (showRowNumbers ? 1 : 0))} className="empty-state">No matching records</td></tr>);
+        const selectedSectionRows = bodySelections.get(section);
+        sectionRows = renderedBodySelections.get(section);
+        if (hadData && !selectedSectionRows.some(isDataRow)) return React.cloneElement(section, {}, <tr><td colSpan={Math.max(1, indices.length + (showRowNumbers ? 1 : 0))} className="empty-state">No matching records</td></tr>);
       }
       return React.cloneElement(section, {}, sectionRows.map((row, position) => {
         const projected = projectTableRow(row, indices);
@@ -181,5 +201,9 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
         return React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
       }));
     })}</table>
+    {pageSize > 0 && selectedRows.length > pageSize && <div className="mobile-table-window-status" role="status">
+      <span>Showing {renderedRowCount} of {selectedRows.length} records</span>
+      {renderedRowCount < selectedRows.length && <button type="button" onClick={() => setVisibleRowLimit((current) => current + pageSize)}>Show {Math.min(pageSize, selectedRows.length - renderedRowCount)} more</button>}
+    </div>}
   </>;
 }

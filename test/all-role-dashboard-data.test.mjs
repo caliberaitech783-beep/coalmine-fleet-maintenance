@@ -12,7 +12,8 @@ test("every operational dashboard loads site-wide requests separately from perso
   assert.match(requestLoader, /cache: "no-store"/);
   assert.match(normal, /createDashboardRequestLoader\(\{onState:setDashboardState\}\)/);
   assert.match(normal, /watchRequestRefresh\(\(\)=>loader\.load\(session\?\.token\|\|authToken\),\{win:window,doc:document,initial:true\}\)/);
-  assert.match(normal, /\},\[session\?\.token,session\?\.assignedRole,embedded,isGeneral\]\)/);
+  assert.match(normal, /if \(section !== "dashboard"\) return undefined/);
+  assert.match(normal, /\},\[session\?\.token,session\?\.assignedRole,embedded,isGeneral,section\]\)/);
   assert.match(normal, /const dashboardRequests=embedded \|\| isGeneral\s*\?\s*requests\s*:\s*dashboardState\.records/);
   assert.match(normal, /stop\(\);loader\.cancel\(\);dashboardLoader\.current=null/);
   assert.match(client, /<Dashboard requests=\{misDashboardRequests\}/);

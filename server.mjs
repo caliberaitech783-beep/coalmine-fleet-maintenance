@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import {createNotificationFeed} from './notification-feed.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import pg from 'pg';
@@ -72,6 +73,7 @@ import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
+import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 
 const {Pool}=pg;
 const app=express();
@@ -79,6 +81,7 @@ const app=express();
 // every visitor shares the proxy's address, so per-IP limits (password reset
 // OTP requests) fired for the whole site instead of one user.
 app.set('trust proxy',true);
+app.use(compression({threshold:1024}));
 const port=Number(process.env.PORT||3000);
 const root=path.dirname(fileURLToPath(import.meta.url));
 const backupStorageRoot=path.resolve(process.env.BACKUP_STORAGE_ROOT||(
@@ -97,6 +100,16 @@ const deploymentShaCandidate=String(process.env.DEPLOYMENT_SHA||(
   existsSync(deploymentShaFile)?readFileSync(deploymentShaFile,'utf8'):''
 )).trim().toLowerCase();
 const deploymentSha=/^[0-9a-f]{40}$/.test(deploymentShaCandidate)?deploymentShaCandidate:'';
+
+function sendPrivateJson(req,res,namespace,payload){
+  const body=JSON.stringify(payload);
+  const etag=jsonEntityTag(namespace,body);
+  res.set('Cache-Control','private, no-store');
+  res.set('ETag',etag);
+  res.vary('Authorization');
+  if(requestEtagMatches(req.get('If-None-Match'),etag))return res.status(304).end();
+  return res.type('application/json').send(body);
+}
 const connectionString=process.env.DATABASE_URL;
 const scheduledJobsEnabled=String(process.env.DISABLE_SCHEDULED_JOBS||'').trim().toLowerCase()!=='true';
 const driverSyncIntervalMs=2*60*1000;
@@ -4025,8 +4038,9 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
     const scope=infoPulseRequestScope(authorization.session,authorization.user);
     const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`);
     const visibleRows=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
-    res.set('Cache-Control','no-store');
-    res.json({requests:await attachDailyRemarks(visibleRows),scope});
+    const payload={requests:await attachDailyRemarks(visibleRows),scope};
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'info-pulse',payload);
+    return res.json(payload);
   }catch(error){next(error)}
 });
 
@@ -4044,7 +4058,6 @@ app.post('/api/info-pulse/prompt',requireSession,async(req,res,next)=>{
 });
 
 app.get('/api/requests',requireSession,async(req,res,next)=>{
-  res.set('Cache-Control','no-store');
   try{
     const operationalRole=req.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(req.session.assignedRole);
     const generalDashboard=req.session.assignedRole==='General User'&&req.query.scope==='dashboard'&&req.session.permissions?.viewDashboardRequests===true;
@@ -4073,7 +4086,9 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
         ? rows.filter((row)=>reportScopeIncludesSite(scopedSite,row.site))
         : [];
     const visibleRows=requestsVisibleToSession(siteVisibleRows,req.session);
-    res.json(await attachDailyRemarks(visibleRows));
+    const payload=await attachDailyRemarks(visibleRows);
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'requests',payload);
+    return res.json(payload);
   }catch(error){next(error)}
 });
 
@@ -4751,10 +4766,12 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
       FROM maintenance_requests WHERE lower(trim(status)) <> 'closed'`);
     const fleetSnapshot=dashboardFleetSnapshot(records,activeFleetRequests);
-    res.json({
+    const payload={
       records:scopeDashboardEquipmentRecords(fleetSnapshot,authorization.session,authorization.user,scope),
       scope,
-    });
+    };
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'dashboard-equipment',payload);
+    return res.json({records:payload.records,scope:payload.scope});
   }catch(error){next(error)}
 });
 

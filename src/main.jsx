@@ -995,6 +995,7 @@ function useDashboardEquipment() {
   useEffect(() => {
     let activeRequest = true;
     let controller;
+    let responseEtag = "";
     const sameScope = loadedFleetScope.current.token === authToken;
     if (!sameScope) {
       loadedFleetScope.current = {token: authToken, loaded: false};
@@ -1010,13 +1011,19 @@ function useDashboardEquipment() {
     await fetch("/api/dashboard/equipment", {
       cache: "no-store",
       signal: controller.signal,
-      headers: {Authorization: `Bearer ${authToken}`},
+      headers: {Authorization: `Bearer ${authToken}`, ...(responseEtag ? {"If-None-Match": responseEtag} : {})},
     })
       .then((response) => {
         if ([401, 403].includes(response.status)) throw Object.assign(new Error("Sign in again or check your dashboard access."), {status: response.status});
+        if (response.status === 304) return {notModified: true};
+        responseEtag = response.headers?.get?.("etag") || "";
         return readApiJson(response, "Could not load fleet data.");
       })
       .then((data) => {
+        if (data?.notModified) {
+          if (activeRequest) { setLoaded(true); setLoadError(""); setUpdatedAt(Date.now()); }
+          return;
+        }
         if (!Array.isArray(data.records)) throw new Error("Fleet data response was invalid. Please retry.");
         if (!data.scope || typeof data.scope !== "object" || Array.isArray(data.scope)
           || typeof data.scope.restrictToScope !== "boolean"
@@ -2102,7 +2109,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
-    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Table controls</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(requestStatusLabel).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} /><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} /></div></div><div id={statusPanelId || undefined} role={statusPanelId ? "tabpanel" : undefined} aria-labelledby={statusPanelLabelledBy || undefined} className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Search &amp; status</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(requestStatusLabel).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} /><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} /></div></div><div id={statusPanelId || undefined} role={statusPanelId ? "tabpanel" : undefined} aria-labelledby={statusPanelLabelledBy || undefined} className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <ActionsTable className="breakdown-table-auto-fit" printTitle={stableToolbar ? "Manager dashboard requests" : ""} toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
@@ -8064,7 +8071,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
-    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Table controls</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(statusLabel).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /></div></div><div className="scroll mobile-workflow-table">
+    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Search &amp; status</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(statusLabel).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /></div></div><div className="scroll mobile-workflow-table">
       <ActionsTable className="workflow-table" closedTimeAfterStarted={closedTimeAfterStarted} toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
@@ -8700,13 +8707,15 @@ function AiFeeder({ role = "", session }) {
     if (!session?.token) return undefined;
     let active = true;
     let pending = null;
+    let responseEtag = "";
     const load = () => {
       if (pending) return pending;
       setLoadState(current => ({...current, refreshing: true}));
       pending = fetch(`/api/info-pulse?t=${Date.now()}`, {
-        cache: "no-store", headers: {Authorization: `Bearer ${session.token}`},
+        cache: "no-store", headers: {Authorization: `Bearer ${session.token}`, ...(responseEtag ? {"If-None-Match": responseEtag} : {})},
       })
         .then(async response => {
+          if (response.status === 304) return null;
           const body = await response.json().catch(() => ({}));
           if (!response.ok) {
             if (active && [401, 403].includes(response.status)) {
@@ -8717,12 +8726,15 @@ function AiFeeder({ role = "", session }) {
             throw new Error(body.error || "Could not load Info Pulse");
           }
           if (!Array.isArray(body.requests) || !body.scope?.label) throw new Error("Incomplete Info Pulse response");
+          responseEtag = response.headers?.get?.("etag") || "";
           return body;
         })
         .then(body => {
           if (!active) return;
-          setRequests(requestsVisibleToMisWorkspace(Array.isArray(body.requests) ? body.requests : [], role === "MIS User"));
-          setScope(body.scope);
+          if (body) {
+            setRequests(requestsVisibleToMisWorkspace(Array.isArray(body.requests) ? body.requests : [], role === "MIS User"));
+            setScope(body.scope);
+          }
           const refreshedAt = Date.now();
           setNow(refreshedAt);
           setLoadState({token: session.token, ready: true, updatedAt: refreshedAt, error: "", refreshing: false});
@@ -9065,7 +9077,7 @@ function NotificationBell({ session, onOpenEntry }) {
   </>;
 }
 
-function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, theme, toggleTheme, embedded = false }) {
+function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, onRefreshRequests, theme, toggleTheme, embedded = false }) {
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const mobileRole = session?.assignedRole || "Mobile User";
   const isGeneral = mobileRole === "General User";
@@ -9081,6 +9093,14 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const dashboardRequests=embedded || isGeneral ? requests : dashboardState.records;
   const dashboardRequestsReady=embedded || isGeneral || (dashboardState.token === session?.token && dashboardState.loaded);
   const [createdRequestRef, setCreatedRequestRef] = useState("");
+  const [workspaceRefreshing, setWorkspaceRefreshing] = useState(false);
+  const refreshWorkspace = async () => {
+    if (workspaceRefreshing || !onRefreshRequests) return;
+    setWorkspaceRefreshing(true);
+    try { await onRefreshRequests(); }
+    catch {}
+    finally { setWorkspaceRefreshing(false); }
+  };
   useEffect(() => {
     if (!createdRequestRef) return undefined;
     const timer = window.setTimeout(() => setCreatedRequestRef(""), 5000);
@@ -9127,11 +9147,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
     if (embedded || isGeneral) return undefined;
+    if (section !== "dashboard") return undefined;
     const loader=createDashboardRequestLoader({onState:setDashboardState});
     dashboardLoader.current=loader;
     const stop=watchRequestRefresh(()=>loader.load(session?.token||authToken),{win:window,doc:document,initial:true});
     return()=>{stop();loader.cancel();dashboardLoader.current=null;};
-  },[session?.token,session?.assignedRole,embedded,isGeneral]);
+  },[session?.token,session?.assignedRole,embedded,isGeneral,section]);
   useEffect(() => {
     let active = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session?.token || authToken}`}})
@@ -9232,6 +9253,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
         {showRequestsMenu&&isMaintenance&&canSeeRequestMenu("Close request form")&&<button className={tab === "close" ? "active" : ""} onClick={() => setTab("close")}>Close request form</button>}
+        {onRefreshRequests&&<button type="button" className="mobile-workspace-refresh" onClick={refreshWorkspace} disabled={workspaceRefreshing}><RefreshCw className={workspaceRefreshing ? "spin" : ""} /> {workspaceRefreshing ? "Refreshing…" : "Refresh now"}</button>}
       </div>
       </div>
       {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
@@ -9278,6 +9300,7 @@ function App() {
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([LOGIN_LANDING_PAGE]);
   const requestLoadSequence = useRef(0);
+  const requestResponseCache = useRef({token: "", etag: ""});
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
   useEffect(() => {
@@ -9451,6 +9474,9 @@ function App() {
     return () => clearTimeout(timer);
   }, [loadTime]);
   const loadRequests = async () => {
+    const responseCache = typeof requestResponseCache === "undefined"
+      ? (loadRequests.responseCache ||= {token: "", etag: ""})
+      : requestResponseCache.current;
     const loadSequence = ++requestLoadSequence.current;
     if (!session?.token) {
       if (loadSequence === requestLoadSequence.current) setRequests([]);
@@ -9464,22 +9490,30 @@ function App() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 15_000);
     try {
+      if (responseCache.token !== session.token) { responseCache.token = session.token; responseCache.etag = ""; }
       const response = await fetch(`/api/requests?t=${Date.now()}${generalScope?`&scope=${generalScope.toLowerCase()}`:""}`, {
         cache: "no-store",
         signal: controller.signal,
-        headers: { Authorization: `Bearer ${session.token}` },
+        headers: { Authorization: `Bearer ${session.token}`, ...(responseCache.etag ? {"If-None-Match": responseCache.etag} : {}) },
       });
+      if (response.status === 304) {
+        if (loadSequence === requestLoadSequence.current) setRequestState((current) => ({...current, token: session.token, loaded: true, error: "", updatedAt: Date.now()}));
+        return requests;
+      }
       if (!response.ok) throw Object.assign(new Error([401, 403].includes(response.status) ? "Sign in again or check your dashboard access." : "Could not load requests"), {status: response.status});
       const data = await response.json();
       if (!Array.isArray(data)) throw new Error("Invalid request data received");
       if (loadSequence === requestLoadSequence.current) {
         setRequests(data);
+        responseCache.token = session.token;
+        responseCache.etag = response.headers?.get?.("etag") || "";
         setRequestState({ token: session.token, loaded: true, error: "", updatedAt: Date.now() });
       }
       return data;
     } catch (error) {
       if (loadSequence === requestLoadSequence.current) {
         if ([401, 403].includes(error.status)) {
+          responseCache.etag = "";
           setRequests([]);
           setRequestState({token: session.token, loaded: false, updatedAt: 0, error: error.message});
         } else {
@@ -9494,6 +9528,7 @@ function App() {
   const requestsLoaded = requestState.token === session?.token && requestState.loaded;
   const requestsError = requestState.token === session?.token ? requestState.error : "";
   useEffect(() => {
+    requestResponseCache.current = {token: session?.token || "", etag: ""};
     setRequestState({ token: session?.token || "", loaded: false, error: "", updatedAt: 0 });
     setRequests([]);
     if (!session?.token) {
@@ -9616,6 +9651,7 @@ function App() {
           onUpdateRequest={updateRequest}
           onDeleteRequest={deleteRequest}
           onAddDailyRemark={addDailyRemark}
+          onRefreshRequests={loadRequests}
           session={session}
           logout={logout}
           theme={theme}
@@ -9722,6 +9758,7 @@ function App() {
               onUpdateRequest={updateRequest}
                   onDeleteRequest={deleteRequest}
                   onAddDailyRemark={addDailyRemark}
+              onRefreshRequests={loadRequests}
               session={operationalSession}
               logout={logout}
               theme={theme}
