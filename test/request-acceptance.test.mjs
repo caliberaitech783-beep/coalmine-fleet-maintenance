@@ -40,7 +40,9 @@ test("Maintenance acceptance is server timed and shared by every request view", 
   const editForm = client.slice(client.indexOf("function RequestEditForm"), client.indexOf("function CloseRequestForm"));
   assert.match(client, /request\.acceptanceRequired \? "Production timing" : "Timing"/);
   assert.match(client, /request\.acceptanceRequired && <label>Acceptance timing/);
-  assert.match(client, /request\.acceptanceRequired && !request\.acceptedAt \? "Accept vehicle" : "Save changes"/);
+  assert.match(client, /const acceptingRequest = !request\.acceptedAt/);
+  assert.match(client, /acceptingRequest \? "Accept vehicle" : "Save changes"/);
+  assert.match(client, /acceptRequest: acceptingRequest/);
   assert.match(client, /value=\{normalizeEquipmentGroup\(request\.equipmentGroup\) \|\| request\.equipment \|\| ""\} readOnly/);
   for (const field of ["door", "chassis", "site"]) assert.match(client, new RegExp(`value=\\{request\\.${field}[^>]+readOnly`));
   assert.doesNotMatch(editForm, /name="(?:equipment|door|chassis|site)"/);
@@ -51,7 +53,9 @@ test("Maintenance acceptance is server timed and shared by every request view", 
   assert.match(server, /ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ/);
   assert.match(server, /ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE/);
   assert.match(server, /started_at,acceptance_required,status/);
-  assert.match(server, /accepted_at=CASE WHEN acceptance_required THEN COALESCE\(accepted_at,NOW\(\)\) ELSE accepted_at END/);
+  assert.match(server, /const explicitAcceptance=req\.body\?\.acceptRequest===true/);
+  assert.match(server, /const accepting=!before\.acceptedAt&&\(before\.acceptanceRequired\|\|explicitAcceptance\)/);
+  assert.match(server, /accepted_at=CASE WHEN accepted_at IS NULL AND \(acceptance_required OR \$11::boolean\) THEN NOW\(\) ELSE accepted_at END/);
   const editRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference'"), server.indexOf("app.patch('/api/requests/:reference/close'"));
   assert.doesNotMatch(editRoute, /equipment_name=|door_number=|registration_number=|chassis_number=|site=|started_at=/);
   assert.match(server, /AS "acceptedAt"/);

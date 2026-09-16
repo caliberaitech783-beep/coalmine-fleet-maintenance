@@ -325,11 +325,19 @@ test("admin embedded maintenance has a working daily-update callback", () => {
   });
 });
 
-test("already accepted vehicles say Save changes, not Accept vehicle again", () => {
-  for (const acceptedAt of ["", "2026-09-08 10:10:00"]) {
-    const tree = harness("RequestEditForm").render({request: {...accepted, acceptanceRequired: true, acceptedAt}, close() {}, onSave() {}});
-    assert.ok(button(tree, acceptedAt ? "Save changes" : "Accept vehicle"));
+test("every unaccepted request offers Accept vehicle, including legacy records without the acceptance-required flag", async () => {
+  for (const acceptanceRequired of [false, true]) {
+    const saved = [];
+    const tree = harness("RequestEditForm").render({request: {...accepted, acceptanceRequired, acceptedAt: ""}, close() {}, onSave(payload) { saved.push(payload); }});
+    assert.ok(button(tree, "Accept vehicle"));
+    await form(tree).props.onSubmit({preventDefault() {}, currentTarget: {category: "Breakdown", complaint: "Repair", expectedCompletionAt: "2026-09-08T18:30", openingHMRReading: ""}});
+    assert.equal(saved[0].acceptRequest, true);
   }
+  const saved = [];
+  const tree = harness("RequestEditForm").render({request: {...accepted, acceptanceRequired: false}, close() {}, onSave(payload) { saved.push(payload); }});
+  assert.ok(button(tree, "Save changes"));
+  await form(tree).props.onSubmit({preventDefault() {}, currentTarget: {category: "Breakdown", complaint: "Repair", expectedCompletionAt: "2026-09-08T18:30", openingHMRReading: ""}});
+  assert.equal(saved[0].acceptRequest, false);
 });
 
 for (const status of ['Open', 'In progress', 'Awaiting parts', 'Closed']) test(`onroad form closes ${status} requests without offering progress statuses`, async () => {

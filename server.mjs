@@ -4702,6 +4702,7 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
   try{
     const reference=String(req.params.reference||'').trim();
     const {category='Maintenance request',complaint,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
+    const explicitAcceptance=req.body?.acceptRequest===true;
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     const normalizedOpeningMeterReading=String(openingMeterReading).trim();
     const openingMeterReadings=req.body?.openingMeterReadings ?? {};
@@ -4714,16 +4715,16 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     if(openingMeterFile&&!validMeterEvidenceDataUrl(openingMeterFile))return res.status(400).json({error:`Upload a JPEG, PNG, WebP, or PDF trip card up to 5 MB.`});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
     const expectedAt=requestExpectedCompletionValue(before.expectedCompletionAt,expectedCompletionAt);
-    const accepting=before.acceptanceRequired&&!before.acceptedAt;
+    const accepting=!before.acceptedAt&&(before.acceptanceRequired||explicitAcceptance);
     validateRequestTimelineChange(before,{expectedCompletionAt:expectedAt||expectedCompletionAt,...(accepting?{acceptedAt:before.timelineRecordedAt}:{})},{now:before.timelineRecordedAt,userEntered:['expectedCompletionAt']});
     buildRequestTimelineChanges(before,{...before,expectedCompletionAt:expectedAt},{events:['expectedCompletionAt'],reason:req.body?.correctionReason,requireCorrectionReason:['expectedCompletionAt']});
     const result=await client.query(`UPDATE maintenance_requests SET category=$1,complaint=$2,
       complaint_language=CASE WHEN complaint=$2 THEN complaint_language ELSE '' END,
-      accepted_at=CASE WHEN acceptance_required THEN COALESCE(accepted_at,NOW()) ELSE accepted_at END,accepted_by=CASE WHEN acceptance_required AND accepted_at IS NULL THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
+      accepted_at=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN NOW() ELSE accepted_at END,accepted_by=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
       opening_meter_readings=opening_meter_readings || $10::jsonb
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading})]);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance]);
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });

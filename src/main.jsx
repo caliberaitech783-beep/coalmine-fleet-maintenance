@@ -8177,6 +8177,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   const submitLock = useRef(false);
   const closeDialog = () => { if (!submitLock.current) close(); };
   const meterType = requestMeterTypeForRequest(request, equipmentRecords);
+  const acceptingRequest = !request.acceptedAt;
   return <Modal title={`Edit request ${request.ref}`} close={closeDialog}>
     <form className="form" onSubmit={async (event) => {
       event.preventDefault();
@@ -8191,7 +8192,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
-        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || ""});
+        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -8228,7 +8229,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label className="full">Reason / complaint *<textarea name="complaint" required defaultValue={request.complaint || ""} /><TranslatedText text={request.complaint} language={request.complaintLanguage} helper /></label>
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
-      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : request.acceptanceRequired && !request.acceptedAt ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? acceptingRequest ? "Accepting…" : "Saving…" : acceptingRequest ? "Accept vehicle" : "Save changes"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -9195,7 +9196,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   };
   const saveEdit = async (payload) => {
     if (requireArrivalReason(editing)) return;
-    const acceptingVehicle = Boolean(editing?.acceptanceRequired && !editing?.acceptedAt);
+    const acceptingVehicle = Boolean(payload.acceptRequest && !editing?.acceptedAt);
     try { await onUpdateRequest(payload.ref, payload); setEditing(null); if (acceptingVehicle) setCreatedRequestRef("Vehicle Accepted"); }
     catch (error) { if (!requireArrivalReason(editing, error)) throw error; }
   };

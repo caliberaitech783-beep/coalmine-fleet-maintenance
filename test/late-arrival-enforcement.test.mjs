@@ -52,7 +52,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
         if(!active(saved)||needsFlag(saved))return {rows:[],rowCount:0};
         if(sql.includes("SET meter_type=CASE"))saved.opening_meter_reading=values[1];
         else if(failFinalWrite)throw new Error('Simulated write failure');
-        else if(sql.includes('SET category='))saved={...saved,complaint:values[1],acceptedAt:saved.acceptanceRequired?(saved.acceptedAt||new Date(now).toISOString()):saved.acceptedAt};
+        else if(sql.includes('SET category='))saved={...saved,complaint:values[1],acceptedAt:(saved.acceptanceRequired||values[10]===true)?(saved.acceptedAt||new Date(now).toISOString()):saved.acceptedAt};
         else saved={...saved,status:sql.includes("status='Closed'")?'Closed':sql.includes("status='Idle'")?'Idle':values[2]};
         return {rows:[structuredClone(saved)],rowCount:1};
       }
@@ -123,7 +123,7 @@ test('the waiting threshold is inclusive but already-accepted late arrival is st
   assert.equal((await due.call()).body.code,'ARRIVAL_RED_FLAG_REQUIRED');
   assert.equal((await harness('edit',{row:{...waiting,acceptedAt:'2026-09-08T12:00:00Z'}}).call()).status,200);
   assert.equal((await harness('edit',{row:acceptedLate}).call()).body.code,'ARRIVAL_RED_FLAG_REQUIRED');
-  assert.match(routes.edit,/COALESCE\(accepted_at,NOW\(\)\)/);
+  assert.match(routes.edit,/accepted_at=CASE WHEN accepted_at IS NULL AND \(acceptance_required OR \$11::boolean\) THEN NOW\(\)/);
   assert.match(server,/to_char\(accepted_at AT TIME ZONE 'Asia\/Kolkata','YYYY-MM-DD HH24:MI:SS'\)/);
 });
 

@@ -58,7 +58,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     assert.equal(tx,true,'all timestamp writes are transactional');
     if(sql.includes('SET category=')){
       saved.complaint=args[1];saved.expectedCompletionAt=args[2];
-      if(saved.acceptanceRequired&&!saved.acceptedAt){saved.acceptedAt=now;saved.acceptedBy=args[7];}
+      if((saved.acceptanceRequired||args[10]===true)&&!saved.acceptedAt){saved.acceptedAt=now;saved.acceptedBy=args[7];}
     }else if(sql.includes("SET verification_status='Verified'")){
       saved.verifiedAt=now;saved.verifiedBy=args[0];saved.firstTripAt=args[2];saved.firstTripDone=args[1];
     }else if(sql.includes('SET closed_at=$1')){saved.closedAt=args[0];saved.status='Closed';saved.closedBy=args[1];}
@@ -111,6 +111,16 @@ test('initial acceptance records independent system capture and user-entered ETC
   assert.equal((await app.call()).status,200);assert.equal(app.audits.length,1);
   assert.deepEqual(app.audits[0].map(row=>[row.event,row.source,row.correction]),[['acceptedAt','system',false],['expectedCompletionAt','user',false]]);
   assert.ok(app.queries.findIndex(row=>row.sql.startsWith('INSERT INTO audit_events'))<app.queries.findIndex(row=>row.sql==='COMMIT'));
+});
+
+test('explicit Accept vehicle records acceptance for a legacy request without making ordinary edits auto-accept it',async()=>{
+  const legacy={...active,acceptanceRequired:false,acceptedAt:null,expectedCompletionAt:null};
+  const ordinary=harness('edit',{row:legacy});
+  assert.equal((await ordinary.call({acceptRequest:false})).status,200);assert.equal(ordinary.saved.acceptedAt,null);
+  assert.deepEqual(ordinary.audits[0].map(row=>row.event),['expectedCompletionAt']);
+  const explicit=harness('edit',{row:legacy});
+  assert.equal((await explicit.call({acceptRequest:true})).status,200);assert.equal(explicit.saved.acceptedBy,maintenance.name);
+  assert.deepEqual(explicit.audits[0].map(row=>row.event),['acceptedAt','expectedCompletionAt']);
 });
 
 test('timeline storage failure rolls back acceptance/ETC mutation and retains existing audit records',async()=>{
