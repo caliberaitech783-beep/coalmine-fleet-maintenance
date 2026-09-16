@@ -84,6 +84,7 @@
 .mine-dashboard .mine-fleet-breakdown-count { min-width: 24px; font-size: 18px !important; line-height: 1.25; }
 .mine-dashboard .mine-fleet-chart-regions footer { flex-wrap: wrap; gap: 4px 10px; padding: 4px; }
 .mine-dashboard .mine-fleet-chart-regions footer b { font-size: 19px !important; }
+.mine-dashboard .mine-fleet-chart-regions footer .mine-region-bd-summary { flex-basis: 100%; text-align: center; }
 .mine-dashboard .mine-fleet-chart-toggle button { min-height: 44px; padding: 10px 14px; }
 .mine-dashboard .mine-fleet-chart-toggle button b { font-size: 20px !important; }
 .mine-dashboard .mine-fleet-chart-tools { flex-wrap: wrap; justify-content: flex-end; }
