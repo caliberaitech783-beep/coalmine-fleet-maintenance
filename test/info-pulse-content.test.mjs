@@ -8,13 +8,12 @@ import * as data from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import * as dates from '../date-time-format.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
-import * as reasons from '../src/info-pulse-reasons.mjs';
 import * as timing from '../src/info-pulse-timing.mjs';
 
 const source = readFileSync(new URL('../src/info-pulse-content.jsx', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
 const {code} = await transformWithOxc(source, 'pulse-content.jsx', {jsx: {runtime: 'classic'}});
-const NOW = Date.parse('2026-09-10T12:00:00+05:30');
+const NOW = Date.parse('2026-09-16T11:00:00+05:30');
 function descendants(tree, predicate) {
   const result = [];
   const visit = node => {
@@ -28,378 +27,113 @@ function descendants(tree, predicate) {
 }
 const byLabel = (tree, label) => descendants(tree, node => node.props['aria-label'] === label)[0];
 const text = tree => Array.isArray(tree) ? tree.map(text).join('') : React.isValidElement(tree) ? text(tree.props.children) : String(tree ?? '');
-function harness() {
-  const slots = [];
-  let cursor = 0;
-  const bindings = {
-    React, ...data, ...dates, ...reasons, ...timing, requestStatusLabel, parseIstTimestamp,
-    useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === 'function' ? initial() : initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
-    useMemo: callback => callback(),
-    createPortal: (child, target) => React.createElement('div', {'data-portal-target': target}, child),
-    ...Object.fromEntries(['ArrowLeft', 'ChevronDown', 'ChevronLeft', 'ChevronRight', 'RefreshCw', 'MapPin', 'Truck', 'Info'].map(name => [name, () => null])),
-  };
-  const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
-  const requests = Array.from({length: 67}, (_, i) => ({ref: `R-${i}`, door: `D-${i}`, site: i < 60 ? 'Sasti OB' : 'Majri OB', status: 'Open', start: i < 60 ? '2026-09-01 12:00' : '2026-09-02 12:00', expectedCompletionAt: '2026-09-03 12:00', complaint: 'Hydraulic leak'}));
-  const props = {requests, cases: data.buildInfoPulseCases(requests, {now: NOW}), role: 'Admin', now: NOW, ready: true, scope: {label: 'All regions'}, updatedAt: NOW};
-  return {render(overrides = {}) {cursor = 0; return Component({...props, ...overrides});}};
+const html = tree => renderToStaticMarkup(tree).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+const bindings = {
+  React, ...data, ...dates, ...timing, requestStatusLabel, parseIstTimestamp,
+  createPortal: (child, target) => React.createElement('div', {'data-portal-target': target}, child),
+  ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle'].map(name => [name, () => null])),
+};
+const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
+const REQUESTS = [
+  {ref: 'REQ-V167', door: 'V167', reg: 'MH34BZ3284', site: 'Dhoptala OB (2nd)', equipmentGroup: 'VOLVO TIPPERS', status: 'Open', start: '2026-09-16 06:02', expectedCompletionAt: '2026-09-16 06:20', complaint: 'RHS 2nd axle main leaf spring broken'},
+  {ref: 'REQ-S145', door: 'S145', site: 'Sasti OB', equipmentGroup: 'SCANIA TIPPERS', status: 'Open', start: '2026-09-16 09:36', expectedCompletionAt: '2026-09-16 13:00', complaint: 'Third axle oil seal leakage'},
+  {ref: 'REQ-D38', door: 'D38', site: 'Majri OB', equipmentGroup: 'DOZERS', status: 'Open', start: '2026-09-14 08:01', complaint: 'LHS track chain loose and battery terminal damage'},
+  {ref: 'REQ-IDLE', door: 'E110', site: 'Majri OB', status: 'Idle', start: '2026-09-10 08:00', complaint: 'No operator'},
+  {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OB', status: 'Closed', start: '2026-09-09 08:00', closedAt: '2026-09-15 08:00', complaint: 'Brake liner broken'},
+  {ref: 'REQ-VERIFIED', door: 'S6', site: 'Sasti OB', status: 'Open', verifiedAt: '2026-09-15 09:00', start: '2026-09-08 08:00', complaint: 'Leaf spring broken'},
+];
+function render(overrides = {}) {
+  const requests = overrides.requests || REQUESTS;
+  return Component({breakdowns: data.buildInfoPulseBreakdowns(requests), scope: {label: 'All regions'}, now: NOW, updatedAt: NOW, ready: true, error: '', refreshing: false, onRefresh() {}, ...overrides});
 }
 
-function allDatesHarness() {
-  const app = harness();
-  descendants(app.render(), node => node.props.className === 'pulse-reset')[0].props.onClick();
-  return app;
-}
-
-test('opens with today in IST applied to dates, site badges, priority boxes, breakdowns and records', () => {
-  // UTC is still September 9; the application day has already changed in IST.
-  const now = Date.parse('2026-09-09T19:00:00Z');
-  const requests = [
-    {ref: 'YESTERDAY', site: 'Sasti OB', status: 'Open', start: '2026-09-09T18:29:59Z', expectedCompletionAt: '2026-09-09 23:59'},
-    {ref: 'TODAY-SASTI', site: 'Sasti OB', status: 'Open', start: '2026-09-09T18:30:00Z', expectedCompletionAt: '2026-09-10 00:05'},
-    {ref: 'TODAY-MAJRI', site: 'Majri OB', status: 'Idle', start: '2026-09-10 00:15', idleReason: 'No driver'},
-    {ref: 'TOMORROW', site: 'Majri OB', status: 'Idle', start: '2026-09-11 00:00'},
-  ];
-  const props = {now, requests, cases: data.buildInfoPulseCases(requests, {now})};
-  const app = harness();
-  let tree = app.render(props);
-  assert.deepEqual(descendants(tree, node => node.type === 'input').map(input => input.props.value), ['2026-09-10', '2026-09-10']);
-  assert.match(text(tree), /10-09-2026 – 10-09-2026/);
-  assert.equal(byLabel(tree, 'Filter site: All sites').props['aria-pressed'], true);
-  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites2');
-  assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB1');
-  assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB1');
-  for (const label of ['All cases: 2 cases', 'Critical: 1 cases', 'Warnings: 1 cases', 'Updates: 0 cases', 'Total breakdowns: 1 at All sites']) assert.ok(byLabel(tree, label), label);
-  let records = text(byLabel(tree, 'Matching case records'));
-  assert.ok(records.includes('TODAY-SASTI') && records.includes('TODAY-MAJRI'));
-  assert.ok(!records.includes('YESTERDAY') && !records.includes('TOMORROW'));
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  tree = app.render(props);
-  assert.ok(byLabel(tree, 'All cases: 1 cases'));
-  byLabel(tree, 'Total breakdowns: 1 at Sasti OB').props.onClick();
-  records = text(byLabel(app.render(props), 'Matching case records'));
-  assert.ok(records.includes('TODAY-SASTI') && !records.includes('YESTERDAY'));
+test('BD balance counts open breakdowns only and lists them longest standing first with their reasons', () => {
+  const tree = render();
+  const balance = byLabel(tree, 'BD balance: 3 open breakdowns at All regions');
+  assert.ok(balance, 'header balance');
+  assert.equal(text(balance), 'BD balance3All regions · open breakdowns, excluding idle');
+  const list = byLabel(tree, 'Open breakdowns, longest standing first');
+  assert.equal(list.type, 'ol');
+  const rows = descendants(list, node => node.type === 'li');
+  assert.deepEqual(rows.map(row => text(descendants(row, node => node.props.className === 'pulse-row-vehicle')[0])), ['D38', 'V167', 'S145']);
+  assert.deepEqual(rows.map(row => text(descendants(row, node => node.props.className === 'pulse-rank')[0])), ['1', '2', '3']);
+  const body = html(list);
+  for (const reason of ['LHS track chain loose and battery terminal damage', 'RHS 2nd axle main leaf spring broken', 'Third axle oil seal leakage']) assert.ok(body.includes(reason), reason);
+  assert.ok(body.includes('Majri OB') && body.includes('DOZERS · REQ-D38') && body.includes('VOLVO TIPPERS · REQ-V167'));
+  for (const excluded of ['E110', 'S55', 'S6', 'No operator', 'Brake liner']) assert.ok(!body.includes(excluded), `${excluded} excluded`);
 });
 
-test('custom dates survive refresh, Reset opens all dates, and reopening defaults to the current IST day', () => {
-  const app = harness();
-  let tree = app.render();
-  const inputs = descendants(tree, node => node.type === 'input');
-  inputs[0].props.onChange({target: {value: '2026-09-02'}});
-  inputs[1].props.onChange({target: {value: '2026-09-02'}});
-  tree = app.render({now: NOW + 86_400_000});
-  assert.deepEqual(descendants(tree, node => node.type === 'input').map(input => input.props.value), ['2026-09-02', '2026-09-02']);
-  assert.ok(byLabel(tree, 'All cases: 7 cases'));
-  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
-  tree = app.render();
-  assert.ok(descendants(tree, node => node.type === 'input').every(input => input.props.value === ''));
-  assert.ok(byLabel(tree, 'All cases: 67 cases'));
-  tree = harness().render({now: NOW + 86_400_000});
-  assert.deepEqual(descendants(tree, node => node.type === 'input').map(input => input.props.value), ['2026-09-11', '2026-09-11']);
-  assert.equal(byLabel(tree, 'Filter site: All sites').props['aria-pressed'], true);
-  assert.ok(byLabel(tree, 'All cases: 0 cases'));
-  assert.match(text(tree), /No matching cases/);
+test('the redesign has no filters, categories, pagination or drill-downs', () => {
+  const tree = render();
+  assert.equal(descendants(tree, node => node.type === 'input' || node.type === 'select').length, 0);
+  assert.equal(descendants(tree, node => 'aria-pressed' in node.props || 'aria-expanded' in node.props).length, 0);
+  assert.deepEqual(descendants(tree, node => node.type === 'button').map(node => text(node)), ['Refresh']);
+  const page = html(tree);
+  for (const removed of ['Critical', 'Warnings', 'Updates', 'ETC overdue', 'Down ≥ 3 days', 'New ≤ 12 hours', 'All cases', 'Request date', 'Site ', 'of 3']) assert.ok(!page.includes(removed), `${removed} removed`);
+  assert.ok(!source.includes('useState') && !source.includes('PAGE_SIZE'));
 });
 
-test('site number opens its exact cases, pages retain all records, and a case reveals details', () => {
-  const app = allDatesHarness();
-  let tree = app.render();
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  byLabel(app.render(), 'Filter issue: ETC overdue').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /60 cases/);
-  assert.match(text(tree), /1–25 of 60 cases/);
-  const first = descendants(tree, node => node.props.className === 'pulse-record-link')[0];
-  first.props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /Hydraulic leak/);
-  byLabel(tree, 'Next cases').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /26–50 of 60 cases/);
-  byLabel(tree, 'Next cases').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /51–60 of 60 cases/);
-  assert.equal(byLabel(tree, 'Next cases').props.disabled, true);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 10);
+test('each row shows standing since, down for and the ETC as overdue, due in or not set', () => {
+  const rows = descendants(byLabel(render(), 'Open breakdowns, longest standing first'), node => node.type === 'li');
+  assert.deepEqual(rows.map(row => row.props.className), ['pulse-breakdown-row none', 'pulse-breakdown-row overdue', 'pulse-breakdown-row due']);
+  const [dozer, volvo, scania] = rows.map(html);
+  assert.match(dozer, /Standing since 14-09-2026 08:01(:00)? AM Down for 2d 2h 59m ETC Not set/);
+  assert.match(volvo, /Standing since 16-09-2026 06:02(:00)? AM Down for 4h 58m ETC 16-09-2026 06:20(:00)? AM Overdue by 4h 40m/);
+  assert.match(scania, /Standing since 16-09-2026 09:36(:00)? AM Down for 1h 24m ETC 16-09-2026 01:00(:00)? PM Due in 2h 0m/);
+  const annotated = timing.pulseBreakdownRows(data.buildInfoPulseBreakdowns(REQUESTS), NOW);
+  assert.equal(annotated[0].share, 1, 'longest standing fills the bar');
+  assert.equal(annotated[1].share.toFixed(3), (298 / 3059).toFixed(3));
+  assert.equal(annotated[2].share, 0.03, 'short stoppages keep a visible sliver');
+  assert.deepEqual(descendants(rows[0], node => node.props.className === 'pulse-standing-bar')[0].props.style, {'--fill': 1});
 });
 
-test('date and site controls update totals and drill-down together and reset returns all cases', () => {
-  const app = allDatesHarness();
-  let tree = app.render();
-  const inputs = descendants(tree, node => node.type === 'input');
-  inputs[0].props.onChange({target: {value: '2026-09-02'}});
-  tree = app.render();
-  assert.match(text(tree), /7 cases/);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
-  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
-  tree = app.render();
-  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases67');
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  tree = app.render();
-  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases60');
-  assert.ok(!text(byLabel(tree, 'Matching case records')).includes('Majri OB'));
+test('missing start, unparseable ETC and missing complaint render explicit placeholders instead of crashing', () => {
+  const requests = [{ref: 'REQ-BLANK', site: 'Sasti OB', status: 'Open', expectedCompletionAt: 'soon'}];
+  const tree = render({requests});
+  const row = html(byLabel(tree, 'Open breakdowns, longest standing first'));
+  assert.match(row, /Not recorded Reference not recorded|Not recorded/);
+  assert.ok(row.includes('Breakdown reason Not recorded'));
+  assert.ok(row.includes('Standing since Not recorded Down for Not recorded ETC Not recorded'));
+  assert.equal(timing.pulseBreakdownRows(data.buildInfoPulseBreakdowns(requests), NOW)[0].etcState, 'unknown');
+  assert.ok(byLabel(tree, 'BD balance: 1 open breakdowns at All regions'));
 });
 
-test('loading and failures never render a misleading zero and retry is actionable', () => {
-  const app = allDatesHarness();
-  let tree = app.render({ready: false, updatedAt: 0});
-  assert.match(text(tree), /Loading site counts/);
-  assert.equal(descendants(tree, node => node.type === 'table').length, 0);
-  let retries = 0;
-  tree = app.render({ready: false, error: 'offline', updatedAt: 0, onRefresh: () => {retries++;}});
-  assert.match(text(tree), /Counts unavailable/);
-  descendants(tree, node => node.type === 'button' && text(node) === 'Retry')[0].props.onClick();
-  assert.equal(retries, 1);
-  tree = app.render({error: 'offline'});
-  assert.match(text(tree), /Showing the last loaded counts/);
-  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases67');
+test('loading, failures and an empty balance never render a misleading count and retry is actionable', () => {
+  let refreshes = 0;
+  const onRefresh = () => refreshes++;
+  let tree = render({ready: false, breakdowns: [], refreshing: true, onRefresh});
+  assert.equal(text(byLabel(tree, 'BD balance unavailable')), 'BD balance—Loading…');
+  assert.match(html(tree), /Loading breakdowns…/);
+  assert.equal(byLabel(tree, 'Open breakdowns, longest standing first'), undefined);
+  assert.equal(byLabel(tree, 'Refresh Info Pulse').props.disabled, true);
+  tree = render({ready: false, breakdowns: [], error: 'offline', onRefresh});
+  assert.equal(text(byLabel(tree, 'BD balance unavailable')), 'BD balance—Could not load');
+  const alert = descendants(tree, node => node.props.role === 'alert')[0];
+  assert.match(text(alert), /Could not load breakdowns\./);
+  descendants(alert, node => node.type === 'button')[0].props.onClick();
+  assert.equal(refreshes, 1);
+  tree = render({error: 'offline', onRefresh});
+  assert.match(text(descendants(tree, node => node.props.role === 'alert')[0]), /Refresh failed\. Showing the last loaded breakdowns\./);
+  assert.ok(byLabel(tree, 'BD balance: 3 open breakdowns at All regions'));
+  tree = render({requests: [REQUESTS[3], REQUESTS[4]], updatedAt: 0});
+  assert.ok(byLabel(tree, 'BD balance: 0 open breakdowns at All regions'));
+  assert.match(html(tree), /No open breakdowns\. BD balance is 0\./);
+  assert.match(html(tree), /Not refreshed yet/);
 });
 
-test('real daily-update arrays render all reasons and dated history without crashing', () => {
-  const request = {ref: 'R-REASONS', door: 'E02-123', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-05 12:00', complaint: 'Hydraulic leak', idleReason: 'No driver', delayedReason: 'Seal unavailable', arrivalFlagRemark: 'Recovery truck delayed', misFlagRemark: 'First trip incomplete', maintenanceWork: 'Pump replaced', dailyRemarks: [
-    {createdAt: '2026-09-09 12:30', authorName: 'Workshop team', remark: 'Pump tested', delayReason: 'Awaiting seal delivery'},
-    {createdAt: '2026-09-08 10:00', authorName: 'Site team', remark: 'Pump removed', delayReason: 'Vendor inspection'},
-  ]};
-  const props = {requests: [request], cases: data.buildInfoPulseCases([request], {now: NOW})};
-  const app = allDatesHarness();
-  let tree = app.render(props);
-  assert.match(renderToStaticMarkup(tree), /Overdue reason/);
-  assert.match(renderToStaticMarkup(tree), /Awaiting seal delivery/);
-  descendants(tree, node => node.props.className === 'pulse-details-toggle')[0].props.onClick();
-  tree = app.render(props);
-  const html = renderToStaticMarkup(tree);
-  for (const value of ['Issue / complaint', 'No driver', 'Seal unavailable', 'Recovery truck delayed', 'First trip incomplete', 'Pump replaced', 'Pump tested', 'Pump removed', 'Vendor inspection', 'Workshop team', '09-09-2026']) assert.ok(html.includes(value), value);
-  assert.ok(!html.includes('[object Object]'));
+test('the panel header and trigger badge carry the BD balance instead of alert cases', () => {
+  const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  assert.match(main, /<h2 id="ai-feeder-title">Open breakdowns<\/h2>/);
+  assert.match(main, /const breakdowns = useMemo\(\(\) => ready \? buildInfoPulseBreakdowns\(requests\) : \[\], \[requests, ready\]\);/);
+  assert.match(main, /aria-label=\{`Info Pulse, \$\{ready \? "BD balance " \+ breakdowns\.length : "BD balance unavailable"\}`\}/);
+  assert.match(main, /<b className="ai-feeder-trigger-count">\{breakdowns\.length\}<\/b>/);
+  assert.match(main, /<InfoPulseContent headerTarget=\{pulseHeaderTarget\} breakdowns=\{breakdowns\} scope=\{scope\} now=\{now\}/);
+  assert.ok(!main.includes('buildInfoPulseCases'));
 });
 
-test('header total and visible breakdown reasons retain filters and complete AM/PM times', () => {
-  const app = allDatesHarness();
-  const tree = app.render({headerTarget: 'overview-header'});
-  const portal = descendants(tree, node => node.props['data-portal-target'] === 'overview-header')[0];
-  assert.ok(byLabel(portal, 'Total breakdowns: 67 at All sites'));
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-breakdown-sites').length, 0);
-  const previews = descendants(tree, node => node.props.className === 'pulse-breakdown-reason');
-  assert.equal(previews.length, 25);
-  assert.match(text(previews[0]), /Breakdown reasonHydraulic leak/);
+test('Info Pulse opens full screen with its content scrolling inside the panel', () => {
+  const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/info-pulse-content.css', import.meta.url), 'utf8');
-  assert.match(css, /\.pulse-card-dates \.pulse-date \{ display: block; white-space: nowrap;/);
-});
-
-test('total breakdowns box counts open requests by site, lists breakdowns without alerts, and returns to cases', () => {
-  const requests = [
-    {ref: 'Q-1', door: 'Q-1', site: 'Sasti OB', status: 'Open', start: '2026-09-08 12:00', expectedCompletionAt: '2026-09-12 12:00', dailyRemarks: 'Pump ordered', complaint: 'Quiet breakdown'},
-    {ref: 'A-1', door: 'A-1', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00', complaint: 'Overdue breakdown'},
-    {ref: 'M-1', door: 'M-1', site: 'Majri OB', status: 'Open', start: '2026-09-10 08:00', expectedCompletionAt: '2026-09-12 12:00', complaint: 'Fresh breakdown'},
-    {ref: 'C-1', door: 'C-1', site: 'Majri OB', status: 'Closed', closedAt: '2026-09-09 12:00', start: '2026-09-01 12:00', complaint: 'Closed'},
-    {ref: 'I-1', door: 'I-1', site: 'Majri OB', status: 'Idle', start: '2026-09-01 12:00', complaint: 'Idle'},
-  ];
-  const props = {requests, cases: data.buildInfoPulseCases(requests, {role: 'Admin', now: NOW})};
-  const app = allDatesHarness();
-  let tree = app.render(props);
-  assert.equal(descendants(tree, node => node.props.className?.startsWith('pulse-stat ')).length, 4, 'the four priority boxes stay as they are');
-  assert.equal(text(byLabel(tree, 'Total breakdowns: 3 at All sites')), 'Total breakdowns3All sites · open requests, excluding idle');
-  assert.equal(byLabel(tree, 'Breakdowns by site'), undefined, 'duplicate site buttons are removed');
-  assert.ok(byLabel(tree, 'Filter site: Majri OB'));
-  assert.equal(byLabel(tree, 'Total breakdowns: 3 at All sites').props['aria-pressed'], false);
-  assert.equal(text(byLabel(tree, 'All cases: 4 cases')), 'All cases4', 'closed and idle rows still raise alert cases');
-  assert.ok(!text(byLabel(tree, 'Matching case records')).includes('Quiet breakdown'), 'a breakdown without alerts is not a case');
-  byLabel(tree, 'Total breakdowns: 3 at All sites').props.onClick();
-  tree = app.render(props);
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  tree = app.render(props);
-  assert.equal(byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props['aria-pressed'], true);
-  assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
-  assert.equal(text(byLabel(tree, 'Total breakdowns: 2 at Sasti OB')), 'Total breakdowns2Sasti OB · open requests, excluding idle');
-  assert.equal(byLabel(tree, 'All cases: 1 cases').props['aria-pressed'], false);
-  assert.equal(byLabel(tree, 'Filter issue: All cases').props['aria-pressed'], false);
-  assert.match(text(tree), /Sasti OB \/ All breakdowns2 breakdowns/);
-  const list = text(byLabel(tree, 'Matching case records'));
-  assert.ok(list.indexOf('Overdue breakdown') < list.indexOf('Quiet breakdown'), 'longest standing first');
-  assert.ok(list.includes('No alerts'));
-  assert.ok(!list.includes('Fresh breakdown') && !list.includes('Idle'));
-  byLabel(tree, 'Filter issue: ETC overdue').props.onClick();
-  tree = app.render(props);
-  assert.equal(byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props['aria-pressed'], false);
-  assert.match(text(tree), /Sasti OB \/ ETC overdue1 cases/);
-  byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props.onClick();
-  tree = app.render(props);
-  assert.match(text(tree), /2 breakdowns/);
-  byLabel(tree, 'Total breakdowns: 2 at Sasti OB').props.onClick();
-  tree = app.render(props);
-  assert.equal(byLabel(tree, 'All cases: 1 cases').props['aria-pressed'], true);
-  assert.match(text(tree), /Sasti OB \/ All cases1 cases/);
-  descendants(tree, node => node.type === 'input')[0].props.onChange({target: {value: '2026-09-10'}});
-  tree = app.render(props);
-  assert.ok(byLabel(tree, 'Total breakdowns: 0 at Sasti OB'), 'date filters apply to the breakdown count');
-  assert.ok(byLabel(tree, 'Filter site: Majri OB'));
-});
-
-test('all case cards appear immediately below the four count boxes without a repeated site table', () => {
-  const app = allDatesHarness();
-  let tree = app.render();
-  assert.equal(descendants(tree, node => node.type === 'table').length, 0);
-  assert.equal(descendants(tree, node => node.props.className?.startsWith('pulse-stat ')).length, 4);
-  for (const label of ['All cases: 67 cases', 'Critical: 67 cases', 'Warnings: 0 cases', 'Updates: 0 cases']) assert.ok(byLabel(tree, label), label);
-  assert.equal(byLabel(tree, 'All cases: 67 cases').props['aria-pressed'], true);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 25);
-  assert.match(text(tree), /Issue \/ complaintHydraulic leak/);
-  assert.equal(byLabel(tree, 'Filter issue: All cases').props['aria-pressed'], true);
-  assert.match(text(tree), /1–25 of 67 cases/);
-});
-
-test('cleared date filters show all sites with exact site badges and no remembered site filter', () => {
-  const app = allDatesHarness();
-  let tree = app.render();
-  assert.equal(byLabel(tree, 'Filter site: All sites').props['aria-pressed'], true);
-  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites67');
-  assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB60');
-  assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB7');
-  assert.ok(descendants(tree, node => node.type === 'input').every(input => input.props.value === ''));
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  tree = app.render();
-  assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
-  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites67');
-  assert.equal(text(byLabel(tree, 'Filter issue: All cases')), 'All cases60');
-  byLabel(tree, 'Filter site: All sites').props.onClick();
-  assert.equal(text(byLabel(app.render(), 'Filter issue: All cases')), 'All cases67');
-  byLabel(app.render(), 'Filter site: Majri OB').props.onClick();
-  assert.equal(byLabel(allDatesHarness().render(), 'Filter site: All sites').props['aria-pressed'], true);
-});
-
-test('site tabs retain the issue drill-down, clear pagination, and All sites restores every matching case', () => {
-  const app = allDatesHarness();
-  let tree = app.render();
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  byLabel(app.render(), 'Filter issue: ETC overdue').props.onClick();
-  tree = app.render();
-  assert.equal(byLabel(tree, 'Filter site: Sasti OB').props['aria-pressed'], true);
-  byLabel(tree, 'Next cases').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /26–50 of 60 cases/);
-  byLabel(tree, 'Filter site: Majri OB').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /Majri OB.*ETC overdue/);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
-  assert.ok(!text(byLabel(tree, 'Matching case records')).includes('R-0'));
-  byLabel(tree, 'Filter site: All sites').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /All sites.*ETC overdue/);
-  assert.match(text(tree), /1–25 of 67 cases/);
-});
-
-test('site badges and issue counts follow both filters, including a site with zero matching cases', () => {
-  const requests = [
-    {ref: 'A', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00'},
-    {ref: 'B', site: 'Sasti OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No driver'},
-    {ref: 'C', site: 'Majri OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No work'},
-    {ref: 'D', site: 'Majri OB', status: 'Open', start: '2026-09-02 12:00', expectedCompletionAt: '2026-09-03 12:00'},
-  ];
-  const props = {requests, cases: data.buildInfoPulseCases(requests, {now: NOW}), scope: {label: 'All regions', sites: ['Lalpeth OB']}};
-  const app = allDatesHarness();
-  let tree = app.render(props);
-  byLabel(tree, 'Filter issue: Idle').props.onClick();
-  tree = app.render(props);
-  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites2');
-  assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB1');
-  assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB1');
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  tree = app.render(props);
-  assert.match(text(tree), /Sasti OB.*Idle/);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 1);
-  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
-  tree = app.render(props);
-  byLabel(tree, 'Filter issue: ETC overdue').props.onClick();
-  tree = app.render(props);
-  descendants(tree, node => node.type === 'input')[0].props.onChange({target: {value: '2026-09-02'}});
-  tree = app.render(props);
-  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites1');
-  assert.equal(text(byLabel(tree, 'Filter site: Sasti OB')), 'Sasti OB0');
-  assert.equal(text(byLabel(tree, 'Filter site: Majri OB')), 'Majri OB1');
-  assert.equal(text(byLabel(tree, 'Filter site: Lalpeth OB')), 'Lalpeth OB0');
-  assert.match(text(tree), /All sites.*ETC overdue/);
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  tree = app.render(props);
-  assert.match(text(tree), /No matching cases/);
-  byLabel(tree, 'Filter site: All sites').props.onClick();
-  tree = app.render(props);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 1);
-  assert.ok(text(byLabel(tree, 'Matching case records')).includes('D'));
-});
-
-test('clearing an issue keeps the selected site and still shows its records', () => {
-  const app = allDatesHarness();
-  byLabel(app.render(), 'Filter site: Majri OB').props.onClick();
-  let tree = app.render();
-  assert.match(text(tree), /Majri OB.*All cases/);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
-  byLabel(tree, 'Filter issue: ETC overdue').props.onClick();
-  tree = app.render();
-  assert.match(text(tree), /Majri OB.*ETC overdue/);
-  assert.equal(descendants(tree, node => node.props.className === 'pulse-record-link').length, 7);
-  byLabel(tree, 'Filter issue: All cases').props.onClick();
-  assert.equal(byLabel(app.render(), 'Filter site: Majri OB').props['aria-pressed'], true);
-});
-
-test('short stoppages show minutes, exact dates, complaint and missing overdue reason before expansion', () => {
-  const request = {ref: 'SHORT', door: 'V592-96804', site: 'Dhoptala OB (2nd)', status: 'Open', start: '2026-09-10 11:43:26', expectedCompletionAt: '2026-09-10 11:50:00', complaint: 'Air pressure leak'};
-  const app = allDatesHarness();
-  const props = {requests: [request], cases: data.buildInfoPulseCases([request], {now: NOW})};
-  const html = renderToStaticMarkup(app.render(props));
-  for (const value of ['Standing since', 'Down for', '16m', 'ETC overdue by', '10m', '11:43:26 AM', 'Air pressure leak', 'Overdue reason', 'Not recorded']) assert.ok(html.includes(value), value);
-  assert.ok(!html.includes('0.0'));
-  assert.ok(!html.includes('pulse-record-detail'));
-});
-
-test('Info Pulse renders impossible same-day AM ETC values as PM with the corrected delay', () => {
-  const now = parseIstTimestamp('2026-09-15 16:08:00');
-  const request = {ref: 'AM-PM', door: 'S270', site: 'Sasti OB', status: 'Open', start: '2026-09-15 10:05:00', expectedCompletionAt: '2026-09-15 03:00', complaint: 'Brake problem'};
-  const app = allDatesHarness();
-  const html = renderToStaticMarkup(app.render({now, requests: [request], cases: data.buildInfoPulseCases([request], {now})}));
-  assert.match(html, /15-09-2026/);
-  assert.match(html, /03:00:00 PM/);
-  assert.match(html, /ETC overdue by<\/dt><dd><strong[^>]*>1h 8m/);
-  assert.doesNotMatch(html, /13h 8m|03:00:00 AM/);
-});
-
-test('restored count boxes reconcile unique cases, combine with site and issue filters, and reset', () => {
-  const requests = [
-    {ref: 'A', site: 'Sasti OB', status: 'Open', start: '2026-09-01 12:00', expectedCompletionAt: '2026-09-03 12:00'},
-    {ref: 'B', site: 'Sasti OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No driver'},
-    {ref: 'C', site: 'Majri OB', status: 'Idle', start: '2026-09-02 12:00', idleReason: 'No work'},
-    {ref: 'D', site: 'Majri OB', status: 'Open', start: '2026-09-10 11:00', complaint: 'Air leak'},
-  ];
-  const props = {requests, cases: data.buildInfoPulseCases(requests, {now: NOW})};
-  const app = allDatesHarness();
-  let tree = app.render(props);
-  for (const label of ['All cases: 4 cases', 'Critical: 1 cases', 'Warnings: 2 cases', 'Updates: 1 cases']) assert.ok(byLabel(tree, label), label);
-  byLabel(tree, 'Warnings: 2 cases').props.onClick();
-  tree = app.render(props);
-  assert.equal(byLabel(tree, 'Warnings: 2 cases').props['aria-pressed'], true);
-  assert.equal(descendants(tree, node => node.type === 'article').length, 2);
-  assert.equal(text(byLabel(tree, 'Filter issue: Idle')), 'Idle2');
-  byLabel(tree, 'Filter site: Sasti OB').props.onClick();
-  tree = app.render(props);
-  assert.ok(byLabel(tree, 'All cases: 2 cases'));
-  assert.ok(byLabel(tree, 'Critical: 1 cases'));
-  assert.ok(byLabel(tree, 'Warnings: 1 cases'));
-  assert.equal(descendants(tree, node => node.type === 'article').length, 1);
-  byLabel(tree, 'Filter issue: Idle').props.onClick();
-  tree = app.render(props);
-  assert.ok(byLabel(tree, 'All cases: 1 cases'));
-  assert.equal(text(byLabel(tree, 'Filter site: All sites')), 'All sites2');
-  byLabel(tree, 'All cases: 1 cases').props.onClick();
-  tree = app.render(props);
-  assert.equal(descendants(tree, node => node.type === 'article').length, 1);
-  assert.equal(byLabel(tree, 'Filter issue: Idle').props['aria-pressed'], true);
-  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
-  tree = app.render(props);
-  assert.equal(byLabel(tree, 'All cases: 4 cases').props['aria-pressed'], true);
-  assert.equal(byLabel(tree, 'Filter site: All sites').props['aria-pressed'], true);
-  assert.equal(descendants(tree, node => node.type === 'article').length, 4);
-});
-
-test("Info Pulse opens full screen with its content scrolling inside the panel", () => {
-  const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../src/info-pulse-content.css", import.meta.url), "utf8");
   assert.match(main, /<div className="ai-feeder-overlay pulse-overlay">\s*<div className="ai-feeder-panel pulse-panel"/);
   assert.match(css, /\.ai-feeder-overlay\.pulse-overlay \{ padding: 0; \}/);
   assert.match(css, /\.ai-feeder-panel\.pulse-panel \{ width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; box-shadow: none; \}/);
@@ -407,12 +141,11 @@ test("Info Pulse opens full screen with its content scrolling inside the panel",
   assert.match(css, /\.pulse-content \{[^}]*overflow: auto;[^}]*min-height: 0;/);
 });
 
-test("case rows are compact until expanded, so at least ten fit on the full-screen panel", () => {
-  const source = readFileSync(new URL("../src/info-pulse-content.jsx", import.meta.url), "utf8");
-  const css = readFileSync(new URL("../src/info-pulse-content.css", import.meta.url), "utf8");
-  assert.match(source, /className=\{`pulse-case-card \$\{row\.issues\.length \? pulseCaseSeverity\(row\) : 'plain'\}\$\{isExpanded \? ' expanded' : ''\}`\}/);
-  assert.match(source, /Each row shows the site, equipment, status, alerts, standing time and ETC\. Expand a row for the complaint, recorded reasons, daily updates and full details\./);
-  assert.match(css, /\.pulse-content \.pulse-case-card \{ display: grid; grid-template-columns: 150px minmax\(220px, 1fr\) minmax\(140px, .6fr\) auto; align-items: center;/);
-  assert.match(css, /\.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-card-reasons, \.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-latest-update, \.pulse-content \.pulse-case-card:not\(\.expanded\) \.pulse-details-toggle \{ display: none; \}/);
-  assert.match(css, /\.pulse-content \.pulse-case-card \.pulse-card-dates \{ display: flex; flex-wrap: nowrap;/);
+test('breakdown rows are single-line cards: rank, equipment, reason and timing, stacking on narrow screens', () => {
+  const css = readFileSync(new URL('../src/info-pulse-content.css', import.meta.url), 'utf8');
+  assert.match(css, /\.pulse-breakdown-row \{ display: grid; grid-template-columns: 40px minmax\(200px, \.85fr\) minmax\(220px, 1\.5fr\) auto; align-items: center;/);
+  assert.match(css, /\.pulse-row-timing \{ display: flex; flex-wrap: nowrap;/);
+  assert.match(css, /\.pulse-standing-bar::after \{[^}]*width: calc\(var\(--fill, 0\) \* 100%\);/);
+  assert.match(css, /@media \(max-width: 1000px\) \{[^@]*\.pulse-breakdown-row \{ grid-template-columns: 40px 1fr; \}/);
+  assert.ok(!css.includes('pulse-case-card') && !css.includes('pulse-issue') && !css.includes('pulse-site-tabs') && !css.includes('pulse-pagination'));
 });

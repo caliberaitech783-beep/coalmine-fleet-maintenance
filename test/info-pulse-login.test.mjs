@@ -39,7 +39,7 @@ function harness(component, {prompt = () => new Promise(() => {}), start = 10000
     window: {setInterval(callback) {intervals.set(++timerId, callback); return timerId;}, clearInterval: id => intervals.delete(id)},
     document: {activeElement: {focus() {}}, body: {style: {overflow: ''}}, addEventListener: (name, callback) => listeners.set(name, callback), removeEventListener: name => listeners.delete(name)},
     fetch: (url, options) => String(url).startsWith('/api/info-pulse/prompt') ? prompt(url, options) : new Promise(() => {}), watchRequestRefresh: () => () => {},
-    requestsVisibleToMisWorkspace: rows => rows, buildInfoPulseCases: () => [],
+    requestsVisibleToMisWorkspace: rows => rows, buildInfoPulseBreakdowns: () => [],
     createPortal: children => children, Activity: () => null, MapPin: () => null, X: () => null, InfoPulseContent: () => null,
   };
   const Component = new Function(...Object.keys(bindings), `${code}; return ${component};`)(...Object.values(bindings));

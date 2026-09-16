@@ -73,7 +73,7 @@ import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequ
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownOpenedDate, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
-import { buildInfoPulseCases } from "../info-pulse-data.mjs";
+import { buildInfoPulseBreakdowns } from "../info-pulse-data.mjs";
 import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
 import InfoPulseContent from "./info-pulse-content.jsx";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
@@ -8613,7 +8613,7 @@ function TicketPage({ session }) {
   </section>;
 }
 
-function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
+function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
   const [pulseHeaderTarget, setPulseHeaderTarget] = useState(null);
   const panelRef = useRef(null);
   const [remainingSeconds, setRemainingSeconds] = useState(() => Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
@@ -8650,13 +8650,13 @@ function AiFeederPanel({ cases = [], requests = [], scope, role, now, updatedAt,
   return createPortal(<div className="ai-feeder-overlay pulse-overlay">
     <div className="ai-feeder-panel pulse-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
-        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><div className="pulse-heading-summary"><h2 id="ai-feeder-title">Site-wise overview</h2><div ref={setPulseHeaderTarget} className="pulse-heading-total" /></div></div>
+        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><div className="pulse-heading-summary"><h2 id="ai-feeder-title">Open breakdowns</h2><div ref={setPulseHeaderTarget} className="pulse-heading-total" /></div></div>
         <div className="ai-feeder-actions">
           {closeAvailableAt > 0 && <span className="ai-feeder-countdown" role="timer" aria-live="off" aria-label={remainingSeconds > 0 ? "Time until Info Pulse can be closed" : "Info Pulse can now be closed"}><small>{remainingSeconds > 0 ? "Close available in" : "You can close"}</small><b>{String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}</b></span>}
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
-      <InfoPulseContent headerTarget={pulseHeaderTarget} cases={cases} requests={requests} scope={scope} role={role} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
+      <InfoPulseContent headerTarget={pulseHeaderTarget} breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
     </div>
   </div>, document.body);
 }
@@ -8737,12 +8737,13 @@ function AiFeeder({ role = "", session }) {
     setOpenMode("");
   };
   const ready = loadState.token === session?.token && loadState.ready;
-  const cases = useMemo(() => ready ? buildInfoPulseCases(requests, {role, now}) : [], [requests, role, now, ready]);
+  // BD balance: every open request that is not idle, closed or verified, longest standing first.
+  const breakdowns = useMemo(() => ready ? buildInfoPulseBreakdowns(requests) : [], [requests, ready]);
   return <>
-    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? cases.length + " cases" : "counts unavailable"}`}>
-      <Activity /><span>INFO PULSE</span>{ready && cases.length > 0 && <><b className="ai-feeder-trigger-count">{cases.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
+      <Activity /><span>INFO PULSE</span>{ready && breakdowns.length > 0 && <><b className="ai-feeder-trigger-count">{breakdowns.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} cases={cases} requests={ready ? requests : []} scope={scope} role={role} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
+    {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} breakdowns={breakdowns} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
   </>;
 }
 

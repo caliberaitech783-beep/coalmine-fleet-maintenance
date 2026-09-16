@@ -8,6 +8,22 @@ export function pulseElapsed(from, to) {
   return [days ? `${days}d` : '', hours || days ? `${hours}h` : '', `${minutes % 60}m`].filter(Boolean).join(' ');
 }
 
+// Annotates ranked breakdown rows (already longest standing first) with the
+// figures the Info Pulse list shows: rank, standing time, its share of the
+// longest standing time, and whether the ETC is overdue, still due or unset.
+export function pulseBreakdownRows(breakdowns = [], now = Date.now()) {
+  const rows = breakdowns.map((row, index) => {
+    const request = row.request || {};
+    const startedAt = parseIstTimestamp(request.start);
+    const standingMs = Number.isFinite(startedAt) && now >= startedAt ? now - startedAt : 0;
+    const etc = effectiveInfoPulseEtcTimestamp(request);
+    const etcState = !String(request.expectedCompletionAt || '').trim() ? 'none' : !Number.isFinite(etc) ? 'unknown' : etc < now ? 'overdue' : 'due';
+    return {...row, rank: index + 1, startedAt, standingMs, etc, etcState};
+  });
+  const longest = Math.max(0, ...rows.map(row => row.standingMs));
+  return rows.map(row => ({...row, share: longest ? Math.max(0.03, row.standingMs / longest) : 0}));
+}
+
 export function pulseCaseTiming(row, now) {
   const request = row.request || {};
   const start = parseIstTimestamp(request.start), closed = parseIstTimestamp(request.closedAt), etc = effectiveInfoPulseEtcTimestamp(request);
