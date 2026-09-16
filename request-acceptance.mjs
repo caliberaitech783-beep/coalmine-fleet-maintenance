@@ -14,8 +14,6 @@ export function requestAwaitingAcceptance(request = {}, now = Date.now()) {
 }
 
 export function requestAcceptedLate(request = {}) {
-  // Late-arrival highlighting only applies where acceptance was required in the first place.
-  if (request.acceptanceRequired === false) return false;
   const acceptanceDelay = elapsedMilliseconds(request.start, request.acceptedAt);
   return acceptanceDelay !== null && acceptanceDelay > REQUEST_ACCEPTANCE_DELAY_MS;
 }
