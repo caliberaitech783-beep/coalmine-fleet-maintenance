@@ -9,6 +9,7 @@ import * as drilldown from "../src/dashboard-drilldown-model.mjs";
 import * as tableModel from "../src/table-actions-model.mjs";
 import * as recordDates from "../src/record-date-range.mjs";
 import * as dateRanges from "../src/date-range-filter.mjs";
+import { defaultDurationSort } from "../src/duration-sort.mjs";
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "../src/request-status.mjs";
 import { formatDisplayDateTime } from "../date-time-format.mjs";
@@ -22,7 +23,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   return [file, (await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } })).code + `; return ${name};`];
 })));
 const empty = () => null;
-const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
+const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
 const load = (file, overrides = {}) => {
@@ -126,6 +127,56 @@ const assertExportsMatch = tree => {
     assert.deepEqual(menu.props.smartPrintRows.map(row => menu.props.smartPrintColumns[0].value(row)), menu.props.rows.map((_, i) => i + 1));
   }
 };
+
+test("duration tables load highest first, preserve manual ascending, and reset to highest with matching exports", () => {
+  const FilterableHeader = ({ label }) => h("th", null, label);
+  const props = { ...sharedProps(), FilterableHeader, recordDateFilter: false };
+  const head = h("thead", { key: "head" }, h("tr", null, ["Machine", "Days of breakdown"].map(label => h("th", { key: label }, label))));
+  const body = rows => h("tbody", { key: "body" }, rows.map(([machine, minutes]) => h("tr", { key: machine }, h("td", null, machine), h("td", { "data-sort-value": minutes }, minutes < 0 ? "—" : "0 days"))));
+  props.children = [head, body([])];
+  const render = interactive("shared-actions-table", props);
+  let tree = render();
+  const durationHeader = tree => one(tree, node => node.type === FilterableHeader && node.props.label === "Days of breakdown");
+  const expectedSort = { key: "1:Days of breakdown", direction: "desc" };
+  assert.deepEqual(durationHeader(tree).props.sort, expectedSort);
+  const rows = [["Short", 7], ["Missing", -1], ["Longest", 60], ["Medium", 38]];
+  props.children = [head, body(rows)];
+  tree = render();
+  assert.deepEqual(bodyValues(tree).map(row => row[1]), ["Longest", "Medium", "Short", "Missing"]);
+  assertExportsMatch(tree);
+  durationHeader(tree).props.onSort(expectedSort.key, "asc");
+  props.children = [head, body([...rows, ["New", 20]])];
+  tree = render();
+  assert.deepEqual(bodyValues(tree).map(row => row[1]), ["Short", "New", "Medium", "Longest", "Missing"]);
+  assert.deepEqual(durationHeader(tree).props.sort, { ...expectedSort, direction: "asc" });
+  assertExportsMatch(tree);
+  one(tree, node => node.type === Menu).props.onClearSort();
+  tree = render();
+  assert.deepEqual(bodyValues(tree).map(row => row[1]), ["Short", "Missing", "Longest", "Medium", "New"]);
+  one(tree, node => node.type === Menu).props.onReset();
+  tree = render();
+  assert.deepEqual(bodyValues(tree).map(row => row[1]), ["Longest", "Medium", "New", "Short", "Missing"]);
+  assert.deepEqual(durationHeader(tree).props.sort, expectedSort);
+  assertExportsMatch(tree);
+});
+
+test("shared table does not override a request table's explicit ascending or cleared sort", () => {
+  const Header = () => null, events = [];
+  const props = { ...sharedProps(), recordDateFilter: false };
+  const columns = sort => h("thead", { key: "head" }, h("tr", null, h(Header, { label: "Days of breakdown", sortKey: "breakdownDays", sort, onSort: (...args) => events.push(args) })));
+  const body = h("tbody", { key: "body" }, ["7m", "38m", "1h"].map(value => h("tr", { key: value }, h("td", null, value))));
+  props.children = [columns({ key: "breakdownDays", direction: "asc" }), body];
+  const render = interactive("shared-actions-table", props);
+  let tree = render();
+  assert.deepEqual(bodyValues(tree).map(row => row[1]), ["7m", "38m", "1h"]);
+  one(tree, node => node.type === Menu).props.onSort();
+  assert.deepEqual(one(render(), node => node.type === SortDialog).props.sort, { key: "breakdownDays", direction: "asc" });
+  props.children = [columns({ key: "", direction: "asc" }), body];
+  tree = render();
+  assert.deepEqual(bodyValues(tree).map(row => row[1]), ["7m", "38m", "1h"]);
+  one(tree, node => node.type === Menu).props.onReset();
+  assert.deepEqual(events, [["breakdownDays", "desc"]]);
+});
 
 test("rendered row sequence and all export/print models follow sorting, filtering, columns and reset", () => {
   const props = sharedProps(), render = interactive("shared-actions-table", props);

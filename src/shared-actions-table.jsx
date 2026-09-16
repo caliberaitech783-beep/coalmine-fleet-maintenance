@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import RecordDateRange from "./record-date-range.jsx";
 import { primaryRecordDateColumn } from "./record-date-range.mjs";
+import { defaultDurationSort } from "./duration-sort.mjs";
 import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder } from "./table-actions-model.mjs";
 import { mobileTablePageSize } from "./mobile-performance.mjs";
 import "./table-actions.css";
@@ -32,7 +33,10 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const [visible, setVisibleState] = useState(() => restoreColumnOrder(columnStorageKey, columns.map((column) => column.key)));
   const setVisible = (keys) => { setVisibleState(keys); storeColumnOrder(columnStorageKey, keys, columns.map((column) => column.key)); };
   const [filters, setFilters] = useState({});
-  const [sort, setSort] = useState({ key: "", direction: "asc" });
+  const externalSort = columns.find((column) => column.header.props.sort)?.header.props.sort;
+  const defaultSort = defaultDurationSort(columns);
+  // Tables with their own header callbacks own their sorting, including a user's manual choice.
+  const [sort, setSort] = useState(() => externalSort ? { key: "", direction: "asc" } : defaultSort);
   const [dialog, setDialog] = useState("");
   // "save" | "saved" while a saved-report dialog is open (see SavedReports).
   const [savedReportDialog, setSavedReportDialog] = useState("");
@@ -54,7 +58,6 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const dateColumn = primaryRecordDateColumn(columns);
   const disabledDateKey = disableDateColumnFilter ? dateColumn?.key : undefined;
   const filterableColumns = columns.filter((column) => column.key !== disabledDateKey);
-  const externalSort = columns.find((column) => column.header.props.sort)?.header.props.sort;
   const effectiveFilters = Object.fromEntries(filterableColumns.map((column) => [column.key, column.header.props.onFilterChange ? column.header.props.filterValue || "" : filters[column.key] || ""]));
   const updateFilter = (key, value) => {
     if (key === disabledDateKey) return;
@@ -115,7 +118,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
-  const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort("", "asc"); setVisible(columns.map((column) => column.key)); };
+  const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort(defaultSort.key, defaultSort.direction); setVisible(columns.map((column) => column.key)); };
   const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
   const dateRangeControl = dateControl && <RecordDateRange {...dateControl} />;
   // Saved reports: named views of this table (visible columns, filters, sort, date range).

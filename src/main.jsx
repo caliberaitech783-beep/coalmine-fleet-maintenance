@@ -21,7 +21,7 @@ import {readComplaintMedia} from "../complaint-media.mjs";
 import './camera-upload.css';
 import {UserLoginHistory,UserLoginActivity} from "./user-login-history.jsx";
 import { filterRecordsByDate } from "./record-date-range.mjs";
-import { isDurationColumn, compareDurationValues } from "./duration-sort.mjs";
+import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./duration-sort.mjs";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import BackupAdministration from "./backup-administration.jsx";
@@ -2090,7 +2090,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       },
     })),
     searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model) && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
-    [sortedRows, sort, changeSort] = useSortableRows(searchedRows, "", (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, breakdownNow) : row[key]);
+    [sortedRows, sort, changeSort] = useSortableRows(searchedRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, breakdownNow) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;
@@ -2418,14 +2418,15 @@ function comparableValue(value) {
   }
   return text;
 }
-function useSortableRows(rows, defaultKey = "", valueForKey = (row, key) => row[key], durationSorting = true) {
-  const [sort, setSort] = useState({ key: defaultKey, direction: "asc" });
+function useSortableRows(rows, defaultSort = "", valueForKey = (row, key) => row[key], durationSorting = true) {
+  const [sort, setSort] = useState(() => typeof defaultSort === "string" ? { key: defaultSort, direction: "asc" } : defaultSort);
   const sortedRows = useMemo(() => {
     if (!sort.key) return rows;
+    const durationColumn = typeof durationSorting === "function" ? durationSorting(sort.key) : durationSorting && isDurationColumn("", sort.key);
     return rows.map((row, index) => ({ row, index })).sort((left, right) => {
       const a = comparableValue(valueForKey(left.row, sort.key));
       const b = comparableValue(valueForKey(right.row, sort.key));
-      if (durationSorting && isDurationColumn("", sort.key)) return compareDurationValues(a, b, sort.direction) || left.index - right.index;
+      if (durationColumn) return compareDurationValues(a, b, sort.direction) || left.index - right.index;
       let result;
       if (typeof a === "number" && typeof b === "number") result = a - b;
       else result = sortCollator.compare(String(a), String(b));
@@ -3105,12 +3106,12 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   );
   const [sortedRows, sort, changeSort] = useSortableRows(
     filteredRows,
-    "",
+    defaultDurationSort(columns),
     (row, key) => {
       const column = columns.find((item) => item.key === key);
       return column?.sortValue?.(row) ?? column?.value?.(row);
     },
-    false, // Reports retain their existing sorting and exact-value filters.
+    (key) => isDurationColumn(columns.find((column) => column.key === key)?.label, key),
   );
   const updateColumnFilter = (key, value) => {
     setColumnFilters((current) => {
@@ -3149,7 +3150,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const reportTableToolbar = (
       <div className="report-table-filter-toolbar">
         <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
-        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); changeSort("", "asc"); setPageSize(50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
+        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
         <SavedReportsPanel title={reportTitle} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentSavedView} onApply={applySavedView} canPrint onPrint={printSavedView} />
         {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
       </div>
@@ -5352,7 +5353,7 @@ function AuditTrailPage({ session }) {
       && matchesSmartSearch(query, event, device.type, device.platform, device.browser)
       && tableRowMatchesFilters(event, filterColumns, filters);
   });
-  const [rows, sort, changeSort] = useSortableRows(filtered, "", (event, key) => key === "occurredAt" ? event.occurredAt : valueFor(event, key));
+  const [rows, sort, changeSort] = useSortableRows(filtered, defaultDurationSort(filterColumns), (event, key) => key === "durationMs" ? event.durationMs : key === "occurredAt" ? event.occurredAt : valueFor(event, key));
   const exportColumns = columns.map(([key, label]) => ({label, value:(event) => valueFor(event, key)}));
   const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
   return <section className="panel pagepanel generic audit-page">
@@ -8038,7 +8039,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy, ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
     return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
-  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, "", (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : row[key]);
+  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;

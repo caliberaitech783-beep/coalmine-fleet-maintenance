@@ -9,6 +9,7 @@ import * as equipment from '../request-equipment.mjs';
 import {normalizeEquipmentGroup} from '../equipment-group.mjs';
 import {requestsVisibleToMisWorkspace} from '../mis-request-visibility.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
+import {defaultDurationSort} from '../src/duration-sort.mjs';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const componentSource=source.slice(source.indexOf('function RequestRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('))+'\n'+source.slice(source.indexOf('function Normal('),source.indexOf('function App('));
@@ -50,7 +51,7 @@ function harness(){
     ExportMenu,PrintButton,TableParameterFilter:Null,MaintenanceRemarks:Null,MeterFileCell:Null,TripCardCell:Null,MaintenanceEtcInput:Null,
     formatTwelveHourDateTime:value=>value||'—',firstTripTimestamp:row=>row.firstTripAt,
     matchesSmartSearch:()=>true,tableRowMatchesFilters:()=>true,tableFilterText:value=>String(value||''),
-    sortCollator:new Intl.Collator(),useSortableRows:rows=>[rows,{},()=>{}],
+    sortCollator:new Intl.Collator(),defaultDurationSort,useSortableRows:rows=>[rows,{},()=>{}],
     calculateBreakdownDaysFromStart:()=>1,...requestAcceptance,normalizeEquipmentGroup,requestStatusLabel,elapsedLabel:()=>'',
     RequestEditForm,DailyRemarkForm,CloseRequestForm,VerifyRequestForm,RequestTimelineButton:({reference})=>React.createElement('b',{},reference),authToken:'fixture',alert:()=>{},
     requestStartParts:start=>({date:String(start).slice(0,10),time:String(start).slice(11)}),
