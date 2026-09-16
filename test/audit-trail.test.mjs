@@ -125,17 +125,26 @@ test("server persists append-only audit events and exposes the detailed report",
 
 test("administrators can delete audit entries older than N days, and the purge is itself recorded", () => {
   assert.match(server, /app\.delete\('\/api\/audit-events',requireSuper,requireAdministrator/);
-  assert.match(server, /const days=Number\(req\.query\.olderThanDays\?\?req\.body\?\.olderThanDays\);/);
-  assert.match(server, /if\(!Number\.isInteger\(days\)\|\|days<1\|\|days>AUDIT_PURGE_MAX_DAYS\)return res\.status\(400\)/, "at least one day is always kept");
-  assert.match(server, /const cutoff=new Date\(Date\.now\(\)-days\*86400000\);/);
+  assert.match(server, /function housekeepingCutoff\(source=\{\},noun='records'\)/);
+  assert.match(server, /if\(!Number\.isInteger\(days\)\|\|days<1\|\|days>AUDIT_PURGE_MAX_DAYS\)return \{error:/, "at least one day is always kept");
+  assert.match(server, /if\(upToDate>=auditIndiaDateKey\(\)\)return \{error:`Select a date before today/, "up-to-date deletes stop before today");
+  assert.match(server, /const cutoff=new Date\(start\+86400000\);/, "the chosen date is deleted inclusively");
+  assert.match(server, /housekeepingCutoff\(\{\.\.\.\(req\.body\|\|\{\}\),\.\.\.req\.query\},'Audit Trail'\)/);
   assert.match(server, /DELETE FROM audit_events WHERE occurred_at<\$1',\[cutoff\.toISOString\(\)\]/);
   assert.match(server, /await appendAuditEvent\(req,\{\n\s+eventType:'Administration',module:'Audit Trail',action:'Delete old audit logs'/);
-  assert.match(server, /res\.json\(\{deleted,olderThanDays:days,cutoff:cutoff\.toISOString\(\)\}\)/);
+  assert.match(server, /res\.json\(\{deleted,\.\.\.window,cutoff:cutoff\.toISOString\(\)\}\)/);
   assert.match(server, /'\/api\/audit-events'\]\.includes\(req\.path\)\)return next\(\);/, "the automatic audit middleware still skips this path, hence the explicit appendAuditEvent");
   assert.match(client, /useState\("2"\), \[purging, setPurging\]/, "the dialog defaults to two days");
   assert.match(client, /> Delete old logs</);
-  assert.match(client, /window\.confirm\(`Permanently delete every Audit Trail entry older than \$\{dayLabel\}/);
-  assert.match(client, /fetch\(`\/api\/audit-events\?olderThanDays=\$\{purgeDayCount\}`, \{method:"DELETE"/);
+  assert.match(client, /window\.confirm\(`Permanently delete every Audit Trail entry \$\{purgeSelection\.label\}/);
+  assert.match(client, /fetch\(`\/api\/audit-events\?\$\{purgeSelection\.query\}`, \{method:"DELETE"/);
+  assert.match(client, /function purgeWindow\(\{ mode, days, date \}\)/);
+  assert.match(client, /query: `upToDate=\$\{key\}`/, "the dialog can delete up to a chosen date");
+  assert.match(client, /query: `olderThanDays=\$\{count\}`/);
+  assert.match(client, /if \(key >= indiaDateKey\(\)\) return \{ error: "Select a date before today/, "today can never be chosen");
+  assert.match(client, /<input type="date" value=\{date\} max=\{yesterdayDateKey\(\)\}/);
+  assert.match(client, /Up to a date/);
+  assert.match(client, /<PurgeWindowFields mode=\{purgeMode\}/);
   assert.match(client, /<Modal title="Delete old audit logs"/);
   assert.match(client, /Delete permanently/);
   assert.match(client, /setPurgeOpen\(false\);\n\s+alert\([\s\S]*?\n\s+load\(\);/, "the list reloads after a purge");

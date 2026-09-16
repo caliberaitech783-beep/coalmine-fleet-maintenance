@@ -5273,6 +5273,39 @@ function AuditToggleGroup({label, value, options, onChange}) {
   })}</div></div>;
 }
 
+// Shared by the Audit Trail and User Sessions housekeeping dialogs. The
+// deletion window is either "older than N days" or "up to a calendar date"
+// (India day, inclusive). Today can never be chosen, so today always stays.
+const PURGE_MAX_DAYS = 3650;
+const indiaDateKey = (value = new Date()) => indiaDateTimeInputValue(value).slice(0, 10);
+const yesterdayDateKey = () => indiaDateKey(new Date(Date.now() - 86400000));
+function purgeWindow({ mode, days, date }) {
+  if (mode === "date") {
+    const key = String(date || "").trim();
+    const start = Date.parse(`${key}T00:00:00+05:30`);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || Number.isNaN(start)) return { error: "Select a valid date." };
+    if (key >= indiaDateKey()) return { error: "Select a date before today. Today's records are never deleted." };
+    return { cutoff: new Date(start + 86400000), query: `upToDate=${key}`, label: `up to ${formatDisplayDate(new Date(start))}` };
+  }
+  const count = Number(days);
+  if (!Number.isInteger(count) || count < 1 || count > PURGE_MAX_DAYS) return { error: `Enter a whole number of days (1 to ${PURGE_MAX_DAYS}).` };
+  return { cutoff: new Date(Date.now() - count * 86400000), query: `olderThanDays=${count}`, label: `older than ${count} day${count === 1 ? "" : "s"}` };
+}
+function PurgeWindowFields({ mode, setMode, days, setDays, date, setDate, window: selected, noun, verb = "recorded" }) {
+  return <>
+    <div className="purge-mode" role="radiogroup" aria-label="Delete by">
+      <label><input type="radio" name="purgeMode" checked={mode === "days"} onChange={() => setMode("days")} /> Older than a number of days</label>
+      <label><input type="radio" name="purgeMode" checked={mode === "date"} onChange={() => setMode("date")} /> Up to a date</label>
+    </div>
+    <div className="formgrid">
+      {mode === "date"
+        ? <label>Delete {noun} up to and including *<input type="date" value={date} max={yesterdayDateKey()} onChange={(event) => setDate(event.target.value)} required autoFocus /></label>
+        : <label>Delete {noun} older than (days) *<input type="number" min="1" max={PURGE_MAX_DAYS} step="1" value={days} onChange={(event) => setDays(event.target.value)} required autoFocus /></label>}
+    </div>
+    <p className="audit-purge-note">{selected.cutoff ? `Everything ${verb} before ${formatTwelveHourDateTime(selected.cutoff)} will be deleted.` : selected.error}</p>
+  </>;
+}
+
 function AuditTrailPage({ session }) {
   const auditLoadSequence = useRef(0);
   const today = indiaDateTimeInputValue().slice(0,10);
@@ -5280,6 +5313,7 @@ function AuditTrailPage({ session }) {
   const [fromDate,setFromDate] = useState(today), [toDate,setToDate] = useState(today);
   const [events, setEvents] = useState([]), [summary, setSummary] = useState(null), [nextCursor, setNextCursor] = useState(null), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [purgeOpen, setPurgeOpen] = useState(false), [purgeDays, setPurgeDays] = useState("2"), [purging, setPurging] = useState(false);
+  const [purgeMode, setPurgeMode] = useState("days"), [purgeDate, setPurgeDate] = useState(yesterdayDateKey);
   const load = async ({append=false,dateRange=appliedDateRange.current} = {}) => {
     const loadSequence = append ? auditLoadSequence.current : ++auditLoadSequence.current;
     if (append) setLoadingMore(true);
@@ -5374,20 +5408,18 @@ function AuditTrailPage({ session }) {
   const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
   // Permanently deletes the entries older than the chosen number of days. The
   // server records the deletion itself as an Audit Trail entry.
-  const purgeDayCount = Number(purgeDays);
-  const purgeCutoff = Number.isInteger(purgeDayCount) && purgeDayCount >= 1 ? new Date(Date.now() - purgeDayCount * 86400000) : null;
+  const purgeSelection = purgeWindow({ mode: purgeMode, days: purgeDays, date: purgeDate });
   const deleteOldLogs = async (event) => {
     event.preventDefault();
-    if (!purgeCutoff) return alert("Enter a whole number of days (1 or more).");
-    const dayLabel = `${purgeDayCount} day${purgeDayCount === 1 ? "" : "s"}`;
-    if (!window.confirm(`Permanently delete every Audit Trail entry older than ${dayLabel} (recorded before ${formatTwelveHourDateTime(purgeCutoff)})? This cannot be undone.`)) return;
+    if (!purgeSelection.cutoff) return alert(purgeSelection.error);
+    if (!window.confirm(`Permanently delete every Audit Trail entry ${purgeSelection.label} (recorded before ${formatTwelveHourDateTime(purgeSelection.cutoff)})? This cannot be undone.`)) return;
     setPurging(true);
     try {
-      const response = await fetch(`/api/audit-events?olderThanDays=${purgeDayCount}`, {method:"DELETE", cache:"no-store", headers:{Authorization:`Bearer ${session?.token || authToken}`}});
+      const response = await fetch(`/api/audit-events?${purgeSelection.query}`, {method:"DELETE", cache:"no-store", headers:{Authorization:`Bearer ${session?.token || authToken}`}});
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not delete the old audit logs.");
       setPurgeOpen(false);
-      alert(`${Number(result.deleted || 0).toLocaleString("en-IN")} audit entr${Number(result.deleted) === 1 ? "y" : "ies"} older than ${dayLabel} deleted.`);
+      alert(`${Number(result.deleted || 0).toLocaleString("en-IN")} audit entr${Number(result.deleted) === 1 ? "y" : "ies"} ${purgeSelection.label} deleted.`);
       load();
     } catch (error) { alert(error.message); }
     finally { setPurging(false); }
@@ -5396,12 +5428,9 @@ function AuditTrailPage({ session }) {
     <header><div><h1>Audit Trail</h1><p>Today’s administration, user changes, account security, backup, and vehicle transfer activity</p></div><div className="audit-header-actions"><button type="button" className="secondary danger" onClick={() => setPurgeOpen(true)} disabled={loading || purging}><Trash2 /> Delete old logs</button><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></div></header>
     {purgeOpen && <Modal title="Delete old audit logs" close={() => !purging && setPurgeOpen(false)} className="audit-purge-modal">
       <form className="form master-form" onSubmit={deleteOldLogs}>
-        <p className="audit-purge-help">Entries older than the number of days you enter are deleted permanently from the Audit Trail. Today and the most recent days stay. The deletion itself is recorded in the Audit Trail with the number of entries removed.</p>
-        <div className="formgrid">
-          <label>Delete entries older than (days) *<input type="number" min="1" max="3650" step="1" value={purgeDays} onChange={(event) => setPurgeDays(event.target.value)} required autoFocus /></label>
-        </div>
-        <p className="audit-purge-note">{purgeCutoff ? `Everything recorded before ${formatTwelveHourDateTime(purgeCutoff)} will be deleted.` : "Enter a whole number of days (1 or more)."}</p>
-        <footer><button type="button" onClick={() => setPurgeOpen(false)} disabled={purging}>Cancel</button><button className="danger" disabled={purging || !purgeCutoff}><Trash2 /> {purging ? "Deleting..." : "Delete permanently"}</button></footer>
+        <p className="audit-purge-help">Choose how far back to keep: everything older than a number of days, or everything up to and including a date. Today always stays. The deletion itself is recorded in the Audit Trail with the number of entries removed.</p>
+        <PurgeWindowFields mode={purgeMode} setMode={setPurgeMode} days={purgeDays} setDays={setPurgeDays} date={purgeDate} setDate={setPurgeDate} window={purgeSelection} noun="entries" />
+        <footer><button type="button" onClick={() => setPurgeOpen(false)} disabled={purging}>Cancel</button><button className="danger" disabled={purging || !purgeSelection.cutoff}><Trash2 /> {purging ? "Deleting..." : "Delete permanently"}</button></footer>
       </form>
     </Modal>}
     <div className="audit-summary"><span><b>{Number(summary?.total ?? events.length).toLocaleString("en-IN")}</b> recorded events</span><span><b>{Number(summary?.failed ?? events.filter((event) => event.outcome === "Failed").length).toLocaleString("en-IN")}</b> failed actions</span><span><b>{Number(summary?.users ?? new Set(events.map((event) => event.actorLogin).filter(Boolean)).size).toLocaleString("en-IN")}</b> users</span><span><b>{Number(summary?.devices ?? new Set(events.map((event) => event.deviceId).filter(Boolean)).size).toLocaleString("en-IN")}</b> devices</span></div>
@@ -5660,21 +5689,20 @@ function UserSessionsPage({session}) {
   const [messageNotice,setMessageNotice]=useState("");
   const [actionsToolbarTarget,setActionsToolbarTarget]=useState(null);
   const [activityPurgeOpen,setActivityPurgeOpen]=useState(false),[activityPurgeDays,setActivityPurgeDays]=useState("2"),[activityPurging,setActivityPurging]=useState(false);
-  const activityPurgeDayCount=Number(activityPurgeDays);
-  const activityPurgeCutoff=Number.isInteger(activityPurgeDayCount)&&activityPurgeDayCount>=1?new Date(Date.now()-activityPurgeDayCount*86400000):null;
-  // Permanently deletes login history and session activity older than the chosen days; the server audits the deletion.
+  const [activityPurgeMode,setActivityPurgeMode]=useState("days"),[activityPurgeDate,setActivityPurgeDate]=useState(yesterdayDateKey);
+  const activitySelection=purgeWindow({mode:activityPurgeMode,days:activityPurgeDays,date:activityPurgeDate});
+  // Permanently deletes login history and session activity in the chosen window; the server audits the deletion.
   const deleteOldActivity=async(event)=>{
     event.preventDefault();
-    if(!activityPurgeCutoff)return alert("Enter a whole number of days (1 or more).");
-    const dayLabel=`${activityPurgeDayCount} day${activityPurgeDayCount===1?"":"s"}`;
-    if(!window.confirm(`Permanently delete every user activity record older than ${dayLabel} (last active before ${formatTwelveHourDateTime(activityPurgeCutoff)})? This cannot be undone.`))return;
+    if(!activitySelection.cutoff)return alert(activitySelection.error);
+    if(!window.confirm(`Permanently delete every user activity record ${activitySelection.label} (last active before ${formatTwelveHourDateTime(activitySelection.cutoff)})? This cannot be undone.`))return;
     setActivityPurging(true);
     try{
-      const response=await fetch(`/api/user-login-history?olderThanDays=${activityPurgeDayCount}`,{method:"DELETE",cache:"no-store",headers:{Authorization:`Bearer ${session?.token||authToken}`}});
+      const response=await fetch(`/api/user-login-history?${activitySelection.query}`,{method:"DELETE",cache:"no-store",headers:{Authorization:`Bearer ${session?.token||authToken}`}});
       const result=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(result.error||"Could not delete the old user activity.");
       setActivityPurgeOpen(false);
-      setMessageNotice(`${Number(result.deleted||0).toLocaleString("en-IN")} user activity record${Number(result.deleted)===1?"":"s"} older than ${dayLabel} deleted.`);
+      setMessageNotice(`${Number(result.deleted||0).toLocaleString("en-IN")} user activity record${Number(result.deleted)===1?"":"s"} ${activitySelection.label} deleted.`);
       load({quiet:true});
     }catch(error){alert(error.message);}
     finally{setActivityPurging(false);}
@@ -5732,12 +5760,9 @@ function UserSessionsPage({session}) {
     {announcing&&<AnnouncementComposer session={session} onClose={()=>setAnnouncing(false)} onSent={()=>{setAnnouncing(false);setMessageNotice('Announcement sent to all users. Each user will see it until they close it.');}} />}
     {activityPurgeOpen&&<Modal title="Delete old user activity" close={()=>!activityPurging&&setActivityPurgeOpen(false)} className="audit-purge-modal">
       <form className="form master-form" onSubmit={deleteOldActivity}>
-        <p className="audit-purge-help">Login history and session activity records last active before the number of days you enter are deleted permanently. Live sessions and the most recent days stay. The deletion itself is recorded in the Audit Trail with the number of records removed.</p>
-        <div className="formgrid">
-          <label>Delete activity older than (days) *<input type="number" min="1" max="3650" step="1" value={activityPurgeDays} onChange={(event)=>setActivityPurgeDays(event.target.value)} required autoFocus /></label>
-        </div>
-        <p className="audit-purge-note">{activityPurgeCutoff?`Everything last active before ${formatTwelveHourDateTime(activityPurgeCutoff)} will be deleted.`:"Enter a whole number of days (1 or more)."}</p>
-        <footer><button type="button" onClick={()=>setActivityPurgeOpen(false)} disabled={activityPurging}>Cancel</button><button className="danger" disabled={activityPurging||!activityPurgeCutoff}><Trash2 /> {activityPurging?"Deleting...":"Delete permanently"}</button></footer>
+        <p className="audit-purge-help">Choose how far back to keep: login history and session activity older than a number of days, or up to and including a date. Live sessions and today always stay. The deletion itself is recorded in the Audit Trail with the number of records removed.</p>
+        <PurgeWindowFields mode={activityPurgeMode} setMode={setActivityPurgeMode} days={activityPurgeDays} setDays={setActivityPurgeDays} date={activityPurgeDate} setDate={setActivityPurgeDate} window={activitySelection} noun="activity" verb="last active" />
+        <footer><button type="button" onClick={()=>setActivityPurgeOpen(false)} disabled={activityPurging}>Cancel</button><button className="danger" disabled={activityPurging||!activitySelection.cutoff}><Trash2 /> {activityPurging?"Deleting...":"Delete permanently"}</button></footer>
       </form>
     </Modal>}
   </section>;

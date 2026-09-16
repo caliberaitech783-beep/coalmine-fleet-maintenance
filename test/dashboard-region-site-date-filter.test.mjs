@@ -46,3 +46,9 @@ test("dashboard region and date controls keep white labels and native icons", ()
   assert.match(brandStyles, /:root \.mine-dashboard-head \.mine-head-actions select,[\s\S]*color: #fff;[\s\S]*color-scheme: dark;/);
   assert.match(brandStyles, /\.mine-date-filter input::\-webkit-calendar-picker-indicator \{[\s\S]*filter: brightness\(0\) invert\(1\);/);
 });
+
+test("the WCL / NCL divider on the fleet chart is clearly visible in both themes", () => {
+  const readability = fs.readFileSync(new URL("../src/dashboard-readability.css", import.meta.url), "utf8");
+  assert.match(readability, /\.mine-fleet-chart-regions > section \+ section \{ border-left: 2px solid #1f2f4d; \}/);
+  assert.match(readability, /:root\[data-theme="dark"\] \.mine-fleet-chart-regions > section \+ section \{ border-left-color: #a9bbdc; \}/);
+});

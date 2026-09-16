@@ -81,16 +81,17 @@ test("the browser agent masks protected controls and keeps user disconnect avail
 
 test("administrators can delete user activity older than N days from the User Sessions page, and the purge is audited", () => {
   assert.match(server, /app\.delete\('\/api\/user-login-history',requireSuper,requireAdministrator/);
-  assert.match(server, /if\(!Number\.isInteger\(days\)\|\|days<1\|\|days>AUDIT_PURGE_MAX_DAYS\)return res\.status\(400\)\.json\(\{error:`Enter how many days of user activity to keep/, "at least one day is always kept");
+  assert.match(server, /housekeepingCutoff\(\{\.\.\.\(req\.body\|\|\{\}\),\.\.\.req\.query\},'user activity'\)/, "same older-than-days or up-to-date window as the Audit Trail purge; today is never deleted");
   assert.match(server, /DELETE FROM user_login_history WHERE last_seen_at<\$1',\[cutoff\.toISOString\(\)\]/);
   assert.match(server, /DELETE FROM user_session_activity WHERE last_seen_at<\$1',\[cutoff\.toISOString\(\)\]/);
   assert.match(server, /req\.audit=\{eventType:'Administration',module:'User activity',action:'Delete old user activity'/, "the automatic audit middleware records the purge with its counts");
-  assert.match(server, /res\.json\(\{deleted:deletedHistory\+deletedActivity,deletedLoginHistory:deletedHistory,deletedSessionActivity:deletedActivity,olderThanDays:days/);
+  assert.match(server, /res\.json\(\{deleted:deletedHistory\+deletedActivity,deletedLoginHistory:deletedHistory,deletedSessionActivity:deletedActivity,\.\.\.window/);
   const page = client.slice(client.indexOf("function UserSessionsPage("), client.indexOf("function reportCategoryIdsForUser("));
   assert.match(page, /useState\("2"\),\[activityPurging,setActivityPurging\]/, "the dialog defaults to two days");
   assert.match(page, /> Delete old activity</);
-  assert.match(page, /window\.confirm\(`Permanently delete every user activity record older than \$\{dayLabel\}/);
-  assert.match(page, /fetch\(`\/api\/user-login-history\?olderThanDays=\$\{activityPurgeDayCount\}`,\{method:"DELETE"/);
+  assert.match(page, /window\.confirm\(`Permanently delete every user activity record \$\{activitySelection\.label\}/);
+  assert.match(page, /fetch\(`\/api\/user-login-history\?\$\{activitySelection\.query\}`,\{method:"DELETE"/);
+  assert.match(page, /<PurgeWindowFields mode=\{activityPurgeMode\}[^>]*verb="last active"/, "the shared older-than / up-to-date fields are used");
   assert.match(page, /<Modal title="Delete old user activity"/);
   assert.match(page, /Delete permanently/);
   assert.match(page, /setActivityPurgeOpen\(false\);\n\s+setMessageNotice\([\s\S]*?\n\s+load\(\{quiet:true\}\);/, "the list reloads after a purge");

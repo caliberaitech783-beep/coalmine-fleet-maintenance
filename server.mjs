@@ -1,7 +1,7 @@
 import express from 'express';
 import compression from 'compression';
 import {createNotificationFeed} from './notification-feed.mjs';
-import {formatDisplayDateTime} from './date-time-format.mjs';
+import {formatDisplayDate,formatDisplayDateTime} from './date-time-format.mjs';
 import pg from 'pg';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -60,7 +60,7 @@ import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirector
 import {buildSiteFleetReportTables,buildSiteReportMessage,reportSites,siteReportFilename,timestampInReportWindow} from './site-consolidated-report.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage,isActiveMaintenanceRequest} from './request-conflict.mjs';
-import {auditChangedFields,auditDateRange,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
+import {auditChangedFields,auditDateRange,auditIndiaDateKey,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
@@ -1106,22 +1106,37 @@ app.get('/api/app-version',(_req,res)=>{
 // stays). /api/audit-events is outside the automatic audit middleware, so the
 // purge itself is written to the Audit Trail here with the count removed.
 const AUDIT_PURGE_MAX_DAYS=3650;
+// The deletion window for the housekeeping routes: either `olderThanDays`
+// (1..3650) or `upToDate` (YYYY-MM-DD, an India calendar day, deleted
+// inclusively). Today can never be chosen, so the current day always stays.
+function housekeepingCutoff(source={},noun='records'){
+  const upToDate=String(source.upToDate||'').trim();
+  if(upToDate){
+    const start=Date.parse(`${upToDate}T00:00:00+05:30`);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(upToDate)||Number.isNaN(start))return {error:'Select a valid date (YYYY-MM-DD).'};
+    if(upToDate>=auditIndiaDateKey())return {error:`Select a date before today. Today's ${noun} are never deleted.`};
+    const cutoff=new Date(start+86400000);
+    return {cutoff,label:`Up to ${formatDisplayDate(new Date(start))}`,fields:[{field:'Up to date (inclusive)',before:'',after:upToDate}],window:{upToDate}};
+  }
+  const days=Number(source.olderThanDays);
+  if(!Number.isInteger(days)||days<1||days>AUDIT_PURGE_MAX_DAYS)return {error:`Enter how many days of ${noun} to keep (1 to ${AUDIT_PURGE_MAX_DAYS}), or a date to delete up to.`};
+  return {cutoff:new Date(Date.now()-days*86400000),label:`Older than ${days} day${days===1?'':'s'}`,fields:[{field:'Older than (days)',before:'',after:String(days)}],window:{olderThanDays:days}};
+}
 app.delete('/api/audit-events',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
-    const days=Number(req.query.olderThanDays??req.body?.olderThanDays);
-    if(!Number.isInteger(days)||days<1||days>AUDIT_PURGE_MAX_DAYS)return res.status(400).json({error:`Enter how many days of Audit Trail to keep (1 to ${AUDIT_PURGE_MAX_DAYS}).`});
-    const cutoff=new Date(Date.now()-days*86400000);
+    const {error,cutoff,label,fields,window}=housekeepingCutoff({...(req.body||{}),...req.query},'Audit Trail');
+    if(error)return res.status(400).json({error});
     const {rowCount}=await pool.query('DELETE FROM audit_events WHERE occurred_at<$1',[cutoff.toISOString()]);
     const deleted=Number(rowCount||0);
     await appendAuditEvent(req,{
       eventType:'Administration',module:'Audit Trail',action:'Delete old audit logs',targetType:'Audit Trail',
-      targetReference:`Older than ${days} day${days===1?'':'s'}`,
+      targetReference:label,
       reason:`Deleted ${deleted} audit entr${deleted===1?'y':'ies'} recorded before ${formatDisplayDateTime(cutoff)}`,
-      changedFields:[{field:'Older than (days)',before:'',after:String(days)},{field:'Entries deleted',before:'',after:String(deleted)}],
+      changedFields:[...fields,{field:'Entries deleted',before:'',after:String(deleted)}],
       statusCode:200,
     });
     res.set('Cache-Control','no-store');
-    res.json({deleted,olderThanDays:days,cutoff:cutoff.toISOString()});
+    res.json({deleted,...window,cutoff:cutoff.toISOString()});
   }catch(error){next(error)}
 });
 
@@ -1131,9 +1146,8 @@ app.delete('/api/audit-events',requireSuper,requireAdministrator,async(req,res,n
 // middleware records this call; req.audit adds the counts removed.
 app.delete('/api/user-login-history',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
-    const days=Number(req.query.olderThanDays??req.body?.olderThanDays);
-    if(!Number.isInteger(days)||days<1||days>AUDIT_PURGE_MAX_DAYS)return res.status(400).json({error:`Enter how many days of user activity to keep (1 to ${AUDIT_PURGE_MAX_DAYS}).`});
-    const cutoff=new Date(Date.now()-days*86400000);
+    const {error,cutoff,label,fields,window}=housekeepingCutoff({...(req.body||{}),...req.query},'user activity');
+    if(error)return res.status(400).json({error});
     const client=await pool.connect();
     let deletedHistory=0,deletedActivity=0;
     try{
@@ -1145,11 +1159,11 @@ app.delete('/api/user-login-history',requireSuper,requireAdministrator,async(req
     }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error}
     finally{client.release()}
     req.audit={eventType:'Administration',module:'User activity',action:'Delete old user activity',targetType:'User activity',
-      targetReference:`Older than ${days} day${days===1?'':'s'}`,
+      targetReference:label,
       reason:`Deleted ${deletedHistory} login history and ${deletedActivity} session activity record(s) last active before ${formatDisplayDateTime(cutoff)}`,
-      changedFields:[{field:'Older than (days)',before:'',after:String(days)},{field:'Login history deleted',before:'',after:String(deletedHistory)},{field:'Session activity deleted',before:'',after:String(deletedActivity)}]};
+      changedFields:[...fields,{field:'Login history deleted',before:'',after:String(deletedHistory)},{field:'Session activity deleted',before:'',after:String(deletedActivity)}]};
     res.set('Cache-Control','no-store');
-    res.json({deleted:deletedHistory+deletedActivity,deletedLoginHistory:deletedHistory,deletedSessionActivity:deletedActivity,olderThanDays:days,cutoff:cutoff.toISOString()});
+    res.json({deleted:deletedHistory+deletedActivity,deletedLoginHistory:deletedHistory,deletedSessionActivity:deletedActivity,...window,cutoff:cutoff.toISOString()});
   }catch(error){next(error)}
 });
 

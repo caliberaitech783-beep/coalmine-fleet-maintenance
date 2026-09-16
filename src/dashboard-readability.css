@@ -283,3 +283,7 @@
   }
   .mine-dashboard .mine-fleet-chart-toggle button .mine-fleet-count-trend { max-width: 100%; box-sizing: border-box; }
 }
+
+/* The line between the WCL and NCL groups on the fleet chart must be clearly visible. */
+.mine-fleet-chart-regions > section + section { border-left: 2px solid #1f2f4d; }
+:root[data-theme="dark"] .mine-fleet-chart-regions > section + section { border-left-color: #a9bbdc; }
