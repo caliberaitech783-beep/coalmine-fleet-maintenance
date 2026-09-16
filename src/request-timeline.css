@@ -28,3 +28,7 @@
 .request-timeline-identity { margin:0 0 14px; padding:10px 14px; border-radius:8px; background:#f3eef9; color:#3a2a55; font-size:15px; }
 .request-timeline-identity b { font-weight:800; }
 .request-timeline-identity span { color:#5f4f7a; }
+.overlay.request-timeline-overlay { padding:0; }
+.overlay .modal.request-timeline-modal { width:100%; max-width:none; height:100dvh; max-height:none; margin:0; border-radius:0; resize:none; display:flex; flex-direction:column; overflow:hidden; }
+.request-timeline-modal > header { flex-shrink:0; }
+.request-timeline-modal > .request-timeline-content { flex:1; min-height:0; overflow:auto; }

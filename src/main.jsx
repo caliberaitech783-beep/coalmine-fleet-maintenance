@@ -9186,6 +9186,21 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     setSection("profile");
     return saved;
   };
+  const operationalWorkspaceRef = useRef(null);
+  useEffect(() => {
+    const workspace = operationalWorkspaceRef.current;
+    if (!workspace || !(isProduction || isMaintenance || isMis)) return;
+    const header = embedded ? document.querySelector(".content > .top") : workspace.closest(".normal")?.querySelector(":scope > header");
+    const updateToolbarOffset = () => {
+      const top = header ? parseFloat(getComputedStyle(header).top) || 0 : 0;
+      workspace.style.setProperty("--workspace-toolbar-top", `${top + (header?.getBoundingClientRect().height || 0)}px`);
+    };
+    updateToolbarOffset();
+    const observer = new ResizeObserver(updateToolbarOffset);
+    if (header) observer.observe(header);
+    window.addEventListener("resize", updateToolbarOffset);
+    return () => { observer.disconnect(); window.removeEventListener("resize", updateToolbarOffset); };
+  }, [embedded, section, showRequestsMenu, isProduction, isMaintenance, isMis]);
   const misWorkspaceRequests=requestsVisibleToMisWorkspace(requests,isMis);
   const misDashboardRequests=requestsVisibleToMisWorkspace(dashboardRequests,isMis);
   const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):misWorkspaceRequests;
@@ -9203,7 +9218,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
       {!embedded&&!showDashboardMenu&&!showRequestsMenu&&!showReportsMenu&&!showTicketsMenu&&<section className="panel"><h2>No menus assigned</h2><p>Contact your administrator to enable access.</p></section>}
-      {(embedded||section==="profile")&&showRequestsMenu&&<div data-operational={isProduction || isMaintenance || isMis ? "true" : undefined} data-active-tab={tab} className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
+      {(embedded||section==="profile")&&showRequestsMenu&&<div ref={operationalWorkspaceRef} data-operational={isProduction || isMaintenance || isMis ? "true" : undefined} data-active-tab={tab} className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isGeneral ? "Requests" : isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isGeneral ? "View requests for your assigned location." : isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}

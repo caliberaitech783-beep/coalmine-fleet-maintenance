@@ -111,5 +111,5 @@ export default function RequestTimelineButton({reference,token,Dialog,label}) {
   if (!reference) return null;
   const title = identity ? `Time breakdown · ${reference} · ${identity}` : `Time breakdown · ${reference}`;
   return <><button type="button" className="request-timeline-link" title="View time breakdown" aria-label={`View time breakdown for ${reference}`} onClick={() => setOpen(true)}>{label || reference}</button>
-    {open && <Dialog title={title} close={() => setOpen(false)}><RequestTimelineContent reference={reference} token={token} onLoaded={request => setIdentity(requestTimelineIdentity(request))} /></Dialog>}</>;
+    {open && <Dialog title={title} className="request-timeline-modal" overlayClassName="request-timeline-overlay" close={() => setOpen(false)}><RequestTimelineContent reference={reference} token={token} onLoaded={request => setIdentity(requestTimelineIdentity(request))} /></Dialog>}</>;
 }
