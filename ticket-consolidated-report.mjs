@@ -65,6 +65,6 @@ export function buildTicketWhatsAppReport({scopeLabel='Site',start,end,openTicke
     `*SITE: ${displaySiteName(scopeLabel)}*`,'*NERVE CENTER CRM CONSOLIDATED REPORT*',
     `*WINDOW:* ${indiaDateTime(start)} – ${indiaDateTime(end)}`,
     `*OPEN TICKETS:* ${openTickets.length} | *CLOSED TICKETS:* ${closedTickets.length}`,
-    `*PDF:* ${pdfUrl}`,`*Excel:* ${xlsxUrl}`,'Open the files for complete ticket details. Links expire in 14 days.',
+    `*PDF:* ${pdfUrl}`,`*Excel:* ${xlsxUrl}`,
   ].join('\n');
 }

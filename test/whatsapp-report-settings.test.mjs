@@ -303,7 +303,7 @@ test('template choice activates only after server-held approval and uses a conte
   settings.templates[purpose]={variant:'custom',body:candidate.body+' Please review.'};
   assert.notEqual(candidateReportTemplate(purpose,settings.templates[purpose]).name,candidate.name);
   assert.equal(effectiveReportTemplate(purpose,settings,approvals).name,META_WORKFLOW_TEMPLATES.requestOpened.name);
-  assert.match(reportTemplateFallback(purpose,META_WORKFLOW_TEMPLATES.requestOpened.example,settings,approvals,'old fallback'),/^\*SITE: Majri OB\*/);
+  assert.match(reportTemplateFallback(purpose,META_WORKFLOW_TEMPLATES.requestOpened.example,settings,approvals,'old fallback',{parameterLayout:'current'}),/^\*SITE: Majri OB\*/);
 });
 
 const deliveryEnv={META_WHATSAPP_ACCESS_TOKEN:'test-token',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_BUSINESS_ACCOUNT_ID:'456'};

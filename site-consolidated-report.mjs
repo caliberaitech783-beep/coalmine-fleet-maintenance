@@ -120,6 +120,5 @@ export function buildSiteReportMessage({kind='Fleet',site,window,count,pdfUrl,xl
     `*FROM:* ${dateLabel(window.start)}`,`*TO:* ${dateLabel(window.end)} IST`,
     `*${kind==='CRM'?'Tickets':'Cases'} with activity:* ${count}`,
     `*PDF - ${siteLabel}:* ${pdfUrl}`,`*Excel - ${siteLabel}:* ${xlsxUrl}`,
-    'This site only. All activity from the previous scheduled time up to this time. Links expire in 14 days.',
   ].join('\n');
 }

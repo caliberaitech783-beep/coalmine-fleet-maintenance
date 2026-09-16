@@ -17,7 +17,7 @@ test('every workflow event has a Meta template definition',()=>{
 
 test('request lifecycle templates retain a highlighted site and event-specific fields',()=>{
   for(const key of ['requestOpened','requestClosed','requestVerified','requestIdle','offRoadEscalation','idleReminder']){
-    assert.match(META_WORKFLOW_TEMPLATES[key].name,/_site_v2$/);
+    assert.match(META_WORKFLOW_TEMPLATES[key].name,/_site_v3$/);
     assert.match(META_WORKFLOW_TEMPLATES[key].body,/^\*SITE: \{\{1\}\}\*\n/);
     assert.match(META_WORKFLOW_TEMPLATES[key].body,/\*Breakdown type:\*/);
     assert.match(META_WORKFLOW_TEMPLATES[key].body,/\*Complaint \/ reason:\*/);
@@ -33,10 +33,10 @@ test('Cloud API template delivery uses approved template parameters',async()=>{
     env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123'},
     fetchImpl:async(url,options)=>{request={url,options};return {ok:true,json:async()=>({messages:[{id:'wamid.template'}]})}},
   });
-  assert.equal(result.template,'nerve_ticketresolved_site_v2');
+  assert.equal(result.template,'nerve_ticketresolved_site_v3');
   assert.equal(JSON.parse(request.options.body).type,'template');
   const values=JSON.parse(request.options.body).template.components[0].parameters;
-  assert.equal(values.length,10);assert.equal(values[1].text,'TIC/1');assert.equal(values[6].text,'Admin');
+  assert.equal(values.length,9);assert.equal(values[1].text,'TIC/1');assert.equal(values[6].text,'Admin');
 });
 
 test('password reset delivery supplies the OTP to the authentication body and copy-code button',async()=>{
@@ -55,10 +55,10 @@ test('template submission creates missing utility templates and preserves existi
   const requests=[];
   const results=await submitMetaWhatsAppTemplates({
     env:{META_WHATSAPP_ACCESS_TOKEN:'secret',META_WHATSAPP_PHONE_NUMBER_ID:'123',META_WHATSAPP_BUSINESS_ACCOUNT_ID:'456'},
-    fetchImpl:async(url,options={})=>{requests.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>({data:[{id:'old',name:'nerve_ticketcreated_site_v2',status:'APPROVED',category:'UTILITY',language:'en_US'}]})};return {ok:true,json:async()=>({id:`new-${requests.length}`,status:'PENDING'})}},
+    fetchImpl:async(url,options={})=>{requests.push({url,options});if(options.method==='GET')return {ok:true,json:async()=>({data:[{id:'old',name:'nerve_ticketcreated_site_v3',status:'APPROVED',category:'UTILITY',language:'en_US'}]})};return {ok:true,json:async()=>({id:`new-${requests.length}`,status:'PENDING'})}},
   });
   assert.equal(results.length,13);
-  assert.equal(results.find((result)=>result.name==='nerve_ticketcreated_site_v2').existing,true);
+  assert.equal(results.find((result)=>result.name==='nerve_ticketcreated_site_v3').existing,true);
   assert.equal(requests.filter((request)=>request.options.method==='POST').length,12);
   const submissions=requests.filter((request)=>request.options.method==='POST').map((request)=>JSON.parse(request.options.body));
   assert.equal(submissions.filter((submission)=>submission.category==='UTILITY').length,11);

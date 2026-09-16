@@ -8,6 +8,7 @@ import {hierarchyRecipientReportScope} from '../hierarchy-report-scope.mjs';
 import {displaySiteName} from '../region-scope.mjs';
 import {reportSites,siteSourceData} from '../site-consolidated-report.mjs';
 import {resolveMobileAccess} from '../mobile-access.mjs';
+import {siteReportMessageContext,recipientReportMessage} from '../whatsapp-message-format.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
@@ -201,12 +202,13 @@ function deliveryHarness({
     }},
     resolveMobileAccess,flowDesignationForUser,applyHierarchyDeliveryRule,applyUserReportScheduleOverride,reportsDueForDesignation,
     reportRecipientLogin,hierarchyRecipientReportScope,hierarchyAccessAllowsReport,reportSites,displaySiteName,
-    hierarchyRuleForDesignation:()=>rule,
+    hierarchyRuleForDesignation:()=>rule,recipientReportMessage,
     directorReportSourceData:async()=>{activity.sourceReads++;return sourceData;},
     publishDirectorReportFiles:async(args)=>{
-      const message=`Test bundle ${published.length+1}: ${displaySiteName(args.siteAccess)}`;
+      const reportContext=siteReportMessageContext({site:args.siteAccess,window:args.window,count:1,pdfUrl:`https://example.invalid/${published.length+1}.pdf`,xlsxUrl:`https://example.invalid/${published.length+1}.xlsx`});
+      const {message}=recipientReportMessage({window:args.window,reports:[reportContext]});
       published.push({args,data:structuredClone(siteSourceData(args.sourceData,args.siteAccess)),message});
-      return {message};
+      return {message,reportContext};
     },
     publicBaseUrl:()=>'https://example.invalid',metaWhatsAppRuntimeEnv:async()=>({}),
     sendMetaWhatsAppTemplate:async(args)=>{if(fail)throw new Error('Template unavailable');sent.push(args);},
@@ -291,7 +293,7 @@ test('the sender combines coincident daily and weekly personal groups, reuses si
   assert.deepEqual(harness.published[0].args.reportTitles,[CLOSING_BD,DIRECTOR_REPORT_TITLES[2]]);
   assert.deepEqual(harness.published[0].args.window,{start:new Date('2026-09-10T13:30:00Z'),end:new Date('2026-09-11T13:30:00Z')});
   assert.equal(harness.published[0].args.scheduleLabel.includes('Daily'),true);
-  assert.ok([...harness.claims.values()].every(({args})=>args[2].includes('-one+two-SITE-sasti ob')));
+  assert.ok([...harness.claims.values()].every(({args})=>args[2].includes('-one+two-SELECTED-LOCATIONS')));
   assert.deepEqual(harness.sent[0].parameters,harness.sent[1].parameters);
   assert.deepEqual(await harness.sendScheduledHierarchyReportBundles(new Date('2026-09-11T13:40:00Z')),{sent:0,failed:0,skipped:2});
   assert.equal(harness.sent.length,2);

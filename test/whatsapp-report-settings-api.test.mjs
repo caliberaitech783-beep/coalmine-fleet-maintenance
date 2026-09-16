@@ -66,7 +66,7 @@ test('template status distinguishes requested wording from the template actually
   const settings=defaultWhatsAppReportSettings();settings.templates.idleReminder.variant='detailed';
   const candidate=candidateReportTemplate('idleReminder',settings.templates.idleReminder);
   let state=reportTemplateState(settings,{[candidate.name]:{status:'PENDING',checkedAt:'2026-09-08T10:00:00Z'}}).idleReminder;
-  assert.equal(state.usingRequested,false);assert.equal(state.name,candidate.name);assert.equal(state.effectiveName,'nerve_idlereminder_site_v2');
+  assert.equal(state.usingRequested,false);assert.equal(state.name,candidate.name);assert.equal(state.effectiveName,'nerve_idlereminder_site_v3');
   state=reportTemplateState(settings,{[candidate.name]:{status:'APPROVED'}}).idleReminder;
   assert.equal(state.usingRequested,true);
 });

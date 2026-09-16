@@ -11,7 +11,7 @@ export function hierarchyReportMessagePurpose(reportTitles=[]) {
   return titles.length===1?SINGLE_REPORT_TEMPLATE_PURPOSES.find(report=>report.reportTitle===titles[0])?.key||'consolidatedRequestReport':'consolidatedRequestReport';
 }
 
-// Keep approved provider definitions immutable for delivery during the v2 review.
+// Keep approved provider definitions immutable during layout migrations.
 export const LEGACY_WORKFLOW_TEMPLATES={
   passwordResetOtp:{name:'nerve_password_reset_otp',category:'AUTHENTICATION',example:['123456'],otpButton:true,components:[
     {type:'BODY',add_security_recommendation:true},
@@ -39,7 +39,7 @@ export const LEGACY_TEMPLATE_FIELD_LABELS = {
   ticketCreated:['Ticket reference','Created by','Site'],ticketResolved:['Ticket reference','Resolved by'],
   dailyUpdate:['Updated by','Request reference'],
 };
-export const TEMPLATE_FIELD_LABELS = {
+export const V2_TEMPLATE_FIELD_LABELS = {
   requestOpened:['Site','Request','Equipment / door','Breakdown type','Complaint / reason','Reported by','Off Road since (IST)','Expected completion (IST)','Next step','Open request'],
   requestClosed:['Site','Request','Equipment / door','Breakdown type','Complaint / reason','Work completed','Delay reason','Closed by','On Road at (IST)','Downtime','Next step','Open request'],
   requestVerified:['Site','Request','Equipment / door','Breakdown type','Complaint / reason','Work completed','Verified by','Verified at (IST)','Closing meter','First trip','Next step','Open request'],
@@ -51,6 +51,10 @@ export const TEMPLATE_FIELD_LABELS = {
   dailyUpdate:['Site','Request','Equipment / door','Breakdown type','Maintenance update','Delay reason','Expected completion (IST)','Updated by','Updated at (IST)','Next step','Open request'],
   maintenanceReminder:['Site','Request','Update due (IST)','Next step'],
 };
+const isReportKey=key=>['consolidatedRequestReport','consolidatedTicketReport'].includes(key);
+export const TEMPLATE_FIELD_LABELS=Object.fromEntries(Object.entries(V2_TEMPLATE_FIELD_LABELS).map(([key,fields])=>[
+  key,fields.filter(field=>!['Next step','Notes'].includes(field)).map(field=>isReportKey(key)&&field==='Site'?'Locations':field),
+]));
 const sampleRequest=['Majri OB','REQ-1787566831835','VOLVO TIPPERS | Door: V257 - MH34BZ5560','Breakdown','Hydraulic hose leaking'];
 const sampleLink='https://bdms.cmll.in/?request=REQ-1787566831835';
 const examples={
@@ -66,16 +70,22 @@ const examples={
   consolidatedTicketReport:['Majri OB','CRM consolidated report','14 Sep 2026, 7:00 PM to 15 Sep 2026, 7:00 AM','5 tickets with activity: 3 open, 2 resolved','https://example.com/reports/majri-crm.pdf','https://example.com/reports/majri-crm.xlsx','All permitted ticket categories for this site. Links expire in 14 days.'],
 };
 const standardTitles={requestOpened:'Off Road Alert',requestClosed:'On Road Update',requestVerified:'MIS Verified',requestIdle:'Idle Vehicle',ticketCreated:'New CRM Ticket',ticketResolved:'CRM Ticket Resolved',dailyUpdate:'Maintenance Update',maintenanceReminder:'Maintenance Reminder',consolidatedRequestReport:'Fleet Report',consolidatedTicketReport:'CRM Report'};
-export const META_WORKFLOW_TEMPLATES=Object.fromEntries(Object.entries(LEGACY_WORKFLOW_TEMPLATES).map(([key,legacy])=>[key,key==='passwordResetOtp'?legacy:{
+export const V2_WORKFLOW_TEMPLATES=Object.fromEntries(Object.entries(LEGACY_WORKFLOW_TEMPLATES).map(([key,legacy])=>[key,key==='passwordResetOtp'?legacy:{
   name:`nerve_${key.toLowerCase()}_site_v2`,
-  body:`*SITE: {{1}}*\n*Nerve Center | ${standardTitles[key]}*\n\n${TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Nerve Center for complete details.`,
+  body:`*SITE: {{1}}*\n*Nerve Center | ${standardTitles[key]}*\n\n${V2_TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Nerve Center for complete details.`,
   example:examples[key],
+}]));
+export const META_WORKFLOW_TEMPLATES=Object.fromEntries(Object.entries(V2_WORKFLOW_TEMPLATES).map(([key,previous])=>[key,previous.otpButton?previous:{
+  name:`nerve_${key.toLowerCase()}_${isReportKey(key)?'locations':'site'}_v3`,
+  body:`*${isReportKey(key)?'LOCATIONS':'SITE'}: {{1}}*\n*Nerve Center | ${standardTitles[key]}*\n\n${TEMPLATE_FIELD_LABELS[key].slice(1).map((label,index)=>`*${label}:* {{${index+2}}}`).join('\n')}\n\nOpen Nerve Center for complete details.`,
+  example:TEMPLATE_FIELD_LABELS[key].map(label=>previous.example[V2_TEMPLATE_FIELD_LABELS[key].indexOf(label==='Locations'?'Site':label)]),
 }]));
 const aliases={offRoadEscalation:'requestOpened',idleReminder:'requestIdle',manualReports:'consolidatedRequestReport'};
 for(const [purpose,key,title] of [['offRoadEscalation','requestOpened','Off Road Escalation'],['idleReminder','requestIdle','Idle Reminder']]){
-  META_WORKFLOW_TEMPLATES[purpose]={...META_WORKFLOW_TEMPLATES[key],name:`nerve_${purpose.toLowerCase()}_site_v2`,body:META_WORKFLOW_TEMPLATES[key].body.replace(standardTitles[key],title)};
+  META_WORKFLOW_TEMPLATES[purpose]={...META_WORKFLOW_TEMPLATES[key],name:`nerve_${purpose.toLowerCase()}_site_v3`,body:META_WORKFLOW_TEMPLATES[key].body.replace(standardTitles[key],title)};
 }
 export const baseTemplateKey = purpose => isSingleReportPurpose(purpose)?'consolidatedRequestReport':aliases[purpose] || purpose;
+export const templateScopeHeader=purpose=>`*${isReportKey(baseTemplateKey(purpose))?'LOCATIONS':'SITE'}: {{1}}*`;
 const titles={requestOpened:'OFF ROAD ALERT',requestClosed:'ON ROAD UPDATE',requestVerified:'MIS VERIFIED',requestIdle:'IDLE VEHICLE',offRoadEscalation:'OFF ROAD ESCALATION',idleReminder:'IDLE REMINDER',consolidatedRequestReport:'FLEET REPORTS',consolidatedTicketReport:'CRM TICKET REPORT',ticketCreated:'NEW CRM TICKET',ticketResolved:'CRM TICKET RESOLVED',dailyUpdate:'MAINTENANCE UPDATE'};
 const purposeNotes={
   requestOpened:{intro:'A breakdown request has been opened.',action:'Review the reported breakdown and update the acceptance or repair plan in Nerve Center.'},
@@ -111,7 +121,7 @@ export function reportTemplateChoices(purpose) {
   if(!base||!fields)return [];
   const {title,intro,action}=reportTemplateContext(purpose);
   const lines=fields.slice(1).map((field,index)=>`*${field}:* {{${index+2}}}`).join('\n');
-  const header=`*SITE: {{1}}*`;
+  const header=templateScopeHeader(purpose);
   const styles=[
     ['standard','Site-first standard','Site heading and clearly labelled details.',null],
     ['brief','Compact summary','Short introduction for quick reading.',`*${title}*`],
@@ -137,7 +147,7 @@ export function validateCustomTemplate(purpose,body) {
   if(fields.some((_,index)=>!tokens.includes(String(index+1))))return 'Keep every required placeholder so operational details are not lost.';
   if(tokens.length!==fields.length||tokens.some((token,index)=>token!==String(index+1)))return 'Use each required placeholder once, in numbered order.';
   if(/^\s*\{\{|\}\}\s*$/.test(body))return 'Add wording before and after the placeholders.';
-  if(!body.trimStart().startsWith('*SITE: {{1}}*\n'))return 'Start with *SITE: {{1}}* on its own first line so the site stays highlighted.';
+  if(!body.trimStart().startsWith(`${templateScopeHeader(purpose)}\n`))return `Start with ${templateScopeHeader(purpose)} on its own first line so the locations stay highlighted.`;
   return '';
 }
 export function previewReportTemplate(purpose,body) {

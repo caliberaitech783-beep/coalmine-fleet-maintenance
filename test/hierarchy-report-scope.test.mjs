@@ -9,6 +9,7 @@ import {applyHierarchyDeliveryRule,defaultHierarchyReportScheduleSettings,flowDe
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
 import {hierarchyAccessAllowsReport} from '../hierarchy-report-catalogue.mjs';
 import {reportSites} from '../site-consolidated-report.mjs';
+import {siteReportMessageContext,recipientReportMessage} from '../whatsapp-message-format.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const mobile=(fields={})=>({login:'mobile',userType:'Mobile User',userGroup:'Production User',site:'Sasti OB',...fields});
@@ -132,7 +133,7 @@ function deliveryHarness(users,{siteAccess=null,reportAccess=DIRECTOR_REPORT_TIT
       return {rows:[],rowCount:1};
     }},
     reportRecipientLogin,resolveMobileAccess,flowDesignationForUser,applyHierarchyDeliveryRule,reportsDueForDesignation,
-    hierarchyRecipientReportScope,hierarchyAccessAllowsReport,reportSites,displaySiteName,
+    hierarchyRecipientReportScope,hierarchyAccessAllowsReport,reportSites,displaySiteName,recipientReportMessage,
     directorReportSourceData:async()=>{sourceReads.push(sourceData);return sourceData;},
     hierarchyRuleForDesignation:()=>siteAccess===null?null:{siteAccess,reportAccess},
     publishDirectorReportFiles:async args=>{
@@ -140,7 +141,8 @@ function deliveryHarness(users,{siteAccess=null,reportAccess=DIRECTOR_REPORT_TIT
       const filtered=sourceDataForSites(args.sourceData,args.siteAccess);
       const message=JSON.stringify({site:args.siteAccess,reportTitles:args.reportTitles,
         requestIds:filtered.requests.map(row=>row.ref),equipmentIds:filtered.equipmentRecords.map(row=>row.id),transferIds:filtered.transferRecords.map(row=>row.id)});
-      published.push({args,data:filtered,message});return {message};
+      const reportContext=siteReportMessageContext({site:args.siteAccess,window:args.window,count:filtered.requests.length,pdfUrl:`https://example.invalid/${published.length+1}.pdf`,xlsxUrl:`https://example.invalid/${published.length+1}.xlsx`});
+      published.push({args,data:filtered,message,reportContext});return {message,reportContext};
     },
     publicBaseUrl:()=> 'https://example.invalid',metaWhatsAppRuntimeEnv:async()=>({}),
     sendMetaWhatsAppTemplate:async args=>sent.push(args),
@@ -153,19 +155,25 @@ function deliveryHarness(users,{siteAccess=null,reportAccess=DIRECTOR_REPORT_TIT
 function assertRecipientSites(harness,recipientIndex,sites){
   const recipient=harness.recipients[recipientIndex];
   const messages=harness.sent.filter(message=>message.to===recipient.phone);
-  assert.deepEqual(messages.map(message=>JSON.parse(message.parameters[0]).site).sort(),[...sites].sort());
+  assert.equal(messages.length,sites.length?1:0,'all permitted sites share one recipient message');
+  if(messages.length)assert.deepEqual(messages[0].context.report.site.split(' | ').map(canonicalSiteName).sort(),[...sites].sort());
   for(const message of messages){
     assert.equal(message.templateKey,'consolidatedRequestReport');
     assert.equal(message.purpose,'consolidatedRequestReport');
     assert.equal(message.parameters.length,1);
-    assert.ok(harness.published.some(bundle=>bundle.message===message.parameters[0]),'send must reference a published site bundle');
+    for(const site of sites){
+      const bundle=harness.published.find(bundle=>bundle.args.siteAccess===site&&message.parameters[0].includes(bundle.reportContext.pdfUrl));
+      assert.ok(bundle,'every delivered site must reference its published files');
+      assert.ok(message.parameters[0].includes(bundle.reportContext.xlsxUrl));
+    }
   }
   const claims=harness.claims.filter(([,login])=>login===reportRecipientLogin(recipient));
-  assert.equal(claims.length,sites.length);
-  assert.deepEqual(claims.map(([, ,key])=>key.split('-SITE-')[1]).sort(),[...sites].sort());
+  assert.equal(claims.length,sites.length?1:0);
+  assert.ok(claims.every(([, ,key])=>key.endsWith('-SELECTED-LOCATIONS')));
   assert.equal(new Set(claims.map(([slot,login,key])=>JSON.stringify([slot,login,key]))).size,claims.length);
   const history=harness.history.filter(row=>row[4]===recipient.phone);
-  assert.deepEqual(history.map(row=>row[1]).sort(),sites.map(displaySiteName).sort());
+  assert.equal(history.length,sites.length?1:0);
+  if(history.length)assert.deepEqual(history[0][1].split(' | ').sort(),sites.map(displaySiteName).sort());
   assert.ok(history.every(row=>row[5]==='Sent'));
 }
 
@@ -185,11 +193,11 @@ function assertIsolatedPublications(harness,source=data){
   }
 }
 
-test('scheduled publication isolates all record types and sends each permitted manager site separately',async()=>{
+test('scheduled publication isolates site files and sends all permitted manager sites in one message',async()=>{
   const before=structuredClone(data);
   const harness=deliveryHarness([mobile(),manager({managerSites:'SASTI II | Majri OB',managerRegion:'All'})],{siteAccess:''});
   const result=await harness.run(at1900Ist);
-  assert.equal(result.sent,3);assert.equal(result.failed,0);
+  assert.equal(result.sent,2);assert.equal(result.failed,0);
   assertRecipientSites(harness,0,['sasti ob']);
   assertRecipientSites(harness,1,['sasti ob','majri ob']);
   assert.equal(harness.published.length,3);
@@ -216,7 +224,7 @@ test('scheduler keeps Admin-fallback manager jobs and mobile region records with
     {login:'unassigned-project',userType:'Super User',adminLevel:'Admin',designation:'Project Manager'},
   ]);
   const result=await harness.run(at1900Ist);
-  assert.equal(result.sent,4);assert.equal(result.failed,0);
+  assert.equal(result.sent,3);assert.equal(result.failed,0);
   assertRecipientSites(harness,0,['sasti ob','majri ob']);
   assertRecipientSites(harness,1,['sasti ob']);
   assertRecipientSites(harness,2,['majri ob']);
@@ -238,7 +246,7 @@ test('unassigned and designation-disjoint recipients never claim, publish or sen
   assert.equal(disjoint.sourceReads.length,0);assert.deepEqual(disjoint.errors,[]);
 });
 
-test('admin, super admin and director receive separate global site bundles unless hierarchy rules narrow them',async()=>{
+test('admin, super admin and director receive one all-locations message unless hierarchy rules narrow them',async()=>{
   const users=[{login:'director',userType:'Super User',adminLevel:'Admin',designation:'Director'},
     {login:'admin',userType:'Super User',adminLevel:'Admin'},
     {login:'super',userType:'Super User',adminLevel:'Super Admin'}];
@@ -246,7 +254,7 @@ test('admin, super admin and director receive separate global site bundles unles
     const harness=deliveryHarness(users,{siteAccess});
     const sites=siteAccess===' | '?[]:siteAccess?['sasti ob','majri ob']:['sasti ob','majri ob','jayant ob'];
     const result=await harness.run(at1900Ist);
-    assert.equal(result.sent,users.length*sites.length);assert.equal(result.failed,0);
+    assert.equal(result.sent,sites.length?users.length:0);assert.equal(result.failed,0);
     users.forEach((_,index)=>assertRecipientSites(harness,index,sites));
     assertIsolatedPublications(harness);
     assert.equal(harness.sourceReads.length,sites.length?1:0);
@@ -262,14 +270,14 @@ test('global site discovery retains equipment-only sites even when there is no r
   const sourceData={requests:[],equipmentRecords:data.equipmentRecords,transferRecords:[]};
   const harness=deliveryHarness([{login:'admin',userType:'Super User',adminLevel:'Admin'}],{sourceData});
   const result=await harness.run(at1900Ist);
-  assert.equal(result.sent,3);assert.equal(result.failed,0);
+  assert.equal(result.sent,1);assert.equal(result.failed,0);
   assertRecipientSites(harness,0,['sasti ob','majri ob','jayant ob']);
   assert.equal(harness.published.length,3);
   assertIsolatedPublications(harness,sourceData);
   assert.ok(harness.published.every(item=>item.data.equipmentRecords.length===1&&item.data.requests.length===0));
 });
 
-test('same-window schedules combine into one bundle per authorized site and still enforce report access',async()=>{
+test('same-window schedules combine into one message with all authorized site files and still enforce report access',async()=>{
   const scheduleSettings=defaultHierarchyReportScheduleSettings();
   scheduleSettings.designations.maintenanceManager.schedules=[
     {key:'first',enabled:true,cadence:'daily',times:['19:00'],reports:[DIRECTOR_REPORT_TITLES[0],DIRECTOR_REPORT_TITLES[1]]},
@@ -277,7 +285,7 @@ test('same-window schedules combine into one bundle per authorized site and stil
   ];
   const harness=deliveryHarness([manager({managerSites:'Sasti OB | Majri OB'})],{siteAccess:'Sasti OB | Majri OB | Jayant OB',reportAccess:DIRECTOR_REPORT_TITLES[0],scheduleSettings});
   const result=await harness.run(at1900Ist);
-  assert.equal(result.sent,2);assert.equal(result.failed,0);
+  assert.equal(result.sent,1);assert.equal(result.failed,0);
   assertRecipientSites(harness,0,['sasti ob','majri ob']);
   assert.equal(harness.published.length,2);
   assertIsolatedPublications(harness);

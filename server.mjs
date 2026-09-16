@@ -40,7 +40,7 @@ import {hierarchyAccessAllowsReport} from './hierarchy-report-catalogue.mjs';
 import {hierarchyRecipientReportScope} from './hierarchy-report-scope.mjs';
 import {prepareTicketReportRows,ticketReportWindow,buildTicketReportTable,buildTicketWhatsAppReport} from './ticket-consolidated-report.mjs';
 import {scheduledReportWindowsDue} from './report-delivery-window.mjs';
-import {siteReportMessageContext} from './whatsapp-message-format.mjs';
+import {siteReportMessageContext,recipientReportMessage} from './whatsapp-message-format.mjs';
 import {META_WORKFLOW_TEMPLATES,metaWhatsAppStatus,registerMetaWhatsAppPhone,sendMetaWhatsAppDocument,sendMetaWhatsAppTemplate,sendMetaWhatsAppText,submitMetaWhatsAppTemplates,metaWhatsAppTemplateStatuses,setWhatsAppDeliveryPolicyReader} from './meta-whatsapp.mjs';
 import {normalizeWhatsAppReportSettings,whatsappPurposeEnabled,PURPOSE_OPTIONS} from './whatsapp-report-settings.mjs';
 import {requestedReportTemplate,reportTemplateFallback} from './whatsapp-template-runtime.mjs';
@@ -3294,40 +3294,50 @@ async function sendScheduledConsolidatedTicketReports(now=new Date()){
         }
         const tickets=windows.get(key).filter(ticket=>reportScopeIncludesSite(scope,ticket.site));
         const sites=reportSites({requests:tickets,equipmentRecords:equipmentRows.map(row=>row.record_data||{})},scope);
-        for(const site of sites){
-          const selected=tickets.filter(ticket=>canonicalSiteName(ticket.site)===site);
-          const scopedOpen=selected.filter(ticket=>!ticket.resolvedAt),scopedClosed=selected.filter(ticket=>Boolean(ticket.resolvedAt));
-          if(!reportSettings.crm.sendEmpty&&!selected.length){skipped++;continue}
-          const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+        const selectedSites=sites.filter(site=>reportSettings.crm.sendEmpty||tickets.some(ticket=>canonicalSiteName(ticket.site)===site));
+        if(!selectedSites.length){skipped++;continue}
+        const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
             (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
             ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
               SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
               WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
-            RETURNING id`,[slotKey,login,`CRM-SITE-${site}`]);
-          if(!claim.rowCount){skipped++;continue}
-          const recipientName=String(user.employee||user.name||user.login||login);
-          let status='Sent';
-          try{
-            if(!phone)throw new Error('Phone number missing');
+            RETURNING id`,[slotKey,login,'CRM-SELECTED-LOCATIONS']);
+        if(!claim.rowCount){skipped++;continue}
+        const recipientName=String(user.employee||user.name||user.login||login);
+        let status='Sent';
+        try{
+          if(!phone)throw new Error('Phone number missing');
+          const siteReports=[],siteBundles=[];
+          for(const site of selectedSites){
+            const selected=tickets.filter(ticket=>canonicalSiteName(ticket.site)===site);
+            const scopedOpen=selected.filter(ticket=>!ticket.resolvedAt),scopedClosed=selected.filter(ticket=>Boolean(ticket.resolvedAt));
             const bundleKey=`${key}/${site}`;
             if(!bundles.has(bundleKey))bundles.set(bundleKey,publishCrmReportFiles({scopeLabel:displaySiteName(site),start:window.start,end:window.end,openTickets:scopedOpen,closedTickets:scopedClosed,slotKey,scopeKey:site}));
             const bundle=await bundles.get(bundleKey);
-            const message=buildSiteReportMessage({kind:'CRM',site,window,count:selected.length,pdfUrl:bundle.pdfUrl,xlsxUrl:bundle.xlsxUrl});
-            const env=await metaWhatsAppRuntimeEnv();
-            try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[message],context:{report:siteReportMessageContext({kind:'CRM',site,window,count:selected.length,pdfUrl:bundle.pdfUrl,xlsxUrl:bundle.xlsxUrl,summary:`${selected.length} tickets with activity | ${scopedOpen.length} open | ${scopedClosed.length} resolved`})}},{env})}
-            catch(templateError){
-              if(templateError.code==='WHATSAPP_POLICY_PAUSED')throw templateError;
-              await sendMetaWhatsAppDocument({to:phone,buffer:bundle.pdf,purpose:'consolidatedTicketReport',filename:bundle.pdfFilename,
-                caption:message},{env});
+            siteBundles.push(bundle);
+            siteReports.push(siteReportMessageContext({kind:'CRM',site,window,count:selected.length,pdfUrl:bundle.pdfUrl,xlsxUrl:bundle.xlsxUrl,summary:`${selected.length} tickets with activity | ${scopedOpen.length} open | ${scopedClosed.length} resolved`}));
+          }
+          const delivery=recipientReportMessage({kind:'CRM',window,reports:siteReports});
+          const env=await metaWhatsAppRuntimeEnv();
+          try{await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedTicketReport',parameters:[delivery.message],context:{report:delivery.reportContext}},{env})}
+          catch(templateError){
+            // An uncertain response may already have delivered the message.
+            // Fall back only after a definite unavailable-template rejection.
+            if(templateError.code==='WHATSAPP_POLICY_PAUSED'||Number(templateError.metaCode)!==132001)throw templateError;
+            if(siteBundles.length===1){
+              const bundle=siteBundles[0];
+              await sendMetaWhatsAppDocument({to:phone,buffer:bundle.pdf,purpose:'consolidatedTicketReport',filename:bundle.pdfFilename,caption:delivery.message},{env});
+            }else{
+              await sendMetaWhatsAppText({to:phone,message:delivery.message,purpose:'consolidatedTicketReport'},{env});
             }
-            sent++;
-          }catch(error){status=`Failed - ${String(error?.message||'CRM delivery error').slice(0,160)}`;failed++;console.error(`CRM report failed for ${login} / ${site}:`,error.message)}
-          await Promise.all([
-            pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
-            pool.query(`INSERT INTO whatsapp_alert_history
-              (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,['Site consolidated CRM report',displaySiteName(site),slotKey,recipientName,phone,status]),
-          ]);
-        }
+          }
+          sent++;
+        }catch(error){status=`Failed - ${String(error?.message||'CRM delivery error').slice(0,160)}`;failed++;console.error(`CRM report failed for ${login}:`,error.message)}
+        await Promise.all([
+          pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
+          pool.query(`INSERT INTO whatsapp_alert_history
+              (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,['Consolidated CRM report',selectedSites.map(displaySiteName).join(' | '),slotKey,recipientName,phone,status]),
+        ]);
       }
     }
     return {sent,failed,skipped};
@@ -3528,32 +3538,36 @@ async function sendScheduledHierarchyReportBundles(now=new Date(),event=null){
       for(const group of dueGroups){
         const reportTitles=group.reports.filter(title=>!hierarchyRule||hierarchyAccessAllowsReport(hierarchyRule.reportAccess,title));
         if(!reportTitles.length){skipped++;continue}
-        for(const site of sites){
-          const {slotKey,scheduleKey,window,scheduleLabel}=group;
-          const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
+        if(!sites.length){skipped++;continue}
+        const {slotKey,scheduleKey,window,scheduleLabel}=group;
+        const claim=await pool.query(`INSERT INTO whatsapp_consolidated_report_runs
             (slot_key,recipient_login,scope_key,status,attempts,updated_at) VALUES ($1,$2,$3,'Sending',1,NOW())
             ON CONFLICT (slot_key,recipient_login,scope_key) DO UPDATE
               SET status='Sending',attempts=whatsapp_consolidated_report_runs.attempts+1,updated_at=NOW()
               WHERE whatsapp_consolidated_report_runs.status LIKE 'Failed%' AND whatsapp_consolidated_report_runs.attempts<3
-            RETURNING id`,[slotKey,login,`HIERARCHY-${designation.key}-${scheduleKey}-SITE-${site}`]);
-          if(!claim.rowCount){skipped++;continue}
-          let status='Sent';
-          try{
+            RETURNING id`,[slotKey,login,`HIERARCHY-${designation.key}-${scheduleKey}-SELECTED-LOCATIONS`]);
+        if(!claim.rowCount){skipped++;continue}
+        let status='Sent';
+        try{
+          const siteReports=[];
+          for(const site of sites){
             const bundleKey=JSON.stringify([site,window.start,window.end,[...reportTitles].sort()]);
             if(!bundles.has(bundleKey))bundles.set(bundleKey,publishDirectorReportFiles({baseUrl:publicBaseUrl(),slotKey,now,reportTitles,siteAccess:site,heading:`${designation.label} Consolidated Report`,scheduleLabel,window,sourceData}));
             const bundle=await bundles.get(bundleKey);
-            const env=await metaWhatsAppRuntimeEnv();
-            await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',parameters:[bundle.message],context:{site,report:bundle.reportContext}},{env});sent++;
-          }catch(error){
-            status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;failed++;
-            console.error(`Hierarchy WhatsApp report failed for ${recipientName} / ${site}:`,error.message);
+            siteReports.push(bundle.reportContext);
           }
-          await Promise.all([
+          const delivery=recipientReportMessage({window,reports:siteReports});
+          const env=await metaWhatsAppRuntimeEnv();
+          await sendMetaWhatsAppTemplate({to:phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',parameters:[delivery.message],context:{report:delivery.reportContext}},{env});sent++;
+        }catch(error){
+          status=`Failed - ${String(error?.message||'Hierarchy WhatsApp delivery error').slice(0,160)}`;failed++;
+          console.error(`Hierarchy WhatsApp report failed for ${recipientName}:`,error.message);
+        }
+        await Promise.all([
             pool.query(`UPDATE whatsapp_consolidated_report_runs SET status=$1,updated_at=NOW() WHERE id=$2`,[status,claim.rows[0].id]),
             pool.query(`INSERT INTO whatsapp_alert_history
-              (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,['Site consolidated fleet report',displaySiteName(site),slotKey,recipientName,phone,status]),
-          ]);
-        }
+              (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,['Consolidated fleet report',sites.map(displaySiteName).join(' | '),slotKey,recipientName,phone,status]),
+        ]);
       }
     }
     return {sent,failed,skipped};

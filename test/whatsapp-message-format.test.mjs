@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {META_WORKFLOW_TEMPLATES,LEGACY_WORKFLOW_TEMPLATES,reportTemplateChoices,validateCustomTemplate,baseTemplateKey} from '../whatsapp-template-catalog.mjs';
-import {whatsAppMessageParameters,renderWhatsAppTemplate,siteReportMessageContext,whatsAppNextStep} from '../whatsapp-message-format.mjs';
+import {META_WORKFLOW_TEMPLATES,LEGACY_WORKFLOW_TEMPLATES,V2_WORKFLOW_TEMPLATES,reportTemplateChoices,validateCustomTemplate,baseTemplateKey,templateScopeHeader} from '../whatsapp-template-catalog.mjs';
+import {whatsAppMessageParameters,renderWhatsAppTemplate,siteReportMessageContext,recipientReportMessage} from '../whatsapp-message-format.mjs';
 import {sendMetaWhatsAppTemplate,setWhatsAppDeliveryPolicyReader} from '../meta-whatsapp.mjs';
 import {defaultWhatsAppReportSettings} from '../whatsapp-report-settings.mjs';
 import {reportTemplateFallback,candidateReportTemplate} from '../whatsapp-template-runtime.mjs';
@@ -33,14 +33,10 @@ test('each event renders the saved site, breakdown and relevant reason/work on s
   assert.match(render('idleReminder',{request}),/\| Idle Reminder\*/);
 });
 
-test('role-aware next steps give Maintenance repair work, MIS verification and Production coordination',()=>{
+test('all operational roles receive the same facts without a Next step',()=>{
   const messages=['Production User','Maintenance User','MIS User'].map(role=>render('requestOpened',{request,recipient:user(role)}));
-  assert.match(messages[0],/coordinate equipment availability/);
-  assert.match(messages[1],/diagnose the complaint/);
-  assert.match(messages[2],/verification follows maintenance closure/);
-  assert.match(whatsAppNextStep('requestClosed',user('MIS User')),/Verify the closure/);
-  assert.match(whatsAppNextStep('ticketCreated',{userType:'Super User',adminLevel:'Admin'}),/record the resolution/);
-  assert.match(whatsAppNextStep('ticketCreated',user('Production User')),/Your ticket is recorded/);
+  assert.equal(new Set(messages).size,1);
+  for(const message of messages)assert.doesNotMatch(message,/Next step|coordinate equipment availability|diagnose the complaint|verification follows maintenance closure/);
 });
 
 test('CRM creation and resolution include the actual site, category, priority, issue and resolution',()=>{
@@ -78,7 +74,7 @@ test('provider payload keeps site first, structured lines static, full site PDF/
   assert.equal(parameters[0],'Sasti OB');assert.equal(parameters[4],report.pdfUrl);assert.equal(parameters[5],report.xlsxUrl);
   assert.ok(parameters.every(value=>!/[\r\n\t]/.test(value)));
   const message=renderWhatsAppTemplate(META_WORKFLOW_TEMPLATES.consolidatedRequestReport,parameters);
-  assert.match(message,/^\*SITE: Sasti OB\*\n/);assert.match(message,/14-09-2026 07:00:00 PM to 15-09-2026 07:00:00 AM/);
+  assert.match(message,/^\*LOCATIONS: Sasti OB\*\n/);assert.match(message,/14-09-2026 07:00:00 PM to 15-09-2026 07:00:00 AM/);
   assert.match(message,/\n\*PDF \/ files:\* https:/);assert.match(message,/\n\*Excel \/ other files:\* https:/);
   assert.doesNotMatch(message,/old summary|Majri/);
 });
@@ -87,7 +83,8 @@ test('every prepared style and valid custom wording preserves a bold first-line 
   for(const purpose of ['requestOpened','requestClosed','requestVerified','requestIdle','ticketCreated','ticketResolved','dailyUpdate','consolidatedRequestReport','consolidatedTicketReport','manualReports','offRoadEscalation','idleReminder']){
     for(const choice of reportTemplateChoices(purpose)){
       assert.equal(validateCustomTemplate(purpose,choice.body),'',`${purpose}/${choice.variant}`);
-      assert.ok(choice.body.startsWith('*SITE: {{1}}*\n'));
+      assert.ok(choice.body.startsWith(`${templateScopeHeader(purpose)}\n`));
+      assert.doesNotMatch(choice.body,/\*Notes:\*|\*Next step:\*/);
     }
   }
   const body=reportTemplateChoices('requestClosed')[2].body;
@@ -96,11 +93,47 @@ test('every prepared style and valid custom wording preserves a bold first-line 
   assert.equal(candidateReportTemplate('ticketResolved',{variant:'custom',body:LEGACY_WORKFLOW_TEMPLATES.ticketResolved.body}).name,META_WORKFLOW_TEMPLATES.ticketResolved.name);
 });
 
-test('text fallback includes the same saved record and role-specific next step',()=>{
+test('text fallback retains the saved request details without a next step',()=>{
   const purpose='requestClosed',context={request,recipient:user('MIS User')};
   const text=reportTemplateFallback(purpose,LEGACY_WORKFLOW_TEMPLATES[purpose].example,defaultWhatsAppReportSettings(),{},'old short notification',context);
   assert.equal(text,render(purpose,context));
-  assert.match(text,/Awaiting spare pump/);assert.match(text,/Verify the closure/);
+  assert.match(text,/Awaiting spare pump/);assert.doesNotMatch(text,/Next step|Verify the closure/);
+});
+
+test('nine selected locations survive consolidation with every file link and no notes',async()=>{
+  const window={start:new Date('2026-09-14T19:00:00+05:30'),end:new Date('2026-09-15T07:00:00+05:30')};
+  const sites=['Sasti OB','Majri OB','Dhoptala OB (2nd)','Gauri Pauni OB (2nd)','Lalpeth OB','Jayant OB','Jayant OB 2nd','Dudhichua OB','Dudhichua East OB'];
+  const reports=sites.map((site,index)=>siteReportMessageContext({site,window,count:index,pdfUrl:`https://reports.example/r/pdf_${index}`,xlsxUrl:`https://reports.example/r/xlsx_${index}`}));
+  const delivery=recipientReportMessage({window,reports});
+  const payloads=[];
+  await sendMetaWhatsAppTemplate({to:'9000000000',templateKey:'consolidatedRequestReport',parameters:[delivery.message],context:{report:delivery.reportContext}},{env,fetchImpl:async(_url,options)=>{
+    payloads.push(JSON.parse(options.body));return {ok:true,json:async()=>({messages:[{id:'one-message'}]})};
+  }});
+  assert.equal(payloads.length,1);
+  const values=payloads[0].template.components[0].parameters.map(row=>row.text);
+  assert.equal(values.length,6);
+  assert.equal(values[0],sites.join(' | '));
+  const rendered=renderWhatsAppTemplate(META_WORKFLOW_TEMPLATES.consolidatedRequestReport,values);
+  for(const report of reports){
+    assert.ok(rendered.includes(report.site));assert.ok(rendered.includes(report.pdfUrl));assert.ok(rendered.includes(report.xlsxUrl));
+    assert.ok(delivery.message.includes(`*SITE: ${report.site}*`));
+  }
+  assert.doesNotMatch(rendered+'\n'+delivery.message,/Notes:|This site only|expire|Next step|undefined|…/);
+  assert.throws(()=>recipientReportMessage({window,reports:[{...reports[0],pdfUrl:''}]}),/Every selected site requires/);
+});
+
+test('old structured layouts discard only the removed fields and legacy opened calls stay unambiguous',()=>{
+  for(const key of Object.keys(V2_WORKFLOW_TEMPLATES).filter(key=>key!=='passwordResetOtp')){
+    const previous=V2_WORKFLOW_TEMPLATES[key];
+    const converted=whatsAppMessageParameters(key,previous.example);
+    assert.deepEqual(converted,META_WORKFLOW_TEMPLATES[key].example,key);
+    assert.doesNotMatch(renderWhatsAppTemplate(META_WORKFLOW_TEMPLATES[key],converted),/\*Notes:\*|\*Next step:\*/);
+  }
+  const legacy=whatsAppMessageParameters('requestOpened',LEGACY_WORKFLOW_TEMPLATES.requestOpened.example,{request});
+  assert.equal(legacy[0],'Sasti OB');assert.equal(legacy[1],LEGACY_WORKFLOW_TEMPLATES.requestOpened.example[0]);
+  assert.equal(legacy[4],request.complaint);assert.equal(legacy.at(-1),LEGACY_WORKFLOW_TEMPLATES.requestOpened.example.at(-1));
+  const current=META_WORKFLOW_TEMPLATES.requestOpened.example;
+  assert.deepEqual(whatsAppMessageParameters('requestOpened',current,{parameterLayout:'current'}),current);
 });
 
 test('new templates use their new schema; explicit unavailable response alone allows a legacy delivery',async()=>{
@@ -110,7 +143,7 @@ test('new templates use their new schema; explicit unavailable response alone al
   }});
   assert.equal(calls.length,2);assert.equal(result.layoutPending,true);
   assert.equal(calls[0].template.name,META_WORKFLOW_TEMPLATES.ticketResolved.name);
-  assert.equal(calls[0].template.components[0].parameters.length,10);
+  assert.equal(calls[0].template.components[0].parameters.length,9);
   assert.equal(calls[1].template.name,LEGACY_WORKFLOW_TEMPLATES.ticketResolved.name);
   assert.deepEqual(calls[1].template.components[0].parameters.map(p=>p.text),parameters);
 });

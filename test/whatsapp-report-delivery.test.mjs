@@ -1,4 +1,4 @@
-import {siteReportMessageContext} from '../whatsapp-message-format.mjs';
+import {siteReportMessageContext,recipientReportMessage} from '../whatsapp-message-format.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -23,12 +23,12 @@ const users=[
   {login:'unassigned-manager',userType:'Super User',adminLevel:'Manager',managerRole:'Maintenance Manager',phone:'9000000004'},
 ];
 function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTemplate=false,failFiles=false,overrides=new Map(),records=null,recipientUsers=users}={}){
-  const templates=[],documents=[],pdfs=[],queries=[],claims=new Map();let uuid=0;
+  const templates=[],documents=[],texts=[],pdfs=[],queries=[],claims=new Map();let uuid=0;
   const ticketRows=records||[
     {reference:'TIC/1',site:'Sasti OB',openedAt:'2026-09-15T10:00:00+05:30',status:'Open',creatorRole:'Production User'},
     {reference:'TIC/2',site:'Majri OB',openedAt:'2026-09-15T11:00:00+05:30',status:'Open',creatorRole:'MIS User'},
   ];
-  const dependencies={siteReportMessageContext,databaseReady:true,storedWhatsAppReportSettings:async()=>settings,whatsappPurposeEnabled,ticketReportWindow,scheduledReportWindowsDue,
+  const dependencies={siteReportMessageContext,recipientReportMessage,databaseReady:true,storedWhatsAppReportSettings:async()=>settings,whatsappPurposeEnabled,ticketReportWindow,scheduledReportWindowsDue,
     storedHierarchyReportScheduleSettings:async()=>defaultHierarchyReportScheduleSettings(),storedUserReportScheduleOverrides:async()=>overrides,
     reportRecipientLogin:user=>String(user.login||'').toLowerCase(),whatsAppRecipientRole,flowDesignationForUser,applyHierarchyDeliveryRule,applyUserReportScheduleOverride,reportsDueForDesignation,
     hierarchyRuleForDesignation:()=>null,hierarchyRecipientReportScope,canonicalSiteName,buildSiteReportMessage,reportSites,siteReportFilename,timestampInReportWindow,displaySiteName,formatDisplayDateTime,
@@ -51,27 +51,31 @@ function crmHarness({settings=defaultWhatsAppReportSettings(),empty=false,failTe
     }},prepareTicketReportRows,buildTicketReportTable,buildTicketWhatsAppReport,resolveMobileAccess,reportScopeIncludesSite,
     publicBaseUrl:()=> 'https://reports.example',randomUUID:()=>String(++uuid).padStart(32,'0').split('').reverse().join(''),
     buildXlsxWorkbookBuffer:(_title,_columns,rows)=>Buffer.from(JSON.stringify(rows)),metaWhatsAppRuntimeEnv:async()=>({WHATSAPP_REPORT_SETTINGS:settings}),
-    sendMetaWhatsAppTemplate:async args=>{if(failTemplate)throw Object.assign(new Error('Template unavailable'),{code:typeof failTemplate==='string'?failTemplate:undefined});templates.push(args);},
+    sendMetaWhatsAppTemplate:async args=>{if(failTemplate)throw Object.assign(new Error('Template unavailable'),{metaCode:failTemplate===true?132001:undefined,code:typeof failTemplate==='string'?failTemplate:undefined});templates.push(args);},
+    sendMetaWhatsAppText:async args=>texts.push(args),
     sendMetaWhatsAppDocument:async args=>documents.push(args),
     buildTicketConsolidatedReportPdf:async args=>{pdfs.push(args);return Buffer.from('%PDF');},console:{warn:()=>{},error:()=>{}},
   };
   const groupSnippet=source.slice(source.indexOf('function combineReportWindowGroups('),source.indexOf('let hierarchyReportRunning=false;'));
   const snippet=source.slice(source.indexOf('async function publishCrmReportFiles('),source.indexOf('async function directorReportSourceData'));
   const send=new Function(...Object.keys(dependencies),`${groupSnippet};${snippet};return sendScheduledConsolidatedTicketReports;`)(...Object.values(dependencies));
-  return {send,templates,documents,pdfs,queries,claims,settings};
+  return {send,templates,documents,texts,pdfs,queries,claims,settings};
 }
 
-test('CRM sends separate site files to admins and all managers, shares identical files and deduplicates each site slot',async()=>{
+test('CRM sends one message per recipient with all selected site files and deduplicates the recipient slot',async()=>{
   const harness=crmHarness();
-  assert.equal((await harness.send(now)).sent,5);
-  assert.equal(harness.templates.length,5);assert.equal(harness.documents.length,0);
+  assert.equal((await harness.send(now)).sent,3);
+  assert.equal(harness.templates.length,3);assert.equal(harness.documents.length,0);
   assert.equal(harness.pdfs.length,2);
   for(const pdf of harness.pdfs){assert.equal(pdf.openTickets.length,1);assert.ok(pdf.openTickets.every(ticket=>ticket.site===pdf.scopeLabel));}
   const manager=harness.templates.filter(message=>message.to==='9000000003');
-  assert.equal(manager.length,1);assert.match(manager[0].parameters[0],/^\*SITE: Sasti OB\*/);assert.doesNotMatch(manager[0].parameters[0],/Majri/);
+  assert.equal(manager.length,1);assert.match(manager[0].parameters[0],/^\*LOCATIONS: Sasti OB\*/);assert.doesNotMatch(manager[0].parameters[0],/Majri/);
+  const admin=harness.templates.find(message=>message.to==='9000000001');
+  assert.match(admin.parameters[0],/^\*LOCATIONS: Majri OB \| Sasti OB\*/);
+  assert.match(admin.parameters[0],/\*SITE: Majri OB\*/);assert.match(admin.parameters[0],/\*SITE: Sasti OB\*/);
   for(const message of harness.templates){assert.match(message.parameters[0],/\*PDF - .+:\* https:\/\/reports.example\/r\//);assert.match(message.parameters[0],/Excel - .+:\* https:\/\/reports.example\/r\//);}
   assert.equal(harness.queries.filter(q=>q.sql.startsWith('INSERT INTO published_reports')).length,2);
-  assert.equal((await harness.send(now)).sent,0);assert.equal(harness.templates.length,5);
+  assert.equal((await harness.send(now)).sent,0);assert.equal(harness.templates.length,3);
 });
 
 test('CRM pauses, recipient selections and empty-site preferences are enforced before sending',async()=>{
@@ -79,9 +83,9 @@ test('CRM pauses, recipient selections and empty-site preferences are enforced b
   assert.equal((await paused.send(now)).skipped,true);assert.equal(paused.queries.length,0);
   const empty=crmHarness({empty:true});empty.settings.crm.sendEmpty=false;
   assert.equal((await empty.send(now)).sent,0);
-  const sendEmpty=crmHarness({empty:true});assert.equal((await sendEmpty.send(now)).sent,5);
+  const sendEmpty=crmHarness({empty:true});assert.equal((await sendEmpty.send(now)).sent,3);
   const selected=crmHarness();selected.settings.crm.recipientRoles=['Super Admin'];
-  assert.equal((await selected.send(now)).sent,2);assert.ok(selected.templates.every(item=>item.to==='9000000002'));
+  assert.equal((await selected.send(now)).sent,1);assert.ok(selected.templates.every(item=>item.to==='9000000002'));
   const otherTime=crmHarness();otherTime.settings.crm.times=['11:30'];
   assert.equal((await otherTime.send(now)).sent,0);assert.equal(otherTime.templates.length,0);
 });
@@ -120,10 +124,12 @@ for(const selectedRole of ['Manager','Admin','Super Admin','default']){
     for(const login of crmRoleExpected.Manager.filter(login=>expected.includes(login))){
       const messages=delivered.filter(item=>item.login===login);
       assert.equal(messages.length,1,`${login} must retain its assigned site scope`);
-      assert.match(messages[0].message,['admin-department-manager','director-manager'].includes(login)?/^\*SITE: Majri OB\*/:/^\*SITE: Sasti OB\*/);
+      assert.match(messages[0].message,['admin-department-manager','director-manager'].includes(login)?/^\*LOCATIONS: Majri OB\*/:/^\*LOCATIONS: Sasti OB\*/);
     }
     for(const login of [...crmRoleExpected.Admin,...crmRoleExpected['Super Admin']].filter(login=>expected.includes(login))){
-      assert.equal(delivered.filter(item=>item.login===login).length,2,`${login} keeps access to both report sites`);
+      const messages=delivered.filter(item=>item.login===login);
+      assert.equal(messages.length,1,`${login} gets both report sites in one message`);
+      assert.match(messages[0].message,/\*SITE: Majri OB\*/);assert.match(messages[0].message,/\*SITE: Sasti OB\*/);
     }
     assert.equal(result.sent,delivered.length);
   });
@@ -197,9 +203,27 @@ test('CRM includes raised-and-resolved cases and reconstructs resolution at the 
   assert.deepEqual(pdf.closedTickets.map(item=>item.reference),['BOTH']);
 });
 
-test('CRM falls back to the same site PDF only when template delivery fails',async()=>{
-  const fallback=crmHarness({failTemplate:true});assert.equal((await fallback.send(now)).sent,5);assert.equal(fallback.documents.length,5);
+test('CRM fallback still sends one message per recipient and never retries an uncertain response',async()=>{
+  const fallback=crmHarness({failTemplate:true});assert.equal((await fallback.send(now)).sent,3);assert.equal(fallback.documents.length,1);assert.equal(fallback.texts.length,2);
   assert.ok(fallback.documents.every(item=>/\*Excel - .+:\* https:\/\/reports.example\/r\//.test(item.caption)));
-  const paused=crmHarness({failTemplate:'WHATSAPP_POLICY_PAUSED'});assert.equal((await paused.send(now)).failed,5);assert.equal(paused.documents.length,0);
-  const failed=crmHarness({failFiles:true});assert.equal((await failed.send(now)).failed,5);assert.equal(failed.templates.length,0);assert.equal(failed.documents.length,0);
+  for(const text of fallback.texts){assert.match(text.message,/SITE: Sasti OB/);assert.match(text.message,/SITE: Majri OB/);}
+  for(const code of ['WHATSAPP_POLICY_PAUSED','network']){
+    const paused=crmHarness({failTemplate:code});assert.equal((await paused.send(now)).failed,3);assert.equal(paused.documents.length,0);assert.equal(paused.texts.length,0);
+  }
+  const failed=crmHarness({failFiles:true});assert.equal((await failed.send(now)).failed,3);assert.equal(failed.templates.length,0);assert.equal(failed.documents.length,0);
+});
+
+test('failure to publish the second site sends no partial message and retries the complete recipient delivery',async()=>{
+  let writes=0;
+  const harness=crmHarness({recipientUsers:[users[0]],failFiles:()=>++writes===2});
+  const first=await harness.send(now);
+  assert.equal(first.failed,1);assert.equal(first.sent,0);assert.equal(harness.templates.length,0);
+  assert.equal(harness.claims.size,1);
+  const retry=await harness.send(new Date(now.getTime()+60000));
+  assert.equal(retry.sent,1);assert.equal(retry.failed,0);assert.equal(harness.templates.length,1);
+  assert.match(harness.templates[0].parameters[0],/\*SITE: Majri OB\*/);
+  assert.match(harness.templates[0].parameters[0],/\*SITE: Sasti OB\*/);
+  assert.equal([...harness.claims.values()][0].attempts,2);
+  assert.equal((await harness.send(new Date(now.getTime()+120000))).sent,0);
+  assert.equal(harness.templates.length,1);
 });
