@@ -104,14 +104,14 @@ export default function OemBreakdownChart({ chart, from, to, error, onSelect, on
   const siteScope = chart.sites.length === 1 ? chart.sites[0].name : "Sites matching current filters";
   return <OemChartSurface chart={chart} plotHeight={plotHeight}>
     <div className="mine-oem-summary">
-      <div><h3>Site-wise OEM breakdown</h3><p>{from || to ? "Fleet with a breakdown during the selected dates, including carried-over breakdowns." : "Current breakdown fleet across all selected sites."} Select a segment, site total or OEM to view details. Hover or focus a segment, legend entry or total for its name and count.</p></div>
+      <h3>Site-wise OEM breakdown</h3>
       <div className="mine-oem-actions"><button type="button" className="secondary" onClick={event => { event.stopPropagation(); onReset?.(); }}>Reset filters</button><button type="button" className="secondary" title="View all breakdown assets matching the current dashboard filters" {...tooltipAttributes("oem-breakdown-tooltip-full-list", totalOem, chart.rows.length, siteScope)} onClick={event => inspect(event, {})}>View full list <b>{chart.rows.length.toLocaleString()}</b></button></div>
-    </div>
-    {error ? <p className="mine-oem-error" role="alert">{error}</p> : <>
-      <div className="mine-oem-legend" aria-label="OEM breakdown totals">
+      {!error && <div className="mine-oem-legend" aria-label="OEM breakdown totals">
         {visibleOems.map((oem, index) => <button type="button" key={oem.key} {...tooltipAttributes(`oem-breakdown-tooltip-legend-${index}`, oem, oemTotals.get(oem.key), siteScope)} onClick={event => inspect(event, { oem: oem.key })} aria-label={`${oem.label}: ${oemTotals.get(oem.key)} breakdown assets, view details`}><i aria-hidden="true" style={{ background: oem.color }} /><span>{oem.label}</span><b>{oemTotals.get(oem.key).toLocaleString()}</b></button>)}
         <button type="button" className="mine-oem-all" title="Open the full list with the current dashboard filters" {...tooltipAttributes("oem-breakdown-tooltip-all", totalOem, chart.rows.length, siteScope)} aria-label={`All total breakdown: ${chart.rows.length} breakdown assets, view full list with current filters`} onClick={event => inspect(event, {})}><span>All total breakdown</span><b>{chart.rows.length.toLocaleString()}</b></button>
-      </div>
+      </div>}
+    </div>
+    {error ? <p className="mine-oem-error" role="alert">{error}</p> : <>
       {!chart.rows.length && <p className="mine-empty" role="status">No OEM breakdowns match the selected filters.</p>}
       <div className="mine-oem-chart-layout">
         <div className="mine-oem-axis" aria-hidden="true"><b>BD count</b>{chart.ticks.map((tick) => <span key={tick}>{tick}</span>)}</div>

@@ -1,7 +1,9 @@
 .mine-oem-dashboard { --mine-oem-chart-headroom: 36px; --mine-oem-chart-caption: 68px; cursor: default; }
 .mine-oem-dashboard b { font-weight: 800; font-variant-numeric: tabular-nums; }
-.mine-oem-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px 10px; }
-.mine-oem-summary h3 { margin: 0 0 6px; color: var(--mine-text); font-size: 18px; }
+.mine-oem-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 20px; }
+.mine-oem-summary h3 { margin: 0; color: var(--mine-text); font-size: 18px; flex-shrink: 0; }
+.mine-oem-summary > .mine-oem-legend { flex: 1 1 600px; padding: 0; }
+.mine-oem-summary > .mine-oem-actions { order: 1; margin-left: auto; }
 .mine-oem-summary p { margin: 0; color: var(--mine-muted); font-size: 13px; line-height: 1.5; }
 .mine-oem-actions { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: 8px; }
 .mine-oem-actions button { display: inline-flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--mine-line); border-radius: 6px; background: var(--mine-panel); color: var(--brand-purple); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
