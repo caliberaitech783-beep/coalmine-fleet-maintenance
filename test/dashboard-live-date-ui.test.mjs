@@ -811,8 +811,9 @@ test("throughput defaults to today, clearing either date shows all time and Rese
       assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
       assert.match(byClass(tree, "dashboard-asset-modal").props.title, /All time/);
     }
-    const types = findAll(byLabel(tree, "Breakdown type percentage of BD In"), node => node.type === "article");
-    assert.ok(types.some(card => text(card).includes("WGM25%1 request")));
+    const types = findAll(byLabel(tree, "Breakdown type percentage of open BD balance"), node => node.type === "article");
+    assert.ok(types.some(card => text(card).includes("WGM0%0 requests")));
+    assert.ok(types.some(card => text(card).includes("Breakdown100%1 request")));
     const exported = findAll(tree, node => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, "All time");
   };

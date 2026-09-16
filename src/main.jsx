@@ -1415,6 +1415,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   });
   // Match the linked request list, including authorized historical/unassigned sites.
   const breakdownMovementTotals = breakdownMovementForRange(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
+  // Match the open balance card: retain carryover, exclude closed and idle cases.
   const breakdownTypeSummary = breakdownTypeShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"));
   const availabilityCountBySite = throughputSites.map((site) => ({
     site,
