@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { GLOBALLY_HIDDEN_REQUEST_OWNERS, GLOBAL_REQUEST_OWNER_HIDE_CUTOFF, MIS_HIDDEN_REQUEST_REFERENCES, requestsVisibleGlobally, requestsVisibleToMisWorkspace, requestsVisibleToSession } from "../mis-request-visibility.mjs";
+import { GLOBALLY_HIDDEN_REQUEST_OWNERS, GLOBALLY_RETIRED_REQUEST_REFERENCES, GLOBAL_REQUEST_OWNER_HIDE_CUTOFF, MIS_HIDDEN_REQUEST_REFERENCES, requestsVisibleGlobally, requestsVisibleToMisWorkspace, requestsVisibleToSession } from "../mis-request-visibility.mjs";
 
 const rows = [
   { ref: "REQ-1787994776734" },
@@ -52,4 +52,11 @@ test("new Stupal Moon requests remain visible everywhere", () => {
   const futureRequest = { ref: "REQ-FUTURE-STUPAL", owner: "Stupal Moon", createdAt: "2026-09-10 09:00:00" };
   const legacyWithoutCreationTime = { ref: "REQ-NO-CREATED-AT", owner: "Stupal Moon" };
   assert.deepEqual(requestsVisibleGlobally([newRequest, futureRequest, legacyWithoutCreationTime]), [newRequest, futureRequest, legacyWithoutCreationTime]);
+});
+
+test("the confirmed stale PL63 request is retired globally without deleting its history", () => {
+  const retired = {ref: "REQ-1788930790041", owner: "Other User", createdAt: "2026-09-10 09:00:00", status: "Open"};
+  const current = {ref: "REQ-PL63-CURRENT", owner: "Other User", createdAt: "2026-09-16 09:00:00", status: "Open"};
+  assert.deepEqual([...GLOBALLY_RETIRED_REQUEST_REFERENCES], [retired.ref]);
+  assert.deepEqual(requestsVisibleGlobally([retired, current]), [current]);
 });

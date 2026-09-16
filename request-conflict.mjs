@@ -3,7 +3,11 @@ function normalized(value) {
 }
 
 export function isActiveMaintenanceRequest(request = {}) {
-  return normalized(request.status) !== "closed";
+  const closedAt = request.closedAt ?? request.closed_at;
+  const verifiedAt = request.verifiedAt ?? request.verified_at;
+  return normalized(request.status) !== "closed"
+    && !String(closedAt ?? "").trim()
+    && !String(verifiedAt ?? "").trim();
 }
 
 export function findActiveRequestConflict(requests = [], { door = "", chassis = "" } = {}) {

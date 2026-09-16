@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {runInNewContext} from 'node:vm';
-import {activeRequestConflictMessage} from '../request-conflict.mjs';
+import {activeRequestConflictMessage,isActiveMaintenanceRequest} from '../request-conflict.mjs';
+import {requestsVisibleGlobally} from '../mis-request-visibility.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {parseIndiaRequestDateTime} from '../request-time.mjs';
 import {validRequestAudioDataUrl} from '../request-workflow.mjs';
@@ -41,7 +42,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
       return {rows:[]};
     }
     if(sql.startsWith('SELECT reference AS ref')){
-      const rows=saved.filter(row=>row.status!=='Closed'&&((values[0]&&normalize(row.door)===normalize(values[0]))||(values[1]&&normalize(row.chassis)===normalize(values[1]))));
+      const rows=saved.filter(row=>(values[0]&&normalize(row.door)===normalize(values[0]))||(values[1]&&normalize(row.chassis)===normalize(values[1])));
       // Reproduce the old race deterministically: both pooled prechecks finish
       // reading no conflict before either caller is allowed to insert.
       if(!client&&legacyReadBarrier){if(++reads===2)releaseReads();await bothReads;}
@@ -63,7 +64,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
     setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>({site:'Sasti OB'}),
-    canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,validComplaintMedia,activeRequestConflictMessage,requestProjection:'*',
+    canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,validComplaintMedia,activeRequestConflictMessage,isActiveMaintenanceRequest,requestsVisibleGlobally,requestProjection:'*',
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],
     addTicketNotificationsBestEffort:async()=>{},requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',
     workflowRequestLink:()=>'',publicBaseUrl:()=>'',console,
@@ -118,6 +119,34 @@ test('active and Idle requests remain conflicts while Closed history permits a n
   assert.equal((await app.create()).status,201);
   assert.equal(app.saved.length,2);
   assert.deepEqual(app.saved[0],closed);
+});
+
+test('closure evidence cannot block a new request even when status text is stale',async()=>{
+  for(const existing of [
+    {ref:'REQ-CLOSED-CASE',door:'DOOR-1',chassis:'CHASSIS-1',status:' closed '},
+    {ref:'REQ-CLOSED-AT',door:'DOOR-1',chassis:'CHASSIS-1',status:'Open',closedAt:'2026-09-10 12:00:00'},
+    {ref:'REQ-VERIFIED',door:'DOOR-1',chassis:'CHASSIS-1',status:'Open',verifiedAt:'2026-09-10 12:30:00'},
+  ]){
+    const app=harness({initial:[existing]});
+    assert.equal((await app.create()).status,201,existing.ref);
+    assert.equal(app.saved.length,2,existing.ref);
+  }
+});
+
+test('the globally excluded PL63 legacy request cannot block its real replacement',async()=>{
+  const existing={ref:'REQ-1788930790041',door:'PL63- MH34CD4480',chassis:'PL63-CHASSIS',status:'Open',owner:'Other User',createdAt:'2026-09-10 09:00:00'};
+  const app=harness({initial:[existing]});
+  const result=await app.create({door:existing.door,chassis:existing.chassis});
+  assert.equal(result.status,201);
+  assert.equal(app.saved.length,2);
+  assert.deepEqual(app.saved[0],existing);
+});
+
+test('a newer request by the formerly excluded owner remains a visible blocker',async()=>{
+  const existing={ref:'REQ-VISIBLE',door:'DOOR-1',chassis:'CHASSIS-1',status:'Open',owner:'Stupal Moon',createdAt:'2026-09-09 18:24:45'};
+  const app=harness({initial:[existing]});
+  assert.equal((await app.create()).status,409);
+  assert.deepEqual(app.saved,[existing]);
 });
 
 test('duplicate references return an actionable conflict and preserve the original record',async()=>{

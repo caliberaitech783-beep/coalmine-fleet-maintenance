@@ -19,6 +19,17 @@ test("closed requests do not prevent a new request", () => {
   assert.equal(findActiveRequestConflict([closed], {door: "D-12", chassis: "CH-2"}), null);
 });
 
+test("closure evidence outranks stale or inconsistently formatted status text", () => {
+  for (const request of [
+    {ref: "REQ-CLOSED-CASE", door: "D-12", status: " closed "},
+    {ref: "REQ-CLOSED-AT", door: "D-12", status: "Open", closedAt: "2026-09-10 12:00:00"},
+    {ref: "REQ-VERIFIED", door: "D-12", status: "Open", verifiedAt: "2026-09-10 12:30:00"},
+  ]) {
+    assert.equal(isActiveMaintenanceRequest(request), false, request.ref);
+    assert.equal(findActiveRequestConflict([request], {door: "D-12"}), null, request.ref);
+  }
+});
+
 test("chassis matching protects the same asset when a door value differs", () => {
   const request = {ref: "REQ-102", door: "OLD-7", chassis: "CHASSIS-7", status: "Idle"};
 

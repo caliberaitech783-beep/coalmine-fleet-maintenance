@@ -59,7 +59,7 @@ import {buildTableExportPdf,buildTableBundlePdf} from './table-export-pdf.mjs';
 import {buildDirectorReportArchiveBuffer,buildDirectorReportTables,buildDirectorWhatsAppMessage,buildXlsxWorkbookBuffer,buildXlsxReportBundleBuffer,directorReportFilename,directorReportWindow,DIRECTOR_REPORT_TITLES} from './director-report-bundle.mjs';
 import {buildSiteFleetReportTables,buildSiteReportMessage,reportSites,siteReportFilename,timestampInReportWindow} from './site-consolidated-report.mjs';
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
-import {activeRequestConflictMessage} from './request-conflict.mjs';
+import {activeRequestConflictMessage,isActiveMaintenanceRequest} from './request-conflict.mjs';
 import {auditChangedFields,auditDateRange,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
@@ -4275,13 +4275,19 @@ async function activeRequestConflict({door='',chassis=''}={},client=pool){
   const normalizedDoor=String(door||'').trim();
   const normalizedChassis=String(chassis||'').trim();
   if(!normalizedDoor&&!normalizedChassis)return null;
-  const {rows}=await client.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status
+  const {rows}=await client.query(`SELECT reference AS ref,door_number AS door,chassis_number AS chassis,status,
+      owner_name AS owner,
+      to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
+      to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
+      to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt"
     FROM maintenance_requests
-    WHERE status<>'Closed' AND (
+    WHERE (
       ($1<>'' AND lower(trim(door_number))=lower(trim($1))) OR
       ($2<>'' AND lower(trim(chassis_number))=lower(trim($2)))
-    ) ORDER BY created_at DESC LIMIT 1`,[normalizedDoor,normalizedChassis]);
-  return rows[0]||null;
+    ) ORDER BY created_at DESC`,[normalizedDoor,normalizedChassis]);
+  // A request hidden from every operational view must not silently block a
+  // replacement. Closure/verification timestamps also outrank stale status text.
+  return requestsVisibleGlobally(rows).find(isActiveMaintenanceRequest)||null;
 }
 
 async function createRequestWithVehicleLock({door='',chassis=''},write){
