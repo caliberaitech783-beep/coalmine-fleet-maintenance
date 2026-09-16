@@ -3,6 +3,7 @@ import {ArrowRightLeft, CheckCircle2, Clock, MapPin, Plus, RefreshCw, Search, Se
 import {formatDisplayDate, formatDisplayDateTime} from '../date-time-format.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {VEHICLE_TRANSFER_STATUS, VEHICLE_TRANSFER_VIEW, vehicleTransferProgress, vehicleTransferStatus, vehicleTransferViewRecords} from '../vehicle-transfer-workflow.mjs';
+import SearchableSelect from './searchable-select.jsx';
 import './vehicle-transfer-workflow.css';
 
 const indiaDateInput = () => {
@@ -37,6 +38,7 @@ function TransferForm({Dialog, equipment, sites, token, onClose, onSaved}) {
   const selected = equipment.find((record) => String(record.id) === equipmentId);
   const source = String(selected?.currentLocation || selected?.location || selected?.site || '').trim();
   const destinations = sites.filter((site) => canonicalSiteName(site) !== canonicalSiteName(source));
+  const equipmentOptions = useMemo(() => equipment.map((record) => ({value:String(record.id),label:equipmentLabel(record),description:`${record.currentLocation||'Location missing'} · Chassis ${record.chassisNo||'not recorded'}`,keywords:[record.door,record.reg,record.equipmentName,record.make,record.modelNo,record.model,record.chassisNo,record.manufacturerSerialNo,record.currentLocation].filter(Boolean).join(' ')})), [equipment]);
   const submit = async (event) => {
     event.preventDefault();
     if (saving) return;
@@ -72,12 +74,7 @@ function TransferForm({Dialog, equipment, sites, token, onClose, onSaved}) {
     <form className="vehicle-transfer-form" onSubmit={submit}>
       <div className="vehicle-transfer-form-intro"><Send /><span><b>MIS submits the transfer</b><small>The source-site PM approves dispatch, destination MIS verifies the arrival, then the destination-site PM accepts it.</small></span></div>
       <div className="formgrid">
-        <label>Vehicle / equipment *
-          <select name="equipmentMasterId" required value={equipmentId} onChange={(event) => setEquipmentId(event.target.value)}>
-            <option value="" disabled>Select from Vehicle Master</option>
-            {equipment.map((record) => <option key={record.id} value={record.id}>{equipmentLabel(record)} · {record.currentLocation || 'Location missing'}</option>)}
-          </select>
-        </label>
+        <SearchableSelect label="Vehicle / equipment" name="equipmentMasterId" options={equipmentOptions} value={equipmentId} onChange={setEquipmentId} required placeholder="Search door, registration, make, model, chassis, or site" emptyText="No matching vehicle or equipment found." />
         <label>Transfer date *<input name="transferDate" type="date" required defaultValue={indiaDateInput()} /></label>
         <label>Transfer number<input name="transferNo" placeholder="Auto-generated if left blank" /></label>
         <label>Current source site<input value={source} readOnly placeholder="Select a vehicle" /></label>

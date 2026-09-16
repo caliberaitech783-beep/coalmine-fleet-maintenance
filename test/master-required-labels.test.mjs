@@ -13,6 +13,8 @@ for (const [name, next] of [["MasterActions", "Equipment"], ["MasterPage", "Mast
   codes[name] = (await transformWithOxc(body, `${name}.jsx`, {jsx: {runtime: "classic"}})).code;
 }
 const Null = () => null;
+const SearchableSelectFixture = ({label, name, required, defaultValue}) => React.createElement("label", null,
+  label, required ? " *" : "", React.createElement("input", {name, required, defaultValue}));
 function nodes(tree, predicate) {
   const found = [];
   const visit = node => {
@@ -46,6 +48,7 @@ function render(name, componentName) {
     mobileRoleAuthority: {"Maintenance User": "Edit requests"}, persistedUserTypeOptions: ["Mobile User", "Super Admin"],
     isCheckedValue: value => value === true, privilegeAccessValue: value => value || "", privilegeSelectionValue: value => value || "",
     useSortableRows: rows => [rows, {}, () => {}], sortCollator: new Intl.Collator(),
+    SearchableSelect: SearchableSelectFixture,
     ...Object.fromEntries(["RefreshCw", "Trash2", "Save", "Upload", "Plus", "X", "Search", "Pencil", "CheckCircle2", "LockKeyhole", "Modal", "ExportMenu", "MultiTextField", "UserTypeAccessFields", "TableParameterFilter", "ActionsTable", "FilterableHeader", "MasterActions"].map(key => [key, Null])),
   };
   const Component = new Function(...Object.keys(scope), `${codes[componentName]}; return ${componentName};`)(...Object.values(scope));

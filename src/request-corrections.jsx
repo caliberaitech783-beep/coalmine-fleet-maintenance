@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
-import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Send,ShieldCheck,X} from 'lucide-react';
+import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,ShieldCheck,X} from 'lucide-react';
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,requestCorrectionFields} from '../request-correction-policy.mjs';
+import SearchableSelect from './searchable-select.jsx';
 import './request-corrections.css';
 
 const requestValue=(request,key)=>{
@@ -81,6 +82,7 @@ function NewCorrectionForm({requests,token,onSaved,allowedTypes=[]}){
   const [error,setError]=useState('');
   const selected=requests.find((request)=>request.ref===reference);
   const fields=requestCorrectionFields(type);
+  const requestOptions=useMemo(()=>requests.map((request)=>({value:request.ref,label:`${request.ref} · ${request.door||request.equipment||'Vehicle not recorded'}`,description:`${request.site||'Site not recorded'} · ${request.equipment||'Equipment not recorded'}`,keywords:[request.ref,request.site,request.door,request.equipment,request.chassisNo,request.reg].filter(Boolean).join(' ')})),[requests]);
   useEffect(()=>{if(correctionTypes.length&&!correctionTypes.includes(type))setType(correctionTypes[0])},[allowedTypes.join('|'),type]);
   useEffect(()=>{
     if(!selected){setValues({});return}
@@ -104,7 +106,7 @@ function NewCorrectionForm({requests,token,onSaved,allowedTypes=[]}){
   };
   return <form className="correction-create" onSubmit={submit}>
     <div className="correction-form-heading"><div><Pencil /><span><b>Request a correction</b><small>The live record remains unchanged until PM approval and final Admin correction.</small></span></div><b>Operational user request</b></div>
-    <div className="correction-form-grid top"><label><span>Maintenance request *</span><select value={reference} onChange={(event)=>setReference(event.target.value)} required><option value="">Select request</option>{requests.map((request)=><option key={request.ref} value={request.ref}>{request.ref} · {request.site} · {request.door||request.equipment}</option>)}</select></label><label><span>Correction type *</span><select value={type} onChange={(event)=>setType(event.target.value)}>{correctionTypes.map((key)=><option key={key} value={key}>{REQUEST_CORRECTION_TYPES[key].label}</option>)}</select></label></div>
+    <div className="correction-form-grid top"><SearchableSelect label="Maintenance request" options={requestOptions} value={reference} onChange={setReference} required placeholder="Search request, door, equipment, chassis, or site" emptyText="No matching maintenance request found." /><label><span>Correction type *</span><select value={type} onChange={(event)=>setType(event.target.value)}>{correctionTypes.map((key)=><option key={key} value={key}>{REQUEST_CORRECTION_TYPES[key].label}</option>)}</select></label></div>
     {selected&&<><div className="correction-request-summary"><b>{selected.ref}</b><span>{selected.site}</span><span>{selected.equipment} · {selected.door}</span><span>Status: {selected.status}</span></div><div className="correction-form-grid">{fields.map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div></>}
     <label><span>Reason for correction * (minimum 10 characters)</span><textarea rows="3" value={reason} onChange={(event)=>setReason(event.target.value)} placeholder="Explain the error, the correct value, and why the record must be changed." required /></label>
     <label className="correction-upload"><ImageUp /><span><b>{evidence?.name||'Upload correction evidence *'}</b><small>JPG, PNG, or WebP · maximum 5 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>readEvidence(event.target.files?.[0])} required={!evidence} /></label>
@@ -117,19 +119,21 @@ export default function RequestCorrections({session,requests=[],Dialog}){
   const token=session?.token||'';
   const [state,setState]=useState({records:[],capabilities:{},loading:true,error:''});
   const [status,setStatus]=useState('Open');
+  const [query,setQuery]=useState('');
   const load=async()=>{
     setState((current)=>({...current,loading:true,error:''}));
     try{const response=await fetch('/api/request-corrections',{cache:'no-store',headers:{Authorization:`Bearer ${token}`}});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not load corrections');setState({records:body.records||[],capabilities:body.capabilities||{},loading:false,error:''})}
     catch(error){setState((current)=>({...current,loading:false,error:error.message}))}
   };
   useEffect(()=>{void load()},[token]);
-  const visible=useMemo(()=>state.records.filter((record)=>status==='All'||(status==='Open'?[REQUEST_CORRECTION_STATUS.PENDING,REQUEST_CORRECTION_STATUS.APPROVED].includes(record.status):record.status===status)),[state.records,status]);
+  const visible=useMemo(()=>{const needle=query.trim().toLowerCase();return state.records.filter((record)=>(status==='All'||(status==='Open'?[REQUEST_CORRECTION_STATUS.PENDING,REQUEST_CORRECTION_STATUS.APPROVED].includes(record.status):record.status===status))&&(!needle||JSON.stringify(record).toLowerCase().includes(needle)))},[state.records,status,query]);
   const pending=state.records.filter((record)=>record.status===REQUEST_CORRECTION_STATUS.PENDING).length;
   const approved=state.records.filter((record)=>record.status===REQUEST_CORRECTION_STATUS.APPROVED).length;
   return <section className="request-corrections-page">
     <header className="correction-page-head"><div><span>CONTROLLED DATA CORRECTION</span><h1>{state.capabilities.canReview?'Correction approvals':state.capabilities.canCreate?'Request correction':'Admin correction'}</h1><p>User requests with evidence, the assigned PM approves or rejects, and Admin applies only an approved correction. Every step is recorded in the Audit Trail.</p></div><button type="button" className="secondary" onClick={load} disabled={state.loading}><RefreshCw className={state.loading?'spin':''} /> Refresh</button></header>
     <div className="correction-kpis"><div><span>Awaiting PM</span><b>{pending}</b></div><div><span>Ready for Admin</span><b>{approved}</b></div><div><span>Total corrections</span><b>{state.records.length}</b></div></div>
     {state.capabilities.canCreate&&<NewCorrectionForm requests={requests} token={token} onSaved={load} allowedTypes={state.capabilities.allowedTypes||[]} />}
+    <div className="correction-list-tools"><label><Search /><input type="search" data-smart-search value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search request, user, site, reason, or status" /></label></div>
     <div className="correction-list-head"><div className="mobile-tabs" role="tablist">{['Open',REQUEST_CORRECTION_STATUS.PENDING,REQUEST_CORRECTION_STATUS.APPROVED,REQUEST_CORRECTION_STATUS.REJECTED,REQUEST_CORRECTION_STATUS.APPLIED,'All'].map((value)=><button type="button" key={value} className={status===value?'active':''} onClick={()=>setStatus(value)}>{value}</button>)}</div><span>{visible.length} shown</span></div>
     {state.error&&<div className="correction-notice error">{state.error}</div>}
     <div className="correction-list">{state.loading&&!state.records.length?<div className="correction-empty">Loading corrections…</div>:visible.length?visible.map((record)=><CorrectionCard key={record.id} record={record} capabilities={state.capabilities} token={token} Modal={Dialog} onChanged={load} />):<div className="correction-empty"><ShieldCheck /><b>No corrections in this view</b><span>Approved and rejected decisions remain available in history.</span></div>}</div>

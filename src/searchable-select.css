@@ -1,0 +1,18 @@
+.searchable-select{position:relative;display:grid;gap:7px;min-width:0}
+.searchable-select>label{font-weight:700;color:var(--ink,#17233d)}
+.searchable-select-control{position:relative;min-width:0}
+.searchable-select-control input{width:100%;min-width:0;padding-left:42px!important;padding-right:38px!important;text-overflow:ellipsis}
+.searchable-select-control>svg{position:absolute;top:50%;z-index:1;width:18px;height:18px;transform:translateY(-50%);pointer-events:none;color:var(--muted,#687895)}
+.searchable-select-control>svg:first-child{left:13px}.searchable-select-control>svg:last-child{right:13px}
+.searchable-select-hint{color:var(--muted,#687895);font-weight:400;line-height:1.45}
+.searchable-select-menu{position:absolute;z-index:80;top:100%;left:0;right:0;margin-top:5px;border:1px solid var(--line,#c9d6ed);border-radius:6px;background:var(--panel,#fff);box-shadow:0 14px 34px #162b4830;overflow:hidden}
+.searchable-select-count{padding:9px 12px;background:color-mix(in srgb,var(--panel,#fff) 88%,#dce7fa);color:var(--muted,#496181);font-size:12px;font-weight:700}
+.searchable-select-menu ul{list-style:none;margin:0;padding:4px;max-height:min(320px,42dvh);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+.searchable-select-menu li{padding:10px 12px;border-radius:4px;cursor:pointer;color:var(--ink,#19385a);overflow-wrap:anywhere}
+.searchable-select-menu li+li{border-top:1px solid var(--line,#edf1f7)}
+.searchable-select-menu li:hover,.searchable-select-menu li[data-active="true"],.searchable-select-menu li[aria-selected="true"]{background:color-mix(in srgb,var(--panel,#fff) 78%,#cfe0ff)}
+.searchable-select-menu li[aria-selected="true"]{box-shadow:inset 3px 0 #3168d9}
+.searchable-select-menu li[aria-disabled="true"]{cursor:not-allowed;opacity:.55}
+.searchable-select-menu strong,.searchable-select-menu small{display:block}.searchable-select-menu strong{font-size:13px;line-height:1.45}.searchable-select-menu small{margin-top:3px;color:var(--muted,#687895);font-size:12px;font-weight:400;line-height:1.4}
+.searchable-select-empty{margin:0;padding:14px;color:var(--muted,#687895);font-size:13px}
+@media(max-width:700px){.searchable-select-menu{position:fixed;z-index:500;top:auto;right:12px;bottom:12px;left:12px;max-height:65dvh}.searchable-select-menu ul{max-height:52dvh}}

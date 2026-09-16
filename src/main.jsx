@@ -32,6 +32,7 @@ import RequestCorrections from "./request-corrections.jsx";
 import {RemoteAssistanceAction, RemoteAssistanceAgent} from "./remote-assistance.jsx";
 import HelpTraining from "./help-training.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
+import SearchableSelect from "./searchable-select.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
 import FleetSiteBars from "./fleet-site-bars.jsx";
 import OemBreakdownChart from "./oem-breakdown-chart.jsx";
@@ -3698,6 +3699,15 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                       {persistedUserTypeOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                     </select>
                   </label>
+                ) : type === "user-select" ? (
+                  <SearchableSelect key={key} label={label} name={key} required defaultValue=""
+                    options={userOptions.map((user) => ({
+                      value: user.login || user.employee,
+                      label: user.employee || user.login,
+                      description: user.login && user.employee ? user.login : "",
+                      keywords: [user.employee, user.login, user.site, user.mobile].filter(Boolean).join(" "),
+                    }))}
+                    placeholder="Search employee name, login, site, or mobile" emptyText="No matching user found." />
                 ) : (
                 <label key={key}>
                   {type === "checkbox" ? (
@@ -3720,16 +3730,6 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
                     <>{label}<input type="date" name={key} /></>
                   ) : type === "shift-status" ? (
                     <>{label} *<select name={key} required defaultValue="Active"><option>Active</option><option>Inactive</option></select></>
-                  ) : type === "user-select" ? (
-                    <>{label} *
-                    <select name={key} required defaultValue="">
-                      <option value="" disabled>Select a user</option>
-                      {userOptions.map((user) => (
-                        <option key={user.id || `${user.login}-${user.employee}`} value={user.login || user.employee}>
-                          {user.employee || user.login}{user.login && user.employee ? ` (${user.login})` : ""}
-                        </option>
-                      ))}
-                    </select></>
                   ) : name === "Equipment master" && key === "status" ? (
                     <>{label} *
                     <select name={key} required defaultValue="Operational"><option value="Operational">On road</option><option value="Off road">Off road</option><option value="Idle">Idle</option></select></>
@@ -6669,6 +6669,18 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                 <label key={key}>{label}<input type="date" name={key} defaultValue={editing[key] || ""} /></label>
               ) : type === "shift-status" ? (
                 <label key={key}>{label} *<select name={key} required defaultValue={editing[key] || "Active"}><option>Active</option><option>Inactive</option></select></label>
+              ) : type === "user-select" ? (
+                <SearchableSelect key={key} label={label} name={key} required defaultValue={editing[key] || ""}
+                  options={[
+                    ...(editing[key] && !userOptions.some((user) => (user.login || user.employee) === editing[key]) ? [{value:editing[key],label:editing[key]}] : []),
+                    ...userOptions.map((user) => ({
+                      value:user.login || user.employee,
+                      label:user.employee || user.login,
+                      description:user.login && user.employee ? user.login : "",
+                      keywords:[user.employee,user.login,user.site,user.mobile].filter(Boolean).join(" "),
+                    })),
+                  ]}
+                  placeholder="Search employee name, login, site, or mobile" emptyText="No matching user found." />
               ) : (
               <label key={key}>{label}{type !== "checkbox" && (type === "user-select" || key === "level" || key === fields[0][0] || (name === "Users & employees" && ["site", "userType"].includes(key))) ? " *" : ""}
                 {type === "checkbox" ? (
@@ -6676,18 +6688,6 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                     <input type="checkbox" name={key} defaultChecked={isCheckedValue(editing[key])} />
                     <span><b>{label}</b><small>Enable this privilege</small></span>
                   </span>
-                ) : type === "user-select" ? (
-                  <select name={key} required defaultValue={editing[key] || ""}>
-                    <option value="" disabled>Select a user</option>
-                    {editing[key] && !userOptions.some((user) => (user.login || user.employee) === editing[key]) && (
-                      <option value={editing[key]}>{editing[key]}</option>
-                    )}
-                    {userOptions.map((user) => (
-                      <option key={user.id || `${user.login}-${user.employee}`} value={user.login || user.employee}>
-                        {user.employee || user.login}{user.login && user.employee ? ` (${user.login})` : ""}
-                      </option>
-                    ))}
-                  </select>
                 ) : key === "level" ? (
                   <select name={key} required defaultValue={editing[key] || ""}>
                     <option value="" disabled>Select level</option>

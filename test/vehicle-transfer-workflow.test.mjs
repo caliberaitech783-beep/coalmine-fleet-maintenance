@@ -96,6 +96,8 @@ test('server and interface wire submission, both PM actions, audit, notification
   assert.match(client,/PM vehicle transfer work queues/);
   assert.match(client,/Release Vehicle/);
   assert.match(client,/Accept Vehicle/);
+  assert.match(client,/SearchableSelect/);
+  assert.match(client,/Search door, registration, make, model, chassis, or site/);
   assert.match(client,/Release vehicle/);
   assert.match(client,/Vehicle Master updated/);
   assert.match(styles,/\.vehicle-transfer-tabs\{/);
