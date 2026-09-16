@@ -5,7 +5,7 @@ import {hashPassword} from '../password-auth.mjs';
 import {visibleInMisRequests,visibleInMisHistory} from '../src/mis-history.mjs';
 import {visibleInMaintenanceHistory} from '../src/maintenance-history.mjs';
 import {visibleInProductionHistory} from '../src/production-history.mjs';
-import {buildDepartmentReports} from '../department-reports.mjs';
+import {buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from '../department-reports.mjs';
 
 // Opt-in real PostgreSQL + HTTP acceptance test. Never point this at production.
 // Start server.mjs with a fresh local DB and DISABLE_SCHEDULED_JOBS=true first.
@@ -14,6 +14,7 @@ const databaseUrl=process.env.BDMS_AUDIT_DATABASE_URL;
 const enabled=Boolean(base&&databaseUrl);
 const password='Local-fixture-only-29!';
 const image='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM9sAAAAASUVORK5CYII=';
+const audio='data:audio/webm;base64,YQ==';
 const india=(offset=0)=>new Date(Date.now()+offset+19800000).toISOString().slice(0,19);
 
 test('real database role cycles, queues, red flags, reports and permission boundaries', {skip:!enabled},async t=>{
@@ -63,13 +64,13 @@ test('real database role cycles, queues, red flags, reports and permission bound
   }
   let sequence=0;
   const refs=[];
-  function requestBody({minutes=5}={}){
+  function requestBody({minutes=5,complaintAudio=''}={}){
     const item=equipment[sequence++];
     assert.ok(item,'Isolated equipment fixtures must cover every request');
-    return {ref:`REQ-AUDIT-${run}-${sequence}`,equipment:item.equipmentName,equipmentGroup:item.group,door:item.door,chassis:item.chassis,reg:item.registration,site:'Sasti OB',category:'Breakdown',complaint:'Isolated audit cycle',meterType:'HMR',start:india(-minutes*60000).replace('T',' · ')};
+    return {ref:`REQ-AUDIT-${run}-${sequence}`,equipment:item.equipmentName,equipmentGroup:item.group,door:item.door,chassis:item.chassis,reg:item.registration,site:'Sasti OB',category:'Breakdown',complaint:'Isolated audit cycle',complaintAudio,meterType:'HMR',start:india(-minutes*60000).replace('T',' · ')};
   }
-  async function create({role='production',minutes=5}={}){
-    const body=requestBody({minutes});
+  async function create({role='production',minutes=5,complaintAudio=''}={}){
+    const body=requestBody({minutes,complaintAudio});
     const row=await call(role,'POST','/api/requests',body,201);refs.push(row.ref);
     assert.equal(row.status,'Open');assert.equal(row.driverName,'','Missing driver must not become fictitious Demo Driver');
     return row;
@@ -95,7 +96,12 @@ test('real database role cycles, queues, red flags, reports and permission bound
     assert.ok(contains(await rows('admin'),row.ref));
   }
   await t.test('late arrival → required red flag → accept → update → repair close → MIS flag and verify',async()=>{
-    const row=await create({minutes:125});
+    const row=await create({minutes:125,complaintAudio:audio});
+    assert.equal(row.complaintAudioAvailable,true);
+    assert.equal('complaintAudio' in row,false,'List and mutation responses must not embed audio bodies');
+    const complaintAudio=await fetch(`${base}/api/requests/${row.ref}/audio/complaint`,{headers:{Authorization:`Bearer ${tokens.maintenance}`}});
+    assert.equal(complaintAudio.status,200);assert.equal(complaintAudio.headers.get('content-type'),'audio/webm');
+    assert.deepEqual([...new Uint8Array(await complaintAudio.arrayBuffer())],[97]);
     const blocked=await call('maintenance','PATCH',`/api/requests/${row.ref}`,change(row),409);
     assert.equal(blocked.code,'ARRIVAL_RED_FLAG_REQUIRED');
     await call('maintenance','PATCH',`/api/requests/${row.ref}/arrival-flag`,{remark:'   '},400);
@@ -168,8 +174,13 @@ test('real database role cycles, queues, red flags, reports and permission bound
     }
   });
   await t.test('ticket created by production, seen and resolved by admin, notification links persist',async()=>{
-    const ticket=await call('production','POST','/api/tickets',{priority:'Medium',message:'Isolated full cycle audit ticket'},201);
+    const ticket=await call('production','POST','/api/tickets',{priority:'Medium',message:'Isolated full cycle audit ticket',messageAudio:audio,attachmentData:image,attachmentName:'audit.png',attachmentType:'image/png'},201);
     assert.ok(ticket.reference);assert.ok((await call('admin','GET','/api/tickets')).some(r=>r.reference===ticket.reference));
+    const listed=(await call('production','GET','/api/tickets')).find(r=>r.reference===ticket.reference);
+    assert.equal(listed.messageAudioAvailable,true);assert.equal(listed.attachmentAvailable,true);
+    assert.equal('messageAudio' in listed,false);assert.equal('attachmentData' in listed,false);
+    const ticketAudio=await fetch(`${base}/api/tickets/${encodeURIComponent(ticket.reference)}/media/message-audio`,{headers:{Authorization:`Bearer ${tokens.production}`}});
+    assert.equal(ticketAudio.status,200);assert.deepEqual([...new Uint8Array(await ticketAudio.arrayBuffer())],[97]);
     await call('production','PATCH','/api/tickets/resolve',{reference:ticket.reference,resolutionMessage:'Should not resolve'},403);
     const resolved=await call('admin','PATCH','/api/tickets/resolve',{reference:ticket.reference,resolutionMessage:'Checked and resolved locally'});
     assert.equal(resolved.status,'Resolved');
@@ -211,10 +222,10 @@ test('real database role cycles, queues, red flags, reports and permission bound
     assert.equal(duplicateReference.body.code,'REQUEST_REFERENCE_CONFLICT');
     assert.match(duplicateReference.body.error,/[Rr]efresh/);
   });
-  await t.test('all 15 department reports render finite cells from actual completed HTTP cycles',async()=>{
+  await t.test('every current department report renders finite cells from actual completed HTTP cycles',async()=>{
     const actual=(await rows('admin')).filter(row=>refs.includes(row.ref));
     const reports=buildDepartmentReports({requests:actual,equipmentRecords:equipment,from:india().slice(0,10),to:india().slice(0,10)});
-    assert.equal(reports.length,15);
+    assert.deepEqual(reports.map(report=>report.title),DEPARTMENT_REPORT_TITLES);
     for(const report of reports){
       assert.ok(report.title);assert.ok(Array.isArray(report.rows));assert.ok(report.columns.length);
       for(const row of report.rows)for(const column of report.columns){const value=column.value?column.value(row):row[column.key];assert.doesNotMatch(String(value),/NaN|Invalid Date|Infinity/,`${report.title}/${column.key}`)}

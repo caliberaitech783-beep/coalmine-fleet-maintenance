@@ -122,6 +122,7 @@
 .pulse-date b { font-size: 14px; font-variant-numeric: tabular-nums; }
 .pulse-date span { font-size: 12px; color: #536179; }
 .pulse-missing { font-style: italic; color: #8b95a8; }
+.pulse-load-more { display: block; min-height: 42px; margin: 4px auto 0; padding: 9px 18px; border: 1px solid #cfc5df; border-radius: 9px; background: #fff; color: var(--record-purple); font: 700 12px Manrope, sans-serif; }
 
 @media (min-width: 651px) and (max-height: 800px) {
   .ai-feeder-panel.pulse-panel > header { padding: 10px 24px; }
@@ -155,9 +156,12 @@
   .pulse-filter-dates label, .pulse-filter-dates input { width: 100%; min-width: 0; }
   .pulse-filter-dates label { flex: 1 1 100%; }
   .pulse-filter-caption { margin-left: 0; flex: 1 1 100%; }
-  .pulse-kpis { grid-template-columns: 1fr; gap: 8px; }
-  .pulse-kpi { min-height: 0; padding: 10px 14px; }
-  .pulse-kpi-count { font-size: 28px; }
+  .pulse-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .pulse-kpi { grid-template-columns: 32px 1fr; grid-template-areas: 'icon count' 'label label' 'hint hint'; min-height: 0; padding: 9px 10px; column-gap: 8px; }
+  .pulse-kpi-icon { width: 32px; height: 32px; border-radius: 9px; }
+  .pulse-kpi-label { font-size: 10px; font-weight: 700; letter-spacing: .45px; }
+  .pulse-kpi-hint { font-size: 10px; font-weight: 500; }
+  .pulse-kpi-count { justify-self: end; font-size: 25px; font-weight: 700; }
   .pulse-breakdown-row { grid-template-columns: 32px 1fr; gap: 8px 12px; padding: 10px 12px 10px 10px; }
   .pulse-rank { width: 28px; height: 28px; font-size: 12px; }
 }

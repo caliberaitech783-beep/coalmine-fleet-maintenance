@@ -35,10 +35,12 @@ test('vehicle transfer target visibility uses current workflow and location scop
 });
 
 test('ticket target visibility matches creator, Manager role and site, or Admin access',()=>{
-  assert.match(route,/req\.session\.role==='super'&&req\.session\.permissions\?\.adminLevel!=='Manager'/);
-  assert.match(route,/ticket\.creatorLogin[\s\S]*===login/);
-  assert.match(route,/managerRoleSelection\([\s\S]*\.map\(managerUserRole\)/);
-  assert.match(route,/creatorRoles\.includes\(ticket\.creatorRole\)&&userManagesSite\(manager,ticket\.site\)/);
+  const helper=server.slice(server.indexOf('async function ticketVisibleToSession'),server.indexOf('async function sendWhatsAppNotifications'));
+  assert.match(route,/await ticketVisibleToSession\(ticket,req\.session\)/);
+  assert.match(helper,/session\?\.role==='super'&&session\?\.permissions\?\.adminLevel!=='Manager'/);
+  assert.match(helper,/ticket\?\.creatorLogin[\s\S]*===String\(session\?\.login/);
+  assert.match(helper,/managerRoleSelection\([\s\S]*\.map\(managerUserRole\)/);
+  assert.match(helper,/creatorRoles\.includes\(ticket\?\.creatorRole\)&&userManagesSite\(manager,ticket\?\.site\)/);
   assert.match(route,/res\.json\(\{kind:'ticket',reference,record:ticket\}\)/);
 });
 

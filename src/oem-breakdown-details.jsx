@@ -4,6 +4,7 @@ import { matchesSmartSearch } from "../smart-search.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { groupOemRecordsBySite } from "./oem-dashboard-filters.mjs";
+import {ProtectedAudio} from "./protected-media.jsx";
 import "./oem-breakdown-details.css";
 
 const extraColumns = [
@@ -28,7 +29,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
   const siteGroups = groupOemRecordsBySite(rows, selection.regions);
   const columns = [...extraColumns,
     { key: "remarks", label: "Daily remarks", render: record => <MaintenanceRemarks remarks={record.requestDetails.dailyRemarks} /> },
-    { key: "audio", label: "Audio clips", render: record => <div className="request-audio-list">{record.requestDetails.complaintAudio && <audio controls preload="none" aria-label="Complaint audio" src={record.requestDetails.complaintAudio} />}{record.requestDetails.maintenanceAudio && <audio controls preload="none" aria-label="Maintenance audio" src={record.requestDetails.maintenanceAudio} />}{!record.requestDetails.complaintAudio && !record.requestDetails.maintenanceAudio && "—"}</div> },
+    { key: "audio", label: "Audio clips", render: record => <div className="request-audio-list">{record.requestDetails.complaintAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/complaint`} token={tableProps.timelineToken} label="Complaint audio" />}{record.requestDetails.maintenanceAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/maintenance`} token={tableProps.timelineToken} label="Maintenance audio" />}{!record.requestDetails.complaintAudioAvailable && !record.requestDetails.maintenanceAudioAvailable && "—"}</div> },
   ];
   return <div className="mine-oem-details">
     <div className="mine-oem-detail-context"><span className="mine-oem-selection"><i style={{ background: selection.color || "var(--brand-purple)" }} />{selection.label}{selection.site && ` · ${selection.site}`}</span><span role="status" aria-live="polite">{selection.periodLabel} · Showing {shownAssets} of {selection.rows.length} assets · {rows.length} of {selection.records.length} records</span></div>

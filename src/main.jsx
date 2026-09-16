@@ -18,6 +18,7 @@ import SharedActionsTable from "./shared-actions-table.jsx";
 import { useTableLayouts, TableLayoutControls, TableLayoutSelect } from "./table-layouts.jsx";
 import {capturePhotoForInput} from "./camera-upload.mjs";
 import {ComplaintMediaInputs,ComplaintMediaView} from "./complaint-media.jsx";
+import {ProtectedAttachment,ProtectedAudio} from "./protected-media.jsx";
 import {readComplaintMedia} from "../complaint-media.mjs";
 import './camera-upload.css';
 import {UserLoginHistory,UserLoginActivity} from "./user-login-history.jsx";
@@ -2042,9 +2043,9 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "idleReason": return <td>{r.idleReason || "—"}</td>;
     case "dailyRemarks": return <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>;
     case "audio": return <td><div className="request-audio-list">
-      {r.complaintAudio && <label><span>Complaint</span><audio controls preload="none" src={r.complaintAudio}>Complaint audio</audio></label>}
-      {r.maintenanceAudio && <label><span>Maintenance</span><audio controls preload="none" src={r.maintenanceAudio}>Maintenance audio</audio></label>}
-      {!r.complaintAudio && !r.maintenanceAudio && "—"}
+      {r.complaintAudioAvailable && <label><span>Complaint</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /></label>}
+      {r.maintenanceAudioAvailable && <label><span>Maintenance</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/maintenance`} token={authToken} label="Maintenance audio" /></label>}
+      {!r.complaintAudioAvailable && !r.maintenanceAudioAvailable && "—"}
     </div></td>;
     case "owner": return <td>{r.owner}</td>;
     case "idealAction": return (onApproveIdeal || onCancelIdeal) ? <td><div className="idle-approval-actions">{onApproveIdeal && <button type="button" className="primary compact" onClick={() => onApproveIdeal(r)}><CheckCircle2 /> Make on road</button>}{onCancelIdeal && <button type="button" className="compact" onClick={() => onCancelIdeal(r)}><X /> Cancel</button>}</div></td> : null;
@@ -2088,7 +2089,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         if (key === "equipment") return normalizeEquipmentGroup(row.equipmentGroup) || row.equipment;
         if (key === "createdBy") return row.owner || row.requesterLogin;
         if (key === "start") return formatTwelveHourDateTime(row.start);
-        if (key === "audio") return row.complaintAudio || row.maintenanceAudio ? "Available" : "Not available";
+        if (key === "audio") return row.complaintAudioAvailable || row.maintenanceAudioAvailable ? "Available" : "Not available";
         return row[key];
       },
     })),
@@ -2150,9 +2151,9 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 <td>{r.idleReason || "—"}</td>
                 <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>
                 {showAudio && <td><div className="request-audio-list">
-                  {r.complaintAudio && <label><span>Complaint</span><audio controls preload="none" src={r.complaintAudio}>Complaint audio</audio></label>}
-                  {r.maintenanceAudio && <label><span>Maintenance</span><audio controls preload="none" src={r.maintenanceAudio}>Maintenance audio</audio></label>}
-                  {!r.complaintAudio && !r.maintenanceAudio && "—"}
+                  {r.complaintAudioAvailable && <label><span>Complaint</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /></label>}
+                  {r.maintenanceAudioAvailable && <label><span>Maintenance</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/maintenance`} token={authToken} label="Maintenance audio" /></label>}
+                  {!r.complaintAudioAvailable && !r.maintenanceAudioAvailable && "—"}
                 </div></td>}
                 <td>{r.owner}</td>
                 {(onApproveIdeal||onCancelIdeal)&&<td><div className="idle-approval-actions">{onApproveIdeal&&<button type="button" className="primary compact" onClick={()=>onApproveIdeal(r)}><CheckCircle2 /> Make on road</button>}{onCancelIdeal&&<button type="button" className="secondary danger compact" onClick={()=>onCancelIdeal(r)}><X /> Cancel idle</button>}</div></td>}
@@ -8040,7 +8041,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
       {key: "closingMeter", label: "Closing KMR/HMR", value: (row) => requestMeterReadingLabel(row, "closing")},
     ] : []),
     ...(showTripCard ? [{key: "tripCard", label: "Trip card image", value: (row) => row.firstTripCardUploaded ? "Uploaded" : "Not uploaded"}] : []),
-    ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudio ? "Available" : "Not available"}] : []),
+    ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudioAvailable ? "Available" : "Not available"}] : []),
   ];
   const filteredRows = rows.filter((row) => {
     const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy, ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
@@ -8122,7 +8123,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               {showMeterData && <><td><b>{requestMeterReadings(row, "opening").KMR || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadings(row, "opening").HMR || "—"}</b></td><td><b>{requestMeterReadingLabel(row, "closing")}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
               {showTripCard && <td><TripCardCell request={row} /></td>}
               {showComplaintAudio && <td className="maintenance-complaint-audio">
-                {row.complaintAudio ? <audio controls preload="none" src={row.complaintAudio}>Complaint audio</audio> : "—"}
+                {row.complaintAudioAvailable ? <ProtectedAudio url={`/api/requests/${encodeURIComponent(row.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /> : "—"}
               </td>}
               {!actionsFirst && workflowActions(row, lockedIdeal)}
             </tr>;
@@ -8282,7 +8283,7 @@ function CloseRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
         <div><span>Closing readings</span><b>{requestMeterReadingLabel(request, "closing")}</b><MeterFileCell request={request} stage="closing" /></div>
         <div><span>Reason / complaint</span><b><TranslatedText text={request.complaint} language={request.complaintLanguage} /></b>{request.complaintMediaAvailable && <ComplaintMediaView request={request} token={authToken} Dialog={Modal} />}</div>
-        <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudio ? <audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio> : <b>—</b>}</div>
+        <div className="request-complaint-audio"><span>Production complaint audio</span>{request.complaintAudioAvailable ? <ProtectedAudio url={`/api/requests/${encodeURIComponent(request.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /> : <b>—</b>}</div>
       </div>
       <div className="formgrid">
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} missingOnly />
@@ -8492,26 +8493,13 @@ function TicketCreateForm({ session, close, onCreated }) {
   </Modal>;
 }
 
-function TicketMedia({ data, name, type, label }) {
-  const objectUrl = useMemo(() => {
-    const match = String(data || "").match(/^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/);
-    if (!match) return "";
-    try {
-      const bytes = Uint8Array.from(atob(match[2]), (character) => character.charCodeAt(0));
-      return URL.createObjectURL(new Blob([bytes], { type: match[1] }));
-    } catch {
-      return "";
-    }
-  }, [data]);
-  useEffect(() => () => { if (objectUrl) URL.revokeObjectURL(objectUrl); }, [objectUrl]);
-  if (!data) return "—";
-  if (!objectUrl) return <span className="ticket-media-error">Attachment unavailable</span>;
-  if (String(type).startsWith("video/")) return <video className="ticket-media" controls preload="metadata" src={objectUrl}>{label} video</video>;
-  return <a href={objectUrl} target="_blank" rel="noreferrer" title={name || `Open ${label.toLowerCase()}`}><img className="ticket-media" src={objectUrl} alt={name || `${label} attachment`} /></a>;
+function TicketMedia({ url, token, name, type, label }) {
+  return <ProtectedAttachment url={url} token={token} fileName={name} contentType={type} label={`${label} attachment`} />;
 }
 
-function TicketAttachment({ ticket }) {
-  return <TicketMedia data={ticket.attachmentData} name={ticket.attachmentName} type={ticket.attachmentType} label="Ticket" />;
+function TicketAttachment({ ticket, token }) {
+  if (!ticket.attachmentAvailable) return "—";
+  return <TicketMedia url={`/api/tickets/${encodeURIComponent(ticket.reference)}/media/attachment`} token={token} name={ticket.attachmentName} type={ticket.attachmentType} label="Ticket" />;
 }
 
 function TicketResolutionForm({ ticket, session, close, onResolved }) {
@@ -8583,7 +8571,7 @@ function TicketPage({ session }) {
     return `${match[3]}-${match[2]}-${match[1]} ${hour % 12 || 12}:${match[5]}:${match[6] || "00"} ${hour >= 12 ? "PM" : "AM"}`;
   };
   const [ticketState, setTicketState] = useState(null), [refreshing, setRefreshing] = useState(true), [creating, setCreating] = useState(false), [category, setCategory] = useState(""), [resolving, setResolving] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null), [refreshCount, setRefreshCount] = useState(0);
-  const requestSequence = useRef(0), activeLoad = useRef(null), currentScope = useRef(null);
+  const requestSequence = useRef(0), activeLoad = useRef(null), currentScope = useRef(null), responseEtags = useRef(new Map());
   currentScope.current = {token: session?.token, category};
   const sameAccount = ticketState?.token === session?.token;
   const sameScope = sameAccount && ticketState?.category === category;
@@ -8603,6 +8591,8 @@ function TicketPage({ session }) {
     let activeRequest = true;
     const controller = new AbortController();
     const sequence = ++requestSequence.current;
+    const etagKey = `${session?.token || ""}:${category}`;
+    const responseEtag = responseEtags.current.get(etagKey) || "";
     activeLoad.current = controller;
     setRefreshing(true);
     setTicketState((current) => current?.token === session?.token && current?.category === category
@@ -8611,15 +8601,18 @@ function TicketPage({ session }) {
     fetch(`/api/tickets${category ? `?category=${encodeURIComponent(category)}` : ""}`, {
       signal: controller.signal,
       cache: "no-store",
-      headers: {Authorization: `Bearer ${session.token}`},
+      headers: {Authorization: `Bearer ${session.token}`, ...(responseEtag ? {"If-None-Match": responseEtag} : {})},
     })
       .then(async (response) => {
+        if (response.status === 304) return null;
         const result = await response.json().catch(() => null);
         if (!response.ok) throw new Error(result?.error || "Could not load tickets.");
         if (!Array.isArray(result)) throw new Error("Could not load tickets. Please retry.");
+        const nextEtag = response.headers?.get?.("etag") || "";
+        if (nextEtag) responseEtags.current.set(etagKey, nextEtag);
         return result;
       })
-      .then((result) => { if (activeRequest && sequence === requestSequence.current) setTicketState({token: session?.token, category, records: result, error: ""}); })
+      .then((result) => { if (activeRequest && sequence === requestSequence.current && result) setTicketState({token: session?.token, category, records: result, error: ""}); })
       .catch((error) => {
         if (activeRequest && error.name !== "AbortError" && sequence === requestSequence.current) {
           setTicketState((current) => ({...current, error: error.message || "Could not load tickets."}));
@@ -8652,7 +8645,7 @@ function TicketPage({ session }) {
     <header className="ticket-page-head"><div><span>CRM support</span><h1>Tickets</h1><p>{session?.permissions?.adminLevel === "Manager" ? "Tickets created by users in your assigned team and location." : isAdmin ? "All support tickets across every user and site." : "Create and track your support requests."}</p></div><div className="ticket-page-actions"><ExportMenu title="CRM tickets report" columns={ticketExportColumns} rows={tickets} />{canCreate && <button className="primary" onClick={() => setCreating(true)}><Plus /> Create ticket</button>}</div></header>
     <div className="ticket-toolbar"><div className="ticket-toolbar-controls"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option value="">All categories</option>{ticketCategories.map((item) => <option key={item}>{item}</option>)}</select></label><div className="master-actions-slot" ref={setActionsToolbarTarget} /></div><span>{loading ? "Loading tickets…" : `${tickets.length} ticket${tickets.length === 1 ? "" : "s"}`}</span></div>
     {error && <div className="hierarchy-save-error" role="alert"><span>{error}{tickets.length > 0 ? " Showing previously loaded tickets." : ""}</span><button type="button" onClick={refresh} disabled={loading}>Retry</button></div>}
-    <div className="ticket-table-wrap"><ActionsTable printTitle="CRM tickets" recordDateFilter={{ label: "Created", value: ticketDateRange, onChange: setTicketDateRange }} toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{displayDateTime(ticket.createdAt)}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudio ? <audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio> : "—"}</td><td><TicketAttachment ticket={ticket} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudio && <audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio>}{ticket.resolutionAttachmentData && <TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {displayDateTime(ticket.resolvedAt)}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
+    <div className="ticket-table-wrap"><ActionsTable printTitle="CRM tickets" recordDateFilter={{ label: "Created", value: ticketDateRange, onChange: setTicketDateRange }} toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>Ticket ID</th><th>User</th><th>Site</th><th>Category</th><th>Priority</th><th>Description</th><th>Audio</th><th>Attachment</th><th>Status</th><th>Resolution</th>{isAdmin && <th>Action</th>}</tr></thead><tbody>{tickets.length ? tickets.map((ticket) => <tr key={ticket.reference}><td><b>{ticket.reference}</b><small>{displayDateTime(ticket.createdAt)}</small></td><td>{ticket.creatorName}<small>@{ticket.creatorLogin} · {ticket.creatorRole}</small></td><td>{ticket.site}</td><td>{ticket.category}</td><td><Status>{ticket.priority || "Medium"}</Status></td><td className="ticket-message">{ticket.message || "Audio description"}</td><td>{ticket.messageAudioAvailable ? <ProtectedAudio url={`/api/tickets/${encodeURIComponent(ticket.reference)}/media/message-audio`} token={session.token} label="Ticket audio" /> : "—"}</td><td><TicketAttachment ticket={ticket} token={session.token} /></td><td><Status>{ticket.status}</Status></td><td>{ticket.resolutionMessage || ticket.resolutionAudioAvailable || ticket.resolutionAttachmentAvailable ? <span>{ticket.resolutionMessage || "Audio resolution"}{ticket.resolutionAudioAvailable && <ProtectedAudio url={`/api/tickets/${encodeURIComponent(ticket.reference)}/media/resolution-audio`} token={session.token} label="Resolution audio" />}{ticket.resolutionAttachmentAvailable && <TicketMedia url={`/api/tickets/${encodeURIComponent(ticket.reference)}/media/resolution-attachment`} token={session.token} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" />}<small>{ticket.resolvedBy} · {displayDateTime(ticket.resolvedAt)}</small></span> : "—"}</td>{isAdmin && <td>{ticket.status !== "Resolved" ? <button className="primary compact" onClick={() => setResolving(ticket)}>Resolve</button> : "Resolved"}</td>}</tr>) : <tr><td colSpan={isAdmin ? 11 : 10} className="empty-state">{loading ? "Loading tickets…" : "No tickets found."}</td></tr>}</tbody></ActionsTable></div>
     {sameAccount && canCreate && creating && <TicketCreateForm key={session.token} session={session} close={() => setCreating(false)} onCreated={applySavedTicket} />}
     {sameAccount && resolving && <TicketResolutionForm key={`${session.token}:${resolving.reference}`} ticket={resolving} session={session} close={() => setResolving(null)} onResolved={applySavedTicket} />}
   </section>;
@@ -8801,14 +8794,14 @@ function NotificationEntryField({ label, value, wide = false, language }) {
   return <div className={wide ? "wide" : ""}><dt>{label}</dt><dd>{language === undefined ? displayed : <TranslatedText text={value} language={language} />}</dd></div>;
 }
 
-function NotificationRequestEntry({ reference, request = {} }) {
+function NotificationRequestEntry({ reference, request = {}, token }) {
   const meterType = request.meterType || "KMR/HMR";
   return <div className="notification-entry-record">
     <div className="notification-entry-hero">
       <div><span>Maintenance request</span><h2>{reference}</h2><p>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "Equipment not recorded"}{request.door ? ` · ${request.door}` : ""}</p></div>
       <Status>{requestStatusLabel(request)}</Status>
     </div>
-    <RequestTimelineButton reference={reference} token={authToken} Dialog={Modal} label="View time breakdown and correction history" />
+    <RequestTimelineButton reference={reference} token={token} Dialog={Modal} label="View time breakdown and correction history" />
     <dl className="notification-entry-fields">
       <NotificationEntryField label="Equipment group" value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment} />
       <NotificationEntryField label="Door number" value={request.door} />
@@ -8835,11 +8828,11 @@ function NotificationRequestEntry({ reference, request = {} }) {
         <article><span>Closing readings</span><b>{requestMeterReadingLabel(request, "closing")}</b><small>{request.closingMeterFileUploaded ? "Evidence uploaded" : "No evidence file uploaded"}</small></article>
       </div>
     </section>
-    {(request.complaintAudio || request.maintenanceAudio) && <section className="notification-entry-section" aria-label="Request audio">
+    {(request.complaintAudioAvailable || request.maintenanceAudioAvailable) && <section className="notification-entry-section" aria-label="Request audio">
       <h3>Audio</h3>
       <div className="notification-entry-audio">
-        {request.complaintAudio && <label><span>Complaint</span><audio controls preload="none" src={request.complaintAudio}>Complaint audio</audio></label>}
-        {request.maintenanceAudio && <label><span>Maintenance update</span><audio controls preload="none" src={request.maintenanceAudio}>Maintenance audio</audio></label>}
+        {request.complaintAudioAvailable && <label><span>Complaint</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(reference)}/audio/complaint`} token={token} label="Complaint audio" /></label>}
+        {request.maintenanceAudioAvailable && <label><span>Maintenance update</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(reference)}/audio/maintenance`} token={token} label="Maintenance audio" /></label>}
       </div>
     </section>}
     <section className="notification-entry-section" aria-label="Daily maintenance updates">
@@ -8849,8 +8842,8 @@ function NotificationRequestEntry({ reference, request = {} }) {
   </div>;
 }
 
-function NotificationTicketEntry({ reference, ticket = {} }) {
-  const hasResolution = ticket.resolutionMessage || ticket.resolutionAudio || ticket.resolutionAttachmentData;
+function NotificationTicketEntry({ reference, ticket = {}, token }) {
+  const hasResolution = ticket.resolutionMessage || ticket.resolutionAudioAvailable || ticket.resolutionAttachmentAvailable;
   return <div className="notification-entry-record">
     <div className="notification-entry-hero">
       <div><span>CRM ticket</span><h2>{reference}</h2><p>{ticket.category || "General"} · {ticket.site || "Site not recorded"}</p></div>
@@ -8868,18 +8861,18 @@ function NotificationTicketEntry({ reference, ticket = {} }) {
       <NotificationEntryField label="Resolved by" value={ticket.resolvedBy} />
       <NotificationEntryField label="Resolved" value={formatTwelveHourDateTime(ticket.resolvedAt)} />
     </dl>
-    {(ticket.messageAudio || ticket.attachmentData) && <section className="notification-entry-section" aria-label="Ticket evidence">
+    {(ticket.messageAudioAvailable || ticket.attachmentAvailable) && <section className="notification-entry-section" aria-label="Ticket evidence">
       <h3>Ticket evidence</h3>
       <div className="notification-entry-evidence">
-        {ticket.messageAudio && <article><span>Recorded description</span><audio controls preload="none" src={ticket.messageAudio}>Ticket audio</audio></article>}
-        {ticket.attachmentData && <article><span>Attachment</span><TicketAttachment ticket={ticket} /></article>}
+        {ticket.messageAudioAvailable && <article><span>Recorded description</span><ProtectedAudio url={`/api/tickets/${encodeURIComponent(reference)}/media/message-audio`} token={token} label="Ticket audio" /></article>}
+        {ticket.attachmentAvailable && <article><span>Attachment</span><TicketAttachment ticket={ticket} token={token} /></article>}
       </div>
     </section>}
     {hasResolution && <section className="notification-entry-section" aria-label="Resolution evidence">
       <h3>Resolution evidence</h3>
       <div className="notification-entry-evidence">
-        {ticket.resolutionAudio && <article><span>Recorded resolution</span><audio controls preload="none" src={ticket.resolutionAudio}>Resolution audio</audio></article>}
-        {ticket.resolutionAttachmentData && <article><span>Resolution attachment</span><TicketMedia data={ticket.resolutionAttachmentData} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" /></article>}
+        {ticket.resolutionAudioAvailable && <article><span>Recorded resolution</span><ProtectedAudio url={`/api/tickets/${encodeURIComponent(reference)}/media/resolution-audio`} token={token} label="Resolution audio" /></article>}
+        {ticket.resolutionAttachmentAvailable && <article><span>Resolution attachment</span><TicketMedia url={`/api/tickets/${encodeURIComponent(reference)}/media/resolution-attachment`} token={token} name={ticket.resolutionAttachmentName} type={ticket.resolutionAttachmentType} label="Resolution" /></article>}
       </div>
     </section>}
   </div>;
@@ -8909,7 +8902,7 @@ function NotificationVehicleTransferEntry({reference, transfer = {}}) {
   </div>;
 }
 
-function NotificationEntryDialog({ state, onClose }) {
+function NotificationEntryDialog({ state, onClose, token }) {
   if (!state) return null;
   const target = state.target;
   const title = state.phase === "loading"
@@ -8917,11 +8910,11 @@ function NotificationEntryDialog({ state, onClose }) {
     : state.phase === "error"
       ? "Notification entry unavailable"
       : `${target.kind === "ticket" ? "Ticket" : target.kind === "transfer" ? "Vehicle transfer" : "Request"} · ${target.reference}`;
-  return createPortal(<Modal title={title} close={onClose} className="notification-entry-modal">
+  return createPortal(<Modal title={title} close={onClose} className="notification-entry-modal" overlayClassName="notification-entry-overlay">
     {state.phase === "loading" && <div className="notification-entry-state loading" role="status" aria-live="polite" aria-busy="true"><Clock /><div><b>Loading the exact entry…</b><p>Checking your current access and retrieving the latest record.</p></div></div>}
     {state.phase === "error" && <div className="notification-entry-state error" role="alert"><AlertTriangle /><div><b>Entry unavailable</b><p>This entry is no longer available or is outside your assigned access.</p><button type="button" onClick={onClose}>Close</button></div></div>}
-    {state.phase === "ready" && target?.kind === "request" && <NotificationRequestEntry reference={target.reference} request={target.record} />}
-    {state.phase === "ready" && target?.kind === "ticket" && <NotificationTicketEntry reference={target.reference} ticket={target.record} />}
+    {state.phase === "ready" && target?.kind === "request" && <NotificationRequestEntry reference={target.reference} request={target.record} token={token} />}
+    {state.phase === "ready" && target?.kind === "ticket" && <NotificationTicketEntry reference={target.reference} ticket={target.record} token={token} />}
     {state.phase === "ready" && target?.kind === "transfer" && <NotificationVehicleTransferEntry reference={target.reference} transfer={target.record} />}
   </Modal>, document.body);
 }
@@ -8980,7 +8973,9 @@ function NotificationBell({ session, onOpenEntry }) {
         const fresh = track(next);
         known = next.map((item) => String(item.id)).join(",");
         setItems(next);
-        if (fresh.length) setAlerts((current) => [...current, ...fresh]);
+        // The bell retains every notification; keep only the two newest toast
+        // cards so bursts cannot cover the phone screen.
+        if (fresh.length) setAlerts((current) => [...current, ...fresh].slice(-2));
       } catch (error) {
         if (controller.signal.aborted) return;
         console.warn("Notification refresh failed; retaining the last successful list.", error);
@@ -9086,7 +9081,7 @@ function NotificationBell({ session, onOpenEntry }) {
       </div>}
     </div>
     {alerts.length > 0 && createPortal(<div className="incoming-notification-stack" aria-label="New notifications">{alerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} />)}</div>, document.body)}
-    <NotificationEntryDialog state={entryState} onClose={closeEntry} />
+    <NotificationEntryDialog state={entryState} onClose={closeEntry} token={session.token} />
   </>;
 }
 

@@ -85,6 +85,9 @@ $env:DATABASE_URL = "postgresql://USER:PASSWORD@HOST:5432/DATABASE"
 npm start
 ~~~
 
+For an isolated loopback PostgreSQL fixture that does not enable TLS, also set
+`DATABASE_SSL=false`. Leave it unset in Azure so production continues to use TLS.
+
 `server.mjs` listens on `PORT` when set, otherwise port `3000`. The server serves `dist` when `dist/index.html` exists and otherwise serves the repository root.
 
 ## 4. Application startup and data loading
@@ -273,11 +276,14 @@ All protected calls use `Authorization: Bearer <session-token>`.
 | POST | `/api/login` | Public | Authenticate and resolve account/role |
 | POST | `/api/change-initial-password` | Password-change token | Complete mandatory first-login password change |
 | GET | `/api/requests` | Session + read permission | Load request projections |
+| GET | `/api/requests/:reference/audio/:kind` | Session + request scope | Load complaint or maintenance audio on demand |
 | POST | `/api/requests` | Production + create permission | Create an Open request |
 | PATCH | `/api/requests/:reference` | Maintenance + edit permission | Edit an open request |
 | PATCH | `/api/requests/:reference/close` | Maintenance + close permission | Save closure details and status |
 | DELETE | `/api/requests/:reference` | Maintenance + delete permission | Delete an unverified request |
 | PATCH | `/api/requests/:reference/verify` | MIS + verify permission | Verify a closed request and optional first trip |
+| GET | `/api/tickets` | Session + ticket scope | Load compact CRM ticket projections |
+| GET | `/api/tickets/:reference/media/:kind` | Session + ticket scope | Load ticket audio or attachments on demand |
 | GET | `/api/masters` | Session | Load masters. Mobile access is limited to Equipment master |
 | POST | `/api/masters/:master` | Super User | Add or import master rows |
 | PUT | `/api/masters/:master/:id` | Super User | Edit a master row |
@@ -303,7 +309,7 @@ The database connection uses `DATABASE_URL` and SSL with certificate verificatio
 
 ## 13. CI/CD and Azure deployment
 
-The tracked GitHub workflow runs on pushes to the `azure-hosting` branch and on manual dispatch:
+The tracked GitHub workflows run on pushes to `azure-hosting` or `azure-hosting-1.0` and on manual dispatch:
 
 1. Checkout the repository.
 2. Install Node.js 22 with npm cache.

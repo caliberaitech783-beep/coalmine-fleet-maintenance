@@ -238,12 +238,35 @@ test('equipment and vehicle classification uses the meter type first and the gro
   assert.deepEqual(data.infoPulseRegions([]), []);
 });
 
-test('the redesign has no alert categories, pagination or drill-downs', () => {
+test('the redesign has no alert categories, numbered pagination or record drill-downs', () => {
   const tree = render();
   assert.equal(descendants(tree, node => 'aria-expanded' in node.props).length, 0);
   const page = html(tree);
   for (const removed of ['Updates', 'ETC overdue', 'Down ≥ 3 days', 'New ≤ 12 hours', 'All cases', 'Total breakdowns', 'of 4 cases', 'Filter site']) assert.ok(!page.includes(removed), `${removed} removed`);
   assert.ok(!source.includes('PAGE_SIZE') && !source.includes('createPortal'));
+});
+
+test('large phone-friendly result sets render 24 rows first and expand without changing the filtered total', () => {
+  const requests = Array.from({length: 30}, (_, index) => ({
+    ref: `REQ-WINDOW-${index + 1}`,
+    door: `WINDOW-${index + 1}`,
+    site: 'Sasti OB',
+    equipmentGroup: 'DOZERS',
+    status: 'Open',
+    start: `2026-09-16 ${String(10 - Math.floor(index / 60)).padStart(2, '0')}:${String(index % 60).padStart(2, '0')}`,
+    complaint: 'Windowed rendering fixture',
+  }));
+  const app = harness();
+  let tree = app.render({requests});
+  let list = byLabel(tree, 'BD balance breakdowns, longest standing first');
+  assert.equal(descendants(list, node => node.type === 'li').length, 24);
+  const more = descendants(tree, node => node.props.className === 'pulse-load-more')[0];
+  assert.equal(text(more), 'Show 6 more breakdowns');
+  more.props.onClick();
+  tree = app.render({requests});
+  list = byLabel(tree, 'BD balance breakdowns, longest standing first');
+  assert.equal(descendants(list, node => node.type === 'li').length, 30);
+  assert.match(html(tree), /30 of 30 breakdowns/);
 });
 
 test('each row shows standing since, down for and the ETC as overdue, due in or not set', () => {

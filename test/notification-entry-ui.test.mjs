@@ -41,7 +41,8 @@ test("the exact entry dialog has accessible loading, generic error, request, tic
   assert.match(dialog, /request\.openingMeterFileUploaded \? "Evidence uploaded"/);
   assert.doesNotMatch(dialog, /<MeterFileCell/);
   assert.match(dialog, /<TicketAttachment ticket=\{ticket\}/);
-  assert.match(dialog, /<TicketMedia data=\{ticket\.resolutionAttachmentData\}/);
+  assert.match(dialog, /ticket\.resolutionAttachmentAvailable[\s\S]*<TicketMedia url=\{`\/api\/tickets\/\$\{encodeURIComponent\(reference\)\}\/media\/resolution-attachment`\}/);
+  assert.match(dialog, /overlayClassName="notification-entry-overlay"/);
 });
 
 test("only a validated server kind drives broad navigation after the dialog opens", () => {

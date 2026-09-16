@@ -151,8 +151,9 @@ function buildAlerts(requests, nowMs) {
         closedAt);
     }
 
+    const hasDailyUpdate = request.hasDailyRemarks === true || String(request.dailyRemarks || "").trim() !== "";
     if (active && Number.isFinite(startedAt) && nowMs - startedAt >= AI_FEEDER_THRESHOLDS.staleUpdateHours * HOUR_MS &&
-      !String(request.dailyRemarks || "").trim()) {
+      !hasDailyUpdate) {
       add(request, "stale-update", "warning",
         `${labelFor(request)} has no daily update`,
         `Open for ${durationLabel(hoursBetween(startedAt, nowMs))} with no maintenance remark recorded.`,

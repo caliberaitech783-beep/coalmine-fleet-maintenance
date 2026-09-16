@@ -9,6 +9,7 @@ import {PULSE_TIERS, pulseBreakdownRows, pulseElapsed, pulseTierCounts} from './
 const tierIcons = {all: Activity, critical: AlertTriangle, warning: Clock, open: Truck};
 const PERIODS = [1, 7, 14, 30];
 const DAY = 86_400_000;
+const INITIAL_VISIBLE_ROWS = 24;
 
 function RecordDate({value}) {
   return Number.isFinite(parseIstTimestamp(value))
@@ -34,17 +35,20 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
   const defaults = {region: 'all', site: '', category: '', from: '', to: today};
   const [tier, setTier] = useState('all');
   const [filters, setFilters] = useState(defaults);
+  const [filtersOpen, setFiltersOpen] = useState(() => typeof window === 'undefined' || !window.matchMedia?.('(max-width: 700px)')?.matches);
+  const [rowLimit, setRowLimit] = useState(INITIAL_VISIBLE_ROWS);
   const regions = infoPulseRegions(scope?.sites);
   const view = infoPulseFilterView(ready ? pulseBreakdownRows(breakdowns, now) : [], filters, regions);
   const rows = view.rows;
   const counts = pulseTierCounts(rows);
   const shown = tier === 'all' ? rows : rows.filter(row => row.tier === tier);
+  const visibleRows = shown.slice(0, rowLimit);
   const scopeLabel = scope?.label || 'Assigned location';
   const selected = PULSE_TIERS.find(option => option.key === tier) || PULSE_TIERS[0];
   const periodDays = filters.to === today && filters.from ? Math.round((Date.parse(filters.to) - Date.parse(filters.from)) / DAY) + 1 : 0;
   const changed = Object.keys(defaults).some(key => filters[key] !== defaults[key]);
-  const choose = (name, value) => setFilters(current => ({...current, [name]: value, ...(name === 'region' ? {site: '', category: ''} : name === 'site' ? {category: ''} : {})}));
-  const preset = days => setFilters(current => ({...current, from: infoPulseDate(new Date(now - (days - 1) * DAY).toISOString()), to: today}));
+  const choose = (name, value) => { setRowLimit(INITIAL_VISIBLE_ROWS); setFilters(current => ({...current, [name]: value, ...(name === 'region' ? {site: '', category: ''} : name === 'site' ? {category: ''} : {})})); };
+  const preset = days => { setRowLimit(INITIAL_VISIBLE_ROWS); setFilters(current => ({...current, from: infoPulseDate(new Date(now - (days - 1) * DAY).toISOString()), to: today})); };
   const untilToday = !filters.from && filters.to === today;
   const dateCaption = !filters.from && !filters.to ? 'All dates' : !filters.from ? `Until ${formatDisplayDate(filters.to)}` : filters.from === filters.to ? formatDisplayDate(filters.from) : `${formatDisplayDate(filters.from)} – ${filters.to ? formatDisplayDate(filters.to) : 'Latest'}`;
   const siteLabel = view.selection.site ? view.sites.find(site => site.key === view.selection.site)?.label || '' : '';
@@ -57,13 +61,13 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
         <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
       </div>
     </div>
-    <details className="pulse-filter-panel" open>
+    <details className="pulse-filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}>
       <summary className="pulse-filter-summary"><b>Filters</b><span>{placeCaption} · {dateCaption}</span><span className="pulse-show-filters">Show filters</span><span className="pulse-hide-filters">Hide filters</span></summary>
       <div className="pulse-filter-topline">
         {regions.length > 1 ? <div className="pulse-region-tabs" role="tablist" aria-label="Breakdowns by region">
           {view.regions.map(region => <button type="button" key={region.code} role="tab" aria-selected={view.selection.region === region.code} onClick={() => choose('region', region.code)}><span>{region.label}</span><b>{region.count}</b></button>)}
         </div> : <span className="pulse-filter-scope"><MapPin size={14} aria-hidden="true" />{regionLabel}</span>}
-        <button type="button" className="pulse-reset" disabled={!changed} onClick={() => setFilters(defaults)}><RotateCcw size={14} aria-hidden="true" />Reset selection</button>
+        <button type="button" className="pulse-reset" disabled={!changed} onClick={() => { setFilters(defaults); setRowLimit(INITIAL_VISIBLE_ROWS); }}><RotateCcw size={14} aria-hidden="true" />Reset selection</button>
       </div>
       {view.sites.length > 1 && ChipRow({name: 'site', label: 'Site', allLabel: 'All sites', options: view.sites, value: view.selection.site, choose})}
       {ChipRow({name: 'category', label: 'Equipment / Vehicle', allLabel: 'All equipment & vehicles', options: view.categories, value: view.selection.category, choose})}
@@ -72,7 +76,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
         <span className="pulse-filter-dates-label">Started</span>
         <label><span>From</span><input type="date" aria-label="Info Pulse from date" value={filters.from} max={filters.to || undefined} onChange={event => choose('from', event.target.value)} /></label>
         <label><span>To</span><input type="date" aria-label="Info Pulse to date" value={filters.to} min={filters.from || undefined} onChange={event => choose('to', event.target.value)} /></label>
-        <div className="pulse-period" role="group" aria-label="Info Pulse period"><button type="button" aria-pressed={untilToday} className={untilToday ? 'active' : ''} onClick={() => setFilters(current => ({...current, from: '', to: today}))}>Until today</button>{PERIODS.map(days => <button type="button" key={days} aria-pressed={periodDays === days} className={periodDays === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}<button type="button" aria-pressed={!filters.from && !filters.to} className={!filters.from && !filters.to ? 'active' : ''} onClick={() => setFilters(current => ({...current, from: '', to: ''}))}>All dates</button></div>
+        <div className="pulse-period" role="group" aria-label="Info Pulse period"><button type="button" aria-pressed={untilToday} className={untilToday ? 'active' : ''} onClick={() => { setRowLimit(INITIAL_VISIBLE_ROWS); setFilters(current => ({...current, from: '', to: today})); }}>Until today</button>{PERIODS.map(days => <button type="button" key={days} aria-pressed={periodDays === days} className={periodDays === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}<button type="button" aria-pressed={!filters.from && !filters.to} className={!filters.from && !filters.to ? 'active' : ''} onClick={() => { setRowLimit(INITIAL_VISIBLE_ROWS); setFilters(current => ({...current, from: '', to: ''})); }}>All dates</button></div>
         <span className="pulse-filter-caption">{dateCaption}</span>
       </div>
     </details>
@@ -80,7 +84,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
       {PULSE_TIERS.map(option => {
         const Icon = tierIcons[option.key];
         const count = ready ? counts[option.key] : null;
-        return <button type="button" key={option.key} className={`pulse-kpi ${option.key}${tier === option.key ? ' selected' : ''}`} aria-pressed={tier === option.key} aria-label={`${option.label}: ${ready ? count : 'unavailable'}`} onClick={() => setTier(option.key)}>
+        return <button type="button" key={option.key} className={`pulse-kpi ${option.key}${tier === option.key ? ' selected' : ''}`} aria-pressed={tier === option.key} aria-label={`${option.label}: ${ready ? count : 'unavailable'}`} onClick={() => { setTier(option.key); setRowLimit(INITIAL_VISIBLE_ROWS); }}>
           <span className="pulse-kpi-icon"><Icon size={20} aria-hidden="true" /></span>
           <span className="pulse-kpi-label">{option.label}</span>
           <b className="pulse-kpi-count">{ready ? count : '—'}</b>
@@ -91,8 +95,8 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
     {error && <div className="pulse-message pulse-error" role="alert">{ready ? 'Refresh failed. Showing the last loaded breakdowns.' : 'Could not load breakdowns.'} <button type="button" disabled={refreshing} onClick={onRefresh}>Retry</button></div>}
     {!ready ? <p className="pulse-message" role="status">{error ? 'Breakdowns unavailable.' : 'Loading breakdowns…'}</p> : view.invalidRange ? <p className="pulse-message pulse-error" role="alert">From date must be on or before To date.</p> : <>
       <div className="pulse-results-line"><h3 className={selected.key}>{selected.label}<span>{selected.hint}</span></h3><span>{shown.length} of {rows.length} breakdowns · {placeCaption} · {dateCaption}</span></div>
-      {shown.length ? <ol className="pulse-breakdown-list" aria-label={`${selected.label} breakdowns, longest standing first`}>
-        {shown.map((row, index) => {
+      {shown.length ? <><ol className="pulse-breakdown-list" aria-label={`${selected.label} breakdowns, longest standing first`}>
+        {visibleRows.map((row, index) => {
           const request = row.request || {};
           return <li className={`pulse-breakdown-row ${row.tier}`} key={row.key}>
             <span className="pulse-rank" aria-hidden="true">{index + 1}</span>
@@ -114,7 +118,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
             </dl>
           </li>;
         })}
-      </ol> : <p className="pulse-empty">{changed || tier !== 'all' ? 'No breakdowns match this selection.' : 'No open breakdowns. BD balance is 0.'}</p>}
+      </ol>{visibleRows.length < shown.length && <button type="button" className="pulse-load-more" onClick={() => setRowLimit(limit => limit + INITIAL_VISIBLE_ROWS)}>Show {Math.min(INITIAL_VISIBLE_ROWS, shown.length - visibleRows.length)} more breakdowns</button>}</> : <p className="pulse-empty">{changed || tier !== 'all' ? 'No breakdowns match this selection.' : 'No open breakdowns. BD balance is 0.'}</p>}
     </>}
   </div>;
 }

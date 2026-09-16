@@ -20,7 +20,7 @@ test('empty fields preserve text-only requests and oversized video is rejected b
 });
 test('attachment endpoint checks ownership and site before loading private media',async()=>{
  const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
- const route=server.slice(server.indexOf("app.get('/api/requests/:reference/complaint-media'"),server.indexOf('const arrivalDelaySql='));
+ const route=server.slice(server.indexOf("app.get('/api/requests/:reference/complaint-media'"),server.indexOf('const requestAudioFields='));
  const body=route.slice(route.indexOf('  try{'),route.lastIndexOf('});'));
  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
  const handler=new AsyncFunction('req','res','next','pool','currentDashboardAuthorization','reportScopeIncludesSite','managerReportScope','canonicalSiteName','requestProjection','requestTimelineProjection','userSiteScope',body);

@@ -85,6 +85,7 @@ test("an open job with no daily remark is flagged once it goes a day without one
   const hours = AI_FEEDER_THRESHOLDS.staleUpdateHours;
   assert.ok(typesFor([{ ref: "REQ-7", status: "Open", start: at(hours + 1) }], "Admin").includes("stale-update"));
   assert.ok(!typesFor([{ ref: "REQ-8", status: "Open", start: at(hours + 1), dailyRemarks: "waiting on parts" }], "Admin").includes("stale-update"));
+  assert.ok(!typesFor([{ ref: "REQ-9", status: "Open", start: at(hours + 1), hasDailyRemarks: true }], "Admin").includes("stale-update"));
 });
 
 test("idle vehicles and brand new requests are reported", () => {

@@ -106,11 +106,26 @@ function sendPrivateJson(req,res,namespace,payload){
   const etag=jsonEntityTag(namespace,body);
   res.set('Cache-Control','private, no-store');
   res.set('ETag',etag);
+  res.set('X-Payload-Bytes',String(Buffer.byteLength(body)));
   res.vary('Authorization');
   if(requestEtagMatches(req.get('If-None-Match'),etag))return res.status(304).end();
   return res.type('application/json').send(body);
 }
+
+function sendDataUrlMedia(res,data,{name='attachment',fallbackType='application/octet-stream'}={}){
+  const match=String(data||'').match(/^data:([^;,]+);base64,([A-Za-z0-9+/]+={0,2})$/);
+  if(!match)return res.status(404).json({error:'This media is not available.'});
+  const type=String(match[1]||fallbackType).trim().toLowerCase();
+  const safeName=String(name||'attachment').replace(/[^a-z0-9._ ()-]+/gi,'_').slice(0,180)||'attachment';
+  const body=Buffer.from(match[2],'base64');
+  res.set('Cache-Control','private, no-store');
+  res.set('Content-Disposition',`inline; filename="${safeName.replaceAll('"','')}"`);
+  res.set('X-Content-Type-Options','nosniff');
+  res.vary('Authorization');
+  return res.type(type).send(body);
+}
 const connectionString=process.env.DATABASE_URL;
+const databaseSsl=String(process.env.DATABASE_SSL||'').trim().toLowerCase()==='false'?false:{rejectUnauthorized:false};
 const scheduledJobsEnabled=String(process.env.DISABLE_SCHEDULED_JOBS||'').trim().toLowerCase()!=='true';
 const driverSyncIntervalMs=2*60*1000;
 const reportDateTime=(value)=>formatDisplayDateTime(value);
@@ -125,7 +140,7 @@ const AUDIT_DEVICE_ID_HEADER='x-bdms-device-id';
 
 const pool=new Pool({
   connectionString:connectionString||undefined,
-  ssl:{rejectUnauthorized:false},
+  ssl:databaseSsl,
   max:10,
   idleTimeoutMillis:30000,
   connectionTimeoutMillis:10000
@@ -2816,9 +2831,9 @@ async function currentDashboardAuthorization(session,client=pool){
 
 function ticketProjection(){
   return `reference,creator_login AS "creatorLogin",creator_name AS "creatorName",creator_role AS "creatorRole",site,category,priority,
-    message,message_audio AS "messageAudio",attachment_data AS "attachmentData",attachment_name AS "attachmentName",
-    attachment_type AS "attachmentType",status,resolution_message AS "resolutionMessage",resolution_audio AS "resolutionAudio",
-    resolution_attachment_data AS "resolutionAttachmentData",resolution_attachment_name AS "resolutionAttachmentName",
+    message,(message_audio <> '') AS "messageAudioAvailable",(attachment_data <> '') AS "attachmentAvailable",attachment_name AS "attachmentName",
+    attachment_type AS "attachmentType",status,resolution_message AS "resolutionMessage",(resolution_audio <> '') AS "resolutionAudioAvailable",
+    (resolution_attachment_data <> '') AS "resolutionAttachmentAvailable",resolution_attachment_name AS "resolutionAttachmentName",
     resolution_attachment_type AS "resolutionAttachmentType",resolved_by AS "resolvedBy",
     to_char(resolved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "resolvedAt",
     to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"`;
@@ -2826,6 +2841,15 @@ function ticketProjection(){
 
 function isTicketAdmin(session){return session?.role==='super'&&session?.permissions?.adminLevel!=='Manager'}
 const userManagesSite=(user,site)=>reportScopeIncludesSite(managerReportScope(user),site);
+
+async function ticketVisibleToSession(ticket,session){
+  if(session?.role==='super'&&session?.permissions?.adminLevel!=='Manager')return true;
+  if(session?.role!=='super')return String(ticket?.creatorLogin||'').trim().toLowerCase()===String(session?.login||'').trim().toLowerCase();
+  const manager=await currentUserRecord(session);
+  const creatorRoles=managerRoleSelection(session?.permissions?.managerRoles?.length
+    ?session.permissions.managerRoles:session?.permissions?.managerRole).map(managerUserRole);
+  return creatorRoles.includes(ticket?.creatorRole)&&userManagesSite(manager,ticket?.site);
+}
 
 async function sendWhatsAppNotifications(client,recipients,reference,message,workflowTemplate,{workflowType='',site='',purpose=''}={}){
   const logins=[...new Set(recipients.map((value)=>String(value||'').trim().toLowerCase()).filter(Boolean))];
@@ -3675,7 +3699,29 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
     const where=conditions.length?`WHERE ${conditions.join(' AND ')}`:'';
     const {rows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets ${where} ORDER BY created_at DESC`,values);
     const visibleRows=managerScope?rows.filter((ticket)=>reportScopeIncludesSite(managerScope,ticket.site)):rows;
-    res.json(visibleRows.map(normalizeOperationalSiteFields));
+    const payload=visibleRows.map(normalizeOperationalSiteFields);
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'tickets',payload);
+    return res.json(payload);
+  }catch(error){next(error)}
+});
+
+const ticketMediaFields={
+  'message-audio':{column:'message_audio',nameColumn:null,fallbackName:'ticket-message.webm'},
+  attachment:{column:'attachment_data',nameColumn:'attachment_name',fallbackName:'ticket-attachment'},
+  'resolution-audio':{column:'resolution_audio',nameColumn:null,fallbackName:'ticket-resolution.webm'},
+  'resolution-attachment':{column:'resolution_attachment_data',nameColumn:'resolution_attachment_name',fallbackName:'resolution-attachment'},
+};
+
+app.get('/api/tickets/:reference/media/:kind',requireSession,async(req,res,next)=>{
+  try{
+    const media=ticketMediaFields[String(req.params.kind||'')];
+    if(!media)return res.status(404).json({error:'Ticket media is not available.'});
+    const nameSelection=media.nameColumn?`,${media.nameColumn} AS name`:`,'' AS name`;
+    const {rows}=await pool.query(`SELECT creator_login AS "creatorLogin",creator_role AS "creatorRole",site,
+      ${media.column} AS data${nameSelection} FROM crm_tickets WHERE reference=$1`,[String(req.params.reference||'').trim()]);
+    const ticket=rows[0];
+    if(!ticket||!await ticketVisibleToSession(ticket,req.session))return res.status(404).json({error:'Ticket media is not available.'});
+    return sendDataUrlMedia(res,ticket.data,{name:ticket.name||media.fallbackName});
   }catch(error){next(error)}
 });
 
@@ -3856,15 +3902,7 @@ app.get('/api/notifications/:id/target',requireSession,async(req,res,next)=>{
 
     if(ticketResult.rows.length){
       const ticket=ticketResult.rows[0];
-      let visible=req.session.role==='super'&&req.session.permissions?.adminLevel!=='Manager';
-      if(req.session.role!=='super')visible=String(ticket.creatorLogin||'').trim().toLowerCase()===login;
-      else if(req.session.permissions?.adminLevel==='Manager'){
-        const manager=await currentUserRecord(req.session);
-        const creatorRoles=managerRoleSelection(req.session.permissions?.managerRoles?.length
-          ?req.session.permissions.managerRoles:req.session.permissions?.managerRole).map(managerUserRole);
-        visible=creatorRoles.includes(ticket.creatorRole)&&userManagesSite(manager,ticket.site);
-      }
-      if(!visible)return unavailable();
+      if(!await ticketVisibleToSession(ticket,req.session))return unavailable();
       return res.json({kind:'ticket',reference,record:ticket});
     }
 
@@ -3908,7 +3946,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 const requestProjection=`reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
-  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, complaint_audio AS "complaintAudio", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
+  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
   (complaint_media <> '[]'::jsonb) AS "complaintMediaAvailable",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
@@ -3919,7 +3957,7 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   to_char(ideal_requested_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealRequestedAt",
   ideal_requested_by AS "idealRequestedBy",to_char(ideal_approved_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "idealApprovedAt",ideal_approved_by AS "idealApprovedBy",
   to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
-  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", maintenance_audio AS "maintenanceAudio", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
+  closed_by AS "closedBy", maintenance_work AS "maintenanceWork", (maintenance_audio <> '') AS "maintenanceAudioAvailable", delayed_reason AS "delayedReason", to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt", verification_status AS "verificationStatus",
   to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
@@ -3929,6 +3967,15 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   (opening_meter_file <> '') AS "openingMeterFileUploaded", opening_meter_file_name AS "openingMeterFileName",
   closing_meter_reading AS "closingMeterReading", (closing_meter_file <> '') AS "closingMeterFileUploaded",
   closing_meter_file_name AS "closingMeterFileName"`;
+
+const infoPulseProjection=`reference AS ref,equipment_name AS equipment,equipment_group AS "equipmentGroup",door_number AS door,
+  registration_number AS reg,site,category,complaint,owner_name AS owner,requester_login AS "requesterLogin",
+  to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
+  to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,status,idle_reason AS "idleReason",
+  to_char(closed_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "closedAt",
+  to_char(expected_completion_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "expectedCompletionAt",
+  verification_status AS "verificationStatus",to_char(verified_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "verifiedAt",
+  meter_type AS "meterType",EXISTS(SELECT 1 FROM maintenance_daily_remarks remark WHERE remark.request_reference=maintenance_requests.reference) AS "hasDailyRemarks"`;
 
 function requestEquipmentNotificationDetails(request={}){
   return [
@@ -4037,9 +4084,9 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
     if(authorization.session.role!=='super'&&!operationalRole&&authorization.session.permissions?.readRequests!==true)
       return res.status(403).json({error:'Your assigned role is not authorized to view Info Pulse.'});
     const scope=infoPulseRequestScope(authorization.session,authorization.user);
-    const {rows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`);
+    const {rows}=await pool.query(`SELECT ${infoPulseProjection} FROM maintenance_requests ORDER BY created_at DESC`);
     const visibleRows=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
-    const payload={requests:await attachDailyRemarks(visibleRows),scope};
+    const payload={requests:visibleRows,scope};
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'info-pulse',payload);
     return res.json(payload);
   }catch(error){next(error)}
@@ -4166,6 +4213,34 @@ app.get('/api/requests/:reference/complaint-media',requireSession,async(req,res,
     const media=await pool.query('SELECT complaint_media FROM maintenance_requests WHERE reference=$1',[reference]);
     res.set('Cache-Control','no-store');
     res.json({items:media.rows[0]?.complaint_media||[]});
+  }catch(error){next(error)}
+});
+
+const requestAudioFields={
+  complaint:{column:'complaint_audio',fallbackName:'complaint-audio.webm'},
+  maintenance:{column:'maintenance_audio',fallbackName:'maintenance-audio.webm'},
+};
+
+app.get('/api/requests/:reference/audio/:kind',requireSession,async(req,res,next)=>{
+  try{
+    const audio=requestAudioFields[String(req.params.kind||'')];
+    if(!audio)return res.status(404).json({error:'Request audio is not available.'});
+    const authorization=await currentDashboardAuthorization(req.session);
+    if(!authorization)return res.status(401).json({error:'This user account no longer exists. Please sign in again.'});
+    const {session,user}=authorization;
+    const operational=session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(session.assignedRole);
+    if(session.role!=='super'&&!operational&&session.permissions?.readRequests!==true)return res.status(403).json({error:'Your assigned role cannot play request audio.'});
+    const reference=String(req.params.reference||'').trim();
+    const {rows}=await pool.query(`SELECT site,requester_login AS "requesterLogin",${audio.column} AS data FROM maintenance_requests WHERE reference=$1`,[reference]);
+    const request=rows[0];
+    if(!request)return res.status(404).json({error:'Request audio is not available.'});
+    if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(404).json({error:'Request audio is not available.'});
+    if(session.role==='normal'){
+      const assignedScope=userSiteScope(user);
+      if(!reportScopeIncludesSite(assignedScope,request.site))return res.status(404).json({error:'Request audio is not available.'});
+      if(session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==String(user.login||req.session.login||'').trim().toLowerCase())return res.status(404).json({error:'Request audio is not available.'});
+    }
+    return sendDataUrlMedia(res,request.data,{name:audio.fallbackName,fallbackType:'audio/webm'});
   }catch(error){next(error)}
 });
 
