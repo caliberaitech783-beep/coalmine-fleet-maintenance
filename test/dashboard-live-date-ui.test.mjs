@@ -805,7 +805,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     assert.equal(button(tree, "Reset dates").props.disabled, false);
     assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 4 in, 2 out, 2 balance/);
     const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
-    assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [4, 2, 2]);
+    assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [4, 2, 1, 1]);
     for (const card of cards) {
       activate(card); tree = view.render(rows);
       assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
@@ -865,7 +865,8 @@ test("throughput region and dependent site filters scope cards, types, tables, e
       change("Site-wise BD from date", day);
       const totals = movement.breakdownMovementForRange(selectedRows, day, day);
       const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
-      assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [totals.open + totals.incoming, totals.outgoing, totals.balance]);
+      const idle = selectedRows.filter(row => movement.matchesBreakdownMovement(row, day, day, "idle")).length;
+      assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [totals.open + totals.incoming, totals.outgoing, totals.balance - idle, idle]);
       for (const card of cards) {
         activate(card); tree = view.render(rows);
         assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));

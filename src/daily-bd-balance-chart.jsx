@@ -25,11 +25,11 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
   const activeSite = sites.includes(site) ? site : '';
   const from = range.from || shiftBdDate(today, 1 - range.days), to = range.to || today;
   const scopedRecords = useMemo(() => activeSite ? records.filter(record => recordBelongsToSite(record, activeSite)) : records, [records, activeSite]);
-  const ledger = useMemo(() => buildDailyBdBalance(scopedRecords, from, to), [scopedRecords, from, to]);
+  const ledger = useMemo(() => buildDailyBdBalance(scopedRecords, from, to, true), [scopedRecords, from, to]);
   // Only daily In/Out are plotted. Opening balances must not flatten their bars.
   const peak = Math.max(0, ...ledger.days.flatMap(day => [day.incoming, day.outgoing]));
   const maximum = Math.max(1, peak <= 20 ? peak : Math.ceil(peak / 5) * 5);
-  const inspect = (metric, start = from, end = to) => onInspect?.(metric, start, end, activeSite);
+  const inspect = (metric, start = from, end = to) => onInspect?.(metric === 'balance' ? 'active-balance' : metric, start, end, activeSite);
   const preset = days => {setRange({days, from: '', to: ''}); setRangeError('');};
   const changeDate = (bound, value) => {
     if (!value) {preset(1); return;}
@@ -41,7 +41,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
   const unavailable = !ready || Boolean(error);
   return <article className="mine-panel daily-bd-balance" aria-label="Daily BD balance chart">
     <header className="bd-balance-header">
-      <div><span className="mine-eyebrow">Daily breakdown movement</span><h2>Daily BD balance</h2><p>Opening + BD In − BD Out = Closing <ArrowRight aria-hidden="true"/> Next day’s opening</p></div>
+      <div><span className="mine-eyebrow">Daily breakdown movement</span><h2>Daily BD balance</h2><p>Opening + BD In − BD Out = Closing + Idle <ArrowRight aria-hidden="true"/> Idle shown separately</p></div>
       <div className="bd-balance-controls">
         <label><span><MapPin aria-hidden="true"/> Site</span><select aria-label="Daily BD balance site" value={activeSite} onChange={event => setSite(event.target.value)}><option value="">All sites</option>{sites.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
         <label><span>From</span><input aria-label="Daily BD balance from date" type="date" value={from} max={today} onChange={event => changeDate('from', event.target.value)}/></label>
@@ -50,9 +50,9 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
       </div>
     </header>
     {unavailable ? <div className="bd-balance-empty" role={error ? 'alert' : 'status'}><b>{error ? 'BD movement is unavailable' : 'Loading BD movement…'}</b>{error && <><span>{error}</span><button type="button" onClick={onRefresh}><RotateCcw/> Retry</button></>}</div> : <>
-      <div className="bd-balance-context"><span>{activeSite || scopeLabel} · {formatDisplayDate(from)} to {formatDisplayDate(to)}{stale ? ' · Last checked data' : to === today ? ' · Today so far' : ''}</span><span className="bd-balance-context-change">Net change <b>{signedCount(ledger.totals.delta)} open</b><BalanceChange row={ledger.totals}/><span className="bd-balance-help" tabIndex={0} title="Opening includes all earlier requests still open at the start of the selected period. Each day's closing becomes the next day's opening. Change = (closing − opening) ÷ opening × 100. Red means more open BD; green means fewer. Each request is counted once; BD Out uses its actual maintenance closing date. Today's figures are live, not final." aria-label="How BD balance and percentage change are calculated"><Info aria-hidden="true"/></span></span></div>
+      <div className="bd-balance-context"><span>{activeSite || scopeLabel} · {formatDisplayDate(from)} to {formatDisplayDate(to)}{stale ? ' · Last checked data' : to === today ? ' · Today so far' : ''}</span><span className="bd-balance-context-change">Net change <b>{signedCount(ledger.totals.delta)} open</b><BalanceChange row={ledger.totals}/><span className="bd-balance-help" tabIndex={0} title="Opening includes all earlier requests still open at the start of the selected period. Closing balance excludes current Idle/Ideal cases, which are shown separately. Closing plus idle carries into the next day's opening. Change = (closing − opening) ÷ opening × 100. Red means more open BD; green means fewer. Each request is counted once; BD Out uses its actual maintenance closing date. Today's figures are live, not final." aria-label="How BD balance and percentage change are calculated"><Info aria-hidden="true"/></span></span></div>
       {rangeError && <p className="bd-balance-range-error" role="alert">{rangeError}</p>}
-      <div className="bd-balance-summary" aria-label="BD movement totals for selected period">{DAILY_BD_METRICS.map(({key,label}) => <button type="button" className={key} key={key} onClick={() => inspect(key)} aria-label={`${label}: ${ledger.totals[key]} requests in selected period`}><span><i/>{label}</span><strong>{ledger.totals[key].toLocaleString()}</strong></button>)}</div>
+      <div className="bd-balance-summary" aria-label="BD movement totals for selected period">{[...DAILY_BD_METRICS, {key: 'idle', label: 'Idle Vehicles'}].map(({key,label}) => <button type="button" className={key} key={key} onClick={() => inspect(key)} aria-label={`${label}: ${ledger.totals[key]} requests in selected period`}><span><i/>{label}</span><strong>{ledger.totals[key].toLocaleString()}</strong></button>)}</div>
       <div className="bd-balance-scroll" tabIndex={0} role="region" aria-label="Daily BD In and BD Out bars with opening and closing balances; scroll for more dates">
         <div className="bd-balance-days" style={{gridTemplateColumns: `repeat(${ledger.days.length}, minmax(154px, 1fr))`}}>
           {ledger.days.map(day => <section className={`bd-balance-day${day.date === today ? ' today' : ''}`} key={day.date} aria-label={`BD movement ${formatDisplayDate(day.date)}`}>
@@ -63,7 +63,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
               <div className="bd-balance-bars">{MOVEMENT_BARS.map(({key,label}) => <button type="button" key={key} className={`bd-balance-bar-button ${key}`} aria-label={`${formatDisplayDate(day.date)}: ${label}, ${day[key]} requests`} title={`${label}: ${day[key]} · ${formatDisplayDate(day.date)} · View requests`} onClick={() => inspect(key, day.date, day.date)}><span className="bd-balance-bar" style={{height: `${day[key] / maximum * 100}%`}}><b>{day[key].toLocaleString()}</b></span></button>)}</div>
             </div>
             <div className="bd-balance-bar-labels" aria-hidden="true"><span>BD In</span><span>BD Out</span></div>
-            <button type="button" className={`bd-balance-closing ${day.direction}`} aria-label={`${formatDisplayDate(day.date)}: Closing balance, ${day.balance} requests`} title={`${day.open} opening + ${day.incoming} in − ${day.outgoing} out = ${day.balance}. ${day.date === today ? 'Today so far.' : 'Carries into the next day.'} View requests`} onClick={() => inspect('balance', day.date, day.date)}><span><b>{day.date === today ? 'Balance now' : 'Closing BD'}</b><small>Net {signedCount(day.delta)}</small></span><strong>{day.balance.toLocaleString()}</strong></button>
+            <button type="button" className={`bd-balance-closing ${day.direction}`} aria-label={`${formatDisplayDate(day.date)}: Closing balance, ${day.balance} requests`} title={`${day.open} opening + ${day.incoming} in − ${day.outgoing} out = ${day.balance} open + ${day.idle} idle. ${day.date === today ? 'Today so far.' : 'Open and idle are shown separately.'} View requests`} onClick={() => inspect('balance', day.date, day.date)}><span><b>{day.date === today ? 'Balance now' : 'Closing BD'}</b><small>Net {signedCount(day.delta)}</small></span><strong>{day.balance.toLocaleString()}</strong></button>
             <footer className="bd-balance-day-date"><b>{formatDisplayDate(day.date)}</b><small>{day.date === today ? (stale ? 'Today · last checked' : 'Today · live') : new Date(`${day.date}T12:00:00Z`).toLocaleDateString('en-GB', {weekday: 'short', timeZone: 'Asia/Kolkata'})}</small></footer>
           </section>)}
         </div>

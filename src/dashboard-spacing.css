@@ -1,4 +1,11 @@
 /* Dashboard-only density: retain readable text and all existing data/actions. */
+.mine-dashboard .bd-balance-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mine-dashboard .mine-breakdown-movement-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.mine-dashboard .bd-balance-summary .idle { --bd-color: #d18c22; }
+@media (max-width: 700px) {
+  .mine-dashboard .bd-balance-summary { grid-template-columns: repeat(5, minmax(160px, 1fr)); overflow-x: auto; }
+  .mine-dashboard .mine-breakdown-movement-kpis { grid-template-columns: repeat(4, minmax(180px, 1fr)); overflow-x: auto; }
+}
 .mine-dashboard .mine-dashboard-head { padding: 10px 14px; gap: 10px; margin-bottom: 6px; }
 .mine-dashboard .mine-dashboard-head > div:first-child { flex: 0 1 300px; gap: 10px; }
 .mine-dashboard .mine-dashboard-head h1 { font-size: clamp(24px, 1.6vw, 30px) !important; margin: 3px 0; }

@@ -74,7 +74,7 @@ test('each day plots only In and Out; opening and closing counts remain clickabl
     assert.ok(find(day, node => node.props.className?.startsWith('bd-balance-closing ')).length);
   }
   label(tree, '10-09-2026: Closing balance, 2 requests').props.onClick();
-  assert.deepEqual(view.calls.pop(), ['balance', '2026-09-10', '2026-09-10', '']);
+  assert.deepEqual(view.calls.pop(), ['active-balance', '2026-09-10', '2026-09-10', '']);
   label(tree, '11-09-2026: Opening BD, 2 requests').props.onClick();
   assert.deepEqual(view.calls.pop(), ['open', '2026-09-11', '2026-09-11', '']);
   assert.match(text(label(tree, '11-09-2026: Closing balance, 2 requests')), /Balance now/);

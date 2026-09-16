@@ -46,6 +46,12 @@ export function bdBalanceChange(opening, closing) {
 }
 
 export function dailyBdRecordsForMetric(records, from, to, metric) {
+  if (metric === 'active-balance' || metric === 'idle') {
+    return dailyBdRecordsForMetric(records, from, to, 'balance').filter(record => {
+      const idle = ['idle', 'ideal'].includes(String(record.status || '').trim().toLowerCase());
+      return metric === 'idle' ? idle : !idle;
+    });
+  }
   const {entries, excluded} = prepareDailyBdRequests(records);
   if (metric === 'undated') return excluded;
   if (!recordedBreakdownRangeLength(from, to)) return [];
@@ -58,7 +64,7 @@ export function dailyBdRecordsForMetric(records, from, to, metric) {
   }).map(({record}) => record);
 }
 
-export function buildDailyBdBalance(records, from, to) {
+export function buildDailyBdBalance(records, from, to, splitIdle = false) {
   const count = recordedBreakdownRangeLength(from, to);
   const {entries, excluded} = prepareDailyBdRequests(records);
   if (!count) return {days: [], totals: null, excluded};
@@ -79,5 +85,12 @@ export function buildDailyBdBalance(records, from, to) {
     totals.balance = opening = balance;
     return row;
   });
-  return {days, totals: {...totals, ...bdBalanceChange(totals.open, totals.balance)}, excluded};
+  const result = {days, totals: {...totals, ...bdBalanceChange(totals.open, totals.balance)}, excluded};
+  if (!splitIdle) return result;
+  const separate = (row, start, end) => {
+    const idle = dailyBdRecordsForMetric(records, start, end, 'idle').length;
+    const balance = row.balance - idle;
+    return {...row, balance, idle, ...bdBalanceChange(row.open, balance)};
+  };
+  return {...result, days: days.map(day => separate(day, day.date, day.date)), totals: separate(result.totals, from, to)};
 }

@@ -28,6 +28,10 @@ export function breakdownClosedDate(record = {}) {
 // Empty bounds mean all time. Share the predicate with linked request lists so
 // every metric opens exactly the requests it counts, including legacy history.
 export function matchesBreakdownMovement(record, start = "", end = "", metric = "all") {
+  if (metric === "active-balance" || metric === "idle") {
+    const idle = ["idle", "ideal"].includes(String(record.status || "").trim().toLowerCase());
+    return matchesBreakdownMovement(record, start, end, "balance") && (metric === "idle" ? idle : !idle);
+  }
   if (start && end && start > end) return false;
   const opened = breakdownOpenedDate(record), closed = breakdownClosedDate(record);
   if (!start && !end) {
