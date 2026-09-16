@@ -1415,7 +1415,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   });
   // Match the linked request list, including authorized historical/unassigned sites.
   const breakdownMovementTotals = breakdownMovementForRange(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
-  const breakdownTypeSummary = breakdownTypeShare(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey);
+  const breakdownTypeSummary = breakdownTypeShare(movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance"));
   const availabilityCountBySite = throughputSites.map((site) => ({
     site,
     ...liveEquipmentMetrics(availabilityEquipment.filter((record) => recordBelongsToSite(record, site)), availabilityRequests),
@@ -1431,7 +1431,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const breakdownDetailStartKey = validBreakdownDetailRange ? breakdownDetailFrom : localDateKey(breakdownDetailStartDate);
   const breakdownDetailRows = dailyBreakdownMovement(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
   const breakdownDetailTotals = breakdownMovementForRange(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
-  const breakdownDetailTypeSummary = breakdownTypeShare(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey);
+  const breakdownDetailTypeSummary = breakdownTypeShare(movementRequestRows(selectedBreakdownSiteRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance"));
   const selectedBreakdownSiteRoad = roadAvailabilityBySiteName.get(breakdownDetailSite) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
   const [sortedBreakdownDetailRows, breakdownDaySort, changeBreakdownDaySort] = useSortableRows(breakdownDetailRows, "date", (day, key) => key === "percentage" ? (selectedBreakdownSiteRoad.total ? day.balance / selectedBreakdownSiteRoad.total * 100 : 0) : day[key]);
   const roadStatusTotal = availabilityKpis.total;
@@ -1657,7 +1657,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     // Site is already known from the panel that opened this, so these keys carry it.
     if (key.startsWith("site-repair:")) {
       const [site, type] = key.slice(12).split("|");
-      return requestAssetRows(movementRequestRows(throughputRequests, breakdownDetailStartKey, breakdownDetailEndKey, "incoming").filter((record) => recordBelongsToSite(record, site)
+      return requestAssetRows(movementRequestRows(throughputRequests, breakdownDetailStartKey, breakdownDetailEndKey, "active-balance").filter((record) => recordBelongsToSite(record, site)
         && normalizedBreakdownType(record.category || record.repairType || record.type) === type));
     }
     if (key.startsWith("site-status:")) {
@@ -1742,7 +1742,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     { section: "Breakdown movement", metric: "BD In", value: breakdownMovementTotals.incoming, scope: dashboardPeriodLabel, details: throughputScopeLabel },
     { section: "Breakdown movement", metric: "BD Out", value: breakdownMovementTotals.outgoing, scope: dashboardPeriodLabel, details: throughputScopeLabel },
     { section: "Breakdown movement", metric: "BD Balance", value: breakdownMovementTotals.balance, scope: dashboardPeriodLabel, details: throughputScopeLabel },
-    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown type", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of BD In` })),
+    ...breakdownTypeSummary.map((type) => ({ section: "Breakdown type", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of open BD balance` })),
     ...breakdownSiteSummary.map((site) => {
       const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
       return { section: "Site summary", metric: site.site, value: site.balance, scope: dashboardPeriodLabel, details: `Open ${site.open}; In ${site.incoming}; Out ${site.outgoing}; Availability ${road.availability}%; On road ${road.onRoad}; Off road ${road.offRoad}; Idle ${road.idle}; Total ${road.total}` };
@@ -1845,9 +1845,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-breakdown-movement-kpis">
 {[{ label: "BD In (opening + new)", value: breakdownMovementTotals.open + breakdownMovementTotals.incoming, className: "all" }, { label: "BD Out", value: breakdownMovementTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, className: "active-balance" }, { label: "Idle Vehicles", value: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, className: "idle" }].map((item) => <div {...listAction(movementKey(item.className), `${item.label} requests`)} className={item.className === "all" ? "incoming" : item.className === "active-balance" ? "balance" : item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{item.className === "all" && breakdownSummaryIsToday && !breakdownSummaryManual && <span aria-label="BD In opening and new counts">Opening: {breakdownMovementTotals.open.toLocaleString()} + New: {breakdownMovementTotals.incoming.toLocaleString()} · </span>}{breakdownSummaryPeriodLabel}</small></div>)}
             </div>
-            <section {...cardAction(movementKey("incoming"), "All BD In types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of BD In">
-              <header><div><b>BD Type Mix</b><small>New requests · all six maintenance types</small></div><span>Percentage share of new BD In</span></header>
-              <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("incoming", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
+            <section {...cardAction(movementKey("active-balance"), "All open BD balance types")} className="mine-breakdown-type-mix" aria-label="Breakdown type percentage of open BD balance">
+              <header><div><b>BD Type Mix</b><small>Open BD balance · all six maintenance types</small></div><span>Percentage share of open BD balance</span></header>
+              <div>{breakdownTypeSummary.map((type) => <article {...listAction(movementKey("active-balance", "", type.label), `${type.label} requests`)} key={type.label}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></article>)}</div>
             </section>
             <div className="mine-breakdown-site-table" role="table" aria-label="Site-wise breakdown opening, inward, outward and balance">
               <div className="dashboard-breakdown-table-period" role="caption" aria-label="Site-wise BD table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityStatusLabel}</small></div>
@@ -1963,8 +1963,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         <div className="dashboard-breakdown-detail-kpis">
           {[{ label: "BD Open", value: breakdownDetailTotals.open, className: "open" }, { label: "BD In", value: breakdownDetailTotals.incoming, className: "incoming" }, { label: "BD Out", value: breakdownDetailTotals.outgoing, className: "outgoing" }, { label: "BD Balance", value: breakdownDetailTotals.balance, className: "balance" }].map((item) => <div {...listAction(movementKey(item.className, breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${item.label} requests at ${breakdownDetailSite}`)} className={item.className} key={item.label}><span>{item.label}</span><strong>{item.value.toLocaleString()}</strong><small>{formatDisplayDateRange(breakdownDetailStartKey, breakdownDetailEndKey)}</small></div>)}
         </div>
-        <section {...cardAction(movementKey("incoming", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} BD In types`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of BD In`}>
-          <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of BD In</span></header>
+        <section {...cardAction(movementKey("active-balance", breakdownDetailSite, "", breakdownDetailStartKey, breakdownDetailEndKey), `${breakdownDetailSite} open BD balance types`)} className="mine-breakdown-type-mix detail" aria-label={`${breakdownDetailSite} breakdown type percentage of open BD balance`}>
+          <header><div><b>BD Type Mix</b><small>{breakdownDetailSite}</small></div><span>Percentage share of open BD balance</span></header>
           <div>{breakdownDetailTypeSummary.map((type) => <button type="button" key={type.label} onClick={() => openSiteScopedDrilldown(`site-repair:${breakdownDetailSite}|${type.label}`)} aria-label={`${type.label}: ${type.count} requests. Drill into equipment and vehicles.`}><span><b>{type.label}</b><strong>{type.percentage}%</strong></span><i aria-hidden="true"><b style={{ width: `${type.percentage}%` }} /></i><small>{type.count} request{type.count === 1 ? "" : "s"}</small></button>)}</div>
         </section>
         <section {...cardAction(`site-status:${breakdownDetailSite}|all`, `${breakdownDetailSite} fleet`)} className="mine-breakdown-type-mix detail dashboard-breakdown-road-mix" aria-label={`${breakdownDetailSite} road status`}>
