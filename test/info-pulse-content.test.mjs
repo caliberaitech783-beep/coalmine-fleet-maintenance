@@ -46,18 +46,23 @@ const REQUESTS = [
   {ref: 'REQ-VERIFIED', door: 'S6', site: 'Sasti OB', status: 'Open', verifiedAt: '2026-09-15 09:00', start: '2026-09-08 08:00', complaint: 'Leaf spring broken'},
 ];
 function harness() {
-  const slots = [];
+  const slots = [], effects = [], timers = [];
   let cursor = 0;
   const bindings = {
     React, ...data, ...dates, ...timing, ...reasons, requestStatusLabel, parseIstTimestamp,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === 'function' ? initial() : initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
+    useEffect(callback) {const slot = cursor++; if (!(slot in slots)) {slots[slot] = true; effects.push(callback);}},
+    setTimeout(callback, delay) {timers.push({callback, delay}); return timers.length;},
+    clearTimeout() {},
     ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle', 'Activity', 'Clock', 'RotateCcw'].map(name => [name, () => null])),
   };
   const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
-  return {render(overrides = {}) {
+  return {effects, timers, render(overrides = {}) {
     cursor = 0;
     const requests = overrides.requests || REQUESTS;
-    return Component({breakdowns: data.buildInfoPulseBreakdowns(requests), scope: {label: 'All regions', sites: null}, now: NOW, updatedAt: NOW, ready: true, error: '', refreshing: false, onRefresh() {}, ...overrides});
+    const tree = Component({breakdowns: data.buildInfoPulseBreakdowns(requests), scope: {label: 'All regions', sites: null}, now: NOW, updatedAt: NOW, ready: true, error: '', refreshing: false, onRefresh() {}, ...overrides});
+    effects.splice(0).forEach(callback => callback());
+    return tree;
   }};
 }
 const render = overrides => harness().render(overrides);
@@ -372,4 +377,25 @@ test('each row shows its recorded delay reason under the breakdown reason, and n
   assert.deepEqual(reasons.pulseDelayReason({delayedReason: 'Waiting for MIS closure'}), {label: 'Closure delay reason', value: 'Waiting for MIS closure', at: ''});
   assert.deepEqual(reasons.pulseDelayReason({dailyRemarks: 'legacy remark text', delayedReason: ''}), null);
   assert.deepEqual(reasons.pulseDelayReason({dailyRemarks: [{remark: 'x', delayReason: '  '}]}), null);
+});
+
+test('the filter panel opens collapsed with a purple blinking cue that clears after three seconds', () => {
+  const app = harness();
+  let tree = app.render();
+  const panel = () => descendants(tree, node => node.type === 'details')[0];
+  assert.equal(panel().props.open, false, 'collapsed by default on every screen size');
+  assert.equal(panel().props.className, 'pulse-filter-panel pulse-filter-hint');
+  assert.equal(text(descendants(tree, node => node.props.className === 'pulse-filter-cue')[0]), 'Customise yourself');
+  assert.deepEqual(app.timers.map(timer => timer.delay), [3000]);
+  app.timers[0].callback();
+  tree = app.render();
+  assert.equal(panel().props.className, 'pulse-filter-panel');
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-filter-cue').length, 0);
+  assert.equal(app.timers.length, 1, 'the cue timer is armed once, not on every render');
+  panel().props.onToggle({currentTarget: {open: true}});
+  tree = app.render();
+  assert.equal(panel().props.open, true, 'the user can still expand it');
+  const css = readFileSync(new URL('../src/info-pulse-content.css', import.meta.url), 'utf8');
+  assert.match(css, /\.pulse-filter-panel\.pulse-filter-hint \{ border: 2px solid var\(--record-purple\); animation: pulse-filter-blink/);
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.pulse-filter-panel\.pulse-filter-hint, \.pulse-filter-cue \{ animation: none; \} \}/);
 });

@@ -35,6 +35,12 @@
 .pulse-filter-summary > span:first-of-type { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; color: #647892; }
 .pulse-show-filters, .pulse-hide-filters { flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--record-purple); }
 .pulse-filter-panel:not([open]) .pulse-hide-filters, .pulse-filter-panel[open] .pulse-show-filters { display: none; }
+/* First-open cue: the collapsed panel blinks a purple border for three seconds. */
+.pulse-filter-panel.pulse-filter-hint { border: 2px solid var(--record-purple); animation: pulse-filter-blink .75s ease-in-out infinite; }
+.pulse-filter-cue { flex-shrink: 0; padding: 3px 10px; border-radius: 999px; background: var(--record-purple); color: #fff; font-size: 12px; font-style: normal; font-weight: 800; animation: pulse-filter-cue .75s ease-in-out infinite; }
+@keyframes pulse-filter-blink { 0%, 100% { border-color: var(--record-purple); box-shadow: 0 0 0 0 #522e9059; } 50% { border-color: #c9b3ef; box-shadow: 0 0 0 7px #522e9000; } }
+@keyframes pulse-filter-cue { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .pulse-filter-panel.pulse-filter-hint, .pulse-filter-cue { animation: none; } }
 .pulse-filter-topline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
 .pulse-region-tabs { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 4px; padding: 4px; border: 1px solid #522e901a; border-radius: 11px; background: #522e9008; }
 .pulse-region-tabs button { display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 132px; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 8px; background: transparent; color: #142943; font: 800 13px Manrope, sans-serif; cursor: pointer; }

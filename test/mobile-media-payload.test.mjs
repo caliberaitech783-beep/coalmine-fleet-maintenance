@@ -54,5 +54,5 @@ test("phone overlays and Info Pulse keep bounded work on screen", () => {
   assert.match(styles, /\.overlay\.notification-entry-overlay\{z-index:21000\}/);
   assert.match(pulse, /const INITIAL_VISIBLE_ROWS = 24/);
   assert.match(pulse, /const visibleRows = shown\.slice\(0, rowLimit\)/);
-  assert.match(pulse, /window\.matchMedia\?\.\('\(max-width: 700px\)'\)/);
+  assert.match(pulse, /const \[filtersOpen, setFiltersOpen\] = useState\(false\)/);
 });

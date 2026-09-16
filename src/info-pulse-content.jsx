@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {RefreshCw, MapPin, Truck, AlertTriangle, Activity, Clock, RotateCcw} from 'lucide-react';
 import {infoPulseDate, infoPulseFilterView, infoPulseRegions} from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
@@ -36,7 +36,13 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
   const defaults = {region: 'all', site: '', category: '', from: '', to: today};
   const [tier, setTier] = useState('all');
   const [filters, setFilters] = useState(defaults);
-  const [filtersOpen, setFiltersOpen] = useState(() => typeof window === 'undefined' || !window.matchMedia?.('(max-width: 700px)')?.matches);
+  // The filter panel opens collapsed on every screen; its border blinks purple with a cue for three seconds.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [cue, setCue] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setCue(false), 3000);
+    return () => clearTimeout(timer);
+  }, []);
   const [rowLimit, setRowLimit] = useState(INITIAL_VISIBLE_ROWS);
   const regions = infoPulseRegions(scope?.sites);
   const view = infoPulseFilterView(ready ? pulseBreakdownRows(breakdowns, now) : [], filters, regions);
@@ -62,8 +68,8 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
         <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
       </div>
     </div>
-    <details className="pulse-filter-panel" open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}>
-      <summary className="pulse-filter-summary"><b>Filters</b><span>{placeCaption} · {dateCaption}</span><span className="pulse-show-filters">Show filters</span><span className="pulse-hide-filters">Hide filters</span></summary>
+    <details className={`pulse-filter-panel${cue ? ' pulse-filter-hint' : ''}`} open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}>
+      <summary className="pulse-filter-summary"><b>Filters</b><span>{placeCaption} · {dateCaption}</span>{cue && <em className="pulse-filter-cue" role="status">Customise yourself</em>}<span className="pulse-show-filters">Show filters</span><span className="pulse-hide-filters">Hide filters</span></summary>
       <div className="pulse-filter-topline">
         {regions.length > 1 ? <div className="pulse-region-tabs" role="tablist" aria-label="Breakdowns by region">
           {view.regions.map(region => <button type="button" key={region.code} role="tab" aria-selected={view.selection.region === region.code} onClick={() => choose('region', region.code)}><span>{region.label}</span><b>{region.count}</b></button>)}
