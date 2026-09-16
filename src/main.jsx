@@ -8634,7 +8634,6 @@ function TicketPage({ session }) {
 }
 
 function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
-  const [pulseHeaderTarget, setPulseHeaderTarget] = useState(null);
   const panelRef = useRef(null);
   const [remainingSeconds, setRemainingSeconds] = useState(() => Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
   const closeRef = useRef(onClose);
@@ -8670,13 +8669,13 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
   return createPortal(<div className="ai-feeder-overlay pulse-overlay">
     <div className="ai-feeder-panel pulse-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
-        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><div className="pulse-heading-summary"><h2 id="ai-feeder-title">Open breakdowns</h2><div ref={setPulseHeaderTarget} className="pulse-heading-total" /></div></div>
+        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Open breakdowns</h2></div>
         <div className="ai-feeder-actions">
           {closeAvailableAt > 0 && <span className="ai-feeder-countdown" role="timer" aria-live="off" aria-label={remainingSeconds > 0 ? "Time until Info Pulse can be closed" : "Info Pulse can now be closed"}><small>{remainingSeconds > 0 ? "Close available in" : "You can close"}</small><b>{String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}</b></span>}
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
-      <InfoPulseContent headerTarget={pulseHeaderTarget} breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
+      <InfoPulseContent breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
     </div>
   </div>, document.body);
 }
