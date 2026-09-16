@@ -67,7 +67,7 @@ test("parent-filtered rows update live without a hidden hierarchy or a second gr
   let tree = render();
   assert.deepEqual(browserJobs(tree), ["JOB-A", "JOB-B"]);
   const html = renderToStaticMarkup(tree);
-  assert.match(html, /<h4>All regions requests<\/h4>/);
+  assert.doesNotMatch(html, /<h4>All regions requests<\/h4>/);
   assert.doesNotMatch(html, /role="tablist"|data-level=|aria-labelledby=|<details/);
   assert.match(html, /grid-template-rows:minmax\(0, 1fr\)/);
   assert.equal(React.Children.toArray(tree.props.children).length, 1);
@@ -89,7 +89,7 @@ test("parent-filtered rows update live without a hidden hierarchy or a second gr
   tree = render();
   assert.equal(tree.props.style, undefined);
   assert.match(renderToStaticMarkup(tree), /<details/);
-  assert.match(renderToStaticMarkup(tree), /<h4>NCL requests<\/h4>/);
+  assert.doesNotMatch(renderToStaticMarkup(tree), /<h4>NCL requests<\/h4>/);
   assert.deepEqual(browserJobs(tree), ["JOB-C"], "default private hierarchy still honors initial selection");
 });
 
@@ -109,7 +109,8 @@ test("disabling Started filtering ignores an already-applied range and forwards 
   assert.equal(table.props.disableDateColumnFilter, true);
   assert.equal(table.props.showRowNumbers, true);
   assert.deepEqual(browserJobs(tree), ["JOB-A", "JOB-B", "JOB-C"]);
-  assert.match(renderToStaticMarkup(tree), /3 of 3 records/);
+  assert.doesNotMatch(renderToStaticMarkup(tree), /3 of 3 records/);
+  assert.equal(table.props.toolbarPortal, true);
 });
 
 const Menu = () => null, FilterDialog = () => null, ColumnsDialog = () => null, SortDialog = () => null, ExportMenu = () => null;
@@ -215,7 +216,8 @@ test("the real browser and shared table render OEM controls and numbered exports
   const Shared = load("shared-actions-table", { RecordDateRange }), Browser = load("dashboard-record-browser");
   const exports = [];
   const CaptureExport = props => { exports.push(props); return null; };
-  const Wrapper = props => h(Shared, { ...sharedProps(), ...props, ExportMenu: CaptureExport });
+  // Static rendering has no DOM portal target; render the toolbar inline for this integration test.
+  const Wrapper = props => h(Shared, { ...sharedProps(), ...props, toolbarPortal: false, ExportMenu: CaptureExport });
   const html = renderToStaticMarkup(h(Browser, { ...browserProps(), rows: records.filter(row => row.category === "Vehicle"), ActionsTable: Wrapper, title: "OEM", hideHierarchyFilters: true, showDateFilter: false, showRowNumbers: true }));
   assert.doesNotMatch(html, /type="date"|role="tablist"|data-level="site"/);
   assert.match(html, /<th class="table-serial-header" scope="col">Sr\. No\.<\/th>/);

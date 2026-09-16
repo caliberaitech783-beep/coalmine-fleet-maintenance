@@ -1,4 +1,5 @@
 .shared-table-actions-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; padding: 10px 12px; position: sticky; left: 0; width: 100%; box-sizing: border-box; background: var(--mine-panel, #fff); border-bottom: 1px solid #dce4ef; }
+.shared-table-record-count { display: inline-flex; align-items: center; padding: 7px 10px; border-radius: 7px; background: var(--brand-purple, #522e90); color: #fff; font-weight: 700; white-space: nowrap; }
 .record-date-range { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; max-width: 100%; min-width: 0; }
 .record-date-range-basis { font-size: 0.85rem; font-weight: 600; color: var(--mine-muted, #61738b); }
 .record-date-range > label { display: inline-flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid #dce4ef; border-radius: 8px; background: var(--mine-panel, #fff); color: var(--mine-text, #21354c); margin: 0; }

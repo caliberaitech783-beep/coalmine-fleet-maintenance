@@ -59,7 +59,8 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     const exported = tableExportModel(dataRows, columns, columns.map(column => column.key));
     assert.equal(exported.rows.length, 1, title);
     assert.equal(table.printTitle, table.exportTitle, title);
-    assert.match(html, /1 of 1 records/);
+    assert.doesNotMatch(html, /1 of 1 records/); // The shared toolbar owns the only count.
+    assert.equal(table.toolbarPortal, true);
     assert.equal(descendants(dataRows[0], node => node.type === "td").length, 13 + expected.length, title);
     for (const column of timingColumns.filter(label => !expected.includes(label))) assert.ok(!html.includes(`<th>${column}</th>`), `${title}: ${column}`);
     if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-2026 11:00:00 AM", title);
@@ -95,7 +96,9 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
     if (label !== "WCL") assert.equal(closing.value(exported.rows.at(-1)), "Not recorded");
     // Render the real children as well, including all FilterTabRow controls.
     const html = renderToStaticMarkup(tree);
-    assert.ok(html.includes(`${count} of ${count} records`));
+    assert.ok(!html.includes(`${count} of ${count} records`));
+    assert.equal(table.props.toolbarPortal, true);
+    assert.equal(descendants(tree, node => node.props.className === "dashboard-record-toolbar").length, 1);
     assert.equal((html.match(/<b>JOB-/g) || []).length, count);
   };
   let tree = render(); verify(tree, 475, "All regions");
@@ -112,10 +115,10 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
   tree = render();
   let datedTable = descendants(tree, (node) => node.type === props.ActionsTable)[0];
   assert.equal(descendants(datedTable, node => node.type === "tr").length - 1, 473);
-  assert.match(renderToStaticMarkup(tree), /473 of 473 records/);
+  assert.doesNotMatch(renderToStaticMarkup(tree), /473 of 473 records/);
   datedTable.props.recordDateFilter.onChange("__date_range__:2026-09-12|2026-09-12");
   tree = render();
-  assert.match(renderToStaticMarkup(tree), /0 of 0 records/);
+  assert.doesNotMatch(renderToStaticMarkup(tree), /0 of 0 records/);
   descendants(tree, (node) => node.type === props.ActionsTable)[0].props.recordDateFilter.onChange("");
   tree = render(); verify(tree, 475, "All regions");
   props.showBdClosingTime = false;

@@ -7,5 +7,5 @@ test('dashboard graph lists omit equipment name and make while retaining the oth
   assert.doesNotMatch(source,/<th>Equipment name<\/th>|<th>Make<\/th>/);
   assert.doesNotMatch(source,/<td>\{record.make/);
   for(const label of ['Machine / Door no.','Equipment category','Equipment group','Model','Serial / chassis no.']) assert.ok(source.includes(`<th>${label}</th>`));
-  assert.match(source,/<ActionsTable key=\{tableKey\} exportTitle=/);
+  assert.match(source,/<ActionsTable key=\{tableKey\} toolbarTarget=\{toolbarTarget\} toolbarPortal exportTitle=/);
 });

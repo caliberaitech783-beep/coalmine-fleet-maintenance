@@ -53,7 +53,7 @@ export default function HourlyBreakdownView({ requests, sites, onBack, ActionsTa
     </div>
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-labelledby={`${id}-window-${hours}`}>
       <div className="dashboard-record-summary hourly-breakdown-summary">
-        <div className="hourly-breakdown-summary-text"><h4>{title}</h4><span role="status" aria-live="polite">{view.rows.length.toLocaleString()} events · Pink: BD In · Green: BD Out</span></div>
+        <div className="hourly-breakdown-summary-text"><h4>{title}</h4><span>Pink: BD In · Green: BD Out</span></div>
         <div className="master-actions-slot hourly-breakdown-actions" ref={setToolbarTarget} />
       </div>
       <div className="dashboard-asset-list">

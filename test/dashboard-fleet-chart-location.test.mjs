@@ -45,7 +45,7 @@ test("site fleet tables omit only the redundant column and retain counts, record
   assert.ok(original.includes("<th>Current location</th>"));
   assert.ok(original.includes("<td>Majri OB</td>"));
   assert.equal(hidden, original.replace("<th>Current location</th>", "").replace("<td>Majri OB</td>", ""));
-  assert.ok(hidden.includes("1 of 1 records"));
+  assert.ok(!hidden.includes("1 of 1 records")); // Counts belong to the shared toolbar, not the browser heading.
   assert.ok(hidden.includes('data-export-title="Majri OB · Vehicle records · WCL"'));
   assert.equal((hidden.match(/<th[ >]/g) || []).length, 8);
   assert.equal((hidden.match(/<td[ >]/g) || []).length, 8);
@@ -83,7 +83,7 @@ test("single-category bar lists omit only the category column with counts and ot
     const props = { rows: [{ ...row, category }], hideCurrentLocation: true };
     const original = render(props), hidden = render({ ...props, hideEquipmentCategory: true });
     assert.equal(hidden, original.replace("<th>Equipment category</th>", "").replace(`<td>${category}</td>`, ""));
-    assert.ok(hidden.includes("1 of 1 records"));
+    assert.ok(!hidden.includes("1 of 1 records"));
     assert.equal((hidden.match(/<th[ >]/g) || []).length, 7);
     assert.equal((hidden.match(/<td[ >]/g) || []).length, 7);
   }
