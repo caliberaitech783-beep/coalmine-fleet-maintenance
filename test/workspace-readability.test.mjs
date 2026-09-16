@@ -54,7 +54,10 @@ test('screen-only operational overrides preserve print styling and do not hide c
   assert.ok(mediaCount>=4);
   assert.equal(css.slice(start).trim(),'');
   assert.doesNotMatch(css,/\bzoom\s*:|\btransform\s*:\s*[^;{}]*scale/i);
-  assert.doesNotMatch(css,/(?:^|[;{])\s*(?:overflow(?:-x)?\s*:\s*(?:hidden|clip)|display\s*:\s*none|visibility\s*:\s*hidden|pointer-events\s*:\s*none|content\s*:)/);
+  const compactDateLabels=/\.mobile-workspace\[data-operational="true"\]\s+\.record-date-range-basis,\s*\.mobile-workspace\[data-operational="true"\]\s+\.record-date-range-hint\[data-empty="true"\]\s*\{\s*display\s*:\s*none;\s*\}/;
+  assert.match(css,compactDateLabels);
+  const controlGuardCss=css.replace(compactDateLabels,'');
+  assert.doesNotMatch(controlGuardCss,/(?:^|[;{])\s*(?:overflow(?:-x)?\s*:\s*(?:hidden|clip)|display\s*:\s*none|visibility\s*:\s*hidden|pointer-events\s*:\s*none|content\s*:)/);
   assert.doesNotMatch(css,/data-mobile-open|\[hidden\]|\[disabled\]|\.hidden\b/);
   assert.match(compact,/\[data-mobile-open="false"\][\s\S]*?display:\s*none\s*!important/);
 });
