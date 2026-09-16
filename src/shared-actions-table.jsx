@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import RecordDateRange from "./record-date-range.jsx";
 import { primaryRecordDateColumn } from "./record-date-range.mjs";
-import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL } from "./table-actions-model.mjs";
+import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder } from "./table-actions-model.mjs";
 import "./table-actions.css";
 import "./sortable-table.css";
 
@@ -25,7 +25,10 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, chi
 }
 
 function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }) {
-  const [visible, setVisible] = useState(columns.map((column) => column.key));
+  // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
+  const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}`;
+  const [visible, setVisibleState] = useState(() => restoreColumnOrder(columnStorageKey, columns.map((column) => column.key)));
+  const setVisible = (keys) => { setVisibleState(keys); storeColumnOrder(columnStorageKey, keys, columns.map((column) => column.key)); };
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "", direction: "asc" });
   const [dialog, setDialog] = useState("");

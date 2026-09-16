@@ -175,3 +175,29 @@ export function tableExportModel(rows, columns, visibleKeys, filters = {}, sort 
     rows: selectTableRows(rows, columns, filters, sort),
   };
 }
+
+function readStorage(key) {
+  try { return typeof localStorage === "undefined" ? null : localStorage.getItem(key); } catch { return null; }
+}
+function writeStorage(key, value) {
+  try { if (typeof localStorage === "undefined") return; if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { /* storage unavailable (private mode, quota) */ }
+}
+// The saved arrangement holds the chosen keys and the full key set at the time, so a column the user hid
+// stays hidden while a column added to the table later is appended rather than lost.
+export function restoreColumnOrder(storageKey, defaultKeys) {
+  const raw = readStorage(storageKey);
+  if (!raw) return defaultKeys;
+  try {
+    const saved = JSON.parse(raw);
+    const visible = Array.isArray(saved) ? saved : Array.isArray(saved?.visible) ? saved.visible : null;
+    const all = Array.isArray(saved?.all) ? saved.all : visible;
+    if (!visible) return defaultKeys;
+    const known = visible.filter((key) => defaultKeys.includes(key));
+    if (!known.length) return defaultKeys;
+    return [...known, ...defaultKeys.filter((key) => !all.includes(key))];
+  } catch { return defaultKeys; }
+}
+export function storeColumnOrder(storageKey, keys, defaultKeys) {
+  const isDefault = keys.length === defaultKeys.length && keys.every((key, index) => key === defaultKeys[index]);
+  writeStorage(storageKey, isDefault ? null : JSON.stringify({ visible: keys, all: defaultKeys }));
+}

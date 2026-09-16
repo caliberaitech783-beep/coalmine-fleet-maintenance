@@ -170,3 +170,27 @@ test("Total Fleet lists sort Started oldest-to-latest from the heading instead o
   assert.match(main, /<span>Oldest to latest<\/span>/);
   assert.match(main, /<span>Latest to oldest<\/span>/);
 });
+
+test("column arrangements are remembered per table and cleared by Reset table", async () => {
+  const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
+  assert.match(shared, /const columnStorageKey = `nerveCenterTableColumns:\$\{exportTitle \|\| printTitle \|\| tableProps\.className \|\| "table"\}`;/);
+  assert.match(shared, /useState\(\(\) => restoreColumnOrder\(columnStorageKey, columns\.map\(\(column\) => column\.key\)\)\)/);
+  assert.match(shared, /const setVisible = \(keys\) => \{ setVisibleState\(keys\); storeColumnOrder\(columnStorageKey, keys, columns\.map\(\(column\) => column\.key\)\); \};/);
+  assert.match(shared, /const reset = \(\) => \{[^}]*setVisible\(columns\.map\(\(column\) => column\.key\)\); \};/, "Reset table restores and clears the saved arrangement");
+  const {restoreColumnOrder, storeColumnOrder} = await import("../src/table-actions-model.mjs");
+  const store = new Map();
+  globalThis.localStorage = {getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k)};
+  try {
+    const defaults = ["a", "b", "c", "d"];
+    assert.deepEqual(restoreColumnOrder("t", defaults), defaults, "nothing saved -> default order");
+    storeColumnOrder("t", ["c", "a", "b", "d"], defaults);
+    assert.deepEqual(restoreColumnOrder("t", defaults), ["c", "a", "b", "d"], "reordered columns come back after a refresh");
+    assert.deepEqual(restoreColumnOrder("t", ["a", "b", "c", "d", "e"]), ["c", "a", "b", "d", "e"], "columns added later are appended, not hidden");
+    storeColumnOrder("t", ["d", "a"], defaults);
+    assert.deepEqual(restoreColumnOrder("t", defaults), ["d", "a"], "hidden columns stay hidden");
+    storeColumnOrder("t", defaults, defaults);
+    assert.equal(store.has("t"), false, "the default arrangement is not stored");
+    store.set("t", "not json");
+    assert.deepEqual(restoreColumnOrder("t", defaults), defaults, "corrupt storage falls back to the default");
+  } finally { delete globalThis.localStorage; }
+});
