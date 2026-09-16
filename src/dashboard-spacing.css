@@ -20,7 +20,19 @@
 .mine-dashboard .daily-bd-balance { --bd-gutter: 14px; margin-bottom: 6px; }
 .mine-dashboard .bd-balance-header { padding: 10px var(--bd-gutter); gap: 10px; }
 .mine-dashboard .bd-balance-controls { gap: 8px; }
+.mine-dashboard .mine-fleet-chart-x { padding: 2px 4px; margin: 0; }
+.mine-dashboard .mine-fleet-region-chart { padding-bottom: 3px; }
+.mine-dashboard .bd-balance-day { grid-template-rows: 42px 36px 180px 32px 64px 44px; }
+.mine-dashboard .bd-balance-day-date { gap: 0; }
+.mine-dashboard .bd-balance-scroll { margin-bottom: 4px; padding-bottom: 0; }
+@media (min-width: 1200px) {
+  .mine-dashboard .mine-fleet-region-chart > header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+  .mine-dashboard .mine-fleet-chart-heading { display: contents; }
+  .mine-dashboard .mine-fleet-chart-toggle { justify-self: center; }
+  .mine-dashboard .mine-fleet-chart-tools { justify-self: end; flex-wrap: wrap; min-width: 0; }
+}
 @media screen {
+  .app:has(.mine-dashboard) > aside { z-index: 50; }
   .content:has(.mine-dashboard) > .top { position: sticky; z-index: 40; }
   .mine-dashboard > .dashboard-filter-bar { position: sticky; top: var(--dashboard-banner-top, var(--dashboard-sticky-top, 0px)); z-index: 30; align-self: start; }
 }
