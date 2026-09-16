@@ -6,6 +6,7 @@ import { primaryRecordDateColumn } from "./record-date-range.mjs";
 import { defaultDurationSort } from "./duration-sort.mjs";
 import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder } from "./table-actions-model.mjs";
 import { mobileTablePageSize } from "./mobile-performance.mjs";
+import { useTableLayouts, TableLayoutSelect } from "./table-layouts.jsx";
 import "./table-actions.css";
 import "./sortable-table.css";
 
@@ -42,6 +43,8 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}`;
   const [visible, setVisibleState] = useState(() => restoreColumnOrder(columnStorageKey, columns.map((column) => column.key)));
   const setVisible = (keys) => { setVisibleState(keys); storeColumnOrder(columnStorageKey, keys, columns.map((column) => column.key)); };
+  // The column schema identifies this table type; site/date headings can change without hiding its layouts.
+  const layoutStore = useTableLayouts("shared-table", columns);
   const [filters, setFilters] = useState({});
   const externalSort = columns.find((column) => column.header.props.sort)?.header.props.sort;
   const defaultSort = defaultDurationSort(columns);
@@ -182,10 +185,11 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
       {printData && dateRangeControl}
       {printData && <ExportMenu printOnly title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
       <button type="button" className="mobile-columns-trigger" onClick={() => setDialog("columns")} aria-label="Choose visible table columns"><span>Columns</span></button>
+      <TableLayoutSelect store={layoutStore} visibleKeys={visible} onSelect={setVisible} />
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} onSaveReport={SavedReports ? () => setSavedReportDialog("save") : undefined} onSavedReports={SavedReports ? () => setSavedReportDialog("saved") : undefined} />
       {!printData && dateRangeControl}
       {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
-      {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
+      {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} layoutStore={layoutStore} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
       {dialog === "sort" && <SortDialog columns={columns} sort={sort.key ? sort : externalSort || sort} onApply={applySort} onClose={() => setDialog("")} />}
       {SavedReports && <SavedReports title={reportTitle} tableKey={tableProps.className || ""} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentView} onApply={applySavedView} canPrint={canPrintReport} onPrint={printCurrentView} />}
       <FilterDialog columns={filterColumns} rows={[...dataRows, ...filterRows]} filters={effectiveFilters} onFilterChange={updateFilter} onClearFilters={clearFilters} open={dialog === "filter"} onOpenChange={(open) => setDialog(open ? "filter" : "")} hideTrigger dialogMode />

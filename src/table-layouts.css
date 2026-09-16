@@ -1,0 +1,22 @@
+.report-columns-dialog:has(.table-layout-controls){display:flex;flex-direction:column;overflow-y:auto}
+.report-columns-dialog:has(.table-layout-controls)>header,.report-columns-dialog:has(.table-layout-controls)>footer{flex-shrink:0}
+.report-columns-dialog:has(.table-layout-controls)>footer{position:sticky;bottom:0;z-index:1}
+.report-columns-dialog:has(.table-layout-controls)>.report-columns-body{flex-shrink:0}
+.table-layout-controls{padding:16px 26px 0}
+.table-layout-controls-row,.table-layout-name-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px}
+.table-layout-controls label,.table-layout-quick-select{display:flex;gap:6px;min-width:0}
+.table-layout-controls label{flex:1 1 220px;flex-direction:column;font-size:13px;font-weight:700}
+.table-layout-controls select,.table-layout-controls input,.table-layout-quick-select select{min-width:0;max-width:100%;height:38px;padding:6px 10px;border:1px solid #d9e0ea;border-radius:7px;background:#fff;color:#273142;font:inherit}
+.table-layout-controls button{min-height:38px;padding:7px 11px;border:1px solid #d9e0ea;border-radius:7px;background:#fff;color:#445066;font-size:12px}
+.table-layout-controls button:disabled{opacity:.45;cursor:default}
+.table-layout-controls button.primary{background:#643298;color:#fff;border-color:#643298}
+.table-layout-name-form{margin-top:12px}
+.table-layout-controls .table-layout-hint,.table-layout-controls .table-layout-notice,.table-layout-controls .table-layout-error{margin:10px 0 0;font-size:12px;line-height:1.5}
+.table-layout-hint{color:#697386}.table-layout-error{color:#b42318}.table-layout-notice{color:#25744e}
+.table-layout-quick-select{align-items:center;font-size:12px;color:#697386;max-width:280px}
+.table-layout-quick-select select{max-width:220px;text-overflow:ellipsis}
+:root[data-theme="dark"] .table-layout-controls :is(input,select,button),:root[data-theme="dark"] .table-layout-quick-select select{background:#1d2d45;border-color:#36516f;color:#dce7f7}
+:root[data-theme="dark"] .table-layout-hint,:root[data-theme="dark"] .table-layout-quick-select{color:#a9b8ce}
+:root[data-theme="dark"] .table-layout-error{color:#ffaba3}
+:root[data-theme="dark"] .table-layout-notice{color:#80d6ac}
+@media(max-width:700px){.table-layout-controls{padding:12px 12px 0}.table-layout-controls-row>label{flex-basis:100%}.table-layout-controls button{min-height:40px}.table-layout-name-form>label{flex-basis:100%}.table-layout-quick-select{max-width:100%}}

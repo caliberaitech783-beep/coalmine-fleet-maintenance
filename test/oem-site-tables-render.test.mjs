@@ -35,7 +35,7 @@ const load = (file, extra = {}) => {
   return new Function(...Object.keys(values), compiled[file])(...Object.values(values));
 };
 const RecordDateRange = load("record-date-range");
-const SharedActionsTable = load("shared-actions-table", { RecordDateRange });
+const SharedActionsTable = load("shared-actions-table", { RecordDateRange, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: () => null });
 const DashboardRecordBrowser = load("dashboard-record-browser");
 const Details = load("oem-breakdown-details", { DashboardRecordBrowser });
 const h = React.createElement, Empty = () => null;

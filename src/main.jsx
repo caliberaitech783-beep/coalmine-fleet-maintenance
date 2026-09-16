@@ -15,6 +15,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
+import { useTableLayouts, TableLayoutControls, TableLayoutSelect } from "./table-layouts.jsx";
 import {capturePhotoForInput} from "./camera-upload.mjs";
 import {ComplaintMediaInputs,ComplaintMediaView} from "./complaint-media.jsx";
 import {readComplaintMedia} from "../complaint-media.mjs";
@@ -2905,7 +2906,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
   if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Smart Print ${title}`}><Printer /><span>Smart Print</span></button>;
   return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
 }
-function ReportColumnSelector({ columns = [], visibleColumnKeys = [], onApply, onClose }) {
+function ReportColumnSelector({ columns = [], visibleColumnKeys = [], layoutStore, onApply, onClose }) {
   const [draftKeys, setDraftKeys] = useState(visibleColumnKeys);
   const [selectedHidden, setSelectedHidden] = useState("");
   const [selectedVisible, setSelectedVisible] = useState("");
@@ -2937,6 +2938,7 @@ function ReportColumnSelector({ columns = [], visibleColumnKeys = [], onApply, o
     <div className="report-action-dialog-backdrop" onPointerDown={onClose}>
       <section className="report-columns-dialog" role="dialog" aria-modal="true" aria-labelledby="report-columns-title" onPointerDown={(event) => event.stopPropagation()}>
         <header><button type="button" className="modal-back-button" onClick={onClose} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><h2 id="report-columns-title">Select Columns</h2><button type="button" onClick={onClose} aria-label="Close column selector" title="Close"><X /></button></header>
+        {layoutStore && <TableLayoutControls store={layoutStore} draftKeys={draftKeys} defaultKeys={columns.map(column => column.key)} onSelect={keys => { setDraftKeys(keys); setSelectedHidden(""); setSelectedVisible(""); }} />}
         <div className="report-columns-body">
           <div className="report-column-list-panel">
             <h3>Do Not Display</h3>
@@ -3085,7 +3087,7 @@ const printSavedReport = ({ title, columns, rows }) => openSmartPrint({ title, c
 function ActionsTable(props) {
   return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }
-function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "" }) {
+function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsChange, rows = [], query = "", emptyMessage, rowKey, rowClassName, toolbarTarget = null, toolbarPortal = false, title = "", layoutKey = "" }) {
   const [columnFilters, setColumnFilters] = useState({});
   const [savedReportDialog, setSavedReportDialog] = useState("");
   const [openFilter, setOpenFilter] = useState(null);
@@ -3140,6 +3142,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   }, [openFilter]);
   // Saved reports for this Reports-page table: columns, filters, sort and rows per page.
   const reportTitle = title || (typeof document !== "undefined" ? document.title : "") || "Report";
+  const layoutStore = useTableLayouts(layoutKey || reportTitle, columns);
   const currentSavedView = () => ({ visible: displayedColumns.map((column) => column.key), filters: columnFilters, sort, pageSize });
   const applySavedView = (view) => {
     onVisibleColumnsChange?.(view.visible.length ? view.visible : columns.map((column) => column.key));
@@ -3152,6 +3155,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const reportTableToolbar = (
       <div className="report-table-filter-toolbar">
         <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
+        <TableLayoutSelect store={layoutStore} visibleKeys={displayedColumns.map(column => column.key)} onSelect={keys => onVisibleColumnsChange?.(keys)} />
         <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(mobileTablePageSize() || 50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
         <SavedReportsPanel title={reportTitle} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentSavedView} onApply={applySavedView} canPrint onPrint={printSavedView} />
         {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
@@ -3188,7 +3192,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
       </table>
       <div className="report-table-pagination"><span>{firstVisibleRow}-{lastVisibleRow} of {sortedRows.length.toLocaleString("en-IN")}</span><div><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={currentPage === 0} aria-label="Previous report page" title="Previous page"><ChevronLeft /></button><b>{currentPage + 1} / {pageCount}</b><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={currentPage >= pageCount - 1} aria-label="Next report page" title="Next page"><ChevronRight /></button></div></div>
       <TableParameterFilter columns={columns} rows={rows} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} open={filterDialogOpen} onOpenChange={setFilterDialogOpen} hideTrigger dialogMode />
-      {columnDialogOpen && <ReportColumnSelector columns={columns} visibleColumnKeys={displayedColumns.map((column) => column.key)} onApply={(keys) => { onVisibleColumnsChange?.(keys); setColumnDialogOpen(false); }} onClose={() => setColumnDialogOpen(false)} />}
+      {columnDialogOpen && <ReportColumnSelector columns={columns} visibleColumnKeys={displayedColumns.map((column) => column.key)} layoutStore={layoutStore} onApply={(keys) => { onVisibleColumnsChange?.(keys); setColumnDialogOpen(false); }} onClose={() => setColumnDialogOpen(false)} />}
       {sortDialogOpen && <ReportSortDialog columns={displayedColumns} sort={sort} onApply={(key, direction) => { changeSort(key, direction); setSortDialogOpen(false); }} onClose={() => setSortDialogOpen(false)} />}
     </>
   );
@@ -5734,6 +5738,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
       {children || (
         <div className="reports-detail-table emptytable">
           <ReportTable
+            layoutKey={title}
             query={query}
             rows={rows}
             rowKey={rowKey}

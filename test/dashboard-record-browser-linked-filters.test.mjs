@@ -24,6 +24,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
 })));
 const empty = () => null;
 const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
+  useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
 const load = (file, overrides = {}) => {
