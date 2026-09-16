@@ -17,7 +17,7 @@ export default function RecordDateRange({ label, value = "", onChange }) {
     <label><span>From</span><input type="date" aria-label={`${label} from date`} value={draft.from} max={draft.to || undefined} aria-invalid={invalid || undefined} aria-describedby={`${id}-hint`} onChange={(event) => change("from", event.target.value)} /></label>
     <label><span>To</span><input type="date" aria-label={`${label} to date`} value={draft.to} min={draft.from || undefined} aria-invalid={invalid || undefined} aria-describedby={`${id}-hint`} onChange={(event) => change("to", event.target.value)} /></label>
     {(draft.from || draft.to || value) && <button type="button" className="record-date-range-clear" onClick={() => { setDraft({ from: "", to: "" }); onChange(""); }}>Clear dates</button>}
-    <span id={`${id}-hint`} className="record-date-range-hint" role={invalid ? "alert" : "status"}>
+    <span id={`${id}-hint`} className="record-date-range-hint" data-empty={!invalid && !applied ? "true" : undefined} role={invalid ? "alert" : "status"}>
       {invalid ? "From must be on or before To. The previous filter is still applied." : applied ? `${describeDateRange(applied)} · ${label} · inclusive` : "All dates"}
     </span>
   </div>;

@@ -176,7 +176,16 @@
   .mobile-workspace[data-operational="true"] .workspace-hero p { margin: 4px 0 0; }
   .mobile-workspace[data-operational="true"] > .workspace-hero .mobile-tabs { flex: 0 1 auto; margin: 0 !important; gap: 8px !important; }
 }
+@media screen {
+.mobile-workspace[data-operational="true"] .record-date-range-basis,
+.mobile-workspace[data-operational="true"] .record-date-range-hint[data-empty="true"] { display: none; }
+.mobile-workspace[data-operational="true"] .shared-table-actions-toolbar { flex-wrap: nowrap; justify-content: flex-start; }
+.mobile-workspace[data-operational="true"] .shared-table-actions-toolbar > .shared-table-record-count,
+.mobile-workspace[data-operational="true"] .shared-table-actions-toolbar > .report-actions { flex-shrink: 0; white-space: nowrap; }
+.mobile-workspace[data-operational="true"] .shared-table-actions-toolbar .record-date-range { flex-wrap: nowrap; }
+}
 @media screen and (max-width: 700px) {
+  .mobile-workspace[data-operational="true"] .shared-table-actions-toolbar { overflow-x: auto; max-width: 100%; }
   .mobile-workspace[data-operational="true"] .workspace-hero-intro { flex-basis: 100%; }
   .mobile-workspace[data-operational="true"] > .workspace-hero .mobile-tabs { width: 100%; flex-wrap: wrap; }
 }
