@@ -73,6 +73,7 @@ import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
+import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForRole,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 
 const {Pool}=pg;
@@ -477,6 +478,33 @@ async function migrate(){
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS maintenance_daily_remarks_request_idx ON maintenance_daily_remarks (request_reference, created_at DESC);
+    CREATE TABLE IF NOT EXISTS request_corrections (
+      id BIGSERIAL PRIMARY KEY,
+      request_reference TEXT NOT NULL REFERENCES maintenance_requests(reference) ON DELETE RESTRICT,
+      site TEXT NOT NULL,
+      correction_type TEXT NOT NULL,
+      original_values JSONB NOT NULL DEFAULT '{}'::jsonb,
+      proposed_changes JSONB NOT NULL DEFAULT '{}'::jsonb,
+      reason TEXT NOT NULL,
+      evidence_data TEXT NOT NULL,
+      evidence_name TEXT NOT NULL,
+      evidence_type TEXT NOT NULL DEFAULT 'image/jpeg',
+      status TEXT NOT NULL DEFAULT 'Pending PM approval',
+      requested_by_login TEXT NOT NULL,
+      requested_by_name TEXT NOT NULL,
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_by_login TEXT NOT NULL DEFAULT '',
+      reviewed_by_name TEXT NOT NULL DEFAULT '',
+      reviewed_at TIMESTAMPTZ,
+      review_remark TEXT NOT NULL DEFAULT '',
+      applied_by_login TEXT NOT NULL DEFAULT '',
+      applied_by_name TEXT NOT NULL DEFAULT '',
+      applied_at TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS request_corrections_request_idx ON request_corrections (request_reference,requested_at DESC);
+    CREATE INDEX IF NOT EXISTS request_corrections_status_idx ON request_corrections (status,site,requested_at DESC);
+    CREATE UNIQUE INDEX IF NOT EXISTS request_corrections_open_idx ON request_corrections (request_reference,correction_type)
+      WHERE status IN ('Pending PM approval','Approved');
     CREATE TABLE IF NOT EXISTS master_records (
       id BIGSERIAL PRIMARY KEY,
       master_name TEXT NOT NULL,
@@ -4105,6 +4133,8 @@ app.post('/api/info-pulse/prompt',requireSession,async(req,res,next)=>{
   }catch(error){next(error)}
 });
 
+registerRequestCorrectionRoutes();
+
 app.get('/api/requests',requireSession,async(req,res,next)=>{
   try{
     const operationalRole=req.session.role==='normal'&&['Production User','Maintenance User','MIS User'].includes(req.session.assignedRole);
@@ -4141,6 +4171,198 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
 });
 
 const requestTimelineProjection=`id AS "timelineRequestId",started_at AS start,accepted_at AS "acceptedAt",closed_at AS "closedAt",first_trip_at AS "firstTripAt",verified_at AS "verifiedAt",expected_completion_at AS "expectedCompletionAt",ideal_requested_at AS "idealRequestedAt",ideal_approved_at AS "idealApprovedAt",in_progress_at AS "inProgressAt",NOW() AS "timelineRecordedAt"`;
+
+const requestCorrectionProjection=`id,request_reference AS "requestReference",site,correction_type AS "correctionType",
+  original_values AS "originalValues",proposed_changes AS "proposedChanges",reason,status,
+  evidence_name AS "evidenceName",evidence_type AS "evidenceType",
+  requested_by_login AS "requestedByLogin",requested_by_name AS "requestedByName",requested_at AS "requestedAt",
+  reviewed_by_login AS "reviewedByLogin",reviewed_by_name AS "reviewedByName",reviewed_at AS "reviewedAt",review_remark AS "reviewRemark",
+  applied_by_login AS "appliedByLogin",applied_by_name AS "appliedByName",applied_at AS "appliedAt"`;
+const requestCorrectionSourceProjection=`id AS "timelineRequestId",reference,site,equipment_name AS equipment,equipment_group AS "equipmentGroup",door_number AS door,
+  requester_login AS "requesterLogin",
+  started_at AS "startedAt",started_at AS start,category,complaint,driver_name AS "driverName",superior_name AS "superiorName",meter_type AS "meterType",opening_meter_reading AS "openingMeterReading",
+  accepted_at AS "acceptedAt",accepted_by AS "acceptedBy",expected_completion_at AS "expectedCompletionAt",
+  closed_at AS "closedAt",closed_by AS "closedBy",maintenance_work AS "maintenanceWork",delayed_reason AS "delayedReason",
+  verified_at AS "verifiedAt",verified_by AS "verifiedBy",first_trip_done AS "firstTripDone",first_trip_at AS "firstTripAt",first_trip_by AS "firstTripBy",
+  closing_meter_reading AS "closingMeterReading",NOW() AS "timelineRecordedAt"`;
+
+async function requestCorrectionAccessContext(session,client=pool){
+  const user=await currentUserRecord(session,client);
+  const adminLevel=String(session?.permissions?.adminLevel||'').trim().toLowerCase();
+  const administrator=session?.role==='super'&&['admin','super admin'].includes(adminLevel);
+  const managerRoles=managerRoleSelection(session?.permissions?.managerRoles?.length?session.permissions.managerRoles:session?.permissions?.managerRole);
+  const pm=session?.role==='super'&&adminLevel==='manager'&&hasVehicleTransferPmRole(managerRoles);
+  const allowedTypes=session?.role==='normal'?requestCorrectionTypesForRole(session.assignedRole):[];
+  const requester=allowedTypes.length>0;
+  return {user,administrator,pm,requester,allowedTypes,login:String(session?.login||'').trim().toLowerCase(),scope:pm?managerReportScope(user):requester?userSiteScope(user):null};
+}
+
+function correctionVisibleToContext(correction,context){
+  return context.administrator
+    ||(context.pm&&reportScopeIncludesSite(context.scope,correction.site))
+    ||(context.requester&&String(correction.requestedByLogin||'').trim().toLowerCase()===context.login);
+}
+
+async function correctionAdministratorLogins(client=pool){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  return [...new Set(rows.flatMap((row)=>{
+    const user=row.record_data||{},profile=resolveMobileAccess({user});
+    const adminLevel=String(profile.permissions?.adminLevel||'').trim().toLowerCase();
+    const login=String(user.login||'').trim().toLowerCase();
+    return profile.sessionRole==='super'&&['admin','super admin'].includes(adminLevel)&&login?[login]:[];
+  }))];
+}
+
+function correctionStageError(type,row={}){
+  if(type==='maintenanceAcceptance'&&!row.acceptedAt)return 'Maintenance acceptance has not been recorded yet.';
+  if(type==='onRoad'&&!row.closedAt)return 'The On Road entry has not been recorded yet.';
+  if(type==='misVerification'&&!row.verifiedAt)return 'MIS verification has not been recorded yet.';
+  return '';
+}
+
+function correctionValuesStillMatch(type,current,original,proposed){
+  const snapshot=requestCorrectionSnapshot(current,type);
+  return Object.keys(proposed||{}).every((key)=>JSON.stringify(snapshot[key]??'')===JSON.stringify(original?.[key]??''));
+}
+
+function registerRequestCorrectionRoutes(){
+  app.get('/api/request-corrections',requireSession,async(req,res,next)=>{
+  try{
+    const context=await requestCorrectionAccessContext(req.session);
+    if(!context.administrator&&!context.pm&&!context.requester)return res.status(403).json({error:'This account cannot access request corrections.'});
+    const {rows}=await pool.query(`SELECT ${requestCorrectionProjection} FROM request_corrections ORDER BY requested_at DESC,id DESC`);
+    res.set('Cache-Control','private, no-store');
+    res.json({records:rows.filter((row)=>correctionVisibleToContext(row,context)),capabilities:{canCreate:context.requester,canReview:context.pm,canApply:context.administrator,allowedTypes:context.allowedTypes}});
+  }catch(error){next(error)}
+});
+
+  app.get('/api/request-corrections/:id/evidence',requireSession,async(req,res,next)=>{
+  try{
+    const id=Number(req.params.id);
+    if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid correction is required.'});
+    const context=await requestCorrectionAccessContext(req.session);
+    const {rows}=await pool.query(`SELECT site,evidence_data AS "evidenceData",evidence_name AS "evidenceName",evidence_type AS "evidenceType" FROM request_corrections WHERE id=$1`,[id]);
+    const row=rows[0];
+    if(!row)return res.status(404).json({error:'Correction request not found.'});
+    if(!correctionVisibleToContext(row,context))return res.status(403).json({error:'This correction belongs to a different location.'});
+    res.set('Cache-Control','private, no-store');
+    res.json(row);
+  }catch(error){next(error)}
+});
+
+  app.post('/api/request-corrections',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const access=await requestCorrectionAccessContext(req.session,client);
+    if(!access.requester)return res.status(403).json({error:'Only Production, Maintenance, or MIS users can request a correction.'});
+    const reference=String(req.body?.requestReference||'').trim();
+    const type=requestCorrectionType(req.body?.correctionType);
+    if(!access.allowedTypes.includes(type))return res.status(403).json({error:'You can request corrections only for entries created by your assigned department.'});
+    const reason=String(req.body?.reason||'').trim();
+    const evidenceData=String(req.body?.evidenceData||'');
+    const evidenceName=String(req.body?.evidenceName||'').trim().slice(0,240);
+    const evidenceType=String(req.body?.evidenceType||'image/jpeg').trim().slice(0,100);
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT ${requestCorrectionSourceProjection} FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
+    const request=rows[0];
+    if(!request){await client.query('ROLLBACK');return res.status(404).json({error:'Maintenance request not found.'})}
+    if(!reportScopeIncludesSite(access.scope,request.site)){await client.query('ROLLBACK');return res.status(403).json({error:'This request belongs to a different location.'})}
+    if(req.session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==access.login){await client.query('ROLLBACK');return res.status(403).json({error:'Production users can request correction only for their own Off Road entry.'})}
+    const stageError=correctionStageError(type,request);
+    if(stageError){await client.query('ROLLBACK');return res.status(409).json({error:stageError})}
+    const originalValues=requestCorrectionSnapshot(request,type);
+    let proposedChanges;
+    try{proposedChanges=normalizeRequestCorrectionChanges(type,req.body?.proposedChanges||{},originalValues)}
+    catch(error){await client.query('ROLLBACK');return res.status(error.status||400).json({error:error.message})}
+    const validationError=requestCorrectionValidationError({type,reason,evidenceData,evidenceName,proposedChanges,originalValues});
+    if(validationError){await client.query('ROLLBACK');return res.status(400).json({error:validationError})}
+    const inserted=await client.query(`INSERT INTO request_corrections
+      (request_reference,site,correction_type,original_values,proposed_changes,reason,evidence_data,evidence_name,evidence_type,status,requested_by_login,requested_by_name)
+      VALUES ($1,$2,$3,$4::jsonb,$5::jsonb,$6,$7,$8,$9,$10,$11,$12) RETURNING ${requestCorrectionProjection}`,
+      [reference,request.site,type,JSON.stringify(originalValues),JSON.stringify(proposedChanges),reason,evidenceData,evidenceName,evidenceType,REQUEST_CORRECTION_STATUS.PENDING,access.login,req.session.name||req.session.login||'User']);
+    await client.query('COMMIT');
+    const saved=inserted.rows[0];
+    const pmLogins=await vehicleTransferPmLogins(pool,request.site);
+    await addTicketNotificationsBestEffort(pool,pmLogins,reference,`Correction approval is required for ${reference} (${REQUEST_CORRECTION_TYPES[type].label}) at ${request.site}. Requested by ${saved.requestedByName}.`,null,{whatsapp:false});
+    req.audit={eventType:'Correction',module:'Maintenance Requests',action:'User requested correction',targetType:'Maintenance request',targetReference:reference,reason,
+      changedFields:[...requestCorrectionChangedFields(type,originalValues,proposedChanges),{field:'Correction status',before:'Draft',after:REQUEST_CORRECTION_STATUS.PENDING},{field:'Evidence image',before:'',after:evidenceName}]};
+    res.status(201).json(saved);
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});if(error.code==='23505')return res.status(409).json({error:'This request already has an open correction of the selected type.'});next(error)}finally{client.release()}
+});
+
+  app.patch('/api/request-corrections/:id/review',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const id=Number(req.params.id),decision=String(req.body?.decision||'').trim().toLowerCase(),remark=String(req.body?.remark||'').trim();
+    if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid correction is required.'});
+    if(!['approve','reject'].includes(decision))return res.status(400).json({error:'Select Approve or Reject.'});
+    if(remark.length<5||remark.length>1000)return res.status(400).json({error:'Enter a PM review remark between 5 and 1,000 characters.'});
+    await client.query('BEGIN');
+    const context=await requestCorrectionAccessContext(req.session,client);
+    const {rows}=await client.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1 FOR UPDATE`,[id]);
+    const before=rows[0];
+    if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'Correction request not found.'})}
+    if(!context.pm||!reportScopeIncludesSite(context.scope,before.site)){await client.query('ROLLBACK');return res.status(403).json({error:'Only the assigned site Project / Production Manager can review this correction.'})}
+    if(before.status!==REQUEST_CORRECTION_STATUS.PENDING){await client.query('ROLLBACK');return res.status(409).json({error:'This correction is no longer awaiting PM approval.'})}
+    const status=decision==='approve'?REQUEST_CORRECTION_STATUS.APPROVED:REQUEST_CORRECTION_STATUS.REJECTED;
+    const updated=await client.query(`UPDATE request_corrections SET status=$1,reviewed_by_login=$2,reviewed_by_name=$3,reviewed_at=NOW(),review_remark=$4 WHERE id=$5 RETURNING ${requestCorrectionProjection}`,
+      [status,String(req.session.login||'').trim().toLowerCase(),req.session.name||req.session.login||'Project Manager',remark,id]);
+    await client.query('COMMIT');
+    const saved=updated.rows[0];
+    const adminLogins=status===REQUEST_CORRECTION_STATUS.APPROVED?await correctionAdministratorLogins(pool):[];
+    await addTicketNotificationsBestEffort(pool,[saved.requestedByLogin,...adminLogins],saved.requestReference,`Correction ${saved.id} for ${saved.requestReference} was ${status.toLowerCase()} by ${saved.reviewedByName}. ${status===REQUEST_CORRECTION_STATUS.APPROVED?'Admin may now apply the approved change.':'The record remains unchanged.'}`,null,{whatsapp:false});
+    req.audit={eventType:'Correction',module:'Maintenance Requests',action:decision==='approve'?'Approve correction':'Reject correction',targetType:'Maintenance request',targetReference:saved.requestReference,reason:remark,
+      changedFields:[{field:'Correction status',before:before.status,after:status}]};
+    res.json(saved);
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+
+  app.patch('/api/request-corrections/:id/apply',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    const access=await requestCorrectionAccessContext(req.session,client);
+    if(!access.administrator)return res.status(403).json({error:'Only an Admin or Super Admin can apply an approved correction.'});
+    const id=Number(req.params.id);
+    if(!Number.isInteger(id)||id<=0)return res.status(400).json({error:'A valid correction is required.'});
+    await client.query('BEGIN');
+    const correctionResult=await client.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1 FOR UPDATE`,[id]);
+    const correction=correctionResult.rows[0];
+    if(!correction){await client.query('ROLLBACK');return res.status(404).json({error:'Correction request not found.'})}
+    if(correction.status!==REQUEST_CORRECTION_STATUS.APPROVED){await client.query('ROLLBACK');return res.status(409).json({error:'This correction is locked until the assigned PM approves it.'})}
+    const requestResult=await client.query(`SELECT ${requestCorrectionSourceProjection} FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[correction.requestReference]);
+    const before=requestResult.rows[0];
+    if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'The maintenance request no longer exists.'})}
+    if(!correctionValuesStillMatch(correction.correctionType,before,correction.originalValues,correction.proposedChanges)){
+      await client.query('ROLLBACK');
+      return res.status(409).json({error:'The original request changed after this correction was submitted. Create a new correction from the latest values.'});
+    }
+    const timelineKey={startedAt:'start',acceptedAt:'acceptedAt',expectedCompletionAt:'expectedCompletionAt',closedAt:'closedAt',firstTripAt:'firstTripAt',verifiedAt:'verifiedAt'};
+    const timelineChanges=Object.fromEntries(Object.entries(correction.proposedChanges).filter(([key])=>timelineKey[key]).map(([key,value])=>[timelineKey[key],value||null]));
+    validateRequestTimelineChange(before,timelineChanges,{now:before.timelineRecordedAt,userEntered:Object.keys(timelineChanges).filter((key)=>key!=='expectedCompletionAt')});
+    const fields=requestCorrectionFields(correction.correctionType).filter((field)=>Object.prototype.hasOwnProperty.call(correction.proposedChanges,field.key));
+    const values=[];
+    const assignments=fields.map((field)=>{
+      values.push(correction.proposedChanges[field.key]===''&&field.kind==='datetime'?null:correction.proposedChanges[field.key]);
+      const cast=field.kind==='datetime'?'::timestamptz':field.kind==='boolean'?'::boolean':'';
+      return `${field.column}=$${values.length}${cast}`;
+    });
+    values.push(correction.requestReference);
+    await client.query(`UPDATE maintenance_requests SET ${assignments.join(',')} WHERE reference=$${values.length}`,values);
+    const timelineEvents=requestCorrectionTimelineFields(correction.correctionType,correction.proposedChanges);
+    if(timelineEvents.length)await recordRequestTimeline(client,req,correction.requestReference,before,{events:timelineEvents,sources:Object.fromEntries(timelineEvents.map((event)=>[event,'user'])),reason:correction.reason,requireCorrectionReason:timelineEvents});
+    const updated=await client.query(`UPDATE request_corrections SET status=$1,applied_by_login=$2,applied_by_name=$3,applied_at=NOW() WHERE id=$4 RETURNING ${requestCorrectionProjection}`,
+      [REQUEST_CORRECTION_STATUS.APPLIED,String(req.session.login||'').trim().toLowerCase(),req.session.name||req.session.login||'Administrator',id]);
+    await client.query('COMMIT');
+    const saved=updated.rows[0];
+    const pmLogins=await vehicleTransferPmLogins(pool,saved.site);
+    await addTicketNotificationsBestEffort(pool,[...pmLogins,saved.requestedByLogin],saved.requestReference,`Approved correction ${saved.id} was applied to ${saved.requestReference} by ${saved.appliedByName}.`,null,{whatsapp:false});
+    req.audit={eventType:'Correction',module:'Maintenance Requests',action:'Apply approved correction',targetType:'Maintenance request',targetReference:saved.requestReference,reason:saved.reason,
+      changedFields:[...requestCorrectionChangedFields(saved.correctionType,saved.originalValues,saved.proposedChanges),{field:'Correction status',before:REQUEST_CORRECTION_STATUS.APPROVED,after:REQUEST_CORRECTION_STATUS.APPLIED}]};
+    res.json(saved);
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});next(error)}finally{client.release()}
+});
+}
+
 async function recordRequestTimeline(client,req,reference,before,{events,sources={},reason='',requireCorrectionReason=[]}={}){
   const {rows}=await client.query(`SELECT ${requestTimelineProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
   const after=rows[0];

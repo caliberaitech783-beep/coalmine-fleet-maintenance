@@ -48,6 +48,8 @@ flowchart LR
 | `auth-role.mjs` | Login candidate filtering by requested access type |
 | `password-auth.mjs` | scrypt password hashing, verification, initial-password setup, public user projection |
 | `request-workflow.mjs` | India date/time validation and request state checks |
+| `request-correction-policy.mjs` | Allow-listed lifecycle correction fields, evidence validation, snapshots, and correction status rules |
+| `src/request-corrections.jsx` | Admin correction submission/application and PM approval workspace |
 | `request-equipment.mjs` | Stable equipment selection and equipment-group labels used by the mobile request form |
 | `equipment-identity.mjs` | Identity used to upsert duplicate equipment imports |
 | `privilege-record.mjs` | Safe merging of duplicate privilege rows |
@@ -215,6 +217,12 @@ flowchart TD
 - Close request form links back to the original request and captures closing date, closing time, maintenance work, and status.
 - Tippers capture separate HMR and KMR readings at opening and closing. Edit request has one shared **Trip card upload** for the opening readings; Close request has one shared **Trip card upload** for the closing readings. Existing single-meter readings remain associated with their original meter, and missing opening readings can still be filled at closure. Closing readings and uploads remain optional for maintenance updates.
 - Request projections include `openingMeterReadings` and `closingMeterReadings` maps keyed by `HMR`/`KMR`, stored in additive JSONB columns. The single `openingMeterReading`/`closingMeterReading` and `meterType` fields remain compatible with older requests and clients. MIS verification pre-fills saved closing readings and preserves the closing trip card.
+
+### Controlled request corrections
+
+Lifecycle records are never edited directly after an entry error. The responsible operational user opens **Request correction**: Production User can request a correction to their own Off Road entry, Maintenance User can request Maintenance acceptance or On Road correction, and MIS User can request MIS verification correction. The user proposes only allow-listed field changes, explains the reason, and attaches a mandatory JPG, PNG, or WebP evidence image. The live maintenance request remains unchanged while the correction is pending.
+
+Project Managers and Production Managers receive an in-app notification and use **Correction approvals** in their manager profile. A manager can approve or reject only corrections belonging to an assigned site, and must record a review remark. Approval does not change the request by itself: it unlocks **Apply approved correction** under **Admin > Request corrections** for Admin and Super Admin. Application re-checks that the original fields have not changed, validates the complete lifecycle timestamp order, updates the request in one database transaction, records timeline corrections, and writes user submission, PM review, and Admin application events to the Audit Trail. Rejected, stale, and unapproved corrections never alter the source request.
 - Closed or verified requests cannot be edited through the edit route.
 - Delete is a server-side operation and cannot remove a verified request.
 

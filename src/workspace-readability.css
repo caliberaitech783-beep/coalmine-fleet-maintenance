@@ -48,6 +48,11 @@
     font-size: max(16px, var(--workspace-copy)) !important;
   }
 
+  .mobile-workspace[data-operational="true"] .record-date-range-basis,
+  .mobile-workspace[data-operational="true"] .record-date-range-hint[data-empty="true"] {
+    display: none;
+  }
+
   /* Shared role workspaces, including those embedded inside Admin. */
   .mobile-workspace .workspace-hero { gap: 16px !important; padding: 18px 22px !important; }
   .mobile-workspace .workspace-hero h1 { font-size: clamp(23px, 1.3vw + 9px, 33px) !important; }
@@ -177,8 +182,6 @@
   .mobile-workspace[data-operational="true"] > .workspace-hero .mobile-tabs { flex: 0 1 auto; margin: 0 !important; gap: 8px !important; }
 }
 @media screen {
-.mobile-workspace[data-operational="true"] .record-date-range-basis,
-.mobile-workspace[data-operational="true"] .record-date-range-hint[data-empty="true"] { display: none; }
 .mobile-workspace[data-operational="true"] .shared-table-actions-toolbar { flex-wrap: nowrap; justify-content: flex-start; }
 .mobile-workspace[data-operational="true"] .shared-table-actions-toolbar > .shared-table-record-count,
 .mobile-workspace[data-operational="true"] .shared-table-actions-toolbar > .report-actions { flex-shrink: 0; white-space: nowrap; }
