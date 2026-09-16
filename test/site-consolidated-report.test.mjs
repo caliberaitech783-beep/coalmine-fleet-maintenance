@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {buildSiteFleetReportTables,buildSiteReportMessage,fleetActivityTable,requestsInReportWindow,reportSites,siteSourceData,timestampInReportWindow} from '../site-consolidated-report.mjs';
 import {DIRECTOR_REPORT_TITLES} from '../director-report-bundle.mjs';
+import {TICKET_ACCEPTANCE_REPORT_TITLE} from '../department-reports.mjs';
 
 const window={start:new Date('2026-09-14T19:00:00+05:30'),end:new Date('2026-09-15T07:00:00+05:30')};
 const request=(ref,fields={})=>({ref,site:'Sasti OB',door:'D-1',equipment:'Tipper',status:'Open',start:'2026-09-14 20:00:00',...fields});
@@ -86,4 +87,28 @@ test('availability uses the exact overnight interval across a month boundary and
   const closed=availability.rows.find(row=>cell(row,'door')==='D-2');
   assert.equal(cell(carried,'productive'),12);assert.equal(cell(carried,'breakdown'),'12.00');assert.equal(cell(carried,'available'),'0.00');
   assert.equal(cell(closed,'productive'),12);assert.equal(cell(closed,'breakdown'),'11.00');assert.equal(cell(closed,'available'),'1.00');
+});
+
+test('selected WhatsApp acceptance report includes only 30-minute delays within the permitted site and schedule window',()=>{
+  const source={requests:[
+    request('exact',{acceptedAt:'2026-09-14 20:30:00'}),
+    request('above',{acceptedAt:'2026-09-14 21:00:00'}),
+    request('below',{acceptedAt:'2026-09-14 20:29:59'}),
+    request('pending'),
+    request('earlier-opening',{start:'2026-09-14 18:00:00',acceptedAt:'2026-09-14 19:00:00'}),
+    request('outside-window',{start:'2026-09-14 17:00:00',acceptedAt:'2026-09-14 18:00:00'}),
+    request('next-window',{acceptedAt:'2026-09-15 07:00:00'}),
+    request('other-site',{site:'Majri OB',acceptedAt:'2026-09-14 21:00:00'}),
+  ]};
+  assert.ok(DIRECTOR_REPORT_TITLES.includes(TICKET_ACCEPTANCE_REPORT_TITLE),'existing schedule selections retain the same report title');
+  const tables=buildSiteFleetReportTables({source,site:'Sasti OB',window,reportTitles:[TICKET_ACCEPTANCE_REPORT_TITLE]});
+  const report=tables.find(table=>table.title===TICKET_ACCEPTANCE_REPORT_TITLE);
+  const refIndex=report.columns.findIndex(column=>column.key==='ref');
+  const differenceIndex=report.columns.findIndex(column=>column.key==='difference');
+  assert.deepEqual(report.rows.map(row=>row[refIndex]),['exact','above','earlier-opening']);
+  assert.deepEqual(report.rows.map(row=>row[differenceIndex]),['30m','1h 0m','1h 0m']);
+  assert.match(report.description,/30 minutes or more/);
+  const withoutSelection=buildSiteFleetReportTables({source,site:'Sasti OB',window,reportTitles:['Total Request Submitted Report']});
+  assert.ok(!withoutSelection.some(table=>table.title===TICKET_ACCEPTANCE_REPORT_TITLE));
+  assert.equal(withoutSelection.find(table=>table.title==='Total Request Submitted Report').rows.length,6);
 });

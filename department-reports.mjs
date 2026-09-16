@@ -2,7 +2,7 @@ import {requestStatusLabel} from './src/request-status.mjs';
 import {indiaDateTimeEpoch} from './report-date-range.mjs';
 import {equipmentGroupValue} from './equipment-group.mjs';
 import {elapsedLabel} from './report-metrics.mjs';
-import {acceptanceTime, maintenanceDelay, pendingRemark, availabilityPercentage} from './report-refinements.mjs';
+import {acceptanceTime, acceptanceDelayAtLeast30Minutes, maintenanceDelay, pendingRemark, availabilityPercentage} from './report-refinements.mjs';
 import {visibleInMisRequests} from './src/mis-history.mjs';
 import {MIS_IN_OUT_REPORT_COLUMNS, MIS_IN_OUT_REPORT_DESCRIPTION, buildSiteInOutReportRows} from './in-out-report.mjs';
 import {requestTimelineDurations,formatTimelineDuration,requestTimelineEvents} from './request-timeline.mjs';
@@ -10,6 +10,7 @@ import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs
 
 const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report'];
 export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6);
+export const TICKET_ACCEPTANCE_REPORT_TITLE = REPORT_TITLES[10];
 const clean = value => String(value ?? '').trim();
 const status = row => clean(row.status).toLowerCase();
 const verified = row => Boolean(row.verifiedAt || row.verifiedBy);
@@ -82,7 +83,7 @@ export function availabilityRows(equipment, requests, from, to, now = new Date()
   });
 }
 
-export function buildDepartmentReports({requests = [], equipmentRecords = [], transferRecords = [], from, to, now = new Date()} = {}) {
+export function buildDepartmentReports({requests = [], equipmentRecords = [], transferRecords = [], from, to, now = new Date(), showAllAcceptances = false} = {}) {
   requests=requests.map(normalizeOperationalSiteFields);
   equipmentRecords=equipmentRecords.map(normalizeOperationalSiteFields);
   transferRecords=transferRecords.map(normalizeOperationalSiteFields);
@@ -101,7 +102,7 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
     report('mis', REPORT_TITLES[8], MIS_IN_OUT_REPORT_DESCRIPTION, MIS_IN_OUT_REPORT_COLUMNS,buildSiteInOutReportRows(requests,{today:now}),r => r.date),
     // Production reports lead with Status, Location and Door no.; chassis is omitted.
     report('production', REPORT_TITLES[9], 'Submitted requests across all statuses.', [...productionLead,...base.slice(2,4),...complaintColumns,ref],requests),
-    report('production', REPORT_TITLES[10], 'Production submission to recorded maintenance acceptance.', [...productionLead,...base.slice(2,4),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),ref,...complaintColumns],requests),
+    report('production', TICKET_ACCEPTANCE_REPORT_TITLE, showAllAcceptances ? 'Production submission to recorded maintenance acceptance. All entries, including requests not yet accepted.' : 'Production submission to recorded maintenance acceptance. Delays of 30 minutes or more.', [...productionLead,...base.slice(2,4),col('submittedAt','Production Request Submitted Date & Time',r => r.start || r.createdAt),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('difference','Difference',r => duration(r.start || r.createdAt,acceptanceTime(r))),col('acceptedBy','Maintenance User Name',r => r.acceptedBy || 'Not recorded'),ref,...complaintColumns],showAllAcceptances ? requests : requests.filter(acceptanceDelayAtLeast30Minutes),r => r.start || r.createdAt),
     report('production', REPORT_TITLES[11], 'All open requests. Delay is measured from maintenance acceptance to the current time.', [...productionLead,...base.slice(2,4),col('acceptedAt','Maintenance Acceptance Date & Time',r => acceptanceTime(r) || 'Not accepted'),col('delay','Delay',r => maintenanceDelay(r,now)),col('remark','Remarks',r => pendingRemark(r,now)),...complaintColumns,ref],open),
     report('maintenance', REPORT_TITLES[12], 'Vehicle arrival delays reported by maintenance, including the reason for each red flag.', [
       col('status','Request status',requestStatusLabel),...maintenanceLead,col('start','Production date and time'),

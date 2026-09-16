@@ -68,7 +68,7 @@ import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired,
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_TITLE } from "../in-out-report.mjs";
-import { buildDepartmentReports } from "../department-reports.mjs";
+import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE } from "../department-reports.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
 import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../report-refinements.mjs";
@@ -5811,6 +5811,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
   const [offRoadAge, setOffRoadAge] = useState("all");
+  const [showAllAcceptances, setShowAllAcceptances] = useState(false);
   const [reportNow, setReportNow] = useState(() => new Date());
   useEffect(() => { const timer = window.setInterval(() => setReportNow(new Date()), 60000); return () => window.clearInterval(timer); }, []);
   const [availabilityTo, setAvailabilityTo] = useState(() => indiaDateTimeInputValue(new Date()).slice(0,10));
@@ -5980,7 +5981,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   ];
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
-    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow }).map((report) => ({
+    ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
       ...report,
       // Department reports return plain status text; render it as the same coloured pill the other reports use.
       columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
@@ -6216,6 +6217,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
                     <label className="report-time-field"><span>IST time slots</span><div>{schedule.times.map((time, index) => <span key={`${schedule.key}-${index}`}><input type="time" aria-label={`Report delivery time ${index+1}`} value={time} onChange={(event) => updateReportSchedule(schedule.key, { times: schedule.times.map((item, itemIndex) => itemIndex === index ? event.target.value : item) })} /><button type="button" onClick={() => updateReportSchedule(schedule.key, { times: schedule.times.filter((_, itemIndex) => itemIndex !== index) })} aria-label="Remove time"><X /></button></span>)}<button type="button" onClick={() => updateReportSchedule(schedule.key, { times: [...schedule.times, "19:00"] })} disabled={schedule.times.length >= 6}>+ Time</button></div></label>
                   </div>
                   {reportAccess.canManageAll ? <details className="report-assignment-picker"><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportGroups.filter((report,index,all) => all.findIndex(item => item.title === report.title) === index).map((report) => <label key={report.title}><input type="checkbox" checked={schedule.reports.includes(report.title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(report.title) ? schedule.reports.filter((title) => title !== report.title) : [...schedule.reports, report.title] })} /><span>{report.title}</span></label>)}</div></details> : <details className="report-assignment-picker" open><summary>Reports <b>{schedule.reports.length}</b></summary><div>{reportAccess.allowedReports.length ? reportAccess.allowedReports.map((title) => <label key={title}><input type="checkbox" checked={schedule.reports.includes(title)} onChange={() => updateReportSchedule(schedule.key, { reports: schedule.reports.includes(title) ? schedule.reports.filter((item) => item !== title) : [...schedule.reports, title] })} /><span>{title}</span></label>) : <p className="report-assignment-empty">No reports are assigned to your role yet. Ask an administrator to add them to the role default.</p>}</div></details>}
+                  {schedule.reports.includes(TICKET_ACCEPTANCE_REPORT_TITLE) && <p className="report-acceptance-schedule-note">Ticket Acceptance includes delays of 30 minutes or more in scheduled WhatsApp reports.</p>}
                 </article>)}
                 <button type="button" className="report-add-schedule" onClick={addReportSchedule}><Plus /> Add schedule</button>
               </div>
@@ -6308,6 +6310,14 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {reportMasterData.loading && <p role="status">Loading report master data…</p>}
       {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
       {selectedReport && <ReportPeriodFilter from={reportFrom} to={reportTo} onApply={(from,to)=>{setReportFrom(from);setReportTo(to);}} />}
+      {selectedReport?.title === TICKET_ACCEPTANCE_REPORT_TITLE && <div className="report-acceptance-filter">
+        <span role="status">{showAllAcceptances ? "Showing all entries" : "Showing delays of 30 minutes or more"}</span>
+        <label className="report-acceptance-toggle">
+          <input type="checkbox" role="switch" checked={showAllAcceptances} onChange={(event) => setShowAllAcceptances(event.target.checked)} />
+          <span className="report-acceptance-track" aria-hidden="true" />
+          <span>Show total</span>
+        </label>
+      </div>}
       {selectedReport?.title === "Open Off road Cases" && <div className="mobile-tabs" aria-label="Off-road age filter">
         <button type="button" className={offRoadAge === "all" ? "active" : ""} onClick={() => setOffRoadAge("all")}>All</button>
         <button type="button" className={offRoadAge === "ten" ? "active" : ""} onClick={() => setOffRoadAge("ten")}>10 days</button>

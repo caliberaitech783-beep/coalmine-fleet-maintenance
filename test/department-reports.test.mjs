@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
-import {availabilityRows,buildDepartmentReports,DEPARTMENT_REPORT_TITLES} from '../department-reports.mjs';
+import {availabilityRows,buildDepartmentReports,DEPARTMENT_REPORT_TITLES,TICKET_ACCEPTANCE_REPORT_TITLE} from '../department-reports.mjs';
 const now = new Date('2026-09-07T12:00:00+05:30');
 const build = requests => buildDepartmentReports({requests,now,from:'2026-09-01',to:'2026-09-07'});
 const cell = (report,key,row=report.rows[0]) => report.columns.find(c=>c.key===key).value(row);
@@ -108,9 +108,40 @@ test('mismatch flag uses verification minus trip without changing Difference or 
 });
 
 test('acceptance is not inferred from status or closure',()=>{
-  const report=build([{status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-01 10:00'}]).find(r=>r.title.includes('Acceptance'));
+  const report=buildDepartmentReports({requests:[{status:'Closed',start:'2026-09-01 09:00',closedAt:'2026-09-01 10:00'}],showAllAcceptances:true}).find(r=>r.title===TICKET_ACCEPTANCE_REPORT_TITLE);
   assert.equal(cell(report,'acceptedAt'),'Not accepted');
   assert.equal(cell(report,'difference'),'Not recorded');
+});
+
+test('acceptance report defaults to recorded delays of at least 30 minutes, without rounding up',()=>{
+  const requests=[
+    {ref:'below',start:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 09:29:59'},
+    {ref:'exact',start:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 09:30:00'},
+    {ref:'above',start:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 09:30:01',status:'Closed',verifiedAt:'2026-09-02 10:00'},
+    {ref:'overnight',start:'2026-09-01 23:45:00',acceptedAt:'2026-09-02 00:15:00'},
+    {ref:'utc',start:'2026-09-01T03:30:00Z',acceptedAt:'2026-09-01 09:30:00'},
+    {ref:'fallback',createdAt:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 10:00:00'},
+    {ref:'pending',start:'2026-08-01 09:00:00'},
+    {ref:'closed-only',start:'2026-08-01 09:00:00',status:'Closed',closedAt:'2026-09-01 11:00:00'},
+    {ref:'missing-start',acceptedAt:'2026-09-01 10:00:00'},
+    {ref:'invalid',start:'invalid',acceptedAt:'2026-09-01 10:00:00'},
+    {ref:'invalid-acceptance',start:'2026-09-01 09:00:00',acceptedAt:'invalid'},
+    {ref:'reversed',start:'2026-09-01 10:00:00',acceptedAt:'2026-09-01 09:00:00'},
+    {ref:'zero',start:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 09:00:00'},
+  ];
+  const report=build(requests).find(r=>r.title===TICKET_ACCEPTANCE_REPORT_TITLE);
+  assert.deepEqual(report.rows.map(r=>r.ref),['exact','above','overnight','utc','fallback']);
+  assert.equal(cell(report,'difference'),'30m');
+  const fallback=report.rows.find(r=>r.ref==='fallback');
+  assert.equal(report.dateValue(fallback),fallback.createdAt);
+  assert.equal(cell(report,'difference',fallback),'1h 0m');
+  const allReports=buildDepartmentReports({requests,showAllAcceptances:true});
+  const total=allReports.find(r=>r.title===TICKET_ACCEPTANCE_REPORT_TITLE);
+  assert.deepEqual(total.rows,requests);
+  assert.deepEqual(total.columns.map(c=>c.key),report.columns.map(c=>c.key));
+  assert.equal(allReports.find(r=>r.title==='Total Request Submitted Report').rows.length,requests.length);
+  assert.deepEqual(build(requests).find(r=>r.title===TICKET_ACCEPTANCE_REPORT_TITLE).rows,report.rows,'the total option does not change subsequent defaults');
+  assert.deepEqual(build(requests.filter(r=>['below','pending','invalid'].includes(r.ref))).find(r=>r.title===TICKET_ACCEPTANCE_REPORT_TITLE).rows,[]);
 });
 test('availability clips intervals to selected inclusive days and merges overlaps',()=>{
   const equipment=[{door:'A',equipmentName:'Asset A'},{door:'B'}];
