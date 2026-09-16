@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import "./dashboard-filter-bar.css";
 
 export default function DashboardFilterBar({ children, inDialog = false, bannerRef }) {
@@ -25,6 +26,6 @@ export default function DashboardFilterBar({ children, inDialog = false, bannerR
   return <header ref={ref} data-collapsed={!inDialog && collapsed ? "true" : undefined} className={`mine-dashboard-head dashboard-filter-bar${inDialog ? " in-dialog" : ""}`}>
     <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1></div></div>
     <div className="mine-head-actions">{children}</div>
-    {!inDialog && <button type="button" className="dashboard-banner-toggle" aria-expanded={!collapsed} aria-label={collapsed ? "Show dashboard banner" : "Hide dashboard banner"} onClick={() => setCollapsed(value => !value)}>{collapsed ? "Show" : "Hide"}</button>}
+    {!inDialog && <button type="button" className="dashboard-banner-toggle" aria-expanded={!collapsed} aria-label={collapsed ? "Show dashboard banner" : "Hide dashboard banner"} title={collapsed ? "Show dashboard banner" : "Hide dashboard banner"} onClick={() => setCollapsed(value => !value)}>{collapsed ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button>}
   </header>;
 }

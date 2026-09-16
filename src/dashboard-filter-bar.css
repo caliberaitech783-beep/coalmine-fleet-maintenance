@@ -1,6 +1,7 @@
 .mine-dashboard > .dashboard-filter-bar { position: sticky; top: var(--dashboard-sticky-top, 0px); z-index: 30; }
-.mine-dashboard > .dashboard-filter-bar:not([data-collapsed="true"]) { padding-top: 32px !important; }
-.dashboard-filter-bar > .dashboard-banner-toggle { position: absolute; right: 10px; top: 4px; min-height: 24px; padding: 2px 10px; border: 1px solid #ffffff80; border-radius: 5px; background: #fff; color: #522e90; font-weight: 700; cursor: pointer; }
+.mine-dashboard > .dashboard-filter-bar:not([data-collapsed="true"]) { padding-top: 12px !important; padding-right: 44px !important; }
+.dashboard-filter-bar > .dashboard-banner-toggle { position: absolute; right: 8px; top: 4px; display: grid; place-items: center; width: 28px; min-height: 28px; padding: 4px; border: 0; border-radius: 5px; background: transparent; color: #fff; cursor: pointer; }
+.dashboard-filter-bar > .dashboard-banner-toggle:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .mine-dashboard > .dashboard-filter-bar[data-collapsed="true"] { min-height: 32px !important; height: 32px; padding: 0 !important; }
 .dashboard-filter-bar[data-collapsed="true"] > div { display: none !important; }
 .mine-dashboard > .dashboard-filter-bar .mine-head-actions { flex: 1 1 auto; }
