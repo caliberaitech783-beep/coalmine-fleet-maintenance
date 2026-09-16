@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { hourlyBreakdownView, breakdownElapsed } from "./hourly-breakdown.mjs";
 import "./hourly-breakdown-view.css";
@@ -21,20 +21,24 @@ export default function HourlyBreakdownView({ requests, sites, onBack, ActionsTa
   const [now, setNow] = useState(Date.now);
   const id = useId();
   const [toolbarTarget, setToolbarTarget] = useState(null);
+  const viewportRef = useRef(null);
+  useEffect(() => {
+    const fitViewport = () => {
+      const element = viewportRef.current;
+      if (element) element.style.height = `${Math.max(240, window.innerHeight - element.getBoundingClientRect().top)}px`;
+    };
+    fitViewport();
+    window.addEventListener("resize", fitViewport);
+    return () => window.removeEventListener("resize", fitViewport);
+  }, []);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const view = hourlyBreakdownView(requests, hours, site, now, sites);
   const siteTabs = [{ site: "", count: view.total }, ...view.siteCounts];
   const title = `${site || "All sites"} · Last ${windowLabel(hours)}`;
-  return <section className="hourly-breakdown-view dashboard-record-browser">
-    <header className="hourly-breakdown-head">
-      <button type="button" className="dashboard-breakdown-day-back hourly-breakdown-back" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />Back to Breakdown</button>
-      <div className="hourly-breakdown-title">
-        <h2>Hourly breakdown activity</h2>
-        <p>Activity within the last {windowLabel(hours)}. Active BD timers update automatically; completed BD durations stop at closure.</p>
-      </div>
-    </header>
+  return <section ref={viewportRef} aria-label="Hourly breakdown activity" className="hourly-breakdown-view dashboard-record-browser">
     <div className="dashboard-record-controls">
       <div className="dashboard-record-topline">
+        <button type="button" className="dashboard-breakdown-day-back hourly-breakdown-back" onClick={onBack} aria-label="Back to Breakdown" title="Back to Breakdown"><ArrowLeft size={16} aria-hidden="true" />Back</button>
         <div className="dashboard-record-tabs hourly-breakdown-windows" role="tablist" aria-label="Choose breakdown activity window">
           {view.hourCounts.map((count, index) => <button type="button" key={index} role="tab" id={`${id}-window-${index + 1}`} aria-selected={hours === index + 1} aria-controls={`${id}-records`} tabIndex={hours === index + 1 ? 0 : -1}
             onClick={() => setHours(index + 1)} onKeyDown={(event) => moveBetweenTabs(event, index, view.hourCounts.length, (next) => setHours(next + 1))}><span>{windowLabel(index + 1)}</span><b>{count.toLocaleString()}</b></button>)}
