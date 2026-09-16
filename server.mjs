@@ -1101,6 +1101,30 @@ app.get('/api/app-version',(_req,res)=>{
   res.json({version:currentAppVersion,commit:deploymentSha});
 });
 
+// Audit Trail housekeeping for Admin and Super Admin: permanently delete the
+// entries recorded more than N days ago (N >= 1, so today's activity always
+// stays). /api/audit-events is outside the automatic audit middleware, so the
+// purge itself is written to the Audit Trail here with the count removed.
+const AUDIT_PURGE_MAX_DAYS=3650;
+app.delete('/api/audit-events',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const days=Number(req.query.olderThanDays??req.body?.olderThanDays);
+    if(!Number.isInteger(days)||days<1||days>AUDIT_PURGE_MAX_DAYS)return res.status(400).json({error:`Enter how many days of Audit Trail to keep (1 to ${AUDIT_PURGE_MAX_DAYS}).`});
+    const cutoff=new Date(Date.now()-days*86400000);
+    const {rowCount}=await pool.query('DELETE FROM audit_events WHERE occurred_at<$1',[cutoff.toISOString()]);
+    const deleted=Number(rowCount||0);
+    await appendAuditEvent(req,{
+      eventType:'Administration',module:'Audit Trail',action:'Delete old audit logs',targetType:'Audit Trail',
+      targetReference:`Older than ${days} day${days===1?'':'s'}`,
+      reason:`Deleted ${deleted} audit entr${deleted===1?'y':'ies'} recorded before ${formatDisplayDateTime(cutoff)}`,
+      changedFields:[{field:'Older than (days)',before:'',after:String(days)},{field:'Entries deleted',before:'',after:String(deleted)}],
+      statusCode:200,
+    });
+    res.set('Cache-Control','no-store');
+    res.json({deleted,olderThanDays:days,cutoff:cutoff.toISOString()});
+  }catch(error){next(error)}
+});
+
 // The preferred language chosen at sign-in is remembered on the user record so
 // speech input and complaint translation follow it on every device.
 app.post('/api/preferred-language',requireSession,async(req,res,next)=>{

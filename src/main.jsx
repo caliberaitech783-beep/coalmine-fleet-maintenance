@@ -5278,6 +5278,7 @@ function AuditTrailPage({ session }) {
   const appliedDateRange = useRef({fromDate:today,toDate:today});
   const [fromDate,setFromDate] = useState(today), [toDate,setToDate] = useState(today);
   const [events, setEvents] = useState([]), [summary, setSummary] = useState(null), [nextCursor, setNextCursor] = useState(null), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
+  const [purgeOpen, setPurgeOpen] = useState(false), [purgeDays, setPurgeDays] = useState("2"), [purging, setPurging] = useState(false);
   const load = async ({append=false,dateRange=appliedDateRange.current} = {}) => {
     const loadSequence = append ? auditLoadSequence.current : ++auditLoadSequence.current;
     if (append) setLoadingMore(true);
@@ -5370,8 +5371,38 @@ function AuditTrailPage({ session }) {
   const [rows, sort, changeSort] = useSortableRows(filtered, defaultDurationSort(filterColumns), (event, key) => key === "durationMs" ? event.durationMs : key === "occurredAt" ? event.occurredAt : valueFor(event, key));
   const exportColumns = columns.map(([key, label]) => ({label, value:(event) => valueFor(event, key)}));
   const updateFilter = (key, value) => setFilters((current) => value ? {...current,[key]:value} : Object.fromEntries(Object.entries(current).filter(([field]) => field !== key)));
+  // Permanently deletes the entries older than the chosen number of days. The
+  // server records the deletion itself as an Audit Trail entry.
+  const purgeDayCount = Number(purgeDays);
+  const purgeCutoff = Number.isInteger(purgeDayCount) && purgeDayCount >= 1 ? new Date(Date.now() - purgeDayCount * 86400000) : null;
+  const deleteOldLogs = async (event) => {
+    event.preventDefault();
+    if (!purgeCutoff) return alert("Enter a whole number of days (1 or more).");
+    const dayLabel = `${purgeDayCount} day${purgeDayCount === 1 ? "" : "s"}`;
+    if (!window.confirm(`Permanently delete every Audit Trail entry older than ${dayLabel} (recorded before ${formatTwelveHourDateTime(purgeCutoff)})? This cannot be undone.`)) return;
+    setPurging(true);
+    try {
+      const response = await fetch(`/api/audit-events?olderThanDays=${purgeDayCount}`, {method:"DELETE", cache:"no-store", headers:{Authorization:`Bearer ${session?.token || authToken}`}});
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Could not delete the old audit logs.");
+      setPurgeOpen(false);
+      alert(`${Number(result.deleted || 0).toLocaleString("en-IN")} audit entr${Number(result.deleted) === 1 ? "y" : "ies"} older than ${dayLabel} deleted.`);
+      load();
+    } catch (error) { alert(error.message); }
+    finally { setPurging(false); }
+  };
   return <section className="panel pagepanel generic audit-page">
-    <header><div><h1>Audit Trail</h1><p>Today’s administration, user changes, account security, backup, and vehicle transfer activity</p></div><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></header>
+    <header><div><h1>Audit Trail</h1><p>Today’s administration, user changes, account security, backup, and vehicle transfer activity</p></div><div className="audit-header-actions"><button type="button" className="secondary danger" onClick={() => setPurgeOpen(true)} disabled={loading || purging}><Trash2 /> Delete old logs</button><button type="button" className="secondary" onClick={() => load()} disabled={loading}><RefreshCw /> {loading ? "Refreshing..." : "Refresh"}</button></div></header>
+    {purgeOpen && <Modal title="Delete old audit logs" close={() => !purging && setPurgeOpen(false)} className="audit-purge-modal">
+      <form className="form master-form" onSubmit={deleteOldLogs}>
+        <p className="audit-purge-help">Entries older than the number of days you enter are deleted permanently from the Audit Trail. Today and the most recent days stay. The deletion itself is recorded in the Audit Trail with the number of entries removed.</p>
+        <div className="formgrid">
+          <label>Delete entries older than (days) *<input type="number" min="1" max="3650" step="1" value={purgeDays} onChange={(event) => setPurgeDays(event.target.value)} required autoFocus /></label>
+        </div>
+        <p className="audit-purge-note">{purgeCutoff ? `Everything recorded before ${formatTwelveHourDateTime(purgeCutoff)} will be deleted.` : "Enter a whole number of days (1 or more)."}</p>
+        <footer><button type="button" onClick={() => setPurgeOpen(false)} disabled={purging}>Cancel</button><button className="danger" disabled={purging || !purgeCutoff}><Trash2 /> {purging ? "Deleting..." : "Delete permanently"}</button></footer>
+      </form>
+    </Modal>}
     <div className="audit-summary"><span><b>{Number(summary?.total ?? events.length).toLocaleString("en-IN")}</b> recorded events</span><span><b>{Number(summary?.failed ?? events.filter((event) => event.outcome === "Failed").length).toLocaleString("en-IN")}</b> failed actions</span><span><b>{Number(summary?.users ?? new Set(events.map((event) => event.actorLogin).filter(Boolean)).size).toLocaleString("en-IN")}</b> users</span><span><b>{Number(summary?.devices ?? new Set(events.map((event) => event.deviceId).filter(Boolean)).size).toLocaleString("en-IN")}</b> devices</span></div>
     <div className="audit-device-filter-band"><AuditToggleGroup label="Device" value={deviceType} options={auditDeviceTypeOptions} onChange={setDeviceType} /><AuditToggleGroup label="Platform" value={platform} options={auditPlatformOptions} onChange={setPlatform} /><span className="audit-visible-count"><b>{rows.length.toLocaleString("en-IN")}</b> visible · {events.length.toLocaleString("en-IN")} loaded</span></div>
     <div className="toolbar audit-toolbar"><div><Search /><input data-smart-search type="search" placeholder="Search audit trail" value={query} onChange={(event) => setQuery(event.target.value)} /></div><form className="audit-date-range" onSubmit={applyDateRange}><label>From date<input type="date" value={fromDate} max={toDate||undefined} onChange={(event)=>setFromDate(event.target.value)} /></label><label>To date<input type="date" value={toDate} min={fromDate||undefined} onChange={(event)=>setToDate(event.target.value)} /></label><button type="submit" className="secondary" disabled={loading}><ListFilter /> Apply dates</button><button type="button" className="secondary" onClick={showToday} disabled={loading}><CalendarDays /> Today</button></form><div className="toolbar-actions-end"><div className="master-actions-slot" ref={setActionsToolbarTarget} /><TableParameterFilter columns={filterColumns} rows={events} filters={filters} onFilterChange={updateFilter} onClearFilters={() => {setFilters({});setDeviceType("All");setPlatform("All");}} /><ExportMenu title="Audit Trail" columns={exportColumns} rows={rows} /></div></div>
