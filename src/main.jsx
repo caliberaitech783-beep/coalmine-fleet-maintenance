@@ -103,6 +103,7 @@ import {readApiJson} from "./api-response.mjs";
 import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-transient-retry.mjs";
 import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
 import {requestsVisibleToMisWorkspace} from "../mis-request-visibility.mjs";
+import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
 import RequestTimelineButton from "./request-timeline.jsx";
 import {
@@ -204,6 +205,7 @@ import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
 import "./dashboard-readability.css";
 import "./dashboard-spacing.css";
+import "./mobile-phone-optimization.css";
 import { APP_VERSION } from "./app-version.js";
 import { trackCountChange, formatCountDelta, BREAKDOWN_COUNT_STORAGE_KEY } from "./fleet-count-trend.mjs";
 
@@ -1234,7 +1236,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     {!equipmentLoaded&&<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="manager-fleet-data-state" />}
     {!requestsLoaded&&<RequestDataState error={requestsError} retry={onRefreshRequests} />}
     {managerReconnecting && <ConnectionRecoveryNotice updatedAt={managerUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
-    {managerDataReady && !managerReconnecting && <p className="manager-live-status">Live status · Updated {new Date(managerUpdatedAt).toLocaleTimeString("en-IN")} · Refreshes every 10 seconds and when you return to this tab.</p>}
+    {managerDataReady && !managerReconnecting && <p className="manager-live-status">Live status · Updated {new Date(managerUpdatedAt).toLocaleTimeString("en-IN")} · Refreshes automatically and when you return to this tab.</p>}
     <div className="manager-kpi-grid">{cards.map(([label, value, hint, action, types]) => <button type="button" key={label} onClick={() => managerDataReady&&action&&setManagerDrilldown(action.key)} disabled={!action||!managerDataReady} aria-busy={!managerDataReady} aria-haspopup="dialog" aria-label={`${label}: ${managerDataReady?Number(value||0).toLocaleString():"loading"}. View details`}>
       <span>{label}</span><strong>{managerDataReady?Number(value || 0).toLocaleString():"—"}</strong><small>{hint}</small><ChevronRight className="manager-kpi-drilldown-icon" aria-hidden="true" />{productionManagerView&&managerDataReady && <div className="manager-kpi-tooltip"><b>Equipment types</b>{types?.length ? types.map((line)=><i key={line}>{line}</i>) : <i>No equipment</i>}</div>}
     </button>)}</div>
@@ -3090,7 +3092,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
-  const [pageSize, setPageSize] = useState(50);
+  const [pageSize, setPageSize] = useState(() => mobileTablePageSize() || 50);
   const [page, setPage] = useState(0);
   const columnValue = (row, column) => tableFilterText(column.value?.(row));
   const displayedColumns = visibleColumnKeys.length ? visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean) : columns;
@@ -3150,7 +3152,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const reportTableToolbar = (
       <div className="report-table-filter-toolbar">
         <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
-        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
+        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(mobileTablePageSize() || 50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
         <SavedReportsPanel title={reportTitle} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentSavedView} onApply={applySavedView} canPrint onPrint={printSavedView} />
         {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
       </div>
@@ -9420,7 +9422,7 @@ function App() {
       }
     };
     checkVersion();
-    const timer = window.setInterval(checkVersion, 10000);
+    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 10_000));
     return () => {
       stopped = true;
       window.clearInterval(timer);
@@ -9503,7 +9505,13 @@ function App() {
         headers: { Authorization: `Bearer ${session.token}`, ...(responseCache.etag ? {"If-None-Match": responseCache.etag} : {}) },
       });
       if (response.status === 304) {
-        if (loadSequence === requestLoadSequence.current) setRequestState((current) => ({...current, token: session.token, loaded: true, error: "", updatedAt: Date.now()}));
+        if (loadSequence === requestLoadSequence.current) setRequestState((current) => {
+          // A no-change response used to rebuild every row in the active phone
+          // workflow. Keep its stable state; dashboards still update their live
+          // timestamp and manual/focus refresh continues to work normally.
+          if (responsiveMobile && selectedOperationalRole && current.token === session.token && current.loaded && !current.error) return current;
+          return {...current, token: session.token, loaded: true, error: "", updatedAt: Date.now()};
+        });
         return requests;
       }
       if (!response.ok) throw Object.assign(new Error([401, 403].includes(response.status) ? "Sign in again or check your dashboard access." : "Could not load requests"), {status: response.status});
