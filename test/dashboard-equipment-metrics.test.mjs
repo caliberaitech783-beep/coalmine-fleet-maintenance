@@ -372,6 +372,21 @@ test("formatted identifiers still respect site scope and duplicate requests coun
   assert.deepEqual(fleetChartCounts(records, requests).breakdown, { equipment: 0, vehicles: 1, total: 1 });
 });
 
+test("fleet opening meters use saved request readings, including legacy readings and zero", async () => {
+  const { fleetAssetRequestDetails } = await import("../dashboard-equipment-metrics.mjs");
+  const record = { door: "S1", category: "Vehicle", currentLocation: "Majri OB", hmr: 999, kmr: 999 };
+  const request = { door: "S1", site: "Majri OB", status: "Open" };
+  const readings = (fields) => {
+    const [row] = fleetAssetRequestDetails([record], [{ ...request, ...fields }]);
+    return [row.hmr, row.kmr];
+  };
+  assert.deepEqual(readings({ openingMeterReadings: { HMR: 10283, KMR: 236734 } }), ["10283", "236734"]);
+  assert.deepEqual(readings({ meterType: "HMR", openingMeterReading: "14775" }), ["14775", undefined]);
+  assert.deepEqual(readings({ openingMeterReading: "236734" }), [undefined, "236734"]);
+  assert.deepEqual(readings({ openingMeterReadings: { HMR: 0, KMR: 0 } }), ["0", "0"]);
+  assert.deepEqual(readings({ closingMeterReadings: { HMR: 500, KMR: 600 } }), [undefined, undefined]);
+});
+
 test("fleet lists carry each asset's current breakdown request or its live road status", async () => {
   const { fleetAssetRequestDetails } = await import("../dashboard-equipment-metrics.mjs");
   const records = [

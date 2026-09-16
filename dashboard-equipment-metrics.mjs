@@ -1,4 +1,5 @@
 import {canonicalSiteName, equipmentSiteName} from './site-location.mjs';
+import {requestMeterReadings} from './request-equipment.mjs';
 
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
 
@@ -219,6 +220,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
   return records.map((record) => {
     const current = active.filter((request) => matches(request, record))
       .sort((left, right) => String(left.start || "").localeCompare(String(right.start || "")))[0];
+    const openingReadings = current ? requestMeterReadings(current, "opening", [record]) : {};
     const requestStatus = current
       ? (String(current.verifiedAt || "").trim() ? "Verified" : String(current.status || "").trim() || "Open")
       : ROAD_STATUS_LABELS[matchingRoadStatus(record, requests, matches)] || ROAD_STATUS_LABELS.unknown;
@@ -228,9 +230,9 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       requestStatus,
       requestStart: current?.start || "—",
       requestClosed: "—",
-      // BD Balance shows the linked request's readings, falling back to the fleet record.
-      hmr: current?.hmr ?? record.hmr,
-      kmr: current?.kmr ?? record.kmr,
+      // Opening readings belong to the linked request, not the fleet's current meters.
+      hmr: current ? openingReadings.HMR || undefined : record.hmr,
+      kmr: current ? openingReadings.KMR || undefined : record.kmr,
       repairCategory: current?.category || "—",
       breakdownReason: current?.complaint || "—",
     };
