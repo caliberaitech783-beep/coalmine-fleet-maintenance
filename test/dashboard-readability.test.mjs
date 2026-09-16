@@ -12,9 +12,9 @@ const rule=selector=>{
   return result[2];
 };
 
-test('the dashboard readability overrides load after every other stylesheet for every role',()=>{
+test('dashboard readability loads before the final dashboard spacing overrides for every role',()=>{
   const imports=[...client.matchAll(/import ["'](.+\.css)["'];/g)].map(match=>match[1]);
-  assert.equal(imports.at(-1),'./dashboard-readability.css');
+  assert.deepEqual(imports.slice(-2),['./dashboard-readability.css','./dashboard-spacing.css']);
   assert.equal(imports.filter(path=>path==='./dashboard-readability.css').length,1);
   assert.match(css,/:is\(\.mine-dashboard, \.manager-dashboard\)\s*\{/);
   const normal=client.slice(client.indexOf('function Normal('),client.indexOf('function App('));
