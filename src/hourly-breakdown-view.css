@@ -1,5 +1,6 @@
 /* The hourly activity page reuses the chart-record browser controls and the shared actions table. */
-.hourly-breakdown-view.dashboard-record-browser { --record-purple: var(--brand-purple, #522e90); display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; box-sizing: border-box; overflow: hidden; gap: 0; padding: 0 18px; color: var(--ink, #142943); }
+.body:has(.hourly-breakdown-view), .normal > main:has(.hourly-breakdown-view) { max-width: none; width: 100%; padding: 0; }
+.hourly-breakdown-view.dashboard-record-browser { --record-purple: var(--brand-purple, #522e90); display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; width: 100%; margin: 0; box-sizing: border-box; overflow: hidden; gap: 0; padding: 0; color: var(--ink, #142943); }
 .hourly-breakdown-view .dashboard-record-topline { flex-wrap: nowrap; }
 .hourly-breakdown-view .hourly-breakdown-back { flex-shrink: 0; }
 .hourly-breakdown-view .dashboard-record-tabs.hourly-breakdown-windows { flex: 1; }
@@ -30,7 +31,7 @@
 [data-theme="dark"] .hourly-breakdown-view .hourly-bd-in { background: #4a1f33; color: #ffc4d8; }
 [data-theme="dark"] .hourly-breakdown-view .hourly-bd-out { background: #163826; color: #b7efc9; }
 @media (max-width: 560px) {
-  .hourly-breakdown-view.dashboard-record-browser { padding: 0 10px; gap: 0; }
+  .hourly-breakdown-view.dashboard-record-browser { padding: 0; gap: 0; }
   .hourly-breakdown-head { flex-direction: column; }
   .hourly-breakdown-title { text-align: left; }
   .hourly-breakdown-windows button { min-width: max-content; padding: 8px 10px; }
