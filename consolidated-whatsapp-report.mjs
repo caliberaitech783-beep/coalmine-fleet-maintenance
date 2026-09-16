@@ -1,6 +1,7 @@
 import {canonicalSiteName} from './site-location.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {displaySiteName} from './region-scope.mjs';
+import {requestStatusLabel} from './src/request-status.mjs';
 
 export const CONSOLIDATED_REPORT_HOURS=[6,10,14,18,22];
 const INDIA_OFFSET_MS=330*60*1000;
@@ -69,15 +70,18 @@ export function prepareConsolidatedRows(requests=[],reportTime=new Date()){
 }
 
 const indiaDateTime=(value)=>formatDisplayDateTime(value);
-const recordLines=(request,index,closed=false)=>[
-  `${index+1}. *${request.door||request.equipment||'Door not assigned'}* — *${request.elapsed}*`,
-  `   Request: ${request.reference||request.ref||'—'}`,
-  `   User: ${request.user||request.owner||'Not assigned'}`,
-  `   OEM: ${request.oem||'Not assigned'}`,
-  closed
-    ? `   Closed by: ${request.closedBy||'Not assigned'}`
-    : `   Status: ${request.status||'Open'}${String(request.status||'').toLowerCase()==='idle'?` | Idle reason: ${request.idleReason||'Not assigned'}`:''}`,
-].join('\n');
+const recordLines=(request,index,closed=false)=>{
+  const status=requestStatusLabel(request);
+  return [
+    `${index+1}. *${request.door||request.equipment||'Door not assigned'}* — *${request.elapsed}*`,
+    `   Request: ${request.reference||request.ref||'—'}`,
+    `   User: ${request.user||request.owner||'Not assigned'}`,
+    `   OEM: ${request.oem||'Not assigned'}`,
+    closed
+      ? `   Closed by: ${request.closedBy||'Not assigned'}`
+      : `   Status: ${status}${status==='Idle'?` | Idle reason: ${request.idleReason||'Not assigned'}`:''}`,
+  ].join('\n');
+};
 
 export function buildConsolidatedWhatsAppReport({scopeLabel='Site',start,end,openRequests=[],closedRequests=[],maxLength=3900}){
   const sites=[...new Set([...openRequests,...closedRequests].map(({site})=>displaySiteName(site)||'Not assigned'))].sort();

@@ -43,7 +43,7 @@ function requestBeforeEnd(request,end){
   if(!next.closedAt){
     next.closedBy='';
     if(parseReportTimestamp(request.closedAt)>=end){next.maintenanceWork='';next.delayedReason='';}
-    next.status=next.idealRequestedAt&&!next.idealApprovedAt?'Idle':next.inProgressAt?'In progress':'Open';
+    next.status=next.idealRequestedAt&&!next.idealApprovedAt?'Idle':next.inProgressAt?'In progress':next.acceptedAt?'Accepted':'Open';
   }
   return next;
 }

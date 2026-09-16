@@ -3,6 +3,7 @@ import {canonicalSiteName} from './site-location.mjs';
 import {reportPdfFont,reportPdfText,registerReportPdfFonts,fittingReportText} from './report-pdf-text.mjs';
 import {formatDisplayDateTime} from './date-time-format.mjs';
 import {displaySiteName} from './region-scope.mjs';
+import {requestStatusLabel} from './src/request-status.mjs';
 
 const COLORS={navy:'#10284c',blue:'#2859b8',muted:'#65758b',line:'#dce4ef',red:'#c43c35',green:'#16845b',soft:'#f4f7fb'};
 const indiaDateTime=(value)=>formatDisplayDateTime(value);
@@ -104,7 +105,7 @@ export async function buildFleetConsolidatedReportPdf({scopeLabel='Site',start,e
     const closed=closedRequests.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(site));
     section(doc,'OFF ROAD / OPEN',opened.length,COLORS.red);
     if(!opened.length)doc.fillColor(COLORS.muted).font('Helvetica').fontSize(9).text('No open requests.').moveDown();
-    opened.forEach((row,index)=>record(doc,{title:row.door||row.equipment,badge:row.elapsed,lines:[['Request',row.reference||row.ref],['User',row.user||row.owner],['OEM',row.oem],['Status',`${clean(row.status,'Open')}${String(row.status||'').toLowerCase()==='idle'?` (${clean(row.idleReason,'Reason not assigned')})`:''}`]]},index));
+    opened.forEach((row,index)=>{const status=requestStatusLabel(row);record(doc,{title:row.door||row.equipment,badge:row.elapsed,lines:[['Request',row.reference||row.ref],['User',row.user||row.owner],['OEM',row.oem],['Status',`${status}${status==='Idle'?` (${clean(row.idleReason,'Reason not assigned')})`:''}`]]},index)});
     section(doc,'ON ROAD / CLOSED',closed.length,COLORS.green);
     if(!closed.length)doc.fillColor(COLORS.muted).font('Helvetica').fontSize(9).text('No closed requests.').moveDown();
     closed.forEach((row,index)=>record(doc,{title:row.door||row.equipment,badge:row.elapsed,lines:[['Request',row.reference||row.ref],['User',row.user||row.owner],['OEM',row.oem],['Closed by',row.closedBy]]},index));

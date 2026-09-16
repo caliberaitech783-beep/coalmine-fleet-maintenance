@@ -43,6 +43,13 @@ test('a later closure or verification does not rewrite the status of an earlier 
   assert.equal(rows[0][10],'');assert.equal(rows[0][11],'');
 });
 
+test('activity snapshots distinguish accepted and in-progress requests from unaccepted Open work',()=>{
+  const accepted=fleetActivityTable([request('accepted',{acceptedAt:'2026-09-15 01:00:00'})],window).rows[0];
+  const progressing=fleetActivityTable([request('progressing',{acceptedAt:'2026-09-15 01:00:00',inProgressAt:'2026-09-15 02:00:00'})],window).rows[0];
+  assert.equal(accepted[4],'Accepted');
+  assert.equal(progressing[4],'In progress');
+});
+
 test('backdated requests and acceptance or flag activity still appear in the interval they were recorded',()=>{
   const cases=['createdAt','acceptedAt','arrivalFlaggedAt','misFlaggedAt'].map((key,index)=>request(`event-${index}`,{start:'2026-09-10 10:00:00',[key]:'2026-09-15 01:00:00'}));
   assert.deepEqual(requestsInReportWindow(cases,window).map(row=>row.ref),cases.map(row=>row.ref));

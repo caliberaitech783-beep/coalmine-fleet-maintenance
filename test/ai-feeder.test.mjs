@@ -48,6 +48,12 @@ test("an impossible same-day AM ETC is recovered as PM before alerts are calcula
   assert.equal(alerts.find(alert => alert.type === "etc-overdue")?.detail, "Expected back on road 1 hour ago and the request is still Open.");
 });
 
+test("an accepted request is never described as Open in Info Pulse alerts", () => {
+  const request = {ref: "REQ-ACCEPTED", status: "Open", acceptedAt: "2026-09-15 11:00:00", start: "2026-09-15 10:00:00", expectedCompletionAt: "2026-09-15 12:00:00"};
+  const alerts = aiFeederAlerts([request], {role: "Admin", now: parseIstTimestamp("2026-09-15 13:00")});
+  assert.equal(alerts.find(alert => alert.type === "etc-overdue")?.detail, "Expected back on road 1 hour ago and the request is still Accepted.");
+});
+
 test("a closed request never raises overdue, long running or stale alerts", () => {
   const types = typesFor([
     { ref: "REQ-2", status: "Closed", closedAt: at(1), verifiedAt: at(1), start: at(240), expectedCompletionAt: ist(at(100)) },

@@ -8,6 +8,8 @@ import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import { managerRoleSelection } from "../admin-access.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mjs";
+import {isNetworkFailure, isTransientStatus} from "../src/api-transient-retry.mjs";
+import {requestWriteConnectionMessage, requestWriteOutcomeConfirmed} from "../src/request-write-recovery.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const managerSource = source.slice(source.indexOf("function ManagerDashboard("), source.indexOf("function Dashboard("));
@@ -256,18 +258,18 @@ const mutationEnd = source.indexOf("  const completeLogin", mutationStart);
 assert.ok(mutationStart > appStart && mutationEnd > mutationStart);
 const mutationCode = `const ${source.slice(mutationStart, mutationEnd)} return { addRequest, updateRequest, addDailyRemark, deleteRequest };`;
 
-function mutationHarness({ ok = true, status = ok ? 200 : 409, saved = { ...closed }, initial = [open], reason = "QA test", refreshError = false } = {}) {
+function mutationHarness({ ok = true, status = ok ? 200 : 409, saved = { ...closed }, initial = [open], reason = "QA test", refreshError = false, refreshed, fetchError } = {}) {
   let rows = initial;
   const events = [];
   const calls = [];
   const win = { prompt: () => reason };
   const scope = {
-    window: win, session: { token: "fixture-token" }, authToken: "fixture-token", requestLoadSequence: { current: 0 },
+    window: win, session: { token: "fixture-token" }, authToken: "fixture-token", requests: initial, requestLoadSequence: { current: 0 },
     setRequests: (update) => { rows = typeof update === "function" ? update(rows) : update; events.push("local-state"); },
     notifyRequestChange: (window) => { assert.equal(window, win); events.push("notify"); },
-    loadRequests: async () => { events.push("reload"); if (refreshError) throw new Error("Offline"); },
-    console: { warn: () => {} },
-    fetch: async (url, options) => { calls.push({ url, options }); return { ok, status, json: async () => saved, text: async () => JSON.stringify(saved) }; },
+    loadRequests: async () => { events.push("reload"); if (refreshError) throw new Error("Offline"); if (refreshed) { rows = refreshed; events.push("local-state"); } return refreshed || rows; },
+    console: { warn: () => {} }, isNetworkFailure, isTransientStatus, requestWriteConnectionMessage, requestWriteOutcomeConfirmed,
+    fetch: async (url, options) => { calls.push({ url, options }); if (fetchError) throw fetchError; return { ok, status, json: async () => saved, text: async () => JSON.stringify(saved) }; },
   };
   const operations = new Function(...Object.keys(scope), mutationCode)(...Object.values(scope));
   return { ...operations, events, calls, rows: () => rows };
@@ -289,6 +291,23 @@ test("failed request updates do not notify other tabs or replace saved local row
   await assert.rejects(app.updateRequest(open.ref, {}, "ideal-onroad"), /already changed/);
   assert.deepEqual(app.events, []);
   assert.deepEqual(app.rows(), [open]);
+});
+
+test("a lost acceptance response is recovered from the freshly saved server lifecycle", async () => {
+  const awaiting = {...open, acceptanceRequired: true, acceptedAt: ""};
+  const accepted = {...awaiting, acceptedAt: "2026-09-16 17:58:00"};
+  const app = mutationHarness({initial: [awaiting], refreshed: [accepted], fetchError: new TypeError("Failed to fetch")});
+  assert.deepEqual(await app.updateRequest(awaiting.ref, {}, "edit"), accepted);
+  assert.deepEqual(app.events, ["reload", "local-state", "notify"]);
+  assert.deepEqual(app.rows(), [accepted]);
+});
+
+test("an unconfirmed mobile acceptance remains unsaved and reports a retryable connection message", async () => {
+  const awaiting = {...open, acceptanceRequired: true, acceptedAt: ""};
+  const app = mutationHarness({initial: [awaiting], refreshed: [awaiting], fetchError: new TypeError("Failed to fetch")});
+  await assert.rejects(app.updateRequest(awaiting.ref, {}, "edit"), /form is still open/i);
+  assert.deepEqual(app.events, ["reload", "local-state"]);
+  assert.deepEqual(app.rows(), [awaiting]);
 });
 
 test("successful creation adds the saved row and notifies without waiting for a refresh", async () => {

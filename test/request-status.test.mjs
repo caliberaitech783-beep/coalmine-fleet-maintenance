@@ -18,6 +18,16 @@ test('MIS verification changes the displayed status and history without reopenin
   assert.equal(verified.status, 'Closed');
 });
 
+test('recorded acceptance and progress replace a stale Open display status', () => {
+  assert.equal(requestStatusLabel({status:'Open'}), 'Open');
+  assert.equal(requestStatusLabel({status:'Open',acceptedAt:'2026-09-09 09:00:00'}), 'Accepted');
+  assert.equal(requestStatusLabel({status:'Open',acceptedAt:'2026-09-09 09:00:00',inProgressAt:'2026-09-09 09:10:00'}), 'In progress');
+  assert.equal(requestStatusLabel({status:'Open',acceptedAt:'2026-09-09 09:00:00',closedAt:'2026-09-09 11:00:00'}), 'Closed');
+  assert.equal(requestStatusLabel({status:'Idle',acceptedAt:'2026-09-09 09:00:00'}), 'Idle');
+  assert.equal(requestStatusLabel({status:'Ideal'}), 'Idle');
+  assert.equal(requestStatusLabel({status:'Awaiting parts',acceptedAt:'2026-09-09 09:00:00'}), 'Awaiting parts');
+});
+
 test('department and scheduled director reports export Verified for verified requests', () => {
   const args={requests:[closed,verified],now:new Date('2026-09-09T12:00:00+05:30')};
   for (const reports of [buildDepartmentReports(args),buildDirectorReportTables(args)]) {

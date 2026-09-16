@@ -1,6 +1,15 @@
-// Keep the maintenance lifecycle value intact; MIS verification is recorded separately.
+// Prefer recorded lifecycle events when an older request still carries the
+// original Open database value. Explicit later states always win.
 export function requestStatusLabel(request = {}) {
-  return String(request.verifiedAt || '').trim() ? 'Verified' : String(request.status || '').trim() || 'Open';
+  if (String(request.verifiedAt || '').trim()) return 'Verified';
+  const status = String(request.status || '').trim();
+  const normalized = status.toLowerCase();
+  if (String(request.closedAt || request.completedAt || '').trim() || normalized === 'closed') return 'Closed';
+  if (normalized === 'ideal') return 'Idle';
+  if (normalized && normalized !== 'open') return status;
+  if (String(request.inProgressAt || '').trim()) return 'In progress';
+  if (String(request.acceptedAt || '').trim()) return 'Accepted';
+  return status || 'Open';
 }
 
 // Lifecycle order used when sorting a Status column: open work first, verified closures last.

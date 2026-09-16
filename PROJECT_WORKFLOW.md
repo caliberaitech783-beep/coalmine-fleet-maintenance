@@ -208,6 +208,7 @@ flowchart TD
 ### Maintenance User
 
 - Requests tab lists requests with edit and delete actions according to the assigned Privilege flags.
+- After maintenance accepts a request, every dashboard, request table, filter, export and report derives the visible lifecycle from the recorded timestamps: `Accepted` after acceptance and `In progress` after work starts. A stale stored `Open` value must not be displayed once either event has been recorded.
 - Close request form links back to the original request and captures closing date, closing time, maintenance work, and status.
 - Tippers capture separate HMR and KMR readings at opening and closing. Edit request has one shared **Trip card upload** for the opening readings; Close request has one shared **Trip card upload** for the closing readings. Existing single-meter readings remain associated with their original meter, and missing opening readings can still be filled at closure. Closing readings and uploads remain optional for maintenance updates.
 - Request projections include `openingMeterReadings` and `closingMeterReadings` maps keyed by `HMR`/`KMR`, stored in additive JSONB columns. The single `openingMeterReading`/`closingMeterReading` and `meterType` fields remain compatible with older requests and clients. MIS verification pre-fills saved closing readings and preserves the closing trip card.

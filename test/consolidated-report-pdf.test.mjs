@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from '../consolidated-report-pdf.mjs';
 
 const start=new Date('2026-08-29T00:30:00.000Z');
@@ -10,6 +11,12 @@ test('fleet consolidated report is generated as a complete PDF document',async()
   assert.equal(pdf.subarray(0,5).toString(),'%PDF-');
   assert.ok(pdf.length>1500);
   assert.match(pdf.toString('latin1'),/Nerve Center Fleet Report/);
+});
+
+test('fleet PDF derives request status from acceptance lifecycle events',()=>{
+  const source=readFileSync(new URL('../consolidated-report-pdf.mjs',import.meta.url),'utf8');
+  assert.match(source,/const status=requestStatusLabel\(row\)/);
+  assert.doesNotMatch(source,/clean\(row\.status,'Open'\)/);
 });
 
 test('CRM consolidated report is generated as a complete PDF document',async()=>{

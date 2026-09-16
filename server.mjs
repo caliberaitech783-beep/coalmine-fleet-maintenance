@@ -3171,7 +3171,8 @@ async function sendScheduledConsolidatedWhatsAppReports(now=new Date()){
     const window=consolidatedReportWindow(now);
     const [{rows:requestRows},{rows:equipmentRows},{rows:userRows}]=await Promise.all([
       pool.query(`SELECT reference,equipment_name AS equipment,door_number AS door,chassis_number AS chassis,site,status,idle_reason AS "idleReason",
-        owner_name AS "user",closed_by AS "closedBy",started_at AS "startedAt",closed_at AS "closedAt"
+        owner_name AS "user",closed_by AS "closedBy",started_at AS "startedAt",closed_at AS "closedAt",
+        accepted_at AS "acceptedAt",in_progress_at AS "inProgressAt",verified_at AS "verifiedAt"
         FROM maintenance_requests
         WHERE (started_at >= $1 AND started_at < $2 AND status <> 'Closed')
            OR (closed_at >= $1 AND closed_at < $2)`,[window.start,window.end]),

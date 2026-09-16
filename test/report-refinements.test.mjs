@@ -51,7 +51,7 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
   const opened='2026-09-07 11:00:00';
   assert.equal(recentBreakdownStatus({status:'Open',start:opened},now),'Pending','unaccepted for more than 24 hours');
   assert.equal(recentBreakdownStatus({status:'Open',start:'2026-09-07 12:30:00'},now),'Open','within 24 hours keeps the live status');
-  assert.equal(recentBreakdownStatus({status:'Open',start:opened,acceptedAt:'2026-09-07 12:00:00'},now),'Open','accepted requests are never Pending');
+  assert.equal(recentBreakdownStatus({status:'Open',start:opened,acceptedAt:'2026-09-07 12:00:00'},now),'Accepted','accepted requests are never Pending or shown as Open');
   assert.equal(recentBreakdownStatus({status:'Closed',start:opened,closedAt:'2026-09-07 15:00:00'},now),'Closed');
   const tables=buildDirectorReportTables({
     requests:[{ref:'REQ-P',door:'D7',site:'Sasti OB',status:'Open',start:opened,model:'PC-210'},{ref:'REQ-C',door:'D8',site:'Jayant OB',status:'Closed',start:opened,closedAt:'2026-09-07 15:30:00',closedBy:'Maintenance User'}],

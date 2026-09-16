@@ -62,3 +62,11 @@ test('Idle requests include their reason in consolidated reports',()=>{
   assert.match(message,/📍 \*SASTI OB\*/);
   assert.match(message,/Status: Idle \| Idle reason: No driver/);
 });
+
+test('accepted requests do not fall back to Open in consolidated reports',()=>{
+  const end=new Date('2026-08-27T00:30:00Z');
+  const openRequests=prepareConsolidatedRows([{reference:'REQ-ACCEPTED',site:'Majri OB',door:'D-1',startedAt:'2026-08-26T22:30:00Z',status:'Open',acceptedAt:'2026-08-27 04:10:00'}],end);
+  const message=buildConsolidatedWhatsAppReport({scopeLabel:'Majri OB',start:new Date('2026-08-26T20:30:00Z'),end,openRequests,closedRequests:[]});
+  assert.match(message,/Status: Accepted/);
+  assert.doesNotMatch(message,/Status: Open/);
+});

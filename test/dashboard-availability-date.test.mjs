@@ -59,6 +59,13 @@ test("manager on-road approval ends a historical idle period", () => {
   assert.deepEqual(availabilityRequestsForDate([row], "2026-09-05"), []);
 });
 
+test("historical availability keeps lifecycle stages recorded by the selected day", () => {
+  const row = {ref:"LIFECYCLE",start:"2026-09-01",status:"Open",acceptedAt:"2026-09-03 10:00:00",inProgressAt:"2026-09-04 10:00:00"};
+  assert.equal(availabilityRequestsForDate([row], "2026-09-02")[0].status, "Open");
+  assert.equal(availabilityRequestsForDate([row], "2026-09-03")[0].status, "Accepted");
+  assert.equal(availabilityRequestsForDate([row], "2026-09-04")[0].status, "In progress");
+});
+
 test("legacy timestamps and incomplete history do not fabricate dated requests", () => {
   const rows = [
     { ref: "FALLBACK", start: "invalid", createdAt: "2026-09-06", status: "Open" },

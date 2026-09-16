@@ -1,5 +1,6 @@
 import {canonicalSiteName, equipmentSiteName} from './site-location.mjs';
 import {requestMeterReadings} from './request-equipment.mjs';
+import {requestStatusLabel} from './src/request-status.mjs';
 
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
 
@@ -222,7 +223,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       .sort((left, right) => String(left.start || "").localeCompare(String(right.start || "")))[0];
     const openingReadings = current ? requestMeterReadings(current, "opening", [record]) : {};
     const requestStatus = current
-      ? (String(current.verifiedAt || "").trim() ? "Verified" : String(current.status || "").trim() || "Open")
+      ? requestStatusLabel(current)
       : ROAD_STATUS_LABELS[matchingRoadStatus(record, requests, matches)] || ROAD_STATUS_LABELS.unknown;
     return {
       ...record,

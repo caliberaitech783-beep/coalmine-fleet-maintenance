@@ -1,4 +1,5 @@
 import { indiaDateTimeEpoch } from "../report-date-range.mjs";
+import { requestStatusLabel } from "./request-status.mjs";
 
 // Availability is a fleet snapshot at the end of the selected IST day, not
 // just the requests opened that day. Leave the existing live view unchanged.
@@ -21,6 +22,13 @@ export function availabilityRequestsForDate(requests = [], date = "") {
     const idle = Number.isFinite(idleAt)
       ? idleAt <= cutoff
       : ["idle", "ideal"].includes(status);
-    return [{ ...request, status: idle ? "Idle" : "Open" }];
+    const recordedByCutoff = (value) => {
+      const eventAt = indiaDateTimeEpoch(value);
+      return Number.isFinite(eventAt) && eventAt <= cutoff ? value : "";
+    };
+    const acceptedAt = recordedByCutoff(request.acceptedAt);
+    const inProgressAt = recordedByCutoff(request.inProgressAt);
+    const statusAtCutoff = idle ? "Idle" : requestStatusLabel({ status: "Open", acceptedAt, inProgressAt });
+    return [{ ...request, acceptedAt, inProgressAt, status: statusAtCutoff }];
   });
 }

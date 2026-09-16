@@ -170,9 +170,9 @@ test('edit and daily-update actions still receive the original request with its 
   assert.equal(received[0].status, 'Open');
 });
 
-test('other workflow tables continue showing their existing status values', () => {
+test('other workflow tables also replace raw Open after maintenance acceptance', () => {
   const tree = harness().render({ rows });
   const statusColumn = find(tree, ExportMenu).props.columns.find(column => column.key === 'status');
-  assert.deepEqual(rows.map(statusColumn.value), rows.map(row => row.status));
-  assert.equal(renderToStaticMarkup(tree).includes('status accepted'), false);
+  assert.deepEqual(rows.map(statusColumn.value), ['Open', 'Accepted', 'In progress', 'Idle', 'Closed', 'In progress']);
+  assert.equal((renderToStaticMarkup(tree).match(/class="status accepted"/g) || []).length, 1);
 });

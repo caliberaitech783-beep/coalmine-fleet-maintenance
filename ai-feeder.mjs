@@ -1,3 +1,5 @@
+import {requestStatusLabel} from './src/request-status.mjs';
+
 const HOUR_MS = 60 * 60 * 1000;
 
 export const AI_FEEDER_THRESHOLDS = {
@@ -113,7 +115,7 @@ function buildAlerts(requests, nowMs) {
       const late = hoursBetween(etcAt, nowMs);
       add(request, "etc-overdue", "critical",
         `${labelFor(request)} has passed its ETC`,
-        `Expected back on road ${durationLabel(late)} ago and the request is still ${request.status || "open"}.`,
+        `Expected back on road ${durationLabel(late)} ago and the request is still ${requestStatusLabel(request)}.`,
         etcAt);
     }
 

@@ -100,7 +100,8 @@ import {edgeSafeJsonInit} from "../request-body-transport.mjs";
 import {profileHeaderDesignation, profileHeaderName} from "./profile-designation.mjs";
 import {auditDeviceDetails} from "../device-details.mjs";
 import {readApiJson} from "./api-response.mjs";
-import {fetchWithTransientRetry} from "./api-transient-retry.mjs";
+import {fetchWithTransientRetry,isNetworkFailure,isTransientStatus} from "./api-transient-retry.mjs";
+import {requestWriteConnectionMessage,requestWriteOutcomeConfirmed} from "./request-write-recovery.mjs";
 import {requestsVisibleToMisWorkspace} from "../mis-request-visibility.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
 import RequestTimelineButton from "./request-timeline.jsx";
@@ -1676,7 +1677,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     }
     if (key === "open-cases") return requestAssetRows(openCaseRequests);
     if (key.startsWith("repair:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.category || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
-    if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => String(record.status || "").trim().toLowerCase() === key.slice(7).toLowerCase()));
+    if (key.startsWith("status:")) return requestAssetRows(visibleBreakdowns.filter((record) => requestStatusLabel(record).toLowerCase() === key.slice(7).toLowerCase()));
     if (key.startsWith("movement:")) {
       const [metric, start, end, site, type] = key.slice(9).split("|");
       const records = site ? throughputRequests.filter((record) => recordBelongsToSite(record, site)) : throughputRequests;
@@ -4147,10 +4148,12 @@ function Equipment({
   );
 }
 function Breakdown({ requests = [] }) {
-  const open = requests.filter((r) => r.status === "Open").length,
-    inProgress = requests.filter((r) => r.status === "In progress").length,
-    awaiting = requests.filter((r) => r.status === "Awaiting parts").length,
-    closed = requests.filter((r) => r.status === "Closed").length;
+  const statusCount = (label) => requests.filter((request) => requestStatusLabel(request).toLowerCase() === label.toLowerCase()).length;
+  const open = statusCount("Open"),
+    accepted = statusCount("Accepted"),
+    inProgress = statusCount("In progress"),
+    awaiting = statusCount("Awaiting parts"),
+    closed = statusCount("Closed");
   return (
     <section className="panel table pagepanel">
       <header>
@@ -4170,6 +4173,7 @@ function Breakdown({ requests = [] }) {
         {[
           `All requests ${requests.length}`,
           `Open ${open}`,
+          `Accepted ${accepted}`,
           `In progress ${inProgress}`,
           `Awaiting parts ${awaiting}`,
           `Closed ${closed}`,
@@ -7238,6 +7242,7 @@ Breakdown = function BreakdownWithMasterEntry({ requests = [] }) {
   const statusTabs = [
     ["all", "All requests", rows.length],
     ["Open", "Open", count("Open")],
+    ["Accepted", "Accepted", count("Accepted")],
     ["In progress", "In progress", count("In progress")],
     ["Awaiting parts", "Awaiting parts", count("Awaiting parts")],
     ["Closed", "Closed", count("Closed")],
@@ -7976,10 +7981,10 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   }, []);
   const delayedReasonDue = (row) => Boolean(String(row.delayedReason || "").trim()) || delayedReasonRequired(row.expectedCompletionAt, new Date(now), 0);
   const canSelectDelayedReason = (row) => Boolean(onDelayedReason) && delayedReasonDue(row);
-  const statusLabel = (row) => String(row.verifiedAt || "").trim() ? "Verified" : (showAcceptanceStatus || showInProgressStatus)
+  const statusLabel = (row) => (showAcceptanceStatus || showInProgressStatus)
     && String(row.acceptedAt || "").trim()
-    && ["open", "in progress"].includes(String(row.status || "").trim().toLowerCase())
-      ? (showAcceptanceStatus ? "Accepted" : "In progress") : row.status;
+    && ["accepted", "in progress"].includes(requestStatusLabel(row).toLowerCase())
+      ? (showAcceptanceStatus ? "Accepted" : "In progress") : requestStatusLabel(row);
   const verifiedColumns = [
     ...(showVerifiedBy ? [{key: "verifiedBy", label: "Verified by", value: (row) => row.verifiedBy}] : []),
     ...(showVerifiedAt ? [
@@ -9182,7 +9187,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     if (requireArrivalReason(editing)) return;
     const acceptingVehicle = Boolean(editing?.acceptanceRequired && !editing?.acceptedAt);
     try { await onUpdateRequest(payload.ref, payload); setEditing(null); if (acceptingVehicle) setCreatedRequestRef("Vehicle Accepted"); }
-    catch (error) { if (!requireArrivalReason(editing, error)) alert(error.message); }
+    catch (error) { if (!requireArrivalReason(editing, error)) throw error; }
   };
   const closeRequest = async (payload) => {
     if (requireArrivalReason(closing)) return;
@@ -9582,15 +9587,40 @@ function App() {
     },
     updateRequest = async (reference, payload, action = "edit") => {
       const endpoint = action === "delayed-reason" ? `/api/requests/${encodeURIComponent(reference)}/delayed-reason` : action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
-      const response = await fetch(endpoint, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify(payload),
-      });
+      const before = requests.find((row) => row.ref === reference) || {ref: reference};
+      const confirmUncertainWrite = async () => {
+        try {
+          const refreshed = await loadRequests();
+          const saved = refreshed.find((row) => row.ref === reference);
+          return requestWriteOutcomeConfirmed(before, saved, action, payload) ? saved : null;
+        } catch { return null; }
+      };
+      const acceptConfirmedWrite = (saved) => {
+        notifyRequestChange(window);
+        return saved;
+      };
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token || authToken}` },
+          body: JSON.stringify(payload),
+        });
+      } catch (error) {
+        if (!isNetworkFailure(error)) throw error;
+        const confirmed = await confirmUncertainWrite();
+        if (confirmed) return acceptConfirmedWrite(confirmed);
+        throw new Error(requestWriteConnectionMessage(before, action));
+      }
       const responseText = await response.text();
       let saved = {};
       try { saved = responseText ? JSON.parse(responseText) : {}; } catch {}
       if (!response.ok) {
+        if (isTransientStatus(response.status)) {
+          const confirmed = await confirmUncertainWrite();
+          if (confirmed) return acceptConfirmedWrite(confirmed);
+          throw new Error(requestWriteConnectionMessage(before, action));
+        }
         const fallback = response.status === 413
           ? "The uploaded file is too large. Choose a smaller file and try again."
           : response.status === 403 && !saved.error
