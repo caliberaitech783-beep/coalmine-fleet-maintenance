@@ -22,6 +22,21 @@
 .pulse-refresh { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 14px; border: 1px solid #d3c9e4; border-radius: 8px; background: #fff; color: #522e90; font: inherit; font-weight: 700; }
 .pulse-refresh:hover:not(:disabled) { background: #f1ecf8; }
 .pulse-content button:disabled { cursor: default; opacity: .65; }
+
+/* Site and request-date filters (site only when the scope has several sites) */
+.pulse-filters { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid #e4e0ee; border-radius: 12px; background: #fff; }
+.pulse-filters label { display: grid; gap: 5px; margin: 0; font-size: 13px; font-weight: 700; color: #46536a; }
+.pulse-filters label > span { display: flex; align-items: center; gap: 4px; }
+.pulse-filters label svg { color: #522e90; }
+.pulse-filters :is(input, select) { box-sizing: border-box; height: 40px; min-height: 40px; min-width: 165px; padding: 8px 12px; border: 1px solid #c8d0de; border-radius: 6px; background: #fff; color: #26344a; font: inherit; }
+.pulse-filters select { max-width: 260px; }
+.pulse-period { display: grid; grid-template-columns: max-content repeat(3, 44px); height: 40px; overflow: hidden; border: 1px solid #c8d0de; border-radius: 6px; }
+.pulse-period button { height: 100%; padding: 0 12px; border: 0; border-right: 1px solid #c8d0de; background: transparent; color: #536179; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.pulse-period button:last-child { border-right: 0; }
+.pulse-period button.active { background: #522e90; color: #fff; }
+.pulse-reset { height: 40px; padding: 0 14px; border: 1px solid #c8d0de; border-radius: 6px; background: #fff; color: #37445c; font: inherit; font-weight: 700; }
+.pulse-reset:hover { background: #f1ecf8; }
+.pulse-filter-caption { align-self: center; margin-left: auto; font-size: 13px; font-weight: 700; color: #536179; }
 .pulse-message { margin: 0; padding: 28px 16px; text-align: center; color: #536179; }
 .pulse-message.pulse-error { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; border: 1px solid #f3c1cb; border-radius: 10px; background: #fff1f3; color: #8e1d33; }
 .pulse-message.pulse-error button { min-height: 34px; padding: 6px 12px; border: 1px solid #e3a3b1; border-radius: 6px; background: #fff; color: #8e1d33; font: inherit; font-weight: 700; }
@@ -106,6 +121,10 @@
   .pulse-panel h2 { font-size: 19px; }
   .pulse-content { padding: 12px 14px 20px; }
   .pulse-toolbar { flex-direction: column; align-items: stretch; }
+  .pulse-filters { padding: 10px 12px; }
+  .pulse-filters label, .pulse-filters :is(input, select) { width: 100%; min-width: 0; }
+  .pulse-filters label { flex: 1 1 100%; }
+  .pulse-filter-caption { margin-left: 0; flex: 1 1 100%; }
   .pulse-refresh-group { margin-left: 0; justify-content: space-between; }
   .pulse-kpis { grid-template-columns: 1fr; gap: 8px; }
   .pulse-kpi { min-height: 0; padding: 10px 14px; }

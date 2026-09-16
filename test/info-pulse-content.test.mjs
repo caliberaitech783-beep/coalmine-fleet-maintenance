@@ -116,13 +116,12 @@ test('clicking a KPI card narrows the list to that tier, renumbers it, and BD ba
   assert.match(html(tree), /No warning breakdowns right now\./);
 });
 
-test('the redesign has no site tabs, date filters, alert categories, pagination or drill-downs', () => {
+test('the redesign has no site tabs, alert categories, pagination or drill-downs', () => {
   const tree = render();
-  assert.equal(descendants(tree, node => node.type === 'input' || node.type === 'select').length, 0);
   assert.equal(descendants(tree, node => 'aria-expanded' in node.props).length, 0);
-  assert.deepEqual(descendants(tree, node => node.type === 'button').map(node => text(node).split(/(?=\d)/)[0]), ['Refresh', 'BD balance', 'Critical', 'Warning', 'Open']);
+  assert.deepEqual(descendants(tree, node => node.type === 'button').map(node => node.props['aria-label'] || text(node)), ['Refresh Info Pulse', 'Today', '7D', '14D', '30D', 'BD balance: 4', 'Critical: 1', 'Warning: 1', 'Open: 2']);
   const page = html(tree);
-  for (const removed of ['Updates', 'ETC overdue', 'Down ≥ 3 days', 'New ≤ 12 hours', 'All cases', 'Request date', 'Site ', 'Total breakdowns', 'of 4 cases']) assert.ok(!page.includes(removed), `${removed} removed`);
+  for (const removed of ['Updates', 'ETC overdue', 'Down ≥ 3 days', 'New ≤ 12 hours', 'All cases', 'Total breakdowns', 'of 4 cases', 'Filter site']) assert.ok(!page.includes(removed), `${removed} removed`);
   assert.ok(!source.includes('PAGE_SIZE') && !source.includes('createPortal'));
 });
 
@@ -206,4 +205,75 @@ test('KPI cards sit in one row of four and breakdown rows are tier-tinted single
   assert.match(css, /\.pulse-standing-bar::after \{[^}]*width: calc\(var\(--fill, 0\) \* 100%\);/);
   assert.match(css, /@media \(max-width: 1000px\) \{[^@]*\.pulse-kpis \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}[^@]*\.pulse-breakdown-row \{ grid-template-columns: 40px 1fr; \}/);
   assert.ok(!css.includes('pulse-heading-total') && !css.includes('pulse-breakdown-total') && !css.includes('pulse-case-card') && !css.includes('pulse-pagination'));
+});
+
+const kpi = (tree, label) => Number(text(descendants(byLabel(tree, label), node => node.props.className === 'pulse-kpi-count')[0]));
+const kpiCounts = tree => Object.fromEntries(['BD balance', 'Critical', 'Warning', 'Open'].map(label => [label, kpi(tree, descendants(tree, node => String(node.props['aria-label'] || '').startsWith(`${label}: `))[0].props['aria-label'])]));
+const selectSite = (app, tree, label) => {
+  const option = descendants(byLabel(tree, 'Info Pulse site'), node => node.type === 'option' && text(node) === label)[0];
+  byLabel(tree, 'Info Pulse site').props.onChange({target: {value: option.props.value}});
+  return app.render();
+};
+
+test('the site filter appears only when the scope has several sites and narrows the KPI counts and list', () => {
+  const app = harness();
+  let tree = app.render();
+  assert.deepEqual(descendants(byLabel(tree, 'Info Pulse site'), node => node.type === 'option').map(text), ['All sites', 'Dhoptala OB (2nd)', 'Majri OB', 'Sasti OB']);
+  assert.match(html(tree), /All sites · All request dates/);
+  tree = selectSite(app, tree, 'Majri OB');
+  assert.deepEqual(kpiCounts(tree), {'BD balance': 2, Critical: 1, Warning: 1, Open: 0});
+  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['D38', 'W1']);
+  assert.match(html(tree), /Every open breakdown in Majri OB/);
+  assert.match(html(tree), /2 of 2 breakdowns · Majri OB · All request dates/);
+  byLabel(tree, 'Open: 0').props.onClick();
+  tree = app.render();
+  assert.match(html(tree), /No breakdowns match these filters\./);
+  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
+  tree = app.render();
+  assert.equal(byLabel(tree, 'Info Pulse site').props.value, '');
+  assert.deepEqual(vehicles(byLabel(tree, 'Open breakdowns, longest standing first')), ['V167', 'S145']);
+  // A single-site user gets no site selector, only the date filters.
+  const single = REQUESTS.filter(request => request.site === 'Sasti OB');
+  tree = harness().render({requests: single, scope: {label: 'Sasti OB', sites: ['Sasti OB']}});
+  assert.equal(byLabel(tree, 'Info Pulse site'), undefined);
+  assert.ok(byLabel(tree, 'Info Pulse from date') && byLabel(tree, 'Info Pulse to date'));
+  assert.ok(!html(tree).includes('All sites ·'));
+});
+
+test('request-date filters are inclusive IST days with presets, reset and an invalid-range message', () => {
+  const app = harness();
+  let tree = app.render();
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-reset').length, 0);
+  byLabel(tree, 'Info Pulse from date').props.onChange({target: {value: '2026-09-15'}});
+  tree = app.render();
+  assert.deepEqual(kpiCounts(tree), {'BD balance': 3, Critical: 0, Warning: 1, Open: 2});
+  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['W1', 'V167', 'S145']);
+  assert.match(html(tree), /3 of 3 breakdowns · All sites · 15-09-2026 – Latest/);
+  byLabel(tree, 'Info Pulse to date').props.onChange({target: {value: '2026-09-15'}});
+  tree = app.render();
+  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['W1']);
+  assert.equal(byLabel(tree, 'Info Pulse from date').props.max, '2026-09-15');
+  assert.equal(byLabel(tree, 'Info Pulse to date').props.min, '2026-09-15');
+  const period = label => descendants(byLabel(tree, 'Info Pulse period'), node => text(node) === label)[0];
+  period('Today').props.onClick();
+  tree = app.render();
+  assert.deepEqual([byLabel(tree, 'Info Pulse from date').props.value, byLabel(tree, 'Info Pulse to date').props.value], ['2026-09-16', '2026-09-16']);
+  assert.equal(period('Today').props['aria-pressed'], true);
+  assert.deepEqual(vehicles(byLabel(tree, 'BD balance breakdowns, longest standing first')), ['V167', 'S145']);
+  period('7D').props.onClick();
+  tree = app.render();
+  assert.deepEqual([byLabel(tree, 'Info Pulse from date').props.value, byLabel(tree, 'Info Pulse to date').props.value], ['2026-09-10', '2026-09-16']);
+  assert.equal(period('7D').props['aria-pressed'], true);
+  assert.equal(period('Today').props['aria-pressed'], false);
+  assert.deepEqual(kpiCounts(tree), {'BD balance': 4, Critical: 1, Warning: 1, Open: 2});
+  descendants(tree, node => node.props.className === 'pulse-reset')[0].props.onClick();
+  tree = app.render();
+  assert.ok(descendants(tree, node => node.type === 'input').every(input => input.props.value === ''));
+  assert.equal(descendants(tree, node => node.props.className === 'pulse-reset').length, 0);
+  byLabel(tree, 'Info Pulse from date').props.onChange({target: {value: '2026-09-16'}});
+  byLabel(tree, 'Info Pulse to date').props.onChange({target: {value: '2026-09-15'}});
+  tree = app.render();
+  assert.match(text(descendants(tree, node => node.props.role === 'alert')[0]), /From date must be on or before To date\./);
+  assert.equal(descendants(tree, node => node.type === 'ol').length, 0);
+  assert.deepEqual(kpiCounts(tree), {'BD balance': 0, Critical: 0, Warning: 0, Open: 0});
 });
