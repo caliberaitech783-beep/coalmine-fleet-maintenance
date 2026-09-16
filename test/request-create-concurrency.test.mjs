@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -61,7 +62,7 @@ function harness({initial=[],legacyReadBarrier=false,failInsert=false}={}){
   const context={
     setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
-    app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,currentUserRecord:async()=>({site:'Sasti OB'}),
+    app:{post(_path,...chain){handlers=chain;}},pool,readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>({site:'Sasti OB'}),
     canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,validComplaintMedia,activeRequestConflictMessage,requestProjection:'*',
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],
     addTicketNotificationsBestEffort:async()=>{},requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',

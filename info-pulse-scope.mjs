@@ -1,6 +1,5 @@
 import {flowDesignationForUser} from './hierarchy-report-flow.mjs';
-import {displaySiteName,managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
-import {canonicalSiteName} from './site-location.mjs';
+import {displaySiteName,managerReportScope,reportScopeIncludesSite,userSiteScope} from './region-scope.mjs';
 
 const DIRECTOR_PROFILE_NAMES=new Set(['mohit chadda','manish chadda','rahul chadda']);
 const normalizedName=(value)=>String(value||'').trim().toLowerCase().replace(/\s+/g,' ');
@@ -15,12 +14,12 @@ export function isInfoPulseDirector(session={},user={}){
 
 export function infoPulseRequestScope(session={},user={}){
   if(session.role==='normal'){
-    const site=canonicalSiteName(user.site||user.location||user.currentLocation||session.location||'');
+    const {sites,label}=userSiteScope(user);
     return {
       kind:'location',
-      label:site?displaySiteName(site):'No location assigned',
+      label:sites.length?label:'No location assigned',
       restrictToScope:true,
-      sites:site?[site]:[],
+      sites,
     };
   }
 

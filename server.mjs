@@ -51,7 +51,7 @@ import {normalizeSessionMessage,sessionMessagePayloadValidationError} from './se
 import {BACKUP_FORMAT,backupFileName,exportDatabase,readBackupRecords,restoreDatabase} from './database-backup.mjs';
 import {BACKUP_SETTING_KEY,DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './backup-settings.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
-import {REGION_DATA,displaySiteName,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite} from './region-scope.mjs';
+import {REGION_DATA,displaySiteName,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite,userSiteScope,userSiteSelection} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
 import {buildTableExportPdf,buildTableBundlePdf} from './table-export-pdf.mjs';
@@ -2871,7 +2871,7 @@ async function genericWhatsAppAlertLogins(client,recipients,{purpose,site}){
     if(!login||excluded.has(login))return false;
     if(isWhatsAppAllAlertRecipient(user,profile))return true;
     if(profile.sessionRole!=='normal')return false;
-    const sameSite=Boolean(site)&&canonicalSiteName(assignedUserSiteName(user))===canonicalSiteName(site);
+    const sameSite=reportScopeIncludesSite(userSiteScope(user),site);
     // CRM users may read their own tickets only. Request updates can go to
     // every operational user at the site, as requested by the delivery policy.
     return purpose==='dailyUpdate'?sameSite&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole):selected.has(login);
@@ -2926,16 +2926,15 @@ async function vehicleTransferAccessContext(session,client=pool){
   const misUser=session?.role==='normal'&&session.assignedRole==='MIS User';
   const misManager=manager&&managerRoles.includes('MIS Manager');
   const pmManager=manager&&hasVehicleTransferPmRole(managerRoles);
-  const assignedSite=canonicalSiteName(assignedUserSiteName(user));
-  const scope=manager?managerReportScope(user):null;
-  return {user,administrator,manager,misUser,misManager,pmManager,assignedSite,scope,
+  const scope=manager?managerReportScope(user):userSiteScope(user);
+  return {user,administrator,manager,misUser,misManager,pmManager,scope,
     canView:administrator||misUser||misManager||pmManager,
     canSubmit:misUser||misManager};
 }
 
 function transferVisibleToContext(record,context){
   if(context.administrator)return true;
-  if(context.misUser)return [record.source,record.destination].some((site)=>canonicalSiteName(site)===context.assignedSite);
+  if(context.misUser)return [record.source,record.destination].some((site)=>reportScopeIncludesSite(context.scope,site));
   if(context.manager)return [record.source,record.destination].some((site)=>reportScopeIncludesSite(context.scope,site));
   return false;
 }
@@ -2945,7 +2944,7 @@ function transferSiteActionAllowed(context,site){
 }
 
 function transferMisVerificationAllowed(context,site){
-  if(context.misUser)return canonicalSiteName(site)===context.assignedSite;
+  if(context.misUser)return reportScopeIncludesSite(context.scope,site);
   return context.misManager&&reportScopeIncludesSite(context.scope,site);
 }
 
@@ -2972,7 +2971,7 @@ async function vehicleTransferMisLogins(client,site){
     const login=String(user.login||'').trim().toLowerCase();
     if(!login)continue;
     const profile=resolveMobileAccess({user});
-    const siteMatches=canonicalSiteName(assignedUserSiteName(user))===canonicalSiteName(site);
+    const siteMatches=reportScopeIncludesSite(userSiteScope(user),site);
     const isSiteMisUser=profile.sessionRole==='normal'&&profile.assignedRole==='MIS User'&&siteMatches;
     const isSiteMisManager=profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'
       &&profile.permissions.managerRoles.includes('MIS Manager')&&userManagesSite(user,site);
@@ -3013,7 +3012,7 @@ app.get('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
     const equipment=equipmentRows.map((row)=>({id:row.id,...row.record_data})).filter((record)=>{
       if(!context.canSubmit)return false;
       const site=record.currentLocation||record.location||record.site;
-      return context.misUser?canonicalSiteName(site)===context.assignedSite:reportScopeIncludesSite(context.scope,site);
+      return reportScopeIncludesSite(context.scope,site);
     });
     res.set('Cache-Control','private, no-store');
     res.json({records,equipment,sites,capabilities:{canSubmit:context.canSubmit,canApproveSource:context.pmManager,
@@ -3034,7 +3033,7 @@ app.post('/api/vehicle-transfers',requireSession,async(req,res,next)=>{
     if(!equipmentRow){await client.query('ROLLBACK');return res.status(404).json({error:'The selected vehicle is no longer available in Vehicle Master.'})}
     const equipment={id:equipmentRow.id,...equipmentRow.record_data};
     const source=displaySiteName(equipment.currentLocation||equipment.location||equipment.site||'');
-    const permittedSource=context.misUser?canonicalSiteName(source)===context.assignedSite:reportScopeIncludesSite(context.scope,source);
+    const permittedSource=reportScopeIncludesSite(context.scope,source);
     if(!permittedSource){await client.query('ROLLBACK');return res.status(403).json({error:'You can submit transfers only for vehicles at your assigned locations.'})}
     const transferNo=String(req.body?.transferNo||'').trim().slice(0,80)||`VT-${Date.now()}-${randomUUID().slice(0,4).toUpperCase()}`;
     const record=normalizeOperationalSiteFields({
@@ -3634,8 +3633,7 @@ async function requestStakeholderLogins(client,{site,requesterLogin}){
     const login=String(user.login||'').trim().toLowerCase();
     if(!login)continue;
     const profile=resolveMobileAccess({user});
-    const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-    const siteMatches=Boolean(requestSite)&&userSite===requestSite;
+    const siteMatches=reportScopeIncludesSite(userSiteScope(user),requestSite);
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
     if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&userManagesSite(user,site))recipients.push(login);
     if(profile.sessionRole==='normal'&&siteMatches&&['Production User','Maintenance User','MIS User'].includes(profile.assignedRole))recipients.push(login);
@@ -3652,6 +3650,7 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
     if(req.session.role!=='super'){
       values.push(String(req.session.login||'').trim().toLowerCase());
       conditions.push(`lower(creator_login)=$${values.length}`);
+      managerScope=userSiteScope(await currentUserRecord(req.session));
     }else if(req.session.permissions?.adminLevel==='Manager'){
       const user=await currentUserRecord(req.session);
       values.push(managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).map(managerUserRole));
@@ -3688,7 +3687,13 @@ app.post('/api/tickets',requireSession,async(req,res,next)=>{
     if(!validTicketMediaDataUrl(messageAudio,{kind:'audio'}))return res.status(400).json({error:'Ticket audio must be a supported recording up to 3 MB.'});
     if(!validTicketMediaDataUrl(attachmentData))return res.status(400).json({error:'Upload a supported image or video up to 10 MB.'});
     const user=await currentUserRecord(req.session,client);
-    const site=displaySiteName(user.site||user.location||user.currentLocation)||'Not assigned';
+    const assignedSites=userSiteSelection(user);
+    const site=req.session.role==='super'
+      ? displaySiteName(user.site||user.location||user.currentLocation)||'Not assigned'
+      : displaySiteName(req.body?.site||(assignedSites.length===1?assignedSites[0]:''));
+    if(req.session.role!=='super'&&!reportScopeIncludesSite(userSiteScope(user),site))
+      return res.status(403).json({error:'Select one of your assigned sites for this ticket.'});
+
     await client.query('BEGIN');
     const inserted=await client.query(`INSERT INTO crm_tickets
       (creator_login,creator_name,creator_role,site,category,priority,message,message_audio,attachment_data,attachment_name,attachment_type)
@@ -3756,8 +3761,7 @@ async function createMaintenanceReminderNotifications(){
       const login=String(user.login||'').trim().toLowerCase();
       if(!login)continue;
       const profile=resolveMobileAccess({user});
-      const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-      const siteMatches=!userSite||userSite===canonicalSiteName(request.site);
+      const siteMatches=reportScopeIncludesSite(userSiteScope(user),request.site);
       if(profile.assignedRole==='Maintenance User'&&siteMatches)recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.includes('Maintenance Manager')&&userManagesSite(user,request.site))recipients.push(login);
@@ -4052,9 +4056,9 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       ? {text:`SELECT ${requestProjection} FROM maintenance_requests WHERE requester_login=$1 ORDER BY created_at DESC`,values:[requesterLogin]}
       : {text:`SELECT ${requestProjection} FROM maintenance_requests ORDER BY created_at DESC`,values:[]};
     let scopedSite=null,scopedManagerSites=null;
-    if(req.session.role==='normal'&&(dashboardScope||req.session.assignedRole==='MIS User'||req.session.assignedRole==='Maintenance User'||req.session.assignedRole==='General User')){
+    if(req.session.role==='normal'){
       const operationalUser=await currentUserRecord(req.session);
-      scopedSite=assignedUserSiteName(operationalUser);
+      scopedSite=userSiteScope(operationalUser);
     }
     if(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager'){
       const manager=await currentUserRecord(req.session);
@@ -4066,7 +4070,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       : scopedSite===null
       ? rows
       : scopedSite
-        ? rows.filter((row)=>canonicalSiteName(row.site)===canonicalSiteName(scopedSite))
+        ? rows.filter((row)=>reportScopeIncludesSite(scopedSite,row.site))
         : [];
     const visibleRows=requestsVisibleToSession(siteVisibleRows,req.session);
     res.json(await attachDailyRemarks(visibleRows));
@@ -4113,8 +4117,8 @@ app.get('/api/requests/:reference/timeline',requireSession,async(req,res,next)=>
     if(!request)return res.status(404).json({error:'Request not found.'});
     if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(session.role==='normal'){
-      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-      if(!assignedSite||assignedSite!==canonicalSiteName(request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+      const assignedScope=userSiteScope(user);
+      if(!reportScopeIncludesSite(assignedScope,request.site))return res.status(403).json({error:'This request belongs to a different location.'});
       if(session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==String(user.login||req.session.login||'').trim().toLowerCase())return res.status(403).json({error:'Only your own request timelines are available.'});
     }
     const {rows:records}=await pool.query(`SELECT changed_fields FROM audit_events WHERE event_type='Workflow timeline' AND action='Record workflow timestamps' AND outcome='Success' AND target_type='Maintenance request' AND target_reference=$1 AND changed_fields @> $2::jsonb ORDER BY occurred_at ASC,id ASC`,[reference,JSON.stringify([{requestId:String(request.timelineRequestId)}])]);
@@ -4139,8 +4143,8 @@ app.get('/api/requests/:reference/complaint-media',requireSession,async(req,res,
     if(!request)return res.status(404).json({error:'Request not found.'});
     if(session.role==='super'&&session.permissions?.adminLevel==='Manager'&&!reportScopeIncludesSite(managerReportScope(user),request.site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(session.role==='normal'){
-      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-      if(!assignedSite||assignedSite!==canonicalSiteName(request.site))return res.status(403).json({error:'This request belongs to a different location.'});
+      const assignedScope=userSiteScope(user);
+      if(!reportScopeIncludesSite(assignedScope,request.site))return res.status(403).json({error:'This request belongs to a different location.'});
       if(session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==String(user.login||req.session.login||'').trim().toLowerCase())return res.status(403).json({error:'Only your own request attachments are available.'});
     }
     const media=await pool.query('SELECT complaint_media FROM maintenance_requests WHERE reference=$1',[reference]);
@@ -4171,8 +4175,8 @@ async function withMaintenanceArrivalGuard(req,reference,write){
     if(!rows.length)throw Object.assign(new Error('Only active, unverified requests can be updated.'),{status:409});
     if(req.session.role==='normal'){
       const user=await currentUserRecord(req.session,client);
-      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-      if(!assignedSite||assignedSite!==canonicalSiteName(rows[0].site))throw Object.assign(new Error('This vehicle is outside your assigned maintenance location.'),{status:403});
+      const assignedScope=userSiteScope(user);
+      if(!reportScopeIncludesSite(assignedScope,rows[0].site))throw Object.assign(new Error('This vehicle is outside your assigned maintenance location.'),{status:403});
     }
     if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
     const result=await write(client,rows[0]);
@@ -4210,7 +4214,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
     const recipients=[String(eligible.rows[0].requester_login||'').trim().toLowerCase()];
     for(const row of userRows){const user=row.record_data||{};const login=String(user.login||'').trim().toLowerCase();if(!login)continue;
-      const profile=resolveMobileAccess({user});const userSite=canonicalSiteName(user.site||user.location||user.currentLocation);const siteMatches=!userSite||userSite===canonicalSiteName(eligible.rows[0].site);
+      const profile=resolveMobileAccess({user});const siteMatches=reportScopeIncludesSite(userSiteScope(user),eligible.rows[0].site);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Admin')recipients.push(login);
       if(profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'&&profile.permissions.managerRoles.some((role)=>['Maintenance Manager','Production Manager'].includes(role))&&userManagesSite(user,eligible.rows[0].site))recipients.push(login);
     }
@@ -4234,8 +4238,8 @@ app.patch('/api/requests/:reference/arrival-flag',requireSession,requireArrivalF
     if(!current)return res.status(404).json({error:'This maintenance request no longer exists.'});
     if(req.session.role==='normal'){
       const user=await currentUserRecord(req.session);
-      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-      if(!assignedSite||assignedSite!==canonicalSiteName(current.site))
+      const assignedScope=userSiteScope(user);
+      if(!reportScopeIncludesSite(assignedScope,current.site))
         return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
     if(current.arrivalFlaggedAt&&String(current.arrivalFlagRemark||'').trim())return res.json((await attachDailyRemarks(currentRows))[0]);
@@ -4307,8 +4311,8 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     if(!['KMR','HMR'].includes(normalizedMeterType))return res.status(400).json({error:'Choose a valid KMR/HMR meter type.'});
     const requester=await currentUserRecord(req.session);
     if(req.session.role==='normal'){
-      const assignedSite=canonicalSiteName(requester.site||requester.location||requester.currentLocation);
-      if(!assignedSite||assignedSite!==canonicalSiteName(storedSite))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});
+      const assignedScope=userSiteScope(requester);
+      if(!reportScopeIncludesSite(assignedScope,storedSite))return res.status(403).json({error:'Create maintenance requests only for your assigned location.'});
     }
     const startedAt=String(start||'').trim()?parseRequestTimelineTimestamp(start):new Date();
     validateRequestTimelineChange({}, {start:startedAt||String(start)}, {userEntered:['start']});
@@ -4417,8 +4421,8 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
     if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
     if(req.session.role==='normal'){
       const user=await currentUserRecord(req.session);
-      const assignedSite=canonicalSiteName(user.site||user.location||user.currentLocation);
-      if(!assignedSite||assignedSite!==canonicalSiteName(existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
+      const assignedScope=userSiteScope(user);
+      if(!reportScopeIncludesSite(assignedScope,existingRows[0].site))return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
     }
     if(!ideal&&status==='Closed'&&existingRows[0].status==='Closed'&&!existingRows[0].verifiedAt)return res.json(existingRows[0]);
     const {rows,delayedClosure}=await withMaintenanceArrivalGuard(req,reference,async(client,before)=>{
@@ -4590,12 +4594,12 @@ app.patch('/api/requests/:reference/mis-flag',requireSession,requirePermission('
     const remark=typeof req.body?.remark==='string'?req.body.remark.trim():'';
     if(!remark||remark.length>2000)return res.status(400).json({error:'Enter a remark describing the issue (1 to 2,000 characters).'});
     const misUser=await currentUserRecord(req.session);
-    const misSite=canonicalSiteName(misUser.site||misUser.location||misUser.currentLocation);
-    if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can raise a red flag.'});
+    const misScope=userSiteScope(misUser);
+    if(!misScope.sites.length)return res.status(403).json({error:'A location must be assigned before this MIS user can raise a red flag.'});
     const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     const existing=existingRows[0];
     if(!existing)return res.status(404).json({error:'This request no longer exists.'});
-    if(canonicalSiteName(existing.site)!==misSite)return res.status(403).json({error:'This request belongs to a different location.'});
+    if(!reportScopeIncludesSite(misScope,existing.site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(existing.misFlaggedAt)return res.status(409).json({error:'An MIS red flag has already been saved for this request. Its original remark is retained in the MIS Red Flag Report.'});
     if(existing.status!=='Closed'||existing.verifiedAt)return res.status(409).json({error:'Only closed requests awaiting MIS verification can be red flagged.'});
     const {rows}=await pool.query(`UPDATE maintenance_requests
@@ -4622,12 +4626,12 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(!validTripCardImageDataUrl(firstTripCardImage))return res.status(400).json({error:'Upload a JPEG, PNG, or WebP trip-card image up to 5 MB.'});
     if(!validMeterReading(closingMeterReading))return res.status(400).json({error:'Enter a valid closing KMR/HMR reading.'});
     const misUser=await currentUserRecord(req.session);
-    const misSite=String(misUser.site||misUser.location||'').trim();
-    if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
+    const misScope=userSiteScope(misUser);
+    if(!misScope.sites.length)return res.status(403).json({error:'A location must be assigned before this MIS user can verify requests.'});
     const {rows:existingRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
     if(!existingRows.length)return res.status(409).json({error:'This request no longer exists.'});
     const existing=existingRows[0];
-    if(canonicalSiteName(existing.site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
+    if(!reportScopeIncludesSite(misScope,existing.site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(existing.status!=='Closed')return res.status(409).json({error:'Only closed requests can be verified.'});
     // Mobile browsers can retry a slow image upload after the first request has
     // already committed. Return the saved row so that retry is idempotent.
@@ -4647,7 +4651,7 @@ app.patch('/api/requests/:reference/verify',requireSession,requirePermission('ve
     if(idempotent)return res.json(rows[0]);
     if(!rows.length){
       const {rows:retryRows}=await pool.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
-      if(retryRows[0]?.verifiedAt&&canonicalSiteName(retryRows[0].site)===canonicalSiteName(misSite))return res.json(retryRows[0]);
+      if(retryRows[0]?.verifiedAt&&reportScopeIncludesSite(misScope,retryRows[0].site))return res.json(retryRows[0]);
       return res.status(409).json({error:'This request could not be verified because its status changed. Refresh and try again.'});
     }
     res.json(rows[0]);
@@ -4674,12 +4678,12 @@ app.get('/api/requests/:reference/trip-card',requireSession,requirePermission('v
   try{
     const reference=String(req.params.reference||'').trim();
     const misUser=await currentUserRecord(req.session);
-    const misSite=String(misUser.site||misUser.location||'').trim();
-    if(!misSite)return res.status(403).json({error:'A location must be assigned before this MIS user can view trip cards.'});
+    const misScope=userSiteScope(misUser);
+    if(!misScope.sites.length)return res.status(403).json({error:'A location must be assigned before this MIS user can view trip cards.'});
     const {rows}=await pool.query(`SELECT site,first_trip_card_image AS image FROM maintenance_requests
       WHERE reference=$1 AND status='Closed' AND verified_at IS NOT NULL`,[reference]);
     if(!rows.length)return res.status(404).json({error:'Verified closed request not found.'});
-    if(canonicalSiteName(rows[0].site)!==canonicalSiteName(misSite))return res.status(403).json({error:'This request belongs to a different location.'});
+    if(!reportScopeIncludesSite(misScope,rows[0].site))return res.status(403).json({error:'This request belongs to a different location.'});
     if(!validTripCardImageDataUrl(rows[0].image))return res.status(404).json({error:'Trip-card image is not available.'});
     res.json({image:rows[0].image});
   }catch(error){next(error)}
@@ -4695,12 +4699,14 @@ app.get('/api/requests/:reference/meter-file',requireSession,async(req,res,next)
       FROM maintenance_requests WHERE reference=$1`,[reference,stage]);
     if(!rows.length)return res.status(404).json({error:'Maintenance request not found.'});
     const row=rows[0];
+    if(req.session.role==='normal'&&!reportScopeIncludesSite(userSiteScope(await currentUserRecord(req.session)),row.site))
+      return res.status(403).json({error:'This request belongs to a different location.'});
     let allowed=req.session.role==='super'||req.session.permissions?.readRequests===true;
     if(req.session.role==='normal'&&req.session.assignedRole==='Maintenance User')allowed=true;
     if(req.session.role==='normal'&&req.session.assignedRole==='Production User')allowed=String(row.requester_login||'').trim().toLowerCase()===String(req.session.login||'').trim().toLowerCase();
     if(req.session.role==='normal'&&req.session.assignedRole==='MIS User'){
       const user=await currentUserRecord(req.session);
-      allowed=Boolean(user.site||user.location)&&canonicalSiteName(row.site)===canonicalSiteName(user.site||user.location);
+      allowed=reportScopeIncludesSite(userSiteScope(user),row.site);
     }
     if(!allowed)return res.status(403).json({error:'You are not authorized to view this meter file.'});
     if(!validMeterEvidenceDataUrl(row.file))return res.status(404).json({error:`${stage==='closing'?'Closing':'Opening'} meter file is not available.`});
@@ -4782,7 +4788,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     if(!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
-    const managerScope=managerRecord?managerReportScope(managerRecord):null;
+    const managerScope=managerRecord?(req.session.role==='normal'?userSiteScope(managerRecord):managerReportScope(managerRecord)):null;
     const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){

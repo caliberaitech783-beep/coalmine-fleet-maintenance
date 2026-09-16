@@ -9,7 +9,7 @@ test("manager requests, equipment, and dashboard metrics are scoped to selected 
   assert.match(server,/adminLevel==='Manager'[\s\S]*scopedManagerSites=managerReportScope\(\{\.\.\.manager,site:assignedUserSiteName\(manager\)\}\)\.sites/);
   assert.match(server,/rows\.filter\(\(row\)=>reportScopeIncludesSite\(\{sites:scopedManagerSites\},row\.site\)\)/);
   assert.match(server,/managerRecord&&row\.master_name==='Equipment master'/);
-  assert.match(server,/managerScope=managerRecord\?managerReportScope\(managerRecord\):null/);
+  assert.match(server,/managerScope=managerRecord\?\(req\.session\.role==='normal'\?userSiteScope\(managerRecord\):managerReportScope\(managerRecord\)\):null/);
   assert.match(server,/equipmentSite=canonicalSiteName\(record\.currentLocation\|\|record\.site\|\|record\.location\|\|''\)/);
   assert.match(source,/function ManagerDashboard\(\{ managerRole, managerRoles = \[\], managerLocation/);
   assert.match(source,/const siteEquipment = equipmentRecords;/);

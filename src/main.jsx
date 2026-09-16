@@ -52,6 +52,7 @@ import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
 import { notifyRequestChange, watchRequestRefresh } from "./request-refresh.mjs";
 import { createDashboardRequestLoader, requestDateKey, requestEventDate, splitDashboardRequests } from "./dashboard-request-data.mjs";
 import { userMasterLocation } from "./user-master-location.mjs";
+import UserSiteFields from "./user-site-fields.jsx";
 import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
@@ -91,7 +92,7 @@ import {
 import { submitMaintenanceRequest } from "../request-submit.mjs";
 import { activeRequestConflictMessage, findActiveRequestConflict } from "../request-conflict.mjs";
 import {ADMIN_MASTER_OPTIONS, ADMIN_TAB_OPTIONS, ADMIN_SUBMENU_OPTIONS, accessAllows, managerRoleSelection, masterAccessAllows, navigationPermissionsForView} from "../admin-access.mjs";
-import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, sitesForManagerRegions} from "../region-scope.mjs";
+import {MANAGER_REGION_OPTIONS, REGION_DATA, displaySiteName, displaySiteSelection, managerRegionSelection, sitesForManagerRegions, userSiteSelection} from "../region-scope.mjs";
 import {MOBILE_USER_ROLES, GENERAL_USER_ROLE, GENERAL_USER_MENU_OPTIONS, generalUserMenuSelection, generalUserCanAccessMenu, MIS_VERIFICATION_MENU, normalizeRequestMenuLabel} from "../mobile-access.mjs";
 import {navigationLabel} from "../navigation-visibility.mjs";
 import {edgeSafeJsonInit} from "../request-body-transport.mjs";
@@ -3337,13 +3338,7 @@ function UserTypeAccessFields({ record = {}, siteOptions = [], canCreateSuperAdm
         </label>)}</div>
       </div>}
     </fieldset>}
-    {accountRole && !isDesktopUser && <label>Location *
-      <select name="site" required defaultValue={displaySiteName(record.site || record.location)}>
-        <option value="" disabled>Select location</option>
-        {siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}
-        {displaySiteName(record.site || record.location) && !siteOptions.includes(displaySiteName(record.site || record.location)) && <option value={displaySiteName(record.site || record.location)}>{displaySiteName(record.site || record.location)}</option>}
-      </select>
-    </label>}
+    {accountRole && !isDesktopUser && <UserSiteFields record={record} siteOptions={siteOptions} />}
     {isAdmin && <div className="super-role-summary full"><ShieldCheck /><span><b>{isSuperAdmin?"Super Admin access":"Admin menu access"}</b><small>All menus are selected by default. You can tailor this account’s desktop and mobile menus below.</small></span></div>}
     {isDesktopUser && <>
       <div className="user-privilege-heading full"><h3>Selected menus for each view</h3><p>Configure this user’s header menus and submenus separately for desktop and responsive mobile screens.</p></div>
@@ -3412,7 +3407,8 @@ function applyUserRoleDefaults(record) {
     }
   } else if (mobileUserRoleOptions.includes(role)) {
     record.userType = "Mobile User";
-    record.site = displaySiteName(record.site || record.location);
+    record.site = displaySiteSelection(record.site || record.location).join(" | ");
+    record.location = record.site;
     record.adminLevel = "";
     record.managerRole = "";
     record.managerRegion = "";
@@ -3505,6 +3501,10 @@ function MasterActions({ name, records = [], onAdd, onDeleteAll, onSaveAll, save
       record.login = record.login.toUpperCase();
       record.employee = record.employee.toUpperCase();
       applyUserRoleDefaults(record);
+    }
+    if (name === "Users & employees" && record.userType === "Mobile User" && !record.site) {
+      alert("Select at least one site for this user.");
+      return;
     }
     if (name === "Users & employees" && record.userType === "Super Admin" && record.adminLevel === "Manager" && !record.managerRole) {
       alert("Select at least one manager role for this Non Admin user.");
@@ -4542,7 +4542,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
     v = findRequestEquipment(groupRecords, equipmentId),
     equipmentDetails = requestEquipmentDetails(v || {}),
     door = equipmentDetails.door,
-    currentLocation = equipmentDetails.site || String(assignedLocation || "").trim();
+    currentLocation = equipmentDetails.site || (displaySiteSelection(assignedLocation).length === 1 ? assignedLocation : "");
   const [requestTime, setRequestTime] = useState(systemTime);
   const [requestDate, setRequestDate] = useState(systemDate);
   const [driverLookup, setDriverLookup] = useState({status: "idle", name: "", source: ""});
@@ -6378,6 +6378,10 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       updated.employee = updated.employee.toUpperCase();
     }
     if (name === "Users & employees") applyUserRoleDefaults(updated);
+    if (name === "Users & employees" && updated.userType === "Mobile User" && !updated.site) {
+      alert("Select at least one site for this user.");
+      return;
+    }
     if (name === "Users & employees" && updated.userType === "Super Admin" && updated.adminLevel === "Manager" && !updated.managerRole) {
       alert("Select at least one manager role for this Non Admin user.");
       return;
@@ -7716,7 +7720,7 @@ Generic = function GenericWithMasters(props) {
   const masterSiteOptions = name === "Users & employees"
     ? [...new Set([
         ...privilegeSiteOptions,
-        ...records.map((record) => displaySiteName(record.site)).filter(Boolean),
+        ...records.flatMap((record) => userSiteSelection(record)),
       ])]
     : name === "Shift Master" ? privilegeSiteOptions : [];
   if (masterFields[name] && loadError && !loaded) return <MasterLoadError name={name} error={loadError} retry={retryLoad} />;
@@ -8399,6 +8403,16 @@ function readTicketAttachment(file) {
 
 function TicketCreateForm({ session, close, onCreated }) {
   const [attachment, setAttachment] = useState(null), [saving, setSaving] = useState(false), [error, setError] = useState("");
+  const [ticketSites, setTicketSites] = useState([]), [sitesLoaded, setSitesLoaded] = useState(session?.role === "super");
+  useEffect(() => {
+    if (session?.role === "super") return;
+    let active = true;
+    fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session.token}`}})
+      .then(async (response) => {if (!response.ok) throw new Error("Could not load your assigned sites."); return response.json();})
+      .then((profile) => {if (active) {setTicketSites(userSiteSelection(profile)); setSitesLoaded(true);}})
+      .catch((error) => {if (active) setError(error.message);});
+    return () => {active = false;};
+  }, [session?.token, session?.role]);
   const submitLock = useRef(false), formScope = useRef(0);
   useEffect(() => {
     formScope.current += 1;
@@ -8425,7 +8439,7 @@ function TicketCreateForm({ session, close, onCreated }) {
       const response = await fetch("/api/tickets", {
         method: "POST",
         headers: {"Content-Type": "application/json", Authorization: `Bearer ${session.token}`},
-        body: JSON.stringify({priority: form.get("priority"), message, messageAudio, attachmentData, attachmentName: attachment?.name || "", attachmentType: attachment?.type || ""}),
+        body: JSON.stringify({site: form.get("site"), priority: form.get("priority"), message, messageAudio, attachmentData, attachmentName: attachment?.name || "", attachmentType: attachment?.type || ""}),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not create the ticket.");
@@ -8438,12 +8452,17 @@ function TicketCreateForm({ session, close, onCreated }) {
   return <Modal title="Create support ticket" close={dismiss}>
     <form className="form ticket-form" onSubmit={submit}>
       <div className="formgrid">
+        {session?.role !== "super" && <label className="full">Site *<select key={ticketSites.join("|")} name="site" required defaultValue={ticketSites.length === 1 ? ticketSites[0] : ""} disabled={!sitesLoaded}>
+          <option value="" disabled>{sitesLoaded ? "Select a site" : "Loading assigned sites…"}</option>
+          {ticketSites.map((site) => <option key={site} value={site}>{site}</option>)}
+        </select></label>}
+
         <label className="full">Priority *<select name="priority" required defaultValue="Medium"><option>Low</option><option>Medium</option><option>High</option></select></label>
         <EnhancedSpeechComplaint label="Description" name="message" audioName="messageAudio" buttonLabel="Record ticket audio" placeholder="Describe the issue, or select Hindi / English and speak in that language." required={false} />
         <label className="full ticket-attachment-field"><span>Image or video attachment</span><input type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime" onChange={(event) => setAttachment(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{attachment ? `${attachment.name} · ${(attachment.size / 1024 / 1024).toFixed(1)} MB` : "Optional · JPEG, PNG, WebP, MP4, WebM, or MOV · maximum 10 MB"}</small></label>
       </div>
       {error && <p className="hierarchy-save-error" role="alert">{error}</p>}
-      <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
+      <footer><button type="button" disabled={saving} onClick={dismiss}>Cancel</button><button className="primary" disabled={saving || !sitesLoaded || (session?.role !== "super" && !ticketSites.length)}>{saving ? "Creating…" : "Create ticket"} <Send /></button></footer>
     </form>
   </Modal>;
 }

@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
@@ -75,7 +76,7 @@ test("saving General User defaults and all-unchecked menus matches the form",()=
   const source=client.slice(client.indexOf("function applyUserRoleDefaults("),client.indexOf("function missingViewSubmenu("));
   const context=vm.createContext({
     GENERAL_USER_ROLE,generalUserMenuSelection,mobileUserRoleOptions:MOBILE_USER_ROLES,
-    privilegeSelectionValue:value=>value,displaySiteName:value=>value,ADMIN_SUBMENU_OPTIONS,
+    ...siteAccess,privilegeSelectionValue:value=>value,displaySiteName:value=>value,ADMIN_SUBMENU_OPTIONS,
     mobileAccessKey:key=>`mobile${key[0].toUpperCase()}${key.slice(1)}`,
     operationalRequestOptions:{[GENERAL_USER_ROLE]:["View requests","Closed history"]},
   });
@@ -146,7 +147,7 @@ test("General User request feeds keep dashboard, optional Requests, and Reports 
     const rows=[{ref:"VISIBLE",site:"Sasti OB"},{ref:"OTHER",site:"Ghugus"}];
     const context=vm.createContext({
       app:{get(_path,_guard,callback){handler=callback;}},requireSession(){},GENERAL_USER_ROLE,
-      currentUserRecord:async()=>user,assignedUserSiteName:value=>value.site,requestProjection:"*",
+      ...siteAccess,currentUserRecord:async()=>user,assignedUserSiteName:value=>value.site,requestProjection:"*",
       pool:{query:async()=>({rows})},canonicalSiteName:value=>value,
       requestsVisibleToSession:value=>value,attachDailyRemarks:async value=>value,
     });

@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import test from "node:test";
@@ -85,7 +86,7 @@ async function runRoute(action, body) {
     addTicketNotificationsBestEffort: async () => {}, workflowRequestLink: () => "", publicBaseUrl: () => "",
     requireAllowedRequestSite: async () => true, assignedRequestScope: async () => ({}), requestSiteIsAllowed: () => true,
     parseIndiaRequestDateTime: () => new Date(), requestProjection: "reference AS ref",
-    currentUserRecord: async () => ({site: tipper.site}), canonicalSiteName: value => value,
+    ...siteAccess,currentUserRecord: async () => ({site: tipper.site}), canonicalSiteName: value => value,
     pool: {query: async (sql, values) => {
       if (/^UPDATE/.test(sql)) { writes.push({sql, values}); return {rows: [tipper]}; }
       return {rows: [{...tipper, status: action === "/verify" ? "Closed" : tipper.status, meter_type: "KMR", opening_meter_file: "saved-opening", closing_meter_file: "saved-closing"}]};

@@ -1,7 +1,6 @@
 import {flowDesignationForUser} from './hierarchy-report-flow.mjs';
 import {resolveMobileAccess} from './mobile-access.mjs';
-import {managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
-import {assignedUserSiteName,canonicalSiteName} from './site-location.mjs';
+import {managerReportScope,reportScopeIncludesSite,userSiteScope} from './region-scope.mjs';
 import {DEFAULT_WORKFLOW_ALERT_ROLES,whatsAppRecipientRole} from './whatsapp-recipient-policy.mjs';
 
 export {isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole} from './whatsapp-recipient-policy.mjs';
@@ -51,8 +50,7 @@ export function isWorkflowWhatsAppRecipient(user={},eventType='',site='',setting
   const keys=leadership?new Set([leadership]):workflowRoleKeys(user,profile);
   if(!policy.recipientRoles?.some((role)=>keys.has(role)))return false;
   if(profile.sessionRole==='normal'){
-    const userSite=canonicalSiteName(assignedUserSiteName(user));
-    return Boolean(userSite)&&userSite===canonicalSiteName(site);
+    return reportScopeIncludesSite(userSiteScope(user),site);
   }
   const scope=managerReportScope(user);
   return reportScopeIncludesSite(scope,site);

@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -60,7 +61,7 @@ function harness({users=fixtureUsers(),settings=defaultWhatsAppReportSettings(),
   }};
   const bindings={pool:client,storedWhatsAppReportSettings:async()=>settings,
     whatsappPurposeEnabled:(value,purpose)=>whatsappPurposeEnabled(value,purpose,now),
-    resolveMobileAccess,assignedUserSiteName,canonicalSiteName,isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,
+    ...siteAccess,resolveMobileAccess,assignedUserSiteName,canonicalSiteName,isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,
     isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,reportTemplateFallback,
     metaWhatsAppRuntimeEnv:async()=>({WHATSAPP_REPORT_SETTINGS:settings}),
     sendMetaWhatsAppTemplate:async(args)=>{templateAttempts.push(args);if(templateGate)await templateGate;if(templateError)throw templateError;templates.push(args);},

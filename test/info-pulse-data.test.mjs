@@ -155,7 +155,7 @@ test('site aliases, zero-case assigned sites and missing site are preserved', ()
 });
 
 test('server-permitted scope is preserved in every count and drill-down', () => {
-  const scope = infoPulseRequestScope({role: 'normal', location: 'Sasti OB'}, {});
+  const scope = infoPulseRequestScope({role: 'normal'}, {site: 'Sasti OB'});
   const permitted = scopeInfoPulseRequests([{...base, ref: 'allowed'}, {...base, ref: 'denied', site: 'Majri OB'}], scope);
   const cases = buildInfoPulseCases(permitted, {role: 'MIS User', now: NOW});
   assert.deepEqual(cases.map(row => row.key), ['allowed']);

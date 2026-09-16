@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -64,7 +65,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
   const context={
     ...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},
     app:{patch:register,post:register},pool:{connect:async()=>client,query:client.query},
-    readSession:async req=>req.testSession,currentUserRecord:async()=>user,
+    readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>user,
     canonicalSiteName:value=>String(value||'').trim().toLowerCase(),requestProjection:'*',
     validMeterReadings,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
     requestDateTimeValue:()=>new Date(now),delayedReasonRequired:()=>false,REQUEST_CLOSE_STATUSES:['Closed','In progress','Open'],

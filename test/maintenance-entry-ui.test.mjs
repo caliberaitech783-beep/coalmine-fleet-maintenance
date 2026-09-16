@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -64,7 +65,7 @@ test('changing equipment group clears the old vehicle, hidden door and fetched d
   const EquipmentCombobox = () => null;
   const alerts = [];
   const app = harness(formCode, 'MaintenanceForm', {
-    ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
+    ...siteAccess, ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
     Clock: Null, MapPin: Null, ChevronRight: Null, CheckCircle2: Null, RefreshCw: Null, AlertTriangle: Null,
     TIME_24H_PATTERN: '.*', alert: message => alerts.push(message),
   });
@@ -104,7 +105,7 @@ test('successful creation closes only after save and never opens a blocking succ
   const alerts = [];
   let resolveSave, closes = 0;
   const app = harness(formCode, 'MaintenanceForm', {
-    ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
+    ...siteAccess, ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
     Clock: Null, MapPin: Null, ChevronRight: Null, CheckCircle2: Null, RefreshCw: Null, AlertTriangle: Null,
     TIME_24H_PATTERN: '.*', alert: message => alerts.push(message), submitMaintenanceRequest,
     FormData: class { constructor(values) {this.values = values;} get(key) {return this.values[key] ?? '';} },

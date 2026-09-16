@@ -1,7 +1,7 @@
 import {GENERAL_USER_ROLE,generalUserCanAccessMenu} from './mobile-access.mjs';
 import {accessAllows} from './admin-access.mjs';
-import {assignedUserSiteName,canonicalSiteName,equipmentSiteName} from './site-location.mjs';
-import {REGION_DATA,managerReportScope,reportScopeIncludesSite} from './region-scope.mjs';
+import {assignedUserSiteName,equipmentSiteName} from './site-location.mjs';
+import {REGION_DATA,managerReportScope,reportScopeIncludesSite,userSiteScope} from './region-scope.mjs';
 
 const OPERATIONAL_DASHBOARD_ROLES=new Set(['Production User','Maintenance User','MIS User']);
 
@@ -47,8 +47,7 @@ export function canReadDashboardEquipment(session={}){
 
 export function dashboardEquipmentScope(session={},user={}){
   if(session.role==='normal'){
-    const assignedSite=canonicalSiteName(assignedUserSiteName(user));
-    return {restrictToScope:true,allowedSites:assignedSite?[assignedSite]:[],allowedRegions:[]};
+    return {restrictToScope:true,allowedSites:userSiteScope(user).sites,allowedRegions:[]};
   }
   if(session.role==='super'&&session.permissions?.adminLevel==='Manager'){
     const reportScope=managerReportScope({...user,site:assignedUserSiteName(user)});

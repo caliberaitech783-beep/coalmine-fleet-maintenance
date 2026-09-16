@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -68,7 +69,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
   },release(){assert.equal(tx,false);released=true;}};
   const context={...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),
-    currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},currentUserRecord:async()=>user,
+    currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,
     validMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
     REQUEST_CLOSE_STATUSES:['Closed','In progress','Awaiting parts'],delayedReasonRequired:()=>false,
@@ -186,6 +187,15 @@ test('timeline exposes only safe history bound to the current immutable request,
   assert.equal(result.body.history.length,1);assert.equal(result.body.history[0].actorName,'Saved actor');
   assert.equal(result.body.events.find(row=>row.event==='acceptedAt').source,'system');assert.equal(result.body.events.find(row=>row.event==='start').source,'unknown');
   const serialized=JSON.stringify(result.body);for(const secret of ['ip_address','device_id','session_id','Old private actor','requestId','timelineRequestId'])assert.equal(serialized.includes(secret),false);
+});
+
+test('multi-site request access accepts the second site and rejects excluded sites',async()=>{
+  const user={site:'Sasti OB | Jayant OB'};
+  for(const site of ['Jayant OB','Majri OB'])for(const kind of ['timeline','edit']){
+    const app=harness(kind,{user,row:{...active,site}});
+    const result=await app.call();
+    assert.equal(result.status,site==='Majri OB'?403:200,`${kind}: ${site}`);
+  }
 });
 
 test('timeline includes saved creator and scoped maintenance remarks without changing timestamps or writing audit history',async()=>{

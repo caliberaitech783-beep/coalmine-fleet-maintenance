@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -20,7 +21,7 @@ async function create({user={site:'Sasti OB'},session=production,body={}}={}){
     setImmediate:callback=>followups.push(callback),
     ...timeline,recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{post(_path,...chain){handlers=chain;}},readSession:async req=>req.testSession,
-    currentUserRecord:async()=>user,canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,
+    ...siteAccess,currentUserRecord:async()=>user,canonicalSiteName,parseIndiaRequestDateTime,validRequestAudioDataUrl,
     activeRequestConflict:async payload=>{calls.push({kind:'conflict',payload});return null;},requestProjection:'*',
     pool:{async query(sql,values){
       if(['BEGIN','COMMIT','ROLLBACK'].includes(sql)||sql.includes('pg_advisory_xact_lock'))return {rows:[]};
@@ -67,6 +68,15 @@ test('canonical site aliases and location/currentLocation profile fallbacks perm
     assert.equal(result.body.requesterLogin,'stupal');
     assert.equal(result.body.requesterRole,'Production User');
     assert.equal(result.calls.filter(call=>call.kind==='insert').length,1);
+  }
+});
+
+test('each selected site accepts a request while an excluded site is rejected',async()=>{
+  const user={site:'Sasti OB | Jayant OB',managerRegion:'All'};
+  for(const assignedRole of ['Production User','Maintenance User'])for(const site of ['Sasti OB','Jayant OB','Majri OB']){
+    const result=await create({user,session:{...production,assignedRole},body:{site}});
+    assert.equal(result.status,site==='Majri OB'?403:201,`${assignedRole}: ${site}`);
+    assert.equal(result.calls.filter(call=>call.kind==='insert').length,site==='Majri OB'?0:1);
   }
 });
 

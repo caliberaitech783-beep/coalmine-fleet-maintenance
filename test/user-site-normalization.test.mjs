@@ -52,7 +52,7 @@ test('server normalises user site names on write and migrates stored users once'
 test('the user form shows the same display names for manager sites and team locations',()=>{
   assert.match(ui,/sitesForManagerRegions\(managerRegions\)\.map\(displaySiteName\)/);
   assert.match(ui,/record\.managerSites = displaySiteSelection\(record\.managerSites\)\.join\(" \| "\)/);
-  assert.match(ui,/defaultValue=\{displaySiteName\(record\.site \|\| record\.location\)\}/);
-  assert.match(ui,/record\.site = displaySiteName\(record\.site \|\| record\.location\)/);
-  assert.match(ui,/records\.map\(\(record\) => displaySiteName\(record\.site\)\)/);
+  assert.match(ui,/<UserSiteFields record=\{record\} siteOptions=\{siteOptions\}/);
+  assert.match(ui,/record\.site = displaySiteSelection\(record\.site \|\| record\.location\)/);
+  assert.match(ui,/records\.flatMap\(\(record\) => userSiteSelection\(record\)\)/);
 });

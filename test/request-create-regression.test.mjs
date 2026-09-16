@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -30,7 +31,7 @@ function createRoute({ conflict = null, insertError, reports = async () => {}, n
     app: { post: (_path, ...handlers) => { handler = handlers.at(-1); } },
     requireSession: () => {}, requirePermission: () => () => {},
     validRequestAudioDataUrl: () => true,
-    currentUserRecord: async () => ({ site: request.site }),
+    ...siteAccess,currentUserRecord: async () => ({ site: request.site }),
     canonicalSiteName: value => value,
     createRequestWithVehicleLock: async (_identity, write) => {
       if (conflict) throw Object.assign(new Error(activeRequestConflictMessage(conflict, request.door)), { duplicate: true, existingReference: conflict.ref });

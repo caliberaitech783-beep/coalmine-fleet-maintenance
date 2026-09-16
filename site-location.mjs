@@ -69,7 +69,6 @@ export function recordBelongsToSite(record, site) {
 }
 
 export function recordsForSite(records = [], site = "") {
-  const selectedSite = canonicalSiteName(site);
-  if (!selectedSite) return [];
-  return records.filter((record) => recordBelongsToSite(record, selectedSite));
+  const sites = (Array.isArray(site) ? site : String(site || "").split("|")).map(canonicalSiteName).filter(Boolean);
+  return records.filter((record) => sites.some((selectedSite) => recordBelongsToSite(record, selectedSite)));
 }

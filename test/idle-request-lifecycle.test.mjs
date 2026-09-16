@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -41,7 +42,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
   const context={
     ...timeline,requestTimelineProjection:'*',recordRequestTimeline:async()=>{},maintenanceWriteFailure:(error,res,next)=>error.status?res.status(error.status).json({error:error.message,code:error.code}):next(error),
     app:{patch(_path,...handlers){chain=handlers;}},readSession:async req=>req.testSession,
-    currentUserRecord:async()=>user,flowDesignationForUser,managerRoleSelection,canonicalSiteName,
+    ...siteAccess,currentUserRecord:async()=>user,flowDesignationForUser,managerRoleSelection,canonicalSiteName,
     userManagesSite:(manager,site)=>reportScopeIncludesSite(managerReportScope(manager),site),
     requestProjection:'*',requestDateTimeValue,validTripCardImageDataUrl,validMeterReading,validMeterReadings,
     pool:{async query(sql,values){

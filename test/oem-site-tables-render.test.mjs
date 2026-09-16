@@ -58,7 +58,9 @@ const selectionFor = (records, extra = {}) => ({ label: "All OEMs", periodLabel:
 function renderDetails(selection) {
   const exports = [];
   const CaptureExport = props => { exports.push(props); return null; };
-  const ActionsTable = props => h(SharedActionsTable, { ...props, Menu: Empty, ColumnsDialog: Empty, SortDialog: Empty, FilterDialog: Empty, ExportMenu: CaptureExport });
+  // Server rendering has no DOM ref for the browser's toolbar portal. Render
+  // that toolbar inline so this harness can inspect the real export models.
+  const ActionsTable = props => h(SharedActionsTable, { ...props, toolbarPortal: false, Menu: Empty, ColumnsDialog: Empty, SortDialog: Empty, FilterDialog: Empty, ExportMenu: CaptureExport });
   const html = renderToStaticMarkup(h(Details, { selection, title: "OEM breakdown", ActionsTable,
     Status: ({ children }) => children, formatDate: formatDisplayDateTime, MaintenanceRemarks: Empty }));
   return { html, exports, sections: renderedSections(html) };

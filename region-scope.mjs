@@ -43,7 +43,7 @@ export function displaySiteSelection(value){
 export function normalizeUserSiteFields(record={}){
   const next=normalizeOperationalSiteFields(record);
   for(const key of ['site','location']){
-    if(typeof next[key]==='string'&&next[key].trim())next[key]=displaySiteName(next[key]);
+    if(next[key]!=null)next[key]=displaySiteSelection(next[key]).join(' | ');
   }
   if(next.managerSites!=null&&String(next.managerSites).trim())next.managerSites=displaySiteSelection(next.managerSites).join(' | ');
   return next;
@@ -55,6 +55,21 @@ export function normalizeOperationalSiteFields(record={}){
     if(typeof next[key]==='string'&&next[key].trim())next[key]=displaySiteName(next[key]);
   }
   return next;
+}
+
+// Team accounts use only their explicit site assignment. Report-region settings
+// from a previous manager role must never broaden operational access.
+export function userSiteSelection(user={}){
+  for(const value of [user.site,user.location,user.currentLocation]){
+    const sites=displaySiteSelection(value);
+    if(sites.length)return sites;
+  }
+  return [];
+}
+
+export function userSiteScope(user={}){
+  const selection=userSiteSelection(user),sites=selection.map(canonicalSiteName);
+  return {key:sites.length===1?sites[0]:sites.length?`SITES-${sites.join('+')}`:'UNASSIGNED',label:selection.length?selection.join(' + '):'Unassigned site',sites};
 }
 
 export function sitesForManagerRegions(value){
@@ -72,8 +87,7 @@ export function managerReportScope(user={}){
     const sites=[...new Set(REGION_DATA.filter(({code})=>regions.includes(code)).flatMap(({sites})=>sites).map(canonicalSiteName).filter(Boolean))];
     return {key:regions.join('+'),label:regions.join(' + '),sites};
   }
-  const site=canonicalSiteName(user.site||user.location||user.currentLocation);
-  return {key:site||'UNASSIGNED',label:site?displaySiteName(site):'Unassigned site',sites:site?[site]:[]};
+  return userSiteScope(user);
 }
 
 export function reportScopeIncludesSite(scope,site){

@@ -1,3 +1,4 @@
+import {userSiteSelection} from '../region-scope.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -39,7 +40,7 @@ const configurations=[
 function harness(config,{fetch:fetchImpl=async()=>response(),readAttachment}={}){
   const slots=[],calls=[],completed=[],order=[];
   let cursor=0,queued=[],dirty=false,mounted=true,stateWrites=0,closed=0;
-  let props={session:{token:'local-test-token'},ticket:{reference:'TKT-FIXTURE'},close(){closed++;order.push('close');},[config.callback](row){completed.push(row);order.push('saved');}};
+  let props={session:{role:'super',token:'local-test-token'},ticket:{reference:'TKT-FIXTURE'},close(){closed++;order.push('close');},[config.callback](row){completed.push(row);order.push('saved');}};
   const useState=initial=>{
     const index=cursor++;
     if(!(index in slots))slots[index]={value:typeof initial==='function'?initial():initial};
@@ -66,7 +67,7 @@ function harness(config,{fetch:fetchImpl=async()=>response(),readAttachment}={})
     readAsDataURL(file){if(file.failRead)this.onerror();else{this.result=file.data||'data:image/png;base64,dGVzdA==';this.onload();}}
   }
   const readTicketAttachment=readAttachment||new Function('FileReader',`${attachmentSource};return readTicketAttachment;`)(FileReader);
-  const scope={React,useState,useRef,useEffect,Modal:Null,EnhancedSpeechComplaint:Null,Send:Null,CheckCircle2:Null,readTicketAttachment,
+  const scope={userSiteSelection,React,useState,useRef,useEffect,Modal:Null,EnhancedSpeechComplaint:Null,Send:Null,CheckCircle2:Null,readTicketAttachment,
     alert:()=>assert.fail('Ticket forms must use inline feedback, not native alert'),
     FormData:class {constructor(values){this.values=values;}get(key){return this.values[key]??'';}},
     fetch:async(...args)=>{calls.push(args);return fetchImpl(...args);},
@@ -173,7 +174,7 @@ for(const config of configurations){
         const pending=deferred(),app=harness(config,{fetch:()=>pending.promise});
         const save=app.submit(app.render());await tick();assert.equal(app.calls.length,1);
         if(transition==='unmount')app.unmount();
-        else app.render(transition==='account change'?{session:{token:'new-local-account'}}:{ticket:{reference:'TKT-NEXT'}});
+        else app.render(transition==='account change'?{session:{role:'super',token:'new-local-account'}}:{ticket:{reference:'TKT-NEXT'}});
         const before=app.stateWrites;
         pending.resolve(response(ok?{reference:'OLD-TICKET'}:{error:'Old request failure'},ok));await save;
         assert.equal(app.completed.length,0);assert.equal(app.closed,0);assert.equal(app.stateWrites,before);
@@ -186,7 +187,7 @@ for(const config of configurations){
     for(const unmount of [true,false]){
       const media=deferred(),app=harness(config,{readAttachment:()=>media.promise});
       const save=app.submit(app.render());
-      if(unmount)app.unmount();else app.render({session:{token:'new-local-account'}});
+      if(unmount)app.unmount();else app.render({session:{role:'super',token:'new-local-account'}});
       const before=app.stateWrites;media.resolve('data:image/png;base64,dGVzdA==');await save;
       assert.equal(app.calls.length,0);assert.equal(app.completed.length,0);assert.equal(app.closed,0);assert.equal(app.stateWrites,before);
     }
@@ -196,7 +197,7 @@ for(const config of configurations){
     const old=deferred(),fresh=deferred();let requests=0;
     const app=harness(config,{fetch:()=>++requests===1?old.promise:fresh.promise});
     const oldSave=app.submit(app.render());await tick();
-    const freshSave=app.submit(app.render({session:{token:'new-local-account'}}));await tick();
+    const freshSave=app.submit(app.render({session:{role:'super',token:'new-local-account'}}));await tick();
     old.resolve(response({reference:'OLD'}));await oldSave;
     const tree=app.render();assert.equal(button(tree,config.pending).props.disabled,true);tree.props.close();
     assert.equal(app.closed,0);assert.equal(app.completed.length,0);
@@ -205,3 +206,20 @@ for(const config of configurations){
     assert.deepEqual(app.completed,[{reference:'NEW'}]);assert.equal(app.closed,1);
   });
 }
+
+test('multi-site ticket form loads only assigned options and submits one chosen site',async()=>{
+  const app=harness(configurations[0],{fetch:async url=>url==='/api/me/profile'?response({location:'Sasti OB | Jayant OB'}):response()});
+  app.render({session:{role:'normal',token:'multi-site'}});await tick();
+  const tree=app.render();
+  const select=all(tree,node=>node.type==='select'&&node.props.name==='site')[0];
+  assert.deepEqual(all(select,node=>node.type==='option').map(node=>node.props.value),['','Sasti OB','Jayant OB']);
+  await app.submit(tree,app.values({site:'Jayant OB'}));
+  assert.equal(JSON.parse(app.calls.find(([url])=>url==='/api/tickets')[1].body).site,'Jayant OB');
+});
+
+test('assignment-load failure stays inline and cannot enable ticket submission',async()=>{
+  const app=harness(configurations[0],{fetch:async()=>response({},false)});
+  app.render({session:{role:'normal',token:'multi-site'}});await tick();
+  const tree=app.render();assert.match(inlineError(tree),/assigned sites/);
+  assert.equal(button(tree,'Create ticket').props.disabled,true);
+});

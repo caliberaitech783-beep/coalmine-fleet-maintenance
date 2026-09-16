@@ -1,3 +1,4 @@
+import * as siteAccess from '../region-scope.mjs';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
@@ -18,7 +19,7 @@ function harness({row=eligible,user={site:'Sasti OB'},beforeUpdate}={}){
   const context={
     app:{patch(path,...handlers){assert.equal(path,'/api/requests/:reference/mis-flag');chain=handlers;}},
     readSession:async req=>req.testSession,
-    currentUserRecord:async()=>user,
+    ...siteAccess,currentUserRecord:async()=>user,
     canonicalSiteName:value=>String(value||'').trim().toLowerCase(),
     requestProjection:'*',
     attachDailyRemarks:async rows=>rows.map(row=>({...row,dailyRemarks:[]})),
