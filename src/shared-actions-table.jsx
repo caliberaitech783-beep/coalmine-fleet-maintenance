@@ -16,6 +16,16 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, chi
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
+  if (/\bdashboard-location-dates\b/.test(tableProps.className || "")) {
+    const location = columns.find(column => /^(current location|request site)$/i.test(column.label.trim()));
+    if (location) {
+      const labels = location.label.trim().toLowerCase() === "request site"
+        ? ["started", "closed", "mis verified at", "first trip time"] : ["started"];
+      const dates = labels.flatMap(label => columns.filter(column => column.label.trim().toLowerCase() === label));
+      for (const column of dates) columns.splice(columns.indexOf(column), 1);
+      columns.splice(columns.indexOf(location) + 1, 0, ...dates);
+    }
+  }
   if (closedTimeAfterStarted) {
     const closed = columns.findIndex(column => column.label.trim().toLowerCase() === "closed time");
     if (closed >= 0 && columns.some(column => column.label.trim().toLowerCase() === "started")) {
