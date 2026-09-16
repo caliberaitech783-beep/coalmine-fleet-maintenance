@@ -103,6 +103,10 @@
 .pulse-row-reason { min-width: 0; }
 .pulse-row-reason span { display: block; font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #8b95a8; }
 .pulse-row-reason p { margin: 2px 0 0; font-size: 15px; font-weight: 600; line-height: 1.4; color: #1e293b; overflow-wrap: anywhere; }
+.pulse-row-delay { display: grid; gap: 1px; margin-top: 8px; padding: 6px 10px; border-left: 3px solid #d98a12; border-radius: 0 8px 8px 0; background: #fff8e8; }
+.pulse-row-delay span { display: block; font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: #8a5a00; }
+.pulse-row-delay p { margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.4; color: #4a3a12; overflow-wrap: anywhere; }
+.pulse-row-delay time { font-size: 11px; color: #8a6a2a; }
 .pulse-row-timing { display: flex; flex-wrap: nowrap; gap: 8px; margin: 0; }
 .pulse-row-timing > div { display: grid; align-content: start; gap: 2px; min-width: 132px; padding: 8px 12px; border-radius: 10px; background: #f6f4fa; }
 .pulse-row-timing dt { font-size: 11px; font-weight: 700; color: #6b7891; }

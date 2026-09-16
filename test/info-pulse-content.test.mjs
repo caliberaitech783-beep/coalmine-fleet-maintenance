@@ -9,6 +9,7 @@ import {parseIstTimestamp} from '../ai-feeder.mjs';
 import * as dates from '../date-time-format.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import * as timing from '../src/info-pulse-timing.mjs';
+import * as reasons from '../src/info-pulse-reasons.mjs';
 
 const source = readFileSync(new URL('../src/info-pulse-content.jsx', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
@@ -37,8 +38,8 @@ const kpiCounts = tree => Object.fromEntries(['BD balance', 'Critical', 'Warning
 const REQUESTS = [
   {ref: 'REQ-V167', door: 'V167', reg: 'MH34BZ3284', site: 'Dhoptala OB (2nd)', equipmentGroup: 'VOLVO TIPPERS', meterType: 'KMR', status: 'Open', start: '2026-09-16 06:02', expectedCompletionAt: '2026-09-16 06:20', complaint: 'RHS 2nd axle main leaf spring broken'},
   {ref: 'REQ-S145', door: 'S145', site: 'Sasti OB', equipmentGroup: 'SCANIA TIPPERS', status: 'Open', start: '2026-09-16 09:36', expectedCompletionAt: '2026-09-16 13:00', complaint: 'Third axle oil seal leakage'},
-  {ref: 'REQ-D38', door: 'D38', site: 'Majri OB', equipmentGroup: 'DOZERS', meterType: 'HMR', status: 'Open', start: '2026-09-14 08:01', complaint: 'LHS track chain loose and battery terminal damage'},
-  {ref: 'REQ-W1', door: 'W1', site: 'Majri OB', equipmentGroup: 'EICHER TIPPERS', status: 'Open', start: '2026-09-15 20:00', complaint: 'Gear box noise'},
+  {ref: 'REQ-D38', door: 'D38', site: 'Majri OB', equipmentGroup: 'DOZERS', meterType: 'HMR', status: 'Open', start: '2026-09-14 08:01', complaint: 'LHS track chain loose and battery terminal damage', dailyRemarks: [{createdAt: '2026-09-14 18:00', authorName: 'Site team', remark: 'Chain inspected', delayReason: 'Vendor inspection pending'}, {createdAt: '2026-09-15 18:30', authorName: 'Maintenance team', remark: 'Battery replaced', delayReason: 'Awaiting track chain from supplier'}]},
+  {ref: 'REQ-W1', door: 'W1', site: 'Majri OB', equipmentGroup: 'EICHER TIPPERS', status: 'Open', start: '2026-09-15 20:00', complaint: 'Gear box noise', overdueReason: 'Gear box sent to workshop', dailyRemarks: [{createdAt: '2026-09-16 08:00', remark: 'Opened gear box', delayReason: 'Spares not in stock'}]},
   {ref: 'REQ-J9', door: 'J9', site: 'Jayant OB', equipmentGroup: 'DRILL MACHINE', status: 'Open', start: '2026-09-16 02:00', complaint: 'Compressor fault'},
   {ref: 'REQ-IDLE', door: 'E110', site: 'Majri OB', status: 'Idle', start: '2026-09-10 08:00', complaint: 'No operator'},
   {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OB', status: 'Closed', start: '2026-09-09 08:00', closedAt: '2026-09-15 08:00', complaint: 'Brake liner broken'},
@@ -48,7 +49,7 @@ function harness() {
   const slots = [];
   let cursor = 0;
   const bindings = {
-    React, ...data, ...dates, ...timing, requestStatusLabel, parseIstTimestamp,
+    React, ...data, ...dates, ...timing, ...reasons, requestStatusLabel, parseIstTimestamp,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === 'function' ? initial() : initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
     ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle', 'Activity', 'Clock', 'RotateCcw'].map(name => [name, () => null])),
   };
@@ -357,4 +358,18 @@ test('filters, KPI cards and rows follow the dashboard record-browser styling an
   assert.match(css, /@media \(max-width: 1000px\) \{[^@]*\.pulse-kpis \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}[^@]*\.pulse-breakdown-row \{ grid-template-columns: 40px 1fr; \}/);
   assert.match(css, /@media \(max-width: 650px\) \{[^@]*\.pulse-region-tabs \{ width: 100%;/);
   assert.ok(!css.includes('pulse-heading-total') && !css.includes('pulse-breakdown-total') && !css.includes('pulse-case-card') && !css.includes('pulse-pagination'));
+});
+
+test('each row shows its recorded delay reason under the breakdown reason, and nothing when none exists', () => {
+  const rows = descendants(byLabel(allDates().tree, 'BD balance breakdowns, longest standing first'), node => node.type === 'li');
+  const [dozer, eicher, drill] = rows.map(html);
+  assert.match(dozer, /Breakdown reason LHS track chain loose and battery terminal damage Delay reason Awaiting track chain from supplier 15-09-2026 06:30(:00)? PM IST · Maintenance team/);
+  assert.ok(!dozer.includes('Vendor inspection pending'), 'only the latest daily delay reason is shown');
+  assert.match(eicher, /Breakdown reason Gear box noise Overdue reason Gear box sent to workshop/);
+  assert.ok(!eicher.includes('Spares not in stock'), 'the ETC overdue reason wins over daily updates');
+  assert.ok(!drill.includes('Delay reason') && !drill.includes('delay reason'), 'no delay block without a recorded reason');
+  assert.equal(descendants(rows[2], node => node.props.className === 'pulse-row-delay').length, 0);
+  assert.deepEqual(reasons.pulseDelayReason({delayedReason: 'Waiting for MIS closure'}), {label: 'Closure delay reason', value: 'Waiting for MIS closure', at: ''});
+  assert.deepEqual(reasons.pulseDelayReason({dailyRemarks: 'legacy remark text', delayedReason: ''}), null);
+  assert.deepEqual(reasons.pulseDelayReason({dailyRemarks: [{remark: 'x', delayReason: '  '}]}), null);
 });

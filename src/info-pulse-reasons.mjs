@@ -46,3 +46,15 @@ export function pulseSeverityCounts(cases = []) {
   for (const row of cases) result[pulseCaseSeverity(row)]++;
   return result;
 }
+
+// The delay reason to show on an Info Pulse row, when one is recorded: the
+// overdue reason entered against the ETC, else the latest daily-update delay
+// reason, else the closure delay reason. Nothing is invented when none exists.
+export function pulseDelayReason(request = {}) {
+  const overdue = text(request.overdueReason);
+  if (overdue) return {label: 'Overdue reason', value: overdue, at: ''};
+  const latest = pulseDailyUpdates(request.dailyRemarks).find(update => update.delayReason);
+  if (latest) return {label: 'Delay reason', value: latest.delayReason, at: latest.createdAt, author: latest.author};
+  const closure = text(request.delayedReason);
+  return closure ? {label: 'Closure delay reason', value: closure, at: ''} : null;
+}

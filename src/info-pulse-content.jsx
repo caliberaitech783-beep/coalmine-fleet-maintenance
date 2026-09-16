@@ -4,6 +4,7 @@ import {infoPulseDate, infoPulseFilterView, infoPulseRegions} from '../info-puls
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import {formatDisplayDate, formatDisplayTime, formatDisplayDateTime} from '../date-time-format.mjs';
 import {requestStatusLabel} from './request-status.mjs';
+import {pulseDelayReason} from './info-pulse-reasons.mjs';
 import {PULSE_TIERS, pulseBreakdownRows, pulseElapsed, pulseTierCounts} from './info-pulse-timing.mjs';
 
 const tierIcons = {all: Activity, critical: AlertTriangle, warning: Clock, open: Truck};
@@ -98,6 +99,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
       {shown.length ? <><ol className="pulse-breakdown-list" aria-label={`${selected.label} breakdowns, longest standing first`}>
         {visibleRows.map((row, index) => {
           const request = row.request || {};
+          const delay = pulseDelayReason(request);
           return <li className={`pulse-breakdown-row ${row.tier}`} key={row.key}>
             <span className="pulse-rank" aria-hidden="true">{index + 1}</span>
             <div className="pulse-row-equipment">
@@ -106,7 +108,9 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
               <small>{[request.equipmentGroup || request.equipment, request.ref].filter(Boolean).join(' · ') || 'Reference not recorded'}</small>
               <span className="pulse-row-status"><i className="pulse-status-tag">{requestStatusLabel(request)}</i><i className={`pulse-tier-tag ${row.tier}`}>{row.tier === 'critical' ? 'Critical · 24h+' : row.tier === 'warning' ? 'Warning · 12h+' : 'Under 12h'}</i></span>
             </div>
-            <div className="pulse-row-reason"><span>Breakdown reason</span><p>{String(request.complaint || '').trim() || 'Not recorded'}</p></div>
+            <div className="pulse-row-reason"><span>Breakdown reason</span><p>{String(request.complaint || '').trim() || 'Not recorded'}</p>
+              {delay && <div className="pulse-row-delay"><span>{delay.label}</span><p>{delay.value}</p>{delay.at && Number.isFinite(parseIstTimestamp(delay.at)) && <time>{formatDisplayDateTime(delay.at)} IST{delay.author ? ` · ${delay.author}` : ''}</time>}</div>}
+            </div>
             <dl className="pulse-row-timing">
               <div><dt>Standing since</dt><dd><RecordDate value={request.start} /></dd></div>
               <div className={`standing ${row.tier}`}><dt>Down for</dt><dd><strong className="pulse-duration">{pulseElapsed(row.startedAt, now)}</strong><i className="pulse-standing-bar" aria-hidden="true" style={{'--fill': row.share}} /></dd></div>
