@@ -25,7 +25,7 @@ test("request lifecycle counts each workflow timestamp separately", () => {
   assert.match(client, /requestLifecycleRows\.closed/);
   assert.match(client, /requestLifecycleRows\.verified/);
   assert.match(client, /requestLifecycleRows\.idle/);
-  assert.match(client, /opened: locationBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) !== "closed"/);
+  assert.match(client, /opened: locationBreakdowns\.filter\(\(record\) => !\["closed", "idle", "ideal"\]\.includes\(String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\)\)/);
   assert.match(client, /closed: locationBreakdowns\.filter\(\(record\) => String\(record\.status \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "closed"/);
   assert.match(client, /key: "production", className: "opened", label: "Production Request", note: "Production \+ Maintenance", value: requestLifecycleRows\.production\.length/);
   assert.match(client, /lifecycleRecords=\{assetDrilldown\.startsWith\("event:"\)\}/);
