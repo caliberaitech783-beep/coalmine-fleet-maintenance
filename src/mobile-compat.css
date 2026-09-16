@@ -75,6 +75,19 @@ body {
 .notification-popover {
   max-height: min(520px, calc(100dvh - 110px));
 }
+@media (max-width: 700px) {
+  .normal .notification-popover {
+    position: fixed;
+    left: 50%;
+    right: auto;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(410px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 32px);
+    box-sizing: border-box;
+  }
+}
 
 .dashboard-asset-modal {
   max-height: 94dvh;
