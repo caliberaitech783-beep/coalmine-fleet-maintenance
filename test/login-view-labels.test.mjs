@@ -50,3 +50,18 @@ test("mobile dialogs support touch dismissal and accessibility", () => {
   assert.match(source, /type="button" onClick=\{close\} aria-label="Close dialog"/);
   assert.doesNotMatch(source, /className="overlay" onMouseDown=/);
 });
+
+test("the login screen does not jump on phones: no dynamic viewport height and no keyboard on load", () => {
+  const css = fs.readFileSync(new URL("../src/mobile-compat.css", import.meta.url), "utf8");
+  const ruleBody = (selector) => css.split(selector).slice(1).map((part) => part.slice(0, part.indexOf("}")));
+  for (const selector of ["\n.login {", ".login-visual {", ".login > main {"]) {
+    const bodies = ruleBody(selector);
+    assert.ok(bodies.length > 0, selector + " rule exists");
+    for (const body of bodies) assert.ok(!body.includes("dvh"), selector + " must not use the dynamic viewport height");
+  }
+  assert.ok(ruleBody("\n.app,").some((body) => body.includes("100dvh")), "the signed-in shells keep the dynamic height");
+  const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
+  assert.ok(source.includes('const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;'));
+  const username = source.slice(source.indexOf('id="login-username"'), source.indexOf('htmlFor="login-password"'));
+  assert.ok(username.includes("autoFocus={!coarsePointerDevice()}"), "username is only auto-focused on desktop");
+});

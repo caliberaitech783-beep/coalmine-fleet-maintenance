@@ -439,6 +439,9 @@ function AuthModeTabs({ mode, onModeChange }) {
     </div>
   );
 }
+// Touch devices open the keyboard the moment a field is focused, which resizes the viewport and makes
+// the login form jump on load; only desktop browsers get the username field focused automatically.
+const coarsePointerDevice = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 function Login({ onLogin, theme, toggleTheme }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -678,7 +681,7 @@ function Login({ onLogin, theme, toggleTheme }) {
               spellCheck="false"
               aria-invalid={Boolean(error)}
               required
-              autoFocus
+              autoFocus={!coarsePointerDevice()}
             />
           </div>
           <label className="login-label" htmlFor="login-password">Password</label>

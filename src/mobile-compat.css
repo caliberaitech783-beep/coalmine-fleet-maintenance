@@ -9,17 +9,22 @@ body {
 }
 
 .app,
-.normal,
-.login {
+.normal {
   min-height: 100vh;
   min-height: 100svh;
   min-height: 100dvh;
 }
 
+/* The login screen must not use the dynamic viewport unit: on phones it changes every time the
+   address bar or keyboard slides in or out, which re-lays the form out and makes it jump. */
+.login {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
 .login-visual {
   min-height: 100vh;
   min-height: 100svh;
-  min-height: 100dvh;
 }
 
 .overlay {
@@ -147,7 +152,6 @@ button {
 
   .login > main {
     min-height: calc(100svh - 200px);
-    min-height: calc(100dvh - 200px);
   }
 
   /* iOS zooms the page when a focused form control is smaller than 16px. */
@@ -179,7 +183,6 @@ button {
 @media (max-width: 560px) {
   .login > main {
     min-height: 100svh;
-    min-height: 100dvh;
     padding:
       max(28px, env(safe-area-inset-top))
       max(22px, env(safe-area-inset-right))
