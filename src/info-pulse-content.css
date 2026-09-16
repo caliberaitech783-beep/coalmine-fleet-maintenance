@@ -1,5 +1,5 @@
-/* Info Pulse: full-screen panel with four standing-time KPI cards over one
-   ranked list of open breakdowns, longest standing first. */
+/* Info Pulse: full-screen panel with dashboard-style filters, four
+   standing-time KPI cards and one ranked list of open breakdowns. */
 .ai-feeder-overlay.pulse-overlay { padding: 0; }
 .ai-feeder-panel.pulse-panel { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border: 0; box-shadow: none; }
 .ai-feeder-panel.pulse-panel { color: #1e293b; }
@@ -22,25 +22,49 @@
 .pulse-refresh { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 14px; border: 1px solid #d3c9e4; border-radius: 8px; background: #fff; color: #522e90; font: inherit; font-weight: 700; }
 .pulse-refresh:hover:not(:disabled) { background: #f1ecf8; }
 .pulse-content button:disabled { cursor: default; opacity: .65; }
-
-/* Site and request-date filters (site only when the scope has several sites) */
-.pulse-filters { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid #e4e0ee; border-radius: 12px; background: #fff; }
-.pulse-filters label { display: grid; gap: 5px; margin: 0; font-size: 13px; font-weight: 700; color: #46536a; }
-.pulse-filters label > span { display: flex; align-items: center; gap: 4px; }
-.pulse-filters label svg { color: #522e90; }
-.pulse-filters :is(input, select) { box-sizing: border-box; height: 40px; min-height: 40px; min-width: 165px; padding: 8px 12px; border: 1px solid #c8d0de; border-radius: 6px; background: #fff; color: #26344a; font: inherit; }
-.pulse-filters select { max-width: 260px; }
-.pulse-period { display: grid; grid-template-columns: max-content repeat(3, 44px); height: 40px; overflow: hidden; border: 1px solid #c8d0de; border-radius: 6px; }
-.pulse-period button { height: 100%; padding: 0 12px; border: 0; border-right: 1px solid #c8d0de; background: transparent; color: #536179; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
-.pulse-period button:last-child { border-right: 0; }
-.pulse-period button.active { background: #522e90; color: #fff; }
-.pulse-reset { height: 40px; padding: 0 14px; border: 1px solid #c8d0de; border-radius: 6px; background: #fff; color: #37445c; font: inherit; font-weight: 700; }
-.pulse-reset:hover { background: #f1ecf8; }
-.pulse-filter-caption { align-self: center; margin-left: auto; font-size: 13px; font-weight: 700; color: #536179; }
 .pulse-message { margin: 0; padding: 28px 16px; text-align: center; color: #536179; }
 .pulse-message.pulse-error { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; border: 1px solid #f3c1cb; border-radius: 10px; background: #fff1f3; color: #8e1d33; }
 .pulse-message.pulse-error button { min-height: 34px; padding: 6px 12px; border: 1px solid #e3a3b1; border-radius: 6px; background: #fff; color: #8e1d33; font: inherit; font-weight: 700; }
 .pulse-empty { margin: 0; padding: 48px 16px; border: 1px dashed #d3c9e4; border-radius: 12px; background: #fff; text-align: center; font-weight: 600; color: #536179; }
+
+/* Filters: region tabs, site and equipment/vehicle chips, started-date range */
+.pulse-filter-panel { --record-purple: #522e90; padding: 10px 16px 12px; border: 1px solid #e4e0ee; border-radius: 12px; background: #fff; }
+.pulse-filter-summary { display: flex; align-items: center; gap: 12px; min-height: 32px; cursor: pointer; list-style: none; }
+.pulse-filter-summary::-webkit-details-marker { display: none; }
+.pulse-filter-summary b { font-size: 14px; color: #1e293b; }
+.pulse-filter-summary > span:first-of-type { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; color: #647892; }
+.pulse-show-filters, .pulse-hide-filters { flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--record-purple); }
+.pulse-filter-panel:not([open]) .pulse-hide-filters, .pulse-filter-panel[open] .pulse-show-filters { display: none; }
+.pulse-filter-topline { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.pulse-region-tabs { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 4px; padding: 4px; border: 1px solid #522e901a; border-radius: 11px; background: #522e9008; }
+.pulse-region-tabs button { display: flex; align-items: center; justify-content: center; gap: 12px; min-width: 132px; min-height: 40px; padding: 8px 16px; border: 0; border-radius: 8px; background: transparent; color: #142943; font: 800 13px Manrope, sans-serif; cursor: pointer; }
+.pulse-region-tabs button b { padding: 3px 8px; border-radius: 5px; background: #522e900d; font-size: 12px; }
+.pulse-region-tabs button[aria-selected="true"] { background: var(--record-purple); color: #fff; box-shadow: 0 2px 5px #522e9026; }
+.pulse-region-tabs button[aria-selected="true"] b { background: #ffffff29; }
+.pulse-filter-scope { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; background: #522e900e; font-size: 13px; font-weight: 800; color: var(--record-purple); }
+.pulse-reset { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--record-purple); font: 700 12px Manrope, sans-serif; cursor: pointer; }
+.pulse-reset:hover:not(:disabled) { background: #522e900c; }
+.pulse-filter-level { display: grid; grid-template-columns: 138px minmax(0, 1fr); align-items: center; gap: 12px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #e8e4ef; }
+.pulse-filter-level-label { display: flex; align-items: center; gap: 10px; color: #647892; font: 750 11px Manrope, sans-serif; }
+.pulse-filter-level-label::before { content: ""; width: 3px; height: 15px; border-radius: 2px; background: #522e9040; flex-shrink: 0; }
+.pulse-filter-chips { display: flex; flex-wrap: wrap; align-items: stretch; gap: 4px; min-width: 0; padding: 3px 2px; }
+.pulse-filter-chips > button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 34px; padding: 5px 12px; border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 7px 7px 3px 3px; background: transparent; color: #142943; font: 700 12px Manrope, sans-serif; cursor: pointer; white-space: nowrap; }
+.pulse-filter-chips > button:hover { background: #522e9009; color: var(--record-purple); }
+.pulse-filter-chips > button[aria-pressed="true"] { border-color: #522e9015; border-bottom-color: var(--record-purple); background: #522e900e; color: var(--record-purple); }
+.pulse-filter-chips > button b { padding: 2px 6px; border-radius: 5px; background: #522e900a; font-size: 10px; font-weight: 800; }
+.pulse-filter-chips > button[aria-pressed="true"] b { background: var(--record-purple); color: #fff; }
+.pulse-filter-level[data-level="site"] .pulse-filter-chips > button[aria-pressed="true"] { background: var(--record-purple); color: #fff; box-shadow: 0 2px 5px #522e9026; }
+.pulse-filter-level[data-level="site"] .pulse-filter-chips > button[aria-pressed="true"] b { background: #ffffff29; color: #fff; }
+.pulse-filter-dates { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; margin-top: 8px; padding-top: 10px; border-top: 1px solid #e8e4ef; }
+.pulse-record-count { padding: 8px 12px; border-radius: 8px; background: var(--record-purple); color: #fff; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.pulse-filter-dates-label { font-size: 13px; font-weight: 700; color: #536179; }
+.pulse-filter-dates label { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 13px; font-weight: 700; color: #46536a; }
+.pulse-filter-dates input { box-sizing: border-box; height: 40px; min-height: 40px; min-width: 160px; padding: 8px 12px; border: 1px solid #c8d0de; border-radius: 6px; background: #fff; color: #26344a; font: inherit; }
+.pulse-period { display: inline-flex; height: 40px; overflow: hidden; border: 1px solid #c8d0de; border-radius: 6px; }
+.pulse-period button { height: 100%; padding: 0 12px; border: 0; border-right: 1px solid #c8d0de; background: transparent; color: #536179; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.pulse-period button:last-child { border-right: 0; }
+.pulse-period button.active { background: var(--record-purple); color: #fff; }
+.pulse-filter-caption { margin-left: auto; font-size: 13px; font-weight: 700; color: #536179; }
 
 /* KPI cards: BD balance (all), critical ≥ 24h, warning ≥ 12h, open < 12h */
 .pulse-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
@@ -121,11 +145,16 @@
   .pulse-panel h2 { font-size: 19px; }
   .pulse-content { padding: 12px 14px 20px; }
   .pulse-toolbar { flex-direction: column; align-items: stretch; }
-  .pulse-filters { padding: 10px 12px; }
-  .pulse-filters label, .pulse-filters :is(input, select) { width: 100%; min-width: 0; }
-  .pulse-filters label { flex: 1 1 100%; }
-  .pulse-filter-caption { margin-left: 0; flex: 1 1 100%; }
   .pulse-refresh-group { margin-left: 0; justify-content: space-between; }
+  .pulse-filter-panel { padding: 8px 12px 10px; }
+  .pulse-filter-summary { flex-wrap: wrap; gap: 6px 10px; }
+  .pulse-region-tabs { width: 100%; box-sizing: border-box; }
+  .pulse-region-tabs button { flex: 1 0 auto; min-width: max-content; gap: 6px; padding: 8px 10px; }
+  .pulse-filter-level { grid-template-columns: 94px minmax(0, 1fr); gap: 6px; }
+  .pulse-filter-level-label { gap: 6px; font-size: 10px; }
+  .pulse-filter-dates label, .pulse-filter-dates input { width: 100%; min-width: 0; }
+  .pulse-filter-dates label { flex: 1 1 100%; }
+  .pulse-filter-caption { margin-left: 0; flex: 1 1 100%; }
   .pulse-kpis { grid-template-columns: 1fr; gap: 8px; }
   .pulse-kpi { min-height: 0; padding: 10px 14px; }
   .pulse-kpi-count { font-size: 28px; }

@@ -1,6 +1,6 @@
 import {aiFeederAlerts, alertTypesForRole, parseIstTimestamp, uniqueInfoPulseRequests} from './ai-feeder.mjs';
 import {canonicalSiteName} from './site-location.mjs';
-import {displaySiteName} from './region-scope.mjs';
+import {REGION_DATA, displaySiteName} from './region-scope.mjs';
 
 export const INFO_PULSE_COLUMNS = [
   {key: 'etc-overdue', label: 'ETC overdue', tone: 'critical'},
@@ -118,5 +118,63 @@ export function infoPulseView(cases = [], {site = '', from = '', to = '', type =
     invalidRange, totals,
     sites: [...grouped.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label)),
     rows: filtered.filter(row => !type || row.issues.some(issue => issue.type === type)),
+  };
+}
+
+const VEHICLE_GROUP = /tipper|truck|bus|jeep|car\b|tanker|trailer|water|ambulance|van\b|tractor|pickup|lorry/i;
+// Requests record KMR for vehicles and HMR for equipment; older requests without
+// a meter type are classified by their equipment group name.
+export function infoPulseAssetCategory(request = {}) {
+  const meter = String(request.meterType || '').trim().toUpperCase();
+  if (meter === 'KMR') return 'Vehicles';
+  if (meter === 'HMR') return 'Equipment';
+  return VEHICLE_GROUP.test(String(request.equipmentGroup || request.equipment || '')) ? 'Vehicles' : 'Equipment';
+}
+
+// Regions available to the user: every region whose sites intersect the scope
+// (a null scope means all regions), each limited to the sites in scope.
+export function infoPulseRegions(scopeSites = null) {
+  const allowed = Array.isArray(scopeSites) ? new Set(scopeSites.map(canonicalSiteName).filter(Boolean)) : null;
+  return REGION_DATA.map(region => ({code: region.code, label: region.code, sites: region.sites.filter(site => !allowed || allowed.has(canonicalSiteName(site)))}))
+    .filter(region => region.sites.length);
+}
+
+const regionOfSite = (regions, siteKey) => regions.find(region => region.sites.some(site => canonicalSiteName(site) === siteKey))?.code || 'unmapped';
+const countBy = (rows, keyOf, labelOf = keyOf) => {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = keyOf(row);
+    if (!groups.has(key)) groups.set(key, {key, label: labelOf(row), count: 0});
+    groups.get(key).count++;
+  }
+  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, {numeric: true}));
+};
+
+// Dashboard-style cascade: started-date range first, then region tabs, site
+// chips and equipment/vehicle chips, each level counted within its parent.
+// Invalid selections fall back to "all" instead of hiding every record.
+export function infoPulseFilterView(rows = [], {region = 'all', site = '', category = '', from = '', to = ''} = {}, regions = infoPulseRegions()) {
+  const invalidRange = Boolean(from && to && from > to);
+  const dated = invalidRange ? [] : rows.filter(row => !(from || to) || (row.date && (!from || row.date >= from) && (!to || row.date <= to)));
+  const entries = dated.map(row => ({row, region: regionOfSite(regions, row.siteKey), category: infoPulseAssetCategory(row.request)}));
+  const regionOptions = [{code: 'all', label: 'All regions', count: entries.length}, ...regions.map(item => ({code: item.code, label: item.label, count: entries.filter(entry => entry.region === item.code).length}))];
+  if (entries.some(entry => entry.region === 'unmapped')) regionOptions.push({code: 'unmapped', label: 'Other / unassigned', count: entries.filter(entry => entry.region === 'unmapped').length});
+  const selection = {region: regionOptions.some(option => option.code === region) ? region : 'all', site: '', category: ''};
+  let filtered = selection.region === 'all' ? entries : entries.filter(entry => entry.region === selection.region);
+  const sites = countBy(filtered, entry => entry.row.siteKey, entry => entry.row.site);
+  const selectedSite = site ? canonicalSiteName(site) : '';
+  if (selectedSite && sites.some(option => option.key === selectedSite)) {
+    selection.site = selectedSite;
+    filtered = filtered.filter(entry => entry.row.siteKey === selectedSite);
+  }
+  const categories = countBy(filtered, entry => entry.category);
+  if (category && categories.some(option => option.key === category)) {
+    selection.category = category;
+    filtered = filtered.filter(entry => entry.category === category);
+  }
+  return {
+    invalidRange, selection, regions: regionOptions, sites, categories,
+    regionLabel: regionOptions.find(option => option.code === selection.region)?.label || 'All regions',
+    total: rows.length, rows: filtered.map(entry => entry.row),
   };
 }
