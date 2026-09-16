@@ -9,8 +9,7 @@ test('machine and meter columns stay beside status and breakdown reason with ori
   assert.deepEqual(ordered.map(c => c.label), ['Status', 'Current location', 'Machine / Door no.', 'Days of breakdown', 'Type of breakdown', 'Reason of breakdown', 'Opening HMR', 'Opening KMR', 'Started', 'Equipment category', 'Equipment group', 'Model']);
   assert.deepEqual(ordered.map(c => c.index), [0, 2, 4, 1, 6, 7, 10, 11, 3, 5, 8, 9]);
   const workflow = requestColumnsInWorkflowOrder([{label: 'Started'}, {label: 'Status'}, {label: 'Site location'}, {label: 'Door no.'}, {label: 'Actions'}], true);
-  assert.equal(workflow[workflow.findIndex(c => c.label === 'Status') + 1].label, 'Door no.');
-  assert.equal(workflow[0].label, 'Actions');
+  assert.deepEqual(workflow.map(c => c.label), ['Door no.', 'Status', 'Actions', 'Started', 'Site location']);
 });
 
 test('unrelated tables retain their existing order', () => {

@@ -82,10 +82,24 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
   };
   const ordered = jobReferenceColumnsLast(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b)), false));
   if (!actionsFirst) return ordered;
-  const isActions = (column) => column.label.trim().toLowerCase() === "actions";
-  const isDelayedReason = (column) => column.label.trim().toLowerCase() === "delayed reason";
-  if (!ordered.some(isActions)) return ordered;
-  return [...ordered.filter(isActions), ...ordered.filter(isDelayedReason), ...ordered.filter((column) => !isActions(column) && !isDelayedReason(column))];
+  // Maintenance and MIS workflow tables lead with a fixed layout (the table adds Sr. No. in front),
+  // then every remaining column follows in the standard order with Job reference last.
+  const leading = [
+    /^(?:machine\s*\/\s*)?door\s*(?:no\.?|number)$/i,
+    /^status$/i,
+    /^actions$/i,
+    /^(?:started|production date and time)$/i,
+    /^days of breakdown$/i,
+    /^(?:breakdown reason|reason of breakdown|reason)$/i,
+    /^(?:breakdown type|type of breakdown|repair category)$/i,
+    /^equipment group$/i,
+    /^make$/i,
+    /^model$/i,
+    /^daily remarks$/i,
+    /^delayed reason$/i,
+  ];
+  const lead = leading.flatMap((pattern) => ordered.filter((column) => pattern.test(column.label.trim())));
+  return [...lead, ...ordered.filter((column) => !lead.includes(column))];
 }
 
 export function jobReferenceColumnsLast(columns) {

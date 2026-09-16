@@ -13,8 +13,7 @@ test("workflow request columns use the requested order with all remaining fields
   const {columns} = tableModel(h("thead", {}, h("tr", {}, labels.map(label => h("th", {}, label)))));
   const ordered = requestColumnsInWorkflowOrder(columns);
   const maintenance = requestColumnsInWorkflowOrder(columns, true);
-  assert.equal(maintenance[0].label, "Actions");
-  assert.deepEqual(maintenance.slice(1), ordered.filter(c => c.label !== "Actions"));
+  assert.deepEqual(maintenance.map(c => c.label), ["Door no.", "Status", "Actions", "Started", "Days of breakdown", "Reason", "Repair category", "Equipment group", "Model", "Closed", "Site location", "Job reference"]);
   assert.deepEqual(tableSlots(projectTableRow(row("maintenance", ...labels), maintenance.map(c => c.index))).map(s => tableCellText(s.cell)), maintenance.map(c => c.label));
   // Breakdown type and reason sit beside breakdown days (the adjacent-field layout), then the remaining requested order.
   assert.deepEqual(ordered.map(c => c.label), ["Started", "Closed", "Days of breakdown", "Repair category", "Reason", "Status", "Door no.", "Site location", "Actions", "Equipment group", "Model", "Job reference"]);

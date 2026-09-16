@@ -9,7 +9,15 @@
   .mobile-workspace .sectiontitle { margin: 10px 0 !important; font-size: 13px !important; }
   .mobile-workspace .maintenance-table-menu { display: flex; align-items: center; gap: 8px; margin: 6px 10px; min-height: 40px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); }
   .maintenance-table-menu svg { width: 18px; height: 18px; }
-  .mobile-workspace .table-search-toolbar[data-mobile-open="false"] { display: none !important; }
+  /* Actions, Print, Filter and Export stay reachable on phones; Table controls toggles only the search and status fields. */
+  .mobile-workspace .table-search-toolbar[data-mobile-open="false"] > label { display: none !important; }
+  .mobile-workspace .table-search-toolbar > .toolbar-actions-end { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .mobile-workspace .toolbar-actions-end > .workflow-actions-slot,
+  .mobile-workspace .toolbar-actions-end > .table-parameter-filter,
+  .mobile-workspace .toolbar-actions-end > .export-menu,
+  .mobile-workspace .toolbar-actions-end > .print-table-trigger { width: auto; flex: 1 1 calc(50% - 8px); min-width: 0; }
+  .mobile-workspace .workflow-actions-slot .report-actions-menu,
+  .mobile-workspace .workflow-actions-slot .report-actions-trigger { width: 100%; }
   .mobile-workspace .mobile-workflow-table td,
   .mobile-workspace .mobile-breakdown-table td { padding: 10px 8px !important; }
 }
