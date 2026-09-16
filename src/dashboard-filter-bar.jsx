@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./dashboard-filter-bar.css";
 
 export default function DashboardFilterBar({ children, inDialog = false, bannerRef }) {
+  const [collapsed, setCollapsed] = useState(false);
   const localRef = useRef(null);
   const ref = bannerRef || localRef;
   useEffect(() => {
@@ -21,8 +22,9 @@ export default function DashboardFilterBar({ children, inDialog = false, bannerR
     window.addEventListener("resize", update);
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
   }, [inDialog]);
-  return <header ref={ref} className={`mine-dashboard-head dashboard-filter-bar${inDialog ? " in-dialog" : ""}`}>
+  return <header ref={ref} data-collapsed={!inDialog && collapsed ? "true" : undefined} className={`mine-dashboard-head dashboard-filter-bar${inDialog ? " in-dialog" : ""}`}>
     <div><img className="mine-brandmark" src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" /><div><span className="mine-eyebrow">Mining operations</span><h1>Fleet control dashboard</h1></div></div>
     <div className="mine-head-actions">{children}</div>
+    {!inDialog && <button type="button" className="dashboard-banner-toggle" aria-expanded={!collapsed} aria-label={collapsed ? "Show dashboard banner" : "Hide dashboard banner"} onClick={() => setCollapsed(value => !value)}>{collapsed ? "Show" : "Hide"}</button>}
   </header>;
 }
