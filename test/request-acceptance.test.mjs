@@ -51,7 +51,9 @@ test("Maintenance acceptance is server timed and shared by every request view", 
   assert.match(server, /ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ/);
   assert.match(server, /ADD COLUMN IF NOT EXISTS acceptance_required BOOLEAN NOT NULL DEFAULT FALSE/);
   assert.match(server, /started_at,acceptance_required,status/);
-  assert.match(server, /accepted_at=CASE WHEN acceptance_required THEN COALESCE\(accepted_at,NOW\(\)\) ELSE accepted_at END/);
+  assert.match(server, /accepted_at=COALESCE\(accepted_at,NOW\(\)\),accepted_by=CASE WHEN accepted_at IS NULL THEN \$8 ELSE accepted_by END,/, "every request records acceptance on the first maintenance save");
+  assert.match(server, /const accepting=!before\.acceptedAt;/);
+  assert.match(server, /OR \(acceptance_required=TRUE AND accepted_at IS NOT NULL AND accepted_at>started_at\+INTERVAL '1 hour'\)/, "late-arrival red flags stay limited to acceptance-required requests");
   const editRoute = server.slice(server.indexOf("app.patch('/api/requests/:reference'"), server.indexOf("app.patch('/api/requests/:reference/close'"));
   assert.doesNotMatch(editRoute, /equipment_name=|door_number=|registration_number=|chassis_number=|site=|started_at=/);
   assert.match(server, /AS "acceptedAt"/);
@@ -64,6 +66,7 @@ test("requests accepted more than one hour after production timing are highlight
   assert.equal(requestAcceptedLate({ start, acceptedAt: "2026-09-08 09:59", status: "Closed" }), true);
   assert.equal(requestAcceptedLate({ start }), false);
   assert.equal(requestAcceptedLate({}), false);
+  assert.equal(requestAcceptedLate({ start, acceptedAt: "2026-09-10 09:00", acceptanceRequired: false }), false, "legacy requests accepted later are not flagged late");
   const client = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const workflowCss = readFileSync(new URL("../src/mobile-workflow.css", import.meta.url), "utf8");
   assert.match(client, /highlightLateAcceptance && requestAcceptedLate\(row\) \? "request-accepted-late"/);

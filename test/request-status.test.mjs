@@ -49,3 +49,11 @@ test('status sort rank follows the request lifecycle rather than the alphabet', 
   assert.ok(requestStatusSortRank('Something new') > requestStatusSortRank('Verified'));
   assert.ok(requestStatusSortRank('Open') < requestStatusSortRank('Idle'));
 });
+
+test('legacy requests that never required acceptance show Accepted once maintenance saved an expected completion', () => {
+  assert.equal(requestStatusLabel({status: 'Open', acceptanceRequired: false, expectedCompletionAt: '2026-09-11 14:00'}), 'Accepted');
+  assert.equal(requestStatusLabel({status: 'Open', acceptanceRequired: false, expectedCompletionAt: ''}), 'Open');
+  assert.equal(requestStatusLabel({status: 'Open', acceptanceRequired: true, expectedCompletionAt: '2026-09-11 14:00'}), 'Open', 'acceptance-required requests still need the recorded acceptance');
+  assert.equal(requestStatusLabel({status: 'Open', acceptanceRequired: false, expectedCompletionAt: '2026-09-11 14:00', inProgressAt: '2026-09-11 09:00'}), 'In progress');
+  assert.equal(requestStatusLabel({status: 'Open', acceptanceRequired: false, expectedCompletionAt: '2026-09-11 14:00', closedAt: '2026-09-12 09:00'}), 'Closed');
+});

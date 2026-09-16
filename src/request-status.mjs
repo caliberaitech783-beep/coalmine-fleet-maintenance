@@ -9,6 +9,9 @@ export function requestStatusLabel(request = {}) {
   if (normalized && normalized !== 'open') return status;
   if (String(request.inProgressAt || '').trim()) return 'In progress';
   if (String(request.acceptedAt || '').trim()) return 'Accepted';
+  // Requests created before acceptance tracking never recorded an acceptance time; maintenance saving an
+  // expected completion is the same act, so show them as Accepted rather than a misleading Open.
+  if (request.acceptanceRequired === false && String(request.expectedCompletionAt || '').trim()) return 'Accepted';
   return status || 'Open';
 }
 
