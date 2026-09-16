@@ -204,6 +204,7 @@ export function buildDirectorReportTables({requests=[],equipmentRecords=[],trans
     {key:'site',label:'Location',value:(request)=>request.reportSite},
     {key:'door',label:'Door no.',value:(request)=>request.reportDoor},
     {key:'model',label:'Model',value:(request)=>request.reportModel},
+    {key:'complaint',label:'Reason / Complaint',value:(request)=>request.complaint||'—'},
     {key:'started',label:'Opened at',value:(request)=>request.start},
     {key:'closedAt',label:'Closed at',value:(request)=>request.closedAt},
     {key:'tat',label:'TAT',value:(request)=>elapsedLabel(request.start,request.closedAt)},

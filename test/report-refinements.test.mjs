@@ -60,13 +60,18 @@ test('recent breakdown cases lead with status, show Pending after 24 unaccepted 
     now,
   });
   const recent=tables.find(table=>table.title==='Recent Breakdown Cases');
-  assert.deepEqual(recent.columns.map(column=>column.key),['status','site','door','model','started','closedAt','tat','reference','createdBy','closedBy']);
+  assert.deepEqual(recent.columns.map(column=>column.key),['status','site','door','model','complaint','started','closedAt','tat','reference','createdBy','closedBy']);
+  assert.equal(recent.columns.find(column=>column.key==='complaint').label,'Reason / Complaint');
   const cell=(row,key)=>row[recent.columns.findIndex(column=>column.key===key)];
   const pending=recent.rows.find(row=>cell(row,'reference')==='REQ-P');
   const closed=recent.rows.find(row=>cell(row,'reference')==='REQ-C');
   assert.equal(cell(pending,'status'),'Pending');
   assert.equal(cell(closed,'status'),'Closed');
   assert.equal(cell(closed,'tat'),'4h 30m');
+  assert.equal(cell(pending,'complaint'),'—','missing complaints have a clear placeholder');
+  const complaint='Engine overheating — inspect cooling system';
+  const withComplaint=buildDirectorReportTables({requests:[{ref:'REQ-REASON',status:'Open',start:opened,complaint}],now}).find(table=>table.title==='Recent Breakdown Cases');
+  assert.equal(withComplaint.rows[0][withComplaint.columns.findIndex(column=>column.key==='complaint')],complaint,'export preserves the full complaint');
   const transfer=tables.find(table=>table.title==='Vehicle Transfer Report');
   assert.deepEqual(transfer.columns.map(column=>column.key),['door','transferNo','transferDate','from','to','model','driver']);
   assert.equal(transfer.rows[0][0],'D9','door number resolved from the chassis in the equipment master');

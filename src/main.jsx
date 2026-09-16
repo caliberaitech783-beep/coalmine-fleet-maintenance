@@ -5899,6 +5899,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "site", label: "Location", value: (request) => request.reportSite, render: (request) => <b>{request.reportSite || "—"}</b>},
     {key: "door", label: "Door no.", value: (request) => request.reportDoor},
     {key: "model", label: "Model", value: (request) => request.reportModel},
+    {key: "complaint", label: "Reason / Complaint", value: (request) => request.complaint || "—"},
     {key: "started", label: "Opened at", value: (request) => formatTimestamp(request.start), sortValue: (request) => request.start, render: (request) => formatTimestamp(request.start)},
     {key: "closedAt", label: "Closed at", value: (request) => formatTimestamp(request.closedAt), sortValue: (request) => request.closedAt, render: (request) => formatTimestamp(request.closedAt)},
     {key: "tat", label: "TAT", value: (request) => elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt), render: (request) => <RequestTimelineButton reference={request.ref} token={session?.token || authToken} Dialog={Modal} label={elapsedLabel(request.start, request.closedAt)} />},
