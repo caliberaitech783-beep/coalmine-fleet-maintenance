@@ -2001,7 +2001,13 @@ button.mine-primary-kpi-card:focus-visible,
 @media (max-width: 1100px) {
   .mine-dashboard.breakdown-dashboard-view { grid-template-columns: minmax(0, 1fr); }
 }
-.mine-maintenance-availability-head { min-height: 78px !important; padding: 9px 12px !important; }
+.mine-maintenance-availability-head { min-height: 0 !important; padding: 6px 12px !important; flex-direction: row; align-items: center; gap: 10px; }
+.mine-maintenance-availability-head > div:first-child { min-width: 0; }
+.mine-maintenance-availability-head .mine-maintenance-availability-tabs { margin-left: auto; }
+.mine-maintenance-availability-head .throughput-filter-eye { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; padding: 4px; border: 0; background: transparent; color: var(--brand-purple, #522e90); }
+.throughput-filter-eye svg { width: 18px; height: 18px; }
+.mine-maintenance-availability-panel .dashboard-breakdown-summary-controls { margin-top: 6px; margin-bottom: 6px; padding: 6px 10px; }
+.mine-maintenance-availability-panel .dashboard-breakdown-summary-controls[hidden] { display: none; }
 .mine-maintenance-availability-tabs button { min-height: 40px; }
 .mine-breakdown-movement-kpis strong { font-size: 24px !important; }
 .mine-breakdown-type-mix > header { min-height: 38px; }
