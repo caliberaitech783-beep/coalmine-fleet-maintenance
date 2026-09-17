@@ -4,7 +4,7 @@ import {infoPulseDate, infoPulseFilterView, infoPulseRegions} from '../info-puls
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import {formatDisplayDate, formatDisplayTime, formatDisplayDateTime} from '../date-time-format.mjs';
 import {requestStatusLabel} from './request-status.mjs';
-import {pulseDelayReason} from './info-pulse-reasons.mjs';
+import {pulseDailyUpdates, pulseDelayReason} from './info-pulse-reasons.mjs';
 import {PULSE_TIERS, pulseBreakdownRows, pulseElapsed, pulseTierCounts} from './info-pulse-timing.mjs';
 
 const tierIcons = {all: Activity, critical: AlertTriangle, warning: Clock, open: Truck};
@@ -35,6 +35,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
   // BD balance as of today: every open breakdown started on or before today.
   const defaults = {region: 'all', site: '', category: '', from: '', to: today};
   const [tier, setTier] = useState('all');
+  const [expandedUpdates, setExpandedUpdates] = useState({});
   const [filters, setFilters] = useState(defaults);
   // The filter panel opens collapsed on every screen; its border blinks purple with a cue for three seconds.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -106,6 +107,9 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
         {visibleRows.map((row, index) => {
           const request = row.request || {};
           const delay = pulseDelayReason(request);
+          const updates = pulseDailyUpdates(request.dailyRemarks);
+          const updatesOpen = Boolean(expandedUpdates[row.key]);
+          const updatesId = `pulse-updates-${encodeURIComponent(row.key)}`;
           return <li className={`pulse-breakdown-row ${row.tier}`} key={row.key}>
             <span className="pulse-rank" aria-hidden="true">{index + 1}</span>
             <div className="pulse-row-equipment">
@@ -113,6 +117,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
               <b className="pulse-row-vehicle"><Truck size={18} aria-hidden="true" />{request.door || request.reg || 'Not recorded'}</b>
               <small>{[request.equipmentGroup || request.equipment, request.ref].filter(Boolean).join(' · ') || 'Reference not recorded'}</small>
               <span className="pulse-row-status"><i className="pulse-status-tag">{requestStatusLabel(request)}</i><i className={`pulse-tier-tag ${row.tier}`}>{row.tier === 'critical' ? 'Critical · 24h+' : row.tier === 'warning' ? 'Warning · 12h+' : 'Under 12h'}</i></span>
+              <button type="button" className="pulse-updates-button" aria-label={`Daily updates for ${request.door || request.reg || request.ref || row.key}`} aria-expanded={updatesOpen} aria-controls={updatesId} onClick={() => setExpandedUpdates(current => ({...current, [row.key]: !current[row.key]}))}>Daily updates <b>{updates.length}</b><span aria-hidden="true">{updatesOpen ? '−' : '+'}</span></button>
             </div>
             <div className="pulse-row-reason"><span>Breakdown reason</span><p>{String(request.complaint || '').trim() || 'Not recorded'}</p>
               {delay && <div className="pulse-row-delay"><span>{delay.label}</span><p>{delay.value}</p>{delay.at && Number.isFinite(parseIstTimestamp(delay.at)) && <time>{formatDisplayDateTime(delay.at)} IST{delay.author ? ` · ${delay.author}` : ''}</time>}</div>}
@@ -126,6 +131,12 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
                 {row.etcState === 'due' && <em>Due in {pulseElapsed(now, row.etc)}</em>}
               </>}</dd></div>
             </dl>
+            <section id={updatesId} className="pulse-updates-history" hidden={!updatesOpen} aria-label={`Daily update history for ${request.ref || row.key}`}>
+              {updatesOpen && <><h4>Daily updates <span>Latest first · Read only</span></h4>{updates.length ? updates.map((update, updateIndex) => <article key={`${update.createdAt}-${updateIndex}`}>
+                <header><time>{Number.isFinite(parseIstTimestamp(update.createdAt)) ? `${formatDisplayDateTime(update.createdAt)} IST` : 'Date not recorded'}</time><b>{update.author || 'Author not recorded'}</b></header>
+                <dl><div><dt>Maintenance update</dt><dd>{update.remark || 'Not recorded'}</dd></div><div><dt>Reason for delay</dt><dd>{update.delayReason || 'Not recorded'}</dd></div></dl>
+              </article>) : <p>No daily updates recorded.</p>}</>}
+            </section>
           </li>;
         })}
       </ol>{visibleRows.length < shown.length && <button type="button" className="pulse-load-more" onClick={() => setRowLimit(limit => limit + INITIAL_VISIBLE_ROWS)}>Show {Math.min(INITIAL_VISIBLE_ROWS, shown.length - visibleRows.length)} more breakdowns</button>}</> : <p className="pulse-empty">{changed || tier !== 'all' ? 'No breakdowns match this selection.' : 'No open breakdowns. BD balance is 0.'}</p>}

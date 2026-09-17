@@ -66,6 +66,33 @@ function harness() {
   }};
 }
 const render = overrides => harness().render(overrides);
+test('daily updates expand per breakdown, newest first, and stay current after refresh', () => {
+  const app = harness();
+  let tree = app.render();
+  const button = () => byLabel(tree, 'Daily updates for D38');
+  const history = () => byLabel(tree, 'Daily update history for REQ-D38');
+  assert.equal(button().props['aria-expanded'], false);
+  assert.equal(history().props.hidden, true);
+  assert.equal(button().props['aria-controls'], history().props.id);
+  button().props.onClick();
+  tree = app.render();
+  assert.equal(button().props['aria-expanded'], true);
+  assert.equal(history().props.hidden, false);
+  const content = html(history());
+  assert.ok(content.indexOf('Battery replaced') < content.indexOf('Chain inspected'));
+  assert.match(content, /Maintenance team/);
+  assert.match(content, /Vendor inspection pending/);
+  assert.equal(byLabel(tree, 'Daily updates for W1').props['aria-expanded'], false);
+  tree = app.render({requests: REQUESTS.map(request => request.ref === 'REQ-D38' ? {...request, dailyRemarks: [{remark: 'Fresh saved note', delayedReason: 'New delay reason', authorLogin: 'mechanic'}]} : request)});
+  assert.match(html(history()), /Fresh saved note.*New delay reason/);
+  assert.match(html(history()), /Date not recorded.*mechanic/);
+  button().props.onClick();
+  tree = app.render();
+  assert.equal(history().props.hidden, true);
+  byLabel(tree, 'Daily updates for J9').props.onClick();
+  tree = app.render();
+  assert.match(html(byLabel(tree, 'Daily update history for REQ-J9')), /No daily updates recorded/);
+});
 // Most list assertions look at every open breakdown, so they switch the default today range to all dates.
 function allDates(overrides = {}) {
   const app = harness();
@@ -246,7 +273,7 @@ test('equipment and vehicle classification uses the meter type first and the gro
 
 test('the redesign has no alert categories, numbered pagination or record drill-downs', () => {
   const tree = render();
-  assert.equal(descendants(tree, node => 'aria-expanded' in node.props).length, 0);
+  assert.ok(descendants(tree, node => 'aria-expanded' in node.props).every(node => node.props.className === 'pulse-updates-button'));
   const page = html(tree);
   for (const removed of ['Updates', 'ETC overdue', 'Down ≥ 3 days', 'New ≤ 12 hours', 'All cases', 'Total breakdowns', 'of 4 cases', 'Filter site']) assert.ok(!page.includes(removed), `${removed} removed`);
   assert.ok(!source.includes('PAGE_SIZE') && !source.includes('createPortal'));

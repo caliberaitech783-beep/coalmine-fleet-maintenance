@@ -6,7 +6,7 @@ export function pulseDailyUpdates(value) {
   const records = Array.isArray(value) ? value : text(value) ? [{remark: value}] : [];
   return records.filter(Boolean).map(record => typeof record === 'string' ? {remark: record} : record)
     .map(record => ({
-      remark: text(record.remark), delayReason: text(record.delayReason),
+      remark: text(record.remark), delayReason: text(record.delayedReason) || text(record.delayReason),
       createdAt: text(record.createdAt), author: text(record.authorName || record.authorLogin),
     }))
     .filter(record => record.remark || record.delayReason)
