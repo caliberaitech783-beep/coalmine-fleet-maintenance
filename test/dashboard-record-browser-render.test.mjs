@@ -19,7 +19,7 @@ const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) =
   : React.isValidElement(node) ? [...(test(node) ? [node] : []), ...descendants(node.props.children, test)] : [];
 
 test("BD Balance places location, reasons and meter readings beside their requested columns", () => {
-  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+  const bindings = {React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
@@ -34,7 +34,7 @@ test("BD Balance places location, reasons and meter readings beside their reques
 });
 
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
-  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+  const bindings = {React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
@@ -72,7 +72,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
 test("BD Out closing times, table order, counts and exports stay consistent through region filtering and reset", () => {
   const slots = [];
   let cursor = 0;
-  const bindings = {React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
+  const bindings = {React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === "function" ? initial() : initial; return [slots[slot], (next) => {slots[slot] = typeof next === "function" ? next(slots[slot]) : next;}];},
     ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
   const Component = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
@@ -124,3 +124,4 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
   props.showBdClosingTime = false;
   assert.doesNotMatch(renderToStaticMarkup(render()), /<th>BD closing time<\/th>/);
 });
+import {matchesSmartSearch} from '../smart-search.mjs';

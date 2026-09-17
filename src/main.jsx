@@ -1292,6 +1292,11 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   const [assetDrilldown, setAssetDrilldown] = useState("");
+  useEffect(() => {
+    const openSearch = () => { setBreakdownDayReturnSite(""); setAssetDrilldown("all"); };
+    window.addEventListener("dashboard-smart-search", openSearch);
+    return () => window.removeEventListener("dashboard-smart-search", openSearch);
+  }, []);
   const [dashboardRegion, setDashboardRegion] = useState("all");
   const [dashboardSite, setDashboardSite] = useState("all");
   const [dashboardFrom, setDashboardFrom] = useState(() => localDateKey(new Date()));
@@ -9896,7 +9901,7 @@ function App() {
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             {adminPermissions.adminLevel === "Manager" && <HelpTraining roles={adminPermissions.managerRoles} />}
             <AiFeeder role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} session={session} />
-            <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
+            <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => active === "Dashboard" ? window.dispatchEvent(new Event("dashboard-smart-search")) : document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
               <Search />
             </button>
             <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "ticket" ? "Tickets" : target?.kind === "transfer" ? "Vehicle transfers" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />

@@ -18,7 +18,7 @@ const hideCategoryFor = new Function("assetDrilldown", `return ${categoryExpress
 const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8")
   .replace(/^import .*;\r?\n/gm, "").replace("export default function", "function");
 const { code } = await transformWithOxc(source, "record-browser.jsx", { jsx: { runtime: "classic" } });
-const bindings = { React, ...model, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
+const bindings = { React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
   useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
   ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null };
 const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
@@ -95,3 +95,4 @@ test("category visibility keeps empty tables aligned and request lists unchanged
   assert.equal(render({ requestRecords: true, hideEquipmentCategory: true }), render({ requestRecords: true }));
   assert.equal(render({ requestRecords: true, lifecycleRecords: true, hideEquipmentCategory: true }), render({ requestRecords: true, lifecycleRecords: true }));
 });
+import {matchesSmartSearch} from '../smart-search.mjs';

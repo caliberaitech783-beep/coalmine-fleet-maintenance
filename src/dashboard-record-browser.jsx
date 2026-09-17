@@ -4,6 +4,7 @@ import { changeDrilldownFilter, drilldownView, equipmentCategoryLabel, equipment
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "./request-status.mjs";
 import { filterRecordsByDate } from "./record-date-range.mjs";
+import { matchesSmartSearch } from "../smart-search.mjs";
 
 const categoryName = (value) => value === "Total vehicles" ? "Vehicles" : value === "Total equipment" ? "Equipment" : value;
 
@@ -55,11 +56,12 @@ export default function DashboardRecordBrowser({ rows, movementDateControl = nul
   const [filters, setFilters] = useState({ region: initialRegion, site: initialSite });
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const [recordDateRange, setRecordDateRange] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [toolbarTarget, setToolbarTarget] = useState(null);
   // Opening balances already select carried requests in the parent; Started must not filter them again.
   const datedRows = movementDateControl ? rows : showDateFilter ? filterRecordsByDate(rows, recordDateRange, (record) => record.requestStart) : rows;
   // With no internal hierarchy, the parent supplies the complete filtered selection.
-  const view = drilldownView(datedRows, regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped });
+  const view = drilldownView(datedRows.filter((row) => matchesSmartSearch(searchQuery, row)), regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped });
   const id = useId();
   const levels = ["region", "site", "category", "group"];
   const invalidParent = levels.findIndex((name) => filters[name] && filters[name] !== view.selection[name]);
@@ -102,7 +104,8 @@ export default function DashboardRecordBrowser({ rows, movementDateControl = nul
       ? <RequestTimelineButton reference={reference} token={timelineToken} Dialog={Dialog} label={label} />
       : <b>{label}</b>;
   };
-  return <div className="dashboard-record-browser" style={hideHierarchyFilters ? { gridTemplateRows: "minmax(0, 1fr)" } : undefined}>
+  return <div className="dashboard-record-browser" style={{ gridTemplateRows: hideHierarchyFilters ? "auto minmax(0, 1fr)" : "auto auto minmax(0, 1fr)" }}>
+    <label className="dashboard-fleet-search">Search fleet<input autoFocus data-smart-search type="search" aria-label="Search fleet" placeholder="Search door number, chassis, site, model or status" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>
     {!hideHierarchyFilters && <details className="dashboard-record-controls">
       <summary className={`dashboard-record-filter-summary${onHourlyReport ? " has-hourly-report" : ""}`}>
         <b>Filters</b>

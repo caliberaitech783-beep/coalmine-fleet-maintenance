@@ -287,5 +287,7 @@
 }
 
 /* The line between the WCL and NCL groups on the fleet chart must be clearly visible. */
-.mine-fleet-chart-regions > section + section { border-left: 2px solid #1f2f4d; }
-:root[data-theme="dark"] .mine-fleet-chart-regions > section + section { border-left-color: #a9bbdc; }
+.mine-fleet-chart-regions > section + section { border-left: 2px solid #9ca3af; }
+:root[data-theme="dark"] .mine-fleet-chart-regions > section + section { border-left-color: #9ca3af; }
+.dashboard-fleet-search { display: grid; gap: 6px; padding: 10px 14px; }
+.dashboard-fleet-search input { width: 100%; min-height: 42px; padding: 10px 12px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 6px; }

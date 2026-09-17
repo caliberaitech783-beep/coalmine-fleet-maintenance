@@ -15,6 +15,7 @@ import { requestStatusSortRank } from "../src/request-status.mjs";
 import { formatDisplayDateTime } from "../date-time-format.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
 import { REGION_DATA } from "../region-scope.mjs";
+import { matchesSmartSearch } from "../smart-search.mjs";
 
 const h = React.createElement;
 const names = { "dashboard-record-browser": "DashboardRecordBrowser", "shared-actions-table": "SharedActionsTable", "record-date-range": "RecordDateRange" };
@@ -24,7 +25,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
 })));
 const empty = () => null;
 const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
-  useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
+  matchesSmartSearch, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
 const load = (file, overrides = {}) => {
@@ -71,8 +72,8 @@ test("parent-filtered rows update live without a hidden hierarchy or a second gr
   const html = renderToStaticMarkup(tree);
   assert.doesNotMatch(html, /<h4>All regions requests<\/h4>/);
   assert.doesNotMatch(html, /role="tablist"|data-level=|aria-labelledby=|<details/);
-  assert.match(html, /grid-template-rows:minmax\(0, 1fr\)/);
-  assert.equal(React.Children.toArray(tree.props.children).length, 1);
+  assert.match(html, /grid-template-rows:auto minmax\(0, 1fr\)/);
+  assert.equal(React.Children.toArray(tree.props.children).length, 2);
   props.summaryLabel = "WCL · Sasti OB requests";
   tree = render();
   assert.match(renderToStaticMarkup(tree), /<h4>WCL · Sasti OB requests<\/h4>/);
@@ -89,7 +90,7 @@ test("parent-filtered rows update live without a hidden hierarchy or a second gr
   props.hideHierarchyFilters = false;
   props.summaryLabel = "";
   tree = render();
-  assert.equal(tree.props.style, undefined);
+  assert.deepEqual(tree.props.style, {gridTemplateRows: 'auto auto minmax(0, 1fr)'});
   assert.match(renderToStaticMarkup(tree), /<details/);
   assert.doesNotMatch(renderToStaticMarkup(tree), /<h4>NCL requests<\/h4>/);
   assert.deepEqual(browserJobs(tree), ["JOB-C"], "default private hierarchy still honors initial selection");
