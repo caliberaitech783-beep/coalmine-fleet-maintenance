@@ -18,9 +18,9 @@ const requestActor = (event,request) => {
 const stageDefinitions = [
   ["waiting", "Waiting for arrival", "start", "acceptedAt"],
   ["maintenance", "Maintenance interval", "acceptedAt", "closedAt"],
+  ["repairElapsed", "Total to closure", "start", "closedAt"],
   ["returnToWork", "Return to work", "closedAt", "firstTripAt"],
   ["overall", "Total to first trip", "start", "firstTripAt"],
-  ["repairElapsed", "Total to closure", "start", "closedAt"],
   ["verificationLag", "Verification after first trip", "firstTripAt", "verifiedAt"],
 ];
 
@@ -37,20 +37,52 @@ export function RequestTimelineView({data}) {
   const remarks = (Array.isArray(request.dailyRemarks) ? request.dailyRemarks : []).filter(Boolean).slice().sort((a,b) => (parseRequestTimelineTimestamp(b.createdAt)?.getTime() || 0) - (parseRequestTimelineTimestamp(a.createdAt)?.getTime() || 0));
   const idleApproval = Boolean(data.request?.idealApprovedAt || data.request?.idealApprovedBy);
   const identity = requestTimelineIdentity(request);
+  const endpointState = (key) => {
+    const event = byEvent.get(key);
+    if (event?.eventAt) return stamp(event.eventAt);
+    const order = ["start", "acceptedAt", "closedAt", "firstTripAt", "verifiedAt"];
+    const laterRecorded = order.slice(order.indexOf(key) + 1).some(next => byEvent.get(next)?.eventAt);
+    const closed = Boolean(request.closedAt || request.verifiedAt || /closed|verified/i.test(request.status || ""));
+    if (key === "acceptedAt" && request.acceptanceRequired === true && !laterRecorded && !closed) return "Awaiting maintenance acceptance";
+    if (key === "closedAt" && !closed && !laterRecorded && /open|accepted|progress|idle/i.test(request.status || "")) return "Not closed yet";
+    if (key === "firstTripAt" && !laterRecorded && !request.verifiedAt && request.firstTripDone !== true && !/verified/i.test(request.status || "")) return "First trip pending";
+    if (key === "verifiedAt" && !/verified/i.test(request.status || "") && !request.verifiedAt) return "MIS verification pending";
+    return `${event?.label || key} time missing`;
+  };
+  const endpointDetails = (key) => {
+    const event = byEvent.get(key) || {};
+    const attribution = requestActor(key, request);
+    return <div className="timeline-endpoint"><span>{event.label || key}</span><time>{endpointState(key)}</time>
+      <small>Time source: {event.eventAt ? sourceLabel(event.source) : "No timestamp available"}</small>
+      {attribution && <small>{attribution[0]}: {attribution[1]}</small>}
+      {event.eventAt && <small>Audit author: {actorLabel(event)} · Saved: {stamp(event.recordedAt)}</small>}
+      {event.reason && <small>Reason: {event.reason}</small>}
+    </div>;
+  };
+  const stageDuration = (key, start, end) => {
+    const value = data.durations?.[key];
+    if (value != null) return formatTimelineDuration(value);
+    if (!byEvent.get(start)?.eventAt) return endpointState(start);
+    if (!byEvent.get(end)?.eventAt) return endpointState(end);
+    return "Not recorded";
+  };
   return <div className="request-timeline-content">
     {identity && <p className="request-timeline-identity"><b>{identity}</b><span> · {data.reference}</span></p>}
     <p>Each duration uses the two recorded event times shown below. The three workflow stages do not overlap. Verification is shown separately, not added to the total.</p>
     {idleApproval && <p className="request-timeline-note">This request closed through a manager’s on-road approval. Its closure is not a separately recorded repair-completion time. The maintenance interval can include idle waiting.</p>}
     <div className="request-timeline-stages">
-      {stageDefinitions.map(([key,label,start,end]) => <article key={key} className={key === "overall" ? "timeline-total" : ""}>
-        <h3>{label}</h3><strong>{formatTimelineDuration(data.durations?.[key] ?? null)}</strong>
-        <div><span>From: {byEvent.get(start)?.label || start}</span><time>{stamp(byEvent.get(start)?.eventAt)}</time></div>
-        <div><span>To: {byEvent.get(end)?.label || end}</span><time>{stamp(byEvent.get(end)?.eventAt)}</time></div>
+      {stageDefinitions.map(([key,label,start,end], index) => <article key={key} className={key === "overall" || key === "repairElapsed" ? "timeline-total" : ""}>
+        <h3><span className="timeline-stage-number">{index + 1}</span>{label}</h3><strong>{stageDuration(key,start,end)}</strong>
+        {key === "repairElapsed" && <small className="timeline-total-formula">Subtotal: 1 + 2</small>}
+        {key === "overall" && <small className="timeline-total-formula">Total: 1 + 2 + 4</small>}
+        <div>From:{endpointDetails(start)}</div>
+        <div>To:{endpointDetails(end)}</div>
+        {index < stageDefinitions.length - 1 && <span className={`timeline-sequence-arrow${index % 2 ? " next-row" : ""}`} aria-hidden="true">{index % 2 ? "↙" : "↓"}</span>}
       </article>)}
     </div>
-    <p className="request-timeline-note">“Not recorded” means an endpoint is missing, invalid or out of order—not zero time. Recording a time does not independently prove when the event happened. Use the existing red flag if the entry is incorrect.</p>
+    <p className="request-timeline-note">Pending stages do not yet have a completed duration. A missing timestamp is not zero time: its exact duration cannot be calculated. “Not recorded” indicates an invalid or unavailable duration. Recording a time does not independently prove when the event happened. Use the existing correction or red-flag workflow if the entry is incorrect.</p>
     <p>Days of breakdown measures elapsed time from submission to recorded closure, or to now while still open. It is not arrival waiting time or confirmed hands-on repair time.</p>
-    <h3>Timestamp sources</h3>
+    <details className="timeline-source-audit"><summary>Additional timestamp audit details</summary>
     <div className="request-timeline-events">
       {events.filter(event => event.eventAt || ["start","acceptedAt","closedAt","firstTripAt","verifiedAt"].includes(event.event)).map(event => {
         const attribution = requestActor(event.event,request);
@@ -65,6 +97,7 @@ export function RequestTimelineView({data}) {
         {event.reason && <p>Reason: {event.reason}</p>}
       </article>;})}
     </div>
+    </details>
     <h3>Recorded maintenance updates</h3>
     <p>These are saved work and delay remarks, separate from acceptance, closure and timestamp-audit history. An update’s date is not an inferred arrival time.</p>
     {remarks.length ? <ol className="request-timeline-updates">{remarks.map((entry,index) => <li key={`${entry.createdAt}-${index}`}>

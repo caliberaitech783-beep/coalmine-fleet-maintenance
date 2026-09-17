@@ -11,6 +11,16 @@
 .request-timeline-stages span,.request-timeline-stages time { display:block; }
 .request-timeline-stages article > div + div { margin-top:8px; }
 .request-timeline-stages .timeline-total { border:2px solid #7654b1; }
+.request-timeline-stages article { position:relative; margin-bottom:18px; }
+.request-timeline-stages .timeline-stage-number { display:inline-grid; place-items:center; width:26px; height:26px; margin-right:8px; border-radius:50%; background:#ede5fa; color:#522e90; }
+.timeline-endpoint small { display:block; font-size:12px; margin-top:3px; }
+.timeline-total-formula { display:block; font-weight:700; color:#7654b1; }
+.request-timeline-stages .timeline-sequence-arrow { position:absolute; bottom:-27px; left:50%; font-size:24px; color:#7654b1; }
+@media(min-width:641px) { .request-timeline-stages article:nth-child(odd) .timeline-sequence-arrow { bottom:auto; top:45%; left:auto; right:-18px; transform:rotate(-90deg); z-index:1; } }
+.timeline-source-audit { margin:16px 0; }
+.timeline-source-audit summary { cursor:pointer; font-weight:700; }
+@media(max-width:640px) { .timeline-sequence-arrow.next-row { font-size:0; } .timeline-sequence-arrow.next-row::after { content:"↓"; font-size:24px; } }
+@media print { .timeline-source-audit { display:none; } }
 .request-timeline-note { border-inline-start:3px solid #a57e35; padding:10px 12px; margin-top:16px !important; }
 .request-timeline-events dl { margin:10px 0 0; }
 .request-timeline-events dt { font-weight:600; }

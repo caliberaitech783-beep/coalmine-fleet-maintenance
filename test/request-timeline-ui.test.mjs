@@ -213,6 +213,21 @@ test("timeline renders genuine zero separately from missing or negative duration
 });
 
 const editProps = (extra = {}) => ({request: {ref: "QA-EDIT", start: "2026-09-08 10:00:00", acceptedAt: "2026-09-08 10:10:00", expectedCompletionAt: "2026-09-08 12:00:17", category: "Breakdown", complaint: "Fixture only", ...extra}, close() {}, onSave: async () => {}, repairTypesLoaded: true, repairTypeRecords: [{id: 1, repairType: "Breakdown"}]});
+test("numbered timeline cards distinguish pending stages and genuine missing legacy times", () => {
+  const pending = {ref:"PENDING", start:request.start, status:"Open", acceptanceRequired:true};
+  const tree = harness("RequestTimelineView").render({data:body(pending.ref,{request:pending,events:requestTimelineEvents(pending),durations:requestTimelineDurations(pending)})});
+  const stages = all(all(tree,node=>node.props.className === "request-timeline-stages")[0],node=>node.type === "article");
+  assert.deepEqual(stages.map(stage=>text(all(stage,node=>node.type === "h3")[0])), ["1Waiting for arrival","2Maintenance interval","3Total to closure","4Return to work","5Total to first trip","6Verification after first trip"]);
+  assert.match(text(stages[0]), /Awaiting maintenance acceptance/);
+  assert.match(text(stages[2]), /Not closed yet/);
+  assert.match(text(stages[4]), /First trip pending/);
+  assert.match(text(stages[0]), /Time source:/);
+  assert.match(text(stages[4]), /Total: 1 \+ 2 \+ 4/);
+  const legacy = {...pending,status:"Verified",acceptanceRequired:false,closedAt:request.closedAt,verifiedAt:request.verifiedAt};
+  const legacyTree = harness("RequestTimelineView").render({data:body(legacy.ref,{request:legacy,events:requestTimelineEvents(legacy),durations:requestTimelineDurations(legacy)})});
+  assert.match(text(legacyTree), /Maintenance acceptance time missing/);
+  assert.match(text(legacyTree), /First trip time missing/);
+});
 const submitValues = (extra = {}) => ({category: "Breakdown", complaint: "Fixture only", expectedCompletionAt: "2026-09-08T12:00", ...extra});
 const submit = (tree, values) => form(tree).props.onSubmit({preventDefault() {}, currentTarget: values});
 
