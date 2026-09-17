@@ -1292,8 +1292,32 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   const [assetDrilldown, setAssetDrilldown] = useState("");
+  const [cardSearchOpen, setCardSearchOpen] = useState(false);
+  const [cardSearchQuery, setCardSearchQuery] = useState("");
+  const dashboardSearchCards = [
+    {title: "Total Fleet", selector: ".mine-fleet-region-chart"},
+    {title: "Daily BD Balance", selector: ".daily-bd-balance"},
+    {title: "Site-wise BD Movement", selector: ".mine-maintenance-availability-panel", tab: "breakdown"},
+    {title: "Availability Count", selector: ".mine-maintenance-availability-panel", tab: "road"},
+    {title: "Total Equipment Intelligence", selector: ".mine-fleet-command"},
+    {title: "Request Lifecycle", selector: ".mine-request-lifecycle"},
+    {title: "Breakdown Trend", selector: ".mine-breakdown-trend"},
+    {title: "Overall Fleet Performance", selector: ".mine-fleet-performance"},
+  ];
+  const showDashboardCard = (card) => {
+    setCardSearchOpen(false);
+    setFleetChartMode("total");
+    if (card.tab) setMaintenanceAvailabilityTab(card.tab);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const target = document.querySelector(`.mine-dashboard ${card.selector}`);
+      if (!target) return;
+      target.setAttribute("tabindex", "-1");
+      target.focus({preventScroll: true});
+      target.scrollIntoView({behavior: "smooth", block: "center"});
+    }));
+  };
   useEffect(() => {
-    const openSearch = () => { setBreakdownDayReturnSite(""); setAssetDrilldown("all"); };
+    const openSearch = () => { setCardSearchQuery(""); setCardSearchOpen(true); };
     window.addEventListener("dashboard-smart-search", openSearch);
     return () => window.removeEventListener("dashboard-smart-search", openSearch);
   }, []);
@@ -1818,6 +1842,13 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
       {renderDashboardHeader()}
+      {cardSearchOpen && <Modal title="Search dashboard cards" close={() => setCardSearchOpen(false)}>
+        <div className="dashboard-card-search">
+          <label>Card name<input autoFocus type="search" aria-label="Search dashboard cards" placeholder="e.g. Daily BD Balance" value={cardSearchQuery} onChange={(event) => setCardSearchQuery(event.target.value)} /></label>
+          <div className="dashboard-card-search-results">{dashboardSearchCards.filter((card) => matchesSmartSearch(cardSearchQuery, card.title)).map((card) => <button type="button" key={card.title} onClick={() => showDashboardCard(card)}>{card.title}<ChevronRight /></button>)}</div>
+          {!dashboardSearchCards.some((card) => matchesSmartSearch(cardSearchQuery, card.title)) && <p role="status">No matching dashboard cards.</p>}
+        </div>
+      </Modal>}
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
         <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>

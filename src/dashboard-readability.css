@@ -290,4 +290,9 @@
 .mine-fleet-chart-regions > section + section { border-left: 2px solid #9ca3af; }
 :root[data-theme="dark"] .mine-fleet-chart-regions > section + section { border-left-color: #9ca3af; }
 .dashboard-fleet-search { display: grid; gap: 6px; padding: 10px 14px; }
+.dashboard-card-search { padding: 20px; }
+.dashboard-card-search label { display: grid; gap: 8px; }
+.dashboard-card-search input { padding: 12px; min-height: 44px; border: 1px solid #9ca3af; border-radius: 6px; }
+.dashboard-card-search-results { display: grid; gap: 8px; margin-top: 16px; }
+.dashboard-card-search-results button { display: flex; justify-content: space-between; align-items: center; padding: 12px; min-height: 44px; text-align: left; border: 1px solid #cbd5e1; border-radius: 6px; background: var(--panel, white); color: var(--ink, #142943); }
 .dashboard-fleet-search input { width: 100%; min-height: 42px; padding: 10px 12px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 6px; }
