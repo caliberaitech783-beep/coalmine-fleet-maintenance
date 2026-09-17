@@ -1661,6 +1661,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       delayedReason: request.delayedReason || "—",
       breakdownReason: request.complaint || "—",
       dailyRemarks: Array.isArray(request.dailyRemarks) ? request.dailyRemarks : [],
+      requestIdleAt: request.idealRequestedAt || request.idleRequestedAt || "",
       requestStart: request.start || "—",
       requestClosed: request.closedAt || request.completedAt || "—",
       requestVerified: request.verifiedAt || "—",
@@ -8202,6 +8203,8 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     ] : []),
   ];
   const closedByColumns = showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : [];
+  const showIdleDate = rows.some(row => ["idle", "ideal"].includes(String(row.status || "").toLowerCase())) || /idle vehicles/i.test(exportTitle);
+  const idleDateColumn = {key: "idleDate", label: "Idle Vehicle Date", value: row => (row.idealRequestedAt || row.idleRequestedAt) ? formatTwelveHourDateTime(row.idealRequestedAt || row.idleRequestedAt, true) : "Not recorded"};
   const startedColumn = {key: "start", label: startedLabel, value: (row) => formatTwelveHourDateTime(row.start)};
   const filterColumns = [
     ...(showAcceptedTime ? [{key: "acceptedTime", label: "Arrival wait", value: (row) => elapsedLabel(row.start, row.acceptedAt)}] : []),
@@ -8222,7 +8225,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     {key: "delayedReason", label: "Delayed reason", value: (row) => row.delayedReason},
     ...(showReason ? [{key: "complaint", label: "Breakdown reason", value: (row) => row.complaint}] : []),
     ...(showCreatedBy ? [{key: "owner", label: "Created by", value: (row) => row.owner || row.requesterLogin}] : []),
-    ...(startedFirst ? [startedColumn, ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn]),
+    ...(startedFirst ? [startedColumn, ...(showIdleDate ? [idleDateColumn] : []), ...closedByColumns, ...verifiedColumns] : [...verifiedColumns, ...closedByColumns, startedColumn, ...(showIdleDate ? [idleDateColumn] : [])]),
     ...(showClosedAt ? [{key: "closedAt", label: closedAtLabel, value: (row) => formatTwelveHourDateTime(row.closedAt)}] : []),
     ...(showArrivalFlagData ? [
       {key: "arrivalFlaggedAt", label: "Red flag raised", value: (row) => formatTwelveHourDateTime(row.arrivalFlaggedAt)},
@@ -8262,10 +8265,10 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   ]));
   const workflowHeader = (key, label) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />;
   const lateAcceptanceHighlight = highlightLateAcceptance ? requestAcceptedLate : undefined;
-  const startedHeader = () => workflowHeader("start", startedLabel);
+  const startedHeader = () => <>{workflowHeader("start", startedLabel)}{showIdleDate && workflowHeader("idleDate", "Idle Vehicle Date")}</>;
   const closedByHeader = () => showClosedBy && workflowHeader("closedBy", "Closed by");
   const verifiedHeaders = () => <>{showVerifiedBy && workflowHeader("verifiedBy", "Verified by")} {showVerifiedAt && <>{workflowHeader("verifiedAt", "Verified date & time")}{workflowHeader("firstTripAt", "First trip time")}</>}</>;
-  const startedCell = (row) => <td>{formatTwelveHourDateTime(row.start)}</td>;
+  const startedCell = (row) => <><td>{formatTwelveHourDateTime(row.start)}</td>{showIdleDate && <td>{idleDateColumn.value(row)}</td>}</>;
   const closedByCell = (row) => showClosedBy && <td>{row.closedBy || "—"}</td>;
   const verifiedCells = (row) => <>{showVerifiedBy && <td>{row.verifiedBy || "—"}</td>}{showVerifiedAt && <><td>{formatTwelveHourDateTime(row.verifiedAt, true)}</td><td>{formatTwelveHourDateTime(firstTripTimestamp(row), true)}</td></>}</>;
   const workflowActions = (row, lockedIdeal) => showActions && <td className="row-actions">
