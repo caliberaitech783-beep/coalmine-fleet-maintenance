@@ -2050,7 +2050,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "hours": return <td>{r.hours}</td>;
     case "status": return <td><Status>{requestStatusLabel(r)}</Status></td>;
     case "idleReason": return <td>{r.idleReason || "—"}</td>;
-    case "dailyRemarks": return <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>;
+    case "dailyRemarks": return <td><MaintenanceRemarks remarks={r.dailyRemarks} category={r.category} /></td>;
     case "audio": return <td><div className="request-audio-list">
       {r.complaintAudioAvailable && <label><span>Complaint</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /></label>}
       {r.maintenanceAudioAvailable && <label><span>Maintenance</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/maintenance`} token={authToken} label="Maintenance audio" /></label>}
@@ -2158,7 +2158,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                   <Status>{requestStatusLabel(r)}</Status>
                 </td>
                 <td>{r.idleReason || "—"}</td>
-                <td><MaintenanceRemarks remarks={r.dailyRemarks} /></td>
+                <td><MaintenanceRemarks remarks={r.dailyRemarks} category={r.category} /></td>
                 {showAudio && <td><div className="request-audio-list">
                   {r.complaintAudioAvailable && <label><span>Complaint</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /></label>}
                   {r.maintenanceAudioAvailable && <label><span>Maintenance</span><ProtectedAudio url={`/api/requests/${encodeURIComponent(r.ref)}/audio/maintenance`} token={authToken} label="Maintenance audio" /></label>}
@@ -7984,8 +7984,8 @@ function requestStartParts(start) {
   return indiaWorkflowDateTimeParts(start || new Date());
 }
 
-function MaintenanceRemarks({ remarks = [] }) {
-  return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{formatTwelveHourDateTime(item.createdAt)} · {item.authorName}</b><p>{item.remark}</p><small>Delay: {item.delayReason}</small></article>)}</details> : "—";
+function MaintenanceRemarks({ remarks = [], category = "" }) {
+  return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{formatTwelveHourDateTime(item.createdAt)} · {item.authorName}</b><p>{item.remark}</p><small>{category ? `${category} · ` : ""}Delayed reason: {item.delayedReason || item.delayReason || "—"}</small></article>)}</details> : "—";
 }
 
 function DelayedReasonForm({ request, close, onSave }) {
@@ -8025,9 +8025,13 @@ function DailyRemarkForm({ request, close, onSave }) {
   const todayKey=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Kolkata",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
   const todayRemark=previous.filter((item)=>String(item.createdAt||"").slice(0,10)===todayKey).at(-1);
   const history=todayRemark?previous.filter((item)=>item!==todayRemark):previous;
+  const [delayedReasonRecords]=useMasterRecords("Delayed Reason");
+  const savedDelayedReason=String(todayRemark?.delayedReason||request.delayedReason||"").trim();
+  const typeDelayedReasons=delayedReasonsForRepairType(request.category,delayedReasonRecords||[]);
+  const delayedReasonOptions=savedDelayedReason&&!typeDelayedReasons.includes(savedDelayedReason)?[savedDelayedReason,...typeDelayedReasons]:typeDelayedReasons;
   return <Modal title={`Daily updates · ${request.ref}`} close={close}><div className="daily-update-journal">
-    {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header>{history.map((item,index)=><article key={`${item.createdAt}-${index}`}><time>{formatTwelveHourDateTime(item.createdAt)}</time><b>{item.authorName||"Maintenance User"}</b><dl><div><dt>Maintenance update</dt><dd>{item.remark}</dd></div><div><dt>Reason for delay</dt><dd>{item.delayReason}</dd></div></dl></article>)}</section>}
-    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);onSave({remark:form.get("remark"),delayReason:form.get("delayReason")});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Reason for delay *<textarea name="delayReason" required defaultValue={todayRemark?.delayReason||""} placeholder="Why is the vehicle still off-road?" /></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
+    {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header>{history.map((item,index)=><article key={`${item.createdAt}-${index}`}><time>{formatTwelveHourDateTime(item.createdAt)}</time><b>{item.authorName||"Maintenance User"}</b><dl><div><dt>Maintenance update</dt><dd>{item.remark}</dd></div><div><dt>Breakdown type</dt><dd>{request.category||"—"}</dd></div><div><dt>Delayed reason</dt><dd>{item.delayedReason||item.delayReason||"—"}</dd></div></dl></article>)}</section>}
+    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label><label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={savedDelayedReason}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
   </div></Modal>;
 }
 
@@ -8259,7 +8263,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               {showArrivalFlagData && <><td>{formatTwelveHourDateTime(row.arrivalFlaggedAt)}</td><td>{row.arrivalFlaggedBy || "—"}</td><td><b>{elapsedLabel(row.start, row.arrivalFlaggedAt)}</b></td><td>{row.acceptedAt ? formatTwelveHourDateTime(row.acceptedAt) : <span className="arrival-not-reached">Not reached</span>}</td><td><b>{elapsedLabel(row.start, row.acceptedAt || new Date(now))}</b></td><td>{row.acceptedBy || "Pending"}</td></>}
               {showTurnaroundTime && <td><b>{row.hours || "—"}</b></td>}
               <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} label={`${days} ${days === 1 ? "day" : "days"}`} /></td>
-              <td><MaintenanceRemarks remarks={row.dailyRemarks} /></td>
+              <td><MaintenanceRemarks remarks={row.dailyRemarks} category={row.category} /></td>
               {showWorkCompletion && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.maintenanceWork} language={row.maintenanceWorkLanguage} /></div></td>}
               {showMeterData && <><td><b>{requestMeterReadings(row, "opening").KMR || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadings(row, "opening").HMR || "—"}</b></td><td><b>{requestMeterReadingLabel(row, "closing")}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
               {showTripCard && <td><TripCardCell request={row} /></td>}
@@ -8984,7 +8988,7 @@ function NotificationRequestEntry({ reference, request = {}, token }) {
     </section>}
     <section className="notification-entry-section" aria-label="Daily maintenance updates">
       <h3>Daily maintenance updates</h3>
-      <div className="notification-entry-remarks"><MaintenanceRemarks remarks={request.dailyRemarks} /></div>
+      <div className="notification-entry-remarks"><MaintenanceRemarks remarks={request.dailyRemarks} category={request.category} /></div>
     </section>
   </div>;
 }

@@ -71,7 +71,8 @@ export function RequestTimelineView({data}) {
       <time>{stamp(entry.createdAt)}</time>
       <dl><div><dt>Update recorded by</dt><dd>{actorLabel({actorName:entry.authorName,actorLogin:entry.authorLogin})}</dd></div>
         <div><dt>Work reported</dt><dd>{entry.remark || "Not recorded"}</dd></div>
-        <div><dt>Reason for delay</dt><dd>{entry.delayReason || "Not recorded"}</dd></div></dl>
+        <div><dt>Breakdown type</dt><dd>{request.category || "Not recorded"}</dd></div>
+        <div><dt>Delayed reason</dt><dd>{entry.delayedReason || entry.delayReason || "Not recorded"}</dd></div></dl>
     </li>)}</ol> : <p>No daily maintenance updates are recorded for this entry.</p>}
     <h3>Recorded changes and corrections</h3>
     <p>History starts when timestamp tracking was enabled. Older changes cannot be reconstructed from missing evidence. Existing timestamp-edit permissions are unchanged.</p>

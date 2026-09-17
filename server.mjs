@@ -478,6 +478,7 @@ async function migrate(){
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS maintenance_daily_remarks_request_idx ON maintenance_daily_remarks (request_reference, created_at DESC);
+    ALTER TABLE maintenance_daily_remarks ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS request_corrections (
       id BIGSERIAL PRIMARY KEY,
       request_reference TEXT NOT NULL REFERENCES maintenance_requests(reference) ON DELETE RESTRICT,
@@ -4215,7 +4216,7 @@ async function syncTemporaryRequestDrivers(){
 async function attachDailyRemarks(rows,client=pool){
   if(!rows.length)return rows;
   const refs=rows.map((row)=>row.ref);
-  const {rows:remarks}=await client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",
+  const {rows:remarks}=await client.query(`SELECT request_reference AS "requestReference",remark,delay_reason AS "delayReason",delayed_reason AS "delayedReason",
     author_login AS "authorLogin",author_name AS "authorName",to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI') AS "createdAt"
     FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) ORDER BY created_at DESC`,[refs]);
   const grouped=new Map();
@@ -4671,8 +4672,11 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
   try{
     const reference=String(req.params.reference||'').trim();
     const remark=String(req.body?.remark||'').trim();
-    const delayReason=String(req.body?.delayReason||'').trim();
-    if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and the reason for delay.'});
+    // delayedReason is the master reason chosen for the breakdown type. The legacy delay_reason column mirrors it
+    // so reports, Info Pulse and WhatsApp alerts keep showing the delay reason for every daily update.
+    const dailyDelayedReason=String(req.body?.delayedReason||'').trim().slice(0,160);
+    const delayReason=String(req.body?.delayReason||'').trim()||dailyDelayedReason;
+    if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and select the delayed reason.'});
     const authorLogin=String(req.session.login||'').trim().toLowerCase();
     const authorName=req.session.name||'Maintenance User';
     const {eligible,updatedToday}=await withMaintenanceArrivalGuard(req,reference,async(client)=>{
@@ -4682,12 +4686,13 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
         AND (created_at AT TIME ZONE 'Asia/Kolkata')::date=(NOW() AT TIME ZONE 'Asia/Kolkata')::date LIMIT 1`,[reference]);
       const updatedToday=existingToday.rows.length>0;
       if(updatedToday){
-        await client.query(`UPDATE maintenance_daily_remarks SET remark=$1,delay_reason=$2,author_login=$3,author_name=$4 WHERE id=$5`,
-          [remark,delayReason,authorLogin,authorName,existingToday.rows[0].id]);
+        await client.query(`UPDATE maintenance_daily_remarks SET remark=$1,delay_reason=$2,author_login=$3,author_name=$4,delayed_reason=CASE WHEN $6<>'' THEN $6 ELSE delayed_reason END WHERE id=$5`,
+          [remark,delayReason,authorLogin,authorName,existingToday.rows[0].id,dailyDelayedReason]);
       }else{
-        await client.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name) VALUES ($1,$2,$3,$4,$5)`,
-          [reference,remark,delayReason,authorLogin,authorName]);
+        await client.query(`INSERT INTO maintenance_daily_remarks (request_reference,remark,delay_reason,author_login,author_name,delayed_reason) VALUES ($1,$2,$3,$4,$5,$6)`,
+          [reference,remark,delayReason,authorLogin,authorName,dailyDelayedReason]);
       }
+      if(dailyDelayedReason)await client.query(`UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2`,[dailyDelayedReason,reference]);
       return {eligible,updatedToday};
     });
     try{

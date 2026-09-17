@@ -233,7 +233,7 @@ test("legacy creator and daily updates are visible without inventing acceptance 
   assert.match(updates,/06 Sept 2026, 01:34:00 IST/);
   assert.match(updates,/Update recorded byAVADH KISHORE TIWARI \(maintenance-fixture\)/);
   assert.match(updates,/Work reportedAir Compressor Removed/);
-  assert.match(updates,/Reason for delayAir Compressor Clutch Kit Not Available/);
+  assert.match(updates,/Delayed reasonAir Compressor Clutch Kit Not Available/);
   assert.match(text(tree),/not arrival waiting time or confirmed hands-on repair time/);
   assert.equal(events.find(event=>event.event === "acceptedAt").eventAt,null);
   assert.deepEqual(legacy,original);
@@ -254,7 +254,7 @@ test("updates show saved remarks newest first, with missing fields left unknown"
   const updates = all(all(tree,node=>node.props.className === "request-timeline-updates")[0],node=>node.type === "li");
   assert.match(text(updates[0]),/Newer update/);
   assert.match(text(updates[1]),/Older update/);
-  assert.match(text(updates[0]),/Update recorded byNot recorded.*Reason for delayNot recorded/);
+  assert.match(text(updates[0]),/Update recorded byNot recorded.*Delayed reasonNot recorded/);
 });
 
 test("editing unchanged ETC preserves minute display without a correction prompt; changing it requires reason", async () => {
