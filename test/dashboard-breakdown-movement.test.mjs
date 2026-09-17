@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { movementRequestRows } from "../src/dashboard-card-actions.mjs";
 import { BREAKDOWN_TYPE_LABELS, breakdownMovementForRange, breakdownTypeShare, dailyBreakdownMovement } from "../dashboard-breakdown-movement.mjs";
 
 const records = [
@@ -8,6 +9,25 @@ const records = [
   { startedAt: "2026-09-03 10:00:00", status: "In Progress" },
   { createdAt: "2026-09-04 11:00:00", closedAt: "2026-09-04 17:00:00", status: "Closed" },
 ];
+
+test("BD balance excludes idle and ideal while their separate list and movement history remain intact", () => {
+  const rows = [
+    ...Array.from({ length: 38 }, () => ({ start: "2026-09-16", status: "Open" })),
+    ...Array.from({ length: 6 }, () => ({ start: "2026-09-16", status: "Idle" })),
+    { start: "2026-09-16", status: " Ideal " },
+  ];
+  for (const [start, end] of [["2026-09-17", "2026-09-17"], ["", ""]]) {
+    const totals = breakdownMovementForRange(rows, start, end);
+    assert.equal(totals.balance, 38);
+    assert.equal(movementRequestRows(rows, start, end, "balance").length, 38);
+    assert.equal(movementRequestRows(rows, start, end, "active-balance").length, 38);
+    assert.equal(movementRequestRows(rows, start, end, "idle").length, 7);
+    assert.equal(totals.open, start ? 45 : 0);
+    assert.equal(totals.incoming, start ? 0 : 45);
+    assert.equal(totals.outgoing, 0);
+  }
+  assert.equal(dailyBreakdownMovement(rows, "2026-09-17", "2026-09-17")[0].balance, 38);
+});
 
 test("breakdown movement reconciles opening, inward, outward and balance", () => {
   assert.deepEqual(breakdownMovementForRange(records, "2026-09-03", "2026-09-04"), {

@@ -8203,7 +8203,9 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     ] : []),
   ];
   const closedByColumns = showClosedBy ? [{key: "closedBy", label: "Closed by", value: (row) => row.closedBy}] : [];
-  const showIdleDate = rows.some(row => ["idle", "ideal"].includes(String(row.status || "").toLowerCase())) || /idle vehicles/i.test(exportTitle);
+  const idleDateFilter = /idle vehicles/i.test(exportTitle);
+  const [idleDateRange, setIdleDateRange] = useState("");
+  const showIdleDate = rows.some(row => ["idle", "ideal"].includes(String(row.status || "").toLowerCase())) || idleDateFilter;
   const idleDateColumn = {key: "idleDate", label: "Idle Vehicle Date", value: row => (row.idealRequestedAt || row.idleRequestedAt) ? formatTwelveHourDateTime(row.idealRequestedAt || row.idleRequestedAt, true) : "Not recorded"};
   const startedColumn = {key: "start", label: startedLabel, value: (row) => formatTwelveHourDateTime(row.start)};
   const filterColumns = [
@@ -8248,7 +8250,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     ...(showTripCard ? [{key: "tripCard", label: "Trip card image", value: (row) => row.firstTripCardUploaded ? "Uploaded" : "Not uploaded"}] : []),
     ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudioAvailable ? "Available" : "Not available"}] : []),
   ];
-  const filteredRows = rows.filter((row) => {
+  const filteredRows = (idleDateFilter ? filterRecordsByDate(rows, idleDateRange, row => row.idealRequestedAt || row.idleRequestedAt) : rows).filter((row) => {
     const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy, ...(showWorkCompletion ? [row.maintenanceWork] : []), ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
     return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
@@ -8291,7 +8293,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
   }, [openFilter]);
   return (
     <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Search &amp; status</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(statusLabel).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /></div></div><div className="scroll mobile-workflow-table">
-      <ActionsTable className="workflow-table" closedTimeAfterStarted={closedTimeAfterStarted} toolbarTarget={actionsToolbarTarget} toolbarPortal>
+      <ActionsTable className="workflow-table" closedTimeAfterStarted={closedTimeAfterStarted} recordDateFilter={idleDateFilter ? { label: "Idle Vehicle Date", value: idleDateRange, onChange: setIdleDateRange } : null} toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
           {showAcceptedTime && workflowHeader("acceptedTime", "Arrival wait")}

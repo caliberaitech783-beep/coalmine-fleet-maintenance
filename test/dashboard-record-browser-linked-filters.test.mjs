@@ -64,6 +64,22 @@ const ActionsTable = ({ children }) => h("table", null, children);
 const browserProps = () => ({ rows: records, regions: REGION_DATA, rowsAreScoped: true, requestRecords: true, ActionsTable, Status: ({ children }) => children, formatDate: formatDisplayDateTime });
 const browserTable = tree => one(tree, node => node.type === ActionsTable);
 const browserJobs = tree => nodes(browserTable(tree), node => node.type === "tbody").flatMap(body => nodes(body, node => node.type === "b")).map(node => node.props.children).filter(value => String(value).startsWith("JOB-"));
+test("idle lists filter by idle event date rather than request start", () => {
+  for (const scope of [{ title: "Majri OB · Idle Vehicles" }, { lifecycleEvent: "idle" }]) {
+    const props = { ...browserProps(), ...scope, rows: [
+      { ...records[0], requestIdleAt: "2026-09-17T00:00:00+05:30" },
+      { ...records[1], requestStart: "2026-09-17 10:00:00", requestIdleAt: "2026-09-16 12:00:00" },
+      { ...records[2], requestStart: "2026-09-17 10:00:00" },
+    ] };
+    const render = interactive("dashboard-record-browser", props);
+    const control = browserTable(render()).props.recordDateFilter;
+    assert.equal(control.label, "Idle Vehicle Date");
+    control.onChange(dateRanges.encodeDateRange("2026-09-17", "2026-09-17"));
+    assert.deepEqual(browserJobs(render()), ["JOB-A"]);
+    control.onChange("");
+    assert.equal(browserJobs(render()).length, 3);
+  }
+});
 test("parent-filtered rows update live without a hidden hierarchy or a second grid row", () => {
   const props = { ...browserProps(), initialRegion: "NCL", initialSite: "Jayant OB", hideHierarchyFilters: true, rows: records.slice(0, 2) };
   const render = interactive("dashboard-record-browser", props);
