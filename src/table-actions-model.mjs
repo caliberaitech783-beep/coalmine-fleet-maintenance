@@ -97,6 +97,7 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
     /^make$/i,
     /^model$/i,
     /^daily remarks$/i,
+    /^work completion action taken$/i,
     /^delayed reason$/i,
   ];
   const lead = leading.flatMap((pattern) => ordered.filter((column) => pattern.test(column.label.trim())));
