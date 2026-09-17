@@ -3,6 +3,7 @@ export const ADMIN_MASTER_OPTIONS = [
   "Equipment master",
   "Breakdown master",
   "Repair type master",
+  "Breakdown Sub-Category",
   "Region master",
   "Shift Master",
   "Delayed Reason",

@@ -325,6 +325,7 @@ const masterNav = [
   ["Equipment master", Truck],
   ["Breakdown master", Wrench],
   ["Repair type master", Wrench],
+  ["Breakdown Sub-Category", Wrench],
   ["Region master", Building2],
   ["Shift Master", Clock],
   ["Delayed Reason", Clock],
@@ -2298,6 +2299,9 @@ const masterFields = {
   ],
   "Repair type master": [
     ["repairType", "Repair type"],
+  ],
+  "Breakdown Sub-Category": [
+    ["subCategory", "Sub-Category"],
   ],
   "Delayed Reason": [
     ["delayedReason", "Delayed reason"],
@@ -6601,7 +6605,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
   const fields = masterFields[name],
     editFields = name === "Users & employees" ? [...fields, ...userPrivilegeFields, ...userSubmenuFields] : fields,
     displayFields = name === "Privilege" ? fields.slice(0, 2) : fields,
-    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Delayed Reason" || name === "Shift Master",
+    canManageRows = name === "OEM master" || name === "Users & employees" || name === "Repair type master" || name === "Breakdown Sub-Category" || name === "Delayed Reason" || name === "Shift Master",
     masterValue = (record, key) => {
       if (name === "Users & employees" && key === "site") return userMasterLocation(record);
       const type = fields.find(([field]) => field === key)?.[2];

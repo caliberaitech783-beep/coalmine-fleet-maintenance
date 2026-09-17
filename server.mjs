@@ -67,6 +67,7 @@ import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.m
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
 import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,approvedDelayedReason,delayedReasonRequired} from './delayed-reason.mjs';
+import {BREAKDOWN_SUB_CATEGORY_DEFAULTS} from './breakdown-sub-category.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
@@ -920,6 +921,23 @@ async function migrate(){
       }
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('repair_type_defaults_seeded','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
+    // One-time seed of the Breakdown Sub-Category master with the owner's list.
+    // After this the Masters page owns the list: deleted rows stay deleted.
+    const {rows:subCategorySeed}=await client.query("SELECT value FROM app_metadata WHERE key='breakdown_sub_category_defaults_seeded_v1' FOR UPDATE");
+    if(!subCategorySeed.length){
+      for(const subCategory of BREAKDOWN_SUB_CATEGORY_DEFAULTS){
+        await client.query(`INSERT INTO master_records (master_name,record_data)
+          SELECT $1,$2::jsonb
+          WHERE NOT EXISTS (
+            SELECT 1 FROM master_records
+            WHERE master_name=$1
+              AND lower(trim(record_data->>'subCategory'))=lower(trim($3))
+          )`,['Breakdown Sub-Category',JSON.stringify({subCategory}),subCategory]);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('breakdown_sub_category_defaults_seeded_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     for(const delayedReason of DELAYED_REASON_DEFAULTS){
