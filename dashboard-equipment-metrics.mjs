@@ -229,7 +229,7 @@ export function fleetAssetRequestDetails(records = [], requests = []) {
       ...record,
       requestReference: current ? String(current.ref || current.reference || "") : "",
       requestStatus,
-      requestIdleAt: current?.idealRequestedAt || current?.idleRequestedAt || "",
+      requestIdleAt: String(current?.idealRequestedAt || "").trim() || String(current?.idleRequestedAt || "").trim(),
       requestStart: current?.start || "—",
       requestClosed: "—",
       // Opening readings belong to the linked request, not the fleet's current meters.
