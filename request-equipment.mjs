@@ -101,7 +101,13 @@ export function requestMeterTypesForRequest(request = {}, records = []) {
       .some((value) => /\btippers?\b/i.test(text(value))),
   );
   const savedTypes = new Set([...Object.keys(request.openingMeterReadings || {}), ...Object.keys(request.closingMeterReadings || {})]);
-  return isTipper || (savedTypes.has("HMR") && savedTypes.has("KMR")) ? ["HMR", "KMR"] : [requestMeterTypeForRequest(request, records)];
+  // Wheeled vehicles record both hours and kilometres; equipment without
+  // wheels has no odometer, so it records HMR only. The Equipment Master
+  // category decides; a saved KMR meter type marks a vehicle when the master
+  // record is not available to the caller.
+  const primaryType = requestMeterTypeForRequest(request, records);
+  const isVehicle = isTipper || (equipment ? requestEquipmentMeterType(equipment) === "KMR" : primaryType === "KMR");
+  return isVehicle || primaryType === "KMR" || (savedTypes.has("HMR") && savedTypes.has("KMR")) ? ["HMR", "KMR"] : ["HMR"];
 }
 
 export function requestMeterReadings(request = {}, stage = "opening", records = []) {

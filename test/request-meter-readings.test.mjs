@@ -80,8 +80,25 @@ test("tippers expose both meters using the group, legacy name, matching master o
     assert.deepEqual(requestMeterTypesForRequest(request), ["HMR", "KMR"]);
   }
   assert.deepEqual(requestMeterTypesForRequest({door: " T1 ", meterType: "KMR"}, [{door: "t1", group: "Tippers", category: "Vehicle"}]), ["HMR", "KMR"]);
-  assert.deepEqual(requestMeterTypesForRequest({meterType: "KMR", equipmentGroup: "LIGHT VEHICLES"}), ["KMR"]);
   assert.deepEqual(requestMeterTypesForRequest({meterType: "HMR", equipmentGroup: "EXCAVATORS"}), ["HMR"]);
+});
+
+test("wheeled vehicles record HMR and KMR while equipment without wheels records HMR only", () => {
+  const master = [
+    {door: "LV1", group: "LIGHT VEHICLES", category: "Vehicle"},
+    {door: "WT1", group: "WATER TANKER", category: "Vehicles"},
+    {door: "EX1", group: "EXCAVATOR", category: "Equipment"},
+    {door: "DM1", group: "DRILL MACHINE", category: "Equipment"},
+  ];
+  assert.deepEqual(requestMeterTypesForRequest({door: "LV1"}, master), ["HMR", "KMR"]);
+  assert.deepEqual(requestMeterTypesForRequest({door: "WT1", meterType: "KMR"}, master), ["HMR", "KMR"]);
+  assert.deepEqual(requestMeterTypesForRequest({door: "EX1", meterType: "HMR"}, master), ["HMR"]);
+  assert.deepEqual(requestMeterTypesForRequest({door: "DM1"}, master), ["HMR"]);
+  // Tables and reports call without the master; the saved KMR type marks a vehicle.
+  assert.deepEqual(requestMeterTypesForRequest({meterType: "KMR", equipmentGroup: "LIGHT VEHICLES"}), ["HMR", "KMR"]);
+  assert.deepEqual(requestMeterReadings({door: "LV1", meterType: "KMR", openingMeterReading: "500"}, "opening", master), {HMR: "", KMR: "500"});
+  assert.deepEqual(requestMeterReadings({door: "EX1", meterType: "HMR", openingMeterReading: "90"}, "opening", master), {HMR: "90"});
+  assert.equal(requestMeterReadingLabel({door: "EX1", meterType: "HMR", openingMeterReading: "90"}), "HMR 90");
 });
 
 test("legacy tipper readings populate their original meter without duplicating it into the second meter", () => {

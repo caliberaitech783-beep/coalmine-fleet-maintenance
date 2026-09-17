@@ -44,12 +44,13 @@ test("tipper edit and close forms render both readings and exactly one trip-card
   }
 });
 
-test("non-tipper forms retain the asset's single meter", () => {
-  for (const meterType of ["HMR", "KMR"]) {
-    const html = renderToStaticMarkup(React.createElement(forms.RequestEditForm, {request: {...tipper, equipmentGroup: "OTHER", meterType}}));
-    assert.match(html, new RegExp(`name="opening${meterType}Reading"`));
-    assert.doesNotMatch(html, new RegExp(`name="opening${meterType === "HMR" ? "KMR" : "HMR"}Reading"`));
-  }
+test("equipment without wheels asks for HMR only while other vehicles ask for HMR and KMR", () => {
+  const equipmentHtml = renderToStaticMarkup(React.createElement(forms.RequestEditForm, {request: {...tipper, equipmentGroup: "OTHER", meterType: "HMR"}}));
+  assert.match(equipmentHtml, /name="openingHMRReading"/);
+  assert.doesNotMatch(equipmentHtml, /name="openingKMRReading"/);
+  const vehicleHtml = renderToStaticMarkup(React.createElement(forms.RequestEditForm, {request: {...tipper, equipmentGroup: "OTHER", meterType: "KMR"}}));
+  assert.match(vehicleHtml, /name="openingHMRReading"/);
+  assert.match(vehicleHtml, /name="openingKMRReading"/);
 });
 
 test("edit and close submissions send both readings and keep the legacy primary value", async () => {
