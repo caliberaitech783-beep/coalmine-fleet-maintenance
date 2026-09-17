@@ -2231,6 +2231,7 @@ const masterFields = {
   ],
   "Delayed Reason": [
     ["delayedReason", "Delayed reason"],
+    ["repairTypes", "Breakdown types (comma separated, or All)"],
   ],
   "Shift Master": [
     ["site", "Site Name", "site-select"],
@@ -7994,7 +7995,7 @@ function DelayedReasonForm({ request, close, onSave }) {
   const [custom, setCustom] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const options = delayedReasonsForRepairType(request.category, records.map((record) => String(record.delayedReason || "").trim()).filter(Boolean));
+  const options = delayedReasonsForRepairType(request.category, records);
   const visibleOptions = options.filter((option) => matchesSmartSearch(query, option));
   return <Modal title={`Delayed reason · ${request.door || request.ref}${request.category ? ` · ${request.category}` : ""}`} close={saving ? () => {} : close}>
     <form className="form" onSubmit={async (event) => {
@@ -8304,6 +8305,10 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
   const [expectedCompletionAt,setExpectedCompletionAt] = useState(initialEtc);
   const [formError,setFormError] = useState("");
   const etcChanged = Boolean(initialEtc && expectedCompletionAt.slice(0,16) !== initialEtc);
+  const etcDelayed = etcChanged && expectedCompletionAt.slice(0,16) > initialEtc;
+  const [editCategory, setEditCategory] = useState(request.category || "");
+  const [delayedReasonRecords] = useMasterRecords("Delayed Reason");
+  const etcDelayedReasonOptions = etcDelayed ? delayedReasonsForRepairType(editCategory, delayedReasonRecords || []) : [];
   const [openingMeterFile, setOpeningMeterFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = useRef(false);
@@ -8324,7 +8329,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
       try {
         const openingMeterEvidence = openingMeterFile ? await readMeterEvidence(openingMeterFile) : "";
         const openingMeterReadings = meterReadingsFromForm(form, request, "opening", equipmentRecords);
-        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
+        await onSave({ref: request.ref, category: form.get("category"), complaint: form.get("complaint"), expectedCompletionAt: form.get("expectedCompletionAt"), correctionReason, delayedReason: etcDelayed ? String(form.get("delayedReason") || "").trim() : "", meterType, openingMeterReadings, openingMeterReading: openingMeterReadings[meterType] || "", openingMeterFile: openingMeterEvidence, openingMeterFileName: openingMeterFile?.name || "", acceptRequest: acceptingRequest});
       } catch (error) { setFormError(error?.message || "Could not save this request. Please try again."); }
       finally { submitLock.current = false; setSubmitting(false); }
     }}>
@@ -8332,7 +8337,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>Equipment group<input value={normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || ""} readOnly aria-readonly="true" /></label>
         <label>
           Type of breakdown *
-          <select name="category" required defaultValue={request.category || ""} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
+          <select name="category" required defaultValue={request.category || ""} onChange={(event) => setEditCategory(event.target.value)} disabled={!repairTypesLoaded || !repairTypeRecords.length} aria-busy={!repairTypesLoaded}>
             <option value="" disabled>
               {!repairTypesLoaded ? "Loading repair types..." : repairTypeRecords.length ? "Select repair type" : "No repair types available"}
             </option>
@@ -8355,6 +8360,7 @@ function RequestEditForm({ request, equipmentRecords = [], close, onSave, onRequ
         <label>{request.acceptanceRequired ? "Production timing" : "Timing"} (12-hour with seconds)<input name="time" type="hidden" value={time} /><input value={displayTime(time)} readOnly aria-readonly="true" /></label>
         {request.acceptanceRequired && <label>Acceptance timing<input value={acceptanceTime ? formatTwelveHourDateTime(acceptanceTime, true) : "Not accepted yet"} readOnly aria-readonly="true" /><small>{request.acceptedAt ? "Vehicle accepted by Maintenance." : "The server records the actual time when you accept the vehicle."}</small></label>}
         <MaintenanceEtcInput value={expectedCompletionAt} displayValue={displayedInitialEtc} onChange={setExpectedCompletionAt} />
+        {etcDelayed && <label className="full">Delayed reason *<select name="delayedReason" required defaultValue={etcDelayedReasonOptions.includes(request.delayedReason) ? request.delayedReason : ""} key={editCategory}><option value="">Select delayed reason</option>{etcDelayedReasonOptions.map((reason) => <option key={reason} value={reason}>{reason}</option>)}</select><small>The ETC is being pushed later. Reasons shown are for breakdown type {editCategory || "Breakdown"}.</small></label>}
         {etcChanged && <label className="full">Reason for changing ETC *<textarea name="correctionReason" required maxLength={500} placeholder="Explain why the previous expected completion time needs to change." /><small>Previous ETC: {displayDateTime(displayedInitialEtcLabel)}. Both values, your name and this reason will be retained.</small></label>}
         <MeterReadingFields request={request} stage="opening" equipmentRecords={equipmentRecords} />
         <label className="full">Trip card upload (optional)<input name="openingMeterFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setOpeningMeterFile(event.target.files?.[0] || null)} /><button type="button" className="camera-upload-button" onClick={(event)=>{event.preventDefault();capturePhotoForInput(event.currentTarget.previousElementSibling);}}>Take photo</button><small>{openingMeterFile ? `${openingMeterFile.name} · ${(openingMeterFile.size / 1024 / 1024).toFixed(1)} MB` : request.openingMeterFileUploaded ? "Existing trip card saved · choose a file only to replace it." : "JPEG, PNG, WebP, or PDF · maximum 5 MB"}</small>{request.openingMeterFileUploaded && <MeterFileCell request={request} stage="opening" />}</label>

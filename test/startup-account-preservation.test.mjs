@@ -28,13 +28,15 @@ async function runStartup({users=[],initialized=true}={}){
             :values?.[0];
         assert.ok(['Repair type master','Delayed Reason','Shift Master'].includes(target),'startup must not insert a user account');
       }
-      assert.doesNotMatch(sql,/UPDATE master_records SET record_data|DELETE FROM (?:master_records|auth_sessions)/,'startup fixture must not rewrite accounts or credentials');
+      // The only permitted master update tags breakdown types on Delayed Reason records; it can never touch accounts.
+      const delayedReasonTypeSeed=sql.startsWith("UPDATE master_records SET record_data=record_data||jsonb_build_object('repairTypes',$2::text)")&&sql.includes("WHERE master_name='Delayed Reason'");
+      if(!delayedReasonTypeSeed)assert.doesNotMatch(sql,/UPDATE master_records SET record_data|DELETE FROM (?:master_records|auth_sessions)/,'startup fixture must not rewrite accounts or credentials');
       return {rows:[],rowCount:0};
     },
     release(){released=true;},
   };
   const context={
-    pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],
+    pool:{query:client.query,connect:async()=>client},currentAppVersion:'current-version',repairTypeDefaults:['Breakdown'],DELAYED_REASON_DEFAULTS:['Awaiting parts'],DELAYED_REASON_DEFAULT_REPAIR_TYPES:{'Awaiting parts':'All'},
     normalizeOperationalSiteFields,normalizeUserSiteFields,normalizeUserAccessLabels,repairLegacySessionDefaults,initializeLoginHistory,
     SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,
     hashPassword:()=>assert.fail('startup must not construct default account credentials'),

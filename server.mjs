@@ -66,7 +66,7 @@ import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipme
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
-import {DELAYED_REASON_DEFAULTS,delayedReasonRequired} from './delayed-reason.mjs';
+import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,delayedReasonRequired} from './delayed-reason.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
@@ -918,7 +918,20 @@ async function migrate(){
           SELECT 1 FROM master_records
           WHERE master_name='Delayed Reason'
             AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
-        )`,[JSON.stringify({delayedReason}),delayedReason]);
+        )`,[JSON.stringify({delayedReason,repairTypes:DELAYED_REASON_DEFAULT_REPAIR_TYPES[delayedReason]||'All'}),delayedReason]);
+    }
+    // One-time: record the approved breakdown types against the existing default reasons so admins can see and edit them.
+    const {rows:delayedTypeSeed}=await client.query("SELECT value FROM app_metadata WHERE key='delayed_reason_repair_types_seeded_v1' FOR UPDATE");
+    if(!delayedTypeSeed.length){
+      for(const delayedReason of DELAYED_REASON_DEFAULTS){
+        await client.query(`UPDATE master_records SET record_data=record_data||jsonb_build_object('repairTypes',$2::text)
+          WHERE master_name='Delayed Reason'
+            AND lower(trim(record_data->>'delayedReason'))=lower(trim($1))
+            AND COALESCE(trim(record_data->>'repairTypes'),'')=''`,[delayedReason,DELAYED_REASON_DEFAULT_REPAIR_TYPES[delayedReason]||'All']);
+      }
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('delayed_reason_repair_types_seeded_v1','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
     }
     const {rows:shiftSeed}=await client.query("SELECT value FROM app_metadata WHERE key='shift_master_defaults_seeded_v1' FOR UPDATE");
     if(!shiftSeed.length){
@@ -4834,6 +4847,7 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     const reference=String(req.params.reference||'').trim();
     const {category='Maintenance request',complaint,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
     const explicitAcceptance=req.body?.acceptRequest===true;
+    const editDelayedReason=String(req.body?.delayedReason||'').trim().slice(0,160);
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     const normalizedOpeningMeterReading=String(openingMeterReading).trim();
     const openingMeterReadings=req.body?.openingMeterReadings ?? {};
@@ -4853,9 +4867,10 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
       complaint_language=CASE WHEN complaint=$2 THEN complaint_language ELSE '' END,
       accepted_at=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN NOW() ELSE accepted_at END,accepted_by=CASE WHEN accepted_at IS NULL AND (acceptance_required OR $11::boolean) THEN $8 ELSE accepted_by END,expected_completion_at=$3::timestamptz,meter_type=$4,
       opening_meter_reading=$5,opening_meter_file=CASE WHEN $6<>'' THEN $6 ELSE opening_meter_file END,opening_meter_file_name=CASE WHEN $6<>'' THEN $7 ELSE opening_meter_file_name END,
-      opening_meter_readings=opening_meter_readings || $10::jsonb
+      opening_meter_readings=opening_meter_readings || $10::jsonb,
+      delayed_reason=CASE WHEN $12<>'' THEN $12 ELSE delayed_reason END
       WHERE reference=$9 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql}
-      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance]);
+      RETURNING ${requestProjection}`,[category,complaint,expectedAt,normalizedMeterType,normalizedOpeningMeterReading,openingMeterFile,String(openingMeterFileName).trim().slice(0,255),req.session.name||'Maintenance User',reference,JSON.stringify({...openingMeterReadings,[normalizedMeterType]:normalizedOpeningMeterReading}),explicitAcceptance,editDelayedReason]);
     if(!result.rows.length)throw arrivalRedFlagError();
     return {...result,timelineEvents:[...(accepting?['acceptedAt']:[]),'expectedCompletionAt'],timelineSources:{acceptedAt:'system',expectedCompletionAt:'user'},timelineReason:req.body?.correctionReason||'',timelineRequireReason:['expectedCompletionAt']};
     });

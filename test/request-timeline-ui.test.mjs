@@ -69,7 +69,7 @@ function harness(name, extra = {}) {
     requestStartParts: () => ({date: "2026-09-08", time: "12:00:00"}), requestMeterTypeForRequest: () => "KMR",
     useMasterRecords: () => [[]], normalizeEquipmentGroup: value => value,
     formatTwelveHourDateTime: value => value || "Not recorded", effectiveInfoPulseEtcTimestamp: () => Number.NaN,
-    indiaDateTimeInputValue: () => "", delayedReasonRequired: () => false,
+    indiaDateTimeInputValue: () => "", delayedReasonRequired: () => false, delayedReasonsForRepairType: () => ["Parts - OEM"],
     arrivalRedFlagRequired: () => false, TIME_24H_PATTERN, readMeterEvidence: async () => "fixture",
     FormData: class {constructor(values) {this.values = values;} get(key) {return this.values[key] ?? "";}},
     URL: {createObjectURL: () => "fixture:preview", revokeObjectURL() {}},
