@@ -1,6 +1,7 @@
 import { siteReportHtml } from "./site-report.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter } from "./smart-print.mjs";
+import { printHelperAvailable, printPdfDirect } from "./direct-print.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
@@ -2883,7 +2884,34 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
     { name: "xl/worksheets/sheet1.xml", content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>` },
   ]);
 }
-function printTableReport({ title, columns = [], rows = [], highlightRow, reportGrouping, pageSize }) {
+// Smart Print goes straight to the printer through the print helper (QZ Tray) when it is installed on this PC:
+// the helper, unlike a web page, can set the paper to the chosen A3 / A4. Without the helper, or if the job
+// cannot be sent, the normal browser print window is used.
+function printTableReport(report) {
+  void printReportDirect(report).then((sent) => { if (!sent) printTableReportInBrowser(report); });
+}
+async function printReportDirect({ title, columns = [], rows = [], highlightRow, pageSize }) {
+  try {
+    if (!(await printHelperAvailable({ token: () => authToken }))) return false;
+    const page = printPageSize(pageSize);
+    const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
+    const highlights = rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []);
+    const response = await fetch("/api/exports/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights, pageSize: page.name }),
+    });
+    if (!response.ok) return false;
+    const printer = await printPdfDirect({ pdf: await response.blob(), page, jobName: title, token: () => authToken });
+    recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records · ${page.name} · ${printer}`});
+    alert(`Sent to ${printer} on ${page.name} paper.`);
+    return true;
+  } catch (error) {
+    console.warn("Direct printing was not possible; using the browser print window.", error);
+    return false;
+  }
+}
+function printTableReportInBrowser({ title, columns = [], rows = [], highlightRow, reportGrouping, pageSize }) {
   // The chosen A3/A4 size sets the fit-to-page scale. @page stays a generic landscape so the browser keeps its
   // Paper size option and the report fills whichever paper the printer really uses.
   const page = printPageSize(pageSize);

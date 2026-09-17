@@ -109,7 +109,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   };
   const printSelection=()=>{
     if(!currentReport().chosen.length)return;
-    askChoice('Select page size to print','The report is scaled to the selected page so no columns are cut off. In the print window, keep Paper size set to the same size.','Select page size',PRINT_PAGE_SIZES.map(page=>({label:`${page.name} · ${page.detail}`,value:page.name})),pageSize=>{
+    askChoice('Select page size to print','The report is scaled to the selected page so no columns are cut off. With the print helper installed it goes straight to the printer on this paper size; otherwise, in the print window keep Paper size set to the same size.','Select page size',PRINT_PAGE_SIZES.map(page=>({label:`${page.name} · ${page.detail}`,value:page.name})),pageSize=>{
       const {reportTitle,chosen}=currentReport();if(!chosen.length)return;
       close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,pageSize});
     });

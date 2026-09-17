@@ -10,6 +10,7 @@ import os from 'node:os';
 import {Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createHash,randomUUID} from 'node:crypto';
+import {printHelperSigning,signPrintRequest} from './print-helper-signing.mjs';
 import {createSessionStore} from './auth-session.mjs';
 import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
@@ -1150,6 +1151,27 @@ app.use(express.json({limit:'20mb',type:JSON_BODY_CONTENT_TYPES}));
 app.get('/api/app-version',(_req,res)=>{
   res.set('Cache-Control','no-store, no-cache, must-revalidate');
   res.json({version:currentAppVersion,commit:deploymentSha});
+});
+
+// Print helper (QZ Tray): Smart Print sends reports straight to the printer on
+// the chosen paper size. The helper prints without an "Allow" prompt only when
+// the app presents its certificate and signs each request. Both answer 204
+// until QZ_SIGNING_CERTIFICATE and QZ_SIGNING_PRIVATE_KEY are configured; the
+// private key never leaves the server.
+app.get('/api/print-helper/certificate',requireSession,(req,res)=>{
+  req.audit=false;
+  const {certificate,configured}=printHelperSigning();
+  res.set('Cache-Control','private, no-store');
+  if(!configured)return res.status(204).end();
+  res.type('text/plain').send(certificate);
+});
+app.post('/api/print-helper/sign',requireSession,(req,res)=>{
+  req.audit=false;
+  const {privateKey,configured}=printHelperSigning();
+  res.set('Cache-Control','private, no-store');
+  if(!configured)return res.status(204).end();
+  try{res.json({signature:signPrintRequest(req.body?.request,privateKey)})}
+  catch(error){res.status(error.status||500).json({error:error.status?error.message:'Could not sign the print request.'})}
 });
 
 // Audit Trail housekeeping for Admin and Super Admin: permanently delete the
