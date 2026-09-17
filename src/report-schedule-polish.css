@@ -252,14 +252,23 @@
 }
 
 /* Matching visual treatment for the bulk report ZIP dialog. */
-.report-zip-modal {
-  width: min(920px, calc(100vw - 28px));
-  max-width: 920px;
-  max-height: min(88vh, 860px);
+.overlay.report-zip-overlay {
+  padding: 0;
+}
+
+.overlay .modal.report-zip-modal {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  margin: 0;
+  resize: none;
   padding: 0 !important;
   overflow: auto;
   border: 1px solid #eadce7;
-  border-radius: 16px !important;
+  border-radius: 0 !important;
   background: linear-gradient(180deg, #fff 0%, #fffbfd 100%);
   box-shadow: 0 26px 70px #24122940 !important;
 }

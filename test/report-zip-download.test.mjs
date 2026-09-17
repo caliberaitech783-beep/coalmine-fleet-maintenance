@@ -25,6 +25,18 @@ test('reports UI supports selectable PDF and Excel downloads in one ZIP archive'
   assert.match(polish,/\.report-zip-range/);
 });
 
+test('report ZIP dialog fills the viewport with scrollable content and pinned controls',()=>{
+  const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../src/report-schedule-polish.css',import.meta.url),'utf8');
+  assert.match(source,/className="overlay report-zip-overlay"/);
+  assert.match(css,/\.overlay\.report-zip-overlay\s*\{\s*padding: 0;/);
+  const modal=css.match(/\.overlay \.modal\.report-zip-modal\s*\{([^}]+)\}/)?.[1];
+  assert.ok(modal);
+  for(const rule of ['width: 100%','max-width: none','height: 100dvh','max-height: 100dvh','resize: none','overflow: auto','border-radius: 0']) assert.ok(modal.includes(rule),rule);
+  assert.match(css,/\.report-zip-modal > header\s*\{\s*position: sticky;/);
+  assert.match(css,/\.report-zip-modal > footer\s*\{\s*position: sticky;/);
+});
+
 test('reports and schedule configuration are exposed to every signed-in profile with server-side scope',()=>{
   const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');

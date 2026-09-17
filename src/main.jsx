@@ -6354,7 +6354,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         document.body,
       )}
       {reportZipOpen && createPortal(
-        <div className="overlay" onPointerDown={(event) => event.target === event.currentTarget && !reportZipDownloading && setReportZipOpen(false)}>
+        <div className="overlay report-zip-overlay" onPointerDown={(event) => event.target === event.currentTarget && !reportZipDownloading && setReportZipOpen(false)}>
           <div className="modal report-zip-modal" role="dialog" aria-modal="true" aria-label="Download reports as ZIP">
             <header>
               <button type="button" className="modal-back-button" onClick={() => setReportZipOpen(false)} disabled={reportZipDownloading} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><div className="report-zip-title"><span><Download /></span><div><h3>Download reports as ZIP</h3><p>Choose reports and receive organised PDF and Excel files in one archive</p></div></div>
