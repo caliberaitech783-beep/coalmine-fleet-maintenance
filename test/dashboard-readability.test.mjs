@@ -76,5 +76,5 @@ test('lower dashboard cards reserve enough space for group names, lifecycle coun
   assert.match(rule('.mine-dashboard .mine-request-chart-day button'),/width:\s*24px/);
   assert.match(rule('.mine-dashboard .mine-request-chart-day button b'),/top:\s*-24px/);
   assert.match(rule('.mine-dashboard .mine-trend-day'),/min-width:\s*60px;\s*flex:\s*1 0 60px/);
-  assert.match(rule('.mine-dashboard .mine-site-road-gauge'),/flex:\s*0 0 90px;\s*width:\s*90px;\s*height:\s*90px/);
+  assert.match(rule('.mine-dashboard .mine-site-road-gauge'),/flex:\s*0 0 64px;\s*width:\s*64px;\s*height:\s*64px/);
 });
