@@ -1010,9 +1010,22 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-road-site-bar i.offroad { background: #df6d64; }
 .mine-road-site-bar i.idle { background: #dda13d; }
 .dashboard-maintenance-availability-state { min-height: 180px; }
-.modal.dashboard-breakdown-movement-modal { width: min(1480px, calc(100vw - 24px)); max-height: calc(100dvh - 20px); }
+.overlay.dashboard-breakdown-movement-overlay { padding: 0; }
+.overlay .modal.dashboard-breakdown-movement-modal { width: 100%; max-width: none; min-width: 0; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; resize: none; }
 .modal.dashboard-breakdown-movement-modal > header { position: sticky; top: 0; z-index: 4; background: var(--surface); }
-.modal.dashboard-breakdown-movement-modal > header h3 { background: var(--brand-purple, #522e90); color: #fff; padding: 10px 16px; border-radius: 8px; }
+.modal.dashboard-breakdown-movement-modal > header h3 { background: transparent; color: var(--ink); padding: 0; }
+.dashboard-breakdown-site-title { display: inline-block; background: var(--brand-purple, #522e90); color: #fff; padding: 10px 16px; border-radius: 8px; }
+.dashboard-breakdown-movement-detail .dashboard-breakdown-road-mix,
+.dashboard-breakdown-movement-detail .dashboard-breakdown-day-help,
+.dashboard-breakdown-day-table .record-date-range-basis,
+.dashboard-breakdown-day-table .record-date-range-hint[data-empty="true"] { display: none; }
+.dashboard-breakdown-filter-toggle { display: flex; justify-content: flex-end; }
+.dashboard-breakdown-filter-toggle button { display: inline-flex; align-items: center; justify-content: center; padding: 4px; border: 0; background: transparent; color: var(--brand-purple, #522e90); }
+.dashboard-breakdown-filter-toggle svg { width: 18px; height: 18px; }
+.dashboard-breakdown-period-controls[hidden] { display: none; }
+.dashboard-breakdown-day-table .shared-table-actions-toolbar { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; }
+.dashboard-breakdown-day-table .shared-table-actions-toolbar > * { flex-shrink: 0; }
+.dashboard-breakdown-day-table .record-date-range { flex-wrap: nowrap; }
 .dashboard-breakdown-movement-detail { display: grid; gap: 11px; }
 .dashboard-breakdown-period-controls {
   display: flex;

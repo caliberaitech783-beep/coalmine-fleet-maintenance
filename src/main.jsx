@@ -1326,6 +1326,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [breakdownDetailTo, setBreakdownDetailTo] = useState("");
   const [breakdownDayReturnSite, setBreakdownDayReturnSite] = useState("");
   const [breakdownCustomDays, setBreakdownCustomDays] = useState(7);
+  const [breakdownFiltersHidden, setBreakdownFiltersHidden] = useState(false);
   const [roadFocusSite, setRoadFocusSite] = useState("");
   useEffect(() => localStorage.setItem("nerveCenterFleetWatermark", String(showFleetWatermark)), [showFleetWatermark]);
   useEffect(() => localStorage.setItem("nerveCenterFleetIntelligenceView", fleetIntelligenceView), [fleetIntelligenceView]);
@@ -1976,8 +1977,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div></>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-request-lifecycle-state" />}
         </article>
       </section>}
-      {breakdownDetailSite && <Modal className="dashboard-breakdown-movement-modal" title={`${breakdownDetailSite} · Day-wise BD Movement`} close={() => setBreakdownDetailSite("")}><div className="dashboard-breakdown-movement-detail">
-        <div className="dashboard-breakdown-period-controls">
+      {breakdownDetailSite && <Modal className="dashboard-breakdown-movement-modal" overlayClassName="dashboard-breakdown-movement-overlay" title={<><span className="dashboard-breakdown-site-title">{breakdownDetailSite}</span> · Day-wise BD Movement</>} close={() => setBreakdownDetailSite("")}><div className="dashboard-breakdown-movement-detail">
+        <div className="dashboard-breakdown-filter-toggle"><button type="button" aria-label={breakdownFiltersHidden ? "Show movement filters" : "Hide movement filters"} title={breakdownFiltersHidden ? "Show movement filters" : "Hide movement filters"} aria-expanded={!breakdownFiltersHidden} aria-controls="breakdown-movement-filters" onClick={() => setBreakdownFiltersHidden(hidden => !hidden)}>{breakdownFiltersHidden ? <EyeOff /> : <Eye />}</button></div>
+        <div id="breakdown-movement-filters" className="dashboard-breakdown-period-controls" hidden={breakdownFiltersHidden}>
           <div className="mine-trend-period" role="group" aria-label="Breakdown movement day range">{[2, 5, 10].map((days) => <button type="button" key={days} className={!validBreakdownDetailRange && breakdownDetailDays === days ? "active" : ""} onClick={() => { setBreakdownDetailDays(days); setBreakdownDetailFrom(""); setBreakdownDetailTo(""); }}>{days} Days</button>)}</div>
           <label><span>From date</span><input type="date" aria-label="Breakdown movement from date" value={breakdownDetailFrom} max={breakdownDetailTo || breakdownDetailEndKey} onChange={(event) => setBreakdownDetailFrom(event.target.value)} /></label>
           <label><span>To date</span><input type="date" aria-label="Breakdown movement to date" value={breakdownDetailTo} min={breakdownDetailFrom || undefined} max={todayKey} onChange={(event) => setBreakdownDetailTo(event.target.value)} /></label>

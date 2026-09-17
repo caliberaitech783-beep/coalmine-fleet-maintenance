@@ -57,7 +57,9 @@ test("day-wise details use a larger table with fleet-impact BD percentage", () =
   assert.match(client, /breakdownPercentage\.toFixed\(1\)/);
   assert.doesNotMatch(client, /className="dashboard-breakdown-day-chart"/);
   assert.doesNotMatch(client, /className="dashboard-site-road-impact"/);
-  assert.match(css, /\.modal\.dashboard-breakdown-movement-modal\s*\{[^}]*width:\s*min\(1480px/);
+  assert.match(css, /\.modal\.dashboard-breakdown-movement-modal\s*\{[^}]*width:\s*100%/);
+  assert.match(css, /\.overlay\.dashboard-breakdown-movement-overlay\s*\{ padding: 0;/);
+  assert.match(client, /hidden=\{breakdownFiltersHidden\}/);
   assert.match(css, /\.dashboard-breakdown-day-table\s*\{[^}]*min-height:\s*260px/);
 });
 
