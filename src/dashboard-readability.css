@@ -286,9 +286,9 @@
   .mine-dashboard .mine-fleet-chart-toggle button .mine-fleet-count-trend { max-width: 100%; box-sizing: border-box; }
 }
 
-/* The line between the WCL and NCL groups on the fleet chart must be clearly visible. */
-.mine-fleet-chart-regions > section + section { border-left: 2px solid #9ca3af; }
-:root[data-theme="dark"] .mine-fleet-chart-regions > section + section { border-left-color: #9ca3af; }
+/* The WCL / NCL divider on the fleet chart: a soft translucent violet band, not a hard line. */
+.mine-fleet-chart-regions > section + section { border-left: 3px solid rgba(124, 58, 190, 0.28); }
+:root[data-theme="dark"] .mine-fleet-chart-regions > section + section { border-left-color: rgba(196, 160, 255, 0.38); }
 .dashboard-fleet-search { display: grid; gap: 6px; padding: 10px 14px; }
 .dashboard-card-search { padding: 20px; }
 .dashboard-card-search label { display: grid; gap: 8px; }
