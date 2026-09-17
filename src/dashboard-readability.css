@@ -39,12 +39,13 @@
 .mine-dashboard .mine-site-road-summary strong,
 .manager-dashboard .manager-kpi-grid strong { font-size: var(--dash-value) !important; line-height: 1.15; font-variant-numeric: tabular-nums; }
 .mine-dashboard .mine-site-road-summary { gap: 10px; }
-.mine-dashboard .mine-site-road-summary > button { min-width: 0; min-height: 80px; padding: 10px 12px; gap: 10px; }
-.mine-dashboard .mine-site-road-summary strong { font-size: 28px !important; }
-.mine-dashboard .mine-site-road-summary small { font-size: 16px !important; }
-.mine-dashboard .mine-site-road-gauge { flex: 0 0 64px; width: 64px; height: 64px; }
-.mine-dashboard .mine-site-road-gauge b { font-size: 18px !important; }
-.mine-dashboard .mine-site-road-gauge small { font-size: 9px !important; }
+.mine-dashboard .mine-site-road-summary > button { min-width: 0; min-height: 60px; padding: 6px 10px; gap: 8px; }
+.mine-dashboard .mine-site-road-summary strong { font-size: 24px !important; }
+.mine-dashboard .mine-site-road-summary small { font-size: 14px !important; }
+.mine-dashboard .mine-site-road-gauge { flex: 0 0 48px; width: 48px; height: 48px; }
+.mine-dashboard .mine-site-road-gauge::before { inset: 4px; }
+.mine-dashboard .mine-site-road-gauge b { font-size: 14px !important; }
+.mine-dashboard .mine-site-road-gauge small { font-size: 7px !important; }
 .mine-dashboard .mine-breakdown-type-mix > header { flex-wrap: wrap; padding: 10px 12px; }
 .mine-dashboard .mine-breakdown-type-mix > header > div { flex-wrap: wrap; }
 .mine-dashboard .mine-breakdown-type-mix :is(article, button) { padding: 12px; gap: 9px; }
