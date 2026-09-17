@@ -1,5 +1,7 @@
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint } from "./smart-print.mjs";
+import { printRequestTimeline } from "./request-timeline-print.mjs";
+import requestTimelinePrintCss from "./request-timeline.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
 import OrganisationChartView from "./organisation-chart.jsx";
 import { ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES, buildOrganisationChart } from "./organisation-chart.mjs";
@@ -7974,8 +7976,7 @@ function Modal({ title, close, children, className = "", overlayClassName = "", 
           {className.split(" ").includes("request-timeline-modal") && <button type="button" className="request-timeline-print" onClick={() => {
             const content = dialogRef.current?.querySelector(".request-timeline-content");
             if (!content) return;
-            const rows = content.innerText.split(/\n+/).map(text => text.trim()).filter(Boolean).map(detail => ({ detail }));
-            openSmartPrint({ title: typeof title === "string" ? title : "Time breakdown", columns: [{ label: "Time breakdown details", value: row => row.detail }], rows, onPrint: printTableReport, formatCell: exportCellText });
+            printRequestTimeline(content, typeof title === "string" ? title : "Time breakdown", requestTimelinePrintCss);
           }}><Printer aria-hidden="true" /><span>Smart Print</span></button>}
           <button type="button" onClick={close} aria-label="Close dialog">
             <X aria-hidden="true" />
