@@ -735,7 +735,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   const site = byClass(tree, "mine-breakdown-site-row");
   assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
   assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
-  assert.ok(text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of 08-09-2026"));
+  assert.ok(!text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of"), "redundant filter note is removed; table caption retains the date");
   assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
   const exported = findAll(tree, (node) => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
   const incoming = exported.find((row) => row.section === "Breakdown movement" && row.metric === "BD In");
