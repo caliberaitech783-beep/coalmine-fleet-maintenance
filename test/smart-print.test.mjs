@@ -94,17 +94,23 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   assert.deepEqual(nodes.filter(n=>n.tag==='th').map(n=>n.textContent),['Sr. No.','Door','Status']);
   assert.deepEqual(nodes.filter(n=>n.tag==='td').map(n=>n.textContent),['1','24','Open','2','25','Closed']);
   assert.deepEqual(nodes.filter(n=>n.tag==='tr'&&n.className==='highlight-row').length,1);
-  nodes.find(n=>n.textContent==='Export Excel').onclick();
+  // A single Export button asks only for the format; exports never ask for a page size.
+  assert.equal(nodes.filter(n=>n.tag==='button'&&/^Export/.test(n.textContent)).length,1);
+  nodes.find(n=>n.textContent==='Export').onclick();
+  assert.equal(exported.length,0);
+  assert.deepEqual(all(body.children.at(-1)).filter(n=>n.tag==='button'&&['PDF','Excel (.xlsx)'].includes(n.textContent)).map(n=>n.textContent),['PDF','Excel (.xlsx)']);
+  assert.equal(all(body.children.at(-1)).some(n=>/^A[34] · /.test(n.textContent)),false);
+  all(body.children.at(-1)).find(n=>n.textContent==='Excel (.xlsx)').onclick();
   await new Promise(resolve=>setTimeout(resolve));
   assert.equal(exported[0].format,'xlsx');
   assert.deepEqual(exported[0].columns,[columns[0],columns[2]]);
   assert.equal(exported[0].rows,rows);
   assert.equal(exported[0].highlightRow,highlightRow);
-  nodes.find(n=>n.textContent==='Export PDF').onclick();
+  nodes.find(n=>n.textContent==='Export').onclick();
   assert.equal(exported.length,1);
-  all(body.children.at(-1)).find(n=>String(n.textContent).startsWith('A4 · ')).onclick();
+  all(body.children.at(-1)).find(n=>n.textContent==='PDF').onclick();
   await new Promise(resolve=>setTimeout(resolve));
-  assert.equal(exported[1].format,'pdf');assert.equal(exported[1].pageSize,'A4');
+  assert.equal(exported[1].format,'pdf');assert.equal(exported[1].pageSize,undefined);
   assert.deepEqual(exported[1].columns,[columns[0],columns[2]]);
   assert.match(all(body.children.at(-1)).find(n=>n.className==='smart-print-notice').textContent,/PDF export downloaded with 2 columns and 2 records/);
  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}

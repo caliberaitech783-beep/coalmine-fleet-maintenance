@@ -91,16 +91,16 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   const footer=make('footer');dialog.append(footer);
   const count=make('span');footer.append(count);
   button('Cancel',close,footer);
-  // Print and PDF export first ask for the page size; the report is then fitted to that page.
+  // Print first asks for the page size, and Export asks for the format, in one shared prompt.
   const pagePrompt=make('div',undefined,'smart-print-page-prompt');
-  const askPageSize=(action,run)=>{
-    const panel=make('div',undefined,'smart-print-page-size');panel.setAttribute('role','group');panel.setAttribute('aria-label','Select page size');
-    panel.append(make('h3',`Select page size to ${action}`),make('p','The report is scaled to the selected page so no columns are cut off.'));
+  const askChoice=(heading,hint,label,options,run)=>{
+    const panel=make('div',undefined,'smart-print-page-size');panel.setAttribute('role','group');panel.setAttribute('aria-label',label);
+    panel.append(make('h3',heading),make('p',hint));
     const choices=make('div');panel.append(choices);
     const dismiss=()=>pagePrompt.replaceChildren();
-    const pageButtons=PRINT_PAGE_SIZES.map(page=>button(`${page.name} · ${page.detail}`,()=>{dismiss();run(page.name);},choices,'primary'));
+    const optionButtons=options.map(option=>button(option.label,()=>{dismiss();run(option.value);},choices,'primary'));
     button('Back',dismiss,choices);
-    pagePrompt.replaceChildren(panel);pageButtons[0].focus?.();
+    pagePrompt.replaceChildren(panel);optionButtons[0].focus?.();
   };
   // A selected saved layout supplies both its columns and its report name to print and export alike.
   const currentReport=()=>{
@@ -109,25 +109,25 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   };
   const printSelection=()=>{
     if(!currentReport().chosen.length)return;
-    askPageSize('print',pageSize=>{
+    askChoice('Select page size to print','The report is scaled to the selected page so no columns are cut off.','Select page size',PRINT_PAGE_SIZES.map(page=>({label:`${page.name} · ${page.detail}`,value:page.name})),pageSize=>{
       const {reportTitle,chosen}=currentReport();if(!chosen.length)return;
       close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,pageSize});
     });
   };
   let exporting=false;
-  const runExport=(format,pageSize)=>{
+  const runExport=format=>{
     const {reportTitle,chosen}=currentReport();if(!chosen.length||exporting)return;
     const formatName=format==='pdf'?'PDF':'Excel';
     exporting=true;render();notice.textContent=`Preparing ${formatName} export…`;
-    Promise.resolve().then(()=>onExport({format,pageSize,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping}))
+    Promise.resolve().then(()=>onExport({format,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping}))
       .then(()=>{notice.textContent=`${formatName} export downloaded with ${chosen.length} column${chosen.length===1?'':'s'} and ${rows.length} record${rows.length===1?'':'s'}.`;})
       .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;})
       .finally(()=>{exporting=false;render();});
   };
-  const exportButtons=onExport?[
-    button('Export PDF',()=>{if(currentReport().chosen.length)askPageSize('export as PDF',pageSize=>runExport('pdf',pageSize));},footer,'smart-print-export'),
-    button('Export Excel',()=>runExport('xlsx'),footer,'smart-print-export'),
-  ]:[];
+  // One Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
+  const exportButtons=onExport?[button('Export',()=>{
+    if(currentReport().chosen.length)askChoice('Export as PDF or Excel','The export uses the selected columns, their order and the same records as the preview.','Select export format',[{label:'PDF',value:'pdf'},{label:'Excel (.xlsx)',value:'xlsx'}],runExport);
+  },footer,'smart-print-export')]:[];
   const printButton=button('Print current selection',printSelection,footer,'primary');
   const printSavedButton=button('Print saved layout',printSelection,controls,'smart-print-saved-print');
   const deleteSavedButton=button('Delete saved layout',()=>{

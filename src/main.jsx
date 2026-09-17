@@ -2925,7 +2925,7 @@ function printTableReport({ title, columns = [], rows = [], highlightRow, report
   }, 150);
 }
 // Smart Print exports: exactly the chosen columns, their order and the table's filtered rows, as PDF or Excel.
-async function exportSmartPrintSelection({ format, pageSize, title, columns = [], rows = [], highlightRow }) {
+async function exportSmartPrintSelection({ format, title, columns = [], rows = [], highlightRow }) {
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
   const highlightedRows = new Set(rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []));
   if (format === "xlsx") {
@@ -2937,7 +2937,7 @@ async function exportSmartPrintSelection({ format, pageSize, title, columns = []
   const response = await fetch("/api/exports/pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-    body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows], pageSize: printPageSize(pageSize).name }),
+    body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows] }),
   });
   if (!response.ok) {
     const details = await response.json().catch(() => ({}));
