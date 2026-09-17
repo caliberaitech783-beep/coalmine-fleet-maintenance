@@ -3,9 +3,9 @@ import { elapsedLabel } from './report-metrics.mjs';
 import { requestStatusLabel } from './src/request-status.mjs';
 
 export const acceptanceTime = row => row.acceptedAt || '';
-export function acceptanceDelayAtLeast30Minutes(row) {
+export function acceptanceDelayOver30Minutes(row) {
   const delay = indiaDateTimeEpoch(acceptanceTime(row)) - indiaDateTimeEpoch(row.start || row.createdAt);
-  return Number.isFinite(delay) && delay >= 30 * 60000;
+  return Number.isFinite(delay) && delay > 30 * 60000;
 }
 export function maintenanceDelay(row, now = new Date()) {
   const accepted = indiaDateTimeEpoch(acceptanceTime(row));

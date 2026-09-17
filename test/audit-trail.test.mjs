@@ -131,7 +131,7 @@ test("administrators can delete audit entries older than N days, and the purge i
   assert.match(server, /const cutoff=new Date\(start\+86400000\);/, "the chosen date is deleted inclusively");
   assert.match(server, /housekeepingCutoff\(\{\.\.\.\(req\.body\|\|\{\}\),\.\.\.req\.query\},'Audit Trail'\)/);
   assert.match(server, /DELETE FROM audit_events WHERE occurred_at<\$1',\[cutoff\.toISOString\(\)\]/);
-  assert.match(server, /await appendAuditEvent\(req,\{\n\s+eventType:'Administration',module:'Audit Trail',action:'Delete old audit logs'/);
+  assert.match(server, /await appendAuditEvent\(req,\{\s*eventType:'Administration',module:'Audit Trail',action:'Delete old audit logs'/);
   assert.match(server, /res\.json\(\{deleted,\.\.\.window,cutoff:cutoff\.toISOString\(\)\}\)/);
   assert.match(server, /'\/api\/audit-events'\]\.includes\(req\.path\)\)return next\(\);/, "the automatic audit middleware still skips this path, hence the explicit appendAuditEvent");
   assert.match(client, /useState\("2"\), \[purging, setPurging\]/, "the dialog defaults to two days");
@@ -147,7 +147,7 @@ test("administrators can delete audit entries older than N days, and the purge i
   assert.match(client, /<PurgeWindowFields mode=\{purgeMode\}/);
   assert.match(client, /<Modal title="Delete old audit logs"/);
   assert.match(client, /Delete permanently/);
-  assert.match(client, /setPurgeOpen\(false\);\n\s+alert\([\s\S]*?\n\s+load\(\);/, "the list reloads after a purge");
+  assert.match(client, /setPurgeOpen\(false\);\s+alert\([\s\S]*?\s+load\(\);/, "the list reloads after a purge");
 });
 
 test("the Audit Trail is cleaned up automatically once a day, keeping five days unless an administrator changes it", () => {

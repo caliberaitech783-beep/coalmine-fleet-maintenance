@@ -113,7 +113,7 @@ test('acceptance is not inferred from status or closure',()=>{
   assert.equal(cell(report,'difference'),'Not recorded');
 });
 
-test('acceptance report defaults to recorded delays of at least 30 minutes, without rounding up',()=>{
+test('acceptance report defaults to recorded delays over 30 minutes, without rounding up',()=>{
   const requests=[
     {ref:'below',start:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 09:29:59'},
     {ref:'exact',start:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 09:30:00'},
@@ -130,7 +130,7 @@ test('acceptance report defaults to recorded delays of at least 30 minutes, with
     {ref:'zero',start:'2026-09-01 09:00:00',acceptedAt:'2026-09-01 09:00:00'},
   ];
   const report=build(requests).find(r=>r.title===TICKET_ACCEPTANCE_REPORT_TITLE);
-  assert.deepEqual(report.rows.map(r=>r.ref),['exact','above','overnight','utc','fallback']);
+  assert.deepEqual(report.rows.map(r=>r.ref),['above','fallback']);
   assert.equal(cell(report,'difference'),'30m');
   const fallback=report.rows.find(r=>r.ref==='fallback');
   assert.equal(report.dateValue(fallback),fallback.createdAt);

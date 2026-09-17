@@ -89,7 +89,7 @@ test('availability uses the exact overnight interval across a month boundary and
   assert.equal(cell(closed,'productive'),12);assert.equal(cell(closed,'breakdown'),'11.00');assert.equal(cell(closed,'available'),'1.00');
 });
 
-test('selected WhatsApp acceptance report includes only 30-minute delays within the permitted site and schedule window',()=>{
+test('selected WhatsApp acceptance report includes only delays over 30 minutes within the permitted site and schedule window',()=>{
   const source={requests:[
     request('exact',{acceptedAt:'2026-09-14 20:30:00'}),
     request('above',{acceptedAt:'2026-09-14 21:00:00'}),
@@ -105,9 +105,9 @@ test('selected WhatsApp acceptance report includes only 30-minute delays within 
   const report=tables.find(table=>table.title===TICKET_ACCEPTANCE_REPORT_TITLE);
   const refIndex=report.columns.findIndex(column=>column.key==='ref');
   const differenceIndex=report.columns.findIndex(column=>column.key==='difference');
-  assert.deepEqual(report.rows.map(row=>row[refIndex]),['exact','above','earlier-opening']);
-  assert.deepEqual(report.rows.map(row=>row[differenceIndex]),['30m','1h 0m','1h 0m']);
-  assert.match(report.description,/30 minutes or more/);
+  assert.deepEqual(report.rows.map(row=>row[refIndex]),['above','earlier-opening']);
+  assert.deepEqual(report.rows.map(row=>row[differenceIndex]),['1h 0m','1h 0m']);
+  assert.match(report.description,/over 30 minutes/);
   const withoutSelection=buildSiteFleetReportTables({source,site:'Sasti OB',window,reportTitles:['Total Request Submitted Report']});
   assert.ok(!withoutSelection.some(table=>table.title===TICKET_ACCEPTANCE_REPORT_TITLE));
   assert.equal(withoutSelection.find(table=>table.title==='Total Request Submitted Report').rows.length,6);
