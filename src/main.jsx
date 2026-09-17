@@ -1867,6 +1867,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <label><span>From date</span><input type="date" aria-label="Site-wise BD from date" value={breakdownSummaryStartKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("from", event.target.value)} /></label>
             <label><span>To date</span><input type="date" aria-label="Site-wise BD to date" value={breakdownSummaryEndKey} max={todayKey} onChange={(event) => updateBreakdownSummaryRange("to", event.target.value)} /></label>
             <button type="button" onClick={resetBreakdownSummaryRange} disabled={breakdownSummaryIsToday && !breakdownSummaryManual}>Reset dates</button>
+            <small hidden>{breakdownSummaryFrom ? "BD movement includes both dates." : "All time · Select a date to filter."} {availabilityDate ? `Availability as of ${availabilityDateLabel}` : dashboardReconnecting ? "Availability: last checked data" : equipmentLoaded ? `Availability is live · ${availabilityDateLabel}` : "Availability pending"}.</small>
           </div>
           {equipmentLoaded ? maintenanceAvailabilityTab === "breakdown" ? <div className="mine-breakdown-movement-view">
             <div className="mine-breakdown-movement-kpis">
