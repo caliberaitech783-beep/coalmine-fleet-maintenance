@@ -2102,7 +2102,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       ...(showReadOnlyAction ? [["requestAction", "Actions"]] : []), ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
       ...(showReason ? [["complaint", "Breakdown reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
-      ...(showCompletionDetails ? [["maintenanceWork", "Work completion action taken"], ["closingMeter", "Closing HMR/KMR"]] : []),
+      ...(showCompletionDetails ? [["maintenanceWork", "Work completion action taken"], ["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]] : []),
       ...(showBreakdownDays ? [["breakdownDays", "Days of breakdown"]] : []),
       ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["hours", showTurnaroundTime ? "Turn around time (TAT)" : "Downtime"],
       ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ...(showAudio ? [["audio", "Audio clips"]] : []), ["owner", "Responsibility"], ...(onApproveIdeal || onCancelIdeal ? [["idealAction", "Action"]] : []),
@@ -2123,7 +2123,8 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         if (key === "status") return requestStatusLabel(row);
         if (key === "equipment") return normalizeEquipmentGroup(row.equipmentGroup) || row.equipment;
         if (key === "createdBy") return row.owner || row.requesterLogin;
-        if (key === "closingMeter") return requestMeterReadingLabel(row, "closing");
+        if (key === "closingHmr") return requestMeterReadings(row, "closing").HMR || "—";
+        if (key === "closingKmr") return requestMeterReadings(row, "closing").KMR || "—";
         if (key === "start") return formatTwelveHourDateTime(row.start);
         if (key === "audio") return row.complaintAudioAvailable || row.maintenanceAudioAvailable ? "Available" : "Not available";
         return row[key];
@@ -2176,7 +2177,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 {showCreatedBy && <td>{r.owner || r.requesterLogin || "—"}</td>}
                 {showClosedBy && <td>{r.closedBy || "—"}</td>}
                 {showAudio && <td>{r.chassis || "—"}</td>}
-                {showCompletionDetails && <><td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.maintenanceWork || "—"} language={r.maintenanceWorkLanguage} /></div></td><td>{requestMeterReadingLabel(r, "closing")}</td></>}
+                {showCompletionDetails && <><td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={r.maintenanceWork || "—"} language={r.maintenanceWorkLanguage} /></div></td><td>{requestMeterReadings(r, "closing").HMR || "—"}</td><td>{requestMeterReadings(r, "closing").KMR || "—"}</td></>}
                 {showBreakdownDays && <td><RequestTimelineButton reference={r.ref} token={authToken} Dialog={Modal} label={`${r.breakdownDays} ${r.breakdownDays === 1 ? "day" : "days"}`} /></td>}
                 <td>{r.category}</td>
                 <td>{r.delayedReason || "—"}</td>
@@ -8182,7 +8183,8 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     ...(showMeterData ? [
       {key: "openingKmr", label: "Opening KMR", value: (row) => requestMeterReadings(row, "opening").KMR || "—"},
       {key: "openingHmr", label: "Opening HMR", value: (row) => requestMeterReadings(row, "opening").HMR || "—"},
-      {key: "closingMeter", label: "Closing KMR/HMR", value: (row) => requestMeterReadingLabel(row, "closing")},
+      {key: "closingHmr", label: "Closing HMR", value: (row) => requestMeterReadings(row, "closing").HMR || "—"},
+      {key: "closingKmr", label: "Closing KMR", value: (row) => requestMeterReadings(row, "closing").KMR || "—"},
     ] : []),
     ...(showTripCard ? [{key: "tripCard", label: "Trip card image", value: (row) => row.firstTripCardUploaded ? "Uploaded" : "Not uploaded"}] : []),
     ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudioAvailable ? "Available" : "Not available"}] : []),
@@ -8237,7 +8239,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}{workflowHeader("category", "Breakdown type")}
           {workflowHeader("delayedReason", "Delayed reason")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
-          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingMeter", "Closing KMR/HMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
@@ -8265,7 +8267,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               <td><RequestTimelineButton reference={row.ref} token={authToken} Dialog={Modal} label={`${days} ${days === 1 ? "day" : "days"}`} /></td>
               <td><MaintenanceRemarks remarks={row.dailyRemarks} category={row.category} /></td>
               {showWorkCompletion && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.maintenanceWork} language={row.maintenanceWorkLanguage} /></div></td>}
-              {showMeterData && <><td><b>{requestMeterReadings(row, "opening").KMR || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadings(row, "opening").HMR || "—"}</b></td><td><b>{requestMeterReadingLabel(row, "closing")}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
+              {showMeterData && <><td><b>{requestMeterReadings(row, "opening").KMR || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadings(row, "opening").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").KMR || "—"}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
               {showTripCard && <td><TripCardCell request={row} /></td>}
               {showComplaintAudio && <td className="maintenance-complaint-audio">
                 {row.complaintAudioAvailable ? <ProtectedAudio url={`/api/requests/${encodeURIComponent(row.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /> : "—"}

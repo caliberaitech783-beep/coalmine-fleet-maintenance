@@ -7,8 +7,11 @@ test('all manager closed histories enable completion details without changing ac
   const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
   assert.match(source, /<BreakdownTable rows=\{visibleDetailRows\}[^>]*showCompletionDetails=\{queueTab==="history"\}/);
   assert.match(source, /showCompletionDetails = false/);
-  assert.ok(source.includes('["maintenanceWork", "Work completion action taken"], ["closingMeter", "Closing HMR/KMR"]'));
-  assert.ok(source.includes('if (key === "closingMeter") return requestMeterReadingLabel(row, "closing")'));
+  assert.ok(source.includes('["maintenanceWork", "Work completion action taken"], ["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]'));
+  for (const [key, type] of [['closingHmr', 'HMR'], ['closingKmr', 'KMR']]) {
+    assert.ok(source.includes(`if (key === "${key}") return requestMeterReadings(row, "closing").${type}`));
+    assert.ok(source.includes(`workflowHeader("${key}", "Closing ${type}")`));
+  }
   assert.ok(source.includes('text={r.maintenanceWork || "—"}'));
   assert.equal(requestMeterReadingLabel({closingMeterReadings: {HMR: '0', KMR: '42000'}}, 'closing'), 'HMR 0 · KMR 42000');
 });
