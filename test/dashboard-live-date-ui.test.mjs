@@ -160,7 +160,7 @@ test("every dashboard date filter starts on today, availability follows the To d
   assert.ok(text(byLabel(tree, "Site-wise breakdown opening, inward, outward and balance")).includes(`Availability count impact${todayLabel}`));
   assert.ok(!findAll(tree, (node) => node.props["aria-label"] === "Availability count date").length, "no separate availability date input");
   assert.equal(button(tree, "Reset dates").props.disabled, true);
-  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 0 in, 0 out, 2 balance; .*1 on road, 1 off road and 1 idle/);
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 0 in, 0 out, 1 balance; .*1 on road, 1 off road and 1 idle/);
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-08");
@@ -741,7 +741,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-08"}});
   tree = view.render();
   const site = byClass(tree, "mine-breakdown-site-row");
-  assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
+  assert.match(site.props["aria-label"], /0 open, 2 in, 0 out, 1 balance/);
   assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
   assert.ok(!text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of"), "redundant filter note is removed; table caption retains the date");
   assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
@@ -769,12 +769,12 @@ test("site-wise range allows one day, keeps dates ordered, rejects future dates 
   tree = setDashboardDate(view, "2026-09-09");
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
-  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 2 balance/);
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 1 balance/);
   byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-01"}});
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-01");
   assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-01");
-  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 2 in, 0 out, 2 balance/);
+  assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 2 in, 0 out, 1 balance/);
   byLabel(tree, "Site-wise BD from date").props.onChange({target: {value: "2026-09-09"}});
   tree = view.render();
   assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "2026-09-09");
@@ -802,7 +802,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     assert.equal(byLabel(tree, "Site-wise BD to date").props.value, todayKey);
     assert.equal(text(byLabel(tree, "Site-wise BD table period")), todayCaption);
     assert.equal(button(tree, "Reset dates").props.disabled, true);
-    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 0 in, 0 out, 2 balance/);
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 0 in, 0 out, 1 balance/);
     const exported = findAll(tree, node => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, displayDates.formatDisplayDateRange(todayKey, todayKey));
   };
@@ -811,7 +811,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     assert.equal(byLabel(tree, "Site-wise BD to date").props.value, "");
     assert.equal(text(byLabel(tree, "Site-wise BD table period")), liveAvailabilityCaption);
     assert.equal(button(tree, "Reset dates").props.disabled, false);
-    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 4 in, 2 out, 2 balance/);
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /0 open, 4 in, 2 out, 1 balance/);
     const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
     assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [4, 2, 1, 1]);
     for (const card of cards) {
@@ -832,7 +832,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     byLabel(tree, "Site-wise BD to date").props.onChange({target: {value: "2026-09-09"}});
     tree = view.render(rows);
     assert.equal(byLabel(tree, "Site-wise BD from date").props.value, "2026-09-09");
-    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 2 balance/);
+    assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 1 in, 1 out, 1 balance/);
     byLabel(tree, `Site-wise BD ${clear} date`).props.onChange({target: {value: ""}});
     tree = view.render(rows);
     assertAllTime();
@@ -875,7 +875,7 @@ test("throughput region and dependent site filters scope cards, types, tables, e
       const totals = movement.breakdownMovementForRange(selectedRows, day, day);
       const cards = findAll(byClass(tree, "mine-breakdown-movement-kpis"), node => node.props["data-dashboard-list"]);
       const idle = selectedRows.filter(row => movement.matchesBreakdownMovement(row, day, day, "idle")).length;
-      assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [totals.open + totals.incoming, totals.outgoing, totals.balance - idle, idle]);
+      assert.deepEqual(cards.map(card => Number(text(findAll(card, node => node.type === "strong")[0]))), [totals.open + totals.incoming, totals.outgoing, totals.balance, idle]);
       for (const card of cards) {
         activate(card); tree = view.render(rows);
         assert.equal(detailView(tree).rows.length, Number(text(findAll(card, node => node.type === "strong")[0])));
