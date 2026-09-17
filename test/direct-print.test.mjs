@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {generateKeyPairSync,createVerify} from 'node:crypto';
-import {normalizePem,printHelperSigning,signPrintRequest,PRINT_HELPER_MAX_REQUEST_LENGTH} from '../print-helper-signing.mjs';
+import {X509Certificate} from 'node:crypto';
+import {normalizePem,printHelperSigning,signPrintRequest,PRINT_HELPER_MAX_REQUEST_LENGTH,resolvePrintHelperSigning,certificateSummary,generatePrintHelperSigning} from '../print-helper-signing.mjs';
 import {directPrintPaper,directPrintOptions,blobToBase64,rememberedPrinter,rememberPrinter,printHelperAvailable,printHelperExpected,launchPrintHelper} from '../src/direct-print.mjs';
 import {PRINT_PAGE_SIZES} from '../src/smart-print.mjs';
 
@@ -67,7 +68,7 @@ test('print requests are signed with SHA512-RSA and the key accepts the formats 
 test('the server only ever hands out the public certificate and signatures, to signed-in users',()=>{
   assert.match(server,/app\.get\('\/api\/print-helper\/certificate',requireSession,/);
   assert.match(server,/app\.post\('\/api\/print-helper\/sign',requireSession,/);
-  assert.match(server,/if\(!configured\)return res\.status\(204\)\.end\(\);/,'inert until the signing settings exist');
+  assert.match(server,/if\(!configured\)return res\.status\(204\)\.end\(\);/,'inert until a certificate exists');
   assert.match(server,/res\.json\(\{signature:signPrintRequest\(req\.body\?\.request,privateKey\)\}\)/);
   assert.doesNotMatch(server,/res\.(?:json|send)\([^)]*privateKey[^)]*\)(?!\}\))/,'the private key is never sent');
   assert.doesNotMatch(client,/PRIVATE KEY|privateKey/,'the browser never sees the key');
@@ -119,4 +120,49 @@ test('the helper is started through its qz: link in a hidden frame, leaving the 
   assert.equal(added.length,1);
   assert.deepEqual([added[0].tag,added[0].src,added[0].style.display],['iframe','qz:launch','none']);
   assert.equal(launchPrintHelper({createElement(){throw new Error('no dom')}}),false);
+});
+
+test('the application creates and keeps its own signing pair, so nobody handles a private key',async()=>{
+  const created=await generatePrintHelperSigning();
+  const certificate=new X509Certificate(created.certificate);
+  assert.match(certificate.subject,/CN=Nerve Center Smart Print/);
+  assert.equal(certificate.ca,true,'a CA-style self-signed certificate, as QZ Tray expects for its override');
+  assert.ok(new Date(certificate.validTo).getFullYear()-new Date().getFullYear()>=19,'valid for about twenty years');
+  const signature=signPrintRequest('request-hash',created.privateKey);
+  assert.equal(createVerify('RSA-SHA512').update('request-hash').verify(certificate.publicKey,signature,'base64'),true,'requests signed with the key verify against the certificate');
+
+  const stored=resolvePrintHelperSigning({env:{},stored:created});
+  assert.deepEqual([stored.configured,stored.source],[true,'database']);
+  assert.deepEqual(resolvePrintHelperSigning({env:{},stored:{}}),{certificate:'',privateKey:'',configured:false,source:null});
+  assert.equal(resolvePrintHelperSigning({env:{QZ_SIGNING_CERTIFICATE:publicKey,QZ_SIGNING_PRIVATE_KEY:privateKey},stored:created}).source,'environment','explicit server settings win');
+
+  const summary=certificateSummary(created.certificate);
+  assert.match(summary.subject,/Nerve Center Smart Print/);
+  assert.match(summary.fingerprint,/^[0-9A-F:]+$/);
+  assert.doesNotMatch(JSON.stringify(summary),/PRIVATE|BEGIN/,'the summary holds no key material');
+  assert.deepEqual(certificateSummary('nonsense'),{subject:'',validTo:'',fingerprint:''});
+  await assert.rejects(generatePrintHelperSigning({generate:async()=>({cert:'',private:''})}),/could not be created/);
+});
+
+test('the Print helper page is for administrators; the key is created once and never leaves the server',()=>{
+  assert.match(server,/app\.get\('\/api\/print-helper\/setup',requireSuper,requireAdministrator,/);
+  assert.match(server,/app\.post\('\/api\/print-helper\/setup',requireSuper,requireAdministrator,/);
+  assert.match(server,/app\.get\('\/api\/print-helper\/setup\/override\.crt',requireSuper,requireAdministrator,/);
+  assert.match(server,/if\(existing\.configured\)return res\.status\(409\)/,'an existing certificate is never replaced');
+  assert.match(server,/res\.set\('Content-Disposition','attachment; filename="override\.crt"'\);/);
+  const view=server.slice(server.indexOf('const printHelperSetupView='),server.indexOf("app.get('/api/print-helper/certificate'"));
+  assert.doesNotMatch(view,/privateKey/,'the setup view is built without the key');
+  const routes=server.slice(server.indexOf("const PRINT_HELPER_SETTING_KEY="),server.indexOf("// Audit Trail housekeeping"));
+  assert.ok(routes.length>1000,'the print helper routes were found');
+  assert.doesNotMatch(routes,/\.(?:json|send)\((?:created|printHelperStoredCache|existing)\)/,'stored signing material is never returned as-is');
+  assert.deepEqual([...routes.matchAll(/\.(?:json|send)\(([^;]*)\);?/g)].map((match)=>match[1]).filter((sent)=>/privateKey/.test(sent)&&!/signPrintRequest\(/.test(sent)),[],'the key is only ever used to sign');
+  assert.match(main,/\["People by designation", User\],\n  \["Print helper", Printer\],/);
+  assert.match(main,/if\(name==="Print helper"\)return isAdministrator;/);
+  assert.match(main,/active === "Print helper" \? \(\n\s+<PrintHelperSetupPage session=\{session\} \/>/);
+  const page=read('../src/print-helper-setup.jsx');
+  assert.match(page,/fetch\("\/api\/print-helper\/setup", \{ method: "POST"/);
+  assert.match(page,/link\.download = "override\.crt";/);
+  assert.match(page,/C:\\Program Files\\QZ Tray/);
+  assert.match(page,/Remember this decision/);
+  assert.doesNotMatch(page,/privateKey|PRIVATE KEY/);
 });

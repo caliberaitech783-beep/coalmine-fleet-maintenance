@@ -33,6 +33,7 @@ import UserProfile from "./user-profile.jsx";
 import BackupAdministration from "./backup-administration.jsx";
 import VehicleTransferWorkflow from "./vehicle-transfer-workflow.jsx";
 import RequestCorrections from "./request-corrections.jsx";
+import PrintHelperSetupPage from "./print-helper-setup.jsx";
 import {REQUEST_CORRECTION_MANAGER_ROLES} from "../request-correction-policy.mjs";
 import {RemoteAssistanceAction, RemoteAssistanceAgent} from "./remote-assistance.jsx";
 import HelpTraining from "./help-training.jsx";
@@ -313,6 +314,7 @@ const adminNav = [
   ["Hierarchy levels", Network],
   ["Reporting structure", Building2],
   ["People by designation", User],
+  ["Print helper", Printer],
   ["Request corrections", Pencil],
   ["Backup", HardDrive],
   ["Export Backup", Download],
@@ -9668,6 +9670,7 @@ function App() {
     if(name==="User Sessions")return isAdministrator;
     if(backupAdminPages.has(name))return isAdministrator;
     if(name==="Audit Trail")return isAdministrator;
+    if(name==="Print helper")return isAdministrator;
     if(name==="Admin locks")return isAdministrator&&adminPermissions.adminLevel==="Super Admin";
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
     if(name==="Correction approvals")return correctionApprovalAccess;
@@ -10091,6 +10094,8 @@ function App() {
             <WhatsAppAlertHistory />
               ) : active === "Reports" ? (
                 <ReportsPage requests={requests} activeReportCategory={activeReportCategory} setActiveReportCategory={setActiveReportCategory} permissions={activeNavigationPermissions} session={session} />
+              ) : active === "Print helper" ? (
+                <PrintHelperSetupPage session={session} />
               ) : active === "Audit Trail" ? (
                 <AuditTrailPage session={session} />
               ) : operationalSession ? (

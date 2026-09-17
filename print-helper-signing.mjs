@@ -3,7 +3,7 @@
 // signature against the certificate the app presents (and that the PC trusts).
 // Both values come from the environment and are never sent to the browser,
 // except the public certificate, which is public by design.
-import {createSign} from 'node:crypto';
+import {createSign,X509Certificate} from 'node:crypto';
 
 export const PRINT_HELPER_MAX_REQUEST_LENGTH=2048;
 
@@ -27,6 +27,41 @@ export function printHelperSigning(env=process.env){
   const certificate=normalizePem(env.QZ_SIGNING_CERTIFICATE);
   const privateKey=normalizePem(env.QZ_SIGNING_PRIVATE_KEY);
   return {certificate,privateKey,configured:Boolean(certificate&&privateKey)};
+}
+
+/**
+ * Signing material in use: the environment settings win; otherwise the pair the application created for itself
+ * and keeps in its database. `source` tells which one, or null when printing is still unsigned.
+ */
+export function resolvePrintHelperSigning({env=process.env,stored={}}={}){
+  const fromEnvironment=printHelperSigning(env);
+  if(fromEnvironment.configured)return {...fromEnvironment,source:'environment'};
+  const certificate=normalizePem(stored?.certificate),privateKey=normalizePem(stored?.privateKey);
+  const configured=Boolean(certificate&&privateKey);
+  return {certificate,privateKey,configured,source:configured?'database':null};
+}
+
+/** Public facts about a certificate, for the setup page. Never includes key material. */
+export function certificateSummary(certificate){
+  try{
+    const parsed=new X509Certificate(normalizePem(certificate));
+    return {subject:parsed.subject.replace(/\n/g,', '),validTo:new Date(parsed.validTo).toISOString(),fingerprint:parsed.fingerprint256};
+  }catch{return {subject:'',validTo:'',fingerprint:''}}
+}
+
+/**
+ * Creates the application's own signing pair: RSA-2048 and a self-signed CA-style certificate valid for 20 years,
+ * the same shape QZ Tray's guide produces with OpenSSL, so the helper accepts it as its trusted override.
+ */
+export async function generatePrintHelperSigning({now=new Date(),generate}={}){
+  const create=generate||(await import('selfsigned')).default.generate;
+  const pems=await create([{name:'commonName',value:'Nerve Center Smart Print'},{name:'organizationName',value:'Caliber Mining and Logistics Limited'}],{
+    keySize:2048,algorithm:'sha256',notBeforeDate:new Date(now.getTime()-86400000),notAfterDate:new Date(now.getTime()+20*365*86400000),
+    extensions:[{name:'basicConstraints',cA:true,critical:true},{name:'keyUsage',digitalSignature:true,keyCertSign:true,critical:true}],
+  });
+  const certificate=normalizePem(pems.cert),privateKey=normalizePem(pems.private);
+  if(!certificate||!privateKey)throw new Error('The certificate could not be created.');
+  return {certificate,privateKey};
 }
 
 /** Base64 SHA512-with-RSA signature of the helper's request string, as QZ Tray expects. */

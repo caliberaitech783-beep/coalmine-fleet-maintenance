@@ -10,7 +10,7 @@ import os from 'node:os';
 import {Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createHash,randomUUID} from 'node:crypto';
-import {printHelperSigning,signPrintRequest} from './print-helper-signing.mjs';
+import {certificateSummary,generatePrintHelperSigning,resolvePrintHelperSigning,signPrintRequest} from './print-helper-signing.mjs';
 import {createSessionStore} from './auth-session.mjs';
 import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
 import {initializeLoginHistory,registerLoginHistoryRoutes} from './user-login-history.mjs';
@@ -1158,20 +1158,70 @@ app.get('/api/app-version',(_req,res)=>{
 // the app presents its certificate and signs each request. Both answer 204
 // until QZ_SIGNING_CERTIFICATE and QZ_SIGNING_PRIVATE_KEY are configured; the
 // private key never leaves the server.
-app.get('/api/print-helper/certificate',requireSession,(req,res)=>{
-  req.audit=false;
-  const {certificate,configured}=printHelperSigning();
-  res.set('Cache-Control','private, no-store');
-  if(!configured)return res.status(204).end();
-  res.type('text/plain').send(certificate);
+// The signing pair comes from the environment settings or, by default, from the pair the application creates
+// for itself on the Print helper page and keeps in app_settings. It is cached; the key is never sent anywhere.
+const PRINT_HELPER_SETTING_KEY='print_helper_signing';
+let printHelperStoredCache=null;
+async function currentPrintHelperSigning(){
+  if(!printHelperStoredCache){
+    const {rows}=await pool.query('SELECT setting_value,updated_at FROM app_settings WHERE setting_key=$1',[PRINT_HELPER_SETTING_KEY]);
+    printHelperStoredCache={...(rows[0]?.setting_value||{}),createdAt:rows[0]?.updated_at||null};
+  }
+  return {...resolvePrintHelperSigning({stored:printHelperStoredCache}),createdAt:printHelperStoredCache.createdAt,createdBy:String(printHelperStoredCache.createdBy||'')};
+}
+const printHelperSetupView=(signing)=>({configured:signing.configured,source:signing.source,
+  ...(signing.configured?certificateSummary(signing.certificate):{subject:'',validTo:'',fingerprint:''}),
+  createdAt:signing.source==='database'?signing.createdAt:null,createdBy:signing.source==='database'?signing.createdBy:''});
+
+app.get('/api/print-helper/certificate',requireSession,async(req,res,next)=>{
+  try{
+    req.audit=false;
+    const {certificate,configured}=await currentPrintHelperSigning();
+    res.set('Cache-Control','private, no-store');
+    if(!configured)return res.status(204).end();
+    res.type('text/plain').send(certificate);
+  }catch(error){next(error)}
 });
-app.post('/api/print-helper/sign',requireSession,(req,res)=>{
-  req.audit=false;
-  const {privateKey,configured}=printHelperSigning();
-  res.set('Cache-Control','private, no-store');
-  if(!configured)return res.status(204).end();
-  try{res.json({signature:signPrintRequest(req.body?.request,privateKey)})}
-  catch(error){res.status(error.status||500).json({error:error.status?error.message:'Could not sign the print request.'})}
+app.post('/api/print-helper/sign',requireSession,async(req,res,next)=>{
+  try{
+    req.audit=false;
+    const {privateKey,configured}=await currentPrintHelperSigning();
+    res.set('Cache-Control','private, no-store');
+    if(!configured)return res.status(204).end();
+    try{res.json({signature:signPrintRequest(req.body?.request,privateKey)})}
+    catch(error){res.status(error.status||500).json({error:error.status?error.message:'Could not sign the print request.'})}
+  }catch(error){next(error)}
+});
+// Print helper setup page (Admin and Super Admin): status, one-time certificate creation, and the public certificate file.
+app.get('/api/print-helper/setup',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{res.set('Cache-Control','private, no-store');res.json(printHelperSetupView(await currentPrintHelperSigning()))}catch(error){next(error)}
+});
+app.post('/api/print-helper/setup',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const existing=await currentPrintHelperSigning();
+    // Replacing a certificate would stop silent printing on every PC that already trusts the old one.
+    if(existing.configured)return res.status(409).json({error:'A certificate already exists. Every PC that prints already trusts it, so it is not replaced.'});
+    const created=await generatePrintHelperSigning();
+    const createdBy=String(req.session?.login||'');
+    const {rows}=await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+      ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW() RETURNING updated_at`,
+      [PRINT_HELPER_SETTING_KEY,JSON.stringify({...created,createdBy})]);
+    printHelperStoredCache={...created,createdBy,createdAt:rows[0]?.updated_at||new Date()};
+    const view=printHelperSetupView(await currentPrintHelperSigning());
+    req.audit={eventType:'Configuration',module:'Print helper',action:'Create print helper certificate',targetType:'Certificate',targetReference:view.subject,
+      reason:`Valid until ${view.validTo}`,changedFields:[{field:'Certificate fingerprint',before:'',after:view.fingerprint}]};
+    res.set('Cache-Control','private, no-store');
+    res.status(201).json(view);
+  }catch(error){next(error)}
+});
+app.get('/api/print-helper/setup/override.crt',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const {certificate,configured}=await currentPrintHelperSigning();
+    if(!configured)return res.status(404).json({error:'Create the certificate first.'});
+    res.set('Cache-Control','private, no-store');
+    res.set('Content-Disposition','attachment; filename="override.crt"');
+    res.type('application/x-x509-ca-cert').send(certificate);
+  }catch(error){next(error)}
 });
 
 // Audit Trail housekeeping for Admin and Super Admin: permanently delete the
