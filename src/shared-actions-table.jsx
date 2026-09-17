@@ -1,3 +1,4 @@
+import { groupReportRows, reportSite, reportAsset } from "./site-report.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
@@ -13,7 +14,7 @@ import "./sortable-table.css";
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
 const sharedTablePageSize = () => typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0;
 
-export default function SharedActionsTable({ closedTimeAfterStarted = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, ...tableProps }) {
+export default function SharedActionsTable({ closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -40,10 +41,10 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, chi
     columns.push(...verification);
   }
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
 }
 
-function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }) {
+function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
   const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}`;
   const [visible, setVisibleState] = useState(() => restoreColumnOrder(columnStorageKey, columns.map((column) => column.key)));
@@ -97,9 +98,12 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const localFilters = Object.fromEntries(filterableColumns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]]));
   const bodySelections = new Map(sections.filter((section) => section.type === "tbody").map((section) => {
     const sectionRows = tableElements(section.props.children), actual = sectionRows.filter(isDataRow);
-    return [section, actual.length ? selectTableRows(actual, columns, localFilters, sort) : sectionRows];
+    const selected = actual.length ? selectTableRows(actual, columns, localFilters, sort) : sectionRows;
+    return [section, groupBySite && actual.length ? groupReportRows(selected, reportSite, reportAsset, dataRows.map(reportSite)).flatMap(group => group.rows) : selected];
   }));
   const selectedRows = [...bodySelections.values()].flat().filter(isDataRow);
+  const siteSummary = groupBySite ? groupReportRows(selectedRows, reportSite, reportAsset) : [];
+  const reportGrouping = groupBySite ? { site: reportSite, asset: reportAsset } : undefined;
   const filterSignature = JSON.stringify(effectiveFilters);
   useEffect(() => {
     if (pageSize) setVisibleRowLimit(pageSize);
@@ -144,7 +148,7 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
   const reportTitle = printTitle || exportTitle || "";
   const canPrintReport = Boolean(printReport && smartPrintData);
   const printModelRef = useRef(null);
-  printModelRef.current = { title: reportTitle, columns: smartPrintData?.columns || [], rows: smartPrintData?.rows || [] };
+  printModelRef.current = { reportGrouping, title: reportTitle, columns: smartPrintData?.columns || [], rows: smartPrintData?.rows || [] };
   const printCurrentView = () => { if (canPrintReport) printReport(printModelRef.current); };
   const currentView = () => ({ visible, filters: effectiveFilters, sort: sort.key ? sort : externalSort || sort, dateRange: dateControl?.value || "" });
   const applySavedView = (view) => {
@@ -188,20 +192,21 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
       <span className="shared-table-record-count" role="status">{selectedRows.length} of {dataRows.length} records</span>
       {printData && dateRangeControl}
-      {printData && <ExportMenu printOnly title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
+      {printData && <ExportMenu printOnly reportGrouping={reportGrouping} title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
       <button type="button" className="mobile-columns-trigger" onClick={() => setDialog("columns")} aria-label="Choose visible table columns"><span>Columns</span></button>
       <TableLayoutSelect store={layoutStore} visibleKeys={visible} onSelect={setVisible} />
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} onSaveReport={SavedReports ? () => setSavedReportDialog("save") : undefined} onSavedReports={SavedReports ? () => setSavedReportDialog("saved") : undefined} />
       {!printData && dateRangeControl}
-      {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
+      {exportData && <ExportMenu reportGrouping={reportGrouping} title={exportTitle} columns={exportData.columns} rows={exportData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
       {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} layoutStore={layoutStore} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
       {dialog === "sort" && <SortDialog columns={columns} sort={sort.key ? sort : externalSort || sort} onApply={applySort} onClose={() => setDialog("")} />}
       {SavedReports && <SavedReports title={reportTitle} tableKey={tableProps.className || ""} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentView} onApply={applySavedView} canPrint={canPrintReport} onPrint={printCurrentView} />}
       <FilterDialog columns={filterColumns} rows={[...dataRows, ...filterRows]} filters={effectiveFilters} onFilterChange={updateFilter} onClearFilters={clearFilters} open={dialog === "filter"} onOpenChange={(open) => setDialog(open ? "filter" : "")} hideTrigger dialogMode />
     </div>
   );
+  const combinedToolbar = <>{actionsToolbar}{groupBySite && <div className="site-report-summary" aria-label="Site-wise counts"><b>Site-wise summary · {siteSummary.length} sites</b><div>{siteSummary.map(group => <span key={group.label}><strong>{group.label}</strong><span>{group.assets} assets · {group.rows.length} records</span></span>)}{!siteSummary.length && <span>No matching records</span>}</div></div>}</>;
   return <>
-    {toolbarTarget ? createPortal(actionsToolbar, toolbarTarget) : toolbarPortal ? null : actionsToolbar}
+    {toolbarTarget ? createPortal(combinedToolbar, toolbarTarget) : toolbarPortal ? null : combinedToolbar}
     <table {...tableProps}>{sections.map((section) => {
       if (showRowNumbers && section.type === "colgroup") return React.cloneElement(section, {}, <col key="row-number" />, section.props.children);
       if (!["thead", "tbody", "tfoot"].includes(section.type)) return section;
@@ -220,7 +225,12 @@ function TableView({ sections, columns, Menu, ColumnsDialog, SortDialog, FilterD
         if (section.type === "thead") return position === 0 ? React.cloneElement(projected, {},
           <th key="row-number" className="table-serial-header" scope="col" rowSpan={sectionRows.length > 1 ? sectionRows.length : undefined}>{SERIAL_COLUMN_LABEL}</th>, cells) : projected;
         if (!isDataRow(row)) return React.cloneElement(projected, {}, cells.map((cell) => React.cloneElement(cell, { colSpan: Math.max(1, indices.length + 1) })));
-        return React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
+        const numbered = React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
+        if (groupBySite && section.type === "tbody" && (position === 0 || reportSite(sectionRows[position - 1]) !== reportSite(row))) {
+          const group = siteSummary.find(item => item.label === reportSite(row));
+          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{group.label}<span>{group.assets} assets · {group.rows.length} records</span></th></tr>{numbered}</React.Fragment>;
+        }
+        return numbered;
       }));
     })}</table>
     {pageSize > 0 && selectedRows.length > pageSize && <div className="mobile-table-window-status" role="status">

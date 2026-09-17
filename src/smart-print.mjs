@@ -40,7 +40,7 @@ function validPrintLayouts(value) {
     .map(item=>({...item,name:String(item.name||`Layout ${item.number}`).trim()||`Layout ${item.number}`})):[];
 }
 
-export function openSmartPrint({title,columns=[],rows=[],highlightRow,onPrint,formatCell=value=>String(value??'')}) {
+export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,formatCell=value=>String(value??'')}) {
   const options=printColumnOptions(columns);
   let selected=options.map(option=>option.id),layouts=[],storage,key;
   let storageError='';
@@ -76,11 +76,11 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,onPrint,fo
   button('Cancel',close,footer);
   const printSelection=(ids,reportTitle=title)=>{
     const chosen=selectedPrintColumns(options,ids);if(!chosen.length)return;
-    close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow});
+    close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping});
   };
   const printButton=button('Print current selection',()=>{
     const chosen=selectedPrintColumns(options,selected);if(!chosen.length)return;
-    close();onPrint({title,columns:chosen,rows,highlightRow});
+    close();onPrint({title,columns:chosen,rows,highlightRow,reportGrouping});
   },footer,'primary');
   const printSavedButton=button('Print saved layout',()=>{
     const layout=layouts.find(item=>String(item.number)===layoutSelect.value);

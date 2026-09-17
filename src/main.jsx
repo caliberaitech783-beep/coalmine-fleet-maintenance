@@ -1,3 +1,4 @@
+import { siteReportHtml } from "./site-report.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint } from "./smart-print.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
@@ -2830,12 +2831,13 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
     { name: "xl/worksheets/sheet1.xml", content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>` },
   ]);
 }
-function printTableReport({ title, columns = [], rows = [], highlightRow }) {
+function printTableReport({ title, columns = [], rows = [], highlightRow, reportGrouping }) {
   recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records`});
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
   const serial = withSerialColumn(columns, exportRows);
   const headings = serial.columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
   const body = serial.rows.length ? serial.rows.map((row, index) => `<tr${highlightRow?.(rows[index]) ? ' class="highlight-row"' : ""}>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${serial.columns.length}">No records available</td></tr>`;
+  const groupedReport = reportGrouping ? siteReportHtml({ rows, columns: serial.columns, cells: serial.rows, grouping: reportGrouping, escape: escapeExportHtml }) : "";
   const frame = document.createElement("iframe");
   frame.title = `${title} print frame`;
   frame.style.position = "fixed";
@@ -2853,7 +2855,7 @@ function printTableReport({ title, columns = [], rows = [], highlightRow }) {
     return;
   }
   printDocument.open();
-  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{@page{size:A4 landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p><table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table></body></html>`);
+  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}.site-print-table{margin:16px 0;table-layout:fixed}.site-print-table td{overflow-wrap:anywhere;white-space:pre-wrap}.site-print-table tr{break-inside:avoid}.site-print-title th{background:#eee8f6;color:#522e90;font-size:12px;text-transform:none}.site-print-summary{margin:14px 0 22px}.site-print-summary th{background:#eee8f6;color:#522e90}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{@page{size:A4 landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p>${groupedReport || `<table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table>`}</body></html>`);
   printDocument.close();
   window.setTimeout(() => {
     frame.contentWindow?.focus();
@@ -2864,7 +2866,7 @@ function printTableReport({ title, columns = [], rows = [], highlightRow }) {
 function PrintButton({ title, columns = [], rows = [], className = "secondary", highlightRow }) {
   return <button type="button" className={`${className} print-table-trigger`} onClick={() => openSmartPrint({ title, columns, rows, highlightRow, onPrint: printTableReport, formatCell: exportCellText })}><Printer /><span>Smart Print</span></button>;
 }
-function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Export", printOnly = false, highlightRow, dashboardPdf = false }) {
+function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Export", printOnly = false, highlightRow, reportGrouping, dashboardPdf = false }) {
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -2934,7 +2936,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
   });
   const printReport = () => {
     setOpen(false);
-    openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, onPrint: printTableReport, formatCell: exportCellText });
+    openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
   };
   if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Smart Print ${title}`}><Printer /><span>Smart Print</span></button>;
   return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
@@ -3116,7 +3118,7 @@ function ReportActionsMenu({ activeFilterCount = 0, onColumns, onFilter, onSort,
     </div>, document.body)}
   </div>;
 }
-const printSavedReport = ({ title, columns, rows }) => openSmartPrint({ title, columns, rows, onPrint: printTableReport, formatCell: exportCellText });
+const printSavedReport = ({ title, columns, rows, reportGrouping }) => openSmartPrint({ title, columns, rows, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
 function ActionsTable(props) {
   return <SharedActionsTable {...props} printReport={printSavedReport} SavedReports={SavedReportsPanel} Menu={ReportActionsMenu} ColumnsDialog={ReportColumnSelector} SortDialog={ReportSortDialog} FilterDialog={TableParameterFilter} ExportMenu={ExportMenu} FilterableHeader={FilterableHeader} />;
 }

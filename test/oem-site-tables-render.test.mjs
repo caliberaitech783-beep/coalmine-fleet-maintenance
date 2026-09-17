@@ -1,3 +1,4 @@
+import { groupReportRows, reportSite, reportAsset, siteReportHtml } from "../src/site-report.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -26,7 +27,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   const { code } = await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } });
   return [file, `${code}; return ${name};`];
 })));
-const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch,
+const bindings = { groupReportRows, reportSite, reportAsset, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Search };
@@ -64,85 +65,36 @@ function renderDetails(selection) {
   const ActionsTable = props => h(SharedActionsTable, { ...props, toolbarPortal: false, Menu: Empty, ColumnsDialog: Empty, SortDialog: Empty, FilterDialog: Empty, ExportMenu: CaptureExport });
   const html = renderToStaticMarkup(h(Details, { selection, title: "OEM breakdown", ActionsTable,
     Status: ({ children }) => children, formatDate: formatDisplayDateTime, MaintenanceRemarks: Empty }));
-  return { html, exports, sections: renderedSections(html) };
+  return { html, exports };
 }
 
-const text = markup => markup.replace(/<[^>]*>/g, "").replaceAll("&amp;", "&");
-function renderedSections(html) {
-  return [...html.matchAll(/<section\b[^>]*class="mine-oem-site-section"[^>]*>([\s\S]*?)<\/section>/g)].map(([, markup]) => {
-    const heading = text(markup.match(/<h4>([\s\S]*?)<\/h4>/)?.[1] || "");
-    const headers = [...(markup.match(/<thead>([\s\S]*?)<\/thead>/)?.[1] || "").matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map(([, cell]) => text(cell));
-    const rows = [...(markup.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] || "").matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)]
-      .map(([, row]) => [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map(([, cell]) => text(cell)));
-    return { heading, headers, rows, markup };
-  });
-}
-
-function verifySiteTables(result, expectedSites, identityColumn) {
-  assert.deepEqual(result.sections.map(section => section.heading), expectedSites.map(([heading]) => heading));
-  assert.equal((result.html.match(/<table\b/g) || []).length, expectedSites.length);
-  assert.equal(result.exports.length, expectedSites.length * 2, "each site has export and print models");
-  assert.doesNotMatch(result.html, /type="date"|role="tablist"|<details\b/);
-  const allDisplayed = [], allExported = [];
-  for (const [index, [heading, identities]] of expectedSites.entries()) {
-    const section = result.sections[index];
-    assert.equal((section.markup.match(/<table\b/g) || []).length, 1);
-    assert.ok(section.markup.indexOf("<h4>") < section.markup.indexOf("<table"), "site heading precedes its table");
-    assert.equal(section.headers[0], "Sr. No.");
-    assert.ok(!section.headers.some(label => ["Request site", "Current location"].includes(label)));
-    const identityIndex = section.headers.indexOf(identityColumn);
-    assert.ok(identityIndex >= 0, `missing ${identityColumn}`);
-    const displayed = section.rows.map(row => row[identityIndex]);
-    assert.deepEqual(displayed, identities);
-    assert.deepEqual(section.rows.map(row => row[0]), identities.map((_, i) => String(i + 1)), "row numbering restarts at each site");
-    assert.ok(section.rows.every(row => row.length === section.headers.length), "headings and cells stay aligned");
-    allDisplayed.push(...displayed);
-    const siteExports = result.exports.filter(model => model.title.includes(heading));
-    assert.equal(siteExports.length, 2, `print/export titles identify ${heading}`);
-    assert.equal(siteExports.filter(model => model.printOnly).length, 1);
-    for (const model of siteExports) {
-      assert.deepEqual(model.columns.map(column => column.label), section.headers);
-      assert.equal(model.smartPrintColumns[0].label, "Sr. No.");
-      assert.ok(!model.smartPrintColumns.some(column => ["Request site", "Current location"].includes(column.label)));
-      for (const [columns, rows] of [[model.columns, model.rows], [model.smartPrintColumns, model.smartPrintRows]]) {
-        assert.deepEqual(rows.map(row => columns[0].value(row)), identities.map((_, i) => i + 1));
-        assert.deepEqual(rows.map(row => columns.find(column => column.label === identityColumn).value(row)), identities);
-      }
-      if (!model.printOnly) allExported.push(...model.rows.map(row => model.columns.find(column => column.label === identityColumn).value(row)));
-    }
-  }
-  const expected = expectedSites.flatMap(([, identities]) => identities);
-  assert.deepEqual(allDisplayed, expected, "every supplied record appears exactly once in the tables");
-  assert.deepEqual(allExported, expected, "every supplied record appears exactly once across site exports");
-  assert.equal(new Set(allDisplayed).size, expected.length);
-}
-
-test("real OEM request details render all sites separately with site headings, per-site numbering and exports", () => {
+test("one toolbar controls the complete site-grouped report and distinguishes assets from records", () => {
   const result = renderDetails(selectionFor(requests));
-  verifySiteTables(result, [["WCL · Sasti OB", ["JOB-S1", "JOB-S2"]], ["WCL · Majri OB", ["JOB-M1"]], ["NCL · Jayant OB", ["JOB-J1", "JOB-J2"]]], "Job reference");
-  assert.match(result.html, /Showing 4 of 4 assets · 5 of 5 records/);
-  assert.ok(result.sections.every(section => section.headers.includes("Daily remarks") && section.headers.includes("Reason")));
+  assert.equal(result.exports.length, 2);
+  assert.equal(result.exports.filter(model => model.printOnly).length, 1);
+  assert.equal((result.html.match(/class="shared-table-actions-toolbar"/g) || []).length, 1);
+  assert.equal((result.html.match(/class="site-report-heading"/g) || []).length, 3);
+  assert.match(result.html, /Site-wise summary/);
+  assert.match(result.html, /1 assets · 2 records/);
+  for (const model of result.exports) {
+    assert.equal(model.rows.length, 5);
+    assert.deepEqual(model.rows.map(model.columns[0].value), [1,2,3,4,5]);
+    assert.deepEqual(groupReportRows(model.rows, model.reportGrouping.site, model.reportGrouping.asset).map(group => [group.label, group.assets, group.rows.length]), [
+      ["WCL · Sasti OB",1,2], ["WCL · Majri OB",1,1], ["NCL · Jayant OB",2,2]
+    ]);
+    const html = siteReportHtml({ rows: model.rows, columns: model.columns,
+      cells: model.rows.map(row => model.columns.map(column => column.value(row))),
+      grouping: model.reportGrouping, escape: value => String(value ?? "").replaceAll("<", "&lt;") });
+    assert.equal((html.match(/class="site-print-table"/g) || []).length, 3);
+    assert.ok(html.includes("<b>Total</b></td><td>4</td><td>5</td>"));
+  }
 });
 
-test("real OEM fleet details retain all sites without a Current location column", () => {
-  const result = renderDetails(selectionFor(fleet, { fleetOnly: true }));
-  verifySiteTables(result, [["WCL · Sasti OB", ["S-10"]], ["WCL · Majri OB", ["M-1"]], ["NCL · Jayant OB", ["J-2", "J-10"]]], "Machine / Door no.");
-  assert.ok(result.sections.every(section => section.headers.includes("OEM") && !section.headers.includes("Job reference")));
-});
-
-test("a parent selection containing one site renders exactly one site section", () => {
-  const selectedRegions = [{ code: "WCL", sites: ["Sasti OB"] }];
-  const result = renderDetails(selectionFor([requests[0], requests[3]], { site: "Sasti OB", regions: selectedRegions }));
-  verifySiteTables(result, [["WCL · Sasti OB", ["JOB-S1", "JOB-S2"]]], "Job reference");
-  assert.doesNotMatch(result.html, /<h4>.*(?:Majri|Jayant)/);
-});
-
-for (const fleetOnly of [false, true]) test(`empty OEM ${fleetOnly ? "fleet" : "request"} details show a message without empty site tables`, () => {
-  const result = renderDetails(selectionFor([], { fleetOnly }));
-  assert.deepEqual(result.sections, []);
-  assert.deepEqual(result.exports, []);
-  assert.doesNotMatch(result.html, /<table\b/);
-  assert.ok(result.html.includes(`<b>No matching ${fleetOnly ? "fleet records" : "requests"}</b>`));
-  assert.match(result.html, /Change the filters above to view another site or OEM\./);
-  assert.match(result.html, /Showing 0 of 0 assets · 0 of 0 records/);
+test("filtered, fleet-only and empty selections use the same combined report", () => {
+  for (const selection of [selectionFor([requests[0]]), selectionFor(fleet, { fleetOnly: true }), selectionFor([])]) {
+    const result = renderDetails(selection);
+    assert.equal(result.exports.length, 2);
+    assert.equal(result.exports[0].rows.length, selection.records.length);
+    assert.equal((result.html.match(/class="shared-table-actions-toolbar"/g) || []).length, 1);
+  }
 });

@@ -18,3 +18,22 @@
   .mine-oem-site-section .dashboard-record-summary { padding: 10px; }
   .mine-oem-site-section .dashboard-record-summary h4 { font-size: 15px; }
 }
+
+/* One fixed report toolbar and summary, with the grouped records scrolling below. */
+.mine-oem-site-tables { display: flex; overflow: hidden; padding: 0; }
+.mine-oem-site-tables > .dashboard-record-browser { flex: 1; min-height: 0; min-width: 0; }
+.mine-oem-site-tables .dashboard-record-results { display: flex; flex-direction: column; min-height: 0; }
+.mine-oem-site-tables .dashboard-record-toolbar { flex: 0 0 auto; }
+.mine-oem-site-tables .dashboard-asset-list { flex: 1; min-height: 0; overflow: auto; }
+.site-report-summary { padding: 10px 16px 12px; border-bottom: 1px solid var(--line, #dde6f2); background: var(--panel, #fff); }
+.site-report-summary > b { display: block; font-size: 12px; margin-bottom: 8px; color: var(--muted, #65758b); }
+.site-report-summary > div { display: flex; flex-wrap: wrap; gap: 8px; max-height: 112px; overflow: auto; }
+.site-report-summary > div > span { display: flex; align-items: center; gap: 12px; padding: 7px 10px; border: 1px solid var(--line, #dde6f2); border-radius: 7px; font-size: 12px; }
+.site-report-summary strong { color: var(--brand-purple, #522e90); }
+.site-report-heading th { padding: 12px 16px !important; background: var(--panel, #f4eff9) !important; color: var(--brand-purple, #522e90) !important; border-left: 4px solid var(--brand-purple, #522e90); text-transform: none !important; }
+.site-report-heading span { margin-left: 20px; font-size: 12px; font-weight: 500; }
+@media (max-width: 700px) {
+  .site-report-summary { padding: 8px 10px; }
+  .site-report-summary > div { flex-wrap: nowrap; max-height: none; }
+  .site-report-summary > div > span { flex: 0 0 auto; flex-direction: column; align-items: flex-start; gap: 3px; }
+}

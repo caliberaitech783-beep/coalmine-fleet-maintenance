@@ -27,6 +27,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
     record.requestDetails?.complaint, record.requestDetails?.owner, record.manufacturerSerialNo));
   const shownAssets = new Set(rows.map(record => record.assetId || record.id)).size;
   const siteGroups = groupOemRecordsBySite(rows, selection.regions);
+  const groupedRows = siteGroups.flatMap(site => site.records.map(record => ({ ...record, reportSite: `${site.region} · ${site.site}` })));
   const columns = [...extraColumns,
     { key: "remarks", label: "Daily remarks", render: record => <MaintenanceRemarks remarks={record.requestDetails.dailyRemarks} /> },
     { key: "audio", label: "Audio clips", render: record => <div className="request-audio-list">{record.requestDetails.complaintAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/complaint`} token={tableProps.timelineToken} label="Complaint audio" />}{record.requestDetails.maintenanceAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/maintenance`} token={tableProps.timelineToken} label="Maintenance audio" />}{!record.requestDetails.complaintAudioAvailable && !record.requestDetails.maintenanceAudioAvailable && "—"}</div> },
@@ -40,10 +41,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
       <label className="mine-oem-local-filter"><select aria-label="Equipment group" value={group} onChange={event => setGroup(event.target.value)}><option value="">All equipment groups</option>{[...new Set(categoryRows.map(equipmentGroupLabel))].sort().map(value => <option key={value}>{value}</option>)}</select></label>
     </div>
     <div className="mine-oem-site-tables" role="region" tabIndex={0} aria-label="Site-wise fleet records">
-      {siteGroups.map(site => <section className="mine-oem-site-section" key={`${site.region}:${site.site}`} aria-label={`${site.region} · ${site.site} records`}>
-        <DashboardRecordBrowser {...tableProps} rows={site.records} regions={selection.regions} rowsAreScoped title={`${title} · ${site.region} · ${site.site}`} summaryLabel={`${site.region} · ${site.site}`} hideHierarchyFilters hideSiteColumn showDateFilter={false} showRowNumbers requestRecords={!selection.fleetOnly} extraColumns={selection.fleetOnly ? [extraColumns[0]] : columns} />
-      </section>)}
-      {!siteGroups.length && <div className="dashboard-record-empty" role="status"><b>No matching {selection.fleetOnly ? "fleet records" : "requests"}</b><span>Change the filters above to view another site or OEM.</span></div>}
+      <DashboardRecordBrowser {...tableProps} rows={groupedRows} regions={selection.regions} rowsAreScoped title={title} groupBySite hideHierarchyFilters showDateFilter={false} showRowNumbers requestRecords={!selection.fleetOnly} extraColumns={selection.fleetOnly ? [extraColumns[0]] : columns} />
     </div>
   </div>;
 }
