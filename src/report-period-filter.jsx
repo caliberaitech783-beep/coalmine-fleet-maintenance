@@ -59,8 +59,20 @@ export function ReportPeriodDialog({from,to,onApply,onClose}) {
 }
 export default function ReportPeriodFilter({from,to,onApply}) {
   const [open,setOpen]=useState(false);
+  const updateDate=(bound,value)=>{
+    if (!value) {onApply('','');return;}
+    const start=from?.slice(0,10),end=to?.slice(0,10);
+    const nextStart=bound==='from'||!start||value<start?value:start;
+    const nextEnd=bound==='to'||!end||value>end?value:end;
+    const bounds=periodBounds(nextStart,nextEnd,'00:00','23:59');
+    if (bounds) onApply(bounds.from,bounds.to);
+  };
   const format=value=>value?`${displayDate(value.slice(0,10))} ${timeParts(value.slice(11,16)).hour}:${timeParts(value.slice(11,16)).minute} ${timeParts(value.slice(11,16)).period}`:'Any time';
-  return <div className="report-period-filter"><button type="button" className="secondary" aria-haspopup="dialog" aria-expanded={open} onClick={()=>setOpen(true)}><Filter size={17}/>Filter</button><span aria-live="polite">{from||to?`${format(from)} – ${format(to)} (IST)`:'All dates'}</span>
+  return <div className="report-period-filter"><button type="button" className="secondary" aria-haspopup="dialog" aria-expanded={open} onClick={()=>setOpen(true)}><Filter size={17}/>Filter</button>
+    <label className="report-period-date"><span>From</span><input aria-label="Report from date" type="date" value={from?.slice(0,10)||''} max={to?.slice(0,10)||undefined} onChange={e=>updateDate('from',e.target.value)}/></label>
+    <label className="report-period-date"><span>To</span><input aria-label="Report to date" type="date" value={to?.slice(0,10)||''} min={from?.slice(0,10)||undefined} onChange={e=>updateDate('to',e.target.value)}/></label>
+    {(from||to)&&<button type="button" className="secondary" onClick={()=>onApply('','')}>Clear dates</button>}
+    <span aria-live="polite">{from||to?`${format(from)} – ${format(to)} (IST)`:'All dates'}</span>
     {open&&<ReportPeriodDialog from={from} to={to} onClose={()=>setOpen(false)} onApply={(start,end)=>{onApply(start,end);setOpen(false);}}/>}
   </div>;
 }

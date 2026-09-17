@@ -30,13 +30,13 @@ test('AM/PM and full final-minute boundaries preserve inclusive date filtering',
 });
 const source=readFileSync(new URL('../src/report-period-filter.jsx',import.meta.url),'utf8');
 const code=(await transformWithOxc(source.replace(/^import .*;\r?$/gm,'').replaceAll('export default function ','function ').replaceAll('export function ','function '),'period.jsx',{jsx:{runtime:'classic'}})).code;
-function harness() {
+function harness(componentName='ReportPeriodDialog') {
   let index=0;const slots=[],applied=[],closed=[];
   const useState=initial=>{const key=index++;if(!(key in slots))slots[key]=typeof initial==='function'?initial():initial;return [slots[key],value=>slots[key]=typeof value==='function'?value(slots[key]):value];};
   const names=['React','useState','useEffect','useRef','useId','createPortal','document',...Object.keys(model),'Filter','ChevronLeft','ChevronRight','X','CalendarDays'];
   const values=[React,useState,()=>{},()=>({current:null}),()=>'qa',tree=>tree,{body:{}},...Object.values(model),...Array(5).fill(()=>null)];
-  const component=new Function(...names,`${code};return ReportPeriodDialog;`)(...values);
-  return {applied,closed,render(){index=0;return component({from:'2026-09-01T00:00:00',to:'2026-09-09T23:59:59.999',onApply:(...args)=>applied.push(args),onClose:()=>closed.push(true)});}};
+  const component=new Function(...names,`${code};return ${componentName};`)(...values);
+  return {applied,closed,render(props={}){index=0;return component({from:'2026-09-01T00:00:00',to:'2026-09-09T23:59:59.999',onApply:(...args)=>applied.push(args),onClose:()=>closed.push(true),...props});}};
 }
 const all=(tree,predicate)=>{const result=[];const visit=n=>{if(Array.isArray(n))return n.forEach(visit);if(!React.isValidElement(n))return;if(predicate(n))result.push(n);visit(n.props.children);};visit(tree);return result;};
 const text=node=>Array.isArray(node)?node.map(text).join(''):React.isValidElement(node)?text(node.props.children):String(node??'');
@@ -59,11 +59,37 @@ test('two calendar clicks select an ordered range and disable Apply for unfinish
   all(tree,n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});
   assert.deepEqual(app.applied[0],['2026-09-03T00:00:00','2026-09-08T23:59:59.999']);
 });
-test('shared popup replaces the inline date controls for every selected report',()=>{
+test('shared date toolbar and popup are used for every selected report',()=>{
   const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   assert.match(main,/selectedReport && <ReportPeriodFilter from=\{reportFrom\} to=\{reportTo\}/);
   assert.doesNotMatch(main,/type="datetime-local" value=\{reportFrom\}/);
   assert.match(source,/element.showModal\(\)/);
   assert.match(source,/onCancel=/);
   assert.match(source,/focus\.focus\(\)/);
+});
+
+test('visible dates apply inclusive days immediately and reflect popup changes',()=>{
+  const app=harness('ReportPeriodFilter');
+  const field=(tree,label)=>all(tree,n=>n.type==='input'&&n.props['aria-label']===label)[0];
+  let tree=app.render({from:'',to:''});
+  field(tree,'Report from date').props.onChange({target:{value:'2026-09-03'}});
+  assert.deepEqual(app.applied.at(-1),['2026-09-03T00:00:00','2026-09-03T23:59:59.999']);
+  tree=app.render({from:app.applied.at(-1)[0],to:app.applied.at(-1)[1]});
+  field(tree,'Report to date').props.onChange({target:{value:'2026-09-09'}});
+  const [from,to]=app.applied.at(-1);
+  const rows=[{at:'2026-09-03 00:00:00'},{at:'2026-09-09 23:59:59.999'},{at:'2026-09-10 00:00:00'}];
+  assert.deepEqual(reportRowsWithinRange(rows,r=>r.at,from,to),rows.slice(0,2));
+  tree=app.render({from:'2026-08-01T09:30:00',to:'2026-08-31T17:45:59.999'});
+  assert.equal(field(tree,'Report from date').props.value,'2026-08-01');
+  assert.equal(field(tree,'Report to date').props.value,'2026-08-31');
+  button(tree,'Clear dates').props.onClick();
+  assert.deepEqual(app.applied.at(-1),['','']);
+  field(tree,'Report from date').props.onChange({target:{value:''}});
+  assert.deepEqual(app.applied.at(-1),['','']);
+});
+
+test('inline edits keep reversed dates ordered like the dashboard',()=>{
+  const app=harness('ReportPeriodFilter'),tree=app.render();
+  all(tree,n=>n.type==='input'&&n.props['aria-label']==='Report from date')[0].props.onChange({target:{value:'2026-09-12'}});
+  assert.deepEqual(app.applied.at(-1),['2026-09-12T00:00:00','2026-09-12T23:59:59.999']);
 });

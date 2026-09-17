@@ -235,6 +235,8 @@ Project Managers and Production Managers receive an in-app notification and use 
 
 ## 9. Dashboard and reports
 
+Every report tab shows From and To date fields beside the Filter button. These apply inclusive full-day IST ranges immediately, using the same shared report state as the popup. Selecting the first date initializes both ends; clearing either field or choosing Clear dates restores All dates. The Filter popup retains presets and precise time selection, and its applied dates appear in the visible fields. Editing a visible date selects full days again.
+
 Info Pulse breakdown rows include a **Daily updates** button with the saved entry count. It expands a read-only history beneath that row, newest first, showing maintenance notes, delay reasons, author, and IST timestamp. Refresh uses the latest request history; requests without entries show an explicit empty state.
 
 **Ticket Acceptance from Maintenance (Timelinewise)** defaults to entries whose recorded maintenance acceptance is more than 30 minutes after production submission; exactly 30 minutes is excluded. **Show total** restores all entries, including unaccepted requests, and manual PDF, Excel, print, and ZIP exports follow the selected view. Missing, invalid, or reversed timestamps are excluded from the delay view. Submission uses `start`, falling back to `createdAt`. Selecting this report in a role or personal WhatsApp schedule includes the same over-30-minute delay report within the recipient's permitted site and reporting window; the screen toggle does not change scheduled delivery.
