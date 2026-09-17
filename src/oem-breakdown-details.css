@@ -61,3 +61,26 @@
 .mine-oem-filter-toggle:focus-visible { outline: 2px solid var(--brand-purple, #522e90); outline-offset: 2px; }
 .mine-oem-details.filters-hidden :is(.mine-oem-detail-search, .dashboard-fleet-search, .site-report-summary) { display: none; }
 .mine-oem-details.filters-hidden .dashboard-record-browser { grid-template-rows: minmax(0, 1fr) !important; }
+
+/* Table actions sit in the modal title row and the site-wise summary in the selection row, so the records start higher. */
+.mine-oem-modal > header h3 { flex: 1 1 auto; }
+.mine-oem-modal > header .modal-header-actions { flex: 0 1 auto; min-width: 0; margin-left: auto; }
+.mine-oem-modal > header .shared-table-actions-toolbar { position: static; width: auto; padding: 0; border: 0; background: transparent; flex-wrap: nowrap; }
+.mine-oem-modal > header .shared-table-actions-toolbar svg { width: 16px; }
+.mine-oem-modal .mine-oem-detail-context { flex-wrap: nowrap; padding-top: 6px; padding-bottom: 6px; }
+.mine-oem-modal .mine-oem-detail-context > :is(.mine-oem-selection, .mine-oem-context-end) { flex: 0 0 auto; }
+.mine-oem-summary-slot { flex: 1 1 0; min-width: 0; }
+.mine-oem-summary-slot .site-report-summary { display: flex; align-items: center; gap: 12px; padding: 0; border: 0; background: transparent; }
+.mine-oem-summary-slot .site-report-summary > b { flex: 0 0 auto; margin: 0; }
+.mine-oem-summary-slot .site-report-summary .site-summary-options { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; align-items: center; max-height: none; overflow-x: auto; overflow-y: hidden; padding: 2px; scrollbar-width: thin; }
+.mine-oem-summary-slot .site-summary-region { flex: 0 0 auto; flex-direction: row; align-items: center; gap: 8px; }
+.mine-oem-summary-slot .site-summary-region > div { flex-wrap: nowrap; }
+.mine-oem-summary-slot .site-summary-button { flex: 0 0 auto; padding: 6px 10px; white-space: nowrap; }
+@media (max-width: 1100px) {
+  .mine-oem-modal > header { flex-wrap: wrap; }
+  .mine-oem-modal > header .modal-header-actions { order: 5; flex: 1 0 100%; }
+  .mine-oem-modal > header .shared-table-actions-toolbar { flex-wrap: wrap; }
+  .mine-oem-modal .mine-oem-detail-context { flex-wrap: wrap; }
+  .mine-oem-summary-slot { order: 5; flex: 1 0 100%; }
+  .mine-oem-summary-slot .site-report-summary > b { display: none; }
+}

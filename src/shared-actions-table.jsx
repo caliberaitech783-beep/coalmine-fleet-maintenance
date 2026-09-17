@@ -14,7 +14,7 @@ import "./sortable-table.css";
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
 const sharedTablePageSize = () => typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0;
 
-export default function SharedActionsTable({ closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, ...tableProps }) {
+export default function SharedActionsTable({ closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -47,10 +47,10 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, gro
     columns.splice(columns.indexOf(started) + 1, 0, idleDate);
   }
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
 }
 
-function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }) {
+function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
   const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}`;
   const [visible, setVisibleState] = useState(() => restoreColumnOrder(columnStorageKey, columns.map((column) => column.key)));
@@ -222,7 +222,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
       <FilterDialog columns={filterColumns} rows={[...dataRows, ...filterRows]} filters={effectiveFilters} onFilterChange={updateFilter} onClearFilters={clearFilters} open={dialog === "filter"} onOpenChange={(open) => setDialog(open ? "filter" : "")} hideTrigger dialogMode />
     </div>
   );
-  const combinedToolbar = <>{actionsToolbar}{groupBySite && <div className="site-report-summary" aria-label="Site-wise counts">
+  const siteSummaryBar = groupBySite && <div className="site-report-summary" aria-label="Site-wise counts">
     <b>Site-wise summary · {siteSummary.length} sites</b>
     <div className="site-summary-options">
       <button type="button" className="site-summary-button" aria-pressed={!activeSite} onClick={() => selectSite("")}><strong>All sites</strong><span>{reportCount(new Set(availableRows.map(reportAsset)).size, availableRows.length)}</span></button>
@@ -234,7 +234,9 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
       </div>)}
       {!siteSummary.length && <span>No matching records</span>}
     </div>
-  </div>}</>;
+  </div>;
+  // A host may place the site summary in its own row (summaryTarget), apart from the actions toolbar.
+  const combinedToolbar = <>{actionsToolbar}{summaryTarget ? createPortal(siteSummaryBar, summaryTarget) : siteSummaryBar}</>;
   return <>
     {toolbarTarget ? createPortal(combinedToolbar, toolbarTarget) : toolbarPortal ? null : combinedToolbar}
     <table {...tableProps} ref={reportTableRef}>{sections.map((section) => {

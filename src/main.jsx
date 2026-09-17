@@ -1338,6 +1338,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [fleetChartMode, setFleetChartMode] = useState("breakdown");
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
+  const [oemToolbarTarget, setOemToolbarTarget] = useState(null);
   const [breakdownCountChange, setBreakdownCountChange] = useState(null);
   const [breakdownCountDay, setBreakdownCountDay] = useState(0);
   const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useState(false);
@@ -2054,8 +2055,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           return <tr key={day.date}><td><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "all")} aria-label={`${breakdownDetailSite} · ${dayLabel}: open day movement report`}><b>{dayLabel}</b></button></td>{[["open", "BD Open", ""], ["incoming", "BD In", "+"], ["outgoing", "BD Out", "-"], ["balance", "BD Balance", ""]].map(([metric, label, prefix]) => <td key={metric} className={metric}><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, metric)} aria-label={`${breakdownDetailSite} · ${dayLabel}: ${label}, ${day[metric]} entries`}>{prefix}{day[metric]}</button></td>)}<td className="percentage"><button type="button" className="dashboard-breakdown-day-link" onClick={() => openBreakdownDay(day, "balance")} aria-label={`${breakdownDetailSite} · ${dayLabel}: BD ${breakdownPercentage.toFixed(1)}%, show ${day.balance} balance entries`} title={`BD Balance ${day.balance} ÷ ${selectedBreakdownSiteRoad.total} registered fleet × 100`}><b>{breakdownPercentage.toFixed(1)}%</b><small>of {selectedBreakdownSiteRoad.total} fleet</small></button></td></tr>;
         }) : <tr><td colSpan="6">No breakdown movement found for this period.</td></tr>}</tbody></ActionsTable></div>
       </div></Modal>}
-      {oemDrilldown && <Modal className="dashboard-asset-modal mine-oem-modal" overlayClassName="dashboard-asset-overlay" topBar={renderDashboardHeader(true)} title={oemDrilldown.title} close={() => setOemDrilldownKind(null)}>
-        <OemBreakdownDetails key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, oemDrilldownKind].join("|")} selection={oemDrilldown} title={oemDrilldown.title} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} />
+      {oemDrilldown && <Modal className="dashboard-asset-modal mine-oem-modal" overlayClassName="dashboard-asset-overlay" topBar={renderDashboardHeader(true)} title={oemDrilldown.title} close={() => setOemDrilldownKind(null)} headerActions={<div className="modal-header-actions" ref={setOemToolbarTarget} />}>
+        <OemBreakdownDetails key={[dashboardRegion, dashboardSite, dashboardOem, dashboardFrom, dashboardTo, oemDrilldownKind].join("|")} selection={oemDrilldown} title={oemDrilldown.title} toolbarTarget={oemToolbarTarget} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} Dialog={Modal} MaintenanceRemarks={MaintenanceRemarks} />
       </Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
@@ -8042,7 +8043,7 @@ Subsidiaries = function SubsidiariesWithImport({ gotoEquipment, requests = [] } 
   if (!loaded) return <MasterLoader name="Region master" />;
   return <RegionMasterPage records={records} requests={requests} onAdd={onAdd} onDeleteAll={onDeleteAll} gotoEquipment={gotoEquipment} />;
 };
-function Modal({ title, close, children, className = "", overlayClassName = "", topBar = null }) {
+function Modal({ title, close, children, className = "", overlayClassName = "", topBar = null, headerActions = null }) {
   const dialogRef = useRef(null);
   const closeRef = useRef(close);
   closeRef.current = close;
@@ -8106,6 +8107,7 @@ function Modal({ title, close, children, className = "", overlayClassName = "", 
             if (!content) return;
             printRequestTimeline(content, typeof title === "string" ? title : "Time breakdown", requestTimelinePrintCss);
           }}><Printer aria-hidden="true" /><span>Smart Print</span></button>}
+          {headerActions}
           <button type="button" onClick={close} aria-label="Close dialog">
             <X aria-hidden="true" />
           </button>
