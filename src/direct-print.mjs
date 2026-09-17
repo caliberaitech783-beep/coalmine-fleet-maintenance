@@ -5,8 +5,27 @@
 // fails, callers fall back to the normal browser print window.
 
 const PRINTER_STORAGE_KEY='nerveCenterDirectPrinter';
+const HELPER_SEEN_KEY='nerveCenterPrintHelperSeen';
 const UNAVAILABLE_RETRY_MS=60_000;
+const LAUNCH_POLL_MS=1500;
 let qzPromise=null,unavailableUntil=0;
+
+/** True once this browser has reached or printed through the helper (a remembered printer counts): from then on the helper is expected, never silently skipped. */
+export function printHelperExpected(storage=globalThis.localStorage){try{return storage?.getItem(HELPER_SEEN_KEY)==='1'||Boolean(String(storage?.getItem(PRINTER_STORAGE_KEY)||'').trim())}catch{return false}}
+function markHelperSeen(storage=globalThis.localStorage){try{storage?.setItem(HELPER_SEEN_KEY,'1')}catch{/* private mode */}}
+
+/** Starts QZ Tray through the "qz:" link it registers in Windows. A hidden frame keeps the app page where it is. */
+export function launchPrintHelper(doc=globalThis.document){
+  try{
+    const frame=doc.createElement('iframe');
+    frame.style.display='none';
+    frame.src='qz:launch';
+    doc.body.appendChild(frame);
+    setTimeout(()=>frame.remove(),8000);
+    return true;
+  }catch{return false}
+}
+const pause=(milliseconds)=>new Promise((resolve)=>setTimeout(resolve,milliseconds));
 
 /** Paper definition for the helper: portrait millimetres; the landscape PDF page is rotated to fit by the helper. */
 export function directPrintPaper(page={}){
@@ -48,17 +67,29 @@ async function loadHelper(token){
   return qzPromise;
 }
 
-/** True when the print helper is installed and reachable on this PC. A miss is remembered for a minute so printing never stalls. */
-export async function printHelperAvailable({token,timeoutMs=2500,now=Date.now(),load=loadHelper}={}){
-  if(now<unavailableUntil)return false;
-  try{
+/**
+ * True when the print helper is reachable on this PC.
+ * - A PC that has never used the helper: one quick try; a miss is remembered for a minute so printing never stalls.
+ * - A PC that has used it before: the helper is expected. If it is not running it is started through its
+ *   "qz:" link and the connection is retried for up to `launchWaitMs`, with no negative memory.
+ */
+export async function printHelperAvailable({token,timeoutMs=2500,now=Date.now(),load=loadHelper,storage=globalThis.localStorage,launch=launchPrintHelper,launchWaitMs=20_000,sleep=pause}={}){
+  const expected=printHelperExpected(storage);
+  if(!expected&&now<unavailableUntil)return false;
+  const connect=async()=>{
     const qz=await load(token);
     if(!qz.websocket.isActive())await withTimeout(qz.websocket.connect({retries:0,delay:0}),timeoutMs,'The print helper did not answer.');
+    markHelperSeen(storage);
     return true;
-  }catch{
-    unavailableUntil=now+UNAVAILABLE_RETRY_MS;
-    return false;
+  };
+  try{return await connect()}catch{/* not running, or not installed */}
+  if(!expected){unavailableUntil=now+UNAVAILABLE_RETRY_MS;return false}
+  launch();
+  for(let waited=0;waited<launchWaitMs;waited+=LAUNCH_POLL_MS){
+    await sleep(LAUNCH_POLL_MS);
+    try{return await connect()}catch{/* still starting */}
   }
+  return false;
 }
 
 export function rememberedPrinter(storage=globalThis.localStorage){try{return String(storage?.getItem(PRINTER_STORAGE_KEY)||'').trim()}catch{return ''}}

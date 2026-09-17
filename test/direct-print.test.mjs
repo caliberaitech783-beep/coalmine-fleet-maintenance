@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {generateKeyPairSync,createVerify} from 'node:crypto';
 import {normalizePem,printHelperSigning,signPrintRequest,PRINT_HELPER_MAX_REQUEST_LENGTH} from '../print-helper-signing.mjs';
-import {directPrintPaper,directPrintOptions,blobToBase64,rememberedPrinter,rememberPrinter,printHelperAvailable} from '../src/direct-print.mjs';
+import {directPrintPaper,directPrintOptions,blobToBase64,rememberedPrinter,rememberPrinter,printHelperAvailable,printHelperExpected,launchPrintHelper} from '../src/direct-print.mjs';
 import {PRINT_PAGE_SIZES} from '../src/smart-print.mjs';
 
 const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8').replace(/\r\n/g,'\n');
@@ -75,13 +75,48 @@ test('the server only ever hands out the public certificate and signatures, to s
 
 test('Smart Print prints through the helper and falls back to the browser print window',()=>{
   assert.match(main,/function printTableReport\(report\) \{\n  void printReportDirect\(report\)\.then\(\(sent\) => \{ if \(!sent\) printTableReportInBrowser\(report\); \}\);\n\}/);
-  assert.match(main,/if \(!\(await printHelperAvailable\(\{ token: \(\) => authToken \}\)\)\) return false;/);
+  assert.match(main,/if \(!\(await printHelperAvailable\(\{ token: \(\) => authToken \}\)\)\) \{\n\s+\/\/ A PC that never used the helper[^\n]*\n\s+if \(!printHelperExpected\(\)\) return false;/,'PCs without the helper still print through the browser, silently');
+  assert.match(main,/The print helper \(QZ Tray\) is not running on this PC/,'where the helper is expected, a miss is never silent');
+  assert.match(main,/\? printReportDirect\(\{ title, columns, rows, highlightRow, pageSize \}\) : false;/,'OK tries again, Cancel uses the browser print window');
+  assert.match(main,/if \(printHelperExpected\(\)\) alert\(`The report could not be sent through the print helper/);
   assert.match(main,/highlights, pageSize: page\.name \}\),/,'the PDF is built at the chosen A3 / A4 size');
   assert.match(main,/await printPdfDirect\(\{ pdf: await response\.blob\(\), page, jobName: title, token: \(\) => authToken \}\)/);
-  assert.match(main,/catch \(error\) \{\n    console\.warn\("Direct printing was not possible; using the browser print window\.", error\);\n    return false;/);
+  assert.match(main,/catch \(error\) \{\n    console\.warn\("Direct printing was not possible; using the browser print window\.", error\);\n    if \(printHelperExpected\(\)\) alert\([^\n]+\n    return false;/,'the failure is explained, then the browser print window is used');
   assert.match(client,/import\('qz-tray'\)/,'the helper library is loaded only when printing');
   assert.match(client,/qz\.print\(config,\[\{type:'pixel',format:'pdf',flavor:'base64',data\}\]\)/);
   assert.match(client,/if\(!remembered\)return send\(await qz\.printers\.getDefault\(\)\);/,'the default printer is looked up only until a printer is remembered');
   assert.match(client,/rememberPrinter\(''\);\n    return send\(await qz\.printers\.getDefault\(\)\);/,'a removed printer falls back to the current default');
   assert.match(client,/qz\.security\.setSignatureAlgorithm\('SHA512'\);/);
+});
+
+test('once the helper has been used on a PC it is expected: it is started by itself and never skipped silently',async()=>{
+  const values=new Map(),storage={getItem:(key)=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:(key)=>values.delete(key)};
+  const connected={websocket:{isActive:()=>true}};
+  assert.equal(printHelperExpected(storage),false);
+  assert.equal(await printHelperAvailable({storage,now:Date.now()+3_600_000,load:async()=>connected}),true);
+  assert.equal(printHelperExpected(storage),true,'a successful connection marks this PC');
+
+  // Helper not running: it is launched, and the connection is retried until it answers.
+  let launches=0,attempts=0,sleeps=0;
+  const startsOnThirdTry=async()=>{attempts++;if(attempts<3)throw new Error('connection refused');return connected};
+  assert.equal(await printHelperAvailable({storage,load:startsOnThirdTry,launch:()=>{launches++},sleep:async()=>{sleeps++}}),true);
+  assert.deepEqual([launches,attempts,sleeps],[1,3,2],'launched once, then polled');
+
+  // Still unreachable after the wait: false, and the next print tries again at once (no one-minute memory here).
+  launches=0;attempts=0;
+  const never=async()=>{attempts++;throw new Error('connection refused')};
+  assert.equal(await printHelperAvailable({storage,load:never,launch:()=>{launches++},sleep:async()=>{},launchWaitMs:4500}),false);
+  assert.deepEqual([launches,attempts],[1,4],'one immediate try plus three polls');
+  assert.equal(await printHelperAvailable({storage,load:async()=>connected,launch:()=>{launches++}}),true,'no negative memory for an expected helper');
+  assert.equal(printHelperExpected({getItem(){throw new Error('blocked')}}),false);
+  assert.equal(printHelperExpected({getItem:(key)=>key==='nerveCenterDirectPrinter'?'iR C3326':null}),true,'a printer remembered from an earlier direct print also counts');
+});
+
+test('the helper is started through its qz: link in a hidden frame, leaving the app page in place',()=>{
+  const added=[];
+  const doc={createElement:(tag)=>({tag,style:{},remove(){}}),body:{appendChild:(node)=>added.push(node)}};
+  assert.equal(launchPrintHelper(doc),true);
+  assert.equal(added.length,1);
+  assert.deepEqual([added[0].tag,added[0].src,added[0].style.display],['iframe','qz:launch','none']);
+  assert.equal(launchPrintHelper({createElement(){throw new Error('no dom')}}),false);
 });

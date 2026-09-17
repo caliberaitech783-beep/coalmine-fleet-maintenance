@@ -1,7 +1,7 @@
 import { siteReportHtml } from "./site-report.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter } from "./smart-print.mjs";
-import { printHelperAvailable, printPdfDirect } from "./direct-print.mjs";
+import { printHelperAvailable, printHelperExpected, printPdfDirect } from "./direct-print.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
@@ -2892,7 +2892,12 @@ function printTableReport(report) {
 }
 async function printReportDirect({ title, columns = [], rows = [], highlightRow, pageSize }) {
   try {
-    if (!(await printHelperAvailable({ token: () => authToken }))) return false;
+    if (!(await printHelperAvailable({ token: () => authToken }))) {
+      // A PC that never used the helper prints through the browser. Where it has been used, never fall back silently.
+      if (!printHelperExpected()) return false;
+      return window.confirm("The print helper (QZ Tray) is not running on this PC, so the paper size cannot be set automatically.\n\nStart \"QZ Tray\" from the Windows Start menu, wait for its icon near the clock, then click OK to try again.\n\nClick Cancel to use the browser print window instead and choose the Paper size there.")
+        ? printReportDirect({ title, columns, rows, highlightRow, pageSize }) : false;
+    }
     const page = printPageSize(pageSize);
     const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
     const highlights = rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []);
@@ -2908,6 +2913,7 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
     return true;
   } catch (error) {
     console.warn("Direct printing was not possible; using the browser print window.", error);
+    if (printHelperExpected()) alert(`The report could not be sent through the print helper (${error?.message || error || "unknown reason"}).\n\nThe browser print window opens instead; choose the Paper size there.`);
     return false;
   }
 }
