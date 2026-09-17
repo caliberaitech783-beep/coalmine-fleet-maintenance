@@ -32,6 +32,7 @@ import UserProfile from "./user-profile.jsx";
 import BackupAdministration from "./backup-administration.jsx";
 import VehicleTransferWorkflow from "./vehicle-transfer-workflow.jsx";
 import RequestCorrections from "./request-corrections.jsx";
+import {REQUEST_CORRECTION_MANAGER_ROLES} from "../request-correction-policy.mjs";
 import {RemoteAssistanceAction, RemoteAssistanceAgent} from "./remote-assistance.jsx";
 import HelpTraining from "./help-training.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
@@ -815,6 +816,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const vehicleTransferMasterAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.includes("Project Manager");
   const vehicleTransferRoleAccess=vehicleTransferDirectAccess||vehicleTransferMasterAccess;
   const correctionApprovalAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.some((role)=>["Project Manager","Production Manager"].includes(role));
+  const correctionRequestAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
   const directMenuAccess = {Dashboard: "dashboardAccess", Tickets: "ticketAccess", Reports: "reportAccess"};
@@ -844,6 +846,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           </button></div>
         ))}
         {permissions.adminLevel === "Manager" && <div className="nav-config-row"><button className={active === "Manager Profile" ? "active" : ""} onClick={() => selectPage("Manager Profile")}><UserRound /><span className="nav-label">{managerProfileLabel}</span></button></div>}
+        {correctionRequestAccess && <div className="nav-config-row"><button className={active === "Request correction" ? "active" : ""} onClick={() => selectPage("Request correction")}><Pencil /><span className="nav-label">Request correction</span></button></div>}
         {correctionApprovalAccess && <div className="nav-config-row"><button className={active === "Correction approvals" ? "active" : ""} onClick={() => selectPage("Correction approvals")}><ShieldCheck /><span className="nav-label">Correction approvals</span></button></div>}
         {canViewMasters && <div
           className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
@@ -9337,7 +9340,6 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const isProduction = mobileRole === "Production User";
   const isMaintenance = mobileRole === "Maintenance User";
   const isMis = mobileRole === "MIS User";
-  const canRequestCorrection = isProduction || isMaintenance || isMis;
   const closedHistoryClosingLabel = isMis ? "Maintenance Closing Time" : "Closing time";
   const workspaceReportTitles = {
     requests: isProduction ? "Active Production Requests" : isMaintenance ? "Active Maintenance Requests" : "MIS Requests Awaiting Verification",
@@ -9459,13 +9461,12 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{canRequestCorrection&&<button className={section === "corrections" ? "active" : ""} onClick={() => setSection("corrections")}><Pencil /> Request correction</button>}{showReportsMenu&&<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardState.error} requestsUpdatedAt={dashboardState.updatedAt} onRefreshRequests={()=>dashboardLoader.current?.load(session?.token)} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
-      {!embedded&&section==="corrections"&&canRequestCorrection&&<RequestCorrections session={session} requests={requests} Dialog={Modal} />}
       {!embedded&&!showDashboardMenu&&!showRequestsMenu&&!showReportsMenu&&!showTicketsMenu&&<section className="panel"><h2>No menus assigned</h2><p>Contact your administrator to enable access.</p></section>}
       {(embedded||section==="profile")&&showRequestsMenu&&<div ref={operationalWorkspaceRef} data-operational={isProduction || isMaintenance || isMis ? "true" : undefined} data-active-tab={tab} className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isGeneral ? "Requests" : isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isGeneral ? "View requests for your assigned location." : isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
@@ -9580,6 +9581,8 @@ function App() {
     .some((role)=>['MIS Manager','Project Manager'].includes(role));
   const correctionApprovalAccess=adminPermissions.adminLevel==='Manager'&&managerRoleSelection(adminPermissions.managerRoles?.length?adminPermissions.managerRoles:adminPermissions.managerRole)
     .some((role)=>['Project Manager','Production Manager'].includes(role));
+  const correctionRequestAccess=adminPermissions.adminLevel==='Manager'&&managerRoleSelection(adminPermissions.managerRoles?.length?adminPermissions.managerRoles:adminPermissions.managerRole)
+    .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return isAdministrator;
@@ -9588,6 +9591,7 @@ function App() {
     if(name==="Admin locks")return isAdministrator&&adminPermissions.adminLevel==="Super Admin";
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
     if(name==="Correction approvals")return correctionApprovalAccess;
+    if(name==="Request correction")return correctionRequestAccess;
     if(name==="Request corrections")return isAdministrator;
     if(ORGANISATION_PAGE_NAMES.includes(name))return isAdministrator;
     if(name==="Dashboard"&&adminPermissions.adminLevel==="Manager")return true;
@@ -9979,7 +9983,7 @@ function App() {
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (
             <AdminLockManagement session={session} />
-          ) : active === "Request corrections" || active === "Correction approvals" ? (
+          ) : active === "Request corrections" || active === "Correction approvals" || active === "Request correction" ? (
             <RequestCorrections session={session} requests={requests} Dialog={Modal} />
           ) : active === "User Sessions" ? (
             <UserSessionsPage session={session} />

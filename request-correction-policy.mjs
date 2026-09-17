@@ -50,14 +50,23 @@ export const REQUEST_CORRECTION_TYPES=Object.freeze({
   },
 });
 
+// Corrections are requested by the department manager, not by the operational
+// user who made the entry: each manager role owns its department's stage(s).
 export const REQUEST_CORRECTION_ROLE_TYPES=Object.freeze({
-  'Production User':Object.freeze(['offRoad']),
-  'Maintenance User':Object.freeze(['maintenanceAcceptance','onRoad']),
-  'MIS User':Object.freeze(['misVerification']),
+  'Production Manager':Object.freeze(['offRoad']),
+  'Maintenance Manager':Object.freeze(['maintenanceAcceptance','onRoad']),
+  'MIS Manager':Object.freeze(['misVerification']),
 });
+export const REQUEST_CORRECTION_MANAGER_ROLES=Object.freeze(Object.keys(REQUEST_CORRECTION_ROLE_TYPES));
 
 export function requestCorrectionTypesForRole(role){
   return [...(REQUEST_CORRECTION_ROLE_TYPES[String(role||'').trim()]||[])];
+}
+
+/** Every correction type a manager may request, across all the manager roles they hold, in workflow order. */
+export function requestCorrectionTypesForManagerRoles(roles=[]){
+  const held=new Set((Array.isArray(roles)?roles:[roles]).flatMap(requestCorrectionTypesForRole));
+  return Object.keys(REQUEST_CORRECTION_TYPES).filter((type)=>held.has(type));
 }
 
 const cleanText=(value,max)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,max);

@@ -5,7 +5,9 @@ import {
   normalizeRequestCorrectionChanges,
   requestCorrectionSnapshot,
   requestCorrectionTimelineFields,
+  requestCorrectionTypesForManagerRoles,
   requestCorrectionTypesForRole,
+  REQUEST_CORRECTION_MANAGER_ROLES,
   requestCorrectionValidationError,
   validCorrectionEvidence,
 } from '../request-correction-policy.mjs';
@@ -16,11 +18,16 @@ test('correction workflow has explicit approval states',()=>{
   assert.deepEqual(Object.values(REQUEST_CORRECTION_STATUS),['Pending PM approval','Approved','Rejected','Applied']);
 });
 
-test('each operational user can request correction only for their own workflow stage',()=>{
-  assert.deepEqual(requestCorrectionTypesForRole('Production User'),['offRoad']);
-  assert.deepEqual(requestCorrectionTypesForRole('Maintenance User'),['maintenanceAcceptance','onRoad']);
-  assert.deepEqual(requestCorrectionTypesForRole('MIS User'),['misVerification']);
-  assert.deepEqual(requestCorrectionTypesForRole('Admin'),[]);
+test('each department manager requests corrections only for their own department stage; operational users cannot',()=>{
+  assert.deepEqual(requestCorrectionTypesForRole('Production Manager'),['offRoad']);
+  assert.deepEqual(requestCorrectionTypesForRole('Maintenance Manager'),['maintenanceAcceptance','onRoad']);
+  assert.deepEqual(requestCorrectionTypesForRole('MIS Manager'),['misVerification']);
+  for(const role of ['Production User','Maintenance User','MIS User','Project Manager','Admin',''])assert.deepEqual(requestCorrectionTypesForRole(role),[],role);
+  assert.deepEqual(REQUEST_CORRECTION_MANAGER_ROLES,['Production Manager','Maintenance Manager','MIS Manager']);
+  assert.deepEqual(requestCorrectionTypesForManagerRoles(['MIS Manager','Maintenance Manager']),['maintenanceAcceptance','onRoad','misVerification'],'a manager with two roles gets both departments, in workflow order');
+  assert.deepEqual(requestCorrectionTypesForManagerRoles(['Project Manager']),[]);
+  assert.deepEqual(requestCorrectionTypesForManagerRoles('Production Manager'),['offRoad']);
+  assert.deepEqual(requestCorrectionTypesForManagerRoles(),[]);
 });
 
 test('correction snapshots expose only the selected lifecycle fields',()=>{

@@ -73,7 +73,7 @@ import {serverErrorHandler} from './server-error-response.mjs';
 import {VEHICLE_TRANSFER_STATUS,applyAcceptedVehicleTransfer,transferMatchesEquipment,vehicleTransferAuditDetails,vehicleTransferStatus,vehicleTransferValidationError} from './vehicle-transfer-workflow.mjs';
 import {legacyEtcRepairPlan,legacyEtcRepairReason} from './legacy-etc-repair.mjs';
 import {SHIFT_MASTER_DEFAULTS,normalizeShiftRecord,shiftIdentity} from './shift-master.mjs';
-import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForRole,requestCorrectionValidationError} from './request-correction-policy.mjs';
+import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,normalizeRequestCorrectionChanges,requestCorrectionChangedFields,requestCorrectionFields,requestCorrectionSnapshot,requestCorrectionTimelineFields,requestCorrectionType,requestCorrectionTypesForManagerRoles,requestCorrectionValidationError} from './request-correction-policy.mjs';
 import {jsonEntityTag,requestEtagMatches} from './response-etag.mjs';
 
 const {Pool}=pg;
@@ -4379,10 +4379,12 @@ async function requestCorrectionAccessContext(session,client=pool){
   const adminLevel=String(session?.permissions?.adminLevel||'').trim().toLowerCase();
   const administrator=session?.role==='super'&&['admin','super admin'].includes(adminLevel);
   const managerRoles=managerRoleSelection(session?.permissions?.managerRoles?.length?session.permissions.managerRoles:session?.permissions?.managerRole);
-  const pm=session?.role==='super'&&adminLevel==='manager'&&hasVehicleTransferPmRole(managerRoles);
-  const allowedTypes=session?.role==='normal'?requestCorrectionTypesForRole(session.assignedRole):[];
+  const manager=session?.role==='super'&&adminLevel==='manager';
+  const pm=manager&&hasVehicleTransferPmRole(managerRoles);
+  // The department manager requests the correction for their own department's stage(s).
+  const allowedTypes=manager?requestCorrectionTypesForManagerRoles(managerRoles):[];
   const requester=allowedTypes.length>0;
-  return {user,administrator,pm,requester,allowedTypes,login:String(session?.login||'').trim().toLowerCase(),scope:pm?managerReportScope(user):requester?userSiteScope(user):null};
+  return {user,administrator,pm,requester,allowedTypes,login:String(session?.login||'').trim().toLowerCase(),scope:pm||requester?managerReportScope(user):null};
 }
 
 function correctionVisibleToContext(correction,context){
@@ -4442,10 +4444,10 @@ function registerRequestCorrectionRoutes(){
   const client=await pool.connect();
   try{
     const access=await requestCorrectionAccessContext(req.session,client);
-    if(!access.requester)return res.status(403).json({error:'Only Production, Maintenance, or MIS users can request a correction.'});
+    if(!access.requester)return res.status(403).json({error:'Only a Production, Maintenance, or MIS Manager can request a correction.'});
     const reference=String(req.body?.requestReference||'').trim();
     const type=requestCorrectionType(req.body?.correctionType);
-    if(!access.allowedTypes.includes(type))return res.status(403).json({error:'You can request corrections only for entries created by your assigned department.'});
+    if(!access.allowedTypes.includes(type))return res.status(403).json({error:'You can request corrections only for the entries of your own department.'});
     const reason=String(req.body?.reason||'').trim();
     const evidenceData=String(req.body?.evidenceData||'');
     const evidenceName=String(req.body?.evidenceName||'').trim().slice(0,240);
@@ -4455,7 +4457,6 @@ function registerRequestCorrectionRoutes(){
     const request=rows[0];
     if(!request){await client.query('ROLLBACK');return res.status(404).json({error:'Maintenance request not found.'})}
     if(!reportScopeIncludesSite(access.scope,request.site)){await client.query('ROLLBACK');return res.status(403).json({error:'This request belongs to a different location.'})}
-    if(req.session.assignedRole==='Production User'&&String(request.requesterLogin||'').trim().toLowerCase()!==access.login){await client.query('ROLLBACK');return res.status(403).json({error:'Production users can request correction only for their own Off Road entry.'})}
     const stageError=correctionStageError(type,request);
     if(stageError){await client.query('ROLLBACK');return res.status(409).json({error:stageError})}
     const originalValues=requestCorrectionSnapshot(request,type);
@@ -4470,9 +4471,10 @@ function registerRequestCorrectionRoutes(){
       [reference,request.site,type,JSON.stringify(originalValues),JSON.stringify(proposedChanges),reason,evidenceData,evidenceName,evidenceType,REQUEST_CORRECTION_STATUS.PENDING,access.login,req.session.name||req.session.login||'User']);
     await client.query('COMMIT');
     const saved=inserted.rows[0];
-    const pmLogins=await vehicleTransferPmLogins(pool,request.site);
+    // A Production Manager can be both the requester and a reviewer; someone else must review.
+    const pmLogins=(await vehicleTransferPmLogins(pool,request.site)).filter((login)=>String(login||'').trim().toLowerCase()!==access.login);
     await addTicketNotificationsBestEffort(pool,pmLogins,reference,`Correction approval is required for ${reference} (${REQUEST_CORRECTION_TYPES[type].label}) at ${request.site}. Requested by ${saved.requestedByName}.`,null,{whatsapp:false});
-    req.audit={eventType:'Correction',module:'Maintenance Requests',action:'User requested correction',targetType:'Maintenance request',targetReference:reference,reason,
+    req.audit={eventType:'Correction',module:'Maintenance Requests',action:'Manager requested correction',targetType:'Maintenance request',targetReference:reference,reason,
       changedFields:[...requestCorrectionChangedFields(type,originalValues,proposedChanges),{field:'Correction status',before:'Draft',after:REQUEST_CORRECTION_STATUS.PENDING},{field:'Evidence image',before:'',after:evidenceName}]};
     res.status(201).json(saved);
   }catch(error){await client.query('ROLLBACK').catch(()=>{});if(error.code==='23505')return res.status(409).json({error:'This request already has an open correction of the selected type.'});next(error)}finally{client.release()}
@@ -4491,6 +4493,7 @@ function registerRequestCorrectionRoutes(){
     const before=rows[0];
     if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'Correction request not found.'})}
     if(!context.pm||!reportScopeIncludesSite(context.scope,before.site)){await client.query('ROLLBACK');return res.status(403).json({error:'Only the assigned site Project / Production Manager can review this correction.'})}
+    if(String(before.requestedByLogin||'').trim().toLowerCase()===context.login){await client.query('ROLLBACK');return res.status(403).json({error:'You requested this correction, so another Project / Production Manager of the site must review it.'})}
     if(before.status!==REQUEST_CORRECTION_STATUS.PENDING){await client.query('ROLLBACK');return res.status(409).json({error:'This correction is no longer awaiting PM approval.'})}
     const status=decision==='approve'?REQUEST_CORRECTION_STATUS.APPROVED:REQUEST_CORRECTION_STATUS.REJECTED;
     const updated=await client.query(`UPDATE request_corrections SET status=$1,reviewed_by_login=$2,reviewed_by_name=$3,reviewed_at=NOW(),review_remark=$4 WHERE id=$5 RETURNING ${requestCorrectionProjection}`,

@@ -186,7 +186,7 @@ test('existing operational headers retain Reports and General User follows its m
     assert.equal(Boolean(reports),showReportsMenu,mobileRole);
     if(reports){reports.props.onClick();assert.deepEqual(sections,['reports']);}
     const correction=buttons.find(button=>renderToStaticMarkup(button).includes('Request correction'));
-    assert.equal(Boolean(correction),['Production User','Maintenance User','MIS User'].includes(mobileRole),`${mobileRole} correction menu`);
+    assert.equal(Boolean(correction),false,`${mobileRole}: Request correction moved to the department manager`);
   }
   assert.match(main,/!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage/);
 });
