@@ -24,7 +24,8 @@ test("request, ticket and Info Pulse list projections never embed media bodies",
 
   const infoRoute = between("app.get('/api/info-pulse'", "app.post('/api/info-pulse/prompt'");
   assert.match(infoRoute, /SELECT \$\{infoPulseProjection\}/);
-  assert.doesNotMatch(infoRoute, /attachDailyRemarks|requestProjection/);
+  assert.doesNotMatch(infoRoute, /requestProjection/);
+  assert.match(infoRoute, /requests:await attachDailyRemarks\(visibleRows\)/);
   assert.doesNotMatch(between("const infoPulseProjection=", "function requestEquipmentNotificationDetails"), /audio|media|file/i);
 });
 

@@ -4282,7 +4282,7 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
     const scope=infoPulseRequestScope(authorization.session,authorization.user);
     const {rows}=await pool.query(`SELECT ${infoPulseProjection} FROM maintenance_requests ORDER BY created_at DESC`);
     const visibleRows=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
-    const payload={requests:visibleRows,scope};
+    const payload={requests:await attachDailyRemarks(visibleRows),scope};
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'info-pulse',payload);
     return res.json(payload);
   }catch(error){next(error)}
