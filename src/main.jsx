@@ -1338,6 +1338,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
   const [breakdownCountChange, setBreakdownCountChange] = useState(null);
+  const [breakdownCountDay, setBreakdownCountDay] = useState(0);
   const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useState(false);
   const openBreakdownList = () => setAssetDrilldown("fleet-breakdown:all");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
@@ -1405,7 +1406,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     if (!breakdownCountReady) return;
     const change = trackCountChange(typeof localStorage === "undefined" ? null : localStorage, BREAKDOWN_COUNT_STORAGE_KEY, liveBreakdownAssetCount);
     setBreakdownCountChange((current) => (current && change && current.open === change.open && current.delta === change.delta ? current : change));
-  }, [breakdownCountReady, liveBreakdownAssetCount, equipmentUpdatedAt]);
+  }, [breakdownCountReady, liveBreakdownAssetCount, equipmentUpdatedAt, breakdownCountDay]);
+  useEffect(() => {
+    const now = new Date();
+    const timer = setTimeout(() => setBreakdownCountDay((day) => day + 1), new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime() + 1000);
+    return () => clearTimeout(timer);
+  }, [breakdownCountDay]);
   const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";

@@ -24,10 +24,11 @@ test("trackCountChange measures the live count against today's opening reading",
   assert.deepEqual(JSON.parse(storage.data.get("k")), { day: "2026-09-11", open: 80, last: 92 }, "the opening stays fixed and the latest reading is kept as the running close");
 });
 
-test("a new day opens at the previous day's closing reading, like a stock's previous close", () => {
+test("a new day resets the change to 0 and counts from the first reading", () => {
   const storage = memoryStorage({ k: JSON.stringify({ day: "2026-09-10", open: 75, last: 80 }) });
-  assert.deepEqual(trackCountChange(storage, "k", 79, "2026-09-11"), { open: 80, delta: -1, direction: "down" });
-  assert.deepEqual(JSON.parse(storage.data.get("k")), { day: "2026-09-11", open: 80, last: 79 });
+  assert.deepEqual(trackCountChange(storage, "k", 79, "2026-09-11"), { open: 79, delta: 0, direction: "flat" });
+  assert.deepEqual(JSON.parse(storage.data.get("k")), { day: "2026-09-11", open: 79, last: 79 });
+  assert.deepEqual(trackCountChange(storage, "k", 82, "2026-09-11"), { open: 79, delta: 3, direction: "up" });
 });
 
 test("a new day without a previous close opens at the first reading", () => {
