@@ -53,3 +53,11 @@
   .site-summary-region > div { flex-wrap: nowrap; }
   .site-summary-button { flex-shrink: 0; white-space: nowrap; }
 }
+
+/* Eye toggle: hide every search/filter strip so the records table takes the full height. */
+.mine-oem-context-end { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.mine-oem-filter-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line, #dde6f2); border-radius: 7px; background: var(--panel, #fff); color: var(--brand-purple, #522e90); font-size: 13px; font-weight: 700; cursor: pointer; }
+.mine-oem-filter-toggle:hover, .mine-oem-filter-toggle[aria-pressed="true"] { border-color: var(--brand-purple, #522e90); }
+.mine-oem-filter-toggle:focus-visible { outline: 2px solid var(--brand-purple, #522e90); outline-offset: 2px; }
+.mine-oem-details.filters-hidden :is(.mine-oem-detail-search, .dashboard-fleet-search, .site-report-summary) { display: none; }
+.mine-oem-details.filters-hidden .dashboard-record-browser { grid-template-rows: minmax(0, 1fr) !important; }

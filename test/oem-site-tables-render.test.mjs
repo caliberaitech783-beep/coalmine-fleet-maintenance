@@ -7,7 +7,7 @@ import { defaultDurationSort } from "../src/duration-sort.mjs";
 import { createPortal } from "react-dom";
 import { renderToStaticMarkup } from "react-dom/server";
 import { transformWithOxc } from "vite";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, RotateCcw, Search } from "lucide-react";
 import * as drilldown from "../src/dashboard-drilldown-model.mjs";
 import * as tableModel from "../src/table-actions-model.mjs";
 import * as recordDates from "../src/record-date-range.mjs";
@@ -30,7 +30,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
 const bindings = { groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
-  ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Search };
+  ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, ListFilter, RotateCcw, Search };
 const load = (file, extra = {}) => {
   const values = { ...bindings, ...extra };
   return new Function(...Object.keys(values), compiled[file])(...Object.values(values));
