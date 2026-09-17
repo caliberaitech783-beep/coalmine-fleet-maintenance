@@ -7,6 +7,7 @@ import {renderToStaticMarkup} from "react-dom/server";
 import {transformWithOxc} from "vite";
 import * as equipment from "../request-equipment.mjs";
 import * as workflow from "../request-workflow.mjs";
+import {approvedDelayedReason} from '../delayed-reason.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
@@ -80,7 +81,7 @@ async function runRoute(action, body) {
       writes.push({sql, values}); return {rows: [{...tipper, status: "Closed", verifiedAt: "2026-09-09 12:00:00"}]};
     }}, {...tipper, status: "Closed"}),
     requestExpectedCompletionValue: (_before, next) => next, validateRequestTimelineChange: () => {}, buildRequestTimelineChanges: () => {},
-    arrivalFlagReadySql: "true", delayedReasonRequired: () => false, parseRequestTimelineTimestamp: value => new Date(value),
+    arrivalFlagReadySql: "true", delayedReasonRequired: () => false, approvedDelayedReason, parseRequestTimelineTimestamp: value => new Date(value),
     maintenanceWriteFailure: (error, res, next) => error.status ? res.status(error.status).json({error: error.message}) : next(error),
     requestWorkflowWhatsAppLogins: async () => [], requestEquipmentNotificationDetails: () => "", requestNotificationTime: () => "",
     addTicketNotificationsBestEffort: async () => {}, workflowRequestLink: () => "", publicBaseUrl: () => "",

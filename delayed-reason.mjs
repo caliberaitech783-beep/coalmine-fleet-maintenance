@@ -84,6 +84,12 @@ export const DELAYED_REASON_DEFAULT_REPAIR_TYPES = Object.fromEntries(DELAYED_RE
   return [reason, groups.length === Object.keys(REPAIR_TYPE_LABELS).length ? 'All' : groups.map((group) => REPAIR_TYPE_LABELS[group]).join(', ')];
 }));
 
+// Only the approved reasons may be selected, stored or displayed. Returns the approved spelling, or ''.
+export function approvedDelayedReason(value) {
+  const key = reasonKey(value);
+  return key ? DELAYED_REASON_DEFAULTS.find((reason) => reasonKey(reason) === key) || '' : '';
+}
+
 export function parseDelayedReasonRepairTypes(value) {
   return String(Array.isArray(value) ? value.join(',') : value || '').split(/[,;|\n]/).map(repairTypeKey).filter(Boolean);
 }
@@ -99,22 +105,21 @@ export function delayedReasonListForRepairType(repairType) {
 // order, limited to reasons still present in the Delayed Reason master, plus any
 // custom reasons added to the master that belong to no defined list.
 // masterRecords are Delayed Reason master records ({delayedReason, repairTypes}) or plain reason strings.
-// A record with breakdown types applies only to those types ("All" = every type). A record without them
-// falls back to the approved list for a default reason, and to every type for a custom reason.
+// Only approved reasons are ever offered. A record with breakdown types applies only to those types
+// ("All" = every type); a record without them falls back to the approved list for its breakdown type.
 export function delayedReasonsForRepairType(repairType, masterRecords = []) {
   const list = delayedReasonListForRepairType(repairType);
   const seen = new Set();
   const entries = masterRecords
     .map((record) => (record && typeof record === 'object' ? record : {delayedReason: record}))
-    .map((record) => ({reason: String(record.delayedReason || '').trim(), types: parseDelayedReasonRepairTypes(record.repairTypes)}))
+    .map((record) => ({reason: approvedDelayedReason(record.delayedReason), types: parseDelayedReasonRepairTypes(record.repairTypes)}))
     .filter((entry) => entry.reason && !seen.has(reasonKey(entry.reason)) && seen.add(reasonKey(entry.reason)));
   if (!entries.length) return [...list];
   const typeKey = repairTypeKey(repairType) || 'breakdown';
   const listOrder = new Map(list.map((reason, index) => [reasonKey(reason), index]));
-  const definedKeys = new Set(DELAYED_REASON_DEFAULTS.map(reasonKey));
   const applies = (entry) => entry.types.length
     ? entry.types.some((type) => type === typeKey || type.startsWith('all'))
-    : !definedKeys.has(reasonKey(entry.reason)) || listOrder.has(reasonKey(entry.reason));
+    : listOrder.has(reasonKey(entry.reason));
   const rank = (entry) => listOrder.has(reasonKey(entry.reason)) ? listOrder.get(reasonKey(entry.reason)) : list.length;
   return entries.filter(applies).map((entry, index) => ({entry, index}))
     .sort((a, b) => rank(a.entry) - rank(b.entry) || a.index - b.index)

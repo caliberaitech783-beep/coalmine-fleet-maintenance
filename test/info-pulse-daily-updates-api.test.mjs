@@ -5,6 +5,7 @@ import {pulseDailyUpdates} from '../src/info-pulse-reasons.mjs';
 import {buildInfoPulseBreakdowns} from '../info-pulse-data.mjs';
 import {scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
+import {approvedDelayedReason} from '../delayed-reason.mjs';
 
 const server = readFileSync(new URL('../server.mjs', import.meta.url), 'utf8');
 const helper = server.slice(server.indexOf('async function attachDailyRemarks('), server.indexOf('async function requestWorkflowWhatsAppLogins('));
@@ -30,7 +31,7 @@ async function load({sites = ['Sasti OB'], failRemarks = false, cached = false} 
   }};
   let handler, body, failure, cacheNamespace;
   const deps = {
-    pool, infoPulseProjection:'reference AS ref', requireSession(){},
+    pool, infoPulseProjection:'reference AS ref', requireSession(){}, approvedDelayedReason,
     app:{get(path, ...handlers){handler=handlers.at(-1);}},
     currentDashboardAuthorization:async()=>({session:{role:'super'}, user:{}}),
     infoPulseRequestScope:()=>({sites:sites.map(canonicalSiteName), restrictToScope:true}), scopeInfoPulseRequests,

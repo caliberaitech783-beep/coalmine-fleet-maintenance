@@ -30,7 +30,9 @@ async function runStartup({users=[],initialized=true}={}){
       }
       // The only permitted master update tags breakdown types on Delayed Reason records; it can never touch accounts.
       const delayedReasonTypeSeed=sql.startsWith("UPDATE master_records SET record_data=record_data||jsonb_build_object('repairTypes',$2::text)")&&sql.includes("WHERE master_name='Delayed Reason'");
-      if(!delayedReasonTypeSeed)assert.doesNotMatch(sql,/UPDATE master_records SET record_data|DELETE FROM (?:master_records|auth_sessions)/,'startup fixture must not rewrite accounts or credentials');
+      // The only permitted master delete trims the Delayed Reason master to the approved reasons.
+      const delayedReasonCleanup=sql.startsWith("DELETE FROM master_records WHERE master_name='Delayed Reason'");
+      if(!delayedReasonTypeSeed&&!delayedReasonCleanup)assert.doesNotMatch(sql,/UPDATE master_records SET record_data|DELETE FROM (?:master_records|auth_sessions)/,'startup fixture must not rewrite accounts or credentials');
       return {rows:[],rowCount:0};
     },
     release(){released=true;},

@@ -5,6 +5,7 @@ import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 import * as timeline from '../request-timeline.mjs';
 import {validMeterReadings} from '../request-workflow.mjs';
+import {approvedDelayedReason} from '../delayed-reason.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const authSource=server.slice(server.indexOf('async function requireSession('),server.indexOf('async function requireSuper('));
@@ -68,7 +69,7 @@ function harness(kind,{row=waiting,user={site:'Sasti OB'},failFinalWrite=false,n
     readSession:async req=>req.testSession,...siteAccess,currentUserRecord:async()=>user,
     canonicalSiteName:value=>String(value||'').trim().toLowerCase(),requestProjection:'*',
     validMeterReadings,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
-    requestDateTimeValue:()=>new Date(now),delayedReasonRequired:()=>false,REQUEST_CLOSE_STATUSES:['Closed','In progress','Open'],
+    requestDateTimeValue:()=>new Date(now),delayedReasonRequired:()=>false,approvedDelayedReason,REQUEST_CLOSE_STATUSES:['Closed','In progress','Open'],
     attachDailyRemarks:async rows=>rows,addTicketNotifications:async()=>{if(notificationFailure==='storage')throw new Error('Notification storage unavailable');},
     workflowWhatsAppRecipientLogins:()=>[],storedWhatsAppReportSettings:async()=>{if(notificationFailure==='settings')throw new Error('Notification settings unavailable');return {};},
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],

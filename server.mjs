@@ -66,7 +66,7 @@ import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipme
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
 import {claimInfoPulsePrompt,infoPulsePromptKey} from './info-pulse-prompt.mjs';
 import {isExcludedWorkflowWhatsAppRecipient,isWorkflowWhatsAppRecipient,isWhatsAppAllAlertRecipient,isWhatsAppReportsOnlyRecipient,whatsAppRecipientRole,workflowReminderSlot,workflowRequestLink,workflowWhatsAppRecipientLogins} from './whatsapp-workflow-policy.mjs';
-import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,delayedReasonRequired} from './delayed-reason.mjs';
+import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,approvedDelayedReason,delayedReasonRequired} from './delayed-reason.mjs';
 // Keep globally excluded request owners out of every server-backed view and report.
 import {requestsVisibleGlobally,requestsVisibleToSession} from './mis-request-visibility.mjs';
 import {serverErrorHandler} from './server-error-response.mjs';
@@ -932,6 +932,15 @@ async function migrate(){
       }
       await client.query(`INSERT INTO app_metadata (key,value,updated_at)
         VALUES ('delayed_reason_repair_types_seeded_v1','true',NOW())
+        ON CONFLICT (key) DO NOTHING`);
+    }
+    // One-time: the Delayed Reason master keeps only the approved reasons.
+    const {rows:delayedApprovedOnly}=await client.query("SELECT value FROM app_metadata WHERE key='delayed_reason_master_approved_only_v1' FOR UPDATE");
+    if(!delayedApprovedOnly.length){
+      await client.query(`DELETE FROM master_records WHERE master_name='Delayed Reason'
+        AND NOT (lower(trim(COALESCE(record_data->>'delayedReason',''))) = ANY($1::text[]))`,[DELAYED_REASON_DEFAULTS.map((reason)=>reason.trim().toLowerCase())]);
+      await client.query(`INSERT INTO app_metadata (key,value,updated_at)
+        VALUES ('delayed_reason_master_approved_only_v1','true',NOW())
         ON CONFLICT (key) DO NOTHING`);
     }
     const {rows:shiftSeed}=await client.query("SELECT value FROM app_metadata WHERE key='shift_master_defaults_seeded_v1' FOR UPDATE");
@@ -4221,7 +4230,8 @@ async function attachDailyRemarks(rows,client=pool){
     FROM maintenance_daily_remarks WHERE request_reference=ANY($1::text[]) ORDER BY created_at DESC`,[refs]);
   const grouped=new Map();
   for(const remark of remarks){const list=grouped.get(remark.requestReference)||[];list.push(remark);grouped.set(remark.requestReference,list)}
-  return rows.map((row)=>({...row,dailyRemarks:grouped.get(row.ref)||[]}));
+  // Tables show only approved delayed reasons; legacy free-text values are not displayed.
+  return rows.map((row)=>({...row,delayedReason:approvedDelayedReason(row.delayedReason),dailyRemarks:grouped.get(row.ref)||[]}));
 }
 
 async function requestWorkflowWhatsAppLogins(client,{eventType,site}){
@@ -4674,7 +4684,7 @@ app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermissi
     const remark=String(req.body?.remark||'').trim();
     // delayedReason is the master reason chosen for the breakdown type. The legacy delay_reason column mirrors it
     // so reports, Info Pulse and WhatsApp alerts keep showing the delay reason for every daily update.
-    const dailyDelayedReason=String(req.body?.delayedReason||'').trim().slice(0,160);
+    const dailyDelayedReason=approvedDelayedReason(req.body?.delayedReason);
     const delayReason=String(req.body?.delayReason||'').trim()||dailyDelayedReason;
     if(!remark||!delayReason)return res.status(400).json({error:'Enter today’s update and select the delayed reason.'});
     const authorLogin=String(req.session.login||'').trim().toLowerCase();
@@ -4852,7 +4862,7 @@ app.patch('/api/requests/:reference',requireSession,requirePermission('editReque
     const reference=String(req.params.reference||'').trim();
     const {category='Maintenance request',complaint,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
     const explicitAcceptance=req.body?.acceptRequest===true;
-    const editDelayedReason=String(req.body?.delayedReason||'').trim().slice(0,160);
+    const editDelayedReason=approvedDelayedReason(req.body?.delayedReason);
     const normalizedMeterType=String(meterType).trim().toUpperCase();
     const normalizedOpeningMeterReading=String(openingMeterReading).trim();
     const openingMeterReadings=req.body?.openingMeterReadings ?? {};
@@ -4966,15 +4976,6 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
             WHERE reference=$4 AND status NOT IN ('Closed','Idle','Ideal') AND verified_at IS NULL AND ${arrivalFlagReadySql} RETURNING ${requestProjection}`,
             [maintenanceWork,maintenanceAudio,status,reference,req.session.name||req.session.login||'Maintenance User',maintenanceWorkLanguage]);
     if(!rows.length)throw arrivalRedFlagError();
-    if(delayedReason){
-      await client.query(`INSERT INTO master_records (master_name,record_data)
-        SELECT 'Delayed Reason',$1::jsonb
-        WHERE NOT EXISTS (
-          SELECT 1 FROM master_records
-          WHERE master_name='Delayed Reason'
-            AND lower(trim(record_data->>'delayedReason'))=lower(trim($2))
-        )`,[JSON.stringify({delayedReason}),delayedReason]);
-    }
     const timelineEvents=ideal?['idealRequestedAt','idealApprovedAt']:status==='Closed'?['closedAt']:['inProgressAt'];
     return {rows,delayedClosure,timelineEvents,timelineSources:{closedAt:'user',idealRequestedAt:'system',idealApprovedAt:'system',inProgressAt:'system'},timelineReason:!ideal&&status==='Closed'?req.body?.correctionReason||'':'',timelineRequireReason:!ideal&&status==='Closed'?['closedAt']:[]};
     });
@@ -5883,8 +5884,8 @@ async function sendScheduledAuditLogExports(now=new Date()){
 app.patch('/api/requests/:reference/delayed-reason',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
-    const delayedReason=String(req.body?.delayedReason||'').trim();
-    if(!delayedReason||delayedReason.length>160)return res.status(400).json({error:'Enter a delayed reason of up to 160 characters.'});
+    const delayedReason=approvedDelayedReason(req.body?.delayedReason);
+    if(!delayedReason)return res.status(400).json({error:'Select one of the approved delayed reasons.'});
     const {rows}=await withMaintenanceArrivalGuard(req,reference,async(client)=>client.query(
       `UPDATE maintenance_requests SET delayed_reason=$1 WHERE reference=$2 RETURNING ${requestProjection}`,
       [delayedReason,reference]));

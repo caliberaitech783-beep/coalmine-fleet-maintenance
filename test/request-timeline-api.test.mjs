@@ -7,6 +7,7 @@ import * as timeline from '../request-timeline.mjs';
 import {validMeterReadings} from '../request-workflow.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
+import {approvedDelayedReason} from '../delayed-reason.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const slice=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end));
@@ -72,7 +73,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,
     validMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
-    REQUEST_CLOSE_STATUSES:['Closed','In progress','Awaiting parts'],delayedReasonRequired:()=>false,
+    REQUEST_CLOSE_STATUSES:['Closed','In progress','Awaiting parts'],delayedReasonRequired:()=>false,approvedDelayedReason,
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],addTicketNotificationsBestEffort:async()=>{},
     requestEquipmentNotificationDetails:()=>'',requestNotificationTime:()=>'',workflowRequestLink:()=>'',publicBaseUrl:()=>'',console:{error(){}},
   };

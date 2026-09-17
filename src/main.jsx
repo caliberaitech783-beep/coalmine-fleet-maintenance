@@ -65,7 +65,7 @@ import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime } from "../date-time-format.mjs";
 import { calculateBreakdownDaysFromStart, calculateBreakdownMinutes, durationLabelMinutes } from "../breakdown-duration.mjs";
-import { delayedReasonRequired, delayedReasonsForRepairType } from "../delayed-reason.mjs";
+import { delayedReasonsForRepairType } from "../delayed-reason.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
@@ -7996,36 +7996,6 @@ function MaintenanceRemarks({ remarks = [], category = "" }) {
   return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{formatTwelveHourDateTime(item.createdAt)} · {item.authorName}</b><p>{item.remark}</p><small>{category ? `${category} · ` : ""}Delayed reason: {item.delayedReason || item.delayReason || "—"}</small></article>)}</details> : "—";
 }
 
-function DelayedReasonForm({ request, close, onSave }) {
-  const [records, , loaded] = useMasterRecords("Delayed Reason");
-  const [query, setQuery] = useState("");
-  const [reason, setReason] = useState(request.delayedReason || "");
-  const [custom, setCustom] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const options = delayedReasonsForRepairType(request.category, records);
-  const visibleOptions = options.filter((option) => matchesSmartSearch(query, option));
-  return <Modal title={`Delayed reason · ${request.door || request.ref}${request.category ? ` · ${request.category}` : ""}`} close={saving ? () => {} : close}>
-    <form className="form" onSubmit={async (event) => {
-      event.preventDefault();
-      if (!reason.trim() || saving) return;
-      setSaving(true); setError("");
-      try { await onSave(reason.trim()); } catch (error) { setError(error.message); } finally { setSaving(false); }
-    }}>
-      <label className="full">Search delayed reasons<input type="search" data-smart-search value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search master reasons…" /></label>
-      <div className="full" style={{maxHeight: "260px", overflowY: "auto"}} role="group" aria-label="Delayed Reasons master">
-        {!loaded && <p>Loading reasons…</p>}
-        {loaded && !visibleOptions.length && <p>No matching reasons. You can add a custom reason below.</p>}
-        {visibleOptions.map((option) => <button key={option} type="button" className={!custom && reason === option ? "primary" : "secondary"} style={{display: "block", marginBottom: "8px", width: "100%", textAlign: "left"}} onClick={() => {setReason(option); setCustom(false);}}>{option}</button>)}
-      </div>
-      <button type="button" className="secondary full" onClick={() => {setCustom(true); setReason("");}}>Add custom reason</button>
-      {custom ? <label className="full">Custom delayed reason<input autoFocus required maxLength={160} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Enter delayed reason" /></label> : reason && <p className="full">Selected: {reason}</p>}
-      {error && <p className="full" role="alert">{error}</p>}
-      <footer><button type="button" disabled={saving} onClick={close}>Cancel</button><button className="primary" disabled={saving || !reason.trim()}>{saving ? "Saving…" : "Save delayed reason"}</button></footer>
-    </form>
-  </Modal>;
-}
-
 function DailyRemarkForm({ request, close, onSave }) {
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const previous=[...(request.dailyRemarks||[])].sort((a,b)=>String(a.createdAt||"").localeCompare(String(b.createdAt||"")));
@@ -8036,10 +8006,10 @@ function DailyRemarkForm({ request, close, onSave }) {
   const [delayedReasonRecords]=useMasterRecords("Delayed Reason");
   const savedDelayedReason=String(todayRemark?.delayedReason||request.delayedReason||"").trim();
   const typeDelayedReasons=delayedReasonsForRepairType(request.category,delayedReasonRecords||[]);
-  const delayedReasonOptions=savedDelayedReason&&!typeDelayedReasons.includes(savedDelayedReason)?[savedDelayedReason,...typeDelayedReasons]:typeDelayedReasons;
+  const delayedReasonOptions=typeDelayedReasons;
   return <Modal title={`Daily updates · ${request.ref}`} close={close}><div className="daily-update-journal">
     {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header>{history.map((item,index)=><article key={`${item.createdAt}-${index}`}><time>{formatTwelveHourDateTime(item.createdAt)}</time><b>{item.authorName||"Maintenance User"}</b><dl><div><dt>Maintenance update</dt><dd>{item.remark}</dd></div><div><dt>Breakdown type</dt><dd>{request.category||"—"}</dd></div><div><dt>Delayed reason</dt><dd>{item.delayedReason||item.delayReason||"—"}</dd></div></dl></article>)}</section>}
-    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label><label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={savedDelayedReason}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
+    <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label><label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
   </div></Modal>;
 }
 
@@ -8139,8 +8109,6 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     const timer = window.setInterval(() => setNow(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
-  const delayedReasonDue = (row) => Boolean(String(row.delayedReason || "").trim()) || delayedReasonRequired(row.expectedCompletionAt, new Date(now), 0);
-  const canSelectDelayedReason = (row) => Boolean(onDelayedReason) && delayedReasonDue(row);
   const statusLabel = (row) => (showAcceptanceStatus || showInProgressStatus)
     && String(row.acceptedAt || "").trim()
     && ["accepted", "in progress"].includes(requestStatusLabel(row).toLowerCase())
@@ -8260,7 +8228,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
               <td>{row.category || "—"}</td>
-              <td>{canSelectDelayedReason(row) ? <button type="button" className="delayed-reason-compact" disabled={lockedIdeal} onClick={() => onDelayedReason(row)}>{row.delayedReason || "Select delayed reason"}</button> : (row.delayedReason || "—")}</td>
+              <td>{row.delayedReason || "—"}</td>
               {showMisFlagData && <><td>{formatTwelveHourDateTime(row.misFlaggedAt, true)}</td><td>{row.misFlaggedBy || "—"}</td><td className="request-reason-cell"><div className="request-reason-text">{row.misFlagRemark || "—"}</div></td><td>{row.verifiedAt ? "Verified" : "Awaiting verification"}</td></>}
               <td><Status>{statusLabel(row) || "Open"}</Status></td>
               <td>{row.idleReason || "—"}</td>
@@ -9251,7 +9219,6 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
-  const [delaying, setDelaying] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
   const [arrivalFlagNextAction, setArrivalFlagNextAction] = useState(null);
   const [userReportCategory, setUserReportCategory] = useState("general");
@@ -9428,7 +9395,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
       {isGeneral && tab === "requests" && canSeeRequestMenu("View requests") && <><h3 className="sectiontitle">Active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} onDelayedReason={permissions.editRequests ? setDelaying : null} /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
@@ -9437,7 +9404,6 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
-    {delaying && <DelayedReasonForm request={delaying} close={() => setDelaying(null)} onSave={async (delayedReason) => { await onUpdateRequest(delaying.ref, {delayedReason}, "delayed-reason"); setDelaying(null); }} />}
     {remarking && <DailyRemarkForm request={remarking} close={() => setRemarking(null)} onSave={saveDailyRemark} />}
     {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}

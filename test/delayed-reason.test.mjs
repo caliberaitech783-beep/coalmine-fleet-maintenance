@@ -1,21 +1,26 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,DELAYED_REASONS_BY_REPAIR_TYPE,delayedReasonRequired,delayedReasonsForRepairType} from '../delayed-reason.mjs';
+import {DELAYED_REASON_DEFAULTS,DELAYED_REASON_DEFAULT_REPAIR_TYPES,DELAYED_REASONS_BY_REPAIR_TYPE,approvedDelayedReason,delayedReasonRequired,delayedReasonsForRepairType} from '../delayed-reason.mjs';
 
-test('maintenance request delayed reasons use searchable master choices and a scoped update',()=>{
+test('the requests table only displays the delayed reason; only approved reasons are accepted',()=>{
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  const form=client.slice(client.indexOf('function DelayedReasonForm'),client.indexOf('function DailyRemarkForm'));
-  assert.match(form,/useMasterRecords\("Delayed Reason"\)/);
-  assert.match(form,/matchesSmartSearch\(query, option\)/);
-  assert.match(form,/Add custom reason/);
-  assert.match(form,/await onSave\(reason.trim\(\)\)/);
-  assert.match(client,/onDelayedReason=\{permissions.editRequests \? setDelaying : null\}/);
+  assert.doesNotMatch(client,/function DelayedReasonForm|Add custom reason|Select delayed reason<\/button>|setDelaying|delayed-reason-compact/);
+  assert.match(client,/<td>\{row\.delayedReason \|\| "—"\}<\/td>/);
+  assert.equal(DELAYED_REASON_DEFAULTS.length,20);
+  assert.equal(approvedDelayedReason(' parts - oem '),'Parts - OEM');
+  assert.equal(approvedDelayedReason('U bolt not available in the sasti site.'),'');
+  assert.equal(approvedDelayedReason(''),'');
+  assert.match(server,/delayedReason:approvedDelayedReason\(row\.delayedReason\)/);
+  assert.match(server,/const dailyDelayedReason=approvedDelayedReason\(req\.body\?\.delayedReason\);/);
+  assert.match(server,/const editDelayedReason=approvedDelayedReason\(req\.body\?\.delayedReason\);/);
+  assert.match(server,/delayed_reason_master_approved_only_v1/);
+  assert.match(server,/DELETE FROM master_records WHERE master_name='Delayed Reason'\s+AND NOT \(lower\(trim\(COALESCE\(record_data->>'delayedReason',''\)\)\) = ANY\(\$1::text\[\]\)\)/);
   const route=server.slice(server.indexOf("app.patch('/api/requests/:reference/delayed-reason'"),server.indexOf('app.use(express.static(staticRoot))'));
   assert.match(route,/requirePermission\('editRequests',\{role:'Maintenance User'\}\)/);
   assert.match(route,/withMaintenanceArrivalGuard/);
-  assert.match(route,/delayedReason.length>160/);
+  assert.match(route,/const delayedReason=approvedDelayedReason\(req\.body\?\.delayedReason\);/);
   assert.match(route,/SET delayed_reason=\$1 WHERE reference=\$2/);
 });
 
@@ -28,13 +33,13 @@ test('delayed reasons are offered per breakdown type in the approved order',()=>
   assert.deepEqual(delayedReasonsForRepairType('Super Structure'),DELAYED_REASONS_BY_REPAIR_TYPE.SUPERSTRUCTURE);
   assert.deepEqual(delayedReasonsForRepairType('superstructure'),DELAYED_REASONS_BY_REPAIR_TYPE.SUPERSTRUCTURE);
   for(const type of ['WGM','Preventive','Breakdown','Aggregate Repair','',undefined])assert.deepEqual(delayedReasonsForRepairType(type),DELAYED_REASONS_BY_REPAIR_TYPE.GENERAL,type);
-  // Reasons removed from the master disappear; custom master reasons stay available for every type.
+  // Reasons removed from the master disappear; reasons outside the approved 20 are never offered.
   const master=['Parts - CMLL','Fault Diagnosis - OEM','Superstructure - Repair','Crane booked','Acc- Repair Estimate-OEM'];
-  assert.deepEqual(delayedReasonsForRepairType('Breakdown',master),['Parts - CMLL','Fault Diagnosis - OEM','Crane booked']);
-  assert.deepEqual(delayedReasonsForRepairType('Accidental',master),['Parts - CMLL','Acc- Repair Estimate-OEM','Crane booked']);
-  assert.deepEqual(delayedReasonsForRepairType('Super Structure',master),['Parts - CMLL','Fault Diagnosis - OEM','Superstructure - Repair','Crane booked']);
+  assert.deepEqual(delayedReasonsForRepairType('Breakdown',master),['Parts - CMLL','Fault Diagnosis - OEM']);
+  assert.deepEqual(delayedReasonsForRepairType('Accidental',master),['Parts - CMLL','Acc- Repair Estimate-OEM']);
+  assert.deepEqual(delayedReasonsForRepairType('Super Structure',master),['Parts - CMLL','Fault Diagnosis - OEM','Superstructure - Repair']);
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
-  assert.match(client,/delayedReasonsForRepairType\(request\.category, records\)/);
+  assert.match(client,/delayedReasonsForRepairType\(request\.category,delayedReasonRecords\|\|\[\]\)/);
   assert.match(client,/\{key: "category", label: "Breakdown type", value: \(row\) => row\.category\}/);
   assert.match(client,/\["category", "Breakdown type"\], \["delayedReason", "Delayed reason"\]/);
   assert.match(client,/case "delayedReason": return <td>\{r\.delayedReason \|\| "—"\}<\/td>;/);
@@ -52,10 +57,10 @@ test('breakdown types stored in the Delayed Reason master drive the picker and t
   assert.deepEqual(delayedReasonsForRepairType('Super Structure',seeded),DELAYED_REASONS_BY_REPAIR_TYPE.SUPERSTRUCTURE);
   for(const type of ['WGM','Preventive','Breakdown','Aggregate Repair'])assert.deepEqual(delayedReasonsForRepairType(type,seeded),DELAYED_REASONS_BY_REPAIR_TYPE.GENERAL,type);
   // Admin edits win over the approved lists.
-  const edited=[{delayedReason:'Parts - OEM',repairTypes:'WGM'},{delayedReason:'Crane booked',repairTypes:'accidental; wgm'},{delayedReason:'Weather',repairTypes:'All'},{delayedReason:'Tyre stock',repairTypes:''}];
-  assert.deepEqual(delayedReasonsForRepairType('WGM',edited),['Parts - OEM','Crane booked','Weather','Tyre stock']);
-  assert.deepEqual(delayedReasonsForRepairType('Breakdown',edited),['Weather','Tyre stock']);
-  assert.deepEqual(delayedReasonsForRepairType('Accidental',edited),['Crane booked','Weather','Tyre stock']);
+  const edited=[{delayedReason:'Parts - OEM',repairTypes:'WGM'},{delayedReason:'Superstructure - Repair',repairTypes:'accidental; wgm'},{delayedReason:'Crane booked',repairTypes:'All'},{delayedReason:'Approval - CMLL',repairTypes:''}];
+  assert.deepEqual(delayedReasonsForRepairType('WGM',edited),['Parts - OEM','Approval - CMLL','Superstructure - Repair']);
+  assert.deepEqual(delayedReasonsForRepairType('Breakdown',edited),['Approval - CMLL']);
+  assert.deepEqual(delayedReasonsForRepairType('Accidental',edited),['Approval - CMLL','Superstructure - Repair']);
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
   assert.match(client,/\["repairTypes", "Breakdown types \(comma separated, or All\)"\]/);
@@ -105,8 +110,6 @@ test('the Delayed reason column only appears once ETC has passed and the close f
   assert.equal(delayedReasonRequired(etc,new Date('2026-09-06T10:00+05:30'),0),true);
   const client=fs.readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=fs.readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  assert.match(client,/delayedReasonRequired\(row\.expectedCompletionAt, new Date\(now\), 0\)/);
-  assert.match(client,/canSelectDelayedReason = \(row\) => Boolean\(onDelayedReason\) && delayedReasonDue\(row\)/);
   assert.match(client,/\{workflowHeader\("delayedReason", "Delayed reason"\)\}/);
   assert.doesNotMatch(client.slice(client.indexOf('function CloseRequestForm'),client.indexOf('function VerifyRequestForm')),/name="delayedReason"/);
   assert.doesNotMatch(client,/delayedReasonNeeded/);
