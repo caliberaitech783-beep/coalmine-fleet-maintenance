@@ -59,7 +59,7 @@
 .mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) { min-height: 70px; padding-block: 12px; }
 .mine-dashboard :is(.mine-breakdown-site-head, .mine-road-site-head) { min-height: 52px; }
 .mine-dashboard .mine-breakdown-site-head span small { display: block; margin-top: 2px; color: var(--brand-purple); font-size: 11px; font-weight: 750; letter-spacing: 0; text-transform: none; }
-.mine-dashboard :is(.mine-breakdown-site-head, .mine-breakdown-site-row) { grid-template-columns: minmax(150px, 1.1fr) repeat(4, minmax(75px, .55fr)) minmax(280px, 2.1fr) 24px; min-width: 850px; }
+.mine-dashboard :is(.mine-breakdown-site-head, .mine-breakdown-site-row) { grid-template-columns: minmax(150px, 1.1fr) repeat(5, minmax(75px, .55fr)) minmax(280px, 2.1fr) 24px; min-width: 925px; }
 .mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) > .site b { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .mine-dashboard :is(.mine-breakdown-site-row, .mine-road-site-row) .metric b,
 .mine-dashboard .mine-road-site-row > .availability b,
