@@ -56,7 +56,8 @@ export default function DashboardRecordBrowser({ rows, movementDateControl = nul
   const [openedLevel, setOpenedLevel] = useState(initialSite ? 2 : initialRegion ? 1 : 0);
   const [recordDateRange, setRecordDateRange] = useState("");
   const [toolbarTarget, setToolbarTarget] = useState(null);
-  const datedRows = showDateFilter && !movementDateControl ? filterRecordsByDate(rows, recordDateRange, (record) => record.requestStart) : rows;
+  // Opening balances already select carried requests in the parent; Started must not filter them again.
+  const datedRows = movementDateControl ? rows : showDateFilter ? filterRecordsByDate(rows, recordDateRange, (record) => record.requestStart) : rows;
   // With no internal hierarchy, the parent supplies the complete filtered selection.
   const view = drilldownView(datedRows, regions, hideHierarchyFilters ? {} : filters, { rowsAreScoped });
   const id = useId();
