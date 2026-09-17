@@ -815,7 +815,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const vehicleTransferDirectAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.includes("MIS Manager");
   const vehicleTransferMasterAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.includes("Project Manager");
   const vehicleTransferRoleAccess=vehicleTransferDirectAccess||vehicleTransferMasterAccess;
-  const correctionApprovalAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.some((role)=>["Project Manager","Production Manager"].includes(role));
+  const correctionApprovalAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.includes("Project Manager");
   const correctionRequestAccess=permissions.adminLevel==="Manager"&&activeManagerRoles.some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const standardMastersAccess=accessAllows(viewPermissions.tabAccess, "Masters");
   const visibleMasterNav = masterNav.filter(([name]) => (standardMastersAccess&&masterAccessAllows(viewPermissions, name)&&!(name==="Vehicle transfers"&&vehicleTransferDirectAccess))||(name==="Vehicle transfers"&&vehicleTransferMasterAccess));
@@ -9580,7 +9580,7 @@ function App() {
   const vehicleTransferRoleAccess=adminPermissions.adminLevel==='Manager'&&managerRoleSelection(adminPermissions.managerRoles?.length?adminPermissions.managerRoles:adminPermissions.managerRole)
     .some((role)=>['MIS Manager','Project Manager'].includes(role));
   const correctionApprovalAccess=adminPermissions.adminLevel==='Manager'&&managerRoleSelection(adminPermissions.managerRoles?.length?adminPermissions.managerRoles:adminPermissions.managerRole)
-    .some((role)=>['Project Manager','Production Manager'].includes(role));
+    .includes('Project Manager');
   const correctionRequestAccess=adminPermissions.adminLevel==='Manager'&&managerRoleSelection(adminPermissions.managerRoles?.length?adminPermissions.managerRoles:adminPermissions.managerRole)
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
   const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);

@@ -4380,7 +4380,9 @@ async function requestCorrectionAccessContext(session,client=pool){
   const administrator=session?.role==='super'&&['admin','super admin'].includes(adminLevel);
   const managerRoles=managerRoleSelection(session?.permissions?.managerRoles?.length?session.permissions.managerRoles:session?.permissions?.managerRole);
   const manager=session?.role==='super'&&adminLevel==='manager';
-  const pm=manager&&hasVehicleTransferPmRole(managerRoles);
+  // Corrections go straight to the site's Project Manager. Department managers,
+  // including the Production Manager, only raise them.
+  const pm=manager&&managerRoles.includes(CORRECTION_REVIEWER_ROLE);
   // The department manager requests the correction for their own department's stage(s).
   const allowedTypes=manager?requestCorrectionTypesForManagerRoles(managerRoles):[];
   const requester=allowedTypes.length>0;
@@ -4391,6 +4393,17 @@ function correctionVisibleToContext(correction,context){
   return context.administrator
     ||(context.pm&&reportScopeIncludesSite(context.scope,correction.site))
     ||(context.requester&&String(correction.requestedByLogin||'').trim().toLowerCase()===context.login);
+}
+
+const CORRECTION_REVIEWER_ROLE='Project Manager';
+async function correctionProjectManagerLogins(client,site){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  return [...new Set(rows.flatMap((row)=>{
+    const user=row.record_data||{},profile=resolveMobileAccess({user});
+    const login=String(user.login||'').trim().toLowerCase();
+    return login&&profile.sessionRole==='super'&&profile.permissions.adminLevel==='Manager'
+      &&(profile.permissions.managerRoles||[]).includes(CORRECTION_REVIEWER_ROLE)&&userManagesSite(user,site)?[login]:[];
+  }))];
 }
 
 async function correctionAdministratorLogins(client=pool){
@@ -4471,8 +4484,8 @@ function registerRequestCorrectionRoutes(){
       [reference,request.site,type,JSON.stringify(originalValues),JSON.stringify(proposedChanges),reason,evidenceData,evidenceName,evidenceType,REQUEST_CORRECTION_STATUS.PENDING,access.login,req.session.name||req.session.login||'User']);
     await client.query('COMMIT');
     const saved=inserted.rows[0];
-    // A Production Manager can be both the requester and a reviewer; someone else must review.
-    const pmLogins=(await vehicleTransferPmLogins(pool,request.site)).filter((login)=>String(login||'').trim().toLowerCase()!==access.login);
+    // Forwarded directly to the site's Project Manager; nobody reviews their own request.
+    const pmLogins=(await correctionProjectManagerLogins(pool,request.site)).filter((login)=>login!==access.login);
     await addTicketNotificationsBestEffort(pool,pmLogins,reference,`Correction approval is required for ${reference} (${REQUEST_CORRECTION_TYPES[type].label}) at ${request.site}. Requested by ${saved.requestedByName}.`,null,{whatsapp:false});
     req.audit={eventType:'Correction',module:'Maintenance Requests',action:'Manager requested correction',targetType:'Maintenance request',targetReference:reference,reason,
       changedFields:[...requestCorrectionChangedFields(type,originalValues,proposedChanges),{field:'Correction status',before:'Draft',after:REQUEST_CORRECTION_STATUS.PENDING},{field:'Evidence image',before:'',after:evidenceName}]};
@@ -4492,8 +4505,8 @@ function registerRequestCorrectionRoutes(){
     const {rows}=await client.query(`SELECT ${requestCorrectionProjection} FROM request_corrections WHERE id=$1 FOR UPDATE`,[id]);
     const before=rows[0];
     if(!before){await client.query('ROLLBACK');return res.status(404).json({error:'Correction request not found.'})}
-    if(!context.pm||!reportScopeIncludesSite(context.scope,before.site)){await client.query('ROLLBACK');return res.status(403).json({error:'Only the assigned site Project / Production Manager can review this correction.'})}
-    if(String(before.requestedByLogin||'').trim().toLowerCase()===context.login){await client.query('ROLLBACK');return res.status(403).json({error:'You requested this correction, so another Project / Production Manager of the site must review it.'})}
+    if(!context.pm||!reportScopeIncludesSite(context.scope,before.site)){await client.query('ROLLBACK');return res.status(403).json({error:'Only the assigned site Project Manager can review this correction.'})}
+    if(String(before.requestedByLogin||'').trim().toLowerCase()===context.login){await client.query('ROLLBACK');return res.status(403).json({error:'You requested this correction, so another Project Manager of the site must review it.'})}
     if(before.status!==REQUEST_CORRECTION_STATUS.PENDING){await client.query('ROLLBACK');return res.status(409).json({error:'This correction is no longer awaiting PM approval.'})}
     const status=decision==='approve'?REQUEST_CORRECTION_STATUS.APPROVED:REQUEST_CORRECTION_STATUS.REJECTED;
     const updated=await client.query(`UPDATE request_corrections SET status=$1,reviewed_by_login=$2,reviewed_by_name=$3,reviewed_at=NOW(),review_remark=$4 WHERE id=$5 RETURNING ${requestCorrectionProjection}`,
@@ -4545,7 +4558,7 @@ function registerRequestCorrectionRoutes(){
       [REQUEST_CORRECTION_STATUS.APPLIED,String(req.session.login||'').trim().toLowerCase(),req.session.name||req.session.login||'Administrator',id]);
     await client.query('COMMIT');
     const saved=updated.rows[0];
-    const pmLogins=await vehicleTransferPmLogins(pool,saved.site);
+    const pmLogins=await correctionProjectManagerLogins(pool,saved.site);
     await addTicketNotificationsBestEffort(pool,[...pmLogins,saved.requestedByLogin],saved.requestReference,`Approved correction ${saved.id} was applied to ${saved.requestReference} by ${saved.appliedByName}.`,null,{whatsapp:false});
     req.audit={eventType:'Correction',module:'Maintenance Requests',action:'Apply approved correction',targetType:'Maintenance request',targetReference:saved.requestReference,reason:saved.reason,
       changedFields:[...requestCorrectionChangedFields(saved.correctionType,saved.originalValues,saved.proposedChanges),{field:'Correction status',before:REQUEST_CORRECTION_STATUS.APPROVED,after:REQUEST_CORRECTION_STATUS.APPLIED}]};

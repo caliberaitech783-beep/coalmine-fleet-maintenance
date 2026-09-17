@@ -16,10 +16,13 @@ test('server persists a manager-requested correction register with evidence, PM 
   assert.doesNotMatch(server,/Production users can request correction only for their own Off Road entry/,'the manager may correct any entry of their department within their sites');
   assert.match(server,/const allowedTypes=manager\?requestCorrectionTypesForManagerRoles\(managerRoles\):\[\];/,'operational users no longer request corrections');
   assert.match(server,/scope:pm\|\|requester\?managerReportScope\(user\):null/,'requests are limited to the manager\'s sites');
-  assert.match(server,/You requested this correction, so another Project \/ Production Manager of the site must review it/,'nobody approves their own correction');
+  assert.match(server,/You requested this correction, so another Project Manager of the site must review it/,'nobody approves their own correction');
   assert.match(server,/action:'Manager requested correction'/);
   assert.match(server,/allowedTypes:context\.allowedTypes/);
-  assert.match(server,/Only the assigned site Project \/ Production Manager can review this correction/);
+  assert.match(server,/Only the assigned site Project Manager can review this correction/);
+  assert.match(server,/const pm=manager&&managerRoles\.includes\(CORRECTION_REVIEWER_ROLE\);/,'a Production Manager raises corrections but never reviews them');
+  assert.match(server,/const CORRECTION_REVIEWER_ROLE='Project Manager';/);
+  assert.match(server,/await correctionProjectManagerLogins\(pool,request\.site\)\)\.filter\(\(login\)=>login!==access\.login\)/,'a new request is forwarded directly to the site Project Manager');
   assert.match(server,/This correction is locked until the assigned PM approves it/);
   assert.match(server,/action:'Apply approved correction'/);
 });
@@ -33,7 +36,8 @@ test('department manager, PM, and Admin receive their dedicated correction step'
   assert.doesNotMatch(main,/canRequestCorrection/,'Production, Maintenance and MIS users no longer have the menu');
   assert.doesNotMatch(main,/section==="corrections"/);
   assert.match(main,/Correction approvals/);
-  assert.match(main,/\["Project Manager","Production Manager"\]/);
+  assert.match(main,/const correctionApprovalAccess=permissions\.adminLevel==="Manager"&&activeManagerRoles\.includes\("Project Manager"\);/,'only the Project Manager sees Correction approvals');
+  assert.match(main,/managerRole\)\r?\n\s+\.includes\('Project Manager'\);/);
   assert.match(main,/<RequestCorrections session=\{session\} requests=\{requests\} Dialog=\{Modal\}/);
 });
 
