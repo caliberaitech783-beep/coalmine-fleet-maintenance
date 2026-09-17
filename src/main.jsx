@@ -5849,7 +5849,7 @@ function locationCountRows(records = []) {
   });
   return [...groups.values()].sort((a, b) => sortCollator.compare(a.location, b.location));
 }
-function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, children }) {
+function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, children }) {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
   const visibleColumns = visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
@@ -5864,6 +5864,7 @@ function ReportSection({ title, description, category = "general", icon: ReportI
           </div>
         </div>
         <div className="generated-report-heading-actions">
+          {headingControl}
           <div className="report-heading-table-actions" ref={setTableToolbarTarget} />
           <ExportMenu title={title} columns={visibleColumns} rows={rows} smartPrintColumns={columns} className="secondary" label="Generate" />
         </div>
@@ -6435,14 +6436,6 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
       {reportMasterData.loading && <p role="status">Loading report master data…</p>}
       {reportMasterData.error && <p role="alert">{reportMasterData.error}</p>}
       {selectedReport && <ReportPeriodFilter from={reportFrom} to={reportTo} onApply={(from,to)=>{setReportFrom(from);setReportTo(to);}} />}
-      {selectedReport?.title === TICKET_ACCEPTANCE_REPORT_TITLE && <div className="report-acceptance-filter">
-        <span role="status">{showAllAcceptances ? "Showing all entries" : "Showing delays of 30 minutes or more"}</span>
-        <label className="report-acceptance-toggle">
-          <input type="checkbox" role="switch" checked={showAllAcceptances} onChange={(event) => setShowAllAcceptances(event.target.checked)} />
-          <span className="report-acceptance-track" aria-hidden="true" />
-          <span>Show total</span>
-        </label>
-      </div>}
       {selectedReport?.title === "Open Off road Cases" && <div className="mobile-tabs" aria-label="Off-road age filter">
         <button type="button" className={offRoadAge === "all" ? "active" : ""} onClick={() => setOffRoadAge("all")}>All</button>
         <button type="button" className={offRoadAge === "ten" ? "active" : ""} onClick={() => setOffRoadAge("ten")}>10 days</button>
@@ -6457,6 +6450,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           rows={selectedReportRows}
           columns={withTimelineLinks(selectedReport.columns, session?.token || authToken)}
           emptyMessage={selectedReport.emptyMessage}
+          headingControl={selectedReport.title === TICKET_ACCEPTANCE_REPORT_TITLE ? <label className="report-acceptance-toggle">
+            <input type="checkbox" role="switch" checked={showAllAcceptances} onChange={(event) => setShowAllAcceptances(event.target.checked)} />
+            <span className="report-acceptance-track" aria-hidden="true" />
+            <span>Show total</span>
+          </label> : null}
           rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
           rowClassName={selectedReport.rowClassName}
         />

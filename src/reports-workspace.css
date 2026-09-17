@@ -27,23 +27,13 @@
   --report-soft: #f3effb;
 }
 
-.report-acceptance-filter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 13px;
-}
 .report-acceptance-toggle {
   position: relative;
   display: inline-flex;
   align-items: center;
   gap: 9px;
   min-height: 32px;
+  white-space: nowrap;
   color: var(--report-accent-strong);
   font-weight: 600;
   cursor: pointer;

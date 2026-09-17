@@ -32,3 +32,13 @@ test("report Rows and Actions controls render to the left of Generate", () => {
   assert.match(reportTable, /toolbarTarget \? createPortal\(reportTableToolbar, toolbarTarget\) : toolbarPortal \? null : reportTableToolbar/);
   assert.match(reportStyles, /\.generated-report-heading-actions \{[\s\S]*display: flex;[\s\S]*justify-content: flex-end;/);
 });
+
+test("ticket acceptance total toggle sits in the report heading and leaves the shared date filter row unchanged", () => {
+  const reportsPage = source.slice(source.indexOf("function ReportsPage("), source.indexOf("function MasterPage("));
+  assert.match(reportsPage, /<ReportPeriodFilter from=\{reportFrom\} to=\{reportTo\}/);
+  assert.match(reportsPage, /headingControl=\{selectedReport\.title === TICKET_ACCEPTANCE_REPORT_TITLE[\s\S]*role="switch"[\s\S]*Show total/);
+  assert.doesNotMatch(reportsPage, /className="report-acceptance-filter"/);
+  assert.doesNotMatch(reportsPage, /Showing delays of 30 minutes or more/);
+  assert.match(reportStyles, /\.report-acceptance-toggle \{/);
+  assert.doesNotMatch(reportStyles, /\.report-acceptance-filter \{/);
+});
