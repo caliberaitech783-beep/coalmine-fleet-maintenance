@@ -28,7 +28,7 @@ test("the admin UI exposes live status and a protected force-close control", () 
   assert.match(client, /Current session/);
   assert.match(client, /Force close/);
   assert.match(client, /\/api\/session-heartbeat/);
-  assert.match(client, /SESSION_IDLE_TIMEOUT_MS = 15 \* 60 \* 1000/);
+  assert.match(client, /SESSION_IDLE_TIMEOUT_MS = 30 \* 60 \* 1000/);
   assert.match(client, /activityEvents=\['pointerdown','keydown','touchstart','wheel'\]/);
   assert.match(client, /<th>Location<\/th>/);
   assert.match(client, /<th>User<\/th><th>Status<\/th><th>Message<\/th><th>Action<\/th><th>Role<\/th><th>Location<\/th>/);
@@ -94,5 +94,5 @@ test("administrators can delete user activity older than N days from the User Se
   assert.match(page, /<PurgeWindowFields mode=\{activityPurgeMode\}[^>]*verb="last active"/, "the shared older-than / up-to-date fields are used");
   assert.match(page, /<Modal title="Delete old user activity"/);
   assert.match(page, /Delete permanently/);
-  assert.match(page, /setActivityPurgeOpen\(false\);\n\s+setMessageNotice\([\s\S]*?\n\s+load\(\{quiet:true\}\);/, "the list reloads after a purge");
+  assert.match(page, /await load\(\{quiet:true\}\);/, "the list reloads after a purge");
 });

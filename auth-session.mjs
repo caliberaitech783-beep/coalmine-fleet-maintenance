@@ -1,5 +1,5 @@
 const DEFAULT_SESSION_MAX_AGE_DAYS = 30;
-export const DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = 15;
+export const DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES = 30;
 
 export function createSessionStore(pool, {
   maxAgeDays = DEFAULT_SESSION_MAX_AGE_DAYS,

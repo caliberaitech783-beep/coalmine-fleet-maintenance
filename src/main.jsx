@@ -234,7 +234,7 @@ let currentEmployeeName = storedSession?.name || "";
 const PREFERRED_LANGUAGE_KEY = "nerveCenterPreferredLanguage";
 const SECONDARY_LANGUAGE_KEY = "nerveCenterSecondaryLanguage";
 const SESSION_EXPIRED_PARAM = "session-expired";
-const SESSION_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
+const SESSION_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 const LOGIN_LANDING_PAGE = "Dashboard";
 const DEVICE_ID_STORAGE_KEY = "nerveCenterDeviceId";
 const clientDeviceId = (() => {
@@ -464,7 +464,7 @@ function Login({ onLogin, theme, toggleTheme }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.has(SESSION_EXPIRED_PARAM)) {
-      setNotice("Your session closed after 15 minutes without activity. Please sign in again.");
+      setNotice("Your session closed after 30 minutes without activity. Please sign in again.");
     } else if (params.has("updated")) {
       setNotice("The application was updated. Please sign in again.");
     } else {
@@ -5739,7 +5739,7 @@ function UserSessionsPage({session}) {
       if(!response.ok)throw new Error(result.error||"Could not delete the old user activity.");
       setActivityPurgeOpen(false);
       setMessageNotice(`${Number(result.deleted||0).toLocaleString("en-IN")} user activity record${Number(result.deleted)===1?"":"s"} ${activitySelection.label} deleted.`);
-      load({quiet:true});
+      await load({quiet:true});
     }catch(error){alert(error.message);}
     finally{setActivityPurging(false);}
   };
@@ -5782,7 +5782,7 @@ function UserSessionsPage({session}) {
     <header><div><span className="page-eyebrow">Security and access</span><h1>User Sessions</h1><p>See live users, send messages, request approved BDMS-tab assistance, and securely close sessions.</p></div><div className="user-session-header-actions"><button type="button" className="primary" onClick={()=>setAnnouncing(true)}><MessageCircle /> Announce to all users</button><button type="button" className="secondary" onClick={()=>load()} disabled={loading}><RefreshCw /> {loading?'Refreshing...':'Refresh'}</button><button type="button" className="secondary danger" onClick={()=>setActivityPurgeOpen(true)} disabled={loading||activityPurging}><Trash2 /> Delete old activity</button></div></header>
     <div className="user-session-summary" aria-label="Session summary">
       <article><span className="user-session-kpi-icon online"><Activity /></span><div><small>Online now</small><b>{Number(summary.online||0).toLocaleString('en-IN')}</b><p>Active in the last 2 minutes</p></div></article>
-      <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Closes after 15 minutes idle</p></div></article>
+      <article><span className="user-session-kpi-icon"><Monitor /></span><div><small>Active sessions</small><b>{Number(summary.active||0).toLocaleString('en-IN')}</b><p>Closes after 30 minutes idle</p></div></article>
       <article><span className="user-session-kpi-icon users"><Users /></span><div><small>Signed-in users</small><b>{Number(summary.users||0).toLocaleString('en-IN')}</b><p>Unique user accounts</p></div></article>
       <article><span className="user-session-kpi-icon devices"><Smartphone /></span><div><small>Known devices</small><b>{Number(summary.devices||0).toLocaleString('en-IN')}</b><p>Identified app devices</p></div></article>
     </div>
@@ -5790,7 +5790,7 @@ function UserSessionsPage({session}) {
     {error&&<div className="user-session-error" role="alert"><AlertTriangle /> <span>{error}</span><button type="button" onClick={()=>load()}>Retry</button></div>}
     {messageNotice&&<div className="user-session-sent" role="status"><CheckCircle2 /><span>{messageNotice}</span><button type="button" aria-label="Dismiss message confirmation" onClick={()=>setMessageNotice("")}><X /></button></div>}
     {status==='Never logged in'?<UserLoginActivity token={session?.token||authToken} Table={ActionsTable} formatDate={formatTwelveHourDateTime} query={query} />:<div className="user-session-table-wrap" data-session-view={status}><ActionsTable className="user-session-table" toolbarTarget={actionsToolbarTarget} toolbarPortal><thead><tr><th>User</th><th>Status</th><th>Message</th><th>Action</th><th>Role</th><th>Location</th><th>Assistance</th><th>Device</th><th>IP address</th><th>Signed in</th><th>Last activity</th><th>Session age</th></tr></thead><tbody>{visible.length?visible.map(row=>{const device=auditDeviceDetails(row.userAgent);const DeviceIcon=device.type==='Mobile'?Smartphone:Monitor;return <tr key={row.sessionId} className={row.current?'current-session':''}><td><div className="session-user-cell"><span><UserRound /></span><div><b>{row.name||'Unknown user'}</b><small>{row.login||'No login name'}{row.current?' · Current session':''}</small></div></div></td><td><button type="button" className={`session-state ${row.online?'online':'inactive'}`} disabled={!row.login} aria-label={`View last 24 hours of login sessions for ${row.name||row.login}`} onClick={()=>setHistoryTarget(row)}><i />{row.online?'Online':'Inactive'}</button></td><td><button type="button" className="session-message-button" onClick={()=>setMessageTarget(row)} disabled={!row.online||row.current}><MessageCircle />{row.current?'Current':row.online?'Message':'Offline'}</button></td><td>{row.current?<span className="current-session-label"><ShieldCheck /> Protected</span>:<button type="button" className="force-close-session" onClick={()=>forceClose(row)} disabled={closingId===row.sessionId}><LogOut />{closingId===row.sessionId?'Closing...':'Force close'}</button>}</td><td><b>{row.roleLabel||row.assignedRole||row.userType||'User'}</b><small>{row.userType||'Application user'}</small></td><td><span className="session-location"><MapPin />{row.location||'Not assigned'}</span></td><td><RemoteAssistanceAction row={row} token={session?.token||authToken} onChanged={()=>load({quiet:true})} /></td><td><div className="session-device"><DeviceIcon /><div><b>{device.type}</b><small>{device.platform} · {device.browser}</small><code>{row.deviceId||'Device ID unavailable'}</code></div></div></td><td><code>{row.ipAddress||'Unavailable'}</code></td><td>{formatTwelveHourDateTime(row.createdAt)}</td><td>{formatTwelveHourDateTime(row.lastSeenAt)}</td><td>{sessionAgeLabel(row.createdAt)}</td></tr>}):<tr><td colSpan="12" className="empty-state">{loading?'Loading user sessions...':'No sessions match this view.'}</td></tr>}</tbody></ActionsTable></div>}
-    <footer className="user-session-note"><ShieldCheck /><span>Remote assistance starts only after user approval, stays inside the BDMS tab, and ends automatically after the selected duration. Sessions still close after 15 minutes without user activity.</span></footer>
+    <footer className="user-session-note"><ShieldCheck /><span>Remote assistance starts only after user approval, stays inside the BDMS tab, and ends automatically after the selected duration. Sessions still close after 30 minutes without user activity.</span></footer>
     {historyTarget&&<UserLoginHistory token={session?.token||authToken} row={historyTarget} Modal={Modal} Table={ActionsTable} formatDate={formatTwelveHourDateTime} deviceDetails={auditDeviceDetails} onClose={()=>setHistoryTarget(null)} />}
     {messageTarget&&<SessionMessageComposer row={messageTarget} session={session} onClose={()=>setMessageTarget(null)} onSent={(row)=>{setMessageTarget(null);setMessageNotice(`Message sent to ${row.name||row.login||'the active user'}.`);}} />}
     {announcing&&<AnnouncementComposer session={session} onClose={()=>setAnnouncing(false)} onSent={()=>{setAnnouncing(false);setMessageNotice('Announcement sent to all users. Each user will see it until they close it.');}} />}

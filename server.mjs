@@ -1847,7 +1847,7 @@ async function touchUserSessionActivity(req,session={}){
     VALUES ($1,$2,$3,$4,COALESCE($5::timestamptz,NOW()),NOW(),0,$6,$7,$8)
     ON CONFLICT (session_id) DO UPDATE SET
       actor_login=EXCLUDED.actor_login,actor_name=EXCLUDED.actor_name,actor_role=EXCLUDED.actor_role,
-      active_seconds=user_session_activity.active_seconds+LEAST(900,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (NOW()-user_session_activity.last_seen_at)))))::bigint,
+      active_seconds=user_session_activity.active_seconds+LEAST(1800,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (NOW()-user_session_activity.last_seen_at)))))::bigint,
       last_seen_at=NOW(),ip_address=EXCLUDED.ip_address,device_id=EXCLUDED.device_id,user_agent=EXCLUDED.user_agent
     WHERE user_session_activity.last_seen_at<=NOW()-INTERVAL '5 seconds'`,[
       sessionId,auditClean(session.login,120),auditClean(session.name,160),auditRole(session),session.created_at||session.createdAt||null,
@@ -5865,7 +5865,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
       await client.query('BEGIN');
       const purged=await client.query(`DELETE FROM audit_events WHERE occurred_at<=$1`,[exportCutoff]);
       purgedEventCount=Number(purged.rowCount||0);
-      await client.query(`DELETE FROM user_session_activity WHERE last_seen_at<=$1::timestamptz-INTERVAL '15 minutes'`,[exportCutoff]);
+      await client.query(`DELETE FROM user_session_activity WHERE last_seen_at<=$1::timestamptz-INTERVAL '30 minutes'`,[exportCutoff]);
       await client.query(`UPDATE user_session_activity SET started_at=$1,last_seen_at=$1,active_seconds=0 WHERE last_seen_at<=$1`,[exportCutoff]);
       status=`Sent - ${confirmedEmails} administrator email(s) confirmed${deliveryFailures?`; ${deliveryFailures} WhatsApp warning(s)`:''}`;
       await client.query(`UPDATE audit_log_export_runs SET status=$1,mail_confirmed_at=NOW(),purged_at=NOW(),purged_event_count=$2,updated_at=NOW() WHERE slot_key=$3`,[status,purgedEventCount,slotKey]);
@@ -5939,7 +5939,7 @@ async function initializeDatabase(){
     databaseReady=true;
     databaseError='';
     const expiredSessions=await sessionStore.pruneExpired();
-    if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} idle for more than 15 minutes.`);
+    if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} idle for more than 30 minutes.`);
     await appendBackendProcessAudit({module:'Cloud deployment',action:'Start application runtime',targetReference:deploymentSha||'Unknown commit',reason:`Database migration completed; scheduled jobs ${scheduledJobsEnabled?'enabled':'disabled'}.`});
     console.log('Database initialization completed.');
     if(scheduledJobsEnabled){
