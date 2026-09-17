@@ -835,7 +835,8 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-breakdown-movement-view,
 .mine-site-road-view { display: grid; gap: 8px; padding: 10px 11px 11px; border-top: 1px solid var(--mine-line); }
 .mine-breakdown-movement-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
-.dashboard-breakdown-detail-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+.dashboard-breakdown-detail-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.dashboard-breakdown-detail-kpis .idle { --metric-color: #d99424; }
 .mine-breakdown-movement-kpis > div,
 .dashboard-breakdown-detail-kpis > div {
   position: relative;
