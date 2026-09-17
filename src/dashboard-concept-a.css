@@ -1266,7 +1266,7 @@ button.mine-primary-kpi-card:focus-visible,
 .mine-hierarchy-chart:hover .mine-hierarchy-slice { opacity: .68; }
 .mine-hierarchy-chart .mine-hierarchy-slice:hover,.mine-hierarchy-chart .mine-hierarchy-slice:focus-visible { opacity: 1; filter: drop-shadow(0 0 2px currentColor); outline: 0; }
 .mine-hierarchy-chart .mine-hierarchy-slice.outer:hover,.mine-hierarchy-chart .mine-hierarchy-slice.outer:focus-visible { stroke-width: 5.3; }
-.mine-hierarchy-chart .mine-hierarchy-slice.inner:hover,.mine-hierarchy-chart .mine-hierarchy-slice.inner:focus-visible { stroke-width: 7; }
+.mine-hierarchy-chart .mine-hierarchy-slice.inner:hover,.mine-hierarchy-chart .mine-hierarchy-slice.inner:focus-visible { stroke-width: 5.8; }
 .mine-hierarchy-details { display: grid; align-content: center; gap: 8px; min-width: 0; }
 .mine-hierarchy-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .mine-hierarchy-categories button,.mine-hierarchy-groups button { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-width: 0; border: 1px solid var(--mine-line); border-radius: 6px; background: transparent; color: var(--mine-text); text-align: left; cursor: pointer; }
