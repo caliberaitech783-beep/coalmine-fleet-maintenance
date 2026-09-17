@@ -21,6 +21,11 @@ function columnWidths(columns,width){
   return weights.map((weight)=>minimum+(remaining*(weight/total)));
 }
 
+// Narrow reports have room for larger, easier-to-read text; wide ones keep the compact size so every column still fits.
+function tableFontSize(columnCount){
+  return columnCount<=7?10:columnCount<=10?9:columnCount<=13?8.2:columnCount<=17?7.4:6.6;
+}
+
 function drawReportHeading(doc,title,count){
   const left=doc.page.margins.left,width=doc.page.width-doc.page.margins.left-doc.page.margins.right,y=doc.y;
   doc.font(fontFor(title,true)).fontSize(16);
@@ -32,22 +37,23 @@ function drawReportHeading(doc,title,count){
   doc.y=y+headingHeight+11;
 }
 
-function drawColumnHeader(doc,columns,widths){
+function drawColumnHeader(doc,columns,widths,fontSize=6.6){
+  const headerSize=fontSize+.1;
   const left=doc.page.margins.left,y=doc.y;
-  doc.font('Helvetica-Bold').fontSize(6.7);
+  doc.font('Helvetica-Bold').fontSize(headerSize);
   const height=Math.max(25,...columns.map((column,index)=>doc.font(fontFor(column.label,true)).heightOfString(clean(column.label,'Field'),{width:widths[index]-8,lineGap:1})+9));
   let x=left;
   columns.forEach((column,index)=>{
     doc.rect(x,y,widths[index],height).fill(COLORS.navy);
-    doc.fillColor(COLORS.white).font(fontFor(column.label,true)).fontSize(6.7).text(clean(column.label,'Field'),x+4,y+4,{width:widths[index]-8,height:height-8,lineGap:1});
+    doc.fillColor(COLORS.white).font(fontFor(column.label,true)).fontSize(headerSize).text(clean(column.label,'Field'),x+4,y+4,{width:widths[index]-8,height:height-8,lineGap:1});
     x+=widths[index];
   });
   doc.y=y+height;
 }
 
-function drawTablePage(doc,drawHeading,columns,widths){
+function drawTablePage(doc,drawHeading,columns,widths,fontSize){
   drawHeading();
-  drawColumnHeader(doc,columns,widths);
+  drawColumnHeader(doc,columns,widths,fontSize);
   return doc.y;
 }
 
@@ -62,19 +68,20 @@ function footer(doc,generatedAt){
 function drawTable(doc,{title,columns=[],rows=[],highlights=[]},drawHeading=()=>drawReportHeading(doc,title,rows.length)){
   ({columns,rows}=withSerialColumn(columns,rows.map(row=>row.map(reportTime12))));
   const highlighted=new Set(highlights);
+  const fontSize=tableFontSize(columns.length);
   const width=doc.page.width-doc.page.margins.left-doc.page.margins.right,widths=columnWidths(columns,width),bottom=doc.page.height-doc.page.margins.bottom-22;
-  let pageStart=drawTablePage(doc,drawHeading,columns,widths),y=pageStart;
-  const newTablePage=()=>{doc.addPage();pageStart=drawTablePage(doc,drawHeading,columns,widths);y=pageStart;};
+  let pageStart=drawTablePage(doc,drawHeading,columns,widths,fontSize),y=pageStart;
+  const newTablePage=()=>{doc.addPage();pageStart=drawTablePage(doc,drawHeading,columns,widths,fontSize);y=pageStart;};
   if(!rows.length)doc.fillColor(COLORS.muted).font('Helvetica-Bold').fontSize(10).text('No records are available for this report.',doc.page.margins.left,y+16,{width});
   rows.forEach((row,rowIndex)=>{
     let remaining=columns.map((_,index)=>clean(row[index])),continuation=false;
     do{
-      doc.font('Helvetica').fontSize(6.6);
+      doc.font('Helvetica').fontSize(fontSize);
       const fullHeight=Math.max(25,...remaining.map((value,index)=>doc.font(fontFor(value)).heightOfString(value,{width:widths[index]-8,lineGap:1})+9));
       if(y>pageStart&&y+fullHeight>bottom)newTablePage();
-      doc.font('Helvetica').fontSize(6.6);
+      doc.font('Helvetica').fontSize(fontSize);
       const available=bottom-y;
-      const pieces=remaining.map((value,index)=>fittingCellText(doc,value,widths[index]-8,available-9));
+      const pieces=remaining.map((value,index)=>fittingCellText(doc,value,widths[index]-8,available-9,fontSize));
       const values=pieces.map(([value])=>value);
       // Keep the serial number and a short job reference on continuation pages for identification.
       if(continuation)[0,1].forEach((index)=>{if(!values[index]&&String(row[index]??'').length<=80)values[index]=clean(row[index]);});
@@ -82,7 +89,7 @@ function drawTable(doc,{title,columns=[],rows=[],highlights=[]},drawHeading=()=>
       let x=doc.page.margins.left;
       columns.forEach((_,columnIndex)=>{
         doc.rect(x,y,widths[columnIndex],height).fill(highlighted.has(rowIndex)?COLORS.highlight:rowIndex%2===0?COLORS.white:COLORS.soft);
-        doc.fillColor(COLORS.navy).font(fontFor(values[columnIndex])).fontSize(6.6).text(values[columnIndex],x+4,y+4,{width:widths[columnIndex]-8,height:height-8,lineGap:1});
+        doc.fillColor(COLORS.navy).font(fontFor(values[columnIndex])).fontSize(fontSize).text(values[columnIndex],x+4,y+4,{width:widths[columnIndex]-8,height:height-8,lineGap:1});
         doc.strokeColor(COLORS.line).lineWidth(.45).rect(x,y,widths[columnIndex],height).stroke();
         x+=widths[columnIndex];
       });
