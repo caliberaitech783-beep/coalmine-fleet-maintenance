@@ -27,3 +27,8 @@ export function siteReportHtml({ rows, columns, cells, grouping, escape }) {
   const summary = `<p class="site-print-summary"><b>Site-wise count:</b> ${groups.map(group => `${escape(group.label)}: ${reportCount(group.assets, group.rows.length)}`).join(' | ')} | <b>Total: ${reportCount(totalAssets, rows.length)}</b></p>`;
   return summary + groups.map(group => `<table class="site-print-table"><thead><tr class="site-print-title"><th colspan="${columns.length}">${escape(group.label)} · ${reportCount(group.assets, group.rows.length)}</th></tr><tr>${headings}</tr></thead><tbody>${group.rows.map(row => `<tr>${cellMap.get(row).map(cell => `<td>${escape(cell)}</td>`).join('')}</tr>`).join('')}</tbody></table>`).join('');
 }
+
+export function splitReportSite(label) {
+  const separator = label.indexOf(' · ');
+  return separator < 0 ? { region: 'Sites', site: label } : { region: label.slice(0, separator), site: label.slice(separator + 3) };
+}

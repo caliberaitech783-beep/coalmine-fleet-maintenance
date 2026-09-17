@@ -1,4 +1,4 @@
-import { groupReportRows, reportSite, reportAsset, reportCount } from "./site-report.mjs";
+import { groupReportRows, reportSite, reportAsset, reportCount, splitReportSite } from "./site-report.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
@@ -52,6 +52,8 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
   // The column schema identifies this table type; site/date headings can change without hiding its layouts.
   const layoutStore = useTableLayouts("shared-table", columns);
   const [filters, setFilters] = useState({});
+  const [{ selectedSite }, setSiteSelection] = useState({ selectedSite: "" });
+  const selectSite = (site) => setSiteSelection({ selectedSite: site });
   const externalSort = columns.find((column) => column.header.props.sort)?.header.props.sort;
   const defaultSort = defaultDurationSort(columns);
   // Tables with their own header callbacks own their sorting, including a user's manual choice.
@@ -86,6 +88,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
   };
   const clearFilters = () => {
     setFilters({});
+    selectSite("");
     columns.forEach((column) => { if (column.header.props.filterValue) column.header.props.onFilterChange?.(""); });
   };
   const applySort = (key, direction) => {
@@ -96,18 +99,26 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
     setDialog("");
   };
   const localFilters = Object.fromEntries(filterableColumns.filter((column) => !column.header.props.onFilterChange).map((column) => [column.key, filters[column.key]]));
-  const bodySelections = new Map(sections.filter((section) => section.type === "tbody").map((section) => {
+  const availableBodySelections = new Map(sections.filter((section) => section.type === "tbody").map((section) => {
     const sectionRows = tableElements(section.props.children), actual = sectionRows.filter(isDataRow);
     const selected = actual.length ? selectTableRows(actual, columns, localFilters, sort) : sectionRows;
     return [section, groupBySite && actual.length ? groupReportRows(selected, reportSite, reportAsset, dataRows.map(reportSite)).flatMap(group => group.rows) : selected];
   }));
+  const availableRows = [...availableBodySelections.values()].flat().filter(isDataRow);
+  const siteSummary = groupBySite ? groupReportRows(availableRows, reportSite, reportAsset) : [];
+  const activeSite = groupBySite && siteSummary.some(group => group.label === selectedSite) ? selectedSite : "";
+  useEffect(() => { if (selectedSite && !activeSite) selectSite(""); }, [selectedSite, activeSite]);
+  const bodySelections = new Map([...availableBodySelections].map(([section, selected]) =>
+    [section, activeSite ? selected.filter(row => isDataRow(row) && reportSite(row) === activeSite) : selected]));
   const selectedRows = [...bodySelections.values()].flat().filter(isDataRow);
-  const siteSummary = groupBySite ? groupReportRows(selectedRows, reportSite, reportAsset) : [];
+  const summaryRegions = [...new Set(siteSummary.map(group => splitReportSite(group.label).region))];
+  const reportTableRef = useRef(null);
+  useEffect(() => { if (reportTableRef.current && groupBySite) reportTableRef.current.closest(".dashboard-asset-list")?.scrollTo({ top: 0, left: 0 }); }, [activeSite, groupBySite]);
   const reportGrouping = groupBySite ? { site: reportSite, asset: reportAsset } : undefined;
   const filterSignature = JSON.stringify(effectiveFilters);
   useEffect(() => {
     if (pageSize) setVisibleRowLimit(pageSize);
-  }, [pageSize, filterSignature, sort.key, sort.direction]);
+  }, [pageSize, filterSignature, activeSite, sort.key, sort.direction]);
   let remainingRows = pageSize ? visibleRowLimit : Number.POSITIVE_INFINITY;
   const renderedBodySelections = new Map([...bodySelections].map(([section, selected]) => {
     const actual = selected.filter(isDataRow);
@@ -137,6 +148,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
       data.rows = numberedRows;
     }
   }
+  if (groupBySite) for (const data of new Set([exportData, printData, smartPrintData])) if (data) data.rows = selectedRows;
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
@@ -204,10 +216,22 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
       <FilterDialog columns={filterColumns} rows={[...dataRows, ...filterRows]} filters={effectiveFilters} onFilterChange={updateFilter} onClearFilters={clearFilters} open={dialog === "filter"} onOpenChange={(open) => setDialog(open ? "filter" : "")} hideTrigger dialogMode />
     </div>
   );
-  const combinedToolbar = <>{actionsToolbar}{groupBySite && <div className="site-report-summary" aria-label="Site-wise counts"><b>Site-wise summary · {siteSummary.length} sites</b><div>{siteSummary.map(group => <span key={group.label}><strong>{group.label}</strong><span>{reportCount(group.assets, group.rows.length)}</span></span>)}{!siteSummary.length && <span>No matching records</span>}</div></div>}</>;
+  const combinedToolbar = <>{actionsToolbar}{groupBySite && <div className="site-report-summary" aria-label="Site-wise counts">
+    <b>Site-wise summary · {siteSummary.length} sites</b>
+    <div className="site-summary-options">
+      <button type="button" className="site-summary-button" aria-pressed={!activeSite} onClick={() => selectSite("")}><strong>All sites</strong><span>{reportCount(new Set(availableRows.map(reportAsset)).size, availableRows.length)}</span></button>
+      {summaryRegions.map(region => <div className="site-summary-region" key={region} role="group" aria-label={region}>
+        <b>{region}</b><div>{siteSummary.filter(group => splitReportSite(group.label).region === region).map(group =>
+          <button type="button" className="site-summary-button" key={group.label} aria-pressed={activeSite === group.label} onClick={() => selectSite(activeSite === group.label ? "" : group.label)}>
+            <strong>{splitReportSite(group.label).site}</strong><span>{reportCount(group.assets, group.rows.length)}</span>
+          </button>)}</div>
+      </div>)}
+      {!siteSummary.length && <span>No matching records</span>}
+    </div>
+  </div>}</>;
   return <>
     {toolbarTarget ? createPortal(combinedToolbar, toolbarTarget) : toolbarPortal ? null : combinedToolbar}
-    <table {...tableProps}>{sections.map((section) => {
+    <table {...tableProps} ref={reportTableRef}>{sections.map((section) => {
       if (showRowNumbers && section.type === "colgroup") return React.cloneElement(section, {}, <col key="row-number" />, section.props.children);
       if (!["thead", "tbody", "tfoot"].includes(section.type)) return section;
       let sectionRows = tableElements(section.props.children);
@@ -228,7 +252,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
         const numbered = React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
         if (groupBySite && section.type === "tbody" && (position === 0 || reportSite(sectionRows[position - 1]) !== reportSite(row))) {
           const group = siteSummary.find(item => item.label === reportSite(row));
-          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{group.label}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{numbered}</React.Fragment>;
+          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{splitReportSite(group.label).site}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{numbered}</React.Fragment>;
         }
         return numbered;
       }));

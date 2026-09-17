@@ -1,4 +1,4 @@
-import { groupReportRows, reportSite, reportAsset, reportCount, siteReportHtml } from "../src/site-report.mjs";
+import { groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, siteReportHtml } from "../src/site-report.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -27,7 +27,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   const { code } = await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } });
   return [file, `${code}; return ${name};`];
 })));
-const bindings = { groupReportRows, reportSite, reportAsset, reportCount, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch,
+const bindings = { groupReportRows, reportSite, reportAsset, reportCount, splitReportSite, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Search };
@@ -57,12 +57,13 @@ const selectionFor = (records, extra = {}) => ({ label: "All OEMs", periodLabel:
 
 // Only toolbar dialogs and file delivery are substituted. Real SharedActionsTable
 // rendering and the export/print models remain on the production path.
-function renderDetails(selection) {
+function renderDetails(selection, selectedSite = "") {
+  const SelectedTable = load("shared-actions-table", { RecordDateRange, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: () => null, useState: initial => React.useState(initial && typeof initial === "object" && "selectedSite" in initial ? { selectedSite } : initial) });
   const exports = [];
   const CaptureExport = props => { exports.push(props); return null; };
   // Server rendering has no DOM ref for the browser's toolbar portal. Render
   // that toolbar inline so this harness can inspect the real export models.
-  const ActionsTable = props => h(SharedActionsTable, { ...props, toolbarPortal: false, Menu: Empty, ColumnsDialog: Empty, SortDialog: Empty, FilterDialog: Empty, ExportMenu: CaptureExport });
+  const ActionsTable = props => h(SelectedTable, { ...props, toolbarPortal: false, Menu: Empty, ColumnsDialog: Empty, SortDialog: Empty, FilterDialog: Empty, ExportMenu: CaptureExport });
   const html = renderToStaticMarkup(h(Details, { selection, title: "OEM breakdown", ActionsTable,
     Status: ({ children }) => children, formatDate: formatDisplayDateTime, MaintenanceRemarks: Empty }));
   return { html, exports };
@@ -97,4 +98,19 @@ test("filtered, fleet-only and empty selections use the same combined report", (
     assert.equal(result.exports[0].rows.length, selection.records.length);
     assert.equal((result.html.match(/class="shared-table-actions-toolbar"/g) || []).length, 1);
   }
+});
+
+test("site selection filters table, print and exports while retaining all site buttons", () => {
+  const result = renderDetails(selectionFor(requests), "WCL · Sasti OB");
+  for (const model of result.exports) {
+    assert.equal(model.rows.length, 2);
+    assert.ok(model.rows.every(row => model.reportGrouping.site(row) === "WCL · Sasti OB"));
+  }
+  assert.match(result.html, /aria-pressed="true"><strong>Sasti OB/);
+  assert.match(result.html, /<strong>Jayant OB/);
+  assert.match(result.html, /<strong>All sites/);
+  assert.doesNotMatch(result.html, /<strong>WCL ·/);
+  assert.equal((result.html.match(/class="site-report-heading"/g)||[]).length,1);
+  assert.equal(renderDetails(selectionFor(requests)).exports[0].rows.length,5);
+  assert.equal(renderDetails(selectionFor([requests[1]]), "WCL · Sasti OB").exports[0].rows.length,1);
 });
