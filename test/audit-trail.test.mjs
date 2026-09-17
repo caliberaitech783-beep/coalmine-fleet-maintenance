@@ -175,3 +175,19 @@ test("the Audit Trail is cleaned up automatically once a day, keeping five days 
   assert.match(client, /Audit Trail · days to keep/);
   assert.match(client, /User activity · days to keep/);
 });
+
+test("the Audit Trail page stays responsive with hundreds of events", () => {
+  const source = client.replace(/\r\n/g, "\n");
+  const page = source.slice(source.indexOf("const auditValueCache = new WeakMap();"), source.indexOf("function sessionAgeLabel("));
+  assert.match(page, /function auditEventValues\(event\) \{\n  let values = auditValueCache\.get\(event\);/, "display values are computed once per event");
+  assert.match(page, /const valueFor = \(event, key\) => auditEventValues\(event\)\[key\] \|\| "—";/, "cells, filters and sorting read the cache");
+  assert.doesNotMatch(page, /values=\{\[\.\.\.new Set\(events\.map/, "header value lists are no longer rebuilt for all 26 columns on every render");
+  assert.match(page, /values=\{openFilter === key \? headerValuesFor\(key\) : NO_FILTER_VALUES\}/, "only the open column builds its value list, once");
+  assert.match(page, /const headerValueCache = useMemo\(\(\) => new Map\(\), \[events\]\);/);
+  assert.match(page, /const filtered = useMemo\(\(\) => events\.filter\(/);
+  assert.match(page, /const auditTable = useMemo\(\(\) => \(\n\s+<ActionsTable className="audit-table"/, "page state such as dialogs does not re-render the table");
+  assert.match(page, /\), \[tableRows, sort, openFilter, filters, actionsToolbarTarget, loading, headerValueCache\]\);/);
+  assert.match(page, /\{auditTable\}/);
+  assert.match(page, /const AUDIT_PAGE_SIZE = 500;/);
+  assert.match(page, /limit:String\(AUDIT_PAGE_SIZE\)/, "smaller pages; older records load on demand");
+});
