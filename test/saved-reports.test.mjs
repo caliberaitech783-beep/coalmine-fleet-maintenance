@@ -62,7 +62,7 @@ test("every Actions table offers Report, Save report and Saved reports and print
   assert.match(main, /<span>Report<\/span><ChevronRight \/><\/button>/);
   assert.match(main, /<span>Save report…<\/span>/);
   assert.match(main, /<FolderOpen \/><span>Saved reports<\/span>/);
-  assert.match(main, /const printSavedReport = \(\{ title, columns, rows \}\) => openSmartPrint\(\{ title, columns, rows, onPrint: printTableReport, formatCell: exportCellText \}\);/);
+  assert.match(main, /const printSavedReport = \(\{ title, columns, rows, reportGrouping \}\) => openSmartPrint\(\{ title, columns, rows, reportGrouping, onPrint: printTableReport, formatCell: exportCellText \}\);/);
   assert.match(main, /<SharedActionsTable \{\.\.\.props\} printReport=\{printSavedReport\} SavedReports=\{SavedReportsPanel\}/);
   assert.match(shared, /printReport = null, SavedReports = null, showRowNumbers = true, \.\.\.tableProps \}\) \{/);
   assert.match(shared, /onSaveReport=\{SavedReports \? \(\) => setSavedReportDialog\("save"\) : undefined\} onSavedReports=\{SavedReports \? \(\) => setSavedReportDialog\("saved"\) : undefined\}/);
