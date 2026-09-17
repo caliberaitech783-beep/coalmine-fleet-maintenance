@@ -23,3 +23,17 @@
 .smart-print-notice { font-size: 13px; }
 .smart-print-dialog > footer { border-top: 1px solid #d7dfeb; flex-wrap: wrap; }
 @media(max-width:600px) { .smart-print-body,.smart-print-dialog > header,.smart-print-dialog > footer { padding: 12px; } .smart-print-columns { grid-template-columns: 1fr; } }
+.smart-print-dialog button.smart-print-export { border-color: #522e90; color: #522e90; font-weight: 700; }
+.smart-print-sheet { padding: 14px; border: 1px solid #d7dfeb; border-radius: 7px; background: #fff; color: #17233c; }
+.smart-print-sheet h4 { margin: 0 0 4px; font-size: 16px; overflow-wrap: anywhere; }
+.smart-print-sheet p { margin: 0 0 12px; color: #65758b; font-size: 12px; }
+.smart-print-sheet th { background: #10284c; color: #fff; font-size: 11px; text-transform: uppercase; }
+.smart-print-sheet tbody tr:nth-child(even) { background: #f6f8fb; }
+.smart-print-sheet tr.highlight-row td { background: #f8caca; }
+.smart-print-dialog { position: fixed; }
+.smart-print-page-prompt:empty { display: none; }
+.smart-print-page-prompt { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 16px; background: #17233c99; border-radius: inherit; }
+.smart-print-page-size { width: min(460px, 100%); padding: 22px; border-radius: 12px; background: var(--surface,#fff); box-shadow: 0 18px 40px #17233c55; }
+.smart-print-page-size h3 { margin: 0 0 6px; }
+.smart-print-page-size p { margin: 0 0 16px; font-size: 13px; }
+.smart-print-page-size > div { display: grid; gap: 10px; }

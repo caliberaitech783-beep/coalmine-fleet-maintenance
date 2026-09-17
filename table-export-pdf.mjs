@@ -93,16 +93,17 @@ function drawTable(doc,{title,columns=[],rows=[],highlights=[]},drawHeading=()=>
   });
 }
 
-function createTableDocument(title,generatedAt){
+function createTableDocument(title,generatedAt,pageSize){
   const info={Title:clean(title),Author:'Nerve Center'};
   if(generatedAt!==undefined)info.CreationDate=new Date(generatedAt);
-  const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info});
+  // A3 stays the default; Smart Print exports may ask for A4 and the columns are fitted to that width.
+  const doc=new PDFDocument({size:'A3',layout:'landscape',margin:28,bufferPages:true,compress:false,info,...(String(pageSize).toUpperCase()==='A4'?{size:'A4'}:{})});
   registerReportPdfFonts(doc);
   return doc;
 }
 
-export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[],highlights=[]}={}){
-  const doc=createTableDocument(title),result=collect(doc);
+export async function buildTableExportPdf({title='Nerve Center report',columns=[],rows=[],highlights=[],pageSize='A3'}={}){
+  const doc=createTableDocument(title,undefined,pageSize),result=collect(doc);
   drawTable(doc,{title,columns,rows,highlights});
   footer(doc);doc.end();return result;
 }

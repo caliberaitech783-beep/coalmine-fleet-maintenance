@@ -48,3 +48,11 @@ test('mixed Hindi and English report text uses embedded Unicode shaping, not los
   const license=readFileSync(new URL('../assets/fonts/OFL.txt',import.meta.url),'utf8');
   assert.match(license,/SIL OPEN FONT LICENSE Version 1.1/);
 });
+test('Smart Print PDF exports fit the chosen A4 or A3 landscape page',async()=>{
+  const columns=Array.from({length:24},(_,index)=>({label:`Column ${index+1}`})),rows=[columns.map((_,index)=>`Value ${index+1}`)];
+  const mediaBox=pdf=>pdf.toString('latin1').match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/).slice(1).map(Number);
+  assert.deepEqual(mediaBox(await buildTableExportPdf({title:'A4 report',columns,rows,pageSize:'A4'})).map(Math.round),[842,595]);
+  assert.deepEqual(mediaBox(await buildTableExportPdf({title:'A3 report',columns,rows,pageSize:'A3'})).map(Math.round),[1191,842]);
+  assert.deepEqual(mediaBox(await buildTableExportPdf({title:'Default report',columns,rows})).map(Math.round),[1191,842]);
+  assert.match((await buildTableExportPdf({title:'A4 report',columns,rows,pageSize:'A4'})).toString('latin1'),/\/Count 1\b/);
+});

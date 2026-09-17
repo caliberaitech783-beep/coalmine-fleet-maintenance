@@ -1,6 +1,6 @@
 import { siteReportHtml } from "./site-report.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
-import { openSmartPrint } from "./smart-print.mjs";
+import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter } from "./smart-print.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
@@ -2872,7 +2872,8 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
     { name: "xl/worksheets/sheet1.xml", content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>` },
   ]);
 }
-function printTableReport({ title, columns = [], rows = [], highlightRow, reportGrouping }) {
+function printTableReport({ title, columns = [], rows = [], highlightRow, reportGrouping, pageSize }) {
+  const page = printPageSize(pageSize);
   recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records`});
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
   const serial = withSerialColumn(columns, exportRows);
@@ -2884,7 +2885,9 @@ function printTableReport({ title, columns = [], rows = [], highlightRow, report
   frame.style.position = "fixed";
   frame.style.right = "0";
   frame.style.bottom = "0";
-  frame.style.width = "0";
+  // Lay the hidden frame out at the chosen page width so the fit-to-page scale is measured on the real layout.
+  frame.style.width = `${page.widthMm}mm`;
+  frame.style.pointerEvents = "none";
   frame.style.height = "0";
   frame.style.border = "0";
   frame.style.opacity = "0";
@@ -2896,14 +2899,43 @@ function printTableReport({ title, columns = [], rows = [], highlightRow, report
     return;
   }
   printDocument.open();
-  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:28px}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}.site-print-table{margin:16px 0;table-layout:fixed}.site-print-table td{overflow-wrap:anywhere;white-space:pre-wrap}.site-print-table tr{break-inside:avoid}.site-print-title th{background:#eee8f6;color:#522e90;font-size:12px;text-transform:none}.site-print-summary{margin:12px 0 16px;font-size:11px;line-height:1.5;color:#17233c}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}@media print{@page{size:A4 landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p>${groupedReport || `<table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table>`}</body></html>`);
+  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:12mm}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}.site-print-table{margin:16px 0;table-layout:fixed}.site-print-table td{overflow-wrap:anywhere;white-space:pre-wrap}.site-print-table tr{break-inside:avoid}.site-print-title th{background:#eee8f6;color:#522e90;font-size:12px;text-transform:none}.site-print-summary{margin:12px 0 16px;font-size:11px;line-height:1.5;color:#17233c}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}td,th{overflow-wrap:break-word}tr{break-inside:avoid}html,body{height:auto}body>:last-child{margin-bottom:0}@media print{@page{size:${page.name} landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}</style></head><body><h1>${escapeExportHtml(title)}</h1><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p>${groupedReport || `<table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table>`}</body></html>`);
   printDocument.close();
   window.setTimeout(() => {
     frame.contentWindow?.focus();
+    // Scale a report wider than the page down to the printable width, so no column is cut off or pushed to a blank page.
+    const printBody = printDocument.body, tables = [...printDocument.querySelectorAll("table")];
+    const scale = printFitScale(Math.max(0, ...tables.map((table) => Math.max(table.offsetWidth, table.scrollWidth))), printBody.clientWidth);
+    if (scale < 1) {
+      printBody.style.zoom = String(scale);
+      printBody.style.margin = `${12 / scale}mm`;
+    }
     frame.contentWindow?.print();
     window.setTimeout(() => frame.remove(), 1000);
   }, 150);
 }
+// Smart Print exports: exactly the chosen columns, their order and the table's filtered rows, as PDF or Excel.
+async function exportSmartPrintSelection({ format, pageSize, title, columns = [], rows = [], highlightRow }) {
+  const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
+  const highlightedRows = new Set(rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []));
+  if (format === "xlsx") {
+    recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:`${rows.length} records`});
+    downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows), exportFileName(title, "xlsx"));
+    return;
+  }
+  recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
+  const response = await fetch("/api/exports/pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+    body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows], pageSize: printPageSize(pageSize).name }),
+  });
+  if (!response.ok) {
+    const details = await response.json().catch(() => ({}));
+    throw new Error(details.error || "Could not create the PDF report.");
+  }
+  downloadExportFile(await response.blob(), exportFileName(title, "pdf"));
+}
+setSmartPrintExporter(exportSmartPrintSelection);
 function PrintButton({ title, columns = [], rows = [], className = "secondary", highlightRow }) {
   return <button type="button" className={`${className} print-table-trigger`} onClick={() => openSmartPrint({ title, columns, rows, highlightRow, onPrint: printTableReport, formatCell: exportCellText })}><Printer /><span>Smart Print</span></button>;
 }
