@@ -1,4 +1,4 @@
-import { groupReportRows, reportSite, reportAsset } from "./site-report.mjs";
+import { groupReportRows, reportSite, reportAsset, reportCount } from "./site-report.mjs";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
@@ -190,7 +190,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
   };
   const actionsToolbar = (
     <div className="shared-table-actions-toolbar" onClick={(event) => event.stopPropagation()}>
-      <span className="shared-table-record-count" role="status">{selectedRows.length} of {dataRows.length} records</span>
+      <span className="shared-table-record-count" role="status">{groupBySite ? reportCount(new Set(selectedRows.map(reportAsset)).size, selectedRows.length) : `${selectedRows.length} of ${dataRows.length} records`}</span>
       {printData && dateRangeControl}
       {printData && <ExportMenu printOnly reportGrouping={reportGrouping} title={printTitle} columns={printData.columns} rows={printData.rows} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
       <button type="button" className="mobile-columns-trigger" onClick={() => setDialog("columns")} aria-label="Choose visible table columns"><span>Columns</span></button>
@@ -204,7 +204,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
       <FilterDialog columns={filterColumns} rows={[...dataRows, ...filterRows]} filters={effectiveFilters} onFilterChange={updateFilter} onClearFilters={clearFilters} open={dialog === "filter"} onOpenChange={(open) => setDialog(open ? "filter" : "")} hideTrigger dialogMode />
     </div>
   );
-  const combinedToolbar = <>{actionsToolbar}{groupBySite && <div className="site-report-summary" aria-label="Site-wise counts"><b>Site-wise summary · {siteSummary.length} sites</b><div>{siteSummary.map(group => <span key={group.label}><strong>{group.label}</strong><span>{group.assets} assets · {group.rows.length} records</span></span>)}{!siteSummary.length && <span>No matching records</span>}</div></div>}</>;
+  const combinedToolbar = <>{actionsToolbar}{groupBySite && <div className="site-report-summary" aria-label="Site-wise counts"><b>Site-wise summary · {siteSummary.length} sites</b><div>{siteSummary.map(group => <span key={group.label}><strong>{group.label}</strong><span>{reportCount(group.assets, group.rows.length)}</span></span>)}{!siteSummary.length && <span>No matching records</span>}</div></div>}</>;
   return <>
     {toolbarTarget ? createPortal(combinedToolbar, toolbarTarget) : toolbarPortal ? null : combinedToolbar}
     <table {...tableProps}>{sections.map((section) => {
@@ -228,7 +228,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
         const numbered = React.cloneElement(projected, {}, <td key="row-number" className="table-serial-cell">{section.type === "tbody" ? rowNumbers.get(row) : ""}</td>, cells);
         if (groupBySite && section.type === "tbody" && (position === 0 || reportSite(sectionRows[position - 1]) !== reportSite(row))) {
           const group = siteSummary.find(item => item.label === reportSite(row));
-          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{group.label}<span>{group.assets} assets · {group.rows.length} records</span></th></tr>{numbered}</React.Fragment>;
+          return <React.Fragment key={row.key || position}><tr className="site-report-heading"><th colSpan={Math.max(1, indices.length + 1)}>{group.label}<span>{reportCount(group.assets, group.rows.length)}</span></th></tr>{numbered}</React.Fragment>;
         }
         return numbered;
       }));

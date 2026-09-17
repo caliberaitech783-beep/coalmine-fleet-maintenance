@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { groupReportRows, siteReportHtml } from '../src/site-report.mjs';
+import { groupReportRows, siteReportHtml, reportCount } from '../src/site-report.mjs';
 
 const rows = [
   { site: 'NCL · Jayant', asset: 'j1', value: 'J1' },
@@ -29,5 +29,15 @@ test('print preserves site headings when the site column is unselected and escap
   assert.ok(!html.includes('<script>'));
   assert.match(html, /class="site-print-title"/);
   assert.ok(html.includes('<th>Machine</th>'));
-  assert.ok(html.includes('<b>Total</b></td><td>1</td><td>1</td>'));
+  assert.ok(html.includes('<b>Total: 1 asset</b>'));
+});
+
+test('equal counts are stated once and print summary is a single text paragraph', () => {
+  assert.equal(reportCount(25,25), '25 assets');
+  assert.equal(reportCount(1,1), '1 asset');
+  assert.equal(reportCount(1,2), '1 asset · 2 records');
+  const html=siteReportHtml({rows,columns:[{label:'Machine'}],cells:rows.map(row=>[row.value]),grouping,escape:String});
+  assert.match(html, /<p class="site-print-summary">/);
+  assert.doesNotMatch(html, /<table class="site-print-summary">/);
+  assert.ok(html.includes('WCL · Sasti: 1 asset'));
 });

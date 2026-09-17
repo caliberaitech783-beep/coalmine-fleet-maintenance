@@ -25,7 +25,6 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
   const rows = categoryRows.filter(record => (!status || record.requestStatus === status) && (!group || equipmentGroupLabel(record) === group) && matchesSmartSearch(query,
     record.requestReference, record.door, record.requestSite, record.make, record.model, record.group, record.requestStatus,
     record.requestDetails?.complaint, record.requestDetails?.owner, record.manufacturerSerialNo));
-  const shownAssets = new Set(rows.map(record => record.assetId || record.id)).size;
   const siteGroups = groupOemRecordsBySite(rows, selection.regions);
   const groupedRows = siteGroups.flatMap(site => site.records.map(record => ({ ...record, reportSite: `${site.region} · ${site.site}` })));
   const columns = [...extraColumns,
@@ -33,7 +32,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
     { key: "audio", label: "Audio clips", render: record => <div className="request-audio-list">{record.requestDetails.complaintAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/complaint`} token={tableProps.timelineToken} label="Complaint audio" />}{record.requestDetails.maintenanceAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/maintenance`} token={tableProps.timelineToken} label="Maintenance audio" />}{!record.requestDetails.complaintAudioAvailable && !record.requestDetails.maintenanceAudioAvailable && "—"}</div> },
   ];
   return <div className="mine-oem-details">
-    <div className="mine-oem-detail-context"><span className="mine-oem-selection"><i style={{ background: selection.color || "var(--brand-purple)" }} />{selection.label}{selection.site && ` · ${selection.site}`}</span><span role="status" aria-live="polite">{selection.periodLabel} · Showing {shownAssets} of {selection.rows.length} assets · {rows.length} of {selection.records.length} records</span></div>
+    <div className="mine-oem-detail-context"><span className="mine-oem-selection"><i style={{ background: selection.color || "var(--brand-purple)" }} />{selection.label}{selection.site && ` · ${selection.site}`}</span><span role="status" aria-live="polite">{selection.periodLabel}</span></div>
     <div className="table-search-toolbar mine-oem-detail-search">
       <label><Search /><input type="search" aria-label="Search OEM breakdown records" placeholder="Search this table" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <label><ListFilter /><select aria-label="OEM breakdown status" value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{[...new Set(selection.records.map(record => record.requestStatus))].sort().map(value => <option key={value}>{value}</option>)}</select></label>

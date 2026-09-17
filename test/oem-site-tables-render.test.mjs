@@ -1,4 +1,4 @@
-import { groupReportRows, reportSite, reportAsset, siteReportHtml } from "../src/site-report.mjs";
+import { groupReportRows, reportSite, reportAsset, reportCount, siteReportHtml } from "../src/site-report.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
@@ -27,7 +27,7 @@ const compiled = Object.fromEntries(await Promise.all(Object.entries(names).map(
   const { code } = await transformWithOxc(source, `${file}.jsx`, { jsx: { runtime: "classic" } });
   return [file, `${code}; return ${name};`];
 })));
-const bindings = { groupReportRows, reportSite, reportAsset, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch,
+const bindings = { groupReportRows, reportSite, reportAsset, reportCount, React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, groupOemRecordsBySite, matchesSmartSearch,
   calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
   ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ListFilter, RotateCcw, Search };
@@ -75,7 +75,7 @@ test("one toolbar controls the complete site-grouped report and distinguishes as
   assert.equal((result.html.match(/class="shared-table-actions-toolbar"/g) || []).length, 1);
   assert.equal((result.html.match(/class="site-report-heading"/g) || []).length, 3);
   assert.match(result.html, /Site-wise summary/);
-  assert.match(result.html, /1 assets · 2 records/);
+  assert.match(result.html, /1 asset · 2 records/);
   for (const model of result.exports) {
     assert.equal(model.rows.length, 5);
     assert.deepEqual(model.rows.map(model.columns[0].value), [1,2,3,4,5]);
@@ -86,7 +86,7 @@ test("one toolbar controls the complete site-grouped report and distinguishes as
       cells: model.rows.map(row => model.columns.map(column => column.value(row))),
       grouping: model.reportGrouping, escape: value => String(value ?? "").replaceAll("<", "&lt;") });
     assert.equal((html.match(/class="site-print-table"/g) || []).length, 3);
-    assert.ok(html.includes("<b>Total</b></td><td>4</td><td>5</td>"));
+    assert.ok(html.includes("<b>Total: 4 assets · 5 records</b>"));
   }
 });
 
