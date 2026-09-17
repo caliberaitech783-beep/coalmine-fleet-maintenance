@@ -31,4 +31,5 @@
 .overlay.request-timeline-overlay { padding:0; }
 .overlay .modal.request-timeline-modal { width:100%; max-width:none; height:100dvh; max-height:none; margin:0; border-radius:0; resize:none; display:flex; flex-direction:column; overflow:hidden; }
 .request-timeline-modal > header { flex-shrink:0; }
+.request-timeline-modal > header .request-timeline-print { display:inline-flex; align-items:center; gap:6px; width:auto; white-space:nowrap; color:#522e90; font-weight:700; }
 .request-timeline-modal > .request-timeline-content { flex:1; min-height:0; overflow:auto; }

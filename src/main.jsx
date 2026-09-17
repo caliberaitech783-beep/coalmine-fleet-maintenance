@@ -7971,6 +7971,12 @@ function Modal({ title, close, children, className = "", overlayClassName = "", 
         {topBar}
         <header>
           <button type="button" className="modal-back-button" onClick={close} aria-label="Back" title="Back"><span aria-hidden="true">←</span></button><h3>{title}</h3>
+          {className.split(" ").includes("request-timeline-modal") && <button type="button" className="request-timeline-print" onClick={() => {
+            const content = dialogRef.current?.querySelector(".request-timeline-content");
+            if (!content) return;
+            const rows = content.innerText.split(/\n+/).map(text => text.trim()).filter(Boolean).map(detail => ({ detail }));
+            openSmartPrint({ title: typeof title === "string" ? title : "Time breakdown", columns: [{ label: "Time breakdown details", value: row => row.detail }], rows, onPrint: printTableReport, formatCell: exportCellText });
+          }}><Printer aria-hidden="true" /><span>Smart Print</span></button>}
           <button type="button" onClick={close} aria-label="Close dialog">
             <X aria-hidden="true" />
           </button>
