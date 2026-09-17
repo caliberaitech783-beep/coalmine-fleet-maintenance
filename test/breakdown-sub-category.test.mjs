@@ -31,6 +31,11 @@ test('it is a Masters sub menu that administrators can add to, edit and delete, 
   assert.ok(ADMIN_MASTER_OPTIONS.includes('Breakdown Sub-Category'),'it can be ticked under Visible masters in Privilege');
   assert.equal(ADMIN_MASTER_OPTIONS[ADMIN_MASTER_OPTIONS.indexOf('Repair type master')+1],'Breakdown Sub-Category');
   assert.equal(masterAccessAllows({adminLevel:'Admin'},'Breakdown Sub-Category'),true);
+  const savedBeforeItExisted=['Users & employees','Equipment master','Breakdown master','Repair type master','Region master'];
+  assert.equal(masterAccessAllows({adminLevel:'Admin',masterAccess:savedBeforeItExisted},'Breakdown Sub-Category'),true,'an Admin whose Visible masters list was saved before this master existed still sees it');
+  assert.equal(masterAccessAllows({adminLevel:'Super Admin',masterAccess:savedBeforeItExisted},'Breakdown Sub-Category'),true);
+  assert.equal(masterAccessAllows({adminLevel:'Manager',masterAccess:savedBeforeItExisted},'Breakdown Sub-Category'),false,'managers still need it ticked');
+  assert.equal(masterAccessAllows({adminLevel:'Manager',masterAccess:[...savedBeforeItExisted,'Breakdown Sub-Category']},'Breakdown Sub-Category'),true);
   assert.equal(masterAccessAllows({adminLevel:'Manager',masterAccess:['Equipment master']},'Breakdown Sub-Category'),false);
 });
 

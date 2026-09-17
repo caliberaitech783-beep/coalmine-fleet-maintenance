@@ -51,6 +51,8 @@ export function accessAllows(selection, name) {
 export function masterAccessAllows(permissions = {}, name, selectionKey = "masterAccess") {
   if (name === "Delayed Reason" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
   if (name === "Shift Master" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
+  // Added after most accounts saved their "Visible masters" list, so Admin and Super Admin always see it.
+  if (name === "Breakdown Sub-Category" && normalizeAdminLevel(permissions.adminLevel) !== "Manager") return true;
   return accessAllows(permissions[selectionKey], name);
 }
 
