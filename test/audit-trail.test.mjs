@@ -57,7 +57,9 @@ test("audit errors retain diagnostic context without exposing credentials", () =
 });
 
 test("audit capture records every meaningful user process and all API failures", () => {
-  assert.equal(auditShouldRecord("POST", "/api/login"), true);
+  assert.equal(auditShouldRecord("POST", "/api/login"), false);
+  assert.equal(auditShouldRecord("POST", "/api/login", {statusCode: 401}), true);
+  assert.equal(auditShouldRecord("POST", "/api/logout"), false);
   assert.equal(auditShouldRecord("DELETE", "/api/user-sessions/example-session"), true);
   assert.equal(auditShouldRecord("GET", "/api/user-sessions"), false);
   assert.equal(auditShouldRecord("POST", "/api/backups/run"), true);
@@ -70,12 +72,12 @@ test("audit capture records every meaningful user process and all API failures",
   assert.equal(auditShouldRecord("POST", "/api/masters/Users%20%26%20employees"), true);
   assert.equal(auditShouldRecord("PUT", "/api/masters/Users%20%26%20employees/1"), true);
   assert.equal(auditShouldRecord("DELETE", "/api/masters/Users%20%26%20employees/1"), true);
-  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1"), true);
-  assert.equal(auditShouldRecord("DELETE", "/api/requests/REQ-1"), true);
-  assert.equal(auditShouldRecord("POST", "/api/requests"), true);
-  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1/close"), true);
-  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1/verify"), true);
-  assert.equal(auditShouldRecord("POST", "/api/requests/REQ-1/daily-remarks"), true);
+  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1"), false);
+  assert.equal(auditShouldRecord("DELETE", "/api/requests/REQ-1"), false);
+  assert.equal(auditShouldRecord("POST", "/api/requests"), false);
+  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1/close"), false);
+  assert.equal(auditShouldRecord("PATCH", "/api/requests/REQ-1/verify"), false);
+  assert.equal(auditShouldRecord("POST", "/api/requests/REQ-1/daily-remarks"), false);
   assert.equal(auditShouldRecord("PATCH", "/api/tickets/TIC-1"), true);
   assert.equal(auditShouldRecord("POST", "/api/reports/send"), true);
   assert.equal(auditShouldRecord("POST", "/api/session-heartbeat"), false);
@@ -94,7 +96,9 @@ test("server persists append-only audit events and exposes the detailed report",
   assert.match(server, /app\.post\('\/api\/logout',requireSession/);
   assert.match(server, /auditShouldRecord\(req\.method,req\.path,\{statusCode:res\.statusCode\}\)/);
   assert.match(server, /AUDIT_VISIBLE_SCOPE_SQL/);
-  assert.match(server, /const AUDIT_VISIBLE_SCOPE_SQL=`TRUE`/);
+  assert.match(server, /event_type NOT IN \('Activity','Workflow','Workflow timeline'\)/);
+  assert.match(server, /lower\(action\) IN \('login','logout','administrator login','user login'\)/);
+  assert.match(server, /if\(auditEventHidden\(eventType,action\)\)return;/);
   assert.match(server, /auditSafeError\(error\)/);
   assert.match(server, /req\.get\?\.\(AUDIT_DEVICE_ID_HEADER\)/);
   assert.match(server, /action:profile\.sessionRole==='super'\?'Administrator login':'User login'/);

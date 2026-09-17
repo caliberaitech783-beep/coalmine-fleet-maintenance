@@ -16,7 +16,7 @@ export function auditLogExportDue(now=new Date(),lastCompletedAt=null){
   const previous=indiaDateParts(lastCompletedAt);
   const currentDay=Date.parse(`${current.dateKey}T00:00:00Z`);
   const previousDay=Date.parse(`${previous.dateKey}T00:00:00Z`);
-  return (currentDay-previousDay)/DAY_MS>=5;
+  return (currentDay-previousDay)/DAY_MS>=2;
 }
 
 export function auditLogExportSlot(now=new Date()){
@@ -31,14 +31,14 @@ export function buildAuditLogExportEmail({url,auditUrl=url,userActivityUrl='',ge
   const users=Number(userCount||0).toLocaleString('en-IN');
   const worked=Number(totalWorkedMinutes||0).toLocaleString('en-IN',{maximumFractionDigits:2});
   return {
-    subject:`Nerve Center - Five-day Audit Trail export and User Activity report - ${generated}`,
+    subject:`Nerve Center - Two-day Audit Trail export and User Activity report - ${generated}`,
     text:[
       'Nerve Center Audit Trail and User Activity reports',
       `Generated: ${generated}`,
       `Recorded events: ${count}`,
       `Users: ${users}`,
       `Calculated active time: ${worked} minutes`,
-      'Coverage: Latest five days',
+      'Coverage: Latest two days',
       '',
       `Download Audit Trail Excel: ${safeAuditUrl}`,
       `Download User Activity Excel: ${safeUserActivityUrl}`,
@@ -47,7 +47,7 @@ export function buildAuditLogExportEmail({url,auditUrl=url,userActivityUrl='',ge
     ].join('\n'),
     html:`<div style="font-family:Arial,sans-serif;color:#10213d;line-height:1.5;max-width:720px">
       <p style="margin:0 0 6px;color:#1d4ed8;font-weight:800">NERVE CENTER</p>
-      <h2 style="margin:0 0 8px">Five-day Audit Trail and User Activity reports</h2>
+      <h2 style="margin:0 0 8px">Two-day Audit Trail and User Activity reports</h2>
       <p style="margin:0;color:#61708a">Generated: ${escapeEmailHtml(generated)}</p>
       <p style="margin:4px 0 20px;color:#61708a">${escapeEmailHtml(count)} recorded events for ${escapeEmailHtml(users)} users; ${escapeEmailHtml(worked)} calculated active minutes</p>
       <a href="${escapeEmailHtml(safeAuditUrl)}" style="display:inline-block;background:#5b2ca0;color:#fff;text-decoration:none;font-weight:800;padding:12px 18px;border-radius:6px;margin:0 8px 8px 0">Download Audit Trail Excel</a>

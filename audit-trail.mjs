@@ -133,9 +133,13 @@ export function auditShouldRecord(method = "", path = "", {statusCode = 0} = {})
   const verb = String(method).toUpperCase();
   const route = String(path).replace(/\/+$/, "") || "/";
   const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(verb);
+  const failed = Number(statusCode) >= 400;
 
   if (route === "/api/session-heartbeat") return false;
-  if (Number(statusCode) >= 400) return route.startsWith("/api/");
+  if (!failed && (route === "/api/login" || route === "/api/logout")) return false;
+  if (!failed && route.startsWith("/api/requests")) return false;
+  if (!failed && auditRouteDetails(verb, route).eventType === "Activity") return false;
+  if (failed) return route.startsWith("/api/");
   if (mutating) return route.startsWith("/api/");
   if (verb === "GET" && /^\/api\/(?:exports|reports|backups)\/.+\/(?:download|export)$/.test(route)) return true;
   if (verb === "GET" && /^\/api\/backups\/[^/]+\/download$/.test(route)) return true;

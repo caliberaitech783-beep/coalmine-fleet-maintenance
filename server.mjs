@@ -254,7 +254,14 @@ const auditSessionId=(req)=>{
 const auditRole=(session={})=>auditClean(session.permissions?.adminLevel||session.assignedRole||session.userType||session.role||'Unauthenticated',100);
 const auditTargetReference=(req)=>auditClean(req.params?.reference||req.params?.id||req.body?.reference||req.body?.username||'',160);
 const auditIpAddress=(req)=>auditClean(String(req.headers?.['x-forwarded-for']||'').split(',')[0]||req.ip||req.socket?.remoteAddress,100);
-const AUDIT_VISIBLE_SCOPE_SQL=`TRUE`;
+const AUDIT_HIDDEN_EVENT_TYPES=new Set(['Activity','Workflow','Workflow timeline']);
+const AUDIT_HIDDEN_SECURITY_ACTIONS=new Set(['login','logout','administrator login','user login']);
+function auditEventHidden(eventType='',action=''){
+  const cleanEvent=auditClean(eventType,80);
+  if(AUDIT_HIDDEN_EVENT_TYPES.has(cleanEvent))return true;
+  return cleanEvent==='Security'&&AUDIT_HIDDEN_SECURITY_ACTIONS.has(auditClean(action,160).toLowerCase());
+}
+const AUDIT_VISIBLE_SCOPE_SQL=`event_type NOT IN ('Activity','Workflow','Workflow timeline') AND NOT (event_type='Security' AND lower(action) IN ('login','logout','administrator login','user login'))`;
 const AUDIT_EVENT_PROJECTION=`id,event_type AS "eventType",outcome,actor_login AS "actorLogin",actor_name AS "actorName",
   actor_role AS "actorRole",module,action,target_type AS "targetType",target_reference AS "targetReference",reason,
   changed_fields AS "changedFields",ip_address AS "ipAddress",device_id AS "deviceId",user_agent AS "userAgent",session_id AS "sessionId",
@@ -264,15 +271,18 @@ const AUDIT_EVENT_PROJECTION=`id,event_type AS "eventType",outcome,actor_login A
 async function appendAuditEvent(req,event={}){
   try{
     const route=auditRouteDetails(req.method,req.path);
+    const eventType=auditClean(event.eventType||route.eventType,80);
+    const action=auditClean(event.action||route.action,160);
+    if(auditEventHidden(eventType,action))return;
     const session=req.session||{};
     const changes=event.changedFields||auditSubmittedFields(req.body);
     await pool.query(`INSERT INTO audit_events
       (event_type,outcome,actor_login,actor_name,actor_role,module,action,target_type,target_reference,reason,changed_fields,ip_address,device_id,user_agent,session_id,
-       request_method,request_path,status_code,duration_ms,error_code,request_id)
+      request_method,request_path,status_code,duration_ms,error_code,request_id)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,[
-      auditClean(event.eventType||route.eventType,80),auditClean(event.outcome||'Success',30),
+      eventType,auditClean(event.outcome||'Success',30),
       auditClean(event.actorLogin||session.login||req.body?.username,120),auditClean(event.actorName||session.name,160),auditClean(event.actorRole||auditRole(session),100),
-      auditClean(event.module||route.module,120),auditClean(event.action||route.action,160),auditClean(event.targetType||'',100),auditClean(event.targetReference||auditTargetReference(req),160),
+      auditClean(event.module||route.module,120),action,auditClean(event.targetType||'',100),auditClean(event.targetReference||auditTargetReference(req),160),
       auditClean(event.reason||req.get?.(AUDIT_REASON_HEADER)||'',500),JSON.stringify(changes),auditIpAddress(req),auditClean(req.get?.(AUDIT_DEVICE_ID_HEADER),80),auditClean(req.get?.('user-agent'),500),auditSessionId(req),
       auditClean(req.method,12),auditClean(req.path,300),Number(event.statusCode||req.auditStatusCode||0)||null,Math.max(0,Number(event.durationMs||req.auditDurationMs||0))||0,
       auditClean(event.errorCode||req.auditErrorCode,80),auditClean(req.auditRequestId||req.get?.('x-request-id'),80),
@@ -5761,7 +5771,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
   if(current?.status?.startsWith('Failed')&&Date.now()-new Date(current.updated_at).getTime()<10*60*1000)return {skipped:true,reason:'waiting to retry',slotKey};
   if(!current){
     const {rows:lastRows}=await pool.query(`SELECT updated_at FROM audit_log_export_runs WHERE status LIKE 'Sent%' ORDER BY updated_at DESC LIMIT 1`);
-    if(!auditLogExportDue(now,lastRows[0]?.updated_at))return {skipped:true,reason:'outside five-day schedule'};
+    if(!auditLogExportDue(now,lastRows[0]?.updated_at))return {skipped:true,reason:'outside two-day schedule'};
   }
   const claim=await pool.query(`INSERT INTO audit_log_export_runs (slot_key,status,attempts,updated_at)
     VALUES ($1,'Sending',1,NOW())
@@ -5837,8 +5847,8 @@ async function sendScheduledAuditLogExports(now=new Date()){
           try{
             await sendMetaWhatsAppTemplate({
               to:recipient.phone,templateKey:'consolidatedRequestReport',purpose:'consolidatedRequestReport',
-              parameters:[`Nerve Center five-day reports. Audit Trail: ${auditUrl} User Activity: ${userActivityUrl} Links expire in 30 days.`],
-              context:{report:{site:'All sites — organisation audit',title:'Five-day audit and user activity',period:`Latest five days, generated ${formatDisplayDateTime(now)}`,summary:`${eventRows.length} audit entries | ${activityRows.length} users`,pdfUrl:auditUrl,xlsxUrl:userActivityUrl,notes:'Audit Trail and User Activity downloads. Links expire in 30 days.'}},
+              parameters:[`Nerve Center two-day reports. Audit Trail: ${auditUrl} User Activity: ${userActivityUrl} Links expire in 30 days.`],
+              context:{report:{site:'All sites — organisation audit',title:'Two-day audit and user activity',period:`Latest two days, generated ${formatDisplayDateTime(now)}`,summary:`${eventRows.length} audit entries | ${activityRows.length} users`,pdfUrl:auditUrl,xlsxUrl:userActivityUrl,notes:'Audit Trail and User Activity downloads. Links expire in 30 days.'}},
             },{env:whatsappEnv});
             whatsappSent++;
           }catch(error){deliveryFailures++;deliveryStatus=`Failed - ${String(error?.message||'WhatsApp delivery error').slice(0,160)}`;console.error(`Audit Trail WhatsApp failed for ${recipient.login||recipient.phone}:`,error.message)}
@@ -5846,7 +5856,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
             pool.query(`UPDATE audit_log_export_deliveries SET status=$1,updated_at=NOW() WHERE slot_key=$2 AND recipient_key=$3 AND channel='WhatsApp'`,[deliveryStatus,slotKey,normalizedPhone]),
             pool.query(`INSERT INTO whatsapp_alert_history
               (report_type,target_name,report_level,recipient_name,recipient_phone,status) VALUES ($1,$2,$3,$4,$5,$6)`,
-              ['Audit Trail export','Latest five days',slotKey,recipient.name,recipient.phone,deliveryStatus]),
+              ['Audit Trail export','Latest two days',slotKey,recipient.name,recipient.phone,deliveryStatus]),
           ]);
         }
       }
@@ -5962,7 +5972,7 @@ async function initializeDatabase(){
       void runAuditedBackendProcess({module:'WhatsApp Integration',action:'Send workflow reminders'},()=>sendScheduledWorkflowWhatsAppReminders())
         .then(result=>console.log('Scheduled workflow WhatsApp reminder check completed.',result))
         .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
-      void runAuditedBackendProcess({module:'Audit Trail',action:'Generate five-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
+      void runAuditedBackendProcess({module:'Audit Trail',action:'Generate two-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
         .then(result=>console.log('Scheduled Audit Trail export check completed.',result))
         .catch(error=>console.error('Scheduled Audit Trail export check failed.',error));
       void runScheduledBackup()
@@ -6029,7 +6039,7 @@ if(scheduledJobsEnabled){
   },60*1000);
   workflowReminderTimer.unref?.();
   const auditLogExportTimer=setInterval(()=>{
-    void runAuditedBackendProcess({module:'Audit Trail',action:'Generate five-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
+    void runAuditedBackendProcess({module:'Audit Trail',action:'Generate two-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled Audit Trail export completed.',result)})
       .catch(error=>console.error('Scheduled Audit Trail export failed.',error));
   },60*1000);
