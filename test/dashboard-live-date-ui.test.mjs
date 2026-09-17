@@ -9,6 +9,7 @@ import * as movement from "../dashboard-breakdown-movement.mjs";
 import * as dailyBalance from "../src/daily-bd-balance.mjs";
 import * as actions from "../src/dashboard-card-actions.mjs";
 import * as dates from "../src/dashboard-request-data.mjs";
+import { encodeDateRange, parseDateRange } from "../src/date-range-filter.mjs";
 import * as forecast from "../src/dashboard-breakdown-forecast.mjs";
 import * as model from "../src/dashboard-drilldown-model.mjs";
 import * as oemBreakdown from "../src/oem-breakdown-model.mjs";
@@ -187,6 +188,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     return [slots[index], (value) => { slots[index] = typeof value === "function" ? value(slots[index]) : value; }];
   };
   const dependencies = {
+    encodeDateRange, parseDateRange,
     FilterableHeader() {},
     openHourlyBreakdownTab() {},
     isDurationColumn, compareDurationValues,
@@ -455,6 +457,12 @@ test("daily BD chart sits directly below Total Fleet and every metric opens its 
       const browser = findAll(tree, node => Array.isArray(node.props.rows) && Array.isArray(node.props.regions))[0];
       assert.equal(browser.props.requestRecords, true);
       assert.equal(browser.props.showBdClosingTime, key === "outgoing");
+      if (key === "open") {
+        assert.equal(browser.props.movementDateControl.label, "Opening balance date");
+        browser.props.movementDateControl.onChange(encodeDateRange("2026-09-09", "2026-09-09"));
+        tree = view.render(rows);
+        assert.deepEqual(detailView(tree).rows.map(row => row.requestReference).sort(), expected, "opening-day selection retains carried requests for every site");
+      }
       if (key === "outgoing" && expected.length) assert.equal(browser.props.rows[0].requestClosed, "2026-09-09 09:00:00");
     }
   }

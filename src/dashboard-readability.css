@@ -71,7 +71,7 @@
 
 /* A chart needs space for the larger labels, not a taller empty plotting area. */
 .mine-dashboard-feature-row .mine-fleet-chart-layout { height: 408px; min-height: 378px; }
-.mine-dashboard .mine-fleet-chart-regions > section { grid-template-rows: minmax(0, 1fr) 46px; }
+.mine-dashboard .mine-fleet-chart-regions > section { grid-template-rows: minmax(0, 1fr) minmax(84px, auto); }
 .mine-dashboard .mine-fleet-site-entry { grid-template-rows: minmax(0, 1fr) 104px; }
 .mine-dashboard .mine-fleet-chart-sites small { font-size: 15px !important; line-height: 1.3; padding: 0 6px; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 .mine-dashboard .mine-fleet-site-summary { display: grid; align-content: start; gap: 2px; }
