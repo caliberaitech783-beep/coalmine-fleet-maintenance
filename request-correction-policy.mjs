@@ -12,7 +12,8 @@ export const REQUEST_CORRECTION_TYPES=Object.freeze({
     label:'Production Off Road entry',
     fields:[
       {key:'startedAt',label:'Off Road date & time',column:'started_at',kind:'datetime'},
-      {key:'category',label:'Breakdown type',column:'category',kind:'text',max:160},
+      // Chosen from the Repair type master, the same list as the Off Road form.
+      {key:'category',label:'Breakdown type',column:'category',kind:'text',max:160,optionsSource:'breakdownTypes'},
       {key:'complaint',label:'Reason / complaint',column:'complaint',kind:'textarea',max:2000},
       {key:'driverName',label:'Driver name',column:'driver_name',kind:'text',max:200},
       {key:'superiorName',label:'Production superior',column:'superior_name',kind:'text',max:200},

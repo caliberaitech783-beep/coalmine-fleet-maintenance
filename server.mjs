@@ -4417,6 +4417,13 @@ async function correctionAdministratorLogins(client=pool){
   }))];
 }
 
+// Breakdown types offered in the correction form: the Repair type master, as on the Off Road form.
+async function correctionBreakdownTypes(client=pool){
+  const {rows}=await client.query(`SELECT DISTINCT trim(record_data->>'repairType') AS name FROM master_records
+    WHERE master_name='Repair type master' AND COALESCE(trim(record_data->>'repairType'),'')<>'' ORDER BY 1`);
+  return rows.map((row)=>row.name);
+}
+
 function correctionStageError(type,row={}){
   if(type==='maintenanceAcceptance'&&!row.acceptedAt)return 'Maintenance acceptance has not been recorded yet.';
   if(type==='onRoad'&&!row.closedAt)return 'The On Road entry has not been recorded yet.';
@@ -4436,7 +4443,8 @@ function registerRequestCorrectionRoutes(){
     if(!context.administrator&&!context.pm&&!context.requester)return res.status(403).json({error:'This account cannot access request corrections.'});
     const {rows}=await pool.query(`SELECT ${requestCorrectionProjection} FROM request_corrections ORDER BY requested_at DESC,id DESC`);
     res.set('Cache-Control','private, no-store');
-    res.json({records:rows.filter((row)=>correctionVisibleToContext(row,context)),capabilities:{canCreate:context.requester,canReview:context.pm,canApply:context.administrator,allowedTypes:context.allowedTypes}});
+    res.json({records:rows.filter((row)=>correctionVisibleToContext(row,context)),capabilities:{canCreate:context.requester,canReview:context.pm,canApply:context.administrator,allowedTypes:context.allowedTypes},
+      fieldOptions:context.requester?{breakdownTypes:await correctionBreakdownTypes()}:{}});
   }catch(error){next(error)}
 });
 
@@ -4477,6 +4485,10 @@ function registerRequestCorrectionRoutes(){
     let proposedChanges;
     try{proposedChanges=normalizeRequestCorrectionChanges(type,req.body?.proposedChanges||{},originalValues)}
     catch(error){await client.query('ROLLBACK');return res.status(error.status||400).json({error:error.message})}
+    if(Object.prototype.hasOwnProperty.call(proposedChanges,'category')){
+      const breakdownTypes=await correctionBreakdownTypes(client);
+      if(breakdownTypes.length&&!breakdownTypes.some((name)=>name.toLowerCase()===String(proposedChanges.category).trim().toLowerCase())){await client.query('ROLLBACK');return res.status(400).json({error:'Select a Breakdown type from the list.'})}
+    }
     const validationError=requestCorrectionValidationError({type,reason,evidenceData,evidenceName,proposedChanges,originalValues});
     if(validationError){await client.query('ROLLBACK');return res.status(400).json({error:validationError})}
     const inserted=await client.query(`INSERT INTO request_corrections

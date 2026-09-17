@@ -52,3 +52,18 @@ test('correction screen explains and enforces the approval sequence',()=>{
   assert.match(view,/Search request, door, equipment, chassis, or site/);
   assert.match(view,/Search request, user, site, reason, or status/);
 });
+
+test('Breakdown type in the correction form is a dropdown from the Repair type master',async()=>{
+  const {REQUEST_CORRECTION_TYPES}=await import('../request-correction-policy.mjs');
+  const category=REQUEST_CORRECTION_TYPES.offRoad.fields.find((field)=>field.key==='category');
+  assert.equal(category.optionsSource,'breakdownTypes');
+  assert.equal(category.kind,'text','server normalisation of the value is unchanged');
+  assert.match(server,/async function correctionBreakdownTypes\(client=pool\)/);
+  assert.match(server,/WHERE master_name='Repair type master'/);
+  assert.match(server,/fieldOptions:context\.requester\?\{breakdownTypes:await correctionBreakdownTypes\(\)\}:\{\}/,'sent with the page so managers without the Repair type master still get the list');
+  assert.match(server,/Select a Breakdown type from the list\./,'a typed value outside the master is refused');
+  assert.match(view,/if\(field\.optionsSource&&options\.length\)\{/);
+  assert.match(view,/\[current,\.\.\.options\]:options/,'the recorded value stays selectable');
+  assert.match(view,/options=\{fieldOptions\[field\.optionsSource\]\|\|\[\]\}/);
+  assert.match(view,/fieldOptions=\{state\.fieldOptions\|\|\{\}\}/);
+});

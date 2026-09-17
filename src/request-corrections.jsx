@@ -28,7 +28,13 @@ const displayValue=(value,kind)=>{
 };
 const statusClass=(value)=>String(value||'').toLowerCase().replaceAll(' ','-');
 
-function CorrectionField({field,value,onChange}){
+function CorrectionField({field,value,onChange,options=[]}){
+  // Master-driven lists (e.g. Breakdown type). The recorded value stays selectable even if it is no longer in the master.
+  if(field.optionsSource&&options.length){
+    const current=String(value??'').trim();
+    const choices=current&&!options.some((option)=>option.toLowerCase()===current.toLowerCase())?[current,...options]:options;
+    return <label><span>{field.label}</span><select value={choices.find((option)=>option.toLowerCase()===current.toLowerCase())??''} onChange={(event)=>onChange(event.target.value)}><option value="" disabled>Select {field.label.toLowerCase()}</option>{choices.map((option)=><option value={option} key={option}>{option}</option>)}</select></label>;
+  }
   if(field.kind==='boolean')return <label className="correction-checkbox"><input type="checkbox" checked={value===true} onChange={(event)=>onChange(event.target.checked)} /><span>{field.label}</span></label>;
   if(field.kind==='textarea')return <label><span>{field.label}</span><textarea value={value??''} onChange={(event)=>onChange(event.target.value)} rows="3" /></label>;
   if(field.kind==='select')return <label><span>{field.label}</span><select value={value??''} onChange={(event)=>onChange(event.target.value)}>{field.options.map((option)=><option value={option} key={option||'blank'}>{option||'Not recorded'}</option>)}</select></label>;
@@ -71,7 +77,7 @@ function CorrectionCard({record,capabilities,token,Modal,onChanged}){
   </article>;
 }
 
-function NewCorrectionForm({requests,token,onSaved,allowedTypes=[]}){
+function NewCorrectionForm({requests,token,onSaved,allowedTypes=[],fieldOptions={}}){
   const [reference,setReference]=useState('');
   const correctionTypes=allowedTypes.filter((key)=>REQUEST_CORRECTION_TYPES[key]);
   const [type,setType]=useState(correctionTypes[0]||'offRoad');
@@ -107,7 +113,7 @@ function NewCorrectionForm({requests,token,onSaved,allowedTypes=[]}){
   return <form className="correction-create" onSubmit={submit}>
     <div className="correction-form-heading"><div><Pencil /><span><b>Request a correction</b><small>The live record remains unchanged until PM approval and final Admin correction.</small></span></div><b>Department manager request</b></div>
     <div className="correction-form-grid top"><SearchableSelect label="Maintenance request" options={requestOptions} value={reference} onChange={setReference} required placeholder="Search request, door, equipment, chassis, or site" emptyText="No matching maintenance request found." /><label><span>Correction type *</span><select value={type} onChange={(event)=>setType(event.target.value)}>{correctionTypes.map((key)=><option key={key} value={key}>{REQUEST_CORRECTION_TYPES[key].label}</option>)}</select></label></div>
-    {selected&&<><div className="correction-request-summary"><b>{selected.ref}</b><span>{selected.site}</span><span>{selected.equipment} · {selected.door}</span><span>Status: {selected.status}</span></div><div className="correction-form-grid">{fields.map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div></>}
+    {selected&&<><div className="correction-request-summary"><b>{selected.ref}</b><span>{selected.site}</span><span>{selected.equipment} · {selected.door}</span><span>Status: {selected.status}</span></div><div className="correction-form-grid">{fields.map((field)=><CorrectionField key={field.key} field={field} value={values[field.key]} options={fieldOptions[field.optionsSource]||[]} onChange={(value)=>setValues((current)=>({...current,[field.key]:value}))} />)}</div></>}
     <label><span>Reason for correction * (minimum 10 characters)</span><textarea rows="3" value={reason} onChange={(event)=>setReason(event.target.value)} placeholder="Explain the error, the correct value, and why the record must be changed." required /></label>
     <label className="correction-upload"><ImageUp /><span><b>{evidence?.name||'Upload correction evidence *'}</b><small>JPG, PNG, or WebP · maximum 5 MB</small></span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event)=>readEvidence(event.target.files?.[0])} required={!evidence} /></label>
     {error&&<div className="correction-notice error">{error}</div>}
@@ -122,7 +128,7 @@ export default function RequestCorrections({session,requests=[],Dialog}){
   const [query,setQuery]=useState('');
   const load=async()=>{
     setState((current)=>({...current,loading:true,error:''}));
-    try{const response=await fetch('/api/request-corrections',{cache:'no-store',headers:{Authorization:`Bearer ${token}`}});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not load corrections');setState({records:body.records||[],capabilities:body.capabilities||{},loading:false,error:''})}
+    try{const response=await fetch('/api/request-corrections',{cache:'no-store',headers:{Authorization:`Bearer ${token}`}});const body=await response.json().catch(()=>({}));if(!response.ok)throw new Error(body.error||'Could not load corrections');setState({records:body.records||[],capabilities:body.capabilities||{},fieldOptions:body.fieldOptions||{},loading:false,error:''})}
     catch(error){setState((current)=>({...current,loading:false,error:error.message}))}
   };
   useEffect(()=>{void load()},[token]);
@@ -132,7 +138,7 @@ export default function RequestCorrections({session,requests=[],Dialog}){
   return <section className="request-corrections-page">
     <header className="correction-page-head"><div><span>CONTROLLED DATA CORRECTION</span><h1>{state.capabilities.canReview?'Correction approvals':state.capabilities.canCreate?'Request correction':'Admin correction'}</h1><p>The department manager requests with evidence, the assigned PM approves or rejects, and Admin applies only an approved correction. Every step is recorded in the Audit Trail.</p></div><button type="button" className="secondary" onClick={load} disabled={state.loading}><RefreshCw className={state.loading?'spin':''} /> Refresh</button></header>
     <div className="correction-kpis"><div><span>Awaiting PM</span><b>{pending}</b></div><div><span>Ready for Admin</span><b>{approved}</b></div><div><span>Total corrections</span><b>{state.records.length}</b></div></div>
-    {state.capabilities.canCreate&&<NewCorrectionForm requests={requests} token={token} onSaved={load} allowedTypes={state.capabilities.allowedTypes||[]} />}
+    {state.capabilities.canCreate&&<NewCorrectionForm requests={requests} token={token} onSaved={load} allowedTypes={state.capabilities.allowedTypes||[]} fieldOptions={state.fieldOptions||{}} />}
     <div className="correction-list-tools"><label><Search /><input type="search" data-smart-search value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Search request, user, site, reason, or status" /></label></div>
     <div className="correction-list-head"><div className="mobile-tabs" role="tablist">{['Open',REQUEST_CORRECTION_STATUS.PENDING,REQUEST_CORRECTION_STATUS.APPROVED,REQUEST_CORRECTION_STATUS.REJECTED,REQUEST_CORRECTION_STATUS.APPLIED,'All'].map((value)=><button type="button" key={value} className={status===value?'active':''} onClick={()=>setStatus(value)}>{value}</button>)}</div><span>{visible.length} shown</span></div>
     {state.error&&<div className="correction-notice error">{state.error}</div>}
