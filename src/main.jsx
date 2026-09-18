@@ -419,7 +419,7 @@ function CaliberBrand({ subtitle = "Breakdown management system", className = ""
         <img src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" />
       </span>
       <span className="caliber-app-name">
-        <strong>Nerve Center</strong>
+        <strong><Activity className="caliber-pulse-icon" aria-hidden="true" />Nerve Center</strong>
         <small>{subtitle}</small>
       </span>
     </div>

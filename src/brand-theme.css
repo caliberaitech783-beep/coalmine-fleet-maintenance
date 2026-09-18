@@ -588,3 +588,26 @@ input[type="radio"] {
     display: flex;
   }
 }
+
+/* Live pulse icon in front of the app name wherever the brand is shown
+   (admin header, operational header, login page): a running trace with a
+   gentle heartbeat, the same motion as the Info Pulse icon. */
+.caliber-app-name strong { display: inline-flex; align-items: center; gap: 6px; }
+.caliber-pulse-icon {
+  flex: 0 0 auto;
+  width: 1.15em;
+  height: 1.15em;
+  overflow: visible;
+  color: #ffd6e6;
+  filter: drop-shadow(0 0 3px #ffffff80);
+  animation: caliber-pulse-beat 1.6s ease-in-out infinite;
+}
+.caliber-pulse-icon path {
+  stroke-dasharray: 26 64;
+  animation: caliber-pulse-trace 1.6s linear infinite;
+}
+@keyframes caliber-pulse-trace { to { stroke-dashoffset: -90; } }
+@keyframes caliber-pulse-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+@media (prefers-reduced-motion: reduce) {
+  .caliber-pulse-icon, .caliber-pulse-icon path { animation: none !important; stroke-dasharray: none; }
+}
