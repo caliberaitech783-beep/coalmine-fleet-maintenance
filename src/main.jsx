@@ -2908,7 +2908,10 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
       body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights, pageSize: page.name }),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      const details = await response.json().catch(() => ({}));
+      throw new Error(details.error || `The report PDF could not be prepared (HTTP ${response.status}).`);
+    }
     const printer = await printPdfDirect({ pdf: await response.blob(), page, jobName: title, token: () => authToken });
     recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records · ${page.name} · ${printer}`});
     alert(`Sent to ${printer} on ${page.name} paper.`);

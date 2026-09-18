@@ -166,3 +166,9 @@ test('the Print helper page is for administrators; the key is created once and n
   assert.match(page,/Remember this decision/);
   assert.doesNotMatch(page,/privateKey|PRIVATE KEY/);
 });
+
+test('a report PDF that cannot be prepared is explained instead of silently opening the browser print window',()=>{
+  assert.doesNotMatch(main,/if \(!response\.ok\) return false;\n\s+const printer = await printPdfDirect/);
+  assert.match(main,/if \(!response\.ok\) \{\n\s+const details = await response\.json\(\)\.catch\(\(\) => \(\{\}\)\);\n\s+throw new Error\(details\.error \|\| `The report PDF could not be prepared \(HTTP \$\{response\.status\}\)\.`\);/);
+  assert.match(server,/if\(dataColumnCount<1\|\|dataColumnCount>48\)return res\.status\(400\)\.json\(\{error:'Select between 1 and 48 report columns\.'\}\);/,'wide tables such as the Audit Trail (27 columns) can be printed through the helper');
+});

@@ -57,7 +57,7 @@ test('PDF exports retain a bounded aggregate text budget',async()=>{
 });
 
 test('PDF row, column and session limits remain in force',async()=>{
-  for(const body of [{columns:[],rows:[]},{columns:Array.from({length:25},()=>({label:'Field'})),rows:[]}])assert.equal((await exportPdf(body)).status,400);
+  for(const body of [{columns:[],rows:[]},{columns:Array.from({length:49},()=>({label:'Field'})),rows:[]}])assert.equal((await exportPdf(body)).status,400);
   assert.equal((await exportPdf({columns:[{label:'Field'}],rows:Array.from({length:5001},()=>['short'])})).status,413);
   const denied=await exportPdf({columns:[{label:'Field'}],rows:[['test']]},{session:null});
   assert.equal(denied.status,401);

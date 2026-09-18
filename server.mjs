@@ -1424,7 +1424,7 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
     const requestedRows=Array.isArray(req.body?.rows)?req.body.rows:[];
     // Shared tables already send their Sr. No. column; it does not count against the data-column limit.
     const dataColumnCount=requestedColumns.length-(String(requestedColumns[0]?.label??'').trim()==='Sr. No.'?1:0);
-    if(dataColumnCount<1||dataColumnCount>24)return res.status(400).json({error:'Select between 1 and 24 report columns.'});
+    if(dataColumnCount<1||dataColumnCount>48)return res.status(400).json({error:'Select between 1 and 48 report columns.'});
     if(requestedRows.length>5000)return res.status(413).json({error:'This report has too many rows to export at once. Apply a filter and try again.'});
     const columns=requestedColumns.map((column,index)=>({label:String(column?.label||`Column ${index+1}`).replace(/\s+/g,' ').trim().slice(0,100)||`Column ${index+1}`}));
     const rows=[];
