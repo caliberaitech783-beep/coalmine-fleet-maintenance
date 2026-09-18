@@ -405,6 +405,8 @@ async function migrate(){
       ADD COLUMN IF NOT EXISTS complaint_language TEXT NOT NULL DEFAULT '';
     ALTER TABLE maintenance_requests
       ADD COLUMN IF NOT EXISTS maintenance_work_language TEXT NOT NULL DEFAULT '';
+    ALTER TABLE maintenance_requests
+      ADD COLUMN IF NOT EXISTS sub_category TEXT NOT NULL DEFAULT '';
     CREATE TABLE IF NOT EXISTS text_translations (
       cache_key TEXT PRIMARY KEY,
       source_language TEXT NOT NULL,
@@ -4252,7 +4254,7 @@ app.patch('/api/notifications/read',requireSession,async(req,res,next)=>{
 const requestProjection=`reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup", door_number AS door,
   to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
   to_char(in_progress_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "inProgressAt", in_progress_by AS "inProgressBy",
-  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
+  registration_number AS reg, chassis_number AS chassis, driver_name AS "driverName", driver_name_source AS "driverNameSource", superior_name AS superior, site, category, sub_category AS "subCategory", complaint, (complaint_audio <> '') AS "complaintAudioAvailable", complaint_language AS "complaintLanguage", maintenance_work_language AS "maintenanceWorkLanguage",
   (complaint_media <> '[]'::jsonb) AS "complaintMediaAvailable",
   to_char(started_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS start,
   to_char(accepted_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "acceptedAt", accepted_by AS "acceptedBy", acceptance_required AS "acceptanceRequired",
@@ -4929,7 +4931,8 @@ app.get('/api/requests/conflict',requireSession,requirePermission('createRequest
 
 app.post('/api/requests',requireSession,requirePermission('createRequests'),async(req,res,next)=>{
   try{
-    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
+    const {ref,equipment='',equipmentGroup='',door,reg='',chassis='',driverName='',driverNameSource='',site='Not assigned',category='Maintenance request',subCategory='',complaint,complaintAudio='',complaintLanguage='',start,meterType=''}=req.body||{};
+    const storedSubCategory=String(subCategory||'').trim().slice(0,200);
     const storedSite=canonicalSiteName(site)==='sasti ob'?'Sasti OB':String(site||'').trim()||'Not assigned';
     const storedComplaintLanguage=(String(complaintLanguage).trim().toLowerCase().match(/^(en|hi|mr|bn|or|te|gu|pa|ta|kn)(-|$)/i)||[])[1]||'';
     const normalizedMeterType=String(meterType).trim().toUpperCase();
@@ -4951,10 +4954,10 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
     const storedDriverSource=storedDriverName?(String(driverNameSource).trim().slice(0,200)||'Manual'):'';
     const {rows}=await createRequestWithVehicleLock({door,chassis},async(client)=>{
     const result=await client.query(`INSERT INTO maintenance_requests
-      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
+      (reference,equipment_name,equipment_group,door_number,registration_number,chassis_number,driver_name,driver_name_source,superior_name,site,category,sub_category,complaint,complaint_audio,complaint_language,started_at,acceptance_required,status,owner_name,requester_login,requester_role,meter_type,opening_meter_reading,opening_meter_file,opening_meter_file_name)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$23,$12,$13,$22,$14,TRUE,'Open',$15,$16,$17,$18,$19,$20,$21)
       RETURNING ${requestProjection}`,
-      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage]);
+      [ref,equipment,String(equipmentGroup).trim().slice(0,200),door,reg,chassis,storedDriverName,storedDriverSource,String(superior).trim().slice(0,200),storedSite,category,complaint,complaintAudio,startedAt,req.session.name||'Mobile User',String(req.session.login||'').trim().toLowerCase(),String(req.session.assignedRole||'').trim(),normalizedMeterType,'','','',storedComplaintLanguage,storedSubCategory]);
     if(complaintMedia.length){
       await client.query('UPDATE maintenance_requests SET complaint_media=$2::jsonb WHERE reference=$1',[ref,JSON.stringify(complaintMedia)]);
       result.rows[0].complaintMediaAvailable=true;
@@ -5419,12 +5422,15 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
       if(req.session.role==='super'){
-        if(!masterAccessAllows(req.session.permissions,row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name,'mobileMasterAccess'))continue;
+        // Request creators need the sub-category list even when the master itself is not ticked for them.
+        const subCategoryForRequests=row.master_name==='Breakdown Sub-Category'&&canViewRepairTypes;
+        if(!subCategoryForRequests&&!masterAccessAllows(req.session.permissions,row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name,'mobileMasterAccess'))continue;
       }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
+        if(row.master_name==='Breakdown Sub-Category'&&!canViewRepairTypes)continue;
         if(row.master_name==='Delayed Reason'&&!canViewDelayedReasons)continue;
-        if(!['Equipment master','Repair type master','Delayed Reason'].includes(row.master_name))continue;
+        if(!['Equipment master','Repair type master','Breakdown Sub-Category','Delayed Reason'].includes(row.master_name))continue;
       }
       const record=row.master_name==='Users & employees'?publicUserRecord(row.record_data):row.record_data;
       if(managerRecord&&row.master_name==='Equipment master'){

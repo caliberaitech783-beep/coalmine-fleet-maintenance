@@ -8,6 +8,8 @@ import * as equipment from '../request-equipment.mjs';
 import { recordsForSite } from '../site-location.mjs';
 import { indiaWorkflowDateTimeParts } from '../src/workflow-clock.mjs';
 import { submitMaintenanceRequest } from '../request-submit.mjs';
+import { normalizedBreakdownType } from '../dashboard-breakdown-movement.mjs';
+import { breakdownSubCategoryNames } from '../breakdown-sub-category.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const formStart = source.indexOf('function MaintenanceForm(');
@@ -38,7 +40,7 @@ function harness(code, name, extra = {}) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial() : initial;
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
-  const scope = { ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
+  const scope = { ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, normalizedBreakdownType, breakdownSubCategoryNames, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
   const component = new Function(...Object.keys(scope), `${code}; return ${name};`)(...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
 }
@@ -127,6 +129,49 @@ test('successful creation closes only after save and never opens a blocking succ
   await byType(tree, 'form').props.onSubmit(event);
   assert.equal(closes, 1, 'failure keeps the form open');
   assert.deepEqual(alerts, ['Save failed.']);
+});
+
+test('choosing the Breakdown type asks for a sub-category from the Breakdown Sub-Category master and saves it with the request', async () => {
+  const EquipmentCombobox = () => null;
+  const saved = [];
+  const app = harness(formCode, 'MaintenanceForm', {
+    ...siteAccess, ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
+    Clock: Null, MapPin: Null, ChevronRight: Null, CheckCircle2: Null, RefreshCw: Null, AlertTriangle: Null,
+    TIME_24H_PATTERN: '.*', alert: () => {}, submitMaintenanceRequest,
+    FormData: class { constructor(values) {this.values = values;} get(key) {return this.values[key] ?? '';} },
+  });
+  const repairTypeRecords = [{id: 1, repairType: 'WGM'}, {id: 2, repairType: 'Breakdown'}, {id: 3, repairType: 'Accidental'}];
+  const subCategoryRecords = [{id: 10, subCategory: 'Tyre puncture'}, {id: 11, subCategory: ' Brake system '}, {id: 12, subCategory: 'Battery'}, {id: 13, subCategory: 'battery'}];
+  const props = {equipmentRecords: records, equipmentLoaded: true, repairTypeRecords, repairTypesLoaded: true, subCategoryRecords, subCategoriesLoaded: true, assignedLocation: 'Sasti OB', close() {}, onSubmit: async (request) => { saved.push(request); return {ref: 'REQ-SAVED'}; }};
+  let tree = app.render(props);
+  const category = () => all(tree, node => node.props.name === 'category')[0];
+  const subCategory = () => all(tree, node => node.props.name === 'subCategory')[0];
+  assert.equal(subCategory(), undefined, 'no sub-category until a breakdown type is chosen');
+  category().props.onChange({target: {value: 'Accidental'}});
+  tree = app.render(props);
+  assert.equal(category().props.value, 'Accidental');
+  assert.equal(subCategory(), undefined, 'only the Breakdown type has sub-categories');
+  category().props.onChange({target: {value: 'Breakdown'}});
+  tree = app.render(props);
+  assert.ok(subCategory(), 'Breakdown shows the sub-category field');
+  assert.equal(subCategory().props.required, true);
+  assert.equal(subCategory().props.disabled, false);
+  const options = all(subCategory(), node => node.type === 'option').map(node => node.props.value);
+  assert.deepEqual(options, ['', 'Battery', 'Brake system', 'Tyre puncture'], 'options come from the master, trimmed, de-duplicated and sorted');
+  tree = app.render({...props, subCategoryRecords: [], subCategoriesLoaded: false});
+  assert.equal(subCategory().props.disabled, true);
+  assert.equal(subCategory().props['aria-busy'], true);
+  tree = app.render(props);
+  all(tree, node => node.props.name === 'equipmentGroup')[0].props.onChange({target: {value: 'EXCAVATOR'}});
+  tree = app.render(props);
+  byType(tree, EquipmentCombobox).props.onSelect(records[0]);
+  tree = app.render(props);
+  await byType(tree, 'form').props.onSubmit({preventDefault() {}, currentTarget: {door: 'EX-17', category: 'Breakdown', subCategory: 'Tyre puncture', complaint: 'Front tyre flat', date: '2026-09-18', time: '10:00:00'}});
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].category, 'Breakdown');
+  assert.equal(saved[0].subCategory, 'Tyre puncture');
+  await byType(tree, 'form').props.onSubmit({preventDefault() {}, currentTarget: {door: 'EX-17', category: 'Accidental', complaint: 'Hit a rock', date: '2026-09-18', time: '10:00:00'}});
+  assert.equal(saved[1].subCategory, '', 'other breakdown types save no sub-category');
 });
 
 function speechHarness({ supported = true, permission } = {}) {

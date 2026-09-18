@@ -39,6 +39,30 @@ test('it is a Masters sub menu that administrators can add to, edit and delete, 
   assert.equal(masterAccessAllows({adminLevel:'Manager',masterAccess:['Equipment master']},'Breakdown Sub-Category'),false);
 });
 
+test('the create request form loads the master and the server stores the chosen sub-category with the request',()=>{
+  assert.match(client,/import \{ breakdownSubCategoryNames \} from "\.\.\/breakdown-sub-category\.mjs";/);
+  assert.match(client,/useMasterRecords\("Breakdown Sub-Category"\)/,'the request page loads the Breakdown Sub-Category master');
+  assert.match(client,/<MaintenanceForm normal[^>]*subCategoryRecords=\{subCategoryRecords\} subCategoriesLoaded=\{subCategoriesLoaded\}/);
+  const form=client.slice(client.indexOf('function MaintenanceForm('),client.indexOf('function Subsidiaries('));
+  assert.match(form,/normalizedBreakdownType\(category\) === "Breakdown"/,'only the Breakdown type asks for a sub-category');
+  assert.match(form,/\{needsSubCategory && \(\n\s+<label>\n\s+Breakdown sub-category \*\n\s+<select\n\s+name="subCategory"\n\s+required/);
+  assert.match(form,/subCategory: String\(fd\.get\("subCategory"\) \|\| ""\)\.trim\(\),/);
+  assert.match(server,/ADD COLUMN IF NOT EXISTS sub_category TEXT NOT NULL DEFAULT ''/);
+  assert.match(server,/category, sub_category AS "subCategory", complaint,/,'requests return the stored sub-category');
+  assert.match(server,/category='Maintenance request',subCategory='',complaint,/);
+  assert.match(server,/const storedSubCategory=String\(subCategory\|\|''\)\.trim\(\)\.slice\(0,200\);/);
+  assert.match(server,/superior_name,site,category,sub_category,complaint,/);
+  assert.match(server,/\$9,\$10,\$11,\$23,\$12,\$13,\$22,\$14/,'the sub-category is bound to the new insert parameter');
+  assert.match(server,/storedComplaintLanguage,storedSubCategory\]\);/);
+});
+
+test('request creators receive the Breakdown Sub-Category master from /api/masters',()=>{
+  const route=server.slice(server.indexOf("app.get('/api/masters',"),server.indexOf("app.post('/api/masters/",server.indexOf("app.get('/api/masters',")));
+  assert.match(route,/if\(row\.master_name==='Breakdown Sub-Category'&&!canViewRepairTypes\)continue;/,'production users who can pick a repair type also get its sub-categories');
+  assert.match(route,/\['Equipment master','Repair type master','Breakdown Sub-Category','Delayed Reason'\]\.includes\(row\.master_name\)/);
+  assert.match(route,/const subCategoryForRequests=row\.master_name==='Breakdown Sub-Category'&&canViewRepairTypes;/,'admin-level request creators get it even when the master is not ticked for them');
+});
+
 test('the server seeds the list once and never re-creates rows an administrator removed',()=>{
   assert.match(server,/import \{BREAKDOWN_SUB_CATEGORY_DEFAULTS\} from '\.\/breakdown-sub-category\.mjs';/);
   assert.match(server,/key='breakdown_sub_category_defaults_seeded_v1' FOR UPDATE/);
