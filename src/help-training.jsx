@@ -2,13 +2,38 @@ import React, {useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 import {CheckCircle2, CircleHelp, Languages, PlayCircle, X} from "lucide-react";
 import {userGuideStorageKey, userGuideVideo, userGuidesForRoles} from "./help-training.mjs";
+import {fetchLiveTemperature, formatTemperature, resolveTemperatureCoordinates, TEMPERATURE_REFRESH_MS} from "./live-temperature.mjs";
 import "./help-training.css";
 
-export default function HelpTraining({role = "", roles = []}) {
+// Live outdoor temperature while the dialog is open (viewer position, else the assigned site).
+function useLiveTemperature(site, active) {
+  const [reading, setReading] = useState({celsius: null, place: "", error: false});
+  useEffect(() => {
+    if (!active) return undefined;
+    let stopped = false;
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const coordinates = await resolveTemperatureCoordinates(site);
+        const result = await fetchLiveTemperature({...coordinates, signal: controller.signal});
+        if (!stopped) setReading({celsius: result.celsius, place: coordinates.place, error: false});
+      } catch {
+        if (!stopped) setReading((current) => ({...current, error: true}));
+      }
+    };
+    void load();
+    const timer = setInterval(load, TEMPERATURE_REFRESH_MS);
+    return () => { stopped = true; controller.abort(); clearInterval(timer); };
+  }, [site, active]);
+  return reading;
+}
+
+export default function HelpTraining({role = "", roles = [], location = ""}) {
   const guides = useMemo(() => userGuidesForRoles([role, ...(Array.isArray(roles) ? roles : [roles])]), [role, roles]);
   const [selectedRole, setSelectedRole] = useState("");
   const guide = guides.find((option) => option.role === selectedRole) || guides[0] || null;
   const [open, setOpen] = useState(false);
+  const temperature = useLiveTemperature(location, open);
   const [language, setLanguage] = useState("en");
   const [showCoachmark, setShowCoachmark] = useState(false);
   const closeButtonRef = useRef(null);
@@ -69,7 +94,10 @@ export default function HelpTraining({role = "", roles = []}) {
     {open && createPortal(<div className="help-training-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) closeGuide(); }}>
       <section className="help-training-dialog" role="dialog" aria-modal="true" aria-labelledby="help-training-title">
         <header>
-          <span className="help-training-heading-icon"><CircleHelp /></span>
+          <span className="help-training-heading-lead">
+            <span className={`help-training-weather${temperature.error ? " is-error" : Number.isFinite(temperature.celsius) ? "" : " is-loading"}`} role="status" aria-live="polite" title={temperature.error ? "Outside temperature unavailable" : `Outside temperature${temperature.place ? ` at ${temperature.place}` : ""}, refreshed every 10 minutes`}>{formatTemperature(temperature.celsius)}</span>
+            <span className="help-training-heading-icon"><CircleHelp /></span>
+          </span>
           <span><h2 id="help-training-title">{guide.title}</h2><p>Watch the complete role guide without leaving your workspace.</p></span>
           <div className="help-training-language" role="group" aria-label="Guide language">
             <Languages aria-hidden="true" />

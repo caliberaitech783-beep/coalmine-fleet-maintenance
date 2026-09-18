@@ -21,3 +21,21 @@
 @keyframes help-orbit{to{transform:rotate(360deg)}}
 @keyframes help-spark{0%{box-shadow:0 0 0 0 #fbbf24b3;transform:scale(1)}60%{transform:scale(1.25)}100%{box-shadow:0 0 0 9px #fbbf2400;transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.help-training-entry>button.help-training-trigger,.help-training-entry>button.help-training-trigger svg,.help-training-entry>button.help-training-trigger::before,.help-training-entry>button.help-training-trigger::after{animation:none!important;transition:none!important}}
+
+/* Dialog heading: live outside temperature "(37°C) 98.6°F" before the icon, and
+   the icon styled exactly like the header trigger badge. */
+.help-training-dialog>header{grid-template-columns:auto minmax(0,1fr) auto 40px}
+.help-training-heading-lead{display:inline-flex;align-items:center;gap:10px}
+.help-training-weather{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border:1px solid #f4c9a8;border-radius:999px;background:linear-gradient(135deg,#fff7e6,#ffe3cc);color:#8a3b12;font-size:13px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.help-training-weather::before{content:"";width:8px;height:8px;border-radius:50%;background:#f97316;box-shadow:0 0 0 0 #f9731699;animation:help-weather-live 1.6s ease-out infinite}
+.help-training-weather.is-loading{opacity:.7}
+.help-training-weather.is-error{border-color:#d9e1ed;background:#f1f4f9;color:#6b7891}
+.help-training-weather.is-error::before{background:#9aa7ba;animation:none}
+:root[data-theme="dark"] .help-training-weather{border-color:#f9731666;background:#f9731626;color:#ffb27a}
+.help-training-dialog .help-training-heading-icon{position:relative;isolation:isolate;width:44px;height:44px;border:1px solid #ffffff66;border-radius:12px;background:linear-gradient(135deg,#a855f7,#6b2fa8);color:#fff;box-shadow:0 6px 14px #6b2fa873,inset 0 1px 0 #ffffff59;animation:help-bob 2.8s ease-in-out infinite}
+.help-training-dialog .help-training-heading-icon svg{width:24px;height:24px;filter:drop-shadow(0 1px 1px #0000004d);transform-origin:50% 50%;animation:help-nod 2.8s ease-in-out infinite}
+.help-training-dialog .help-training-heading-icon::before{content:"";position:absolute;inset:-5px;border:2px dashed #a855f7a6;border-radius:16px;opacity:.85;animation:help-orbit 9s linear infinite;pointer-events:none}
+.help-training-dialog .help-training-heading-icon::after{content:"";position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff7cc,#fbbf24);box-shadow:0 0 0 0 #fbbf24b3;animation:help-spark 1.8s ease-out infinite;pointer-events:none}
+@keyframes help-weather-live{0%{box-shadow:0 0 0 0 #f9731699}100%{box-shadow:0 0 0 8px #f9731600}}
+@media(max-width:700px){.help-training-dialog>header{grid-template-columns:auto minmax(0,1fr) 36px}.help-training-weather{font-size:11px;padding:4px 8px}.help-training-dialog .help-training-heading-icon{width:36px;height:36px}}
+@media (prefers-reduced-motion:reduce){.help-training-weather::before,.help-training-dialog .help-training-heading-icon,.help-training-dialog .help-training-heading-icon svg,.help-training-dialog .help-training-heading-icon::before,.help-training-dialog .help-training-heading-icon::after{animation:none!important}}

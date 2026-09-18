@@ -43,7 +43,7 @@ test("all deployed role guide videos exist", async () => {
 
 test("normal user header renders Help and Training", async () => {
   const source = await readFile("src/main.jsx", "utf8");
-  assert.match(source, /<HelpTraining role=\{mobileRole\} \/>/);
+  assert.match(source, /<HelpTraining role=\{mobileRole\} location=\{assignedLocation\} \/>/);
 });
 
 test("operational user header displays the Help and Training control as an icon only", async () => {
@@ -54,6 +54,6 @@ test("operational user header displays the Help and Training control as an icon 
 
 test("manager header renders Help and Training only for manager accounts", async () => {
   const source = await readFile("src/main.jsx", "utf8");
-  assert.match(source, /adminPermissions\.adminLevel === "Manager" && <HelpTraining roles=\{adminPermissions\.managerRoles\} \/>/);
+  assert.match(source, /adminPermissions\.adminLevel === "Manager" && <HelpTraining roles=\{adminPermissions\.managerRoles\} location=\{profileLocation\} \/>/);
 });
 
