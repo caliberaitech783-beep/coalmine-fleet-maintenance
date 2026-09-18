@@ -28,7 +28,7 @@ test('Shift Master accepts workbook headers, normalizes time, and validates effe
 test('Shift Master is wired into navigation, CRUD, seed data, and Equipment Master hides Sync Oracle',()=>{
   const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
   const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-  assert.match(client,/\["Shift Master", Clock\]/);
+  assert.match(client,/\["Shift Master", Clock, "shift"\]/);
   assert.match(client,/"Shift Master": \[/);
   assert.match(client,/name === "Shift Master" \? privilegeSiteOptions/);
   assert.match(client,/name === "Vehicle transfers" && \(/);

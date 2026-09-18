@@ -34,7 +34,7 @@ test('sub-category names are trimmed, de-duplicated and sorted, and Others is al
 });
 
 test('it is a Masters sub menu that administrators can add to, edit and delete, controlled from Privilege',()=>{
-  assert.match(client,/\["Repair type master", Wrench\],\n  \["Breakdown Sub-Category", Wrench\],\n  \["Region master", Building2\],/,'listed in the Masters menu after Repair type master');
+  assert.match(client,/\["Repair type master", Wrench, "repair"\],\n  \["Breakdown Sub-Category", Wrench, "subcategory"\],\n  \["Region master", Building2, "region"\],/,'listed in the Masters menu after Repair type master');
   assert.match(client,/"Breakdown Sub-Category": \[\n    \["subCategory", "Sub-Category"\],\n  \],/);
   assert.match(client,/name === "Repair type master" \|\| name === "Breakdown Sub-Category" \|\| name === "Delayed Reason"/,'rows can be added, edited and deleted');
   assert.ok(ADMIN_MASTER_OPTIONS.includes('Breakdown Sub-Category'),'it can be ticked under Visible masters in Privilege');

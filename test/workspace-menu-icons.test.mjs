@@ -36,3 +36,18 @@ test('the WhatsApp Integration menu uses the same badge markup with its own colo
   assert.match(styles,/\.app > aside nav \.masters-dropdown button\.workspace-menu-item \{/,'the item styling is shared by every dropdown that uses the markup');
   assert.match(styles,/\.operational-workspaces-dropdown,\s*\.whatsapp-dropdown \{ min-width: 252px; padding: 8px; \}/);
 });
+
+test('the Masters menu carries its badge key inside the nav tuple and uses the same badge markup',()=>{
+  const nav=source.match(/const masterNav = \[[\s\S]*?\];/)[0];
+  const keys=[...nav.matchAll(/\["[^"]+", [A-Za-z0-9]+, "([a-z]+)"\]/g)].map(m=>m[1]);
+  assert.deepEqual(keys,['users','equipment','breakdown','repair','subcategory','region','shift','delayed','transfers','hierarchy','oem']);
+  assert.match(source,/visibleMasterNav\.map\(\(\[name, Icon, menuKey\]\) => \(\s*<div className="nav-config-row" key=\{name\}><button\s*role="menuitem"\s*className=\{`workspace-menu-item\$\{active === name \? " active" : ""\}`\}\s*data-workspace=\{menuKey \|\| "master"\}/);
+  assert.match(source,/onClick=\{\(event\) => selectMaster\(name, event\)\}\s*>\s*<span className="workspace-icon" aria-hidden="true"><Icon \/><i className="workspace-icon-glow" \/><\/span>\s*<span className="nav-label">\{name\}<\/span>/);
+  for(const key of keys.filter(key=>key!=='oem'))assert.match(styles,new RegExp(`\\.workspace-menu-item\\[data-workspace="${key}"\\] \\.workspace-icon \\{ --ws-a: #[0-9a-f]{6}; --ws-b: #[0-9a-f]{6};`),key);
+  assert.match(styles,/\[data-workspace="equipment"\]:hover \.workspace-icon svg[\s\S]*animation: ws-drive/);
+  assert.match(styles,/\[data-workspace="breakdown"\]:hover \.workspace-icon svg[\s\S]*animation: ws-wrench/);
+  assert.match(styles,/\[data-workspace="shift"\]:hover \.workspace-icon svg[\s\S]*animation: ws-tick/);
+  assert.match(styles,/\[data-workspace="transfers"\]:hover \.workspace-icon svg[\s\S]*animation: ws-shuttle/);
+  for(const name of ['ws-tick','ws-shuttle'])assert.match(styles,new RegExp(`@keyframes ${name} \\{`),name);
+  assert.match(styles,/\.masters-dropdown:has\(> \.nav-config-row > \.workspace-menu-item\),\s*\.operational-workspaces-dropdown,\s*\.whatsapp-dropdown \{ min-width: 252px; padding: 8px; \}/);
+});

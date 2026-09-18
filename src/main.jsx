@@ -333,18 +333,19 @@ const adminNav = [
   ["Audit Trail", History],
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
+// [page name, icon, badge key]: the key picks the badge colour and hover animation (topbar.css).
 const masterNav = [
-  ["Users & employees", Users],
-  ["Equipment master", Truck],
-  ["Breakdown master", Wrench],
-  ["Repair type master", Wrench],
-  ["Breakdown Sub-Category", Wrench],
-  ["Region master", Building2],
-  ["Shift Master", Clock],
-  ["Delayed Reason", Clock],
-  ["Vehicle transfers", ArrowRightLeft],
-  ["Hierarchy master", Network],
-  ["OEM master", ShieldCheck],
+  ["Users & employees", Users, "users"],
+  ["Equipment master", Truck, "equipment"],
+  ["Breakdown master", Wrench, "breakdown"],
+  ["Repair type master", Wrench, "repair"],
+  ["Breakdown Sub-Category", Wrench, "subcategory"],
+  ["Region master", Building2, "region"],
+  ["Shift Master", Clock, "shift"],
+  ["Delayed Reason", Clock, "delayed"],
+  ["Vehicle transfers", ArrowRightLeft, "transfers"],
+  ["Hierarchy master", Network, "hierarchy"],
+  ["OEM master", ShieldCheck, "oem"],
 ];
 const whatsappNav = [
   ["Meta API setup", Settings],
@@ -882,13 +883,14 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown" role="menu">
-            {visibleMasterNav.map(([name, Icon]) => (
+            {visibleMasterNav.map(([name, Icon, menuKey]) => (
               <div className="nav-config-row" key={name}><button
                 role="menuitem"
-                className={active === name ? "active" : ""}
+                className={`workspace-menu-item${active === name ? " active" : ""}`}
+                data-workspace={menuKey || "master"}
                 onClick={(event) => selectMaster(name, event)}
               >
-                <Icon />
+                <span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span>
                 <span className="nav-label">{name}</span>
               </button></div>
             ))}
