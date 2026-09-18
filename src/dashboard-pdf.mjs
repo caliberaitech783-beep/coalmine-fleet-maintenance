@@ -4,6 +4,8 @@ export async function downloadDashboardPdf(dashboard, filename, print = false) {
   const [{toCanvas}, {jsPDF}] = await Promise.all([import("html-to-image"), import("jspdf")]);
   await document.fonts.ready;
   const clone = dashboard.cloneNode(true);
+  // Reports stay on the Day palette even when the screen is in Night mode.
+  clone.classList.replace("mine-dashboard-night", "mine-dashboard-day");
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;left:-100000px;top:0;pointer-events:none;z-index:-1;";
   host.style.width = `${dashboard.getBoundingClientRect().width}px`;

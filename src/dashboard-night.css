@@ -1,0 +1,164 @@
+/* Night palette for the Fleet control dashboard.
+   brand-theme.css paints every .mine-dashboard with the Day palette, which
+   also caught Night mode and left the whole dashboard white. This sheet is
+   imported last so the Night palette wins, then retones the colours that were
+   hard-coded for a white card. Screen only: printed pages keep the Day
+   palette, and dashboard-pdf.mjs swaps the capture to mine-dashboard-day. */
+@media screen {
+  .mine-dashboard.mine-dashboard-night {
+    --mine-bg: #171219;
+    --mine-panel: #241d27;
+    --mine-line: #45354d;
+    --mine-text: #f6f0f7;
+    --mine-muted: #b9aabd;
+    background: linear-gradient(145deg, #1d1720 0%, #171219 100%);
+    border-color: #45354d;
+    color: var(--mine-text);
+  }
+
+  /* Shared panel chrome */
+  .mine-dashboard.mine-dashboard-night .mine-panel > header { border-bottom-color: var(--mine-line); }
+  .mine-dashboard.mine-dashboard-night .mine-empty { color: var(--mine-muted) !important; }
+  .mine-dashboard.mine-dashboard-night [data-dashboard-list]:focus-visible,
+  .mine-dashboard.mine-dashboard-night .mine-maintenance-availability-tabs button:focus-visible,
+  .mine-dashboard.mine-dashboard-night .dashboard-breakdown-day-table .dashboard-breakdown-day-link:focus-visible { outline-color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night .dashboard-fleet-data-state > button { border-color: #8eb5ff55; color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .dashboard-fleet-data-state > button:is(:hover, :focus-visible) { border-color: #8eb5ff; outline-color: #8eb5ff40; }
+  .mine-dashboard.mine-dashboard-night .dashboard-connection-notice > button:focus-visible { outline-color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .record-date-range-hint[role="alert"] { color: #ff9bac; }
+
+  /* Total Fleet chart */
+  .mine-dashboard.mine-dashboard-night .mine-fleet-region-chart {
+    --fleet-equipment: #ff696d;
+    --fleet-vehicles: #a67bd3;
+    --fleet-breakdown: #cc2a31;
+  }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-region-chart.watermarked::before { background: #c9a8f0; opacity: .05; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-bar.equipment { background: linear-gradient(180deg, #ff9599, var(--fleet-equipment)); }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-bar.vehicles { background: linear-gradient(180deg, #c2a0ea, var(--fleet-vehicles)); }
+  /* A panel-coloured gap keeps the breakdown share readable against the lighter bar above it. */
+  .mine-dashboard.mine-dashboard-night .mine-fleet-breakdown-segment.partial-segment { box-shadow: 0 -2px 0 var(--mine-panel); }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-bars-trigger:is(:hover, :focus-visible) .mine-fleet-site-bars { outline-color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-site-summary button.bd-percent { color: #ff8a8e; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-site-summary button:is(:hover, :focus-visible) { background: color-mix(in srgb, #a67bd3 16%, transparent); color: #c9a8f0; outline-color: color-mix(in srgb, #a67bd3 60%, transparent); }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-regions footer { border-top-color: #7aa2ff; background: #8eb5ff0d; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-regions footer b { color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-watermark-toggle:is(:hover, :focus-visible, [aria-pressed="true"]) { border-color: #a67bd3; color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-toggle { box-shadow: inset 0 1px 0 #ffffff14; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-toggle .mine-fleet-view-option.active { background: #8a5cc8; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-toggle button[aria-pressed="true"] { background: linear-gradient(135deg, #8a5cc8, #7549b8); }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-toggle .mine-fleet-view-option .mine-fleet-count-trend.up { color: #ff9bac; background: #4b2030; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-toggle .mine-fleet-view-option .mine-fleet-count-trend.down { color: #78dfb7; background: #143e30; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-toggle .mine-fleet-view-option .mine-fleet-count-trend.flat { color: #d6c9dc; background: #3a2f40; }
+  .mine-dashboard.mine-dashboard-night .mine-fleet-chart-toggle .mine-fleet-view-option.active .mine-fleet-count-trend.flat { color: #fff; background: #0000002e; }
+
+  /* OEM BD view of the same chart */
+  .mine-dashboard.mine-dashboard-night .mine-oem-legend .mine-oem-all { border-color: #a67bd3; color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night .mine-oem-actions button { background: var(--mine-panel); border-color: var(--mine-line); color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-oem-actions, .mine-oem-legend) button:hover { background: #33273a; border-color: #a67bd3; box-shadow: inset 0 0 0 1px #a67bd3; }
+  .mine-dashboard.mine-dashboard-night .mine-oem-site-caption { border-top-color: #a67bd3; }
+  /* OEM colours are tuned for white labels, so a light ring outlines them on the dark panel instead of lightening them. */
+  .mine-dashboard.mine-dashboard-night .mine-oem-stack:has(> .mine-oem-segment) { border-radius: 5px 5px 0 0; box-shadow: 0 0 0 1px #b9aabd; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-oem-legend, .mine-oem-selection) i,
+  .mine-dashboard.mine-dashboard-night .mine-oem-segment[data-count-callout] .mine-oem-segment-label { box-shadow: 0 0 0 1px #b9aabd; }
+  .mine-dashboard.mine-dashboard-night .mine-oem-count-connector line { stroke: #b9aabd; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-oem-dashboard button, .mine-oem-scroll):focus-visible { outline-color: #c9a8f0; }
+  /* The tooltip is portaled to <body>, outside the dashboard root. */
+  :root[data-theme="dark"] .mine-oem-tooltip { border-color: #45354d; background: #2d2331; color: #f6f0f7; box-shadow: 0 10px 28px #000000a6; }
+  :root[data-theme="dark"] .mine-oem-tooltip-site { color: #b9aabd; }
+  :root[data-theme="dark"] .mine-oem-tooltip-heading i { box-shadow: 0 0 0 1px #b9aabd; }
+
+  /* Daily BD Balance */
+  .mine-dashboard.mine-dashboard-night .daily-bd-balance .incoming { --bd-color: #5b8def; }
+  .mine-dashboard.mine-dashboard-night .daily-bd-balance .balance { --bd-color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night .bd-balance-controls svg { color: #a67bd3; }
+  .mine-dashboard.mine-dashboard-night .bd-balance-day.today { background: linear-gradient(to top, #8eb5ff0d, transparent); }
+  .mine-dashboard.mine-dashboard-night .bd-balance-day.today .bd-balance-day-date > b { color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .bd-balance-change.steady { color: #d9cbe0; background: #33273a; }
+  .mine-dashboard.mine-dashboard-night .bd-balance-range-error { color: #ff9bac; }
+  .mine-dashboard.mine-dashboard-night .daily-bd-balance :is(button, input, select, [tabindex]):focus-visible { outline-color: #c9a8f0; }
+
+  /* Tracking Vehicle Throughput */
+  .mine-dashboard.mine-dashboard-night .mine-maintenance-availability-panel { border-top-color: #a67bd3; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-maintenance-availability-tabs, .dashboard-breakdown-period-controls) button.active { box-shadow: inset 0 0 0 1px #a67bd3, 0 3px 10px #0006; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-maintenance-availability-head .throughput-filter-eye, .dashboard-breakdown-filter-toggle button, .dashboard-breakdown-day-back) { color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night :is(.dashboard-breakdown-period-controls, .dashboard-card-search) :is(input, select) { background: #171219; border-color: var(--mine-line); color: var(--mine-text); }
+  .mine-dashboard.mine-dashboard-night :is(.mine-request-lifecycle-controls, .mine-trend-controls) :is(input, select) { background: transparent; color: var(--mine-text); }
+  .mine-dashboard.mine-dashboard-night :is(.mine-panel, .dashboard-breakdown-movement-modal, .dashboard-card-search) :is(input, select):focus { border-color: #a67bd3 !important; box-shadow: 0 0 0 3px #a67bd340 !important; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-breakdown-movement-kpis, .dashboard-breakdown-detail-kpis) .open { --metric-color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-breakdown-movement-kpis, .dashboard-breakdown-detail-kpis) .outgoing { --metric-color: #4cc795; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-breakdown-movement-kpis, .dashboard-breakdown-detail-kpis) .balance { --metric-color: #b691e6; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-type-mix:not(.dashboard-breakdown-road-mix) :is(article, button):nth-child(1) { --type-color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-type-mix:not(.dashboard-breakdown-road-mix) :is(article, button):nth-child(3) { --type-color: #4cc795; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-type-mix:not(.dashboard-breakdown-road-mix) :is(article, button):nth-child(4) { --type-color: #b691e6; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-type-mix:not(.dashboard-breakdown-road-mix) :is(article, button):nth-child(6) { --type-color: #5ec3de; }
+  .mine-dashboard.mine-dashboard-night .dashboard-breakdown-road-mix button:nth-child(1) { --type-color: #4cc795; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-site-head span small { color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-breakdown-site-row, .mine-road-site-row) > .site svg,
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-road-impact > em,
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-site-row > .metric.open b { color: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-site-row > .metric.balance b { color: #b691e6; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-site-row > .metric.incoming b,
+  .mine-dashboard.mine-dashboard-night .mine-road-site-row > .metric.offroad b { color: #ff8a8e; }
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-site-row > .metric.outgoing b,
+  .mine-dashboard.mine-dashboard-night .mine-road-site-row > :is(.metric.onroad, .availability) b,
+  .mine-dashboard.mine-dashboard-night .mine-breakdown-road-impact > span:first-child b { color: #4cc795; }
+  .mine-dashboard.mine-dashboard-night .mine-road-site-row.focused { box-shadow: inset 4px 0 #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .mine-site-road-summary :is(.availability, .onroad) { --summary-color: #78dfb7; --summary-bg: #143e30; --summary-border: #346e57; }
+  .mine-dashboard.mine-dashboard-night .mine-site-road-summary .offroad { --summary-color: #ff9bac; --summary-bg: #4b2030; --summary-border: #754253; }
+  .mine-dashboard.mine-dashboard-night .mine-site-road-summary .idle { --summary-color: #ffd295; --summary-bg: #5b381b; --summary-border: #8a5a2b; }
+  .mine-dashboard.mine-dashboard-night .mine-site-road-gauge { background: conic-gradient(#4cc795 0deg var(--availability), #2b4d40 var(--availability) 360deg); }
+  .mine-dashboard.mine-dashboard-night .mine-site-road-gauge::before { background: #143e30; }
+  /* Day-wise BD Movement dialog */
+  .mine-dashboard.mine-dashboard-night .dashboard-breakdown-apply { color: #8eb5ff !important; }
+  .mine-dashboard.mine-dashboard-night .dashboard-breakdown-road-shortcut { border-color: #346e57 !important; background: #143e30 !important; color: #78dfb7 !important; }
+  .mine-dashboard.mine-dashboard-night .dashboard-breakdown-day-table td.percentage b { background: #3a2a4a; color: #e6d6fa; }
+  /* Card search dialog: --panel is never defined, so these buttons fell back to white. */
+  .mine-dashboard.mine-dashboard-night .dashboard-card-search-results button { border-color: var(--mine-line); background: #2d2331; color: var(--mine-text); }
+  .mine-dashboard.mine-dashboard-night .dashboard-card-search-results button:is(:hover, :focus-visible) { border-color: #a67bd3; background: #33273a; }
+
+  /* Total Equipment Intelligence. React writes stroke="#rrggbb" verbatim and
+     CSS outranks SVG presentation attributes; the legend swatches are inline
+     styles, which browsers serialise as rgb(). */
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-track { stroke: var(--mine-line); }
+  .mine-dashboard.mine-dashboard-night :is(.mine-pie-slice, .mine-hierarchy-slice)[stroke="#522e90"] { stroke: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-slice[stroke="#6d43a1"] { stroke: #9466d6; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-slice[stroke="#3d1d70"] { stroke: #e2d2fa; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-slice[stroke="#b72d6e"] { stroke: #e0609a; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-slice[stroke="#a92566"] { stroke: #f08cb8; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-hierarchy-categories, .mine-hierarchy-groups, .mine-pie-legend) i[style*="82, 46, 144"] { background: #c9a8f0 !important; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-groups i[style*="109, 67, 161"] { background: #9466d6 !important; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-groups i[style*="61, 29, 112"] { background: #e2d2fa !important; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-groups i[style*="183, 45, 110"] { background: #e0609a !important; }
+  .mine-dashboard.mine-dashboard-night .mine-hierarchy-groups i[style*="169, 37, 102"] { background: #f08cb8 !important; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-hierarchy-categories, .mine-hierarchy-groups) button:is(:hover, :focus-visible) { border-color: #a67bd3aa; background: #a67bd314; }
+  .mine-dashboard.mine-dashboard-night .mine-intelligence-view-switch { background: #171219; }
+  .mine-dashboard.mine-dashboard-night .mine-intelligence-view-switch button.active { background: #2d2331; color: #c9a8f0; box-shadow: inset 0 0 0 1px #a67bd380, 0 1px 4px #0006; }
+
+  /* Request Lifecycle */
+  .mine-dashboard.mine-dashboard-night .mine-request-lifecycle { border-top-color: #7aa2ff; }
+  .mine-dashboard.mine-dashboard-night .mine-request-lifecycle-summary .opened > i { background: #7aa2ff; }
+  .mine-dashboard.mine-dashboard-night .mine-request-lifecycle-summary .opened:is(:hover, :focus-visible) { border-color: #7aa2ff66; background: #7aa2ff0f; }
+  .mine-dashboard.mine-dashboard-night .mine-request-chart-day button.opened { background: #7aa2ff; color: #7aa2ff; }
+
+  /* Breakdown trend */
+  .mine-dashboard.mine-dashboard-night .mine-trend-view-all { color: #8eb5ff !important; }
+  .mine-dashboard.mine-dashboard-night .mine-trend-summary article { border-left-color: #8eb5ff; background: #8eb5ff0f; }
+  .mine-dashboard.mine-dashboard-night .mine-trend-summary article:nth-child(2) { border-left-color: #b691e6; background: #b691e60f; }
+  .mine-dashboard.mine-dashboard-night .mine-trend-legend i { background: #4f86c6; }
+  .mine-dashboard.mine-dashboard-night .mine-trend-day:hover > span i { background: #8eb5ff; }
+  .mine-dashboard.mine-dashboard-night .mine-trend-day.forecast > span i { box-shadow: inset 0 0 0 1px #a67bd3; background: repeating-linear-gradient(135deg, #a67bd3 0 3px, #6d4a96 3px 6px); }
+  .mine-dashboard.mine-dashboard-night .mine-trend-day.forecast:hover > span i { background: #a67bd3; }
+  .mine-dashboard.mine-dashboard-night .mine-trend-day.forecast > span i > b { color: #c9a8f0; }
+
+  /* Overall Fleet Performance: the gauge colour is an inline custom property. */
+  .mine-dashboard.mine-dashboard-night .mine-fleet-performance > header strong svg { color: #c9a8f0; }
+  .mine-dashboard.mine-dashboard-night .mine-performance-gauges > button:nth-child(1) { --gauge-color: #7aa2ff !important; }
+  .mine-dashboard.mine-dashboard-night .mine-performance-gauges > button:nth-child(2) { --gauge-color: #4cc795 !important; }
+  .mine-dashboard.mine-dashboard-night :is(.mine-performance-bar, .mine-performance-legend) .utilized { background: #7aa2ff; }
+
+  /* PDF capture: dashboard-pdf.mjs moves the clone to mine-dashboard-day while
+     <html> stays dark, so reset the dark root tokens the Day card still reads. */
+  :root[data-theme="dark"] .mine-dashboard.mine-dashboard-day { --ink: #2b2233; --muted: #766a7c; --line: #eadde7; }
+  :root[data-theme="dark"] .mine-dashboard.mine-dashboard-day .mine-panel :is(input, select) { border-color: var(--mine-line); background: var(--mine-panel); color: var(--mine-text); }
+}

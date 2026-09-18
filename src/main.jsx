@@ -217,6 +217,7 @@ import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
 import "./dashboard-readability.css";
 import "./dashboard-spacing.css";
 import "./mobile-phone-optimization.css";
+import "./dashboard-night.css";
 import { APP_VERSION } from "./app-version.js";
 import { trackCountChange, formatCountDelta, BREAKDOWN_COUNT_STORAGE_KEY } from "./fleet-count-trend.mjs";
 
