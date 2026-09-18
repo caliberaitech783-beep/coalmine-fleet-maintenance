@@ -20,7 +20,7 @@ const source = readFileSync(new URL("../src/dashboard-record-browser.jsx", impor
 const { code } = await transformWithOxc(source, "record-browser.jsx", { jsx: { runtime: "classic" } });
 const bindings = { React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
   useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
-  ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null };
+  ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null };
 const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
 const row = { id: "asset-1", door: "E08-MH34BZ2407", category: "Vehicles", currentLocation: "Majri OB", model: "PRO8035L", manufacturerSerialNo: "CHASSIS-1" };
 const render = (props = {}) => renderToStaticMarkup(React.createElement(Browser, {

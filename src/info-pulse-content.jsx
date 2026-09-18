@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {RefreshCw, MapPin, Truck, AlertTriangle, Activity, Clock, RotateCcw} from 'lucide-react';
+import {RefreshCw, MapPin, Truck, AlertTriangle, Activity, Clock, RotateCcw, Eye} from 'lucide-react';
 import {infoPulseDate, infoPulseFilterView, infoPulseRegions} from '../info-pulse-data.mjs';
 import {parseIstTimestamp} from '../ai-feeder.mjs';
 import {formatDisplayDate, formatDisplayTime, formatDisplayDateTime} from '../date-time-format.mjs';
@@ -71,7 +71,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
       </div>
     </div>
     <details className={`pulse-filter-panel${cue ? ' pulse-filter-hint' : ''}`} open={filtersOpen} onToggle={event => setFiltersOpen(event.currentTarget.open)}>
-      <summary className="pulse-filter-summary"><b>Filters</b><span>{placeCaption} · {dateCaption}</span>{cue && <em className="pulse-filter-cue" role="status">Customise yourself</em>}<span className="pulse-show-filters">Show filters</span><span className="pulse-hide-filters">Hide filters</span></summary>
+      <summary className="pulse-filter-summary"><b>Filters</b><span>{placeCaption} · {dateCaption}</span>{cue && <em className="pulse-filter-cue" role="status">Customise yourself</em>}<span className="pulse-show-filters"><Eye className="filter-eye-cue" size={16} aria-hidden="true" />Show filters</span><span className="pulse-hide-filters">Hide filters</span></summary>
       <div className="pulse-filter-topline">
         {regions.length > 1 ? <div className="pulse-region-tabs" role="tablist" aria-label="Breakdowns by region">
           {view.regions.map(region => <button type="button" key={region.code} role="tab" aria-selected={view.selection.region === region.code} onClick={() => choose('region', region.code)}><span>{region.label}</span><b>{region.count}</b></button>)}

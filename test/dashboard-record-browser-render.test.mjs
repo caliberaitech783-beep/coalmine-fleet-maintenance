@@ -21,7 +21,7 @@ const descendants = (node, test) => Array.isArray(node) ? node.flatMap((child) =
 test("BD Balance places location, reasons and meter readings beside their requested columns", () => {
   const bindings = {React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
-    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
+    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
   const row = {id: "bd-1", currentLocation: "Sasti OB", category: "Vehicle", requestStatus: "Open", requestStart: "2026-09-10 10:00:00", model: "Test model", hmr: 0, kmr: 1234, repairCategory: "Breakdown", breakdownReason: "Brake repair"};
   const html = renderToStaticMarkup(React.createElement(Browser, {rows: [row], regions: REGION_DATA, rowsAreScoped: true, bdBalanceColumns: true,
@@ -36,7 +36,7 @@ test("BD Balance places location, reasons and meter readings beside their reques
 test("each lifecycle metric supplies only its relevant timestamp columns to the table, print and exports", () => {
   const bindings = {React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate,
     useEffect: React.useEffect, useId: React.useId, useRef: React.useRef, useState: React.useState,
-    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
+    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Browser = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
   const timingColumns = ["Closed", "MIS verified at", "First trip time"];
   const row = {id: "case-1", requestReference: "JOB-1", requestSite: "Sasti OB", category: "Vehicle", requestStatus: "Closed",
@@ -78,7 +78,7 @@ test("BD Out closing times, table order, counts and exports stay consistent thro
   let cursor = 0;
   const bindings = {React, ...model, matchesSmartSearch, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank, filterRecordsByDate, useEffect() {}, useId: () => "test-records", useRef: () => ({current: null}),
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === "function" ? initial() : initial; return [slots[slot], (next) => {slots[slot] = typeof next === "function" ? next(slots[slot]) : next;}];},
-    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null};
+    ChevronLeft: () => null, ChevronRight: () => null, RotateCcw: () => null, Eye: () => null};
   const Component = new Function(...Object.keys(bindings), `${code}; return DashboardRecordBrowser;`)(...Object.values(bindings));
   const rows = Array.from({length: 475}, (_, id) => ({id: `R-${id}`, requestReference: `JOB-${id}`, requestSite: id < 469 ? "Sasti OB" : "Old workshop", category: "Vehicle",
     requestStatus: "Closed", requestStart: "2026-09-10 10:00:00", requestClosed: id === 474 ? "—" : "2026-09-10T05:30:00Z"}));

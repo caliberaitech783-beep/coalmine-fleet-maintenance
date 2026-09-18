@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, RotateCcw } from "lucide-react";
 import { changeDrilldownFilter, drilldownView, equipmentCategoryLabel, equipmentGroupLabel, equipmentMachineLabel } from "./dashboard-drilldown-model.mjs";
 import { calculateBreakdownMinutes, formatBreakdownDaysHours } from "../breakdown-duration.mjs";
 import { requestStatusSortRank } from "./request-status.mjs";
@@ -117,7 +117,7 @@ export default function DashboardRecordBrowser({ rows, toolbarTarget: hostToolba
         <b>Filters</b>
         <span>{[view.regionLabel, view.selection.site, categoryName(view.selection.category), view.selection.group].filter(Boolean).join(" · ")}</span>
         {onHourlyReport && <button type="button" className="dashboard-hourly-report-button" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onHourlyReport(); }}>Hourly In/Out report</button>}
-        <span className="dashboard-record-show-filters">Show filters</span>
+        <span className="dashboard-record-show-filters"><Eye className="filter-eye-cue" size={16} aria-hidden="true" />Show filters</span>
         <span className="dashboard-record-hide-filters">Hide filters</span>
       </summary>
       <div className="dashboard-record-topline">

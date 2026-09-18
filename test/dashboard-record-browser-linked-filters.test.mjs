@@ -27,7 +27,7 @@ const empty = () => null;
 const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDates, ...dateRanges, defaultDurationSort, calculateBreakdownMinutes, formatBreakdownDaysHours, requestStatusSortRank,
   matchesSmartSearch, useTableLayouts: () => ({ layouts: [] }), TableLayoutSelect: empty,
   useState: React.useState, useEffect: React.useEffect, useMemo: React.useMemo, useId: React.useId, useRef: React.useRef,
-  ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
+  ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, Eye: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
 const load = (file, overrides = {}) => {
   const values = { ...bindings, ...overrides };
   return new Function(...Object.keys(values), compiled[file])(...Object.values(values));

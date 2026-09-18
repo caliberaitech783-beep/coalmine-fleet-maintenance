@@ -55,7 +55,7 @@
 .pulse-filter-summary::-webkit-details-marker { display: none; }
 .pulse-filter-summary b { font-size: 14px; color: #1e293b; }
 .pulse-filter-summary > span:first-of-type { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; color: #647892; }
-.pulse-show-filters, .pulse-hide-filters { flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--record-purple); }
+.pulse-show-filters, .pulse-hide-filters { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 13px; font-weight: 700; color: var(--record-purple); }
 .pulse-filter-panel:not([open]) .pulse-hide-filters, .pulse-filter-panel[open] .pulse-show-filters { display: none; }
 /* First-open cue: the collapsed panel blinks a purple border for three seconds. */
 .pulse-filter-panel.pulse-filter-hint { border: 2px solid var(--record-purple); animation: pulse-filter-blink .75s ease-in-out infinite; }

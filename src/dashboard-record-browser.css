@@ -12,7 +12,7 @@
 .dashboard-record-filter-summary { display: flex; align-items: center; gap: 12px; min-height: 32px; cursor: pointer; list-style: none; }
 .dashboard-record-filter-summary::-webkit-details-marker { display: none; }
 .dashboard-record-filter-summary > span:first-of-type { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--muted, #647892); }
-.dashboard-record-show-filters, .dashboard-record-hide-filters { flex-shrink: 0; color: var(--record-purple); font-weight: 700; }
+.dashboard-record-show-filters, .dashboard-record-hide-filters { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; color: var(--record-purple); font-weight: 700; }
 .dashboard-record-controls:not([open]) .dashboard-record-hide-filters, .dashboard-record-controls[open] .dashboard-record-show-filters { display: none; }
 .dashboard-record-controls[open] > summary { margin-bottom: 12px; }
 .dashboard-record-filter-summary:focus-visible { outline: 2px solid var(--record-purple); outline-offset: 3px; }

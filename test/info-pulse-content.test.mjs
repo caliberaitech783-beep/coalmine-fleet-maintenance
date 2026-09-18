@@ -60,7 +60,7 @@ function harness() {
     useEffect(callback) {const slot = cursor++; if (!(slot in slots)) {slots[slot] = true; effects.push(callback);}},
     setTimeout(callback, delay) {timers.push({callback, delay}); return timers.length;},
     clearTimeout() {},
-    ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle', 'Activity', 'Clock', 'RotateCcw'].map(name => [name, () => null])),
+    ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle', 'Activity', 'Clock', 'RotateCcw', 'Eye'].map(name => [name, () => null])),
   };
   const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
   return {effects, timers, render(overrides = {}) {
