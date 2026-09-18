@@ -39,12 +39,18 @@ export const BREAKDOWN_SUB_CATEGORY_DEFAULTS=Object.freeze([
   'Bucket tooth wornout',
 ]);
 
-/** Sub-category names from master records (or plain strings): trimmed, de-duplicated case-insensitively, sorted. */
+// The catch-all fault: offered whenever the master has rows, and always the last option.
+export const BREAKDOWN_SUB_CATEGORY_OTHERS='Others';
+const isOthersName=(name)=>/^others?$/i.test(String(name).trim());
+
+/** Sub-category names from master records (or plain strings): trimmed, de-duplicated case-insensitively, sorted, Others last. */
 export function breakdownSubCategoryNames(records=[]){
   const seen=new Map();
   for(const record of records){
     const name=String(typeof record==='string'?record:record?.[BREAKDOWN_SUB_CATEGORY_FIELD]??'').replace(/\s+/g,' ').trim();
     if(name&&!seen.has(name.toLowerCase()))seen.set(name.toLowerCase(),name);
   }
-  return [...seen.values()].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
+  if(!seen.size)return [];
+  const names=[...seen.values()],others=names.filter(isOthersName);
+  return [...names.filter((name)=>!isOthersName(name)).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'})),others[0]||BREAKDOWN_SUB_CATEGORY_OTHERS];
 }

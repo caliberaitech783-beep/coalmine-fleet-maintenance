@@ -131,11 +131,12 @@ test('successful creation closes only after save and never opens a blocking succ
   assert.deepEqual(alerts, ['Save failed.']);
 });
 
-test('choosing the Breakdown type asks for a sub-category from the Breakdown Sub-Category master and saves it with the request', async () => {
+test('choosing the Breakdown type asks for a searchable sub-category from the Breakdown Sub-Category master and saves it with the request', async () => {
   const EquipmentCombobox = () => null;
+  const SearchableSelect = () => null;
   const saved = [];
   const app = harness(formCode, 'MaintenanceForm', {
-    ...siteAccess, ...equipment, recordsForSite, EquipmentCombobox, Modal: Null, SpeechComplaint: Null,
+    ...siteAccess, ...equipment, recordsForSite, EquipmentCombobox, SearchableSelect, Modal: Null, SpeechComplaint: Null,
     Clock: Null, MapPin: Null, ChevronRight: Null, CheckCircle2: Null, RefreshCw: Null, AlertTriangle: Null,
     TIME_24H_PATTERN: '.*', alert: () => {}, submitMaintenanceRequest,
     FormData: class { constructor(values) {this.values = values;} get(key) {return this.values[key] ?? '';} },
@@ -145,7 +146,7 @@ test('choosing the Breakdown type asks for a sub-category from the Breakdown Sub
   const props = {equipmentRecords: records, equipmentLoaded: true, repairTypeRecords, repairTypesLoaded: true, subCategoryRecords, subCategoriesLoaded: true, assignedLocation: 'Sasti OB', close() {}, onSubmit: async (request) => { saved.push(request); return {ref: 'REQ-SAVED'}; }};
   let tree = app.render(props);
   const category = () => all(tree, node => node.props.name === 'category')[0];
-  const subCategory = () => all(tree, node => node.props.name === 'subCategory')[0];
+  const subCategory = () => byType(tree, SearchableSelect);
   assert.equal(subCategory(), undefined, 'no sub-category until a breakdown type is chosen');
   category().props.onChange({target: {value: 'Accidental'}});
   tree = app.render(props);
@@ -153,14 +154,14 @@ test('choosing the Breakdown type asks for a sub-category from the Breakdown Sub
   assert.equal(subCategory(), undefined, 'only the Breakdown type has sub-categories');
   category().props.onChange({target: {value: 'Breakdown'}});
   tree = app.render(props);
-  assert.ok(subCategory(), 'Breakdown shows the sub-category field');
+  assert.ok(subCategory(), 'Breakdown shows the searchable sub-category field');
+  assert.equal(subCategory().props.name, 'subCategory', 'it still submits as subCategory');
   assert.equal(subCategory().props.required, true);
   assert.equal(subCategory().props.disabled, false);
-  const options = all(subCategory(), node => node.type === 'option').map(node => node.props.value);
-  assert.deepEqual(options, ['', 'Battery', 'Brake system', 'Tyre puncture'], 'options come from the master, trimmed, de-duplicated and sorted');
+  assert.deepEqual(subCategory().props.options, ['Battery', 'Brake system', 'Tyre puncture', 'Others'], 'searchable options come from the master, trimmed, de-duplicated, sorted, with Others last');
   tree = app.render({...props, subCategoryRecords: [], subCategoriesLoaded: false});
+  assert.equal(subCategory().props.loading, true);
   assert.equal(subCategory().props.disabled, true);
-  assert.equal(subCategory().props['aria-busy'], true);
   tree = app.render(props);
   all(tree, node => node.props.name === 'equipmentGroup')[0].props.onChange({target: {value: 'EXCAVATOR'}});
   tree = app.render(props);

@@ -27,5 +27,6 @@ test('large request, vehicle, and employee lists use search while short fixed li
   assert.match(corrections,/Search request, user, site, reason, or status/);
   assert.match(transfers,/Search door, registration, make, model, chassis, or site/);
   assert.match(main,/Search employee name, login, site, or mobile/);
+  assert.match(main,/Search and select breakdown sub-category/,'the create request form searches the Breakdown Sub-Category master');
   assert.match(corrections,/Correction type \*/);
 });

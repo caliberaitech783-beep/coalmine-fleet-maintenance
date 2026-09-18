@@ -4954,29 +4954,17 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             </select>
           </label>
           {needsSubCategory && (
-            <label>
-              Breakdown sub-category *
-              <select
-                name="subCategory"
-                required
-                defaultValue=""
-                disabled={!subCategoriesLoaded || !subCategoryOptions.length}
-                aria-busy={!subCategoriesLoaded}
-              >
-                <option value="" disabled>
-                  {!subCategoriesLoaded
-                    ? "Loading sub-categories..."
-                    : subCategoryOptions.length
-                      ? "Select breakdown sub-category"
-                      : "No sub-categories available"}
-                </option>
-                {subCategoryOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchableSelect
+              label="Breakdown sub-category"
+              name="subCategory"
+              required
+              defaultValue=""
+              options={subCategoryOptions}
+              loading={!subCategoriesLoaded}
+              disabled={!subCategoriesLoaded || !subCategoryOptions.length}
+              placeholder="Search and select breakdown sub-category"
+              emptyText="No matching sub-category. Try another word, or choose Others."
+            />
           )}
           <div>
             <EquipmentCombobox key={`${assignedLocation}|${equipmentGroup}`} records={groupRecords}

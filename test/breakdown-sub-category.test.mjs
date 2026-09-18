@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {BREAKDOWN_SUB_CATEGORY_DEFAULTS,BREAKDOWN_SUB_CATEGORY_FIELD,BREAKDOWN_SUB_CATEGORY_MASTER,breakdownSubCategoryNames} from '../breakdown-sub-category.mjs';
+import {BREAKDOWN_SUB_CATEGORY_DEFAULTS,BREAKDOWN_SUB_CATEGORY_FIELD,BREAKDOWN_SUB_CATEGORY_MASTER,BREAKDOWN_SUB_CATEGORY_OTHERS,breakdownSubCategoryNames} from '../breakdown-sub-category.mjs';
 import {ADMIN_MASTER_OPTIONS,masterAccessAllows} from '../admin-access.mjs';
 
 const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8').replace(/\r\n/g,'\n');
@@ -19,9 +19,18 @@ test('the Breakdown Sub-Category master carries the owner\'s 33 sub-categories',
   assert.ok(BREAKDOWN_SUB_CATEGORY_DEFAULTS.includes('Swing motor'),'first letters are capitalised');
 });
 
-test('sub-category names are trimmed, de-duplicated and sorted',()=>{
-  assert.deepEqual(breakdownSubCategoryNames([{subCategory:' clutch '},{subCategory:'Battery'},'CLUTCH',{subCategory:''},{},null,{subCategory:'Air  conditioning'}]),['Air conditioning','Battery','clutch']);
-  assert.deepEqual(breakdownSubCategoryNames(),[]);
+test('sub-category names are trimmed, de-duplicated and sorted, and Others is always the last option',()=>{
+  assert.deepEqual(breakdownSubCategoryNames([{subCategory:' clutch '},{subCategory:'Battery'},'CLUTCH',{subCategory:''},{},null,{subCategory:'Air  conditioning'}]),['Air conditioning','Battery','clutch','Others']);
+  assert.deepEqual(breakdownSubCategoryNames(),[],'an empty master still offers nothing at all');
+  assert.equal(BREAKDOWN_SUB_CATEGORY_OTHERS,'Others');
+  const withOthers=breakdownSubCategoryNames([{subCategory:'Others'},{subCategory:'Battery'},{subCategory:'Air conditioning'}]);
+  assert.deepEqual(withOthers,['Air conditioning','Battery','Others'],'a master row named Others moves to the end instead of sorting into the middle');
+  assert.equal(withOthers.filter((name)=>/^others?$/i.test(name)).length,1,'Others is never duplicated');
+  assert.deepEqual(breakdownSubCategoryNames([{subCategory:'other'},{subCategory:'Battery'}]),['Battery','other'],'a master row keeps its own spelling');
+  const seeded=breakdownSubCategoryNames(BREAKDOWN_SUB_CATEGORY_DEFAULTS);
+  assert.equal(seeded.length,34);
+  assert.equal(seeded[0],'Adaptor issue');
+  assert.equal(seeded.at(-1),'Others');
 });
 
 test('it is a Masters sub menu that administrators can add to, edit and delete, controlled from Privilege',()=>{
@@ -45,7 +54,8 @@ test('the create request form loads the master and the server stores the chosen 
   assert.match(client,/<MaintenanceForm normal[^>]*subCategoryRecords=\{subCategoryRecords\} subCategoriesLoaded=\{subCategoriesLoaded\}/);
   const form=client.slice(client.indexOf('function MaintenanceForm('),client.indexOf('function Subsidiaries('));
   assert.match(form,/normalizedBreakdownType\(category\) === "Breakdown"/,'only the Breakdown type asks for a sub-category');
-  assert.match(form,/\{needsSubCategory && \(\n\s+<label>\n\s+Breakdown sub-category \*\n\s+<select\n\s+name="subCategory"\n\s+required/);
+  assert.match(form,/\{needsSubCategory && \(\n\s+<SearchableSelect\n\s+label="Breakdown sub-category"\n\s+name="subCategory"\n\s+required\n\s+defaultValue=""\n\s+options=\{subCategoryOptions\}\n\s+loading=\{!subCategoriesLoaded\}/,'the requester searches the list instead of scrolling a plain dropdown');
+  assert.doesNotMatch(form,/<select\n\s+name="subCategory"/,'the plain dropdown is gone');
   assert.match(form,/subCategory: String\(fd\.get\("subCategory"\) \|\| ""\)\.trim\(\),/);
   assert.match(server,/ADD COLUMN IF NOT EXISTS sub_category TEXT NOT NULL DEFAULT ''/);
   assert.match(server,/category, sub_category AS "subCategory", complaint,/,'requests return the stored sub-category');
