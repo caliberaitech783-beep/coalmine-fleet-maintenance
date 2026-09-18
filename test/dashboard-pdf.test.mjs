@@ -54,3 +54,12 @@ test("printed dashboard pages cover every row once and end on the blank band bet
 test("printing an unavailable dashboard is refused before anything is prepared", async () => {
   await assert.rejects(dashboardPrintPdf(null, {widthMm: 297, heightMm: 210}), /Dashboard is not available/);
 });
+
+test("a print starts with the clock row and keeps the sticky banner in its place", () => {
+  const source = readFileSync(new URL("../src/dashboard-pdf.mjs", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  assert.match(source, /const clockRow = forPrint \? document\.querySelector\("\.content > \.top, \.normal > header"\) : null;/, "the row with the live time and date, for prints only");
+  assert.match(source, /root\.append\(rowClone, clone\);/, "the clock row sits above the dashboard, as on screen");
+  assert.match(source, /root\.querySelectorAll\("\.export-menu, \.overlay, \[role=dialog\]"\)\.forEach\(node => node\.remove\(\)\);/);
+  assert.match(source, /root\.querySelectorAll\("\*"\)\.forEach\(node => \{\n\s+const style = getComputedStyle\(node\);\n[^\n]*\n\s+if \(style\.position === "sticky"\) node\.style\.position = "static";/, "a banner pinned while the page is scrolled is not pushed down over the charts");
+  assert.match(source, /const canvas = await toCanvas\(root, /, "the capture covers the clock row and the dashboard together");
+});

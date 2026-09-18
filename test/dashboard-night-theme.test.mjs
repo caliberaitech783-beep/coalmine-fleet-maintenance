@@ -35,12 +35,27 @@ test("Total Fleet bars stay visible on the dark panel", async () => {
   assert.match(night, /\.mine-fleet-site-summary button\.bd-percent \{ color: #ff8a8e; \}/);
 });
 
-test("Dashboard PDFs keep the Day palette when the screen is in Night mode", async () => {
+test("Dashboard PDF downloads keep the Day palette when the screen is in Night mode", async () => {
   const pdf = await read("dashboard-pdf.mjs");
-  const swap = pdf.indexOf('clone.classList.replace("mine-dashboard-night", "mine-dashboard-day")');
-  assert.ok(swap > 0, "expected the capture clone to switch to the Day class");
+  const swap = pdf.indexOf('if (!forPrint) clone.classList.replace("mine-dashboard-night", "mine-dashboard-day")');
+  assert.ok(swap > 0, "expected the download capture to switch to the Day class");
   // The swap must happen before the clone is inserted and styled.
   assert.ok(swap < pdf.indexOf("document.body.appendChild(host)"));
+  const download = pdf.slice(pdf.indexOf("export async function downloadDashboardPdf("), pdf.indexOf("export async function printDashboard("));
+  assert.match(download, /const \{canvas\} = await captureDashboard\(dashboard\);/, "downloads do not ask for the print capture");
+});
+
+test("Dashboard prints keep the screen's Night palette, dark to the edge of the paper", async () => {
+  const pdf = await read("dashboard-pdf.mjs");
+  assert.equal((pdf.match(/captureDashboard\(dashboard, \{forPrint: true\}\)/g) || []).length, 2, "Smart Print and the browser print window both keep the screen palette");
+  assert.match(pdf, /const background = forPrint \? pageBackground\(dashboard\) : "";/, "the paper takes the colour behind the dashboard on screen");
+  const print = pdf.slice(pdf.indexOf("export async function dashboardPrintPdf("), pdf.indexOf("async function printDashboardCanvas("));
+  assert.match(print, /context\.fillStyle = paper;/);
+  assert.match(print, /pdf\.setFillColor\(paper\);\n\s+pdf\.rect\(0, 0, pageWidth, pageHeight, "F"\);\n\s+pdf\.addImage\(/, "every sheet is painted before the dashboard is placed on it");
+  assert.doesNotMatch(print, /#ffffff/, "no white is forced onto a Night print");
+  const browser = pdf.slice(pdf.indexOf("async function printDashboardCanvas("));
+  assert.match(browser, /html,body\{margin:0;padding:0;background:\$\{background\};print-color-adjust:exact;-webkit-print-color-adjust:exact\}/);
+  assert.match(browser, /context\.fillStyle = background;/);
 });
 
 test("Smart Print is readable in Night mode and keeps a white paper preview", async () => {

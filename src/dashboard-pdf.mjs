@@ -1,15 +1,29 @@
 // Capture the rendered dashboard, not a separate table of KPI values.
-async function captureDashboard(dashboard) {
+// A print keeps the screen's Day or Night palette and the clock row the dashboard sits under;
+// a PDF download stays on the Day palette.
+async function captureDashboard(dashboard, {forPrint = false} = {}) {
   if (!dashboard) throw new Error("Dashboard is not available. Please reopen it and try again.");
   const {toCanvas} = await import("html-to-image");
   await document.fonts.ready;
   const clone = dashboard.cloneNode(true);
   // Reports stay on the Day palette even when the screen is in Night mode.
-  clone.classList.replace("mine-dashboard-night", "mine-dashboard-day");
+  if (!forPrint) clone.classList.replace("mine-dashboard-night", "mine-dashboard-day");
+  const background = forPrint ? pageBackground(dashboard) : "";
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;left:-100000px;top:0;pointer-events:none;z-index:-1;";
   host.style.width = `${dashboard.getBoundingClientRect().width}px`;
-  host.appendChild(clone);
+  // A print starts with the row showing the live time and date, as the screen does.
+  const clockRow = forPrint ? document.querySelector(".content > .top, .normal > header") : null;
+  let root = clone;
+  if (clockRow) {
+    root = document.createElement("div");
+    root.style.background = background;
+    const rowClone = clockRow.cloneNode(true);
+    rowClone.style.width = "100%";
+    rowClone.style.margin = "0";
+    root.append(rowClone, clone);
+  }
+  host.appendChild(root);
   document.body.appendChild(host);
   try {
     clone.style.margin = "0";
@@ -23,10 +37,12 @@ async function captureDashboard(dashboard) {
       if (control.tagName === "SELECT") Array.from(control.options).forEach(option => option.selected = option.value === control.value);
       else control.setAttribute("value", control.value);
     });
-    clone.querySelectorAll(".export-menu, .overlay, [role=dialog]").forEach(node => node.remove());
+    root.querySelectorAll(".export-menu, .overlay, [role=dialog]").forEach(node => node.remove());
     // Expand internal scroll areas so all charts and rows are included.
-    clone.querySelectorAll("*").forEach(node => {
+    root.querySelectorAll("*").forEach(node => {
       const style = getComputedStyle(node);
+      // The copy starts at the top of the page, where a sticky banner would slide down over the charts.
+      if (style.position === "sticky") node.style.position = "static";
       if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight) {
         node.style.maxHeight = "none";
         node.style.height = `${node.scrollHeight}px`;
@@ -38,20 +54,34 @@ async function captureDashboard(dashboard) {
         node.style.overflowX = "visible";
       }
     });
-    const width = Math.ceil(Math.max(clone.scrollWidth, clone.getBoundingClientRect().width));
-    const height = Math.ceil(clone.scrollHeight);
-    return await toCanvas(clone, {width, height, pixelRatio: Math.min(2, Math.sqrt(24000000 / (width * height))), backgroundColor: getComputedStyle(clone).backgroundColor || "#ffffff"});
+    const width = Math.ceil(Math.max(root.scrollWidth, root.getBoundingClientRect().width));
+    const height = Math.ceil(root.scrollHeight);
+    const canvas = await toCanvas(root, {width, height, pixelRatio: Math.min(2, Math.sqrt(24000000 / (width * height))), backgroundColor: background || getComputedStyle(clone).backgroundColor || "#ffffff"});
+    return {canvas, background: background || "#ffffff"};
   } finally {
     host.remove();
   }
 }
 
-export async function downloadDashboardPdf(dashboard, filename, print = false) {
-  const canvas = await captureDashboard(dashboard);
-  if (print) {
-    await printDashboardCanvas(canvas, filename);
-    return;
+// The colour behind the dashboard on screen: the dark page in Night mode, the light page in Day mode.
+function pageBackground(element) {
+  for (let node = element; node; node = node.parentElement) {
+    const color = getComputedStyle(node).backgroundColor;
+    if (color && color !== "transparent" && !/rgba\([^)]*,\s*0\)$/.test(color)) return color;
   }
+  return "#ffffff";
+}
+
+// jsPDF paints with #rrggbb; the canvas normalises any CSS colour to that form.
+function hexColor(color) {
+  const probe = document.createElement("canvas").getContext("2d");
+  probe.fillStyle = "#ffffff";
+  probe.fillStyle = color;
+  return /^#[0-9a-f]{6}$/i.test(probe.fillStyle) ? probe.fillStyle : "#ffffff";
+}
+
+export async function downloadDashboardPdf(dashboard, filename) {
+  const {canvas} = await captureDashboard(dashboard);
   const {jsPDF} = await import("jspdf");
   const pageWidth = 1100;
   const scale = pageWidth / canvas.width;
@@ -75,8 +105,9 @@ export async function downloadDashboardPdf(dashboard, filename, print = false) {
   pdf.save(filename);
 }
 
-export function printDashboard(dashboard, title) {
-  return downloadDashboardPdf(dashboard, title, true);
+export async function printDashboard(dashboard, title) {
+  const {canvas, background} = await captureDashboard(dashboard, {forPrint: true});
+  await printDashboardCanvas(canvas, title, background);
 }
 
 const MM_TO_PT = 72 / 25.4;
@@ -115,8 +146,9 @@ function blankRowDetector(canvas) {
 
 /** The dashboard as it is on screen, on landscape pages of the paper chosen in Smart Print. */
 export async function dashboardPrintPdf(dashboard, page = {widthMm: 297, heightMm: 210}) {
-  const canvas = await captureDashboard(dashboard);
+  const {canvas, background} = await captureDashboard(dashboard, {forPrint: true});
   const {jsPDF} = await import("jspdf");
+  const paper = hexColor(background);
   const pageWidth = page.widthMm * MM_TO_PT, pageHeight = page.heightMm * MM_TO_PT, margin = PRINT_MARGIN_MM * MM_TO_PT;
   const printableWidth = pageWidth - margin * 2, printableHeight = pageHeight - margin * 2;
   const scale = printableWidth / canvas.width;
@@ -126,16 +158,19 @@ export async function dashboardPrintPdf(dashboard, page = {widthMm: 297, heightM
     part.width = canvas.width;
     part.height = height;
     const context = part.getContext("2d", {alpha: false});
-    context.fillStyle = "#ffffff";
+    context.fillStyle = paper;
     context.fillRect(0, 0, part.width, part.height);
     context.drawImage(canvas, 0, top, part.width, height, 0, 0, part.width, height);
     if (index) pdf.addPage([pageWidth, pageHeight], "landscape");
+    // The whole sheet takes the page colour, so Night mode prints dark to the edge instead of on white.
+    pdf.setFillColor(paper);
+    pdf.rect(0, 0, pageWidth, pageHeight, "F");
     pdf.addImage(part.toDataURL("image/jpeg", 0.98), "JPEG", margin, margin, printableWidth, height * scale);
   });
   return pdf.output("blob");
 }
 
-async function printDashboardCanvas(canvas, title) {
+async function printDashboardCanvas(canvas, title, background = "#ffffff") {
   const frame = document.createElement("iframe");
   frame.title = "Dashboard print preview";
   frame.style.cssText = "position:fixed;width:1px;height:1px;left:-10000px;top:0;border:0";
@@ -144,7 +179,7 @@ async function printDashboardCanvas(canvas, title) {
     const doc = frame.contentDocument;
     doc.title = title;
     const style = doc.createElement("style");
-    style.textContent = "@page{size:A4 landscape;margin:8mm}html,body{margin:0;padding:0}section{break-after:page;page-break-after:always}section:last-child{break-after:auto;page-break-after:auto}img{display:block;width:100%;height:auto;print-color-adjust:exact;-webkit-print-color-adjust:exact}";
+    style.textContent = `@page{size:A4 landscape;margin:8mm}html,body{margin:0;padding:0;background:${background};print-color-adjust:exact;-webkit-print-color-adjust:exact}section{break-after:page;page-break-after:always}section:last-child{break-after:auto;page-break-after:auto}img{display:block;width:100%;height:auto;print-color-adjust:exact;-webkit-print-color-adjust:exact}`;
     doc.head.appendChild(style);
     // A4 landscape printable area: 281 x 194 mm. Use a little spare height.
     const pagePixels = Math.floor(canvas.width * 192 / 281);
@@ -154,7 +189,7 @@ async function printDashboardCanvas(canvas, title) {
       part.width = canvas.width;
       part.height = Math.min(pagePixels, canvas.height - top);
       const context = part.getContext("2d", {alpha:false});
-      context.fillStyle = "#ffffff";
+      context.fillStyle = background;
       context.fillRect(0, 0, part.width, part.height);
       context.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
       const page = doc.createElement("section");
