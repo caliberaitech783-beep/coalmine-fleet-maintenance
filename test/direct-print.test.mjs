@@ -100,7 +100,8 @@ test('Smart Print prints through the helper and falls back to the browser print 
   assert.match(main,/\? printReportDirect\(\{ title, columns, rows, highlightRow, pageSize, printOptions \}\) : false;/,'OK tries again, Cancel uses the browser print window');
   assert.match(main,/if \(printHelperExpected\(\)\) alert\(`The report could not be sent through the print helper/);
   assert.match(main,/highlights, pageSize: page\.name \}\),/,'the PDF is built at the chosen A3 / A4 size');
-  assert.match(main,/await printPdfDirect\(\{ pdf: await response\.blob\(\), page, jobName: title, token: \(\) => authToken, printOptions \}\)/,'pages, sides and copies chosen in Smart Print reach the helper');
+  assert.match(main,/const confirmed = await showPrintPreview\(\{ pdf, title, page, printOptions, printer: printOptions\.printer \|\| rememberedPrinter\(\) \}\);\n\s+if \(!confirmed\) return true;/,'the finished PDF is previewed first; Cancel prints nothing and does not open the browser window');
+  assert.match(main,/await printPdfDirect\(\{ pdf, page, jobName: title, token: \(\) => authToken, printOptions \}\)/,'pages, sides and copies chosen in Smart Print reach the helper');
   assert.match(main,/catch \(error\) \{\n    console\.warn\("Direct printing was not possible; using the browser print window\.", error\);\n    if \(printHelperExpected\(\)\) alert\([^\n]+\n    return false;/,'the failure is explained, then the browser print window is used');
   assert.match(client,/import\('qz-tray'\)/,'the helper library is loaded only when printing');
   assert.match(client,/qz\.print\(config,\[directPrintData\(data,printOptions\.pages\)\]\)/);

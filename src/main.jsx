@@ -1,7 +1,8 @@
 import { siteReportHtml } from "./site-report.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter, setSmartPrintPrinterSource } from "./smart-print.mjs";
-import { listPrinters, printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect } from "./direct-print.mjs";
+import { listPrinters, printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect, rememberedPrinter } from "./direct-print.mjs";
+import { showPrintPreview } from "./print-preview.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
@@ -212,6 +213,7 @@ import "./manager-scroll.css";
 import "./user-sessions.css";
 import "./backup-administration.css";
 import "./daily-bd-balance.css";
+import "./print-preview.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";
@@ -2919,7 +2921,11 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
       const details = await response.json().catch(() => ({}));
       throw new Error(details.error || `The report PDF could not be prepared (HTTP ${response.status}).`);
     }
-    const printer = await printPdfDirect({ pdf: await response.blob(), page, jobName: title, token: () => authToken, printOptions });
+    // The finished PDF is shown first; nothing reaches the printer until the user clicks Print in the preview.
+    const pdf = await response.blob();
+    const confirmed = await showPrintPreview({ pdf, title, page, printOptions, printer: printOptions.printer || rememberedPrinter() });
+    if (!confirmed) return true;
+    const printer = await printPdfDirect({ pdf, page, jobName: title, token: () => authToken, printOptions });
     recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records · ${page.name} · ${printer}${printOptions.pages ? ` · pages ${printOptions.pages}` : ""}${printOptions.duplex && printOptions.duplex !== "one-sided" ? ` · ${printOptions.duplex}` : ""}${Number(printOptions.copies) > 1 ? ` · ${printOptions.copies} copies` : ""}`});
     alert(`Sent to ${printer} on ${page.name} paper.`);
     return true;
