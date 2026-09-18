@@ -37,6 +37,16 @@ test("ISO strings and Date objects order with the server's IST stamps", () => {
   assert.equal(order.dailyUpdatesCountLabel(15), "15 updates");
 });
 
+test("author and delayed reason read every field shape the tables, journal and Info Pulse produce", () => {
+  assert.equal(order.dailyUpdateAuthor({ authorName: "Site team", authorLogin: "site" }), "Site team");
+  assert.equal(order.dailyUpdateAuthor({ author: " Pulse author " }), "Pulse author");
+  assert.equal(order.dailyUpdateAuthor({ authorLogin: "mechanic" }), "mechanic");
+  assert.equal(order.dailyUpdateAuthor({}), "");
+  assert.equal(order.dailyUpdateReason({ delayedReason: "Approved reason", delayReason: "Legacy text" }), "Approved reason");
+  assert.equal(order.dailyUpdateReason({ delayReason: " Legacy text " }), "Legacy text");
+  assert.equal(order.dailyUpdateReason(null), "");
+});
+
 test("the chosen order is remembered on the device and survives a broken storage", () => {
   const store = new Map();
   const storage = { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
@@ -56,12 +66,12 @@ const source = readFileSync(new URL("../src/daily-updates-list.jsx", import.meta
   .replace(/^import .*;\r?\n/gm, "").replace(/^export (default )?/gm, "");
 const { code } = await transformWithOxc(source, "daily-updates-list.jsx", { jsx: { runtime: "classic" } });
 const bindings = { React, useSyncExternalStore: React.useSyncExternalStore, ...order, formatDisplayDateTime };
-const { DailyUpdatesList, setDailyUpdatesOrder } = new Function(...Object.keys(bindings), `${code}; return { DailyUpdatesList, setDailyUpdatesOrder };`)(...Object.values(bindings));
-const render = (props) => renderToStaticMarkup(React.createElement(DailyUpdatesList, props));
+const { DailyUpdatesList, DailyUpdatesPanel, setDailyUpdatesOrder } = new Function(...Object.keys(bindings), `${code}; return { DailyUpdatesList, DailyUpdatesPanel, setDailyUpdatesOrder };`)(...Object.values(bindings));
+const render = (props, Component = DailyUpdatesList) => renderToStaticMarkup(React.createElement(Component, props));
 
 test("the updates cell collapses to a count with the latest time and opens into a scrolling, numbered list", () => {
   const html = render({ remarks: updates, category: "Breakdown" });
-  assert.match(html, /^<details class="daily-remarks" data-order="newest"><summary><b>4 updates<\/b><small>Latest 16-09-2026 08:38:00 PM<\/small><\/summary>/);
+  assert.match(html, /^<details class="daily-remarks"><summary><b>4 updates<\/b><small>Latest 16-09-2026 08:38:00 PM<\/small><\/summary><div class="daily-remarks-panel" data-order="newest">/);
   assert.match(html, /<div class="daily-remarks-order" role="group" aria-label="Order of daily updates"><span>Show<\/span><button type="button" aria-pressed="true" title="[^"]+">Newest first<\/button><button type="button" aria-pressed="false" title="[^"]+">Oldest first<\/button><\/div>/);
   assert.match(html, /<ol class="daily-remarks-list" aria-label="4 updates, newest first">/);
   const badges = [...html.matchAll(/<i aria-label="Update (\d) of 4">#(\d)<\/i><b>([^<]+)<\/b><span>([^<]+)<\/span>/g)].map((match) => match.slice(1));
@@ -71,15 +81,27 @@ test("the updates cell collapses to a count with the latest time and opens into 
   assert.match(html, /<footer class="daily-remarks-more">Scroll inside the list to see all 4 updates<\/footer><\/div><\/details>$/);
 });
 
-test("short histories need no scroll hint, missing authors and categories degrade cleanly, and no updates shows a dash", () => {
+test("short histories need no scroll hint, missing fields degrade cleanly, and no updates shows a dash", () => {
   const html = render({ remarks: updates.slice(0, 2).map((item) => ({ ...item, authorName: "" })) });
   assert.match(html, /<summary><b>2 updates<\/b>/);
   assert.doesNotMatch(html, /daily-remarks-more/);
-  assert.match(html, /<span>Maintenance User<\/span>/);
+  assert.match(html, /<span>—<\/span>/);
   assert.match(html, /<small>Delayed reason: Waiting for compressor assembly<\/small>/);
   assert.equal(render({ remarks: [updates[0]] }).match(/<summary><b>1 update<\/b>/)?.length, 1);
   assert.equal(render({ remarks: [] }), "—");
   assert.equal(render({}), "—");
+});
+
+test("the panel stands alone in the journal, time breakdown and Info Pulse with their own labels", () => {
+  const pulseRecords = [{ remark: "Fresh saved note", delayReason: "New delay reason", createdAt: "", author: "mechanic" }, { remark: "Chain inspected", delayReason: "Vendor inspection pending", createdAt: "2026-09-14 18:00", author: "Site team" }];
+  const html = render({ remarks: pulseRecords, missingLabel: "Not recorded", className: "pulse-updates-panel", formatDateTime: (value) => `${formatDisplayDateTime(value)} IST` }, DailyUpdatesPanel);
+  assert.match(html, /^<div class="daily-remarks-panel pulse-updates-panel" data-order="newest">/);
+  assert.match(html, /<i aria-label="Update 2 of 2">#2<\/i><b>14-09-2026 06:00:00 PM IST<\/b><span>Site team<\/span>/);
+  assert.match(html, /<i aria-label="Update 1 of 2">#1<\/i><b>Date not recorded<\/b><span>mechanic<\/span><\/header><p>Fresh saved note<\/p><small>Delayed reason: New delay reason<\/small>/);
+  assert.doesNotMatch(html, /<details|<summary/);
+  const audited = render({ remarks: [{ createdAt: "2026-09-06 01:34", remark: "" }], missingLabel: "Not recorded", authorLabel: (item) => `${item.authorName || "Unknown"} (audit)` }, DailyUpdatesPanel);
+  assert.match(audited, /<span>Unknown \(audit\)<\/span><\/header><p>Not recorded<\/p><small>Delayed reason: Not recorded<\/small>/);
+  assert.equal(render({ remarks: [] }, DailyUpdatesPanel), "");
 });
 
 test("switching the order writes the device preference through the shared store", () => {
@@ -97,13 +119,36 @@ test("switching the order writes the device preference through the shared store"
   }
 });
 
-test("every table cell renders the shared list and the BD Balance column sorts by the latest update", () => {
+test("every place that lists updates renders the shared panel and sorts its column by the latest update", () => {
   const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(main, /import DailyUpdatesList from "\.\/daily-updates-list\.jsx";/);
+  assert.match(main, /import DailyUpdatesList, \{ DailyUpdatesPanel \} from "\.\/daily-updates-list\.jsx";/);
   assert.match(main, /function MaintenanceRemarks\(\{ remarks = \[\], category = "" \}\) \{\s*\/\/[^\n]*\s*return <DailyUpdatesList remarks=\{remarks\} category=\{category\} formatDateTime=\{formatTwelveHourDateTime\} \/>;/);
+  // The daily-update journal's read-only history.
+  assert.match(main, /Previous daily updates[\s\S]{0,400}<DailyUpdatesPanel remarks=\{history\} category=\{request\.category\} formatDateTime=\{formatTwelveHourDateTime\} missingLabel="Not recorded" \/>/);
+  // Workflow tables sort the Daily remarks column by the most recent update.
+  assert.equal((main.match(/key === "dailyRemarks" \? latestDailyUpdateStamp\(row\.dailyRemarks\) : row\[key\]\)/g) || []).length, 2);
+  // The time breakdown prints the panel with its own stylesheet.
+  assert.match(main, /import dailyUpdatesPrintCss from "\.\/daily-updates\.css\?raw";/);
+  assert.match(main, /printRequestTimeline\(content, [^\n]*`\$\{requestTimelinePrintCss\}\\n\$\{dailyUpdatesPrintCss\}`\)/);
   const browser = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8");
   assert.equal((browser.match(/<td data-sort-value=\{latestUpdateStamp\(record\.dailyRemarks\)\}><Remarks remarks=\{record\.dailyRemarks\} \/><\/td>/g) || []).length, 2);
+  assert.match(browser, /<td key=\{column\.key\} data-sort-value=\{column\.sortValue \? column\.sortValue\(record\) : undefined\}>\{column\.render\(record\)\}<\/td>/);
+  const oem = readFileSync(new URL("../src/oem-breakdown-details.jsx", import.meta.url), "utf8");
+  assert.match(oem, /\{ key: "remarks", label: "Daily remarks", sortValue: record => latestUpdateStamp\(record\.requestDetails\.dailyRemarks\), render: /);
+  const pulse = readFileSync(new URL("../src/info-pulse-content.jsx", import.meta.url), "utf8");
+  assert.match(pulse, /import \{DailyUpdatesPanel\} from '\.\/daily-updates-list\.jsx';/);
+  assert.match(pulse, /<h4>Daily updates <span>Read only<\/span><\/h4>\{updates\.length \? <DailyUpdatesPanel remarks=\{updates\} formatDateTime=\{value => `\$\{formatDisplayDateTime\(value\)\} IST`\} missingLabel="Not recorded" \/> : <p>No daily updates recorded\.<\/p>\}/);
+  const timeline = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8");
+  assert.match(timeline, /import \{DailyUpdatesPanel\} from "\.\/daily-updates-list\.jsx";/);
+  assert.match(timeline, /<div className="request-timeline-updates"><DailyUpdatesPanel remarks=\{remarks\} category=\{request\.category\} formatDateTime=\{stamp\} missingLabel="Not recorded" authorLabel=\{entry => actorLabel\(\{actorName:entry\.authorName,actorLogin:entry\.authorLogin\}\)\} \/><\/div>/);
   const css = readFileSync(new URL("../src/daily-updates.css", import.meta.url), "utf8");
-  assert.match(css, /\.daily-remarks \.daily-remarks-list\{[^}]*max-height:270px;overflow-y:auto/);
-  assert.match(css, /@media print\{\.daily-remarks-order,\.daily-remarks-more\{display:none\}\.daily-remarks \.daily-remarks-list\{max-height:none;overflow:visible\}\}/);
+  assert.match(css, /\.daily-remarks-panel \.daily-remarks-list\{[^}]*max-height:270px;overflow-y:auto/);
+  assert.match(css, /@media print\{\.daily-remarks-order,\.daily-remarks-more\{display:none\}\.daily-remarks-panel \.daily-remarks-list\{max-height:none;overflow:visible\}\}/);
+  assert.doesNotMatch(css, /\.daily-update-history article/, "the journal no longer styles its own cards");
+  const pulseCss = readFileSync(new URL("../src/info-pulse-content.css", import.meta.url), "utf8");
+  assert.match(pulseCss, /\.pulse-panel \.pulse-updates-history \.daily-remarks-order button\[aria-pressed="true"\] \{ background: #56318f;/);
+  assert.doesNotMatch(pulseCss, /\.pulse-updates-history dl/);
+  const timelineCss = readFileSync(new URL("../src/request-timeline.css", import.meta.url), "utf8");
+  assert.match(timelineCss, /\.request-timeline-updates \.daily-remarks-panel \.daily-remarks-list \{ max-height:340px; \}/);
+  assert.doesNotMatch(timelineCss, /\.request-timeline-updates dd/);
 });

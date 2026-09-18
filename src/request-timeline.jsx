@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from "react";
 import {formatTimelineDuration,parseRequestTimelineTimestamp} from "../request-timeline.mjs";
+import {DailyUpdatesPanel} from "./daily-updates-list.jsx";
 import "./request-timeline.css";
 
 const clock = new Intl.DateTimeFormat("en-IN", {timeZone:"Asia/Kolkata", day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false});
@@ -34,7 +35,7 @@ export function RequestTimelineView({data}) {
   const history = Array.isArray(data.history) ? data.history : [];
   const byEvent = new Map(events.map(event => [event.event,event]));
   const request = data.request || {};
-  const remarks = (Array.isArray(request.dailyRemarks) ? request.dailyRemarks : []).filter(Boolean).slice().sort((a,b) => (parseRequestTimelineTimestamp(b.createdAt)?.getTime() || 0) - (parseRequestTimelineTimestamp(a.createdAt)?.getTime() || 0));
+  const remarks = (Array.isArray(request.dailyRemarks) ? request.dailyRemarks : []).filter(Boolean);
   const idleApproval = Boolean(data.request?.idealApprovedAt || data.request?.idealApprovedBy);
   const identity = requestTimelineIdentity(request);
   const endpointState = (key) => {
@@ -100,13 +101,7 @@ export function RequestTimelineView({data}) {
     </details>
     <h3>Recorded maintenance updates</h3>
     <p>These are saved work and delay remarks, separate from acceptance, closure and timestamp-audit history. An update’s date is not an inferred arrival time.</p>
-    {remarks.length ? <ol className="request-timeline-updates">{remarks.map((entry,index) => <li key={`${entry.createdAt}-${index}`}>
-      <time>{stamp(entry.createdAt)}</time>
-      <dl><div><dt>Update recorded by</dt><dd>{actorLabel({actorName:entry.authorName,actorLogin:entry.authorLogin})}</dd></div>
-        <div><dt>Work reported</dt><dd>{entry.remark || "Not recorded"}</dd></div>
-        <div><dt>Breakdown type</dt><dd>{request.category || "Not recorded"}</dd></div>
-        <div><dt>Delayed reason</dt><dd>{entry.delayedReason || entry.delayReason || "Not recorded"}</dd></div></dl>
-    </li>)}</ol> : <p>No daily maintenance updates are recorded for this entry.</p>}
+    {remarks.length ? <div className="request-timeline-updates"><DailyUpdatesPanel remarks={remarks} category={request.category} formatDateTime={stamp} missingLabel="Not recorded" authorLabel={entry => actorLabel({actorName:entry.authorName,actorLogin:entry.authorLogin})} /></div> : <p>No daily maintenance updates are recorded for this entry.</p>}
     <h3>Recorded changes and corrections</h3>
     <p>History starts when timestamp tracking was enabled. Older changes cannot be reconstructed from missing evidence. Existing timestamp-edit permissions are unchanged.</p>
     {history.length ? <ol className="request-timeline-history">{history.map((entry,index) => <li key={`${entry.event}-${entry.recordedAt}-${index}`}>

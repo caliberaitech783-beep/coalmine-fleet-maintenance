@@ -10,10 +10,16 @@ import * as dates from '../date-time-format.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import * as timing from '../src/info-pulse-timing.mjs';
 import * as reasons from '../src/info-pulse-reasons.mjs';
+import * as dailyUpdatesOrder from '../src/daily-updates-order.mjs';
 
 const source = readFileSync(new URL('../src/info-pulse-content.jsx', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
 const {code} = await transformWithOxc(source, 'pulse-content.jsx', {jsx: {runtime: 'classic'}});
+// Info Pulse lists updates through the shared panel, compiled here the same way.
+const panelSource = readFileSync(new URL('../src/daily-updates-list.jsx', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export (default )?/gm, '');
+const panelCode = (await transformWithOxc(panelSource, 'daily-updates-list.jsx', {jsx: {runtime: 'classic'}})).code;
+const panelBindings = {React, useSyncExternalStore: React.useSyncExternalStore, ...dailyUpdatesOrder, formatDisplayDateTime: dates.formatDisplayDateTime};
+const {DailyUpdatesPanel} = new Function(...Object.keys(panelBindings), panelCode + '; return {DailyUpdatesPanel};')(...Object.values(panelBindings));
 const NOW = Date.parse('2026-09-16T11:00:00+05:30');
 function descendants(tree, predicate) {
   const result = [];
@@ -49,7 +55,7 @@ function harness() {
   const slots = [], effects = [], timers = [];
   let cursor = 0;
   const bindings = {
-    React, ...data, ...dates, ...timing, ...reasons, requestStatusLabel, parseIstTimestamp,
+    React, ...data, ...dates, ...timing, ...reasons, requestStatusLabel, parseIstTimestamp, DailyUpdatesPanel,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === 'function' ? initial() : initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
     useEffect(callback) {const slot = cursor++; if (!(slot in slots)) {slots[slot] = true; effects.push(callback);}},
     setTimeout(callback, delay) {timers.push({callback, delay}); return timers.length;},
@@ -79,6 +85,7 @@ test('daily updates expand per breakdown, newest first, and stay current after r
   assert.equal(button().props['aria-expanded'], true);
   assert.equal(history().props.hidden, false);
   const content = html(history());
+  assert.match(content, /Read only Show Newest first Oldest first #2 .*Battery replaced .*Delayed reason: Awaiting track chain from supplier #1 .*Chain inspected/);
   assert.ok(content.indexOf('Battery replaced') < content.indexOf('Chain inspected'));
   assert.match(content, /Maintenance team/);
   assert.match(content, /Vendor inspection pending/);

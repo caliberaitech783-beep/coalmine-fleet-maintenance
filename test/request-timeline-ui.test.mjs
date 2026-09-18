@@ -7,14 +7,26 @@ import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { transformWithOxc } from "vite";
 import {formatTimelineDuration, parseRequestTimelineTimestamp, requestTimelineEvents, requestTimelineDurations, buildRequestTimelineChanges} from "../request-timeline.mjs";
 import * as equipment from "../request-equipment.mjs";
+import * as dailyUpdatesOrder from "../src/daily-updates-order.mjs";
+import { formatDisplayDateTime } from "../date-time-format.mjs";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export (?:default )?function /g, "function ");
 const code = (await transformWithOxc(source, "request-timeline.jsx", {jsx: {runtime: "classic"}})).code;
+// The time breakdown lists updates through the shared panel, compiled here the same way.
+const panelSource = readFileSync(new URL("../src/daily-updates-list.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/^export (default )?/gm, "");
+const panelCode = (await transformWithOxc(panelSource, "daily-updates-list.jsx", {jsx: {runtime: "classic"}})).code;
+const panelBindings = {React, useSyncExternalStore: React.useSyncExternalStore, ...dailyUpdatesOrder, formatDisplayDateTime};
+const {DailyUpdatesPanel} = new Function(...Object.keys(panelBindings), panelCode + "; return {DailyUpdatesPanel};")(...Object.values(panelBindings));
+const panelText = node => renderToStaticMarkup(node).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 test("time breakdown wraps explanations instead of inheriting table-cell nowrap", () => {
   const css = readFileSync(new URL("../src/request-timeline.css", import.meta.url), "utf8");
   assert.match(css,/\.request-timeline-content\s*\{[^}]*white-space:normal/);
-  assert.match(css,/\.request-timeline-updates dd\s*\{[^}]*white-space:pre-wrap/);
+  assert.match(css,/\.request-timeline-updates \.daily-remarks-panel/);
+  const updatesCss = readFileSync(new URL("../src/daily-updates.css", import.meta.url), "utf8");
+  assert.match(updatesCss,/\.daily-remarks-panel\{[^}]*white-space:normal/);
+  assert.match(updatesCss,/\.daily-remarks-panel \.daily-remarks-list article p\{[^}]*white-space:pre-line/);
 });
 const formCode = {};
 for (const [name, end] of [["RequestEditForm", "CloseRequestForm"], ["CloseRequestForm", "VerifyRequestForm"], ["VerifyRequestForm", "TicketCreateForm"]]) {
@@ -64,6 +76,7 @@ function harness(name, extra = {}) {
       respond(data, ok = true) {resolve({ok, json: async () => data});},
       malformed() {resolve({ok: true, json: async () => {throw new Error("Bad JSON");}});},
     })),
+    DailyUpdatesPanel,
     Modal: Null, MeterFileCell: Null, EnhancedSpeechComplaint: Null, VerificationTimeField: Null, ChevronRight: Null, MaintenanceEtcInput: "maintenance-etc",
     TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback),
     requestStartParts: () => ({date: "2026-09-08", time: "12:00:00"}), requestMeterTypeForRequest: () => "KMR",
@@ -244,11 +257,8 @@ test("legacy creator and daily updates are visible without inventing acceptance 
   assert.match(text(articles[1]),/No separate acceptance time is recorded/);
   assert.match(text(articles[1]),/does not mean the vehicle never reached maintenance/);
   assert.doesNotMatch(text(articles[1]),/AVADH|ASHISH|System recorded/);
-  const updates = text(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
-  assert.match(updates,/06 Sept 2026, 01:34:00 IST/);
-  assert.match(updates,/Update recorded byAVADH KISHORE TIWARI \(maintenance-fixture\)/);
-  assert.match(updates,/Work reportedAir Compressor Removed/);
-  assert.match(updates,/Delayed reasonAir Compressor Clutch Kit Not Available/);
+  const updates = panelText(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
+  assert.match(updates,/#1 06 Sept 2026, 01:34:00 IST AVADH KISHORE TIWARI \(maintenance-fixture\) Air Compressor Removed (?:Breakdown · )?Delayed reason: Air Compressor Clutch Kit Not Available/);
   assert.match(text(tree),/not arrival waiting time or confirmed hands-on repair time/);
   assert.equal(events.find(event=>event.event === "acceptedAt").eventAt,null);
   assert.deepEqual(legacy,original);
@@ -263,13 +273,13 @@ test("saved workflow attribution stays distinct from the timestamp correction au
   assert.match(text(tree),/No daily maintenance updates are recorded/);
 });
 
-test("updates show saved remarks newest first, with missing fields left unknown", () => {
+test("updates show saved remarks newest first by default, numbered from the first update, with missing fields left unknown", () => {
   const changed = {...request,dailyRemarks:[{createdAt:"2026-09-05 01:34",remark:"Older update"},{createdAt:"2026-09-06 01:34",remark:"Newer update"}]};
   const tree = harness("RequestTimelineView").render({data:body(request.ref,{request:changed})});
-  const updates = all(all(tree,node=>node.props.className === "request-timeline-updates")[0],node=>node.type === "li");
-  assert.match(text(updates[0]),/Newer update/);
-  assert.match(text(updates[1]),/Older update/);
-  assert.match(text(updates[0]),/Update recorded byNot recorded.*Delayed reasonNot recorded/);
+  const html = renderToStaticMarkup(all(tree,node=>node.props.className === "request-timeline-updates")[0]);
+  const updates = [...html.matchAll(/<li>(.*?)<\/li>/g)].map(match => match[1].replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim());
+  assert.deepEqual(updates,["#2 06 Sept 2026, 01:34:00 IST Not recorded Newer update Delayed reason: Not recorded","#1 05 Sept 2026, 01:34:00 IST Not recorded Older update Delayed reason: Not recorded"]);
+  assert.match(html,/<button type="button" aria-pressed="true" title="[^"]+">Newest first<\/button><button type="button" aria-pressed="false" title="[^"]+">Oldest first<\/button>/);
 });
 
 test("editing unchanged ETC preserves minute display without a correction prompt; changing it requires reason", async () => {

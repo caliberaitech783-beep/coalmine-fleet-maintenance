@@ -5,6 +5,7 @@ import {parseIstTimestamp} from '../ai-feeder.mjs';
 import {formatDisplayDate, formatDisplayTime, formatDisplayDateTime} from '../date-time-format.mjs';
 import {requestStatusLabel} from './request-status.mjs';
 import {pulseDailyUpdates, pulseDelayReason} from './info-pulse-reasons.mjs';
+import {DailyUpdatesPanel} from './daily-updates-list.jsx';
 import {PULSE_TIERS, pulseBreakdownRows, pulseElapsed, pulseTierCounts} from './info-pulse-timing.mjs';
 
 const tierIcons = {all: Activity, critical: AlertTriangle, warning: Clock, open: Truck};
@@ -132,10 +133,7 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
               </>}</dd></div>
             </dl>
             <section id={updatesId} className="pulse-updates-history" hidden={!updatesOpen} aria-label={`Daily update history for ${request.ref || row.key}`}>
-              {updatesOpen && <><h4>Daily updates <span>Latest first · Read only</span></h4>{updates.length ? updates.map((update, updateIndex) => <article key={`${update.createdAt}-${updateIndex}`}>
-                <header><time>{Number.isFinite(parseIstTimestamp(update.createdAt)) ? `${formatDisplayDateTime(update.createdAt)} IST` : 'Date not recorded'}</time><b>{update.author || 'Author not recorded'}</b></header>
-                <dl><div><dt>Maintenance update</dt><dd>{update.remark || 'Not recorded'}</dd></div><div><dt>Reason for delay</dt><dd>{update.delayReason || 'Not recorded'}</dd></div></dl>
-              </article>) : <p>No daily updates recorded.</p>}</>}
+              {updatesOpen && <><h4>Daily updates <span>Read only</span></h4>{updates.length ? <DailyUpdatesPanel remarks={updates} formatDateTime={value => `${formatDisplayDateTime(value)} IST`} missingLabel="Not recorded" /> : <p>No daily updates recorded.</p>}</>}
             </section>
           </li>;
         })}

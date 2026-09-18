@@ -7,6 +7,9 @@ import { groupOemRecordsBySite } from "./oem-dashboard-filters.mjs";
 import {ProtectedAudio} from "./protected-media.jsx";
 import "./oem-breakdown-details.css";
 
+// Sorting the Daily remarks column orders rows by their most recent update (server stamps are "YYYY-MM-DD HH:MM").
+const latestUpdateStamp = remarks => (Array.isArray(remarks) ? remarks : []).reduce((latest, item) => { const stamp = String(item?.createdAt || ""); return stamp > latest ? stamp : latest; }, "");
+
 const extraColumns = [
   { key: "oem", label: "OEM", render: record => record.make || "—" },
   { key: "reason", label: "Reason", render: record => <div className="request-reason-text mine-oem-reason">{record.requestDetails.complaint || "—"}</div> },
@@ -31,7 +34,7 @@ export default function OemBreakdownDetails({ selection, title, MaintenanceRemar
   const siteGroups = groupOemRecordsBySite(rows, selection.regions);
   const groupedRows = siteGroups.flatMap(site => site.records.map(record => ({ ...record, reportSite: `${site.region} · ${site.site}` })));
   const columns = [...extraColumns,
-    { key: "remarks", label: "Daily remarks", render: record => <MaintenanceRemarks remarks={record.requestDetails.dailyRemarks} /> },
+    { key: "remarks", label: "Daily remarks", sortValue: record => latestUpdateStamp(record.requestDetails.dailyRemarks), render: record => <MaintenanceRemarks remarks={record.requestDetails.dailyRemarks} /> },
     { key: "audio", label: "Audio clips", render: record => <div className="request-audio-list">{record.requestDetails.complaintAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/complaint`} token={tableProps.timelineToken} label="Complaint audio" />}{record.requestDetails.maintenanceAudioAvailable && <ProtectedAudio url={`/api/requests/${encodeURIComponent(record.requestReference)}/audio/maintenance`} token={tableProps.timelineToken} label="Maintenance audio" />}{!record.requestDetails.complaintAudioAvailable && !record.requestDetails.maintenanceAudioAvailable && "—"}</div> },
   ];
   return <div className={`mine-oem-details${filtersHidden ? " filters-hidden" : ""}`}>

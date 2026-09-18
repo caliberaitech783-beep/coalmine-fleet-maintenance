@@ -5,6 +5,7 @@ import { listPrinters, printHelperAvailable, printHelperExpected, printHelperLas
 import { showPrintPreview } from "./print-preview.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
+import dailyUpdatesPrintCss from "./daily-updates.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
 import OrganisationChartView from "./organisation-chart.jsx";
 import { ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES, buildOrganisationChart } from "./organisation-chart.mjs";
@@ -53,7 +54,8 @@ import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
 import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
-import DailyUpdatesList from "./daily-updates-list.jsx";
+import DailyUpdatesList, { DailyUpdatesPanel } from "./daily-updates-list.jsx";
+import { latestDailyUpdateStamp } from "./daily-updates-order.mjs";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
@@ -2213,7 +2215,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
       },
     })),
     searchedRows = displayRows.filter((row) => matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.site, requestStatusLabel(row), row.complaint, row.owner, row.closedBy, row.make, row.model) && (!statusFilter || requestStatusLabel(row) === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters)),
-    [sortedRows, sort, changeSort] = useSortableRows(searchedRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, breakdownNow) : row[key]);
+    [sortedRows, sort, changeSort] = useSortableRows(searchedRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(requestStatusLabel(row)) : key === "hours" ? durationLabelMinutes(row.hours) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, breakdownNow) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;
@@ -8211,7 +8213,7 @@ function Modal({ title, close, children, className = "", overlayClassName = "", 
           {className.split(" ").includes("request-timeline-modal") && <button type="button" className="request-timeline-print" onClick={() => {
             const content = dialogRef.current?.querySelector(".request-timeline-content");
             if (!content) return;
-            printRequestTimeline(content, typeof title === "string" ? title : "Time breakdown", requestTimelinePrintCss);
+            printRequestTimeline(content, typeof title === "string" ? title : "Time breakdown", `${requestTimelinePrintCss}\n${dailyUpdatesPrintCss}`);
           }}><Printer aria-hidden="true" /><span>Smart Print</span></button>}
           {headerActions}
           <button type="button" onClick={close} aria-label="Close dialog">
@@ -8244,7 +8246,7 @@ function DailyRemarkForm({ request, close, onSave }) {
   const typeDelayedReasons=delayedReasonsForRepairType(request.category,delayedReasonRecords||[]);
   const delayedReasonOptions=typeDelayedReasons;
   return <Modal title={`Daily updates · ${request.ref}`} close={close}><div className="daily-update-journal">
-    {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header>{history.map((item,index)=><article key={`${item.createdAt}-${index}`}><time>{formatTwelveHourDateTime(item.createdAt)}</time><b>{item.authorName||"Maintenance User"}</b><dl><div><dt>Maintenance update</dt><dd>{item.remark}</dd></div><div><dt>Breakdown type</dt><dd>{request.category||"—"}</dd></div><div><dt>Delayed reason</dt><dd>{item.delayedReason||item.delayReason||"—"}</dd></div></dl></article>)}</section>}
+    {history.length>0&&<section className="daily-update-history"><header><div><b>Previous daily updates</b><span>{history.length} saved record{history.length===1?"":"s"}</span></div><span className="readonly-badge"><LockKeyhole /> Read only</span></header><DailyUpdatesPanel remarks={history} category={request.category} formatDateTime={formatTwelveHourDateTime} missingLabel="Not recorded" /></section>}
     <form className="form daily-update-form" onSubmit={(event) => {event.preventDefault();const form=new FormData(event.currentTarget);const delayedReason=String(form.get("delayedReason")||"").trim();onSave({remark:form.get("remark"),delayReason:delayedReason,delayedReason});}}><header><span>{todayRemark?"Update today’s record":"New daily record"}</span><b>{today}</b></header>{todayRemark&&<div className="daily-update-complete"><ShieldCheck /><div><b>Today’s update can be edited</b><span>Maintenance Users can update this record until the end of today.</span></div></div>}<label>Breakdown type<input value={request.category||"Breakdown"} readOnly aria-readonly="true" /></label><label>Today’s maintenance update *<textarea name="remark" required defaultValue={todayRemark?.remark||""} placeholder="What work was completed today?" /></label><label>Delayed reason *<select name="delayedReason" required key={delayedReasonOptions.join("|")} defaultValue={delayedReasonOptions.includes(savedDelayedReason)?savedDelayedReason:""}><option value="">Select delayed reason</option>{delayedReasonOptions.map((reason)=><option key={reason} value={reason}>{reason}</option>)}</select><small>Reasons shown are for breakdown type {request.category||"Breakdown"}.</small></label><footer><button type="button" onClick={close}>Cancel</button><button className="primary">{todayRemark?"Update today’s entry":"Save today’s update"} <ChevronRight /></button></footer></form>
   </div></Modal>;
 }
@@ -8408,7 +8410,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     const matchesText = matchesSmartSearch(query, row.ref, row.equipmentGroup, row.equipment, row.door, row.make, row.model, row.site, statusLabel(row), row.idleReason, row.complaint, row.owner, row.requesterLogin, row.closedBy, ...(showWorkCompletion ? [row.maintenanceWork] : []), ...(showMisFlagData ? [row.misFlaggedBy, row.misFlagRemark] : []));
     return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
-  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : row[key]);
+  const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;

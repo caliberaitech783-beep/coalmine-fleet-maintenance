@@ -52,6 +52,15 @@ export function latestDailyUpdateStamp(updates) {
   return dailyUpdateStamp(latestDailyUpdate(updates));
 }
 
+// Author and delayed reason under every field name the tables, the journal and Info Pulse produce.
+export function dailyUpdateAuthor(update) {
+  return String(update?.authorName || update?.author || update?.authorLogin || "").trim();
+}
+
+export function dailyUpdateReason(update) {
+  return String(update?.delayedReason || update?.delayReason || "").trim();
+}
+
 export function dailyUpdatesCountLabel(count) {
   return `${count} update${count === 1 ? "" : "s"}`;
 }

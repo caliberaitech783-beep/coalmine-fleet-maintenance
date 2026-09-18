@@ -16,7 +16,7 @@ test("overdue maintenance requests support daily remarks and twice-daily reminde
   assert.doesNotMatch(source, /Reason for delay/);
   assert.doesNotMatch(source, /<textarea name="delayReason"/);
   assert.match(source, /onSave\(\{remark:form\.get\("remark"\),delayReason:delayedReason,delayedReason\}\)/);
-  assert.match(source, /<dt>Breakdown type<\/dt><dd>\{request\.category\|\|"—"\}<\/dd><\/div><div><dt>Delayed reason<\/dt><dd>\{item\.delayedReason\|\|item\.delayReason\|\|"—"\}/);
+  assert.match(source, /<DailyUpdatesPanel remarks=\{history\} category=\{request\.category\} formatDateTime=\{formatTwelveHourDateTime\} missingLabel="Not recorded" \/>/);
   assert.match(source, /<MaintenanceRemarks remarks=\{row\.dailyRemarks\} category=\{row\.category\} \/>/);
   assert.match(server, /const delayReason=String\(req\.body\?\.delayReason\|\|''\)\.trim\(\)\|\|dailyDelayedReason;/);
   assert.match(source, /<label>Delayed reason \*<select name="delayedReason" required/);
