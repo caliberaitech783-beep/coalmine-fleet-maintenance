@@ -1,0 +1,16 @@
+.etc-cell{white-space:nowrap}
+.etc-countdown{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:15px;background:#eef1f5;color:#5c687b;font-size:11px;font-weight:800;line-height:1;white-space:nowrap;font-variant-numeric:tabular-nums}
+.etc-countdown::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:currentColor}
+.etc-countdown.due{background:#e2f4ec;color:#087448}
+.etc-countdown.soon{background:#fff2e5;color:#b8641a}
+.etc-countdown.overdue,.etc-countdown.closed-late{background:#fdeceb;color:#c9253d}
+.etc-countdown.overdue::before{animation:etc-countdown-pulse 1s ease-in-out infinite}
+.etc-countdown.closed{background:#e8f1ff;color:#2459b3}
+.etc-countdown.none,.etc-countdown.unknown,.etc-countdown.idle{font-weight:600}
+@keyframes etc-countdown-pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.etc-countdown.overdue::before{animation:none}}
+:root[data-theme="dark"] .etc-countdown{background:#22304a;color:#b8c4d9}
+:root[data-theme="dark"] .etc-countdown.due{background:#183e32;color:#9ce3bd}
+:root[data-theme="dark"] .etc-countdown.soon{background:#4a3416;color:#f4c789}
+:root[data-theme="dark"] .etc-countdown.overdue,:root[data-theme="dark"] .etc-countdown.closed-late{background:#4b1f27;color:#ffb3bd}
+:root[data-theme="dark"] .etc-countdown.closed{background:#243c65;color:#b9d0ff}

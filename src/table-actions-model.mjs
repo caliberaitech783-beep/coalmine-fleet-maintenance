@@ -91,6 +91,8 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
     /^actions$/i,
     /^(?:started|production date and time)$/i,
     /^days of breakdown$/i,
+    /^etc$/i,
+    /^time left for etc$/i,
     /^(?:breakdown reason|reason of breakdown|reason)$/i,
     /^(?:breakdown type|type of breakdown|repair category)$/i,
     /^equipment group$/i,
@@ -129,7 +131,7 @@ export function dateColumnsFirst(columns, statusFirst = true) {
   const isDate = ({ key, label }) => {
     if (/^(start|end|date|time|occurredAt|createdAt|updatedAt|closedAt|verifiedAt|firstTripAt|acceptedAt|arrivalFlaggedAt|misFlaggedAt)$/.test(key)) return true;
     const text = label.trim().toLowerCase();
-    if (/\b(by|duration|waiting|delay|turn ?around|tat)\b/.test(text)) return false;
+    if (/\b(by|duration|waiting|delay|left|turn ?around|tat)\b/.test(text)) return false;
     return /\b(date|time|timestamp)\b/.test(text)
       || /^(started|closed|accepted|created|updated|ticket created|vehicle received|red flag raised)$/.test(text)
       || /\b(at|on)$/.test(text);
