@@ -31,7 +31,7 @@ function harness(initialWidth) {
     navigationPermissionsForView: permission => permission, masterAccessAllows: () => true, accessAllows: () => true,
     reportCategoryIdsForUser: () => [], reportAccessAllows: () => true,
     profileHeaderName: name => name, profileHeaderDesignation: () => "Admin", UserProfile: Null,
-    ...Object.fromEntries(["CaliberBrand", "Menu", "ChevronDown", "MessageCircle", "Users", "LogOut"].map(name => [name, Null])),
+    ...Object.fromEntries(["CaliberBrand", "Menu", "ChevronDown", "MessageCircle", "Users", "LogOut", "DoorExitIcon"].map(name => [name, Null])),
   };
   const Side = new Function(...Object.keys(scope), `${code}; return Side;`)(...Object.values(scope));
   return {

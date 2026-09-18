@@ -368,21 +368,11 @@
   .ai-feeder-priority.critical .ai-feeder-priority-icon::after { animation: none; }
 }
 
-/* Info Pulse icon: a live, working trace wherever the pulse icon appears
-   (header trigger and the overlay title). */
-.ai-feeder-trigger > svg:first-child,
-.ai-feeder-kicker > svg {
-  overflow: visible;
-  filter: drop-shadow(0 0 3px #ffffff80);
-  animation: ai-pulse-beat 1.6s ease-in-out infinite;
-}
-.ai-feeder-trigger > svg:first-child path,
-.ai-feeder-kicker > svg path {
-  stroke-dasharray: 26 64;
-  animation: ai-pulse-trace 1.6s linear infinite;
-}
-@keyframes ai-pulse-trace { to { stroke-dashoffset: -90; } }
-@keyframes ai-pulse-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+/* Info Pulse count: heartbeat glow with a ripple ring so a change is impossible to miss. */
+.ai-feeder-trigger-count { position: relative; border-radius: 10px; background: linear-gradient(135deg, #ff6b6b, #b81c3c); box-shadow: 0 0 0 0 #ff5d5db3; font-variant-numeric: tabular-nums; animation: ai-count-glow 1.4s ease-out infinite; }
+.ai-feeder-trigger-count::after { content: ""; position: absolute; inset: -4px; border-radius: 14px; border: 2px solid #ff7878e6; opacity: 0; animation: ai-count-ring 1.4s ease-out infinite; pointer-events: none; }
+@keyframes ai-count-glow { 0% { box-shadow: 0 0 0 0 #ff5d5db3; } 100% { box-shadow: 0 0 0 10px #ff5d5d00; } }
+@keyframes ai-count-ring { 0% { opacity: 0.9; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5); } }
 @media (prefers-reduced-motion: reduce) {
-  .ai-feeder-trigger > svg:first-child, .ai-feeder-kicker > svg, .ai-feeder-trigger > svg:first-child path, .ai-feeder-kicker > svg path { animation: none !important; stroke-dasharray: none; }
+  .ai-feeder-trigger-count, .ai-feeder-trigger-count::after { animation: none !important; }
 }

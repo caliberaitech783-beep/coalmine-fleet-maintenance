@@ -6,14 +6,12 @@ const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8').rep
 const css=readFileSync(new URL('../src/brand-theme.css',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const mail=readFileSync(new URL('../audit-log-export.mjs',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 
-test('the brand shows a live pulse icon in front of Nerve Center everywhere the brand component is used',()=>{
-  assert.match(source,/<span className="caliber-app-name">\s*<strong><Activity className="caliber-pulse-icon" aria-hidden="true" \/>Nerve Center<\/strong>/);
+test('the brand shows the shared pulse icon in front of Nerve Center everywhere the brand component is used',()=>{
+  assert.match(source,/<span className="caliber-app-name">\s*<strong><PulseIcon className="caliber-pulse-icon" \/>Nerve Center<\/strong>/);
   assert.ok((source.match(/<CaliberBrand/g)||[]).length>=6,'headers and the login page all render the brand component');
   assert.match(css,/\.caliber-app-name strong \{ display: inline-flex; align-items: center; gap: 6px; \}/);
-  assert.match(css,/\.caliber-pulse-icon \{[\s\S]*animation: caliber-pulse-beat 1\.6s ease-in-out infinite;/);
-  assert.match(css,/\.caliber-pulse-icon path \{\s*stroke-dasharray: 26 64;\s*animation: caliber-pulse-trace 1\.6s linear infinite;/);
-  assert.match(css,/@keyframes caliber-pulse-trace \{ to \{ stroke-dashoffset: -90; \} \}/);
-  assert.match(css,/@media \(prefers-reduced-motion: reduce\) \{\s*\.caliber-pulse-icon, \.caliber-pulse-icon path \{ animation: none !important; stroke-dasharray: none; \}/);
+  assert.match(css,/\.caliber-pulse-icon \{ flex: 0 0 auto; width: 1\.15em; height: 1\.15em; color: #ffd6e6; \}/);
+  assert.doesNotMatch(css,/caliber-pulse-trace|stroke-dasharray: 26 64/,'the old right-to-left trace is gone');
 });
 
 test('the Audit Trail e-mail header carries the pulse glyph before the name',()=>{

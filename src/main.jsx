@@ -32,6 +32,8 @@ import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./duration-sort.mjs";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
+import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
+import { playTempleBell, shouldChime } from "./notification-chime.mjs";
 import BackupAdministration from "./backup-administration.jsx";
 import VehicleTransferWorkflow from "./vehicle-transfer-workflow.jsx";
 import RequestCorrections from "./request-corrections.jsx";
@@ -419,7 +421,7 @@ function CaliberBrand({ subtitle = "Breakdown management system", className = ""
         <img src="/caliber-logo-reverse.png" alt="Caliber Mining and Logistics" />
       </span>
       <span className="caliber-app-name">
-        <strong><Activity className="caliber-pulse-icon" aria-hidden="true" />Nerve Center</strong>
+        <strong><PulseIcon className="caliber-pulse-icon" />Nerve Center</strong>
         <small>{subtitle}</small>
       </span>
     </div>
@@ -1016,8 +1018,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           <small>{[profileHeaderDesignation({name:session?.name,permissions}), profileLocation].filter(Boolean).join(" · ")}</small>
         </span>
         <UserProfile session={session} role={profileHeaderDesignation({name:session?.name,permissions})} location={profileLocation} />
-        <button onClick={logout} aria-label="Sign out">
-          <LogOut />
+        <button onClick={logout} aria-label="Sign out" className="sign-out-button">
+          <DoorExitIcon /><span className="sign-out-label">Sign out</span>
         </button>
       </div>
     </aside>
@@ -9124,7 +9126,7 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
   return createPortal(<div className="ai-feeder-overlay pulse-overlay">
     <div className="ai-feeder-panel pulse-panel" role="dialog" aria-modal="true" aria-labelledby="ai-feeder-title" tabIndex={-1} ref={panelRef}>
       <header>
-        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><Activity aria-hidden="true" /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Open breakdowns</h2></div>
+        <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><PulseIcon /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Open breakdowns</h2></div>
         <div className="ai-feeder-actions">
           {closeAvailableAt > 0 && <span className="ai-feeder-countdown" role="timer" aria-live="off" aria-label={remainingSeconds > 0 ? "Time until Info Pulse can be closed" : "Info Pulse can now be closed"}><small>{remainingSeconds > 0 ? "Close available in" : "You can close"}</small><b>{String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}</b></span>}
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
@@ -9220,7 +9222,7 @@ function AiFeeder({ role = "", session }) {
   const breakdowns = useMemo(() => ready ? buildInfoPulseBreakdowns(requests) : [], [requests, ready]);
   return <>
     <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
-      <Activity /><span>INFO PULSE</span>{ready && breakdowns.length > 0 && <><b className="ai-feeder-trigger-count">{breakdowns.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
+      <PulseIcon /><span>INFO PULSE</span>{ready && breakdowns.length > 0 && <><b className="ai-feeder-trigger-count">{breakdowns.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
     {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} breakdowns={breakdowns} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
   </>;
@@ -9442,6 +9444,11 @@ function NotificationBell({ session, onOpenEntry }) {
     };
   }, [open]);
   const unread = items.filter((item) => !item.isRead).length;
+  const previousUnreadRef = useRef(null);
+  useEffect(() => {
+    if (shouldChime(previousUnreadRef.current, unread)) playTempleBell();
+    previousUnreadRef.current = unread;
+  }, [unread]);
   const siteOptions = notificationSiteOptions(items, siteFilter);
   const siteItems = filterNotificationsBySite(items, siteFilter);
   const categoryOptions = notificationCategoryOptions(siteItems, categoryFilter);
@@ -9507,7 +9514,7 @@ function NotificationBell({ session, onOpenEntry }) {
   }, []);
   return <>
     <div className="notification-center" ref={centerRef}>
-      <button ref={triggerRef} type="button" onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><Bell />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>
+      <button ref={triggerRef} type="button" className={unread > 0 ? "ringing" : ""} onClick={toggle} aria-label={`${unread} unread notifications`} aria-expanded={open}><BellRingIcon ringing={unread > 0} />{unread > 0 && <i>{unread > 9 ? "9+" : unread}</i>}</button>
       {open && <div className="notification-popover" role="dialog" aria-label="Notifications">
         <header><b>Notifications</b><div><span>{visibleItems.length}</span><button type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X /></button></div></header>
         <div className="notification-filters">
@@ -9702,7 +9709,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
-    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out"><LogOut /></button></div></header>}
+    {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
       {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardState.error} requestsUpdatedAt={dashboardState.updatedAt} onRefreshRequests={()=>dashboardLoader.current?.load(session?.token)} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
@@ -10220,8 +10227,8 @@ function App() {
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             {adminPermissions.adminLevel === "Manager" && <HelpTraining roles={adminPermissions.managerRoles} />}
             <AiFeeder role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} session={session} />
-            <button type="button" aria-label="Focus page smart search" title="Smart search" onClick={() => active === "Dashboard" ? window.dispatchEvent(new Event("dashboard-smart-search")) : document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
-              <Search />
+            <button type="button" aria-label="Focus page smart search" title="Smart search" className="smart-search-button" onClick={() => active === "Dashboard" ? window.dispatchEvent(new Event("dashboard-smart-search")) : document.querySelector('.body input[data-smart-search]:not([disabled])')?.focus()}>
+              <SearchScanIcon />
             </button>
             <NotificationBell session={session} onOpenEntry={(target) => selectMenu(target?.kind === "ticket" ? "Tickets" : target?.kind === "transfer" ? "Vehicle transfers" : adminPermissions.adminLevel === "Manager" ? "Dashboard" : "Breakdown master")} />
           </div>

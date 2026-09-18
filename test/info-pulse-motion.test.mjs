@@ -22,9 +22,11 @@ test('breakdown cards animate in, glow on their tier edge, and fill the Down for
   assert.doesNotMatch(added,/\.pulse-kpi/);
 });
 
-test('the Info Pulse icon is a live working trace in the header trigger and the overlay title',()=>{
-  assert.match(feeder,/\.ai-feeder-trigger > svg:first-child,\s*\.ai-feeder-kicker > svg \{[^}]*animation: ai-pulse-beat 1\.6s ease-in-out infinite;/);
-  assert.match(feeder,/\.ai-feeder-trigger > svg:first-child path,\s*\.ai-feeder-kicker > svg path \{\s*stroke-dasharray: 26 64;\s*animation: ai-pulse-trace 1\.6s linear infinite;/);
-  assert.match(feeder,/@keyframes ai-pulse-trace \{ to \{ stroke-dashoffset: -90; \} \}/);
-  assert.match(feeder,/@media \(prefers-reduced-motion: reduce\) \{\s*\.ai-feeder-trigger > svg:first-child, \.ai-feeder-kicker > svg,[^}]*animation: none !important; stroke-dasharray: none;/);
+test('the Info Pulse icon is the shared left-to-right pulse with a moving dot, and the count badge glows',()=>{
+  const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+  assert.match(main,/<PulseIcon \/><span>INFO PULSE<\/span>/,'header trigger');
+  assert.match(main,/<span className="ai-feeder-kicker"><PulseIcon \/> INFO PULSE<\/span>/,'overlay title');
+  assert.doesNotMatch(feeder,/ai-pulse-trace|stroke-dasharray: 26 64/,'old trace rules removed');
+  assert.match(feeder,/\.ai-feeder-trigger-count \{ position: relative; border-radius: 10px; background: linear-gradient\(135deg, #ff6b6b, #b81c3c\);[^}]*animation: ai-count-glow 1\.4s ease-out infinite; \}/);
+  assert.match(feeder,/\.ai-feeder-trigger-count::after \{[^}]*animation: ai-count-ring 1\.4s ease-out infinite;/);
 });
