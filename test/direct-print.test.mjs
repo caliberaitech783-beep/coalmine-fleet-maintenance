@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {generateKeyPairSync,createVerify} from 'node:crypto';
 import {X509Certificate} from 'node:crypto';
 import {normalizePem,printHelperSigning,signPrintRequest,PRINT_HELPER_MAX_REQUEST_LENGTH,resolvePrintHelperSigning,certificateSummary,generatePrintHelperSigning} from '../print-helper-signing.mjs';
-import {directPrintPaper,directPrintOptions,blobToBase64,rememberedPrinter,rememberPrinter,printHelperAvailable,printHelperExpected,launchPrintHelper} from '../src/direct-print.mjs';
+import {directPrintPaper,directPrintOptions,blobToBase64,rememberedPrinter,rememberPrinter,printHelperAvailable,printHelperExpected,printHelperLastFailure,launchPrintHelper,probePrintHelper} from '../src/direct-print.mjs';
 import {PRINT_PAGE_SIZES} from '../src/smart-print.mjs';
 
 const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8').replace(/\r\n/g,'\n');
@@ -37,19 +37,32 @@ test('the printer used last is remembered on this PC',()=>{
   assert.equal(rememberedPrinter({getItem(){throw new Error('blocked')}}),'','blocked storage never breaks printing');
 });
 
-test('without the helper the check answers false quickly and is remembered for a minute',async()=>{
-  let loads=0;
-  const connected={websocket:{isActive:()=>true}};
-  const slow={websocket:{isActive:()=>false,connect:()=>new Promise(()=>{})}};
-  const base=Date.now()+10*60_000;
-  assert.equal(await printHelperAvailable({now:base,load:async()=>{loads++;return connected}}),true,'an active helper connection is used');
-  assert.equal(await printHelperAvailable({now:base+1,timeoutMs:50,load:async()=>{loads++;return slow}}),false,'a helper that never answers times out');
-  assert.equal(await printHelperAvailable({now:base+30_000,load:async()=>{loads++;return connected}}),false,'within the minute the miss is answered from memory');
-  assert.equal(loads,2);
-  assert.equal(await printHelperAvailable({now:base+61_001,load:async()=>{loads++;throw new Error('not installed')}}),false);
-  assert.equal(await printHelperAvailable({now:base+200_000,load:async()=>{loads++;return connected}}),true,'and it is tried again afterwards');
+test('the presence probe answers from a plain socket, without waiting for any Allow question',async()=>{
+  class Opens{constructor(url){this.url=url;setTimeout(()=>this.onopen?.(),0)}close(){this.closed=true}}
+  class Refuses{constructor(){setTimeout(()=>{this.onerror?.();this.onclose?.()},0)}}
+  class Hangs{}
+  assert.equal(await probePrintHelper({WebSocketImpl:Opens,secure:true}),true);
+  assert.equal(await probePrintHelper({WebSocketImpl:Refuses}),false);
+  assert.equal(await probePrintHelper({WebSocketImpl:Hangs,timeoutMs:30}),false,'a silent port is a miss after the timeout');
+  assert.equal(await probePrintHelper({WebSocketImpl:null}),false,'no WebSocket support at all');
+  let url='';class Records{constructor(target){url=target;setTimeout(()=>this.onopen?.(),0)}close(){}}
+  await probePrintHelper({WebSocketImpl:Records,secure:true});assert.equal(url,'wss://localhost:8181','secure pages use the helper\'s secure port');
+  await probePrintHelper({WebSocketImpl:Records,secure:false});assert.equal(url,'ws://localhost:8182');
 });
 
+test('without the helper the check answers false quickly and is remembered for a minute',async()=>{
+  const connected={websocket:{isActive:()=>true}};
+  const quiet=()=>()=>{};
+  const base=Date.now()+10*60_000;
+  let probes=0,loads=0;
+  const absent=async()=>{probes++;return false},presentProbe=async()=>{probes++;return true};
+  assert.equal(await printHelperAvailable({now:base,probe:absent,load:async()=>{loads++;return connected},notice:quiet}),false,'no helper on this PC');
+  assert.equal(printHelperLastFailure(),'not-installed');
+  assert.equal(await printHelperAvailable({now:base+30_000,probe:presentProbe,load:async()=>{loads++;return connected},notice:quiet}),false,'within the minute the miss is answered from memory');
+  assert.deepEqual([probes,loads],[1,0],'no further probing or loading in that minute');
+  assert.equal(await printHelperAvailable({now:base+61_001,probe:presentProbe,load:async()=>{loads++;return connected},notice:quiet}),true,'tried again afterwards');
+  assert.equal(printHelperLastFailure(),'');
+});
 test('print requests are signed with SHA512-RSA and the key accepts the formats an app setting can hold',()=>{
   const signature=signPrintRequest('abc123',privateKey);
   assert.equal(createVerify('RSA-SHA512').update('abc123').verify(publicKey,signature,'base64'),true);
@@ -78,6 +91,7 @@ test('Smart Print prints through the helper and falls back to the browser print 
   assert.match(main,/function printTableReport\(report\) \{\n  void printReportDirect\(report\)\.then\(\(sent\) => \{ if \(!sent\) printTableReportInBrowser\(report\); \}\);\n\}/);
   assert.match(main,/if \(!\(await printHelperAvailable\(\{ token: \(\) => authToken \}\)\)\) \{\n\s+\/\/ A PC that never used the helper[^\n]*\n\s+if \(!printHelperExpected\(\)\) return false;/,'PCs without the helper still print through the browser, silently');
   assert.match(main,/The print helper \(QZ Tray\) is not running on this PC/,'where the helper is expected, a miss is never silent');
+  assert.match(main,/did not accept the connection: \$\{failure \|\| "no answer"\}/,'a refused or unanswered Allow question is explained');
   assert.match(main,/\? printReportDirect\(\{ title, columns, rows, highlightRow, pageSize \}\) : false;/,'OK tries again, Cancel uses the browser print window');
   assert.match(main,/if \(printHelperExpected\(\)\) alert\(`The report could not be sent through the print helper/);
   assert.match(main,/highlights, pageSize: page\.name \}\),/,'the PDF is built at the chosen A3 / A4 size');
@@ -93,24 +107,48 @@ test('Smart Print prints through the helper and falls back to the browser print 
 test('once the helper has been used on a PC it is expected: it is started by itself and never skipped silently',async()=>{
   const values=new Map(),storage={getItem:(key)=>values.get(key)??null,setItem:(key,value)=>values.set(key,value),removeItem:(key)=>values.delete(key)};
   const connected={websocket:{isActive:()=>true}};
+  const quiet=()=>()=>{};
   assert.equal(printHelperExpected(storage),false);
-  assert.equal(await printHelperAvailable({storage,now:Date.now()+3_600_000,load:async()=>connected}),true);
-  assert.equal(printHelperExpected(storage),true,'a successful connection marks this PC');
+  assert.equal(await printHelperAvailable({storage,now:Date.now()+3_600_000,probe:async()=>true,load:async()=>connected,notice:quiet}),true);
+  assert.equal(printHelperExpected(storage),true,'a reachable helper marks this PC');
 
-  // Helper not running: it is launched, and the connection is retried until it answers.
-  let launches=0,attempts=0,sleeps=0;
-  const startsOnThirdTry=async()=>{attempts++;if(attempts<3)throw new Error('connection refused');return connected};
-  assert.equal(await printHelperAvailable({storage,load:startsOnThirdTry,launch:()=>{launches++},sleep:async()=>{sleeps++}}),true);
-  assert.deepEqual([launches,attempts,sleeps],[1,3,2],'launched once, then polled');
+  // Helper not running: it is launched, and its presence is probed again until it answers.
+  let launches=0,probes=0,sleeps=0;
+  const presentOnThirdProbe=async()=>{probes++;return probes>=3};
+  assert.equal(await printHelperAvailable({storage,probe:presentOnThirdProbe,load:async()=>connected,launch:()=>{launches++},sleep:async()=>{sleeps++},notice:quiet}),true);
+  assert.deepEqual([launches,probes,sleeps],[1,3,2],'launched once, then polled');
 
-  // Still unreachable after the wait: false, and the next print tries again at once (no one-minute memory here).
-  launches=0;attempts=0;
-  const never=async()=>{attempts++;throw new Error('connection refused')};
-  assert.equal(await printHelperAvailable({storage,load:never,launch:()=>{launches++},sleep:async()=>{},launchWaitMs:4500}),false);
-  assert.deepEqual([launches,attempts],[1,4],'one immediate try plus three polls');
-  assert.equal(await printHelperAvailable({storage,load:async()=>connected,launch:()=>{launches++}}),true,'no negative memory for an expected helper');
+  // Still absent after the wait: false with the reason, and the next print tries again at once (no one-minute memory here).
+  launches=0;probes=0;
+  assert.equal(await printHelperAvailable({storage,probe:async()=>{probes++;return false},load:async()=>connected,launch:()=>{launches++},sleep:async()=>{},launchWaitMs:4500,notice:quiet}),false);
+  assert.deepEqual([launches,probes,printHelperLastFailure()],[1,4,'not-running'],'one immediate probe plus three polls');
+  assert.equal(await printHelperAvailable({storage,probe:async()=>true,load:async()=>connected,launch:()=>{launches++},notice:quiet}),true,'no negative memory for an expected helper');
   assert.equal(printHelperExpected({getItem(){throw new Error('blocked')}}),false);
   assert.equal(printHelperExpected({getItem:(key)=>key==='nerveCenterDirectPrinter'?'iR C3326':null}),true,'a printer remembered from an earlier direct print also counts');
+});
+
+test('the handshake waits for the user\'s Allow and a second print shares the pending answer',async()=>{
+  const quiet=()=>()=>{};
+  let resolveConnect,connects=0,notices=[];
+  const notice=(text)=>{notices.push(text);return ()=>notices.push('hidden')};
+  const helper={websocket:{isActive:()=>false,connect:()=>{connects++;return new Promise((resolve)=>{resolveConnect=resolve})}}};
+  const seen={getItem:(key)=>key==='nerveCenterPrintHelperSeen'?'1':null,setItem(){},removeItem(){}};
+  const first=printHelperAvailable({storage:seen,probe:async()=>true,load:async()=>helper,notice});
+  await new Promise((resolve)=>setTimeout(resolve,10));
+  const second=printHelperAvailable({storage:seen,probe:async()=>true,load:async()=>helper,notice});
+  await new Promise((resolve)=>setTimeout(resolve,10));
+  assert.equal(connects,1,'one handshake, shared by both prints');
+  assert.match(notices[0],/click Allow in its window/);
+  resolveConnect();
+  assert.deepEqual(await Promise.all([first,second]),[true,true]);
+  assert.equal(notices.at(-1),'hidden');
+
+  const denied={websocket:{isActive:()=>false,connect:()=>Promise.reject(new Error('Request blocked'))}};
+  assert.equal(await printHelperAvailable({storage:seen,probe:async()=>true,load:async()=>denied,notice:quiet}),false,'Block in QZ Tray is a clean refusal');
+  assert.equal(printHelperLastFailure(),'Request blocked');
+  const silent={websocket:{isActive:()=>false,connect:()=>new Promise(()=>{})}};
+  assert.equal(await printHelperAvailable({storage:seen,probe:async()=>true,load:async()=>silent,handshakeWaitMs:30,notice:quiet}),false,'an unanswered question eventually times out');
+  assert.match(printHelperLastFailure(),/did not answer/);
 });
 
 test('the helper is started through its qz: link in a hidden frame, leaving the app page in place',()=>{

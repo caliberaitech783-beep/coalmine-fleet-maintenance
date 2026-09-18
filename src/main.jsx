@@ -1,7 +1,7 @@
 import { siteReportHtml } from "./site-report.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
 import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter } from "./smart-print.mjs";
-import { printHelperAvailable, printHelperExpected, printPdfDirect } from "./direct-print.mjs";
+import { printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect } from "./direct-print.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
@@ -2898,7 +2898,11 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
     if (!(await printHelperAvailable({ token: () => authToken }))) {
       // A PC that never used the helper prints through the browser. Where it has been used, never fall back silently.
       if (!printHelperExpected()) return false;
-      return window.confirm("The print helper (QZ Tray) is not running on this PC, so the paper size cannot be set automatically.\n\nStart \"QZ Tray\" from the Windows Start menu, wait for its icon near the clock, then click OK to try again.\n\nClick Cancel to use the browser print window instead and choose the Paper size there.")
+      const failure = printHelperLastFailure();
+      const reason = failure === "not-running"
+        ? "The print helper (QZ Tray) is not running on this PC, so the paper size cannot be set automatically.\n\nStart \"QZ Tray\" from the Windows Start menu, wait for its icon near the clock, then click OK to try again."
+        : `The print helper (QZ Tray) did not accept the connection: ${failure || "no answer"}.\n\nIf QZ Tray asked for permission, click Allow (not Block), then click OK to try again.`;
+      return window.confirm(`${reason}\n\nClick Cancel to use the browser print window instead and choose the Paper size there.`)
         ? printReportDirect({ title, columns, rows, highlightRow, pageSize }) : false;
     }
     const page = printPageSize(pageSize);
