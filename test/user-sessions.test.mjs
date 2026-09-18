@@ -96,3 +96,15 @@ test("administrators can delete user activity older than N days from the User Se
   assert.match(page, /Delete permanently/);
   assert.match(page, /await load\(\{quiet:true\}\);/, "the list reloads after a purge");
 });
+
+test('the User Sessions header is compact: title only, short summary cards, toolbar close to the top',()=>{
+  const styles=readFileSync(new URL("../src/user-sessions.css", import.meta.url), "utf8");
+  assert.match(client,/<header><div><h1>User Sessions<\/h1><\/div>/,'the eyebrow and the description sentence are gone');
+  assert.doesNotMatch(client,/Security and access<\/span><h1>User Sessions/);
+  assert.doesNotMatch(client,/securely close sessions\./);
+  assert.match(styles,/\.user-session-summary article\{display:flex;align-items:center;gap:12px;min-height:0;padding:9px 18px;/,'summary cards are short');
+  assert.match(styles,/\.user-session-kpi-icon\{display:grid;place-items:center;width:34px;height:34px;/);
+  assert.match(styles,/\.user-session-summary b\{display:block;margin-top:1px;color:#132541;font-size:20px;/);
+  assert.match(styles,/\.user-session-toolbar\{display:flex;align-items:center;gap:14px;padding:9px 20px;/,'the search and filter row sits higher');
+  assert.match(styles,/\.user-sessions-page>header\{align-items:center;padding-top:12px;padding-bottom:10px;min-height:0\}/);
+});

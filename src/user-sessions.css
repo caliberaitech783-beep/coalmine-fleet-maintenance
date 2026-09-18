@@ -1,14 +1,14 @@
 .user-sessions-page{overflow:hidden}
-.user-sessions-page>header{align-items:center}
+.user-sessions-page>header{align-items:center;padding-top:12px;padding-bottom:10px;min-height:0}.user-sessions-page>header h1{margin:0;font-size:24px;line-height:1.2}
 .page-eyebrow{display:block;margin-bottom:6px;color:#21769b;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0}
 .user-session-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-bottom:1px solid var(--border,#dde5ef);background:#f8fafc}
-.user-session-summary article{display:flex;align-items:center;gap:14px;min-height:108px;padding:20px 22px;border-right:1px solid var(--border,#dde5ef)}
+.user-session-summary article{display:flex;align-items:center;gap:12px;min-height:0;padding:9px 18px;border-right:1px solid var(--border,#dde5ef)}
 .user-session-summary article:last-child{border-right:0}
-.user-session-kpi-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:8px;color:#3465d9;background:#eaf0ff;flex:0 0 auto}
+.user-session-kpi-icon{display:grid;place-items:center;width:34px;height:34px;border-radius:8px;color:#3465d9;background:#eaf0ff;flex:0 0 auto}
 .user-session-kpi-icon.online{color:#16815f;background:#e3f6ef}.user-session-kpi-icon.users{color:#6737a4;background:#f0e9fa}.user-session-kpi-icon.devices{color:#b25d13;background:#fff1df}
-.user-session-kpi-icon svg{width:23px;height:23px}
-.user-session-summary small{display:block;color:#74849d;font-size:12px;font-weight:800;text-transform:uppercase}.user-session-summary b{display:block;margin-top:2px;color:#132541;font-size:28px;line-height:1}.user-session-summary p{margin:7px 0 0;color:#718097;font-size:12px}
-.user-session-toolbar{display:flex;align-items:center;gap:14px;padding:16px 20px;border-bottom:1px solid var(--border,#dde5ef)}
+.user-session-kpi-icon svg{width:17px;height:17px}
+.user-session-summary small{display:block;color:#74849d;font-size:11px;font-weight:800;text-transform:uppercase;line-height:1.2}.user-session-summary b{display:block;margin-top:1px;color:#132541;font-size:20px;line-height:1.1}.user-session-summary p{margin:2px 0 0;color:#718097;font-size:11px;line-height:1.2}
+.user-session-toolbar{display:flex;align-items:center;gap:14px;padding:9px 20px;border-bottom:1px solid var(--border,#dde5ef)}
 .user-session-search{display:flex;align-items:center;gap:10px;width:min(440px,45vw);height:44px;padding:0 14px;border:1px solid #d7dfeb;border-radius:7px;background:#fff}.user-session-search svg{width:18px;color:#8290a5}.user-session-search input{width:100%;border:0;outline:0;background:transparent;color:#152640;font:inherit}
 .user-session-status{display:flex;padding:4px;border:1px solid #d7dfeb;border-radius:7px;background:#f2f5f9}.user-session-status button{min-width:86px;height:34px;border:0;border-radius:5px;background:transparent;color:#60718a;font-weight:700;cursor:pointer}.user-session-status button.active{color:#fff;background:#5b2b91;box-shadow:0 3px 8px #5b2b9126}
 .user-session-visible{margin-left:auto;color:#75849b}.user-session-visible b{color:#152640}
