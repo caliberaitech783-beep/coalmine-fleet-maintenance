@@ -998,7 +998,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <span className="nav-label">{n}</span>
           </button></div>
         ))}
-        {vehicleTransferDirectAccess&&<div className="nav-config-row"><button className={active==="Vehicle transfers"?"active":""} onClick={()=>selectPage("Vehicle transfers")}><ArrowRightLeft /><span className="nav-label">Vehicle Transfer</span></button></div>}
+        {vehicleTransferDirectAccess&&<div className="nav-config-row"><button className={`header-nav-item${active==="Vehicle transfers"?" active":""}`} data-nav="transfers" onClick={()=>selectPage("Vehicle transfers")}><span className="header-nav-icon" aria-hidden="true"><ArrowRightLeft /></span><span className="nav-label">Vehicle Transfer</span></button></div>}
         {canViewAdmin && <div
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}

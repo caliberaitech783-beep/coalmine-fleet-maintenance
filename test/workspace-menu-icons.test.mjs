@@ -119,3 +119,9 @@ test('operational, manager and workspace navigation get the graphical treatment 
   for(const name of ['hn-pulse','hn-wiggle','hn-press','hn-tick','hn-shuttle','hn-dot'])assert.match(motion,new RegExp(`@keyframes ${name} \\{`),name);
   assert.match(motion,/@media \(prefers-reduced-motion: reduce\)/);
 });
+
+test('the Vehicle Transfer header button gets the same glass badge as its neighbours',()=>{
+  assert.match(source,/vehicleTransferDirectAccess&&<div className="nav-config-row"><button className=\{`header-nav-item\$\{active==="Vehicle transfers"\?" active":""\}`\} data-nav="transfers"[^\n]*<span className="header-nav-icon" aria-hidden="true"><ArrowRightLeft \/><\/span><span className="nav-label">Vehicle Transfer<\/span>/);
+  assert.match(styles,/\.header-nav-item\[data-nav="transfers"\] \{ --hn-a: #fb923c; --hn-b: #ea580c;/);
+  assert.match(styles,/\[data-nav="transfers"\]:hover \.header-nav-icon svg[^{]*\{ animation: ws-shuttle/);
+});

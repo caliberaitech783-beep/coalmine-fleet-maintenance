@@ -860,6 +860,7 @@
 .header-nav-item[data-nav="reports"] { --hn-a: #f472b6; --hn-b: #c9306e; --hn-glow: rgba(201, 48, 110, 0.5); }
 .header-nav-item[data-nav="tickets"] { --hn-a: #fb7185; --hn-b: #d63b5d; --hn-glow: rgba(214, 59, 93, 0.5); }
 .header-nav-item[data-nav="admin"] { --hn-a: #f97373; --hn-b: #f04e53; --hn-glow: rgba(240, 78, 83, 0.5); }
+.header-nav-item[data-nav="transfers"] { --hn-a: #fb923c; --hn-b: #ea580c; --hn-glow: rgba(234, 88, 12, 0.5); }
 /* Icon motion while hovered / focused / active. */
 .header-nav-item[data-nav="dashboard"]:hover .header-nav-icon svg, .header-nav-item[data-nav="dashboard"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="dashboard"].active .header-nav-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
 .header-nav-item[data-nav="masters"]:hover .header-nav-icon svg, .header-nav-item[data-nav="masters"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="masters"].active .header-nav-icon svg { animation: ws-shuttle 1s ease-in-out infinite; }
@@ -871,6 +872,7 @@
 .header-nav-item[data-nav="manager"]:hover .header-nav-icon svg, .header-nav-item[data-nav="manager"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="manager"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
 .header-nav-item[data-nav="correction"]:hover .header-nav-icon svg, .header-nav-item[data-nav="correction"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="correction"].active .header-nav-icon svg { transform-origin: 20% 80%; animation: ws-wrench 0.9s ease-in-out infinite; }
 .header-nav-item[data-nav="approvals"]:hover .header-nav-icon svg, .header-nav-item[data-nav="approvals"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="approvals"].active .header-nav-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.header-nav-item[data-nav="transfers"]:hover .header-nav-icon svg, .header-nav-item[data-nav="transfers"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="transfers"].active .header-nav-icon svg { animation: ws-shuttle 1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   .app > aside nav button.header-nav-item,
   .app > aside nav button.header-nav-item::before,
