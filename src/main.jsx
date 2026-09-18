@@ -962,16 +962,18 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown reports-dropdown" role="menu">
-            {visibleReportNav.map((category) => (
-              <div className="nav-config-row" key={category.id}><button
+            {visibleReportNav.map((category) => {
+              const CategoryIcon = category.icon || FileBarChart;
+              return <div className="nav-config-row" key={category.id}><button
                 role="menuitem"
-                className={active === "Reports" && activeReportCategory === category.id ? "active" : ""}
+                className={`workspace-menu-item${active === "Reports" && activeReportCategory === category.id ? " active" : ""}`}
+                data-workspace={`report-${category.id}`}
                 onClick={(event) => selectReport(category, event)}
               >
-                <FileBarChart />
+                <span className="workspace-icon" aria-hidden="true"><CategoryIcon /><i className="workspace-icon-glow" /></span>
                 <span className="nav-label">{category.label}</span>
-              </button></div>
-            ))}
+              </button></div>;
+            })}
           </div>
         </div>}
         {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports").map(([n, I]) => (

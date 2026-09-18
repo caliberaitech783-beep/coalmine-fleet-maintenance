@@ -494,13 +494,14 @@
   .normal-header-user { display: none !important; }
 }
 
-/* Masters, WhatsApp Integration and Operational Workspaces menus: graphical icon badges, one colour per workspace,
+/* Masters, WhatsApp Integration, Operational Workspaces and Reports menus: graphical icon badges, one colour per workspace,
    with a light sheen on hover and an icon animation while hovered / active
    (truck drives, wrench turns, shield pulses). Animations stop for people who
    prefer reduced motion. */
 .masters-dropdown:has(> .nav-config-row > .workspace-menu-item),
 .operational-workspaces-dropdown,
 .whatsapp-dropdown { min-width: 252px; padding: 8px; }
+.masters-dropdown:has(> .nav-config-row > .workspace-menu-item) { min-width: 262px !important; }
 .masters-dropdown:has(> .nav-config-row > .workspace-menu-item) .nav-config-row + .nav-config-row,
 .operational-workspaces-dropdown .nav-config-row + .nav-config-row,
 .whatsapp-dropdown .nav-config-row + .nav-config-row { margin-top: 4px; }
@@ -593,6 +594,10 @@
 .workspace-menu-item[data-workspace="delayed"] .workspace-icon { --ws-a: #facc15; --ws-b: #a16207; --ws-shadow: rgba(161, 98, 7, 0.45); --ws-ring: rgba(250, 204, 21, 0.4); }
 .workspace-menu-item[data-workspace="transfers"] .workspace-icon { --ws-a: #22d3ee; --ws-b: #0e7490; --ws-shadow: rgba(14, 116, 144, 0.45); --ws-ring: rgba(34, 211, 238, 0.4); }
 .workspace-menu-item[data-workspace="hierarchy"] .workspace-icon { --ws-a: #a78bfa; --ws-b: #6d28d9; --ws-shadow: rgba(109, 40, 217, 0.45); --ws-ring: rgba(167, 139, 250, 0.4); }
+.workspace-menu-item[data-workspace="report-general"] .workspace-icon { --ws-a: #60a5fa; --ws-b: #1d4ed8; --ws-shadow: rgba(29, 78, 216, 0.45); --ws-ring: rgba(96, 165, 250, 0.4); }
+.workspace-menu-item[data-workspace="report-production"] .workspace-icon { --ws-a: #fbbf24; --ws-b: #ea580c; --ws-shadow: rgba(234, 88, 12, 0.45); --ws-ring: rgba(251, 191, 36, 0.4); }
+.workspace-menu-item[data-workspace="report-maintenance"] .workspace-icon { --ws-a: #2dd4bf; --ws-b: #059669; --ws-shadow: rgba(5, 150, 105, 0.45); --ws-ring: rgba(45, 212, 191, 0.4); }
+.workspace-menu-item[data-workspace="report-mis"] .workspace-icon { --ws-a: #38bdf8; --ws-b: #4f46e5; --ws-shadow: rgba(79, 70, 229, 0.45); --ws-ring: rgba(56, 189, 248, 0.4); }
 
 .workspace-menu-item:hover .workspace-icon,
 .workspace-menu-item:focus-visible .workspace-icon,
@@ -655,6 +660,18 @@
 .workspace-menu-item[data-workspace="hierarchy"]:hover .workspace-icon svg,
 .workspace-menu-item[data-workspace="hierarchy"]:focus-visible .workspace-icon svg,
 .workspace-menu-item[data-workspace="hierarchy"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="report-general"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-general"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-general"].active .workspace-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="report-production"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-production"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-production"].active .workspace-icon svg { animation: ws-tick 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="report-maintenance"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-maintenance"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-maintenance"].active .workspace-icon svg { transform-origin: 30% 70%; animation: ws-wrench 0.9s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="report-mis"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-mis"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="report-mis"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
 
 @keyframes ws-drive {
   0%, 100% { transform: translateX(-2px); }

@@ -51,3 +51,13 @@ test('the Masters menu carries its badge key inside the nav tuple and uses the s
   for(const name of ['ws-tick','ws-shuttle'])assert.match(styles,new RegExp(`@keyframes ${name} \\{`),name);
   assert.match(styles,/\.masters-dropdown:has\(> \.nav-config-row > \.workspace-menu-item\),\s*\.operational-workspaces-dropdown,\s*\.whatsapp-dropdown \{ min-width: 252px; padding: 8px; \}/);
 });
+
+test('the Reports menu shows each category with its own icon in a badge keyed by category id',()=>{
+  assert.match(source,/visibleReportNav\.map\(\(category\) => \{\s*const CategoryIcon = category\.icon \|\| FileBarChart;\s*return <div className="nav-config-row" key=\{category\.id\}><button\s*role="menuitem"\s*className=\{`workspace-menu-item\$\{active === "Reports" && activeReportCategory === category\.id \? " active" : ""\}`\}\s*data-workspace=\{`report-\$\{category\.id\}`\}/);
+  assert.match(source,/<span className="workspace-icon" aria-hidden="true"><CategoryIcon \/><i className="workspace-icon-glow" \/><\/span>\s*<span className="nav-label">\{category\.label\}<\/span>/);
+  assert.match(source,/\{id: "production", label: "Production report",[^\n]*icon: Gauge\}/,'the category icons feed the badges');
+  for(const key of ['report-general','report-production','report-maintenance','report-mis'])assert.match(styles,new RegExp(`\\.workspace-menu-item\\[data-workspace="${key}"\\] \\.workspace-icon \\{ --ws-a: #[0-9a-f]{6}; --ws-b: #[0-9a-f]{6};`),key);
+  assert.match(styles,/\[data-workspace="report-production"\]:hover \.workspace-icon svg[\s\S]*animation: ws-tick/);
+  assert.match(styles,/\[data-workspace="report-maintenance"\]:hover \.workspace-icon svg[\s\S]*animation: ws-wrench/);
+  assert.match(styles,/\.masters-dropdown:has\(> \.nav-config-row > \.workspace-menu-item\) \{ min-width: 262px !important; \}/,'badge menus override the narrow !important widths in style.css');
+});
