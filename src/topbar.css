@@ -493,3 +493,131 @@
   .normal-header-actions { gap: 5px !important; }
   .normal-header-user { display: none !important; }
 }
+
+/* Operational Workspaces menu: graphical icon badges, one colour per workspace,
+   with a light sheen on hover and an icon animation while hovered / active
+   (truck drives, wrench turns, shield pulses). Animations stop for people who
+   prefer reduced motion. */
+.operational-workspaces-dropdown { min-width: 252px; padding: 8px; }
+.operational-workspaces-dropdown .nav-config-row + .nav-config-row { margin-top: 4px; }
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  overflow: hidden;
+  isolation: isolate;
+  color: #fff;
+  background: transparent;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.16) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.6s ease;
+}
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item:hover::before,
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item:focus-visible::before { transform: translateX(120%); }
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item:hover,
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.14);
+  transform: translateX(3px);
+}
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item.active {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.app > aside nav .operational-workspaces-dropdown button.workspace-menu-item .nav-label { font-weight: 700; letter-spacing: 0.01em; }
+
+.workspace-icon {
+  --ws-a: #6f98ff;
+  --ws-b: #3b5bdb;
+  --ws-shadow: rgba(59, 91, 219, 0.45);
+  --ws-ring: rgba(111, 152, 255, 0.4);
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--ws-a), var(--ws-b));
+  box-shadow: 0 6px 14px var(--ws-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.workspace-icon svg {
+  position: relative;
+  z-index: 1;
+  width: 20px !important;
+  height: 20px !important;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+.workspace-icon-glow {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--ws-a);
+  border-radius: 14px;
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+}
+.workspace-menu-item[data-workspace="production"] .workspace-icon { --ws-a: #fbbf24; --ws-b: #ea580c; --ws-shadow: rgba(234, 88, 12, 0.45); --ws-ring: rgba(251, 191, 36, 0.4); }
+.workspace-menu-item[data-workspace="maintenance"] .workspace-icon { --ws-a: #2dd4bf; --ws-b: #059669; --ws-shadow: rgba(5, 150, 105, 0.45); --ws-ring: rgba(45, 212, 191, 0.4); }
+.workspace-menu-item[data-workspace="mis"] .workspace-icon { --ws-a: #38bdf8; --ws-b: #4f46e5; --ws-shadow: rgba(79, 70, 229, 0.45); --ws-ring: rgba(56, 189, 248, 0.4); }
+
+.workspace-menu-item:hover .workspace-icon,
+.workspace-menu-item:focus-visible .workspace-icon,
+.workspace-menu-item.active .workspace-icon {
+  transform: scale(1.08);
+  filter: brightness(1.08);
+  box-shadow: 0 8px 20px var(--ws-shadow), 0 0 0 3px var(--ws-ring), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.workspace-menu-item:hover .workspace-icon-glow,
+.workspace-menu-item:focus-visible .workspace-icon-glow,
+.workspace-menu-item.active .workspace-icon-glow { animation: ws-ring 1.4s ease-out infinite; }
+.workspace-menu-item[data-workspace="production"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="production"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="production"].active .workspace-icon svg { animation: ws-drive 0.7s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="maintenance"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="maintenance"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="maintenance"].active .workspace-icon svg { transform-origin: 30% 70%; animation: ws-wrench 0.9s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="mis"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="mis"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="mis"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+
+@keyframes ws-drive {
+  0%, 100% { transform: translateX(-2px); }
+  25% { transform: translate(0, -1px); }
+  50% { transform: translateX(2px); }
+  75% { transform: translate(0, 1px); }
+}
+@keyframes ws-wrench {
+  0%, 100% { transform: rotate(-18deg); }
+  50% { transform: rotate(18deg); }
+}
+@keyframes ws-shield {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.14); }
+}
+@keyframes ws-ring {
+  0% { opacity: 0.9; transform: scale(0.9); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-menu-item,
+  .workspace-menu-item::before,
+  .workspace-icon,
+  .workspace-icon svg,
+  .workspace-icon-glow { animation: none !important; transition: none !important; }
+}

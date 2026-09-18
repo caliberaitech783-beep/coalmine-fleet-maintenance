@@ -935,8 +935,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
             <ChevronDown className="masters-chevron" />
           </button></div>
           <div className="masters-dropdown operational-workspaces-dropdown" role="menu">
-            {operationalWorkspaceNav.map(([name, Icon]) => <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={(event) => selectDropdownPage(name, event, setWorkspacesSelectionClosed)}>
-              <Icon /><span className="nav-label">{name}</span>
+            {operationalWorkspaceNav.map(([name, Icon, role]) => <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name ? " active" : ""}`} data-workspace={String(role).split(" ")[0].toLowerCase()} onClick={(event) => selectDropdownPage(name, event, setWorkspacesSelectionClosed)}>
+              <span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span>
             </button></div>)}
           </div>
         </div>}
