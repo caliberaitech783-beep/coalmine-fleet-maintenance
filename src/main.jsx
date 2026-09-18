@@ -52,6 +52,7 @@ import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
 import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
+import DailyUpdatesList from "./daily-updates-list.jsx";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
@@ -8190,7 +8191,8 @@ function requestStartParts(start) {
 }
 
 function MaintenanceRemarks({ remarks = [], category = "" }) {
-  return remarks?.length ? <details className="daily-remarks"><summary>{remarks.length} update{remarks.length === 1 ? "" : "s"}</summary>{remarks.map((item, index) => <article key={`${item.createdAt}-${index}`}><b>{formatTwelveHourDateTime(item.createdAt)} · {item.authorName}</b><p>{item.remark}</p><small>{category ? `${category} · ` : ""}Delayed reason: {item.delayedReason || item.delayReason || "—"}</small></article>)}</details> : "—";
+  // Long histories scroll inside the cell; newest-first or oldest-first is the reader's saved choice.
+  return <DailyUpdatesList remarks={remarks} category={category} formatDateTime={formatTwelveHourDateTime} />;
 }
 
 function DailyRemarkForm({ request, close, onSave }) {
