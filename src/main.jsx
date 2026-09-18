@@ -2932,7 +2932,7 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
 function printTableReport(report) {
   void printReportDirect(report).then((sent) => { if (!sent) printTableReportInBrowser(report); });
 }
-async function printReportDirect({ title, columns = [], rows = [], highlightRow, pageSize, printOptions = {} }) {
+async function printReportDirect({ title, columns = [], rows = [], highlightRow, pageSize, printOptions = {} }, buildPdf = null) {
   try {
     if (!(await printHelperAvailable({ token: () => authToken }))) {
       // A PC that never used the helper prints through the browser. Where it has been used, never fall back silently.
@@ -2942,26 +2942,31 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
         ? "The print helper (QZ Tray) is not running on this PC, so the paper size cannot be set automatically.\n\nStart \"QZ Tray\" from the Windows Start menu, wait for its icon near the clock, then click OK to try again."
         : `The print helper (QZ Tray) did not accept the connection: ${failure || "no answer"}.\n\nIf QZ Tray asked for permission, click Allow (not Block), then click OK to try again.`;
       return window.confirm(`${reason}\n\nClick Cancel to use the browser print window instead and choose the Paper size there.`)
-        ? printReportDirect({ title, columns, rows, highlightRow, pageSize, printOptions }) : false;
+        ? printReportDirect({ title, columns, rows, highlightRow, pageSize, printOptions }, buildPdf) : false;
     }
     const page = printPageSize(pageSize);
-    const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
-    const highlights = rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []);
-    const response = await fetch("/api/exports/pdf", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-      body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights, pageSize: page.name }),
-    });
-    if (!response.ok) {
-      const details = await response.json().catch(() => ({}));
-      throw new Error(details.error || `The report PDF could not be prepared (HTTP ${response.status}).`);
+    // A dashboard brings a PDF of itself as it is on screen; every other report is the server-built table.
+    let pdf;
+    if (buildPdf) pdf = await buildPdf(page);
+    else {
+      const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
+      const highlights = rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []);
+      const response = await fetch("/api/exports/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+        body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights, pageSize: page.name }),
+      });
+      if (!response.ok) {
+        const details = await response.json().catch(() => ({}));
+        throw new Error(details.error || `The report PDF could not be prepared (HTTP ${response.status}).`);
+      }
+      pdf = await response.blob();
     }
     // The finished PDF is shown first; nothing reaches the printer until the user clicks Print in the preview.
-    const pdf = await response.blob();
     const confirmed = await showPrintPreview({ pdf, title, page, printOptions, printer: printOptions.printer || rememberedPrinter() });
     if (!confirmed) return true;
     const printer = await printPdfDirect({ pdf, page, jobName: title, token: () => authToken, printOptions });
-    recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records · ${page.name} · ${printer}${printOptions.pages ? ` · pages ${printOptions.pages}` : ""}${printOptions.duplex && printOptions.duplex !== "one-sided" ? ` · ${printOptions.duplex}` : ""}${Number(printOptions.copies) > 1 ? ` · ${printOptions.copies} copies` : ""}`});
+    recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${buildPdf ? "Dashboard as shown on screen" : `${rows.length} records`} · ${page.name} · ${printer}${printOptions.pages ? ` · pages ${printOptions.pages}` : ""}${printOptions.duplex && printOptions.duplex !== "one-sided" ? ` · ${printOptions.duplex}` : ""}${Number(printOptions.copies) > 1 ? ` · ${printOptions.copies} copies` : ""}`});
     alert(`Sent to ${printer} on ${page.name} paper.`);
     return true;
   } catch (error) {
@@ -2969,6 +2974,19 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
     if (printHelperExpected()) alert(`The report could not be sent through the print helper (${error?.message || error || "unknown reason"}).\n\nThe browser print window opens instead; choose the Paper size there.`);
     return false;
   }
+}
+// Smart Print of a dashboard prints the dashboard itself, captured as it is on screen, never a KPI table.
+// Through the print helper it gets the same preview, paper, printer, pages, sides and copies as any report;
+// without the helper the captured dashboard opens in the browser print window.
+function printDashboardReport({ dashboard, title, pageSize, printOptions }) {
+  if (!dashboard) {
+    alert("Dashboard is not available. Please reopen it and try again.");
+    return;
+  }
+  const loadCapture = () => import("./dashboard-pdf.mjs");
+  void printReportDirect({ title, pageSize, printOptions }, async (page) => (await loadCapture()).dashboardPrintPdf(dashboard, page))
+    .then(async (sent) => { if (!sent) await (await loadCapture()).printDashboard(dashboard, title); })
+    .catch((error) => alert(error?.message || "The dashboard could not be printed."));
 }
 function printTableReportInBrowser({ title, columns = [], rows = [], highlightRow, reportGrouping, pageSize }) {
   // The chosen A3/A4 size sets the fit-to-page scale. @page stays a generic landscape so the browser keeps its
@@ -3111,6 +3129,11 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
   });
   const printReport = () => {
     setOpen(false);
+    if (dashboardPdf) {
+      const dashboard = triggerRef.current?.closest(".mine-dashboard, .manager-dashboard");
+      openSmartPrint({ title, snapshot: "The dashboard prints exactly as it looks on screen, with every panel and chart. Choose the paper and printer next.", onPrint: ({ pageSize, printOptions }) => printDashboardReport({ dashboard, title, pageSize, printOptions }) });
+      return;
+    }
     openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
   };
   if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Smart Print ${title}`}><Printer /><span>Smart Print</span></button>;

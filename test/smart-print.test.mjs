@@ -186,3 +186,39 @@ test('the printer list from the helper is offered, the last used printer is pres
   assert.deepEqual(normalizePrintOptions({printer:'  iR   C3326 '}).printer,'iR C3326');
  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
+
+test('a dashboard snapshot skips the column picker but keeps paper, printer, pages, sides and copies',()=>{
+ class Element {
+  constructor(tag){this.tag=tag;this.children=[];this.value='';}
+  append(...nodes){this.children.push(...nodes);}
+  replaceChildren(...nodes){this.children=nodes;}
+  setAttribute(){} addEventListener(){} showModal(){} close(){} remove(){}
+ }
+ const body=new Element('body'), data=new Map([['nerveCenterSession',JSON.stringify({login:'tester'})]]);
+ const storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)};
+ const oldDocument=globalThis.document,oldWindow=globalThis.window;
+ globalThis.document={body,createElement:tag=>new Element(tag)};
+ globalThis.window={localStorage:storage,sessionStorage:storage,prompt:()=>'x',confirm:()=>true};
+ const all=node=>[node,...node.children.flatMap(all)];
+ try {
+  const printed=[];
+  const snapshot='The dashboard prints exactly as it looks on screen.';
+  openSmartPrint({title:'Fleet control dashboard KPI report',snapshot,onPrint:args=>printed.push(args),onExport:()=>assert.fail('a dashboard has no column export here')});
+  let nodes=all(body.children.at(-1));
+  assert.ok(nodes.some(n=>n.textContent===snapshot),'the dialog says the dashboard prints as shown');
+  assert.equal(nodes.find(n=>n.className==='smart-print-controls').hidden,true,'no saved column layouts');
+  assert.equal(nodes.find(n=>n.className==='smart-print-columns').hidden,true,'no KPI columns to tick');
+  assert.equal(nodes.some(n=>n.textContent==='Export'),false);
+  assert.equal(nodes.some(n=>n.textContent==='Print preview — first 5 records'),false,'no KPI table preview');
+  const print=nodes.find(n=>n.textContent==='Print as shown on screen');
+  assert.equal(print.disabled,false,'printing is available without choosing columns');
+  print.onclick();
+  nodes=all(body.children.at(-1));nodes.find(n=>String(n.textContent).startsWith('A3 · ')).onclick();
+  nodes=all(body.children.at(-1));nodes.find(n=>n.textContent==='Print now').onclick();
+  assert.equal(printed.length,1);
+  assert.equal(printed[0].title,'Fleet control dashboard KPI report');
+  assert.equal(printed[0].pageSize,'A3','the chosen paper reaches the dashboard print');
+  assert.equal(printed[0].printOptions.copies,1);
+  assert.equal(printed[0].printOptions.duplex,'one-sided');
+ } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});

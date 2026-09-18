@@ -92,7 +92,7 @@ export function printFitScale(contentWidth,availableWidth,minimum=.3) {
 let smartPrintExporter;
 export function setSmartPrintExporter(exporter) {smartPrintExporter=exporter;}
 
-export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,onExport=smartPrintExporter,onListPrinters=smartPrintPrinterSource,formatCell=value=>String(value??'')}) {
+export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,onExport=smartPrintExporter,onListPrinters=smartPrintPrinterSource,formatCell=value=>String(value??''),snapshot=''}) {
   const options=printColumnOptions(columns);
   let selected=options.map(option=>option.id),layouts=[],storage,key;
   let storageError='';
@@ -114,10 +114,11 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   const heading=make('div');heading.append(make('h2','Smart Print'),make('p',title));header.append(heading);
   const closeButton=button('×',close,header);closeButton.setAttribute('aria-label','Close Smart Print');dialog.append(header);
   const body=make('div',undefined,'smart-print-body');dialog.append(body);
-  body.append(make('p','Choose the columns to print. Save the selection with a report name, then print it directly from Saved report layouts.'));
+  // A snapshot (a dashboard) prints as it is on screen, so there are no columns to choose.
+  body.append(make('p',snapshot||'Choose the columns to print. Save the selection with a report name, then print it directly from Saved report layouts.'));
   const controls=make('div',undefined,'smart-print-controls');body.append(controls);
   const layoutLabel=make('label','Saved report layouts');const layoutSelect=make('select');layoutLabel.append(layoutSelect);controls.append(layoutLabel);
-  const notice=make('p',storageError,'smart-print-notice');notice.setAttribute('role','status');
+  const notice=make('p',snapshot?'':storageError,'smart-print-notice');notice.setAttribute('role','status');
   const updateLayouts=(number='')=>{layoutSelect.replaceChildren();const placeholder=make('option','Custom selection');placeholder.value='';layoutSelect.append(placeholder);for(const layout of layouts){const option=make('option',layout.name||`Layout ${layout.number}`);option.value=String(layout.number);layoutSelect.append(option);}layoutSelect.value=String(number);};
   updateLayouts();
   const checks=make('div',undefined,'smart-print-columns');checks.setAttribute('role','group');checks.setAttribute('aria-label','Columns to print');
@@ -198,10 +199,10 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     pagePrompt.replaceChildren(panel);
   };
   const printSelection=()=>{
-    if(!currentReport().chosen.length)return;
+    if(!snapshot&&!currentReport().chosen.length)return;
     askChoice('Select page size to print','The report is scaled to the selected page so no columns are cut off. With the print helper installed it goes straight to the printer on this paper size; otherwise, in the print window keep Paper size set to the same size.','Select page size',PRINT_PAGE_SIZES.map(page=>({label:`${page.name} · ${page.detail}`,value:page.name})),pageSize=>{
       askPrintOptions(pageSize,printOptions=>{
-        const {reportTitle,chosen}=currentReport();if(!chosen.length)return;
+        const {reportTitle,chosen}=currentReport();if(!snapshot&&!chosen.length)return;
         close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,pageSize,printOptions});
       });
     });
@@ -217,10 +218,10 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       .finally(()=>{exporting=false;render();});
   };
   // One Export button: choose PDF or Excel, then the file downloads straight away with the current selection.
-  const exportButtons=onExport?[button('Export',()=>{
+  const exportButtons=onExport&&!snapshot?[button('Export',()=>{
     if(currentReport().chosen.length)askChoice('Export as PDF or Excel','The export uses the selected columns, their order and the same records as the preview.','Select export format',[{label:'PDF',value:'pdf'},{label:'Excel (.xlsx)',value:'xlsx'}],runExport);
   },footer,'smart-print-export')]:[];
-  const printButton=button('Print current selection',printSelection,footer,'primary');
+  const printButton=button(snapshot?'Print as shown on screen':'Print current selection',printSelection,footer,'primary');
   const printSavedButton=button('Print saved layout',printSelection,controls,'smart-print-saved-print');
   const deleteSavedButton=button('Delete saved layout',()=>{
     try{
@@ -236,6 +237,12 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     }catch(error){notice.textContent=error?.message||'Could not delete the saved report layout.';}
   },controls,'smart-print-saved-delete');
   const render=()=>{
+    if(snapshot){
+      printButton.hidden=false;printButton.disabled=exporting;
+      count.textContent='Printed exactly as shown on screen';
+      preview.replaceChildren(make('h3','Print preview'),make('p','The finished pages are shown after you choose the paper and printer. Nothing prints until you click Print there.'));
+      return;
+    }
     for(const {input,id} of checkboxes)input.checked=selected.includes(id);
     const chosen=selectedPrintColumns(options,selected);printButton.disabled=!chosen.length;
     const savedSelected=layouts.some(item=>String(item.number)===layoutSelect.value);
@@ -274,6 +281,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   layoutSelect.onchange=()=>{const layout=layouts.find(item=>String(item.number)===layoutSelect.value);if(layout)selected=layout.columns.filter(id=>options.some(option=>option.id===id));render();};
   for(const option of options){const label=make('label'),input=make('input');input.type='checkbox';input.checked=true;input.onchange=()=>{selected=input.checked?[...selected,option.id]:selected.filter(id=>id!==option.id);layoutSelect.value='';render();};label.append(input,make('span',option.label));checks.append(label);checkboxes.push({input,id:option.id});}
   body.append(notice,checks,preview);dialog.append(pagePrompt);
+  if(snapshot){controls.hidden=true;checks.hidden=true;}
   // Keep keyboard navigation in this native top-layer dialog, even when it was
   // launched from a modal with its own document-level focus trap.
   dialog.addEventListener('keydown',event=>event.stopPropagation());

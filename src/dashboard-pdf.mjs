@@ -1,7 +1,7 @@
 // Capture the rendered dashboard, not a separate table of KPI values.
-export async function downloadDashboardPdf(dashboard, filename, print = false) {
+async function captureDashboard(dashboard) {
   if (!dashboard) throw new Error("Dashboard is not available. Please reopen it and try again.");
-  const [{toCanvas}, {jsPDF}] = await Promise.all([import("html-to-image"), import("jspdf")]);
+  const {toCanvas} = await import("html-to-image");
   await document.fonts.ready;
   const clone = dashboard.cloneNode(true);
   // Reports stay on the Day palette even when the screen is in Night mode.
@@ -40,38 +40,99 @@ export async function downloadDashboardPdf(dashboard, filename, print = false) {
     });
     const width = Math.ceil(Math.max(clone.scrollWidth, clone.getBoundingClientRect().width));
     const height = Math.ceil(clone.scrollHeight);
-    const canvas = await toCanvas(clone, {width, height, pixelRatio: Math.min(2, Math.sqrt(24000000 / (width * height))), backgroundColor: getComputedStyle(clone).backgroundColor || "#ffffff"});
-    if (print) {
-      await printDashboardCanvas(canvas, filename);
-      return;
-    }
-    const pageWidth = 1100;
-    const scale = pageWidth / canvas.width;
-    const sliceHeight = Math.min(canvas.height, Math.floor(14000 / scale));
-    let pdf;
-    for (let top = 0; top < canvas.height; top += sliceHeight) {
-      const part = document.createElement("canvas");
-      part.width = canvas.width;
-      part.height = Math.min(sliceHeight, canvas.height - top);
-      const context = part.getContext("2d", {alpha: false});
-      context.fillStyle = "#ffffff";
-      context.fillRect(0, 0, part.width, part.height);
-      context.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
-      const pageHeight = part.height * scale;
-      const orientation = pageWidth > pageHeight ? "landscape" : "portrait";
-      if (!pdf) pdf = new jsPDF({unit: "pt", format: [pageWidth, pageHeight], orientation, compress: true});
-      else pdf.addPage([pageWidth, pageHeight], orientation);
-      // Explicit browser JPEG encoding avoids PNG predictor/alpha corruption in PDF viewers.
-      pdf.addImage(part.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, pageWidth, pageHeight);
-    }
-    pdf.save(filename);
+    return await toCanvas(clone, {width, height, pixelRatio: Math.min(2, Math.sqrt(24000000 / (width * height))), backgroundColor: getComputedStyle(clone).backgroundColor || "#ffffff"});
   } finally {
     host.remove();
   }
 }
 
+export async function downloadDashboardPdf(dashboard, filename, print = false) {
+  const canvas = await captureDashboard(dashboard);
+  if (print) {
+    await printDashboardCanvas(canvas, filename);
+    return;
+  }
+  const {jsPDF} = await import("jspdf");
+  const pageWidth = 1100;
+  const scale = pageWidth / canvas.width;
+  const sliceHeight = Math.min(canvas.height, Math.floor(14000 / scale));
+  let pdf;
+  for (let top = 0; top < canvas.height; top += sliceHeight) {
+    const part = document.createElement("canvas");
+    part.width = canvas.width;
+    part.height = Math.min(sliceHeight, canvas.height - top);
+    const context = part.getContext("2d", {alpha: false});
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, part.width, part.height);
+    context.drawImage(canvas, 0, top, part.width, part.height, 0, 0, part.width, part.height);
+    const pageHeight = part.height * scale;
+    const orientation = pageWidth > pageHeight ? "landscape" : "portrait";
+    if (!pdf) pdf = new jsPDF({unit: "pt", format: [pageWidth, pageHeight], orientation, compress: true});
+    else pdf.addPage([pageWidth, pageHeight], orientation);
+    // Explicit browser JPEG encoding avoids PNG predictor/alpha corruption in PDF viewers.
+    pdf.addImage(part.toDataURL("image/jpeg", 0.98), "JPEG", 0, 0, pageWidth, pageHeight);
+  }
+  pdf.save(filename);
+}
+
 export function printDashboard(dashboard, title) {
   return downloadDashboardPdf(dashboard, title, true);
+}
+
+const MM_TO_PT = 72 / 25.4;
+const PRINT_MARGIN_MM = 8;
+
+/**
+ * Where each printed page starts and ends, in canvas rows. A page ends on a blank band between
+ * panels when one is in the lower half of the page, so a panel is not split over two sheets.
+ */
+export function dashboardPageSlices(totalHeight, pageHeight, isBlankRow = () => false, search = 0.5) {
+  const size = Math.max(1, Math.floor(pageHeight)), slices = [];
+  for (let top = 0; top < totalHeight;) {
+    let bottom = Math.min(totalHeight, top + size);
+    if (bottom < totalHeight) {
+      const lowest = Math.max(top + 1, Math.ceil(bottom - size * search));
+      for (let row = bottom; row >= lowest; row--) if (isBlankRow(row)) { bottom = row; break; }
+    }
+    slices.push({top, height: bottom - top});
+    top = bottom;
+  }
+  return slices;
+}
+
+// A row is blank when every sampled pixel matches its first pixel: the gap between two panels.
+function blankRowDetector(canvas) {
+  const context = canvas.getContext("2d", {willReadFrequently: true});
+  return (row) => {
+    if (row <= 0 || row >= canvas.height) return false;
+    const data = context.getImageData(0, row, canvas.width, 1).data;
+    for (let i = 16; i < data.length; i += 16) {
+      if (Math.abs(data[i] - data[0]) > 6 || Math.abs(data[i + 1] - data[1]) > 6 || Math.abs(data[i + 2] - data[2]) > 6) return false;
+    }
+    return true;
+  };
+}
+
+/** The dashboard as it is on screen, on landscape pages of the paper chosen in Smart Print. */
+export async function dashboardPrintPdf(dashboard, page = {widthMm: 297, heightMm: 210}) {
+  const canvas = await captureDashboard(dashboard);
+  const {jsPDF} = await import("jspdf");
+  const pageWidth = page.widthMm * MM_TO_PT, pageHeight = page.heightMm * MM_TO_PT, margin = PRINT_MARGIN_MM * MM_TO_PT;
+  const printableWidth = pageWidth - margin * 2, printableHeight = pageHeight - margin * 2;
+  const scale = printableWidth / canvas.width;
+  const pdf = new jsPDF({unit: "pt", format: [pageWidth, pageHeight], orientation: "landscape", compress: true});
+  dashboardPageSlices(canvas.height, printableHeight / scale, blankRowDetector(canvas)).forEach(({top, height}, index) => {
+    const part = document.createElement("canvas");
+    part.width = canvas.width;
+    part.height = height;
+    const context = part.getContext("2d", {alpha: false});
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, part.width, part.height);
+    context.drawImage(canvas, 0, top, part.width, height, 0, 0, part.width, height);
+    if (index) pdf.addPage([pageWidth, pageHeight], "landscape");
+    pdf.addImage(part.toDataURL("image/jpeg", 0.98), "JPEG", margin, margin, printableWidth, height * scale);
+  });
+  return pdf.output("blob");
 }
 
 async function printDashboardCanvas(canvas, title) {
