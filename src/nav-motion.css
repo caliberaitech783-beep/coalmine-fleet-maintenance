@@ -1,0 +1,140 @@
+/* Graphical, animated navigation for every login.
+   - Operational header (Production / Maintenance / MIS / General / OEM users):
+     the button's leading icon becomes a glass badge tinted along the header
+     gradient (purple -> magenta -> coral), with a sheen that drags across the
+     button, an underline that slides in, and badge motion on hover / active.
+   - Workspace sub-tabs and Manager dashboard tabs: a pulsing colour dot, sheen
+     sweep, lift and glow on hover / active.
+   Driven by data-nav attributes so the markup keeps its plain shape. */
+
+.normal-header-nav button[data-nav] {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  gap: 10px;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.normal-header-nav button[data-nav]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.2) 50%, transparent 75%);
+  transform: translateX(-130%);
+  transition: transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.normal-header-nav button[data-nav]:hover::before,
+.normal-header-nav button[data-nav]:focus-visible::before,
+.normal-header-nav button[data-nav].active::before { transform: translateX(130%); }
+.normal-header-nav button[data-nav]::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 4px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--hn-a, #ffffff), #ffffff);
+  opacity: 0.95;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.normal-header-nav button[data-nav]:hover::after,
+.normal-header-nav button[data-nav]:focus-visible::after,
+.normal-header-nav button[data-nav].active::after { transform: scaleX(1); }
+.normal-header-nav button[data-nav]:hover { transform: translateY(-1px); }
+.normal-header-nav button[data-nav] > svg:first-child {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 9px;
+  color: #fff;
+  stroke-width: 2.2;
+  background: linear-gradient(135deg, var(--hn-a, #8b5cf6), var(--hn-b, #522e90));
+  box-shadow: 0 4px 10px var(--hn-glow, rgba(82, 46, 144, 0.45)), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.normal-header-nav button[data-nav]:hover > svg:first-child,
+.normal-header-nav button[data-nav]:focus-visible > svg:first-child,
+.normal-header-nav button[data-nav].active > svg:first-child {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 14px var(--hn-glow, rgba(82, 46, 144, 0.45)), 0 0 0 3px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.normal-header-nav button[data-nav="dashboard"] { --hn-a: #8b5cf6; --hn-b: #522e90; --hn-glow: rgba(82, 46, 144, 0.5); }
+.normal-header-nav button[data-nav="requests"] { --hn-a: #d946ef; --hn-b: #8a2a86; --hn-glow: rgba(138, 42, 134, 0.5); }
+.normal-header-nav button[data-nav="reports"] { --hn-a: #f472b6; --hn-b: #c9306e; --hn-glow: rgba(201, 48, 110, 0.5); }
+.normal-header-nav button[data-nav="tickets"] { --hn-a: #fb7185; --hn-b: #d63b5d; --hn-glow: rgba(214, 59, 93, 0.5); }
+.normal-header-nav button[data-nav="transfers"] { --hn-a: #f97373; --hn-b: #f04e53; --hn-glow: rgba(240, 78, 83, 0.5); }
+.normal-header-nav button[data-nav="dashboard"]:hover > svg:first-child, .normal-header-nav button[data-nav="dashboard"]:focus-visible > svg:first-child, .normal-header-nav button[data-nav="dashboard"].active > svg:first-child { animation: hn-pulse 1.2s ease-in-out infinite; }
+.normal-header-nav button[data-nav="requests"]:hover > svg:first-child, .normal-header-nav button[data-nav="requests"]:focus-visible > svg:first-child, .normal-header-nav button[data-nav="requests"].active > svg:first-child { animation: hn-wiggle 0.9s ease-in-out infinite; }
+.normal-header-nav button[data-nav="reports"]:hover > svg:first-child, .normal-header-nav button[data-nav="reports"]:focus-visible > svg:first-child, .normal-header-nav button[data-nav="reports"].active > svg:first-child { animation: hn-press 1s ease-in-out infinite; }
+.normal-header-nav button[data-nav="tickets"]:hover > svg:first-child, .normal-header-nav button[data-nav="tickets"]:focus-visible > svg:first-child, .normal-header-nav button[data-nav="tickets"].active > svg:first-child { animation: hn-tick 1s ease-in-out infinite; }
+.normal-header-nav button[data-nav="transfers"]:hover > svg:first-child, .normal-header-nav button[data-nav="transfers"]:focus-visible > svg:first-child, .normal-header-nav button[data-nav="transfers"].active > svg:first-child { animation: hn-shuttle 1s ease-in-out infinite; }
+
+/* Workspace sub-tabs and Manager dashboard tabs. */
+.mobile-tabs button[data-nav] {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+.mobile-tabs button[data-nav]::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--tab-a, #a855f7), var(--tab-b, #522e90));
+  box-shadow: 0 0 0 3px var(--tab-ring, rgba(168, 85, 247, 0.22));
+  transition: transform 0.2s ease;
+}
+.mobile-tabs button[data-nav]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.35) 50%, transparent 75%);
+  transform: translateX(-130%);
+  transition: transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.mobile-tabs button[data-nav]:hover::after,
+.mobile-tabs button[data-nav]:focus-visible::after,
+.mobile-tabs button[data-nav].active::after { transform: translateX(130%); }
+.mobile-tabs button[data-nav]:hover { transform: translateY(-1px); box-shadow: 0 6px 16px var(--tab-ring, rgba(168, 85, 247, 0.22)); }
+.mobile-tabs button[data-nav].active { box-shadow: 0 6px 16px var(--tab-ring, rgba(168, 85, 247, 0.22)); }
+.mobile-tabs button[data-nav]:hover::before,
+.mobile-tabs button[data-nav]:focus-visible::before,
+.mobile-tabs button[data-nav].active::before { animation: hn-dot 1.2s ease-in-out infinite; }
+.welcome.workspace-hero .mobile-tabs button[data-nav]::before { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.28); }
+.mobile-tabs button[data-nav="requests"],
+.mobile-tabs button[data-nav="active"] { --tab-a: #8b5cf6; --tab-b: #522e90; --tab-ring: rgba(139, 92, 246, 0.25); }
+.mobile-tabs button[data-nav="create"] { --tab-a: #fb7185; --tab-b: #b72d6e; --tab-ring: rgba(240, 78, 83, 0.25); }
+.mobile-tabs button[data-nav="verify"] { --tab-a: #38bdf8; --tab-b: #4f46e5; --tab-ring: rgba(79, 70, 229, 0.25); }
+.mobile-tabs button[data-nav="history"] { --tab-a: #f472b6; --tab-b: #c9306e; --tab-ring: rgba(201, 48, 110, 0.25); }
+.mobile-tabs button[data-nav="idle"] { --tab-a: #fbbf24; --tab-b: #d97706; --tab-ring: rgba(217, 119, 6, 0.25); }
+.mobile-tabs button[data-nav="close"] { --tab-a: #2dd4bf; --tab-b: #059669; --tab-ring: rgba(5, 150, 105, 0.25); }
+.mobile-tabs button[data-nav="role"] { --tab-a: #d946ef; --tab-b: #8a2a86; --tab-ring: rgba(138, 42, 134, 0.25); }
+
+@keyframes hn-pulse { 0%, 100% { transform: scale(1.06); } 50% { transform: scale(1.16); } }
+@keyframes hn-wiggle { 0%, 100% { transform: scale(1.08) rotate(-8deg); } 50% { transform: scale(1.08) rotate(8deg); } }
+@keyframes hn-press { 0%, 100% { transform: scale(1.08); } 50% { transform: scale(1.14, 0.98); } }
+@keyframes hn-tick { 0%, 100% { transform: scale(1.08) rotate(0deg); } 50% { transform: scale(1.08) rotate(10deg); } }
+@keyframes hn-shuttle { 0%, 100% { transform: scale(1.08) translateX(-2px); } 50% { transform: scale(1.08) translateX(2px); } }
+@keyframes hn-dot { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .normal-header-nav button[data-nav],
+  .normal-header-nav button[data-nav]::before,
+  .normal-header-nav button[data-nav]::after,
+  .normal-header-nav button[data-nav] > svg:first-child,
+  .mobile-tabs button[data-nav],
+  .mobile-tabs button[data-nav]::before,
+  .mobile-tabs button[data-nav]::after { animation: none !important; transition: none !important; }
+}

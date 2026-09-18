@@ -94,3 +94,28 @@ test('the top-level header buttons get glass badges in the header gradient tones
   assert.match(styles,/button > svg:first-child \{\s*display: none;\s*\}\s*\.app > aside nav > \.nav-config-row > button > \.header-nav-icon,\s*\.app > aside nav > \.masters-menu > \.nav-config-row > button > \.header-nav-icon \{\s*display: none;\s*\}/,'mid-width layout still hides the header icons');
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\) \{\s*\.app > aside nav button\.header-nav-item,/);
 });
+
+test('operational, manager and workspace navigation get the graphical treatment through data-nav attributes only',()=>{
+  const motion=readFileSync(new URL('../src/nav-motion.css',import.meta.url),'utf8').replace(/\r\n/g,'\n');
+  const header=source.slice(source.indexOf('<nav className="normal-header-nav">'),source.indexOf('</nav>',source.indexOf('<nav className="normal-header-nav">')));
+  for(const [key,icon,label] of [['dashboard','LayoutDashboard',' Dashboard'],['reports','FileBarChart',' Reports'],['tickets','Ticket',' Tickets'],['transfers','ArrowRightLeft',' Vehicle Transfer']]){
+    assert.match(header,new RegExp(`<button data-nav="${key}" className=\\{section === "[a-z]+" \\? "active" : ""\\}[\\s\\S]*?><${icon} \\/>${label}<\\/button>`),`${key} keeps the plain icon + label shape`);
+  }
+  assert.match(header,/<button data-nav="requests" className=\{section === "profile" \? "active" : ""\}[\s\S]*?><Wrench \/> \{isGeneral \? "Requests" : mobileRole\}<\/button>/);
+  const tabs=source.slice(source.indexOf('<div className="mobile-tabs" role="tablist">'),source.indexOf('</div>\n      </div>',source.indexOf('<div className="mobile-tabs" role="tablist">')));
+  for(const key of ['requests','create','verify','history','idle','close'])assert.match(tabs,new RegExp(`<button data-nav="${key}" `),key);
+  assert.match(tabs,/>Requests<\/button>/,'tab text unchanged');
+  const manager=source.match(/<div className="mobile-tabs manager-queue-tabs"[\s\S]*?<\/div>/)[0];
+  for(const key of ['active','idle','history'])assert.match(manager,new RegExp(`<button data-nav="${key}" `),key);
+  assert.match(source,/<button type="button" key=\{role\} data-nav="role" className=\{activeManagerRole===role\?"active":""\}/);
+  const imports=[...source.matchAll(/import ["'](.+\.css)["'];/g)].map(m=>m[1]);
+  assert.ok(imports.indexOf('./nav-motion.css')>imports.indexOf('./brand-theme.css')&&imports.indexOf('./nav-motion.css')<imports.indexOf('./workspace-readability.css'),'loaded after the brand theme, before the pinned last five');
+  assert.match(motion,/\.normal-header-nav button\[data-nav\] > svg:first-child \{[\s\S]*background: linear-gradient\(135deg, var\(--hn-a, #8b5cf6\), var\(--hn-b, #522e90\)\)/,'the icon itself is the badge');
+  assert.match(motion,/\.normal-header-nav button\[data-nav="dashboard"\] \{ --hn-a: #8b5cf6; --hn-b: #522e90;/);
+  assert.match(motion,/\.normal-header-nav button\[data-nav="transfers"\] \{ --hn-a: #f97373; --hn-b: #f04e53;/);
+  assert.match(motion,/\.normal-header-nav button\[data-nav\]::after \{[\s\S]*transform: scaleX\(0\);\s*transform-origin: left center;/);
+  assert.match(motion,/\.mobile-tabs button\[data-nav\]::before \{[\s\S]*border-radius: 50%;/,'tabs get a colour dot');
+  for(const key of ['requests','create','verify','history','idle','close','role'])assert.match(motion,new RegExp(`\\.mobile-tabs button\\[data-nav="${key}"\\][^{]*\\{ --tab-a: #[0-9a-f]{6}; --tab-b: #[0-9a-f]{6};`),key);
+  for(const name of ['hn-pulse','hn-wiggle','hn-press','hn-tick','hn-shuttle','hn-dot'])assert.match(motion,new RegExp(`@keyframes ${name} \\{`),name);
+  assert.match(motion,/@media \(prefers-reduced-motion: reduce\)/);
+});

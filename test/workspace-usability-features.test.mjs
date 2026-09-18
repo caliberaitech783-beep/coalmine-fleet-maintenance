@@ -14,7 +14,7 @@ test("operational tables expose search, filters, sorting, and the MIS idle queue
   assert.match(ui, /const workflowHeader = \(key, label\) => <FilterableHeader/);
   assert.match(ui, />Idle Vehicles</);
   assert.match(ui, /tab === "idle"/);
-  assert.match(ui, /showRequestsMenu&&canSeeRequestMenu\("Closed history"\)&&<button className=\{tab === "idle"/);
+  assert.match(ui, /showRequestsMenu&&canSeeRequestMenu\("Closed history"\)&&<button data-nav="idle" className=\{tab === "idle"/);
   assert.doesNotMatch(ui, /isMis && tab === "idle"/);
 });
 
