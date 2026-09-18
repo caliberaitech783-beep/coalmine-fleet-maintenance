@@ -861,22 +861,24 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
       <nav>
         {visibleNav.filter(([name]) => name === "Dashboard").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
-            className={active === n ? "active" : ""}
+            className={`header-nav-item${active === n ? " active" : ""}`}
+            data-nav={n.toLowerCase()}
             onClick={() => selectPage(n)}
           >
-            <I />
+            <span className="header-nav-icon" aria-hidden="true"><I /></span>
             <span className="nav-label">{n}</span>
           </button></div>
         ))}
-        {permissions.adminLevel === "Manager" && <div className="nav-config-row"><button className={active === "Manager Profile" ? "active" : ""} onClick={() => selectPage("Manager Profile")}><UserRound /><span className="nav-label">{managerProfileLabel}</span></button></div>}
-        {correctionRequestAccess && <div className="nav-config-row"><button className={active === "Request correction" ? "active" : ""} onClick={() => selectPage("Request correction")}><Pencil /><span className="nav-label">Request correction</span></button></div>}
-        {correctionApprovalAccess && <div className="nav-config-row"><button className={active === "Correction approvals" ? "active" : ""} onClick={() => selectPage("Correction approvals")}><ShieldCheck /><span className="nav-label">Correction approvals</span></button></div>}
+        {permissions.adminLevel === "Manager" && <div className="nav-config-row"><button className={`header-nav-item${active === "Manager Profile" ? " active" : ""}`} data-nav="manager" onClick={() => selectPage("Manager Profile")}><span className="header-nav-icon" aria-hidden="true"><UserRound /></span><span className="nav-label">{managerProfileLabel}</span></button></div>}
+        {correctionRequestAccess && <div className="nav-config-row"><button className={`header-nav-item${active === "Request correction" ? " active" : ""}`} data-nav="correction" onClick={() => selectPage("Request correction")}><span className="header-nav-icon" aria-hidden="true"><Pencil /></span><span className="nav-label">Request correction</span></button></div>}
+        {correctionApprovalAccess && <div className="nav-config-row"><button className={`header-nav-item${active === "Correction approvals" ? " active" : ""}`} data-nav="approvals" onClick={() => selectPage("Correction approvals")}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Correction approvals</span></button></div>}
         {canViewMasters && <div
           className={`masters-menu${mastersOpen ? " open" : ""}${mastersSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setMastersSelectionClosed(false)}
         >
           <div className="nav-config-row"><button
-            className={visibleMasterNav.some(([name]) => name === active) ? "active" : ""}
+            className={`header-nav-item${visibleMasterNav.some(([name]) => name === active) ? " active" : ""}`}
+            data-nav="masters"
             aria-haspopup="menu"
             aria-expanded={mastersOpen}
             onClick={() => {
@@ -884,7 +886,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
               setMastersOpen((value) => !value);
             }}
           >
-            <Menu />
+            <span className="header-nav-icon" aria-hidden="true"><Menu /></span>
             <span className="nav-label">Masters</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
@@ -907,7 +909,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           onPointerLeave={() => setWhatsappSelectionClosed(false)}
         >
           <div className="nav-config-row"><button
-            className={whatsappNav.some(([name]) => name === active) ? "active" : ""}
+            className={`header-nav-item${whatsappNav.some(([name]) => name === active) ? " active" : ""}`}
+            data-nav="whatsapp"
             aria-haspopup="menu"
             aria-expanded={whatsappOpen}
             onClick={() => {
@@ -915,7 +918,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
               setWhatsappOpen((value) => !value);
             }}
           >
-            <MessageCircle />
+            <span className="header-nav-icon" aria-hidden="true"><MessageCircle /></span>
             <span className="nav-label">WhatsApp Integration</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
@@ -932,7 +935,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           onPointerLeave={() => setWorkspacesSelectionClosed(false)}
         >
           <div className="nav-config-row"><button
-            className={operationalWorkspaceNav.some(([name]) => name === active) ? "active" : ""}
+            className={`header-nav-item${operationalWorkspaceNav.some(([name]) => name === active) ? " active" : ""}`}
+            data-nav="workspaces"
             aria-haspopup="menu"
             aria-expanded={workspacesOpen}
             onClick={() => {
@@ -940,7 +944,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
               setWorkspacesOpen((value) => !value);
             }}
           >
-            <Users />
+            <span className="header-nav-icon" aria-hidden="true"><Users /></span>
             <span className="nav-label">Operational Workspaces</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
@@ -955,7 +959,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           onPointerLeave={() => setReportsSelectionClosed(false)}
         >
           <div className="nav-config-row"><button
-            className={active === "Reports" ? "active" : ""}
+            className={`header-nav-item${active === "Reports" ? " active" : ""}`}
+            data-nav="reports"
             aria-haspopup="menu"
             aria-expanded={reportsOpen}
             onClick={() => {
@@ -963,7 +968,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
               setReportsOpen((value) => !value);
             }}
           >
-            <FileBarChart />
+            <span className="header-nav-icon" aria-hidden="true"><FileBarChart /></span>
             <span className="nav-label">Reports</span>
             <ChevronDown className="masters-chevron" />
           </button></div>
@@ -984,10 +989,11 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
         </div>}
         {visibleNav.filter(([name]) => name !== "Dashboard" && name !== "Reports").map(([n, I]) => (
           <div className="nav-config-row" key={n}><button
-            className={active === n ? "active" : ""}
+            className={`header-nav-item${active === n ? " active" : ""}`}
+            data-nav={n.toLowerCase()}
             onClick={() => selectPage(n)}
           >
-            <I />
+            <span className="header-nav-icon" aria-hidden="true"><I /></span>
             <span className="nav-label">{n}</span>
           </button></div>
         ))}
@@ -996,7 +1002,7 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
         >
-          <div className="nav-config-row"><button className={[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? "active" : ""} aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);setAdminOpen((value) => !value);}}><ShieldCheck /><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
+          <div className="nav-config-row"><button className={`header-nav-item${[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? " active" : ""}`} data-nav="admin" aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);setAdminOpen((value) => !value);}}><span className="header-nav-icon" aria-hidden="true"><ShieldCheck /></span><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
             {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
             {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}

@@ -178,6 +178,11 @@
     display: none;
   }
 
+  .app > aside nav > .nav-config-row > button > .header-nav-icon,
+  .app > aside nav > .masters-menu > .nav-config-row > button > .header-nav-icon {
+    display: none;
+  }
+
   .app > aside nav .masters-chevron {
     display: block;
     width: 11px;
@@ -773,4 +778,103 @@
   .workspace-icon,
   .workspace-icon svg,
   .workspace-icon-glow { animation: none !important; transition: none !important; }
+}
+
+/* Top-level header buttons: glass icon badges tinted along the header's own
+   gradient (purple -> magenta -> coral), a light sheen that drags across the
+   button and an underline that slides in on hover / focus / active, plus a
+   small icon animation per button. */
+.app > aside nav button.header-nav-item {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.app > aside nav button.header-nav-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.2) 50%, transparent 75%);
+  transform: translateX(-130%);
+  transition: transform 0.7s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.app > aside nav button.header-nav-item:hover::before,
+.app > aside nav button.header-nav-item:focus-visible::before,
+.app > aside nav button.header-nav-item.active::before { transform: translateX(130%); }
+.app > aside nav button.header-nav-item::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 3px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--hn-a, #ffffff), #ffffff);
+  opacity: 0.95;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.app > aside nav button.header-nav-item:hover::after,
+.app > aside nav button.header-nav-item:focus-visible::after,
+.app > aside nav button.header-nav-item.active::after { transform: scaleX(1); }
+.app > aside nav button.header-nav-item:hover { transform: translateY(-1px); }
+
+.header-nav-icon {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 9px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--hn-a, #8b5cf6), var(--hn-b, #522e90));
+  box-shadow: 0 4px 10px var(--hn-glow, rgba(82, 46, 144, 0.45)), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.header-nav-icon svg {
+  display: block;
+  width: 17px !important;
+  height: 17px !important;
+  stroke-width: 2.2;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+.header-nav-item:hover .header-nav-icon,
+.header-nav-item:focus-visible .header-nav-icon,
+.header-nav-item.active .header-nav-icon {
+  transform: scale(1.1);
+  filter: brightness(1.1);
+  box-shadow: 0 6px 14px var(--hn-glow, rgba(82, 46, 144, 0.45)), 0 0 0 3px rgba(255, 255, 255, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+/* Tints follow the header gradient from left (purple) to right (coral). */
+.header-nav-item[data-nav="dashboard"] { --hn-a: #8b5cf6; --hn-b: #522e90; --hn-glow: rgba(82, 46, 144, 0.5); }
+.header-nav-item[data-nav="manager"],
+.header-nav-item[data-nav="masters"] { --hn-a: #a855f7; --hn-b: #6b2fa8; --hn-glow: rgba(107, 47, 168, 0.5); }
+.header-nav-item[data-nav="correction"],
+.header-nav-item[data-nav="whatsapp"] { --hn-a: #d946ef; --hn-b: #8a2a86; --hn-glow: rgba(138, 42, 134, 0.5); }
+.header-nav-item[data-nav="approvals"],
+.header-nav-item[data-nav="workspaces"] { --hn-a: #ec4899; --hn-b: #b72d6e; --hn-glow: rgba(183, 45, 110, 0.5); }
+.header-nav-item[data-nav="reports"] { --hn-a: #f472b6; --hn-b: #c9306e; --hn-glow: rgba(201, 48, 110, 0.5); }
+.header-nav-item[data-nav="tickets"] { --hn-a: #fb7185; --hn-b: #d63b5d; --hn-glow: rgba(214, 59, 93, 0.5); }
+.header-nav-item[data-nav="admin"] { --hn-a: #f97373; --hn-b: #f04e53; --hn-glow: rgba(240, 78, 83, 0.5); }
+/* Icon motion while hovered / focused / active. */
+.header-nav-item[data-nav="dashboard"]:hover .header-nav-icon svg, .header-nav-item[data-nav="dashboard"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="dashboard"].active .header-nav-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.header-nav-item[data-nav="masters"]:hover .header-nav-icon svg, .header-nav-item[data-nav="masters"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="masters"].active .header-nav-icon svg { animation: ws-shuttle 1s ease-in-out infinite; }
+.header-nav-item[data-nav="whatsapp"]:hover .header-nav-icon svg, .header-nav-item[data-nav="whatsapp"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="whatsapp"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.header-nav-item[data-nav="workspaces"]:hover .header-nav-icon svg, .header-nav-item[data-nav="workspaces"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="workspaces"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.header-nav-item[data-nav="reports"]:hover .header-nav-icon svg, .header-nav-item[data-nav="reports"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="reports"].active .header-nav-icon svg { animation: ws-press 1s ease-in-out infinite; }
+.header-nav-item[data-nav="tickets"]:hover .header-nav-icon svg, .header-nav-item[data-nav="tickets"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="tickets"].active .header-nav-icon svg { animation: ws-tick 1s ease-in-out infinite; }
+.header-nav-item[data-nav="admin"]:hover .header-nav-icon svg, .header-nav-item[data-nav="admin"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="admin"].active .header-nav-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.header-nav-item[data-nav="manager"]:hover .header-nav-icon svg, .header-nav-item[data-nav="manager"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="manager"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.header-nav-item[data-nav="correction"]:hover .header-nav-icon svg, .header-nav-item[data-nav="correction"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="correction"].active .header-nav-icon svg { transform-origin: 20% 80%; animation: ws-wrench 0.9s ease-in-out infinite; }
+.header-nav-item[data-nav="approvals"]:hover .header-nav-icon svg, .header-nav-item[data-nav="approvals"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="approvals"].active .header-nav-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .app > aside nav button.header-nav-item,
+  .app > aside nav button.header-nav-item::before,
+  .app > aside nav button.header-nav-item::after,
+  .header-nav-icon,
+  .header-nav-icon svg { animation: none !important; transition: none !important; }
 }

@@ -29,7 +29,7 @@ test('server persists a manager-requested correction register with evidence, PM 
 
 test('department manager, PM, and Admin receive their dedicated correction step',()=>{
   assert.match(main,/\["Request corrections", Pencil\]/);
-  assert.match(main,/\{correctionRequestAccess && <div className="nav-config-row"><button className=\{active === "Request correction" \? "active" : ""\}/,'department managers get the Request correction menu');
+  assert.match(main,/\{correctionRequestAccess && <div className="nav-config-row"><button className=\{`header-nav-item\$\{active === "Request correction" \? " active" : ""\}`\} data-nav="correction"/,'department managers get the Request correction menu');
   assert.match(main,/activeManagerRoles\.some\(\(role\)=>REQUEST_CORRECTION_MANAGER_ROLES\.includes\(role\)\)/);
   assert.match(main,/if\(name==="Request correction"\)return correctionRequestAccess;/);
   assert.match(main,/active === "Correction approvals" \|\| active === "Request correction" \? \(/);
