@@ -367,3 +367,22 @@
 @media (prefers-reduced-motion: reduce) {
   .ai-feeder-priority.critical .ai-feeder-priority-icon::after { animation: none; }
 }
+
+/* Info Pulse icon: a live, working trace wherever the pulse icon appears
+   (header trigger and the overlay title). */
+.ai-feeder-trigger > svg:first-child,
+.ai-feeder-kicker > svg {
+  overflow: visible;
+  filter: drop-shadow(0 0 3px #ffffff80);
+  animation: ai-pulse-beat 1.6s ease-in-out infinite;
+}
+.ai-feeder-trigger > svg:first-child path,
+.ai-feeder-kicker > svg path {
+  stroke-dasharray: 26 64;
+  animation: ai-pulse-trace 1.6s linear infinite;
+}
+@keyframes ai-pulse-trace { to { stroke-dashoffset: -90; } }
+@keyframes ai-pulse-beat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-feeder-trigger > svg:first-child, .ai-feeder-kicker > svg, .ai-feeder-trigger > svg:first-child path, .ai-feeder-kicker > svg path { animation: none !important; stroke-dasharray: none; }
+}
