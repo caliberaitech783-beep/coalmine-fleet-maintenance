@@ -42,3 +42,21 @@ test("Dashboard PDFs keep the Day palette when the screen is in Night mode", asy
   // The swap must happen before the clone is inserted and styled.
   assert.ok(swap < pdf.indexOf("document.body.appendChild(host)"));
 });
+
+test("Smart Print is readable in Night mode and keeps a white paper preview", async () => {
+  const css = await read("smart-print.css");
+  assert.match(css, /:root\[data-theme="dark"\] \.smart-print-dialog \{[^}]*background: #241d27;[^}]*color: #f6f0f7;/);
+  assert.match(css, /:root\[data-theme="dark"\] \.smart-print-dialog :is\(button, select\) \{[^}]*background: #2d2331;/);
+  // The dark theme lightens every table cell, so the paper preview pins its own ink.
+  assert.match(css, /:root\[data-theme="dark"\] \.smart-print-sheet td \{ background: #fff; color: #17233c; \}/);
+  assert.match(css, /:root\[data-theme="dark"\] \.smart-print-sheet th \{ background: #10284c; color: #fff; \}/);
+});
+
+test("Dashboard list dialogs use dark panels in Night mode", async () => {
+  const [browser, theme] = await Promise.all([read("dashboard-record-browser.css"), read("theme.css")]);
+  // --panel is otherwise undefined, so var(--panel, #fff) painted these dialogs white.
+  assert.match(browser, /:root\[data-theme="dark"\] :is\(\.dashboard-asset-modal, \.hourly-breakdown-view\) \{ --panel: #241d27; --surface: #241d27; --text: #f6f0f7; \}/);
+  assert.match(browser, /--record-purple: #c9a8f0;/);
+  assert.match(theme, /:root\[data-theme="dark"\] \.request-timeline-link \{ color: #c9a8f0; \}/);
+  assert.match(theme, /:root\[data-theme="dark"\] \.sort-header:is\(:hover, :focus-visible, \.active\)/);
+});

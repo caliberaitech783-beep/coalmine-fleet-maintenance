@@ -433,3 +433,10 @@ textarea {
 :root[data-theme="dark"] .notification-entry-audio label{background:#17253a;border-color:#34435a}
 :root[data-theme="dark"] .notification-entry-state button{background:#17253a;border-color:#36516f;color:#dce7f7}
 :root[data-theme="dark"] .notification-entry-state button:hover{background:#223e64;color:#fff}
+/* Night mode for shared table pieces that kept light-theme blues, purples and whites. */
+:root[data-theme="dark"] .sort-header:is(:hover, :focus-visible, .active),
+:root[data-theme="dark"] .sort-header:is(:hover, :focus-visible, .active) svg { color: #8eb5ff; }
+:root[data-theme="dark"] .request-timeline-link { color: #c9a8f0; }
+:root[data-theme="dark"] .request-timeline-link:hover { color: #e2cff7; }
+:root[data-theme="dark"] header > button.modal-back-button { border-color: #45354d; background: #2d2331; }
+:root[data-theme="dark"] .record-date-range > label { border-color: #45354d; }

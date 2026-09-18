@@ -48,3 +48,25 @@
 .smart-print-printer-note { margin: 0; font-size: 12px; color: var(--muted, #5b6a82); }
 .smart-print-options-error:empty { display: none; }
 .smart-print-options-error { margin: 0 0 10px; color: #b23836; font-size: 12px; font-weight: 700; }
+/* Night mode: the dialog chrome goes dark; the preview stays a white paper sheet. */
+:root[data-theme="dark"] .smart-print-dialog { border-color: #45354d; background: #241d27; color: #f6f0f7; }
+:root[data-theme="dark"] .smart-print-dialog::backdrop { background: #000000a6; }
+:root[data-theme="dark"] .smart-print-dialog > :is(header, footer) { border-color: #45354d; background: #241d27; }
+:root[data-theme="dark"] .smart-print-dialog :is(button, select) { border-color: #5a4763; background: #2d2331; color: #f6f0f7; }
+:root[data-theme="dark"] .smart-print-dialog button:is(.primary, .smart-print-saved-print) { border-color: #6d43a1; background: #6d43a1; color: #fff; }
+:root[data-theme="dark"] .smart-print-dialog button.smart-print-saved-delete { border-color: #ff8a8e80; color: #ff9bac; }
+:root[data-theme="dark"] .smart-print-dialog button.smart-print-export { border-color: #a67bd3; color: #c9a8f0; }
+:root[data-theme="dark"] .smart-print-dialog :is(button, select, input):focus-visible { outline-color: #c9a8f0; }
+:root[data-theme="dark"] .smart-print-columns label { border-color: #45354d; }
+:root[data-theme="dark"] .smart-print-columns input { accent-color: #a67bd3; }
+:root[data-theme="dark"] .smart-print-page-prompt { background: #000000a6; }
+:root[data-theme="dark"] .smart-print-page-size { background: #241d27; box-shadow: 0 18px 40px #000000a6; }
+:root[data-theme="dark"] .smart-print-options :is(input[type="text"], input[type="number"], select) { border-color: #5a4763; background: #171219; color: #f6f0f7; }
+:root[data-theme="dark"] .smart-print-options-error { color: #ff9bac; }
+:root[data-theme="dark"] .smart-print-sheet { border-color: #45354d; }
+:root[data-theme="dark"] .smart-print-sheet :is(th, td) { border-color: #d7dfeb; }
+:root[data-theme="dark"] .smart-print-sheet th { background: #10284c; color: #fff; }
+:root[data-theme="dark"] .smart-print-sheet td { background: #fff; color: #17233c; }
+:root[data-theme="dark"] .smart-print-sheet tbody tr:nth-child(even) td { background: #f6f8fb; }
+:root[data-theme="dark"] .smart-print-sheet tr.highlight-row td { background: #f8caca; }
+:root[data-theme="dark"] .smart-print-sheet td :is(b, strong) { color: inherit; }

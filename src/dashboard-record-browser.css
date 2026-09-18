@@ -79,3 +79,24 @@
   .dashboard-record-summary { padding: 8px 12px; }
   .dashboard-record-browser .dashboard-asset-list { max-height: none; }
 }
+/* Night mode: --panel, --surface and --text are never defined, so these dialogs fell back to white
+   panels while the dark theme turned their text light. Give them the dark surfaces instead. */
+:root[data-theme="dark"] :is(.dashboard-asset-modal, .hourly-breakdown-view) { --panel: #241d27; --surface: #241d27; --text: #f6f0f7; }
+:root[data-theme="dark"] :is(.dashboard-asset-modal .dashboard-record-browser, .hourly-breakdown-view.dashboard-record-browser) { --record-purple: #c9a8f0; }
+:root[data-theme="dark"] .dashboard-record-tabs button[aria-selected="true"],
+:root[data-theme="dark"] .dashboard-record-level-tabs > button[aria-pressed="true"] b,
+:root[data-theme="dark"] .dashboard-record-level[data-level="site"] .dashboard-record-level-tabs > button[aria-pressed="true"] { background: #6d43a1; color: #fff; }
+:root[data-theme="dark"] .dashboard-record-browser .dashboard-fleet-search input { border-color: #806c87; background: #171219; color: #f6f0f7; }
+:root[data-theme="dark"] .mine-oem-details .mine-oem-detail-search { border-bottom-color: #45354d; background: #241d27; }
+:root[data-theme="dark"] .mine-oem-details .mine-oem-detail-search label { border-color: #806c87; background: #171219; color: #b9aabd; }
+:root[data-theme="dark"] .mine-oem-details .mine-oem-detail-search :is(input, select) { background: transparent; color: #f6f0f7; }
+:root[data-theme="dark"] .mine-oem-details .mine-oem-detail-search option { background: #241d27; color: #f6f0f7; }
+:root[data-theme="dark"] .site-report-summary strong { color: #c9a8f0; }
+:root[data-theme="dark"] .site-report-summary .site-summary-button:hover { border-color: #a67bd3; }
+:root[data-theme="dark"] .site-report-summary .site-summary-button[aria-pressed="true"] { border-color: #c9a8f0; background: #6d43a1; color: #fff; }
+:root[data-theme="dark"] .site-report-summary .site-summary-button[aria-pressed="true"] strong { color: inherit; }
+:root[data-theme="dark"] .site-report-heading th { border-left-color: #a67bd3; background: #33273a !important; color: #c9a8f0 !important; }
+:root[data-theme="dark"] .mine-oem-filter-toggle { color: #c9a8f0; }
+:root[data-theme="dark"] .mine-oem-filter-toggle:is(:hover, [aria-pressed="true"]) { border-color: #a67bd3; }
+:root[data-theme="dark"] :is(.site-report-summary .site-summary-button, .mine-oem-filter-toggle):focus-visible { outline-color: #c9a8f0; }
+:root[data-theme="dark"] .dashboard-record-level[data-level="site"] .dashboard-record-level-tabs > button[aria-pressed="true"] b { background: #ffffff29; }
