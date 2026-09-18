@@ -2894,7 +2894,7 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
 function printTableReport(report) {
   void printReportDirect(report).then((sent) => { if (!sent) printTableReportInBrowser(report); });
 }
-async function printReportDirect({ title, columns = [], rows = [], highlightRow, pageSize }) {
+async function printReportDirect({ title, columns = [], rows = [], highlightRow, pageSize, printOptions = {} }) {
   try {
     if (!(await printHelperAvailable({ token: () => authToken }))) {
       // A PC that never used the helper prints through the browser. Where it has been used, never fall back silently.
@@ -2904,7 +2904,7 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
         ? "The print helper (QZ Tray) is not running on this PC, so the paper size cannot be set automatically.\n\nStart \"QZ Tray\" from the Windows Start menu, wait for its icon near the clock, then click OK to try again."
         : `The print helper (QZ Tray) did not accept the connection: ${failure || "no answer"}.\n\nIf QZ Tray asked for permission, click Allow (not Block), then click OK to try again.`;
       return window.confirm(`${reason}\n\nClick Cancel to use the browser print window instead and choose the Paper size there.`)
-        ? printReportDirect({ title, columns, rows, highlightRow, pageSize }) : false;
+        ? printReportDirect({ title, columns, rows, highlightRow, pageSize, printOptions }) : false;
     }
     const page = printPageSize(pageSize);
     const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
@@ -2918,8 +2918,8 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
       const details = await response.json().catch(() => ({}));
       throw new Error(details.error || `The report PDF could not be prepared (HTTP ${response.status}).`);
     }
-    const printer = await printPdfDirect({ pdf: await response.blob(), page, jobName: title, token: () => authToken });
-    recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records · ${page.name} · ${printer}`});
+    const printer = await printPdfDirect({ pdf: await response.blob(), page, jobName: title, token: () => authToken, printOptions });
+    recordUserActivity({module:"Reports",action:"Print report",targetReference:title,reason:`${rows.length} records · ${page.name} · ${printer}${printOptions.pages ? ` · pages ${printOptions.pages}` : ""}${printOptions.duplex && printOptions.duplex !== "one-sided" ? ` · ${printOptions.duplex}` : ""}${Number(printOptions.copies) > 1 ? ` · ${printOptions.copies} copies` : ""}`});
     alert(`Sent to ${printer} on ${page.name} paper.`);
     return true;
   } catch (error) {

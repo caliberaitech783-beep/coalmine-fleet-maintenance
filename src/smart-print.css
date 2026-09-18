@@ -37,3 +37,12 @@
 .smart-print-page-size h3 { margin: 0 0 6px; }
 .smart-print-page-size p { margin: 0 0 16px; font-size: 13px; }
 .smart-print-page-size > div { display: grid; gap: 10px; }
+.smart-print-options { width: min(560px, 100%); max-height: calc(100% - 24px); overflow: auto; }
+.smart-print-options fieldset { margin: 0 0 12px; padding: 10px 14px 12px; border: 1px solid var(--line, #dbe4ee); border-radius: 10px; display: grid; gap: 8px; }
+.smart-print-options legend { padding: 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--muted, #5b6a82); }
+.smart-print-radio { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.smart-print-radio input { width: 16px; height: 16px; margin: 0; accent-color: #51288e; }
+.smart-print-options input[type="text"], .smart-print-options input[type="number"] { height: 38px; padding: 0 12px; border: 1px solid var(--line, #cbd6ec); border-radius: 8px; font: inherit; }
+.smart-print-options input[type="number"] { width: 110px; }
+.smart-print-options-error:empty { display: none; }
+.smart-print-options-error { margin: 0 0 10px; color: #b23836; font-size: 12px; font-weight: 700; }

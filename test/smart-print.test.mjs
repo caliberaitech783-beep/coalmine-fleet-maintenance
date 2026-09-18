@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {printColumnOptions,selectedPrintColumns,nextPrintLayout,normalizePrintLayoutName,printLayoutStorageKey,removePrintLayout,openSmartPrint,printFitScale,printPageSize,PRINT_PAGE_SIZES} from '../src/smart-print.mjs';
+import {printColumnOptions,selectedPrintColumns,nextPrintLayout,normalizePrintLayoutName,printLayoutStorageKey,removePrintLayout,openSmartPrint,printFitScale,printPageSize,PRINT_PAGE_SIZES,normalizePageRanges,normalizePrintOptions,loadPrintOptions,savePrintOptions,PRINT_DUPLEX_OPTIONS,DEFAULT_PRINT_OPTIONS} from '../src/smart-print.mjs';
 test('only chosen headings and values reach print in table order',()=>{
  const columns=[{label:'Door',value:r=>r.door},{label:'Private',value:()=>{throw Error('Excluded value read');}},{label:'Status',value:r=>r.status}];
  const options=printColumnOptions(columns);
@@ -55,6 +55,18 @@ test('dialog prompts for a report name, restores it, prints it, and can delete i
   nodes=all(body.children.at(-1));
   assert.deepEqual(nodes.filter(n=>n.tag==='button'&&/^A[34] · /.test(n.textContent)).map(n=>n.textContent.slice(0,2)),['A4','A3']);
   nodes.find(n=>String(n.textContent).startsWith('A3 · ')).onclick();
+  // Then the print options: pages, sides and copies. Nothing prints until "Print now".
+  assert.equal(printed.length,0);
+  nodes=all(body.children.at(-1));
+  assert.deepEqual(nodes.filter(n=>n.tag==='legend').map(n=>n.textContent),['Pages','Sides','Copies']);
+  const radios=nodes.filter(n=>n.tag==='input'&&n.type==='radio');
+  assert.deepEqual(radios.map(n=>n.checked),[true,false,true,false,false],'all pages and single-sided by default');
+  radios[3].onchange();
+  const copiesInput=nodes.find(n=>n.tag==='input'&&n.type==='number');copiesInput.value='2';copiesInput.oninput();
+  const pagesInput=nodes.find(n=>n.tag==='input'&&n.type==='text');pagesInput.value='1-2, 4';pagesInput.oninput();
+  nodes.find(n=>n.textContent==='Print now').onclick();
+  assert.deepEqual(printed[0].printOptions,{pages:'1-2,4',duplex:'long-edge',copies:2});
+  assert.deepEqual(JSON.parse(data.get('bdms:smart-print:options')),{duplex:'long-edge',copies:2},'sides and copies are remembered; pages are not');
   assert.deepEqual(printed[0].columns,[columns[0]]);
   assert.equal(printed[0].rows,rows);
   assert.equal(printed[0].title,'Operations summary');
@@ -124,4 +136,19 @@ test('wide reports are scaled down to the page and never enlarged',()=>{
  assert.equal(printPageSize('a3').widthMm,420);
  assert.equal(printPageSize('unknown').name,'A4');
  assert.deepEqual(PRINT_PAGE_SIZES.map(page=>page.name),['A4','A3']);
+});
+
+test('print options: page ranges are validated, sides and copies are normalised and remembered',()=>{
+  assert.equal(normalizePageRanges(''),'');
+  assert.equal(normalizePageRanges(' 1-3, 5 ,8-8 '),'1-3,5,8');
+  for(const bad of ['a','0','3-1','1,,2','1-','-2'])assert.throws(()=>normalizePageRanges(bad),/pages|Page numbers/,bad);
+  assert.deepEqual(normalizePrintOptions({}),DEFAULT_PRINT_OPTIONS);
+  assert.deepEqual(normalizePrintOptions({pages:'2-3',duplex:'short-edge',copies:'150'}),{pages:'2-3',duplex:'short-edge',copies:99});
+  assert.deepEqual(normalizePrintOptions({duplex:'sideways',copies:0}),DEFAULT_PRINT_OPTIONS);
+  assert.deepEqual(PRINT_DUPLEX_OPTIONS.map(option=>option.value),['one-sided','long-edge','short-edge']);
+  const data=new Map(),storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)};
+  assert.deepEqual(loadPrintOptions(storage),DEFAULT_PRINT_OPTIONS);
+  savePrintOptions({pages:'1-2',duplex:'long-edge',copies:3},storage);
+  assert.deepEqual(loadPrintOptions(storage),{pages:'',duplex:'long-edge',copies:3},'the page selection is never remembered');
+  assert.deepEqual(loadPrintOptions({getItem(){throw new Error('blocked')}}),DEFAULT_PRINT_OPTIONS);
 });

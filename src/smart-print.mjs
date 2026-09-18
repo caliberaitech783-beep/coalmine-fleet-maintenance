@@ -48,6 +48,37 @@ export const PRINT_PAGE_SIZES=[
   {name:'A3',detail:'420 × 297 mm landscape',widthMm:420,heightMm:297},
 ];
 export const printPageSize=name=>PRINT_PAGE_SIZES.find(page=>page.name===String(name||'').trim().toUpperCase())||PRINT_PAGE_SIZES[0];
+
+// Print options asked after the page size. They apply when the print helper sends the job itself;
+// the browser print window, used as a fallback, has its own pages and sides settings.
+export const PRINT_DUPLEX_OPTIONS=[
+  {value:'one-sided',label:'Single-sided'},
+  {value:'long-edge',label:'Double-sided · flip on the long edge (book)'},
+  {value:'short-edge',label:'Double-sided · flip on the short edge (notepad)'},
+];
+export const PRINT_OPTIONS_STORAGE_KEY='bdms:smart-print:options';
+export const DEFAULT_PRINT_OPTIONS=Object.freeze({pages:'',duplex:'one-sided',copies:1});
+/** "1-3, 5 ,8" -> "1-3,5,8"; blank means all pages. Throws on anything else. */
+export function normalizePageRanges(text){
+  const value=String(text??'').replace(/\s+/g,'');
+  if(!value)return '';
+  if(!/^\d+(-\d+)?(,\d+(-\d+)?)*$/.test(value))throw new Error('Enter the pages to print like 1-3,5 or leave it blank for all pages.');
+  const parts=value.split(',').map(part=>part.split('-').map(Number));
+  if(parts.some(([from,to])=>from<1||(to!==undefined&&to<from)))throw new Error('Page numbers start at 1 and each range must go from a lower page to a higher one.');
+  return parts.map(([from,to])=>to===undefined||to===from?String(from):`${from}-${to}`).join(',');
+}
+export function normalizePrintOptions(options={}){
+  const duplex=PRINT_DUPLEX_OPTIONS.some(option=>option.value===options.duplex)?options.duplex:DEFAULT_PRINT_OPTIONS.duplex;
+  const copies=Math.min(99,Math.max(1,Math.trunc(Number(options.copies))||1));
+  return {pages:normalizePageRanges(options.pages),duplex,copies};
+}
+/** Sides and copies are remembered on this PC; the page selection is always asked fresh. */
+export function loadPrintOptions(storage=globalThis.window?.localStorage){
+  try{const saved=JSON.parse(storage?.getItem(PRINT_OPTIONS_STORAGE_KEY)||'{}');return normalizePrintOptions({...saved,pages:''});}catch{return {...DEFAULT_PRINT_OPTIONS};}
+}
+export function savePrintOptions(options,storage=globalThis.window?.localStorage){
+  try{storage?.setItem(PRINT_OPTIONS_STORAGE_KEY,JSON.stringify({duplex:options.duplex,copies:options.copies}));}catch{/* private mode */}
+}
 /** Shrinks a report that is wider than the page so every column fits; never enlarges it. */
 export function printFitScale(contentWidth,availableWidth,minimum=.3) {
   if(!(contentWidth>0)||!(availableWidth>0)||contentWidth<=availableWidth)return 1;
@@ -107,11 +138,50 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
     return {reportTitle:layout?.name||title,chosen:selectedPrintColumns(options,layout?layout.columns:selected)};
   };
+  // Second step after the page size: which pages, single or double-sided, and how many copies.
+  const askPrintOptions=(pageSize,run)=>{
+    const remembered=loadPrintOptions();
+    const state={pages:'',pagesMode:'all',duplex:remembered.duplex,copies:remembered.copies};
+    const panel=make('div',undefined,'smart-print-page-size smart-print-options');panel.setAttribute('role','group');panel.setAttribute('aria-label','Print options');
+    panel.append(make('h3',`Print options · ${pageSize}`),make('p','Choose the pages, the sides and the number of copies. These apply when the report goes straight to the printer.'));
+    const field=(legend)=>{const box=make('fieldset');box.append(make('legend',legend));panel.append(box);return box;};
+    const radio=(parent,name,value,label,checked,onPick)=>{
+      const wrap=make('label',undefined,'smart-print-radio');const input=make('input');input.type='radio';input.name=name;input.value=value;input.checked=checked;input.onchange=()=>onPick(value);
+      wrap.append(input,make('span',label));parent.append(wrap);return input;
+    };
+    const pagesBox=field('Pages');
+    radio(pagesBox,'smart-print-pages','all','All pages',true,()=>{state.pagesMode='all';});
+    radio(pagesBox,'smart-print-pages','custom','Only these pages',false,()=>{state.pagesMode='custom';pagesInput.focus?.();});
+    const pagesInput=make('input');pagesInput.type='text';pagesInput.placeholder='e.g. 1-3,5';pagesInput.setAttribute('aria-label','Pages to print');
+    pagesInput.oninput=()=>{state.pages=pagesInput.value;state.pagesMode='custom';customRadio.checked=true;};
+    const customRadio=pagesBox.children[pagesBox.children.length-1].children[0];
+    pagesBox.append(pagesInput);
+    const sidesBox=field('Sides');
+    PRINT_DUPLEX_OPTIONS.forEach(option=>radio(sidesBox,'smart-print-duplex',option.value,option.label,option.value===state.duplex,value=>{state.duplex=value;}));
+    const copiesBox=field('Copies');
+    const copiesInput=make('input');copiesInput.type='number';copiesInput.min='1';copiesInput.max='99';copiesInput.step='1';copiesInput.value=String(state.copies);copiesInput.setAttribute('aria-label','Copies');
+    copiesInput.oninput=()=>{state.copies=copiesInput.value;};
+    copiesBox.append(copiesInput);
+    const error=make('p',undefined,'smart-print-options-error');panel.append(error);
+    const actions=make('div');panel.append(actions);
+    const dismiss=()=>pagePrompt.replaceChildren();
+    button('Print now',()=>{
+      let options;
+      try{options=normalizePrintOptions({pages:state.pagesMode==='custom'?state.pages:'',duplex:state.duplex,copies:state.copies});}
+      catch(problem){error.textContent=problem.message;return;}
+      if(state.pagesMode==='custom'&&!options.pages){error.textContent='Enter the pages to print, or choose All pages.';return;}
+      savePrintOptions(options);dismiss();run(options);
+    },actions,'primary');
+    button('Back',dismiss,actions);
+    pagePrompt.replaceChildren(panel);
+  };
   const printSelection=()=>{
     if(!currentReport().chosen.length)return;
     askChoice('Select page size to print','The report is scaled to the selected page so no columns are cut off. With the print helper installed it goes straight to the printer on this paper size; otherwise, in the print window keep Paper size set to the same size.','Select page size',PRINT_PAGE_SIZES.map(page=>({label:`${page.name} · ${page.detail}`,value:page.name})),pageSize=>{
-      const {reportTitle,chosen}=currentReport();if(!chosen.length)return;
-      close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,pageSize});
+      askPrintOptions(pageSize,printOptions=>{
+        const {reportTitle,chosen}=currentReport();if(!chosen.length)return;
+        close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,pageSize,printOptions});
+      });
     });
   };
   let exporting=false;

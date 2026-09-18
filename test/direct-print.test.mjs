@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {generateKeyPairSync,createVerify} from 'node:crypto';
 import {X509Certificate} from 'node:crypto';
 import {normalizePem,printHelperSigning,signPrintRequest,PRINT_HELPER_MAX_REQUEST_LENGTH,resolvePrintHelperSigning,certificateSummary,generatePrintHelperSigning} from '../print-helper-signing.mjs';
-import {directPrintPaper,directPrintOptions,blobToBase64,rememberedPrinter,rememberPrinter,printHelperAvailable,printHelperExpected,printHelperLastFailure,launchPrintHelper,probePrintHelper} from '../src/direct-print.mjs';
+import {directPrintPaper,directPrintOptions,directPrintData,blobToBase64,rememberedPrinter,rememberPrinter,printHelperAvailable,printHelperExpected,printHelperLastFailure,launchPrintHelper,probePrintHelper} from '../src/direct-print.mjs';
 import {PRINT_PAGE_SIZES} from '../src/smart-print.mjs';
 
 const read=(path)=>readFileSync(new URL(path,import.meta.url),'utf8').replace(/\r\n/g,'\n');
@@ -17,8 +17,13 @@ test('the chosen Smart Print page becomes the printer paper size',()=>{
   assert.deepEqual(directPrintPaper(a3),{size:{width:297,height:420},units:'mm'},'A3');
   assert.throws(()=>directPrintPaper({}),/valid page size/);
   const options=directPrintOptions(a3,'  BD Balance ·  All regions ');
-  assert.deepEqual(options,{size:{width:297,height:420},units:'mm',scaleContent:true,colorType:'color',jobName:'BD Balance · All regions'});
+  assert.deepEqual(options,{size:{width:297,height:420},units:'mm',scaleContent:true,colorType:'color',duplex:'one-sided',copies:1,jobName:'BD Balance · All regions'});
   assert.equal(directPrintOptions(a4,'').jobName,'Nerve Center report');
+  const twoSided=directPrintOptions(a4,'Report',{duplex:'long-edge',copies:'3'});
+  assert.deepEqual([twoSided.duplex,twoSided.copies],['long-edge',3],'sides and copies reach the printer');
+  assert.deepEqual([directPrintOptions(a4,'R',{duplex:'upside-down',copies:500}).duplex,directPrintOptions(a4,'R',{copies:500}).copies],['one-sided',99]);
+  assert.deepEqual(directPrintData('QUJD','1-3, 5'),{type:'pixel',format:'pdf',flavor:'base64',data:'QUJD',options:{pageRanges:'1-3,5'}},'a page selection limits the pages printed');
+  assert.deepEqual(directPrintData('QUJD',''),{type:'pixel',format:'pdf',flavor:'base64',data:'QUJD'},'all pages by default');
 });
 
 test('PDF bytes are passed to the helper as base64, including large files',async()=>{
@@ -92,13 +97,13 @@ test('Smart Print prints through the helper and falls back to the browser print 
   assert.match(main,/if \(!\(await printHelperAvailable\(\{ token: \(\) => authToken \}\)\)\) \{\n\s+\/\/ A PC that never used the helper[^\n]*\n\s+if \(!printHelperExpected\(\)\) return false;/,'PCs without the helper still print through the browser, silently');
   assert.match(main,/The print helper \(QZ Tray\) is not running on this PC/,'where the helper is expected, a miss is never silent');
   assert.match(main,/did not accept the connection: \$\{failure \|\| "no answer"\}/,'a refused or unanswered Allow question is explained');
-  assert.match(main,/\? printReportDirect\(\{ title, columns, rows, highlightRow, pageSize \}\) : false;/,'OK tries again, Cancel uses the browser print window');
+  assert.match(main,/\? printReportDirect\(\{ title, columns, rows, highlightRow, pageSize, printOptions \}\) : false;/,'OK tries again, Cancel uses the browser print window');
   assert.match(main,/if \(printHelperExpected\(\)\) alert\(`The report could not be sent through the print helper/);
   assert.match(main,/highlights, pageSize: page\.name \}\),/,'the PDF is built at the chosen A3 / A4 size');
-  assert.match(main,/await printPdfDirect\(\{ pdf: await response\.blob\(\), page, jobName: title, token: \(\) => authToken \}\)/);
+  assert.match(main,/await printPdfDirect\(\{ pdf: await response\.blob\(\), page, jobName: title, token: \(\) => authToken, printOptions \}\)/,'pages, sides and copies chosen in Smart Print reach the helper');
   assert.match(main,/catch \(error\) \{\n    console\.warn\("Direct printing was not possible; using the browser print window\.", error\);\n    if \(printHelperExpected\(\)\) alert\([^\n]+\n    return false;/,'the failure is explained, then the browser print window is used');
   assert.match(client,/import\('qz-tray'\)/,'the helper library is loaded only when printing');
-  assert.match(client,/qz\.print\(config,\[\{type:'pixel',format:'pdf',flavor:'base64',data\}\]\)/);
+  assert.match(client,/qz\.print\(config,\[directPrintData\(data,printOptions\.pages\)\]\)/);
   assert.match(client,/if\(!remembered\)return send\(await qz\.printers\.getDefault\(\)\);/,'the default printer is looked up only until a printer is remembered');
   assert.match(client,/rememberPrinter\(''\);\n    return send\(await qz\.printers\.getDefault\(\)\);/,'a removed printer falls back to the current default');
   assert.match(client,/qz\.security\.setSignatureAlgorithm\('SHA512'\);/);

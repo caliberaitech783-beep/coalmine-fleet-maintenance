@@ -18,9 +18,20 @@ export function directPrintPaper(page={}){
   return {size:{width,height},units:'mm'};
 }
 
-/** Options for one print job: the chosen paper, content scaled to it, colour, and a readable job name. */
-export function directPrintOptions(page,jobName=''){
-  return {...directPrintPaper(page),scaleContent:true,colorType:'color',jobName:String(jobName||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,120)||'Nerve Center report'};
+const DUPLEX_VALUES=new Set(['one-sided','long-edge','short-edge']);
+/** Options for one print job: the chosen paper, content scaled to it, colour, sides, copies, and a readable job name. */
+export function directPrintOptions(page,jobName='',{duplex='one-sided',copies=1}={}){
+  return {
+    ...directPrintPaper(page),scaleContent:true,colorType:'color',
+    duplex:DUPLEX_VALUES.has(duplex)?duplex:'one-sided',
+    copies:Math.min(99,Math.max(1,Math.trunc(Number(copies))||1)),
+    jobName:String(jobName||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,120)||'Nerve Center report',
+  };
+}
+/** The PDF data item for the helper; a page selection such as "1-3,5" limits the pages printed. */
+export function directPrintData(data,pages=''){
+  const pageRanges=String(pages||'').replace(/\s+/g,'');
+  return {type:'pixel',format:'pdf',flavor:'base64',data,...(pageRanges?{options:{pageRanges}}:{})};
 }
 
 export async function blobToBase64(blob){
@@ -156,16 +167,16 @@ export function rememberPrinter(name,storage=globalThis.localStorage){try{if(nam
  * Sends a PDF to the printer on the given page size. Uses the remembered
  * printer, else the PC's default printer. Resolves with the printer name.
  */
-export async function printPdfDirect({pdf,page,jobName,token,notice=helperNotice}){
+export async function printPdfDirect({pdf,page,jobName,token,printOptions={},notice=helperNotice}){
   const qz=await loadHelper(token);
   await handshake(qz,{handshakeWaitMs:180_000,notice});
   const data=await blobToBase64(pdf);
   // One helper call per job once the printer is known, so an unsigned setup asks "Allow" only once.
   const send=async(printer)=>{
     if(!printer)throw new Error('No default printer is set on this PC.');
-    const config=qz.configs.create(printer,directPrintOptions(page,jobName));
+    const config=qz.configs.create(printer,directPrintOptions(page,jobName,printOptions));
     const hide=notice('Sending to the printer: if QZ Tray asks, click Allow in its window.');
-    try{await qz.print(config,[{type:'pixel',format:'pdf',flavor:'base64',data}])}finally{hide()}
+    try{await qz.print(config,[directPrintData(data,printOptions.pages)])}finally{hide()}
     rememberPrinter(printer);
     return printer;
   };
