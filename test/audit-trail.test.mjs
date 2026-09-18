@@ -28,6 +28,7 @@ test("audit routes classify security, master, workflow, and CRM activity", () =>
   assert.equal(auditRouteDetails("DELETE", "/api/user-sessions/example-session").action, "Force close session");
   assert.equal(auditRouteDetails("PUT", "/api/masters/Users%20%26%20employees/1").module, "Users & employees");
   assert.equal(auditRouteDetails("DELETE", "/api/requests/REQ-1").action, "Delete request");
+  assert.equal(auditRouteDetails("POST", "/api/requests/bulk-delete").action, "Delete requests");
   assert.deepEqual(auditRouteDetails("POST", "/api/vehicle-transfers"), {module:"Vehicle transfers",eventType:"Vehicle transfer",action:"Submit vehicle transfer"});
   assert.equal(auditRouteDetails("PATCH", "/api/vehicle-transfers/12/source-approval").action, "Release vehicle from source");
   assert.equal(auditRouteDetails("PATCH", "/api/vehicle-transfers/12/destination-verification").action, "Verify vehicle at destination");

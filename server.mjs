@@ -62,6 +62,7 @@ import {buildSiteFleetReportTables,buildSiteReportMessage,reportSites,siteReport
 import {ADMIN_LOCK_TICKET_CUTOFF,ADMIN_LOCK_POLICY_PAUSED,isLockableAdmin,isTrueSuperAdmin} from './admin-lock-policy.mjs';
 import {activeRequestConflictMessage,isActiveMaintenanceRequest} from './request-conflict.mjs';
 import {auditChangedFields,auditDateRange,auditIndiaDateKey,auditRouteDetails,auditSafeError,auditShouldRecord,auditSubmittedFields} from './audit-trail.mjs';
+import {requestDeletionBlocker,requestDeletionSnapshot,normalizeDeletionReferences,REQUEST_BULK_DELETE_LIMIT} from './request-deletion.mjs';
 import {duplicateUsername} from './user-username.mjs';
 import {canReadDashboardEquipment,currentDashboardUserCandidate,dashboardEquipmentScope,dashboardEquipmentScopeIsUsable,dashboardSessionFromProfile,scopeDashboardEquipmentRecords} from './dashboard-equipment-access.mjs';
 import {infoPulseRequestScope,scopeInfoPulseRequests} from './info-pulse-scope.mjs';
@@ -5206,13 +5207,67 @@ app.patch('/api/requests/:reference/idle-cancel',requireSession,async(req,res,ne
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
+function administratorSession(session){
+  const adminLevel=String(session?.permissions?.adminLevel||'').trim().toLowerCase();
+  return session?.role==='super'&&['admin','super admin'].includes(adminLevel);
+}
+
+// Removes requests together with everything that hangs off them (daily remarks
+// cascade; correction requests and WhatsApp dispatch records are removed here)
+// in one transaction. Verified requests are never removed; Idle requests only
+// for an Admin. Returns the removed rows (for the Audit Trail) and the skipped
+// references with the reason each one was kept.
+async function deleteMaintenanceRequests(references,{administrator=false}={}){
+  const client=await pool.connect();
+  try{
+    await client.query('BEGIN');
+    const {rows}=await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=ANY($1::text[])`,[references]);
+    const byRef=new Map(rows.map(row=>[row.ref,row]));
+    const skipped=[],eligible=[];
+    for(const reference of references){
+      const blocker=requestDeletionBlocker(byRef.get(reference),{administrator});
+      if(blocker)skipped.push({ref:reference,error:blocker});else eligible.push(reference);
+    }
+    let deleted=[];
+    if(eligible.length){
+      await client.query(`DELETE FROM request_corrections WHERE request_reference=ANY($1::text[])`,[eligible]);
+      await client.query(`DELETE FROM whatsapp_workflow_dispatches WHERE request_reference=ANY($1::text[])`,[eligible]);
+      const result=await client.query(`DELETE FROM maintenance_requests WHERE reference=ANY($1::text[]) AND verified_at IS NULL AND ($2::boolean OR status NOT IN ('Idle','Ideal')) RETURNING reference`,[eligible,administrator]);
+      if(result.rowCount!==eligible.length)throw Object.assign(new Error('A request changed while it was being deleted. Refresh and try again.'),{status:409});
+      deleted=eligible.map(ref=>byRef.get(ref));
+    }
+    await client.query('COMMIT');
+    return {deleted,skipped};
+  }catch(error){await client.query('ROLLBACK').catch(()=>{});throw error}
+  finally{client.release()}
+}
+
 app.delete('/api/requests/:reference',requireSession,requirePermission('deleteRequests',{role:'Maintenance User'}),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
-    const result=await pool.query(`DELETE FROM maintenance_requests WHERE reference=$1 AND verified_at IS NULL AND status NOT IN ('Idle','Ideal')`,[reference]);
-    if(!result.rowCount)return res.status(409).json({error:'Verified or Idle requests cannot be deleted, or the request no longer exists.'});
+    const outcome=await deleteMaintenanceRequests([reference],{administrator:administratorSession(req.session)});
+    if(!outcome.deleted.length)return res.status(409).json({error:outcome.skipped[0]?.error||'The request no longer exists.'});
+    req.audit={targetType:'Maintenance request',targetReference:reference,changedFields:requestDeletionSnapshot(outcome.deleted[0])};
     res.status(204).end();
-  }catch(error){next(error)}
+  }catch(error){if(error.status===409)return res.status(409).json({error:error.message});next(error)}
+});
+
+// Admin / Super Admin only: remove several requests (for example demo or test
+// entries) from any stage before MIS verification in one go.
+app.post('/api/requests/bulk-delete',requireSession,requireAdministrator,async(req,res,next)=>{
+  try{
+    const references=normalizeDeletionReferences(req.body?.references);
+    if(!references.length)return res.status(400).json({error:'Select at least one request to delete.'});
+    if(references.length>REQUEST_BULK_DELETE_LIMIT)return res.status(400).json({error:`Delete at most ${REQUEST_BULK_DELETE_LIMIT} requests at a time.`});
+    const reason=String(req.body?.reason||req.get(AUDIT_REASON_HEADER)||'').trim();
+    if(!reason)return res.status(400).json({error:'A deletion reason is required for the Audit Trail.'});
+    const outcome=await deleteMaintenanceRequests(references,{administrator:true});
+    const deletedRefs=outcome.deleted.map(row=>row.ref);
+    req.audit={action:'Delete requests',targetType:'Maintenance request',targetReference:deletedRefs.join(', ')||references.join(', '),reason,
+      changedFields:[{field:'Requests deleted',before:'',after:String(deletedRefs.length)},{field:'Requests skipped',before:'',after:String(outcome.skipped.length)},
+        ...outcome.deleted.slice(0,50).flatMap(row=>requestDeletionSnapshot(row))]};
+    res.json({deleted:deletedRefs,skipped:outcome.skipped});
+  }catch(error){if(error.status===409)return res.status(409).json({error:error.message});next(error)}
 });
 
 app.patch('/api/requests/:reference/mis-flag',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{

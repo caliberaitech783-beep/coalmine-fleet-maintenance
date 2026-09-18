@@ -76,6 +76,7 @@ import { calculateBreakdownDaysFromStart, calculateBreakdownMinutes, durationLab
 import { delayedReasonsForRepairType } from "../delayed-reason.mjs";
 import { breakdownSubCategoryNames } from "../breakdown-sub-category.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
+import { requestDeletable } from "../request-deletion.mjs";
 import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_TITLE } from "../in-out-report.mjs";
@@ -2141,9 +2142,9 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   );
 }
 const PRODUCTION_REQUEST_COLUMNS = ["door", "equipment", "model", "site", "breakdownDays", "category", "delayedReason", "complaint", "start", "status", "dailyRemarks", "ref", "createdBy"];
-function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal } = {}) {
+function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onCancelIdeal, requestActions = null } = {}) {
   switch (key) {
-    case "requestAction": return showReadOnlyAction ? <td className="row-actions"><span>Read only</span></td> : null;
+    case "requestAction": return showReadOnlyAction ? <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td> : null;
     case "ref": return <td><b>{r.ref}</b></td>;
     case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
     case "door": return <td>{r.door}</td>;
@@ -2172,7 +2173,15 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     default: return null;
   }
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showClosedBy = false, showCompletionDetails = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", exportTitle = "Breakdown report", columnOrder = null }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showClosedBy = false, showCompletionDetails = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", onDelete, onDeleteSelected, canDeleteRow, exportTitle = "Breakdown report", columnOrder = null }) {
+  const rowDeletable = (row) => Boolean(canDeleteRow ? canDeleteRow(row) : !["idle", "ideal"].includes(String(row.status || "").toLowerCase()));
+  const [selectedRefs, setSelectedRefs] = useState(() => new Set());
+  const toggleSelected = (ref, checked) => setSelectedRefs((current) => { const next = new Set(current); if (checked) next.add(ref); else next.delete(ref); return next; });
+  useEffect(() => { setSelectedRefs((current) => { const present = new Set(rows.map((row) => row.ref)); const next = new Set([...current].filter((ref) => present.has(ref))); return next.size === current.size ? current : next; }); }, [rows]);
+  const requestActions = (onDelete || onDeleteSelected) ? (row) => <>
+    {onDeleteSelected && <label className="request-select" title={rowDeletable(row) ? `Select ${row.ref} for deletion` : "This request cannot be deleted"}><input type="checkbox" aria-label={`Select ${row.ref} for deletion`} checked={selectedRefs.has(row.ref)} disabled={!rowDeletable(row)} onChange={(event) => toggleSelected(row.ref, event.target.checked)} /></label>}
+    {onDelete && rowDeletable(row) ? <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button> : <span>Read only</span>}
+  </> : null;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
@@ -2237,7 +2246,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
-    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Search &amp; status</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(requestStatusLabel).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}<PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} /><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} /></div></div><div id={statusPanelId || undefined} role={statusPanelId ? "tabpanel" : undefined} aria-labelledby={statusPanelLabelledBy || undefined} className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
+    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Search &amp; status</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className={`table-search-toolbar${stableToolbar ? " manager-table-search-toolbar" : ""}`}><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(requestStatusLabel).filter(Boolean))].map((value) => <option key={value}>{value}</option>)}</select></label>{showDateFilter && <label className="table-date-filter"><CalendarDays /><input aria-label="Filter by started date" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} /></label>}<div className="toolbar-actions-end">{actionsBesideSearch && <div className="master-actions-slot" ref={setActionsToolbarTarget} />}{onDeleteSelected && <div className="request-bulk-delete"><button type="button" onClick={() => setSelectedRefs(new Set(sortedRows.filter(rowDeletable).map((row) => row.ref)))}>Select all shown</button><button type="button" className="danger" disabled={!selectedRefs.size} onClick={() => onDeleteSelected(sortedRows.filter((row) => selectedRefs.has(row.ref)))}><Trash2 /> Delete selected ({selectedRefs.size})</button></div>}<PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} /><TableParameterFilter columns={filterColumns} rows={displayRows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); setDateFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} /></div></div><div id={statusPanelId || undefined} role={statusPanelId ? "tabpanel" : undefined} aria-labelledby={statusPanelLabelledBy || undefined} className={`${showBreakdownDays ? "scroll mobile-breakdown-table" : "scroll"}${stickyHeader ? " master-table-scroll" : ""}`}>
       <ActionsTable className="breakdown-table-auto-fit" printTitle={stableToolbar ? "Manager dashboard requests" : ""} toolbarTarget={actionsBesideSearch ? actionsToolbarTarget : null} toolbarPortal={actionsBesideSearch}>
         <thead>
           <tr>
@@ -2250,7 +2259,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
           {sortedRows.length ? (
             sortedRows.map((r) => (
               <tr key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
-                {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction, onApproveIdeal, onCancelIdeal })}</React.Fragment>) : <>
+                {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction, onApproveIdeal, onCancelIdeal, requestActions })}</React.Fragment>) : <>
                 {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
                 <td><b>{r.ref}</b></td>
                 <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
@@ -8360,9 +8369,16 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+  if (onDelete || onDeleteSelected) showActions = true;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
+  // Deletion: the caller decides which rows qualify (Admins may remove Idle rows too); Verified rows never qualify.
+  const lockedIdealRow = (row) => ["idle", "ideal"].includes(String(row.status || "").toLowerCase());
+  const rowDeletable = (row) => Boolean(canDeleteRow ? canDeleteRow(row) : !lockedIdealRow(row));
+  const [selectedRefs, setSelectedRefs] = useState(() => new Set());
+  const toggleSelected = (ref, checked) => setSelectedRefs((current) => { const next = new Set(current); if (checked) next.add(ref); else next.delete(ref); return next; });
+  useEffect(() => { setSelectedRefs((current) => { const present = new Set(rows.map((row) => row.ref)); const next = new Set([...current].filter((ref) => present.has(ref))); return next.size === current.size ? current : next; }); }, [rows]);
   // Compatibility markers for source-level workflow checks: showReason && <th>Reason</th>; showCreatedBy && <th>Created by</th>; showVerifiedBy && <th>Verified by</th>; showClosedBy && <th>Closed by</th>.
   const [now, setNow] = useState(() => Date.now());
   const [query, setQuery] = useState(""), [statusFilter, setStatusFilter] = useState(""), [parameterFilters, setParameterFilters] = useState({});
@@ -8462,7 +8478,8 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     {onFlagArrival && arrivalRedFlagRequired(row, now) && <button type="button" className="arrival-red-flag" onClick={() => onFlagArrival(row)} title="Required: record the reason for the vehicle arrival delay before proceeding"><Flag /> Red flag</button>}
     {onFlagArrival && row.arrivalFlaggedAt && !arrivalRedFlagRequired(row, now) && <button type="button" className="arrival-flagged" onClick={() => onFlagArrival(row)} title={`Flagged ${formatTwelveHourDateTime(row.arrivalFlaggedAt)} by ${row.arrivalFlaggedBy || "Maintenance User"}`}><Flag /> View red flag</button>}
     {onEdit && !lockedIdeal && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
-    {onDelete && !lockedIdeal && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
+    {onDeleteSelected && <label className="request-select" title={rowDeletable(row) ? `Select ${row.ref} for deletion` : "This request cannot be deleted"}><input type="checkbox" aria-label={`Select ${row.ref} for deletion`} checked={selectedRefs.has(row.ref)} disabled={!rowDeletable(row)} onChange={(event) => toggleSelected(row.ref, event.target.checked)} /></label>}
+    {onDelete && rowDeletable(row) && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
     {onClose && !lockedIdeal && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
     {onRemark && String(row.status).toLowerCase() !== "closed" && !lockedIdeal && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
     {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
@@ -8477,7 +8494,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     return () => document.removeEventListener("pointerdown", closeFilter);
   }, [openFilter]);
   return (
-    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Search &amp; status</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(statusLabel).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} /><PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /></div></div><div className="scroll mobile-workflow-table">
+    <><button type="button" className="maintenance-table-menu" aria-label="Table search and filters" aria-expanded={mobileControlsOpen} aria-controls={mobileControlsId} onClick={() => setMobileControlsOpen((open) => !open)}><Menu /> Search &amp; status</button><div id={mobileControlsId} data-mobile-open={mobileControlsOpen} className="table-search-toolbar"><label><Search /><input data-smart-search type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search this table" /></label><label><ListFilter /><select aria-label="Filter by status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">All statuses</option>{[...new Set(rows.map(statusLabel).filter(Boolean))].map((value) => <option key={value} value={value}>{value}</option>)}</select></label><div className="toolbar-actions-end"><div className="workflow-actions-slot" ref={setActionsToolbarTarget} />{onDeleteSelected && <div className="request-bulk-delete"><button type="button" onClick={() => setSelectedRefs(new Set(sortedRows.filter(rowDeletable).map((row) => row.ref)))}>Select all shown</button><button type="button" className="danger" disabled={!selectedRefs.size} onClick={() => onDeleteSelected(sortedRows.filter((row) => selectedRefs.has(row.ref)))}><Trash2 /> Delete selected ({selectedRefs.size})</button></div>}<PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /><TableParameterFilter columns={filterColumns} rows={rows} filters={parameterFilters} onFilterChange={(key, value) => setParameterFilters((current) => ({ ...current, [key]: value }))} onClearFilters={() => { setParameterFilters({}); setStatusFilter(""); }} /><ExportMenu title={exportTitle} columns={filterColumns} rows={sortedRows} highlightRow={lateAcceptanceHighlight} /></div></div><div className="scroll mobile-workflow-table">
       <ActionsTable className="workflow-table" closedTimeAfterStarted={closedTimeAfterStarted} recordDateFilter={idleDateFilter ? { label: "Idle Vehicle Date", value: idleDateRange, onChange: setIdleDateRange } : null} toolbarTarget={actionsToolbarTarget} toolbarPortal>
         <thead><tr>
           {showActions && actionsFirst && <th>Actions</th>}
@@ -9486,7 +9503,7 @@ function NotificationBell({ session, onOpenEntry }) {
   </>;
 }
 
-function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onAddDailyRemark, onRefreshRequests, theme, toggleTheme, embedded = false }) {
+function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onDeleteRequests, onAddDailyRemark, onRefreshRequests, theme, toggleTheme, embedded = false }) {
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const mobileRole = session?.assignedRole || "Mobile User";
   const isGeneral = mobileRole === "General User";
@@ -9524,6 +9541,11 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const isProduction = mobileRole === "Production User";
   const isMaintenance = mobileRole === "Maintenance User";
   const isMis = mobileRole === "MIS User";
+  // Admin / Super Admin (never a Manager-level admin) may delete requests at every stage before MIS
+  // verification - open, awaiting acceptance, in progress, Idle and closed-awaiting-MIS - from any
+  // workspace, singly or several at once. Maintenance users keep their own delete right as before.
+  const administratorSession = session?.role === "super" && ["admin", "super admin"].includes(String(permissions.adminLevel || "").trim().toLowerCase());
+  const canDeleteRow = (row) => requestDeletable(row, { administrator: administratorSession });
   const closedHistoryClosingLabel = isMis ? "Maintenance Closing Time" : "Closing time";
   const workspaceReportTitles = {
     requests: isProduction ? "Active Production Requests" : isMaintenance ? "Active Maintenance Requests" : "MIS Requests Awaiting Verification",
@@ -9614,6 +9636,21 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     else if (arrivalFlagNextAction === "remark") setRemarking(saved);
   };
   const deleteRequest = async (row) => { if (!window.confirm(`Delete request ${row.ref}?`)) return; try { await onDeleteRequest(row.ref); } catch (error) { alert(error.message); } };
+  const deleteSelectedRequests = administratorSession && onDeleteRequests ? async (rows) => {
+    const references = rows.map((row) => row.ref);
+    if (!references.length) return;
+    const plural = references.length === 1 ? "" : "s";
+    const reason = window.prompt(`Enter the reason for deleting ${references.length} request${plural} (recorded in the Audit Trail):`, "");
+    if (reason === null) return;
+    if (!reason.trim()) { alert("A deletion reason is required for the Audit Trail."); return; }
+    const preview = references.slice(0, 8).join(", ") + (references.length > 8 ? ` and ${references.length - 8} more` : "");
+    if (!window.confirm(`Permanently delete ${references.length} request${plural}?\n${preview}`)) return;
+    try {
+      const outcome = await onDeleteRequests(references, reason.trim());
+      if (outcome?.skipped?.length) alert(`${outcome.deleted.length} deleted. Not deleted: ${outcome.skipped.map((item) => `${item.ref} (${item.error})`).join("; ")}`);
+    } catch (error) { alert(error.message); }
+  } : null;
+  const adminDeleteProps = administratorSession ? { onDelete: deleteRequest, onDeleteSelected: deleteSelectedRequests, canDeleteRow } : {};
   const createRequest = async (request) => {
     const saved = await onCreate(request);
     setCreatedRequestRef("Request Submitted");
@@ -9666,14 +9703,14 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       </div>
       {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
-      {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} /></section></>}
+      {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} {...adminDeleteProps} /></section></>}
       {isGeneral && tab === "requests" && canSeeRequestMenu("View requests") && <><h3 className="sectiontitle">Active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} /></section></>}
-      {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
-      {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} /></section></>}
-      {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showWorkCompletion={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} />}</section></>}
-      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} canDeleteRow={canDeleteRow} onDeleteSelected={deleteSelectedRequests} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} {...adminDeleteProps} /></section></>}
+      {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} {...adminDeleteProps} /></section></>}
+      {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} {...adminDeleteProps} /></section></>}
+      {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showWorkCompletion={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} {...adminDeleteProps} />}</section></>}
+      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime {...adminDeleteProps} /></section></>}
       </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} subCategoryRecords={subCategoryRecords} subCategoriesLoaded={subCategoriesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
@@ -10071,6 +10108,16 @@ function App() {
       requestLoadSequence.current += 1;
       setRequests((current) => current.filter((row) => row.ref !== reference));
       notifyRequestChange(window);
+    },
+    deleteRequestsBulk = async (references, reason) => {
+      const response = await fetch("/api/requests/bulk-delete", {method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${authToken}`, "X-Audit-Reason": reason}, body: JSON.stringify({references, reason})});
+      const details = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(details.error || "Could not delete the selected requests");
+      const removed = new Set(details.deleted || []);
+      requestLoadSequence.current += 1;
+      setRequests((current) => current.filter((row) => !removed.has(row.ref)));
+      notifyRequestChange(window);
+      return details;
     };
   const completeLogin = (nextSession) => {
     setActive(LOGIN_LANDING_PAGE);
@@ -10096,7 +10143,7 @@ function App() {
           requests={requests}
           onCreate={addRequest}
           onUpdateRequest={updateRequest}
-          onDeleteRequest={deleteRequest}
+          onDeleteRequest={deleteRequest} onDeleteRequests={deleteRequestsBulk}
           onAddDailyRemark={addDailyRemark}
           onRefreshRequests={loadRequests}
           session={session}
@@ -10207,7 +10254,7 @@ function App() {
               requests={requests}
               onCreate={addRequest}
               onUpdateRequest={updateRequest}
-                  onDeleteRequest={deleteRequest}
+                  onDeleteRequest={deleteRequest} onDeleteRequests={deleteRequestsBulk}
                   onAddDailyRemark={addDailyRemark}
               onRefreshRequests={loadRequests}
               session={operationalSession}

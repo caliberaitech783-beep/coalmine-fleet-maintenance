@@ -237,3 +237,13 @@
   white-space: nowrap;
 }
 :root[data-theme="dark"] .status.verified { background: #183e32; color: #9ce3bd; }
+/* Request deletion controls (Admin bulk delete + per-row Delete). */
+.row-actions button.danger{color:#c44343;border-color:#efcece}
+.row-actions .request-select{display:inline-flex;align-items:center;margin:0}
+.row-actions .request-select input{width:16px;height:16px;margin:0;accent-color:#c9253d;cursor:pointer}
+.row-actions .request-select input:disabled{cursor:not-allowed;opacity:.4}
+.request-bulk-delete{display:inline-flex;align-items:center;gap:6px}
+.request-bulk-delete button{border:1px solid #d9e0ec;background:#fff;color:#31446a;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.request-bulk-delete button.danger{color:#fff;background:#c9253d;border-color:#c9253d}
+.request-bulk-delete button.danger:disabled{opacity:.45;cursor:not-allowed}
+.request-bulk-delete button svg{width:14px;height:14px}

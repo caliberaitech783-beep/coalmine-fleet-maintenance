@@ -95,6 +95,7 @@ export function auditRouteDetails(method = "", path = "") {
       : route.endsWith("/mis-flag") ? "Update MIS red flag"
       : route.endsWith("/ideal-onroad") ? "Approve idle vehicle on road"
       : route.endsWith("/idle-cancel") ? "Cancel idle vehicle request"
+      : route.endsWith("/bulk-delete") ? "Delete requests"
       : verb === "POST" ? "Create request"
       : ["PUT", "PATCH"].includes(verb) ? "Edit request"
       : "View requests";
