@@ -108,3 +108,10 @@ test('the User Sessions header is compact: title only, short summary cards, tool
   assert.match(styles,/\.user-session-toolbar\{display:flex;align-items:center;gap:14px;padding:9px 20px;/,'the search and filter row sits higher');
   assert.match(styles,/\.user-sessions-page>header\{align-items:center;padding-top:12px;padding-bottom:10px;min-height:0\}/);
 });
+
+test('every User Sessions row is bold: name, status, session, role, location, device',()=>{
+  const styles=readFileSync(new URL("../src/user-sessions.css", import.meta.url), "utf8");
+  assert.match(styles,/\.user-session-table td\{padding:14px 16px;border-bottom:1px solid #e5eaf1;color:#132541;font-size:13px;font-weight:700;vertical-align:middle\}/);
+  assert.match(styles,/\.session-device small\{display:block;margin-top:4px;color:#5b6a82;font-size:12px;font-weight:700\}/,'the second lines (login, device id) are bold too');
+  assert.match(styles,/\.user-session-table code\{font:700 12px/);
+});
