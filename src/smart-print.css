@@ -44,5 +44,7 @@
 .smart-print-radio input { width: 16px; height: 16px; margin: 0; accent-color: #51288e; }
 .smart-print-options input[type="text"], .smart-print-options input[type="number"] { height: 38px; padding: 0 12px; border: 1px solid var(--line, #cbd6ec); border-radius: 8px; font: inherit; }
 .smart-print-options input[type="number"] { width: 110px; }
+.smart-print-options select { height: 38px; padding: 0 12px; border: 1px solid var(--line, #cbd6ec); border-radius: 8px; font: inherit; max-width: 100%; }
+.smart-print-printer-note { margin: 0; font-size: 12px; color: var(--muted, #5b6a82); }
 .smart-print-options-error:empty { display: none; }
 .smart-print-options-error { margin: 0 0 10px; color: #b23836; font-size: 12px; font-weight: 700; }

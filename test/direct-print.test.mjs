@@ -104,7 +104,11 @@ test('Smart Print prints through the helper and falls back to the browser print 
   assert.match(main,/catch \(error\) \{\n    console\.warn\("Direct printing was not possible; using the browser print window\.", error\);\n    if \(printHelperExpected\(\)\) alert\([^\n]+\n    return false;/,'the failure is explained, then the browser print window is used');
   assert.match(client,/import\('qz-tray'\)/,'the helper library is loaded only when printing');
   assert.match(client,/qz\.print\(config,\[directPrintData\(data,printOptions\.pages\)\]\)/);
+  assert.match(client,/const remembered=String\(printOptions\.printer\|\|''\)\.trim\(\)\|\|rememberedPrinter\(\);/,'the printer chosen in Smart Print wins over the remembered one');
   assert.match(client,/if\(!remembered\)return send\(await qz\.printers\.getDefault\(\)\);/,'the default printer is looked up only until a printer is remembered');
+  assert.match(client,/export async function listPrinters\(\{token,notice=helperNotice\}=\{\}\)/);
+  assert.match(client,/const found=await qz\.printers\.find\(\);/,'the helper lists the PC\'s printers');
+  assert.match(main,/setSmartPrintPrinterSource\(async \(\) => \(await printHelperAvailable\(\{ token: \(\) => authToken \}\)\) \? listPrinters\(\{ token: \(\) => authToken \}\) : null\);/);
   assert.match(client,/rememberPrinter\(''\);\n    return send\(await qz\.printers\.getDefault\(\)\);/,'a removed printer falls back to the current default');
   assert.match(client,/qz\.security\.setSignatureAlgorithm\('SHA512'\);/);
 });

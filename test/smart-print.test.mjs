@@ -58,14 +58,15 @@ test('dialog prompts for a report name, restores it, prints it, and can delete i
   // Then the print options: pages, sides and copies. Nothing prints until "Print now".
   assert.equal(printed.length,0);
   nodes=all(body.children.at(-1));
-  assert.deepEqual(nodes.filter(n=>n.tag==='legend').map(n=>n.textContent),['Pages','Sides','Copies']);
+  assert.deepEqual(nodes.filter(n=>n.tag==='legend').map(n=>n.textContent),['Printer','Pages','Sides','Copies']);
+  assert.equal(nodes.find(n=>n.tag==='p'&&/Loading the printers|chosen in the print window/.test(n.textContent)).textContent,'The printer is chosen in the print window.','no printer source registered in this test');
   const radios=nodes.filter(n=>n.tag==='input'&&n.type==='radio');
   assert.deepEqual(radios.map(n=>n.checked),[true,false,true,false,false],'all pages and single-sided by default');
   radios[3].onchange();
   const copiesInput=nodes.find(n=>n.tag==='input'&&n.type==='number');copiesInput.value='2';copiesInput.oninput();
   const pagesInput=nodes.find(n=>n.tag==='input'&&n.type==='text');pagesInput.value='1-2, 4';pagesInput.oninput();
   nodes.find(n=>n.textContent==='Print now').onclick();
-  assert.deepEqual(printed[0].printOptions,{pages:'1-2,4',duplex:'long-edge',copies:2});
+  assert.deepEqual(printed[0].printOptions,{pages:'1-2,4',duplex:'long-edge',copies:2},'no printer key when none was chosen');
   assert.deepEqual(JSON.parse(data.get('bdms:smart-print:options')),{duplex:'long-edge',copies:2},'sides and copies are remembered; pages are not');
   assert.deepEqual(printed[0].columns,[columns[0]]);
   assert.equal(printed[0].rows,rows);
@@ -151,4 +152,37 @@ test('print options: page ranges are validated, sides and copies are normalised 
   savePrintOptions({pages:'1-2',duplex:'long-edge',copies:3},storage);
   assert.deepEqual(loadPrintOptions(storage),{pages:'',duplex:'long-edge',copies:3},'the page selection is never remembered');
   assert.deepEqual(loadPrintOptions({getItem(){throw new Error('blocked')}}),DEFAULT_PRINT_OPTIONS);
+});
+
+test('the printer list from the helper is offered, the last used printer is preselected, and the choice reaches print',async()=>{
+ class Element {
+  constructor(tag){this.tag=tag;this.children=[];this.value='';}
+  append(...nodes){this.children.push(...nodes);}
+  replaceChildren(...nodes){this.children=nodes;}
+  setAttribute(){} addEventListener(){} showModal(){} close(){} remove(){}
+ }
+ const body=new Element('body'), data=new Map([['nerveCenterSession',JSON.stringify({login:'tester'})]]);
+ const storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)};
+ const oldDocument=globalThis.document,oldWindow=globalThis.window;
+ globalThis.document={body,createElement:tag=>new Element(tag)};
+ globalThis.window={localStorage:storage,sessionStorage:storage,prompt:()=>'x',confirm:()=>true};
+ const all=node=>[node,...node.children.flatMap(all)];
+ try {
+  const printed=[];
+  const onListPrinters=async()=>({printers:['OneNote (Desktop)','iR C3326','iR C3326 (Copy 1)'],defaultPrinter:'iR C3326',remembered:'iR C3326 (Copy 1)'});
+  openSmartPrint({title:'Report',columns:[{label:'Door',value:r=>r.door}],rows:[{door:'1'}],onPrint:args=>printed.push(args),onListPrinters});
+  let nodes=all(body.children.at(-1));
+  nodes.find(n=>n.textContent==='Print current selection').onclick();
+  nodes=all(body.children.at(-1));nodes.find(n=>String(n.textContent).startsWith('A4 · ')).onclick();
+  await new Promise(resolve=>setTimeout(resolve,0));await new Promise(resolve=>setTimeout(resolve,0));
+  nodes=all(body.children.at(-1));
+  const printerBox=nodes.find(n=>n.tag==='fieldset'&&n.children[0]?.textContent==='Printer');
+  const select=printerBox.children.find(n=>n.tag==='select');
+  assert.deepEqual(select.children.map(n=>n.textContent),['OneNote (Desktop)','iR C3326 (default)','iR C3326 (Copy 1)']);
+  assert.equal(select.value,'iR C3326 (Copy 1)','the printer used last time is preselected over the default');
+  select.value='iR C3326';select.onchange();
+  nodes.find(n=>n.textContent==='Print now').onclick();
+  assert.equal(printed[0].printOptions.printer,'iR C3326');
+  assert.deepEqual(normalizePrintOptions({printer:'  iR   C3326 '}).printer,'iR C3326');
+ } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });

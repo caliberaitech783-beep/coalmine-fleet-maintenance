@@ -160,6 +160,20 @@ export async function printHelperAvailable({token,timeoutMs=2500,now=Date.now(),
   }
 }
 
+/** The printers the helper can see on this PC, with the PC's default and the one used last time. */
+export async function listPrinters({token,notice=helperNotice}={}){
+  const qz=await loadHelper(token);
+  await handshake(qz,{handshakeWaitMs:180_000,notice});
+  const hide=notice('Reading the printers on this PC: if QZ Tray asks, click Allow in its window.');
+  try{
+    const found=await qz.printers.find();
+    const printers=[...new Set((Array.isArray(found)?found:[found]).map((name)=>String(name||'').trim()).filter(Boolean))];
+    const remembered=rememberedPrinter();
+    const defaultPrinter=printers.includes(remembered)?'':String(await qz.printers.getDefault().catch(()=>'')||'').trim();
+    return {printers,defaultPrinter,remembered};
+  }finally{hide()}
+}
+
 export function rememberedPrinter(storage=globalThis.localStorage){try{return String(storage?.getItem(PRINTER_STORAGE_KEY)||'').trim()}catch{return ''}}
 export function rememberPrinter(name,storage=globalThis.localStorage){try{if(name)storage?.setItem(PRINTER_STORAGE_KEY,name);else storage?.removeItem(PRINTER_STORAGE_KEY)}catch{/* private mode */}}
 
@@ -180,11 +194,12 @@ export async function printPdfDirect({pdf,page,jobName,token,printOptions={},not
     rememberPrinter(printer);
     return printer;
   };
-  const remembered=rememberedPrinter();
+  // The printer chosen in Smart Print wins; else the one used last time; else the PC's default printer.
+  const remembered=String(printOptions.printer||'').trim()||rememberedPrinter();
   if(!remembered)return send(await qz.printers.getDefault());
   try{return await send(remembered)}
   catch(error){
-    // A remembered printer that was removed or renamed falls back to the PC's current default printer.
+    // A chosen or remembered printer that was removed or renamed falls back to the PC's current default printer.
     if(!/printer|not\s*found|cannot find/i.test(String(error?.message||error)))throw error;
     rememberPrinter('');
     return send(await qz.printers.getDefault());

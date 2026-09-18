@@ -1,7 +1,7 @@
 import { siteReportHtml } from "./site-report.mjs";
 import { requestStatusLabel, requestStatusSortRank } from "./request-status.mjs";
-import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter } from "./smart-print.mjs";
-import { printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect } from "./direct-print.mjs";
+import { openSmartPrint, printFitScale, printPageSize, setSmartPrintExporter, setSmartPrintPrinterSource } from "./smart-print.mjs";
+import { listPrinters, printHelperAvailable, printHelperExpected, printHelperLastFailure, printPdfDirect } from "./direct-print.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
 import { SavedReportsPanel } from "./saved-reports.jsx";
@@ -2994,6 +2994,8 @@ async function exportSmartPrintSelection({ format, title, columns = [], rows = [
   downloadExportFile(await response.blob(), exportFileName(title, "pdf"));
 }
 setSmartPrintExporter(exportSmartPrintSelection);
+// The printer list in Smart Print comes from the print helper; without it the browser print window chooses.
+setSmartPrintPrinterSource(async () => (await printHelperAvailable({ token: () => authToken })) ? listPrinters({ token: () => authToken }) : null);
 function PrintButton({ title, columns = [], rows = [], className = "secondary", highlightRow }) {
   return <button type="button" className={`${className} print-table-trigger`} onClick={() => openSmartPrint({ title, columns, rows, highlightRow, onPrint: printTableReport, formatCell: exportCellText })}><Printer /><span>Smart Print</span></button>;
 }

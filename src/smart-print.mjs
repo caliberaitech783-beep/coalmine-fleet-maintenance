@@ -70,8 +70,12 @@ export function normalizePageRanges(text){
 export function normalizePrintOptions(options={}){
   const duplex=PRINT_DUPLEX_OPTIONS.some(option=>option.value===options.duplex)?options.duplex:DEFAULT_PRINT_OPTIONS.duplex;
   const copies=Math.min(99,Math.max(1,Math.trunc(Number(options.copies))||1));
-  return {pages:normalizePageRanges(options.pages),duplex,copies};
+  const printer=String(options.printer||'').replace(/\s+/g,' ').trim().slice(0,200);
+  return {pages:normalizePageRanges(options.pages),duplex,copies,...(printer?{printer}:{})};
 }
+// The app registers one printer source (the print helper's list); the dialog offers it when it answers.
+let smartPrintPrinterSource=null;
+export function setSmartPrintPrinterSource(source){smartPrintPrinterSource=source;}
 /** Sides and copies are remembered on this PC; the page selection is always asked fresh. */
 export function loadPrintOptions(storage=globalThis.window?.localStorage){
   try{const saved=JSON.parse(storage?.getItem(PRINT_OPTIONS_STORAGE_KEY)||'{}');return normalizePrintOptions({...saved,pages:''});}catch{return {...DEFAULT_PRINT_OPTIONS};}
@@ -88,7 +92,7 @@ export function printFitScale(contentWidth,availableWidth,minimum=.3) {
 let smartPrintExporter;
 export function setSmartPrintExporter(exporter) {smartPrintExporter=exporter;}
 
-export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,onExport=smartPrintExporter,formatCell=value=>String(value??'')}) {
+export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,onExport=smartPrintExporter,onListPrinters=smartPrintPrinterSource,formatCell=value=>String(value??'')}) {
   const options=printColumnOptions(columns);
   let selected=options.map(option=>option.id),layouts=[],storage,key;
   let storageError='';
@@ -141,7 +145,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   // Second step after the page size: which pages, single or double-sided, and how many copies.
   const askPrintOptions=(pageSize,run)=>{
     const remembered=loadPrintOptions();
-    const state={pages:'',pagesMode:'all',duplex:remembered.duplex,copies:remembered.copies};
+    const state={pages:'',pagesMode:'all',duplex:remembered.duplex,copies:remembered.copies,printer:''};
     const panel=make('div',undefined,'smart-print-page-size smart-print-options');panel.setAttribute('role','group');panel.setAttribute('aria-label','Print options');
     panel.append(make('h3',`Print options · ${pageSize}`),make('p','Choose the pages, the sides and the number of copies. These apply when the report goes straight to the printer.'));
     const field=(legend)=>{const box=make('fieldset');box.append(make('legend',legend));panel.append(box);return box;};
@@ -149,6 +153,24 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       const wrap=make('label',undefined,'smart-print-radio');const input=make('input');input.type='radio';input.name=name;input.value=value;input.checked=checked;input.onchange=()=>onPick(value);
       wrap.append(input,make('span',label));parent.append(wrap);return input;
     };
+    // Printer: the helper's list when it answers; otherwise the print window chooses.
+    const printerBox=field('Printer');
+    const printerNote=make('p','Loading the printers on this PC…','smart-print-printer-note');
+    printerBox.append(printerNote);
+    let printerSelect=null,printerRequest=0;
+    const showPrinters=(result)=>{
+      if(!result||!Array.isArray(result.printers)||!result.printers.length){printerNote.textContent='The printer is chosen in the print window.';return;}
+      printerSelect=make('select');printerSelect.setAttribute('aria-label','Printer');
+      const preferred=result.printers.includes(result.remembered)?result.remembered:result.printers.includes(result.defaultPrinter)?result.defaultPrinter:result.printers[0];
+      result.printers.forEach(name=>{const option=make('option',name===result.defaultPrinter?`${name} (default)`:name);option.value=name;if(name===preferred)option.selected=true;printerSelect.append(option);});
+      printerSelect.value=preferred;state.printer=preferred;
+      printerSelect.onchange=()=>{state.printer=printerSelect.value;};
+      printerBox.replaceChildren(printerBox.children[0],printerSelect);
+    };
+    if(typeof onListPrinters==='function'){
+      const request=++printerRequest;
+      Promise.resolve().then(()=>onListPrinters()).then(result=>{if(request===printerRequest)showPrinters(result);}).catch(()=>showPrinters(null));
+    }else showPrinters(null);
     const pagesBox=field('Pages');
     radio(pagesBox,'smart-print-pages','all','All pages',true,()=>{state.pagesMode='all';});
     radio(pagesBox,'smart-print-pages','custom','Only these pages',false,()=>{state.pagesMode='custom';pagesInput.focus?.();});
@@ -167,7 +189,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     const dismiss=()=>pagePrompt.replaceChildren();
     button('Print now',()=>{
       let options;
-      try{options=normalizePrintOptions({pages:state.pagesMode==='custom'?state.pages:'',duplex:state.duplex,copies:state.copies});}
+      try{options=normalizePrintOptions({pages:state.pagesMode==='custom'?state.pages:'',duplex:state.duplex,copies:state.copies,printer:state.printer});}
       catch(problem){error.textContent=problem.message;return;}
       if(state.pagesMode==='custom'&&!options.pages){error.textContent='Enter the pages to print, or choose All pages.';return;}
       savePrintOptions(options);dismiss();run(options);
