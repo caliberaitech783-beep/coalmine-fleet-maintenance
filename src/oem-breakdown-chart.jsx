@@ -4,6 +4,14 @@ import "./oem-breakdown.css";
 
 const COUNT_HEIGHT = 14;
 const CALLOUT_GAP = 18;
+const MIN_PLOT_HEIGHT = 200;
+
+// The bars never grow past the room the screen has left below them, so the whole
+// panel stays on one page instead of pushing its header or its sites out of view.
+function fitPlotHeight(chart, available) {
+  const preferred = Math.max(260, Math.min(560, chart.axisMax * COUNT_HEIGHT), ...chart.sites.map(site => site.segments.length * CALLOUT_GAP));
+  return available > 0 ? Math.max(MIN_PLOT_HEIGHT, Math.min(preferred, available)) : preferred;
+}
 
 function segmentLabels(site, axisMax, plotHeight) {
   let bottom = 0;
@@ -92,8 +100,8 @@ function OemChartSurface({ chart, plotHeight, children }) {
   </div>;
 }
 
-export default function OemBreakdownChart({ chart, from, to, error, onSelect, onReset }) {
-  const plotHeight = Math.max(260, Math.min(560, chart.axisMax * COUNT_HEIGHT), ...chart.sites.map(site => site.segments.length * CALLOUT_GAP));
+export default function OemBreakdownChart({ chart, from, to, error, onSelect, onReset, availableHeight = 0 }) {
+  const plotHeight = fitPlotHeight(chart, availableHeight);
   const inspect = (event, selection) => { event.stopPropagation(); onSelect(selection); };
   const oemTotals = new Map();
   chart.rows.forEach(row => oemTotals.set(row.oemKey, (oemTotals.get(row.oemKey) || 0) + 1));

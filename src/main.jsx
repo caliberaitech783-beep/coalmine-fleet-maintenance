@@ -1279,6 +1279,28 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
 }
+const OEM_CHART_VIEWPORT_GAP = 24;
+// Room left on screen for the OEM bars: what is below the plot's own top, less the
+// axis headroom and site captions it reserves and whatever the panel keeps under it.
+function oemChartPlotSpace(article) {
+  const root = article?.querySelector(".mine-oem-dashboard");
+  const layout = article?.querySelector(".mine-oem-chart-layout");
+  if (!root || !layout) return 0;
+  const styles = window.getComputedStyle(root);
+  const axisChrome = (parseFloat(styles.getPropertyValue("--mine-oem-chart-headroom")) || 0)
+    + (parseFloat(styles.getPropertyValue("--mine-oem-chart-caption")) || 0);
+  const rect = layout.getBoundingClientRect();
+  const below = Math.max(0, article.getBoundingClientRect().bottom - rect.bottom);
+  let room = window.innerHeight - (rect.top + window.scrollY);
+  for (let parent = layout.parentElement; parent; parent = parent.parentElement) {
+    const { overflowY } = window.getComputedStyle(parent);
+    if ((overflowY === "auto" || overflowY === "scroll") && parent.scrollHeight > parent.clientHeight) {
+      room = parent.clientHeight - (rect.top - parent.getBoundingClientRect().top + parent.scrollTop);
+      break;
+    }
+  }
+  return Math.round(room - axisChrome - below - OEM_CHART_VIEWPORT_GAP);
+}
 function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFleet = () => {}, requests = [], requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, theme = "light" }) {
   const throughputFiltersRef = useRef(null);
   const dashboardBannerRef = useRef(null);
@@ -1576,6 +1598,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const oemLocationRows = oemRowsForLocation(oemBreakdownRows, dashboardRegion, dashboardSite, availableRegions);
   const oemChart = buildOemBreakdownChart({ rows: oemLocationRows, equipment: scopedEquipment, regions: fleetRegionInsights, oem: dashboardOem });
   const oemFleetEquipment = visibleEquipment.filter(record => dashboardOem === "all" || oemLabel(record).toLowerCase() === dashboardOem);
+  // Measure the space the OEM chart may use so the panel never needs a page scroll.
+  const fleetChartRef = useRef(null);
+  const [oemPlotSpace, setOemPlotSpace] = useState(0);
+  useEffect(() => {
+    const fitOemChart = () => setOemPlotSpace(oemChartPlotSpace(fleetChartRef.current));
+    fitOemChart();
+    window.addEventListener("resize", fitOemChart);
+    return () => window.removeEventListener("resize", fitOemChart);
+  }, [showOemBreakdowns, equipmentLoaded, oemChart.axisMax, oemChart.sites.length]);
   const openOemDrilldown = (selection = {}) => {
     const filters = oemFiltersForSelection({ region: dashboardRegion, site: dashboardSite, oem: dashboardOem }, selection, availableRegions);
     setDashboardRegion(filters.region);
@@ -1871,7 +1902,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {dashboardReconnecting && <ConnectionRecoveryNotice updatedAt={dashboardUpdatedAt} retry={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} />}
       <section className="mine-dashboard-feature-row" aria-label="Fleet and repair overview">
-        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
+        <article className={`mine-panel mine-fleet-region-chart${showFleetWatermark ? " watermarked" : ""}`} ref={fleetChartRef} data-mode={fleetChartMode} aria-label={`${showOemBreakdowns ? "OEM breakdown" : showFleetBreakdowns ? "Fleet with breakdowns" : "Total fleet"} by region and site graph`}>
           <header>
             <div className="mine-fleet-chart-heading">
               <h2>{showOemBreakdowns ? "OEM BD" : "Total Fleet"}</h2>
@@ -1891,7 +1922,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
             <div className="mine-fleet-chart-tools">{!showOemBreakdowns && <div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div>}<button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
-          {equipmentLoaded ? (showOemBreakdowns ? <OemBreakdownChart chart={oemChart} from={oemFrom} to={oemTo} onSelect={openOemDrilldown} onReset={resetOemFilters} /> : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
+          {equipmentLoaded ? (showOemBreakdowns ? <OemBreakdownChart chart={oemChart} from={oemFrom} to={oemTo} availableHeight={oemPlotSpace} onSelect={openOemDrilldown} onReset={resetOemFilters} /> : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
               <div className="mine-fleet-chart-regions" style={{ minWidth: `${fleetRegionInsights.reduce((count, region) => count + Math.max(1, region.sites.length), 0) * 108}px` }}><div className="mine-fleet-chart-grid" aria-hidden="true">{fleetChartTicks.map((tick) => <i key={tick} style={{ bottom: `${fleetBarHeightPercent(tick, fleetChartAxisMax)}%` }} />)}</div>{fleetRegionInsights.map((region) => <section key={region.code} style={{ flexGrow: Math.max(1, region.sites.length), minWidth: `${Math.max(1, region.sites.length) * 108}px` }} aria-label={`${region.code} fleet sites`}>
                 <div className="mine-fleet-chart-sites">{region.sites.map((site) => <div className="mine-fleet-site-entry" key={site.name}>

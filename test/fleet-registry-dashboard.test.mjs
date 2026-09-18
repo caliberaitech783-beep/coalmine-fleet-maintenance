@@ -6,6 +6,15 @@ const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf
 const css = fs.readFileSync(new URL("../src/dashboard-concept-a.css", import.meta.url), "utf8");
 const readabilityCss = fs.readFileSync(new URL("../src/dashboard-readability.css", import.meta.url), "utf8");
 
+test("the OEM breakdown panel is measured against the screen instead of scrolling the page", () => {
+  assert.match(source, /function oemChartPlotSpace\(article\)/, "the dashboard measures the room left for the plot");
+  assert.match(source, /--mine-oem-chart-headroom/, "the axis headroom it reserves is taken from the stylesheet");
+  assert.match(source, /--mine-oem-chart-caption/, "so are the site captions under the bars");
+  assert.match(source, /mine-fleet-region-chart[^>]*ref=\{fleetChartRef\}/, "the chart panel is the element that gets measured");
+  assert.match(source, /window\.addEventListener\("resize", fitOemChart\)/, "resizing the window re-fits the chart");
+  assert.match(source, /<OemBreakdownChart chart=\{oemChart\}[^>]*availableHeight=\{oemPlotSpace\}/);
+});
+
 test("fleet intelligence connects category and group drilldowns without a region-site subpanel", () => {
   assert.match(source, /className="mine-panel mine-fleet-command"/);
   assert.match(source, /Total Equipment Intelligence/);

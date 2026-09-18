@@ -179,3 +179,18 @@ test("crowded tiny counts remain separate and connected without distorting the s
     if (index) assert.ok(center - labelCenters[index - 1] >= 18 - 1e-6);
   });
 });
+
+test("the plot uses the room the screen has left so the whole panel stays on one page", () => {
+  const chart = makeChart();
+  const unmeasured = Chart({chart}).props.plotHeight;
+  assert.ok(unmeasured >= 260, "without a measurement the chart keeps its full height");
+  assert.equal(Chart({chart, availableHeight: 0}).props.plotHeight, unmeasured);
+  const short = unmeasured - 60;
+  assert.equal(Chart({chart, availableHeight: short}).props.plotHeight, short, "a short screen shrinks the bars instead of scrolling the page");
+  assert.equal(Chart({chart, availableHeight: 5000}).props.plotHeight, unmeasured, "spare room never stretches the bars past their own size");
+  assert.equal(Chart({chart, availableHeight: 40}).props.plotHeight, 200, "the plot never collapses below a readable height");
+  const fitted = Chart({chart, availableHeight: short});
+  assert.ok(descendants(fitted, node => node.props?.className === "mine-oem-stack").length, "bars still render at the fitted height");
+  const labels = descendants(fitted, node => node.props?.className === "mine-oem-segment-label");
+  assert.ok(labels.length, "segment counts are still placed against the fitted height");
+});
