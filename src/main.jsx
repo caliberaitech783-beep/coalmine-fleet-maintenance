@@ -333,6 +333,12 @@ const adminNav = [
   ["Audit Trail", History],
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
+// Badge colour / animation key for each Administration menu entry (topbar.css).
+const adminMenuKeys = {
+  "User Sessions": "sessions", "Access structure": "access", "Hierarchy levels": "levels", "Reporting structure": "reporting",
+  "People by designation": "people", "Print helper": "print", "Request corrections": "corrections", "Backup": "backup",
+  "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule", "Audit Trail": "history", "Admin locks": "locks",
+};
 // [page name, icon, badge key]: the key picks the badge colour and hover animation (topbar.css).
 const masterNav = [
   ["Users & employees", Users, "users"],
@@ -992,8 +998,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
         >
           <div className="nav-config-row"><button className={[...adminNav.map(([name])=>name),"Admin locks"].includes(active) ? "active" : ""} aria-haspopup="menu" aria-expanded={adminOpen} onClick={() => {setAdminSelectionClosed(false);setAdminOpen((value) => !value);}}><ShieldCheck /><span className="nav-label">Admin</span><ChevronDown className="masters-chevron" /></button></div>
           <div className="masters-dropdown admin-dropdown" role="menu">
-            {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={active===name?"active":""} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><Icon /><span className="nav-label">{name}</span></button></div>)}
-            {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={active === "Admin locks" ? "active" : ""} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><ShieldCheck /><span className="nav-label">Admin locks</span></button></div>}
+            {adminNav.map(([name,Icon])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={adminMenuKeys[name] || "admin"} onClick={(event)=>selectDropdownPage(name,event,setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
+            {permissions.adminLevel === "Super Admin" && <div className="nav-config-row"><button role="menuitem" className={`workspace-menu-item${active === "Admin locks" ? " active" : ""}`} data-workspace={adminMenuKeys["Admin locks"]} onClick={(event) => selectDropdownPage("Admin locks", event, setAdminSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><ShieldCheck /><i className="workspace-icon-glow" /></span><span className="nav-label">Admin locks</span></button></div>}
           </div>
         </div>}
       </nav>

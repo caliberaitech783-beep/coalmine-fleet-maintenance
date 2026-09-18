@@ -61,3 +61,15 @@ test('the Reports menu shows each category with its own icon in a badge keyed by
   assert.match(styles,/\[data-workspace="report-maintenance"\]:hover \.workspace-icon svg[\s\S]*animation: ws-wrench/);
   assert.match(styles,/\.masters-dropdown:has\(> \.nav-config-row > \.workspace-menu-item\) \{ min-width: 262px !important; \}/,'badge menus override the narrow !important widths in style.css');
 });
+
+test('the Administration menu maps each entry to a badge key without changing the adminNav tuples',()=>{
+  assert.match(source,/const adminMenuKeys = \{\s*"User Sessions": "sessions", "Access structure": "access", "Hierarchy levels": "levels", "Reporting structure": "reporting",\s*"People by designation": "people", "Print helper": "print", "Request corrections": "corrections", "Backup": "backup",\s*"Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule", "Audit Trail": "history", "Admin locks": "locks",\s*\};/);
+  assert.match(source,/adminNav\.map\(\(\[name,Icon\]\)=><div className="nav-config-row" key=\{name\}><button role="menuitem" className=\{`workspace-menu-item\$\{active===name\?" active":""\}`\} data-workspace=\{adminMenuKeys\[name\] \|\| "admin"\}[^\n]*<span className="workspace-icon" aria-hidden="true"><Icon \/><i className="workspace-icon-glow" \/><\/span><span className="nav-label">\{name\}<\/span>/);
+  assert.match(source,/data-workspace=\{adminMenuKeys\["Admin locks"\]\}[^\n]*<span className="workspace-icon" aria-hidden="true"><ShieldCheck \/><i className="workspace-icon-glow" \/><\/span><span className="nav-label">Admin locks<\/span>/);
+  assert.match(source,/const adminNav = \[\n  \["User Sessions", UserRound\],\n  \["Access structure", Users\],/,'the tuples stay two elements: other tests pin them');
+  for(const key of ['sessions','access','levels','reporting','people','print','corrections','backup','export','import','schedule','locks'])assert.match(styles,new RegExp(`\\.workspace-menu-item\\[data-workspace="${key}"\\] \\.workspace-icon \\{ --ws-a: #[0-9a-f]{6}; --ws-b: #[0-9a-f]{6};`),key);
+  assert.match(styles,/\[data-workspace="print"\]:hover \.workspace-icon svg[\s\S]*animation: ws-press/);
+  assert.match(styles,/\[data-workspace="export"\]:hover \.workspace-icon svg[\s\S]*animation: ws-drop/);
+  assert.match(styles,/\[data-workspace="schedule"\]:hover \.workspace-icon svg[\s\S]*animation: ws-tick/);
+  for(const name of ['ws-press','ws-drop'])assert.match(styles,new RegExp(`@keyframes ${name} \\{`),name);
+});

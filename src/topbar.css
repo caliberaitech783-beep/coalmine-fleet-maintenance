@@ -494,7 +494,7 @@
   .normal-header-user { display: none !important; }
 }
 
-/* Masters, WhatsApp Integration, Operational Workspaces and Reports menus: graphical icon badges, one colour per workspace,
+/* Masters, WhatsApp Integration, Operational Workspaces, Reports and Administration menus: graphical icon badges, one colour per workspace,
    with a light sheen on hover and an icon animation while hovered / active
    (truck drives, wrench turns, shield pulses). Animations stop for people who
    prefer reduced motion. */
@@ -598,6 +598,18 @@
 .workspace-menu-item[data-workspace="report-production"] .workspace-icon { --ws-a: #fbbf24; --ws-b: #ea580c; --ws-shadow: rgba(234, 88, 12, 0.45); --ws-ring: rgba(251, 191, 36, 0.4); }
 .workspace-menu-item[data-workspace="report-maintenance"] .workspace-icon { --ws-a: #2dd4bf; --ws-b: #059669; --ws-shadow: rgba(5, 150, 105, 0.45); --ws-ring: rgba(45, 212, 191, 0.4); }
 .workspace-menu-item[data-workspace="report-mis"] .workspace-icon { --ws-a: #38bdf8; --ws-b: #4f46e5; --ws-shadow: rgba(79, 70, 229, 0.45); --ws-ring: rgba(56, 189, 248, 0.4); }
+.workspace-menu-item[data-workspace="sessions"] .workspace-icon { --ws-a: #818cf8; --ws-b: #4338ca; --ws-shadow: rgba(67, 56, 202, 0.45); --ws-ring: rgba(129, 140, 248, 0.4); }
+.workspace-menu-item[data-workspace="access"] .workspace-icon { --ws-a: #60a5fa; --ws-b: #1d4ed8; --ws-shadow: rgba(29, 78, 216, 0.45); --ws-ring: rgba(96, 165, 250, 0.4); }
+.workspace-menu-item[data-workspace="levels"] .workspace-icon { --ws-a: #a78bfa; --ws-b: #6d28d9; --ws-shadow: rgba(109, 40, 217, 0.45); --ws-ring: rgba(167, 139, 250, 0.4); }
+.workspace-menu-item[data-workspace="reporting"] .workspace-icon { --ws-a: #c084fc; --ws-b: #7c3aed; --ws-shadow: rgba(124, 58, 237, 0.45); --ws-ring: rgba(192, 132, 252, 0.4); }
+.workspace-menu-item[data-workspace="people"] .workspace-icon { --ws-a: #f472b6; --ws-b: #be185d; --ws-shadow: rgba(190, 24, 93, 0.45); --ws-ring: rgba(244, 114, 182, 0.4); }
+.workspace-menu-item[data-workspace="print"] .workspace-icon { --ws-a: #94a3b8; --ws-b: #475569; --ws-shadow: rgba(71, 85, 105, 0.5); --ws-ring: rgba(148, 163, 184, 0.4); }
+.workspace-menu-item[data-workspace="corrections"] .workspace-icon { --ws-a: #fbbf24; --ws-b: #d97706; --ws-shadow: rgba(217, 119, 6, 0.45); --ws-ring: rgba(251, 191, 36, 0.4); }
+.workspace-menu-item[data-workspace="backup"] .workspace-icon { --ws-a: #2dd4bf; --ws-b: #0f766e; --ws-shadow: rgba(15, 118, 110, 0.45); --ws-ring: rgba(45, 212, 191, 0.4); }
+.workspace-menu-item[data-workspace="export"] .workspace-icon { --ws-a: #4ade80; --ws-b: #15803d; --ws-shadow: rgba(21, 128, 61, 0.45); --ws-ring: rgba(74, 222, 128, 0.4); }
+.workspace-menu-item[data-workspace="import"] .workspace-icon { --ws-a: #22d3ee; --ws-b: #0e7490; --ws-shadow: rgba(14, 116, 144, 0.45); --ws-ring: rgba(34, 211, 238, 0.4); }
+.workspace-menu-item[data-workspace="schedule"] .workspace-icon { --ws-a: #38bdf8; --ws-b: #0369a1; --ws-shadow: rgba(3, 105, 161, 0.45); --ws-ring: rgba(56, 189, 248, 0.4); }
+.workspace-menu-item[data-workspace="locks"] .workspace-icon { --ws-a: #f87171; --ws-b: #b91c1c; --ws-shadow: rgba(185, 28, 28, 0.45); --ws-ring: rgba(248, 113, 113, 0.4); }
 
 .workspace-menu-item:hover .workspace-icon,
 .workspace-menu-item:focus-visible .workspace-icon,
@@ -672,6 +684,42 @@
 .workspace-menu-item[data-workspace="report-mis"]:hover .workspace-icon svg,
 .workspace-menu-item[data-workspace="report-mis"]:focus-visible .workspace-icon svg,
 .workspace-menu-item[data-workspace="report-mis"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="sessions"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="sessions"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="sessions"].active .workspace-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="access"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="access"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="access"].active .workspace-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="levels"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="levels"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="levels"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="reporting"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="reporting"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="reporting"].active .workspace-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="people"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="people"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="people"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="print"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="print"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="print"].active .workspace-icon svg { animation: ws-press 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="corrections"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="corrections"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="corrections"].active .workspace-icon svg { transform-origin: 20% 80%; animation: ws-wrench 0.9s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="backup"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="backup"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="backup"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="export"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="export"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="export"].active .workspace-icon svg { animation: ws-drop 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="import"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="import"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="import"].active .workspace-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="schedule"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="schedule"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="schedule"].active .workspace-icon svg { animation: ws-tick 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="locks"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="locks"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="locks"].active .workspace-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
 
 @keyframes ws-drive {
   0%, 100% { transform: translateX(-2px); }
@@ -706,6 +754,14 @@
 @keyframes ws-shuttle {
   0%, 100% { transform: translateX(-3px); }
   50% { transform: translateX(3px); }
+}
+@keyframes ws-press {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08, 0.9); }
+}
+@keyframes ws-drop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
 }
 @keyframes ws-ring {
   0% { opacity: 0.9; transform: scale(0.9); }
