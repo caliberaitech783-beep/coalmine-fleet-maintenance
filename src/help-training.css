@@ -5,3 +5,19 @@
 
 /* Keep the guide wrapper visible when the mobile header hides other spans. */
 .normal > header .normal-header-actions > .help-training-entry { display: inline-flex !important; flex-shrink: 0; }
+
+/* Help & Training trigger: an eye-catching glass badge shared by every header
+   (operational users and Manager-level admins). The badge bobs, the question
+   mark nods every few seconds, a dashed halo orbits it and a spark pulses at
+   the corner; hover lifts and brightens it. Static under reduced motion. */
+.help-training-entry>button.help-training-trigger{position:relative;isolation:isolate;display:grid;place-items:center;width:40px;height:40px;min-height:0;padding:0;border:1px solid #ffffff66;border-radius:12px;background:linear-gradient(135deg,#a855f7,#6b2fa8);color:#fff;box-shadow:0 6px 14px #6b2fa873,inset 0 1px 0 #ffffff59;cursor:pointer;transition:transform .2s ease,box-shadow .2s ease,filter .2s ease;animation:help-bob 2.8s ease-in-out infinite}
+.help-training-entry>button.help-training-trigger:hover,.help-training-entry>button.help-training-trigger:focus-visible{animation:none;transform:translateY(-2px) scale(1.06);filter:brightness(1.1);background:linear-gradient(135deg,#c084fc,#7c3aed);box-shadow:0 10px 22px #6b2fa899,0 0 0 3px #ffffff33,inset 0 1px 0 #ffffff66;outline:none;color:#fff}
+.help-training-entry>button.help-training-trigger svg{width:22px!important;height:22px!important;filter:drop-shadow(0 1px 1px #0000004d);transform-origin:50% 50%;animation:help-nod 2.8s ease-in-out infinite}
+.help-training-entry>button.help-training-trigger::before{content:"";position:absolute;inset:-5px;border:2px dashed #ffffffa6;border-radius:16px;opacity:.85;animation:help-orbit 9s linear infinite;pointer-events:none}
+.help-training-entry>button.help-training-trigger::after{content:"";position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff7cc,#fbbf24);box-shadow:0 0 0 0 #fbbf24b3;animation:help-spark 1.8s ease-out infinite;pointer-events:none}
+.help-training-entry>button.help-training-trigger>span{display:none}
+@keyframes help-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+@keyframes help-nod{0%,70%,100%{transform:rotate(0)}78%{transform:rotate(-14deg) scale(1.1)}86%{transform:rotate(12deg) scale(1.1)}94%{transform:rotate(-6deg)}}
+@keyframes help-orbit{to{transform:rotate(360deg)}}
+@keyframes help-spark{0%{box-shadow:0 0 0 0 #fbbf24b3;transform:scale(1)}60%{transform:scale(1.25)}100%{box-shadow:0 0 0 9px #fbbf2400;transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.help-training-entry>button.help-training-trigger,.help-training-entry>button.help-training-trigger svg,.help-training-entry>button.help-training-trigger::before,.help-training-entry>button.help-training-trigger::after{animation:none!important;transition:none!important}}
