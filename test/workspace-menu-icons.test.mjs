@@ -22,3 +22,17 @@ test('the three icons get their own gradient badge and animation, with reduced m
   assert.match(styles,/button\.workspace-menu-item::before \{[\s\S]*translateX\(-120%\)/,'hover sheen');
   assert.match(styles,/@media \(prefers-reduced-motion: reduce\) \{\s*\.workspace-menu-item,[\s\S]*animation: none !important/);
 });
+
+test('the WhatsApp Integration menu uses the same badge markup with its own colours and animations',()=>{
+  assert.match(source,/const whatsappMenuKey = \(name\) => \(\{ "Meta API setup": "setup", "Daily site-wise report": "site", "Daily OEM report": "oem", "WhatsApp alert history": "history" \}\)\[name\] \|\| "whatsapp";/);
+  assert.match(source,/visibleWhatsAppNav\.map\(\(\[name, Icon\]\) => \(\s*<div className="nav-config-row" key=\{name\}><button role="menuitem" className=\{`workspace-menu-item\$\{active === name \? " active" : ""\}`\} data-workspace=\{whatsappMenuKey\(name\)\}/);
+  assert.match(source,/<span className="workspace-icon" aria-hidden="true"><Icon \/><i className="workspace-icon-glow" \/><\/span><span className="nav-label">\{navigationLabel\(name\)\}<\/span>/);
+  for(const key of ['setup','site','oem','history'])assert.match(styles,new RegExp(`\\.workspace-menu-item\\[data-workspace="${key}"\\] \\.workspace-icon \\{ --ws-a: #[0-9a-f]{6}; --ws-b: #[0-9a-f]{6};`),key);
+  assert.match(styles,/\[data-workspace="setup"\]:hover \.workspace-icon svg[\s\S]*animation: ws-spin/);
+  assert.match(styles,/\[data-workspace="site"\]:hover \.workspace-icon svg[\s\S]*animation: ws-rise/);
+  assert.match(styles,/\[data-workspace="oem"\]:hover \.workspace-icon svg[\s\S]*animation: ws-shield/);
+  assert.match(styles,/\[data-workspace="history"\]:hover \.workspace-icon svg[\s\S]*animation: ws-rewind/);
+  for(const name of ['ws-spin','ws-rise','ws-rewind'])assert.match(styles,new RegExp(`@keyframes ${name} \\{`),name);
+  assert.match(styles,/\.app > aside nav \.masters-dropdown button\.workspace-menu-item \{/,'the item styling is shared by every dropdown that uses the markup');
+  assert.match(styles,/\.operational-workspaces-dropdown,\s*\.whatsapp-dropdown \{ min-width: 252px; padding: 8px; \}/);
+});

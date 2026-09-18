@@ -352,6 +352,8 @@ const whatsappNav = [
   ["Daily OEM report", ShieldCheck],
   ["WhatsApp alert history", History],
 ];
+// Badge colour / animation key for each WhatsApp Integration menu entry.
+const whatsappMenuKey = (name) => ({ "Meta API setup": "setup", "Daily site-wise report": "site", "Daily OEM report": "oem", "WhatsApp alert history": "history" })[name] || "whatsapp";
 const operationalWorkspaceNav = [
   ["Production workspace", Truck, "Production User"],
   ["Maintenance workspace", Wrench, "Maintenance User"],
@@ -911,8 +913,8 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           </button></div>
           <div className="masters-dropdown whatsapp-dropdown" role="menu">
             {visibleWhatsAppNav.map(([name, Icon]) => (
-              <div className="nav-config-row" key={name}><button role="menuitem" className={active === name ? "active" : ""} onClick={(event) => selectDropdownPage(name, event, setWhatsappSelectionClosed)}>
-                <Icon /><span className="nav-label">{navigationLabel(name)}</span>
+              <div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active === name ? " active" : ""}`} data-workspace={whatsappMenuKey(name)} onClick={(event) => selectDropdownPage(name, event, setWhatsappSelectionClosed)}>
+                <span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{navigationLabel(name)}</span>
               </button></div>
             ))}
           </div>
