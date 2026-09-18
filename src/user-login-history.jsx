@@ -1,5 +1,6 @@
 import React,{useEffect,useState} from 'react';
 import {sessionTimeSummary,formatSessionDuration} from './login-session-duration.mjs';
+import {LOGIN_ACTIVITY_FILTERS,loginActivityRows} from './login-activity.mjs';
 
 function useHistory(token,parameters,refreshKey=0){
   const [state,setState]=useState({loading:true,data:null,error:''});
@@ -34,30 +35,25 @@ export function UserLoginHistory({token,row,Modal,Table,formatDate,deviceDetails
 
 export function UserLoginActivity({token,Table,formatDate,query=''}){
   const [toolbarTarget,setToolbarTarget]=useState(null);
-  const [period,setPeriod]=useState('7d');
-  const [from,setFrom]=useState('');
-  const [to,setTo]=useState('');
-  const [range,setRange]=useState({period:'7d'});
-  const [filter,setFilter]=useState('none');
+  const [filter,setFilter]=useState('never');
   const [refresh,setRefresh]=useState(0);
-  const {loading,data,error}=useHistory(token,new URLSearchParams(range).toString(),refresh);
-  const rows=(data?.users||[]).filter(row=>(filter==='all'||(filter==='none'&&!row.sessionCount)||(filter==='active'&&row.sessionCount)||(filter==='never'&&!row.lastLogin))
-    &&[row.name,row.login,row.roleLabel,row.location].join(' ').toLowerCase().includes(query.trim().toLowerCase()));
+  // No date window here: "never logged in" means never, and the other rows show how long ago the last login was.
+  const {loading,data,error}=useHistory(token,'period=all',refresh);
+  const needle=query.trim().toLowerCase();
+  const rows=loginActivityRows(data?.users||[],filter).filter(row=>[row.name,row.login,row.roleLabel,row.location].join(' ').toLowerCase().includes(needle));
+  const neverCount=loginActivityRows(data?.users||[],'never').length;
   return <div className="login-activity-panel">
-    <div className="login-activity-heading"><div><span className="login-history-eyebrow">User activity overview</span><h2>Never logged in / Login activity</h2></div><span className="login-activity-count" role="status"><strong>{loading?'…':rows.length}</strong> users shown</span></div>
-    <form className="login-activity-controls" onSubmit={event=>{event.preventDefault();setRange(period==='custom'?{period,from,to}:{period});setRefresh(value=>value+1);}}>
-      <label>Period<select value={period} onChange={event=>{setPeriod(event.target.value);if(event.target.value==='7d')setRange({period:'7d'});}}><option value="7d">Last 7 days</option><option value="custom">Custom dates</option></select></label>
-      {period==='custom'&&<><label>From<input type="date" required value={from} onChange={event=>setFrom(event.target.value)} /></label><label>To<input type="date" required min={from} value={to} onChange={event=>setTo(event.target.value)} /></label></>}
-      <label>Activity<select value={filter} onChange={event=>setFilter(event.target.value)}><option value="none">No activity in selected period</option><option value="active">Logged in / active in selected period</option><option value="never">No recorded login history</option><option value="all">All users</option></select></label>
-      <button type="submit" className="secondary">{period==='custom'?'Apply dates':'Refresh activity'}</button>
+    <div className="login-activity-heading"><div><span className="login-history-eyebrow">User activity overview</span><h2>Never logged in / Days since last login</h2></div><span className="login-activity-count" role="status"><strong>{loading?'…':rows.length}</strong> users shown{data&&!loading?` · ${neverCount} never logged in`:''}</span></div>
+    <form className="login-activity-controls" onSubmit={event=>{event.preventDefault();setRefresh(value=>value+1);}}>
+      <label>Show<select value={filter} onChange={event=>setFilter(event.target.value)}>{LOGIN_ACTIVITY_FILTERS.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+      <button type="submit" className="secondary">Refresh</button>
     </form>
-    <p className="login-activity-range">{data?`${formatDate(data.from)} — ${formatDate(data.to)}`:''}</p>
-    <details className="login-history-help"><summary>About login history and activity</summary><p>“No recorded login” means no retained history is available; it does not prove the account has never been used. Continuous tracking began {data?.trackingSince?formatDate(data.trackingSince):'recently'}. Login days counts days with a new sign-in, not total time worked.</p></details>
+    <details className="login-history-help"><summary>About login history and activity</summary><p>“Never logged in” means no login is on record for the account. Days since last login count India calendar days from the most recent recorded login. Continuous tracking began {data?.trackingSince?formatDate(data.trackingSince):'recently'}; an account created before that with no later login also shows as never logged in. Login days counts days with a new sign-in, not total time worked.</p></details>
     {error&&<p role="alert">{error}</p>}
     <div className="login-activity-table-actions" ref={setToolbarTarget} />
-    <div className="login-history-table login-activity-scroll" tabIndex={0} role="region" aria-label="User activity results, scroll to view more users"><Table preserveColumnOrder toolbarTarget={toolbarTarget} toolbarPortal exportTitle="User login activity"><thead><tr><th>User</th><th>Login name</th><th>Role</th><th>Location</th><th>Activity</th><th>Logins in period</th><th>Days with logins</th><th>Last recorded login</th></tr></thead><tbody>
-      {rows.map(row=><tr key={row.id}><td>{row.name||row.login}</td><td>{row.login}</td><td>{row.roleLabel}</td><td>{row.location}</td><td>{row.activity}</td><td>{row.loginCount}</td><td>{row.loginDays}</td><td>{row.lastLogin?formatDate(row.lastLogin):'No recorded login'}</td></tr>)}
-      {!rows.length&&<tr><td colSpan="8">{loading?'Loading activity…':'No users match this view.'}</td></tr>}
+    <div className="login-history-table login-activity-scroll" tabIndex={0} role="region" aria-label="User activity results, scroll to view more users"><Table preserveColumnOrder toolbarTarget={toolbarTarget} toolbarPortal exportTitle="User login activity"><thead><tr><th>User</th><th>Login name</th><th>Role</th><th>Location</th><th>Status</th><th>Days since last login</th><th>Last recorded login</th><th>Total logins</th><th>Days with logins</th></tr></thead><tbody>
+      {rows.map(row=><tr key={row.id} className={row.daysSince===null?'login-never':''}><td>{row.name||row.login}</td><td>{row.login}</td><td>{row.roleLabel}</td><td>{row.location}</td><td>{row.status}</td><td>{row.daysSince===null?'—':row.daysSince}</td><td>{row.lastLogin?formatDate(row.lastLogin):'Never'}</td><td>{row.loginCount}</td><td>{row.loginDays}</td></tr>)}
+      {!rows.length&&<tr><td colSpan="9">{loading?'Loading activity…':'No users match this view.'}</td></tr>}
     </tbody></Table></div>
   </div>;
 }

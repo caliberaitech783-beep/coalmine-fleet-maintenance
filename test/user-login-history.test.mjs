@@ -8,6 +8,7 @@ test('history windows use rolling hours and inclusive India calendar dates',()=>
   const now=new Date('2026-09-14T12:00:00Z');
   assert.equal(loginHistoryRange({period:'24h'},now).from.toISOString(),'2026-09-13T12:00:00.000Z');
   assert.equal(loginHistoryRange({},now).from.toISOString(),'2026-09-07T12:00:00.000Z');
+  assert.deepEqual(loginHistoryRange({period:'all'},now),{from:new Date('2000-01-01T00:00:00Z'),to:now},'the Never logged in view asks for every retained login, no date window');
   const range=loginHistoryRange({period:'custom',from:'2026-09-01',to:'2026-09-07'});
   assert.equal(range.from.toISOString(),'2026-08-31T18:30:00.000Z');
   assert.equal(range.to.toISOString(),'2026-09-07T18:30:00.000Z');

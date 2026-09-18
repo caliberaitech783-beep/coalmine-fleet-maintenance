@@ -100,3 +100,4 @@ header > button.modal-back-button { display: inline-flex; align-items: center; j
 .modal-back-button:focus-visible { outline: 2px solid #7043ad; outline-offset: 3px; }
 .modal-back-button:disabled { opacity: .5; cursor: not-allowed; }
 .modal > header > h3 { flex: 1; min-width: 0; }
+.login-history-table tr.login-never td:nth-child(6) { color: #b23836; font-weight: 800; }

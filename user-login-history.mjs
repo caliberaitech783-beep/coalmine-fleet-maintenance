@@ -30,6 +30,8 @@ export async function initializeLoginHistory(pool) {
 
 export function loginHistoryRange(query={}, now=new Date()) {
   if(query.period==='24h')return {from:new Date(now.getTime()-86400000),to:now};
+  // "all": every retained login, so the Never logged in view needs no dates.
+  if(query.period==='all')return {from:new Date('2000-01-01T00:00:00Z'),to:now};
   if(query.period!=='custom')return {from:new Date(now.getTime()-7*86400000),to:now};
   const valid=value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')) && !Number.isNaN(Date.parse(`${value}T00:00:00+05:30`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0,10)===value;
   if(!valid(query.from)||!valid(query.to))throw new Error('Select valid From and To dates.');
