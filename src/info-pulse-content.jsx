@@ -7,6 +7,7 @@ import {requestStatusLabel} from './request-status.mjs';
 import {pulseDailyUpdates, pulseDelayReason} from './info-pulse-reasons.mjs';
 import {DailyUpdatesPanel} from './daily-updates-list.jsx';
 import {PULSE_TIERS, pulseBreakdownRows, pulseElapsed, pulseTierCounts} from './info-pulse-timing.mjs';
+import {pulseExportColumns} from './info-pulse-export.mjs';
 
 const tierIcons = {all: Activity, critical: AlertTriangle, warning: Clock, open: Truck};
 const PERIODS = [1, 7, 14, 30];
@@ -31,7 +32,7 @@ function ChipRow({name, label, allLabel, options, value, choose}) {
 // Info Pulse: dashboard-style filters (region tabs, site and equipment/vehicle
 // chips, started-date range defaulting to today), four standing-time KPI cards
 // and one ranked list of open breakdowns, longest standing first.
-export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh}) {
+export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, ExportMenu = null}) {
   const today = infoPulseDate(new Date(now ?? Date.now()).toISOString());
   // BD balance as of today: every open breakdown started on or before today.
   const defaults = {region: 'all', site: '', category: '', from: '', to: today};
@@ -63,10 +64,13 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
   const siteLabel = view.selection.site ? view.sites.find(site => site.key === view.selection.site)?.label || '' : '';
   const regionLabel = view.selection.region === 'all' && regions.length === 1 ? regions[0].label : view.regionLabel;
   const placeCaption = [regionLabel, siteLabel, view.selection.category].filter(Boolean).join(' · ');
+  // Export beside Refresh: PDF, Excel and Smart Print of every breakdown in the current selection (tier, filters and order), through the app's shared ExportMenu when the panel passes it in.
+  const exportTitle = `Info Pulse ${selected.label} breakdowns · ${placeCaption} · ${dateCaption}`;
   return <div className="pulse-content">
     <div className="pulse-toolbar">
       <p className="pulse-lede">Every open breakdown in <b>{siteLabel || (view.selection.region !== 'all' && view.regionLabel) || scopeLabel}</b>, longest standing first. Idle, closed and verified requests are not counted. Dates and times in IST.</p>
       <div className="pulse-refresh-group"><span className="pulse-updated">{updatedAt ? `Updated ${formatDisplayDateTime(updatedAt)} IST` : 'Not refreshed yet'}</span>
+        {ExportMenu && ready && <ExportMenu title={exportTitle} columns={pulseExportColumns(now)} rows={shown} className="pulse-refresh pulse-export" portalClassName="pulse-export-layer" />}
         <button type="button" className="pulse-refresh" onClick={onRefresh} disabled={refreshing} aria-label="Refresh Info Pulse"><RefreshCw size={16} />{refreshing ? 'Refreshing…' : 'Refresh'}</button>
       </div>
     </div>

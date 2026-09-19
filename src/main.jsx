@@ -2850,10 +2850,10 @@ function CaliberActivityMark({ size = "medium" }) {
     </span>
   );
 }
-function CaliberActivityOverlay({ message = "" }) {
+function CaliberActivityOverlay({ message = "", className = "" }) {
   if (!message) return null;
   return createPortal(
-    <div className="caliber-activity-overlay" role="status" aria-live="polite" aria-label={message}>
+    <div className={`caliber-activity-overlay${className ? ` ${className}` : ""}`} role="status" aria-live="polite" aria-label={message}>
       <div className="caliber-activity-panel">
         <CaliberActivityMark size="large" />
         <strong>{message}</strong>
@@ -3093,7 +3093,8 @@ setSmartPrintPrinterSource(async () => (await printHelperAvailable({ token: () =
 function PrintButton({ title, columns = [], rows = [], className = "secondary", highlightRow }) {
   return <button type="button" className={`${className} print-table-trigger`} onClick={() => openSmartPrint({ title, columns, rows, highlightRow, onPrint: printTableReport, formatCell: exportCellText })}><Printer /><span>Smart Print</span></button>;
 }
-function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Export", printOnly = false, highlightRow, reportGrouping, dashboardPdf = false }) {
+// portalClassName reaches the export menu and the "preparing file" overlay, both portaled to the body: a caller inside a higher overlay (Info Pulse) uses it to raise them above itself.
+function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Export", printOnly = false, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "" }) {
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -3171,7 +3172,7 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
     openSmartPrint({ title, columns: smartPrintColumns, rows: smartPrintRows, highlightRow, reportGrouping, onPrint: printTableReport, formatCell: exportCellText });
   };
   if (printOnly) return <button type="button" className={className} onClick={printReport} aria-label={`Smart Print ${title}`}><Printer /><span>Smart Print</span></button>;
-  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className="export-menu-popover" style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} /></>;
+  return <><div className="export-menu"><button ref={triggerRef} type="button" className={`${className} export-menu-trigger`} onClick={() => setOpen((current) => !current)} disabled={Boolean(downloadActivity)} aria-expanded={open} aria-haspopup="menu"><Download /><span>{label}</span><ChevronDown /></button>{open && createPortal(<div className={`export-menu-popover${portalClassName ? ` ${portalClassName}` : ""}`} style={popoverPosition} role="menu" aria-label={`${title} export options`}><button type="button" role="menuitem" onClick={downloadPdf} disabled={Boolean(downloadActivity)}><Download /> Download as PDF</button><button type="button" role="menuitem" onClick={downloadExcel} disabled={Boolean(downloadActivity)}><FileSpreadsheet /> Download as Excel</button><button type="button" role="menuitem" onClick={printReport}><Printer /> Smart Print</button></div>, document.body)}</div><CaliberActivityOverlay message={downloadActivity} className={portalClassName} /></>;
 }
 function ReportColumnSelector({ columns = [], visibleColumnKeys = [], layoutStore, onApply, onClose }) {
   const [draftKeys, setDraftKeys] = useState(visibleColumnKeys);
@@ -9136,7 +9137,7 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
-      <InfoPulseContent breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} />
+      <InfoPulseContent breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} />
     </div>
   </div>, document.body);
 }

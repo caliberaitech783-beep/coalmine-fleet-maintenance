@@ -10,6 +10,7 @@ import * as dates from '../date-time-format.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import * as timing from '../src/info-pulse-timing.mjs';
 import * as reasons from '../src/info-pulse-reasons.mjs';
+import * as exportModel from '../src/info-pulse-export.mjs';
 import * as dailyUpdatesOrder from '../src/daily-updates-order.mjs';
 
 const source = readFileSync(new URL('../src/info-pulse-content.jsx', import.meta.url), 'utf8')
@@ -55,7 +56,7 @@ function harness() {
   const slots = [], effects = [], timers = [];
   let cursor = 0;
   const bindings = {
-    React, ...data, ...dates, ...timing, ...reasons, requestStatusLabel, parseIstTimestamp, DailyUpdatesPanel,
+    React, ...data, ...dates, ...timing, ...reasons, ...exportModel, requestStatusLabel, parseIstTimestamp, DailyUpdatesPanel,
     useState(initial) {const slot = cursor++; if (!(slot in slots)) slots[slot] = typeof initial === 'function' ? initial() : initial; return [slots[slot], next => {slots[slot] = typeof next === 'function' ? next(slots[slot]) : next;}];},
     useEffect(callback) {const slot = cursor++; if (!(slot in slots)) {slots[slot] = true; effects.push(callback);}},
     setTimeout(callback, delay) {timers.push({callback, delay}); return timers.length;},
@@ -432,4 +433,44 @@ test('the filter panel opens collapsed with a purple blinking cue that clears af
   const css = readFileSync(new URL('../src/info-pulse-content.css', import.meta.url), 'utf8');
   assert.match(css, /\.pulse-filter-panel\.pulse-filter-hint \{ border: 2px solid var\(--record-purple\); animation: pulse-filter-blink/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{ \.pulse-filter-panel\.pulse-filter-hint, \.pulse-filter-cue \{ animation: none; \} \}/);
+});
+
+test('Export beside Refresh offers PDF, Excel and Smart Print for every breakdown in the current selection', () => {
+  const ExportMenu = () => null;
+  const exportOf = tree => descendants(tree, node => node.type === ExportMenu)[0];
+  // The panel passes the app's shared menu; without it, or before the first load, nothing is offered.
+  assert.equal(exportOf(render()), undefined);
+  assert.equal(exportOf(render({ExportMenu, ready: false})), undefined);
+  const {app, tree} = allDates({ExportMenu});
+  const group = descendants(tree, node => node.props.className === 'pulse-refresh-group')[0];
+  assert.deepEqual(group.props.children.map(child => child.type === ExportMenu ? 'Export' : child.props.className), ['pulse-updated', 'Export', 'pulse-refresh']);
+  const menu = exportOf(tree);
+  assert.equal(menu.props.title, 'Info Pulse BD balance breakdowns · All regions · All dates');
+  assert.equal(menu.props.className, 'pulse-refresh pulse-export');
+  assert.equal(menu.props.portalClassName, 'pulse-export-layer');
+  assert.deepEqual(menu.props.columns.map(column => column.label), exportModel.pulseExportColumns(NOW).map(column => column.label));
+  assert.deepEqual(menu.props.rows.map(row => row.request.door), ['D38', 'W1', 'J9', 'V167', 'S145']);
+  const cell = (row, label) => menu.props.columns.find(column => column.label === label).value(row);
+  assert.equal(cell(menu.props.rows[0], 'Down for'), '2d 2h 59m');
+  assert.equal(cell(menu.props.rows[3], 'ETC status'), 'Overdue by 4h 40m');
+  // Narrowing to a KPI tier narrows the export too, and the title says so.
+  byLabel(tree, 'Critical: 1').props.onClick();
+  const critical = exportOf(app.render({ExportMenu}));
+  assert.equal(critical.props.title, 'Info Pulse Critical breakdowns · All regions · All dates');
+  assert.deepEqual(critical.props.rows.map(row => row.request.door), ['D38']);
+  // Every filtered breakdown is exported, not only the 24 rendered so far.
+  const requests = Array.from({length: 30}, (_, index) => ({ref: `REQ-EXPORT-${index + 1}`, door: `EXPORT-${index + 1}`, site: 'Sasti OB', status: 'Open', start: `2026-09-16 09:${String(index % 60).padStart(2, '0')}`, complaint: 'Export fixture'}));
+  const wide = render({ExportMenu, requests});
+  assert.equal(exportOf(wide).props.rows.length, 30);
+  assert.equal(descendants(byLabel(wide, 'BD balance breakdowns, longest standing first'), node => node.type === 'li').length, 24);
+  assert.equal(exportOf(wide).props.title, 'Info Pulse BD balance breakdowns · All regions · Until 16-09-2026');
+  // The panel hands over the shared menu, whose popover and "preparing file" overlay are raised above the full-screen panel.
+  const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
+  assert.match(main, /<InfoPulseContent breakdowns=\{breakdowns\}[^\r\n]* ExportMenu=\{ExportMenu\} \/>/);
+  assert.match(main, /function ExportMenu\(\{[^\r\n]*, portalClassName = "" \}\) \{/);
+  assert.match(main, /className=\{`export-menu-popover\$\{portalClassName \? ` \$\{portalClassName\}` : ""\}`\}/);
+  assert.match(main, /<CaliberActivityOverlay message=\{downloadActivity\} className=\{portalClassName\} \/>/);
+  const css = readFileSync(new URL('../src/info-pulse-content.css', import.meta.url), 'utf8');
+  assert.match(css, /\.export-menu-popover\.pulse-export-layer, \.caliber-activity-overlay\.pulse-export-layer \{ z-index: 10001; \}/);
+  assert.match(css, /\.pulse-export svg:first-child \{ width: 16px; height: 16px; \}/);
 });

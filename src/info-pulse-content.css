@@ -43,6 +43,11 @@
 .pulse-updated { font-size: 13px; color: #6b7891; white-space: nowrap; }
 .pulse-refresh { display: inline-flex; align-items: center; gap: 6px; min-height: 38px; padding: 8px 14px; border: 1px solid #d3c9e4; border-radius: 8px; background: #fff; color: #522e90; font: inherit; font-weight: 700; }
 .pulse-refresh:hover:not(:disabled) { background: #f1ecf8; }
+/* Export (PDF, Excel, Smart Print) sits beside Refresh in the same button style. Its menu and the
+   "preparing file" overlay are portaled to the body, so both are raised above the full-screen
+   Info Pulse overlay (z-index 10000 in ai-feeder.css). */
+.pulse-export svg:first-child { width: 16px; height: 16px; }
+.export-menu-popover.pulse-export-layer, .caliber-activity-overlay.pulse-export-layer { z-index: 10001; }
 .pulse-content button:disabled { cursor: default; opacity: .65; }
 .pulse-message { margin: 0; padding: 28px 16px; text-align: center; color: #536179; }
 .pulse-message.pulse-error { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 16px; border: 1px solid #f3c1cb; border-radius: 10px; background: #fff1f3; color: #8e1d33; }
@@ -178,7 +183,8 @@
   .pulse-panel h2 { font-size: 19px; }
   .pulse-content { padding: 12px 14px 20px; }
   .pulse-toolbar { flex-direction: column; align-items: stretch; }
-  .pulse-refresh-group { margin-left: 0; justify-content: space-between; }
+  .pulse-refresh-group { margin-left: 0; flex-wrap: wrap; justify-content: space-between; }
+  .pulse-refresh-group .pulse-updated { flex: 1 1 100%; }
   .pulse-filter-panel { padding: 8px 12px 10px; }
   .pulse-filter-summary { flex-wrap: wrap; gap: 6px 10px; }
   .pulse-region-tabs { width: 100%; box-sizing: border-box; }
