@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import RecordDateRange from "./record-date-range.jsx";
 import { primaryRecordDateColumn } from "./record-date-range.mjs";
 import { defaultDurationSort } from "./duration-sort.mjs";
-import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder } from "./table-actions-model.mjs";
+import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, closedTimeAfterStartedColumns, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder } from "./table-actions-model.mjs";
 import { mobileTablePageSize } from "./mobile-performance.mjs";
 import { useTableLayouts, TableLayoutSelect } from "./table-layouts.jsx";
 import "./table-actions.css";
@@ -28,13 +28,7 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, gro
       columns.splice(columns.indexOf(location) + 1, 0, ...dates);
     }
   }
-  if (closedTimeAfterStarted) {
-    const closed = columns.findIndex(column => column.label.trim().toLowerCase() === "closed time");
-    if (closed >= 0 && columns.some(column => column.label.trim().toLowerCase() === "started")) {
-      const [column] = columns.splice(closed, 1);
-      columns.splice(columns.findIndex(item => item.label.trim().toLowerCase() === "started") + 1, 0, column);
-    }
-  }
+  if (closedTimeAfterStarted) closedTimeAfterStartedColumns(columns);
   if (tableProps["data-verification-last"] === "true") {
     const verification = ["mis verified at", "first trip time"].flatMap(label => columns.filter(column => column.label.trim().toLowerCase() === label));
     for (const column of verification) columns.splice(columns.indexOf(column), 1);

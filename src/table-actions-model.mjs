@@ -106,6 +106,21 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
   return [...lead, ...ordered.filter((column) => !lead.includes(column))];
 }
 
+// Closed history and MIS requests read the closing time beside Started, in the table, its exports and prints.
+// Columns come from FilterableHeader keys (start / closedAt) or from plain heading text; the idle date, when shown, stays between them.
+export function closedTimeAfterStartedColumns(columns) {
+  const labelOf = (column) => String(column?.label || "").trim().toLowerCase();
+  const isClosedTime = (column) => column.key === "closedAt" || /^(?:closed time|closing time|maintenance closing time)$/.test(labelOf(column));
+  const isStarted = (column) => column.key === "start" || /^(?:started|production date and time)$/.test(labelOf(column));
+  const closed = columns.findIndex(isClosedTime);
+  if (closed < 0 || !columns.some(isStarted)) return columns;
+  const [column] = columns.splice(closed, 1);
+  let target = columns.findIndex(isStarted) + 1;
+  if (labelOf(columns[target]) === "idle vehicle date") target += 1;
+  columns.splice(target, 0, column);
+  return columns;
+}
+
 export function jobReferenceColumnsLast(columns) {
   const isJobReference = (column) => /^job\s+ref(?:erence)?s?\.?$/i.test(column.label.trim());
   let ordered = [...columns.filter((column) => !isJobReference(column)), ...columns.filter(isJobReference)];
