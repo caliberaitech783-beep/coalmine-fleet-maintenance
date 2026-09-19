@@ -1,12 +1,12 @@
-// Stock-ticker style change for a live dashboard count. The count is compared
-// with today's opening reading: the first value seen on the device today, so
-// the change resets to 0 at 12 AM every day. The arrow, delta and badge colour
-// then move live as the count rises and falls through the day.
-export const BREAKDOWN_COUNT_STORAGE_KEY = "fleetBreakdownCountOpen";
+// The operating day is shared by every device and starts at midnight in India.
+const INDIA_OFFSET_MS = 330 * 60_000;
 
-export function localDayKey(date = new Date()) {
-  const pad = (value) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+export function indiaCountDayWindow(now = new Date()) {
+  const date = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(date.getTime())) throw new TypeError("A valid timestamp is required.");
+  const day = new Date(date.getTime() + INDIA_OFFSET_MS).toISOString().slice(0, 10);
+  const openingAt = new Date(`${day}T00:00:00+05:30`);
+  return { day, openingAt, nextMidnightAt: new Date(openingAt.getTime() + 86_400_000) };
 }
 
 export function resolveCountTrend(previous, current) {
@@ -14,34 +14,10 @@ export function resolveCountTrend(previous, current) {
   return current > previous ? "up" : "down";
 }
 
-function readRecord(storage, key) {
-  try {
-    const parsed = JSON.parse(storage?.getItem?.(key) ?? "null");
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeRecord(storage, key, record) {
-  try {
-    storage?.setItem?.(key, JSON.stringify(record));
-  } catch {
-    // Storage may be unavailable (private mode, quota); the ticker then uses this page load as the opening.
-  }
-}
-
-// Returns { open, delta, direction } for `current` against today's opening
-// reading, and records `current` as the latest reading (today's running close).
-export function trackCountChange(storage, key, current, dayKey = localDayKey()) {
-  if (!Number.isFinite(current)) return null;
-  const stored = readRecord(storage, key);
-  let open;
-  if (stored?.day === dayKey && Number.isFinite(stored.open)) open = stored.open;
-  else open = current;
-  writeRecord(storage, key, { day: dayKey, open, last: current });
+export function dailyCountChange(open, current, day) {
+  if (!Number.isSafeInteger(open) || !Number.isSafeInteger(current) || open < 0 || current < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
   const delta = current - open;
-  return { open, delta, direction: resolveCountTrend(open, current) ?? "flat" };
+  return { day, open, current, delta, direction: resolveCountTrend(open, current) ?? "flat" };
 }
 
 export function formatCountDelta(delta) {

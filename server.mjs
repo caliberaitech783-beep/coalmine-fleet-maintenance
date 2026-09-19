@@ -53,6 +53,8 @@ import {normalizeSessionMessage,sessionMessagePayloadValidationError} from './se
 import {BACKUP_FORMAT,backupFileName,exportDatabase,readBackupRecords,restoreDatabase} from './database-backup.mjs';
 import {BACKUP_SETTING_KEY,DEFAULT_BACKUP_SETTINGS,indiaBackupSlot,normalizeBackupSettings,scheduledBackupDue} from './backup-settings.mjs';
 import {dashboardFleetSnapshot} from './dashboard-fleet-snapshot.mjs';
+import {fleetChartCounts} from './dashboard-equipment-metrics.mjs';
+import {dailyCountChange,indiaCountDayWindow} from './src/fleet-count-trend.mjs';
 import {REGION_DATA,displaySiteName,displaySiteSelection,managerReportScope,normalizeOperationalSiteFields,normalizeUserSiteFields,reportScopeIncludesSite,userSiteScope,userSiteSelection} from './region-scope.mjs';
 import {attachRequestOems,consolidatedReportDue,consolidatedReportWindow,prepareConsolidatedRows} from './consolidated-whatsapp-report.mjs';
 import {buildFleetConsolidatedReportPdf,buildTicketConsolidatedReportPdf} from './consolidated-report-pdf.mjs';
@@ -5453,17 +5455,40 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       id,
       ...(record_data&&typeof record_data==='object'&&!Array.isArray(record_data)?record_data:{}),
     }));
-    const {rows:activeFleetRequests}=await pool.query(`SELECT equipment_name AS equipment, equipment_group AS "equipmentGroup",
+    // Rebuild the midnight opening fleet from shared request history. The
+    // account's full site assignment is applied to both snapshots below.
+    const countDay=indiaCountDayWindow();
+    const {rows:fleetRequests}=await pool.query(`SELECT reference AS ref, equipment_name AS equipment, equipment_group AS "equipmentGroup",
       door_number AS door, registration_number AS reg, chassis_number AS chassis, site, status, owner_name AS owner,
-      to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt"
-      FROM maintenance_requests WHERE lower(trim(status)) <> 'closed'`);
+      to_char(created_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "createdAt",
+      lower(trim(status)) <> 'closed' AS "currentlyActive",
+      started_at < $1 AND (closed_at IS NULL OR closed_at >= $1) AS "openAtMidnight",
+      CASE WHEN ideal_requested_at IS NOT NULL AND ideal_requested_at < $1
+        AND (ideal_approved_at IS NULL OR ideal_approved_at >= $1) THEN 'Idle'
+        WHEN ideal_requested_at IS NULL AND lower(trim(status)) IN ('idle','ideal') THEN 'Idle'
+        ELSE 'In progress' END AS "midnightStatus"
+      FROM maintenance_requests
+      WHERE lower(trim(status)) <> 'closed'
+        OR (started_at < $1 AND (closed_at IS NULL OR closed_at >= $1))`,[countDay.openingAt]);
+    const activeFleetRequests=fleetRequests.filter(row=>row.currentlyActive??String(row.status||'').trim().toLowerCase()!=='closed');
+    const openingFleetRequests=fleetRequests.filter(row=>row.openAtMidnight).map(row=>({...row,status:row.midnightStatus}));
     const fleetSnapshot=dashboardFleetSnapshot(records,activeFleetRequests);
+    const openingFleetSnapshot=dashboardFleetSnapshot(records,openingFleetRequests);
+    const scopedFleet=scopeDashboardEquipmentRecords(fleetSnapshot,authorization.session,authorization.user,scope);
+    const scopedOpeningFleet=scopeDashboardEquipmentRecords(openingFleetSnapshot,authorization.session,authorization.user,scope);
+    const breakdownCountChange=dailyCountChange(
+      fleetChartCounts(scopedOpeningFleet).breakdown.total,
+      fleetChartCounts(scopedFleet).breakdown.total,
+      countDay.day,
+    );
     const payload={
-      records:scopeDashboardEquipmentRecords(fleetSnapshot,authorization.session,authorization.user,scope),
+      records:scopedFleet,
       scope,
+      breakdownCountChange,
+      nextCountDayAt:countDay.nextMidnightAt.toISOString(),
     };
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'dashboard-equipment',payload);
-    return res.json({records:payload.records,scope:payload.scope});
+    return res.json(payload);
   }catch(error){next(error)}
 });
 

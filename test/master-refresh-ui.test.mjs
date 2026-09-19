@@ -11,6 +11,11 @@ const dashboardHook = source.slice(source.indexOf("function useDashboardEquipmen
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const oldEquipment = [{id: 1, door: "D-01"}];
 const newEquipment = [...oldEquipment, {id: 2, door: "D-02"}];
+const fleetResponse = (records, scope, current = 0) => ({
+  records, scope,
+  breakdownCountChange: {day: "2026-09-19", open: 0, current, delta: current, direction: current ? "up" : "flat"},
+  nextCountDayAt: new Date(Date.now() + 60_000).toISOString(),
+});
 function harness(hookName = "useMasterRecords") {
   let cursor = 0, now = 0, timerId = 0;
   const slots = [], effects = new Map(), queued = [], requests = [];
@@ -30,7 +35,7 @@ function harness(hookName = "useMasterRecords") {
     const index = cursor++;
     const prior = effects.get(index);
     if (!prior || deps.some((value, i) => !Object.is(value, prior.deps[i]))) {
-      queued.push(() => {prior?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
+      queued.push(() => {effects.get(index)?.cleanup?.(); effects.set(index, {deps, cleanup: effect()});});
     }
   };
   const scope = {
@@ -80,7 +85,7 @@ test("refresh replaces a successful empty equipment result with newly added mast
 for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${hookName}: mounted role views refresh on focus/visibility and their live polling interval, never while hidden`, async () => {
   const app = harness(hookName);
   const fleetScope = {restrictToScope: true, allowedSites: ["Sasti OB"], allowedRegions: null};
-  const response = records => hookName === "useMasterRecords" ? {"Equipment master": records} : {records, scope: fleetScope};
+  const response = records => hookName === "useMasterRecords" ? {"Equipment master": records} : fleetResponse(records, fleetScope);
   const records = () => hookName === "useMasterRecords" ? app.render()[0] : app.render().records;
   app.render(); app.effects();
   app.requests[0].respond(response(oldEquipment)); await settle();
@@ -102,6 +107,7 @@ for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${ho
     assert.equal(app.render().loaded, true, "a failed refresh retains the last confirmed snapshot with a reconnecting error");
     assert.equal(app.render().loadError, "Temporary network error");
   }
+  app.effects();
   app.unmount();
   assert.equal(app.timers.size, 0);
   assert.equal(app.timeouts.size, 0);
@@ -114,14 +120,14 @@ test("dashboard refresh never leaks previous account fleet data or scope", async
   const app = harness("useDashboardEquipment");
   const fleetScope = {restrictToScope: true, allowedSites: ["Sasti OB"], allowedRegions: null};
   app.render(); app.effects();
-  app.requests[0].respond({records: oldEquipment, scope: fleetScope}); await settle();
+  app.requests[0].respond(fleetResponse(oldEquipment, fleetScope)); await settle();
   app.render().retry(); app.render(); app.effects();
   app.setToken("fixture-account-b"); app.render(); app.effects();
   assert.equal(app.requests[1].options.signal.aborted, true);
   assert.deepEqual(app.render().records, []);
   assert.equal(app.render().scope, null);
   assert.equal(app.render().loaded, false);
-  app.requests[1].respond({records: newEquipment, scope: fleetScope}); await settle();
+  app.requests[1].respond(fleetResponse(newEquipment, fleetScope)); await settle();
   app.requests[2].reject(new Error("No connection")); await settle();
   assert.deepEqual(app.render().records, []);
   assert.equal(app.render().scope, null);
@@ -135,17 +141,17 @@ test("cross-tab closure refreshes a same-size fleet snapshot and failure recover
   const offroad = [{id: 1, door: "D-01", dashboardRoadStatus: "offroad"}];
   const onroad = [{...offroad[0], dashboardRoadStatus: "onroad"}];
   app.render(); app.effects();
-  app.requests[0].respond({records: offroad, scope}); await settle();
+  app.requests[0].respond(fleetResponse(offroad, scope, 1)); await settle();
   app.storage();
   assert.equal(app.requests.length, 2);
-  app.requests[1].respond({records: onroad, scope}); await settle();
+  app.requests[1].respond(fleetResponse(onroad, scope)); await settle();
   assert.deepEqual(app.render().records, onroad);
   app.tick(10_000);
   app.requests[2].reject(new Error("Temporary network error")); await settle();
   assert.equal(app.render().loaded, true);
   assert.equal(app.render().loadError, "Temporary network error");
   app.tick(10_000);
-  app.requests[3].respond({records: onroad, scope}); await settle();
+  app.requests[3].respond(fleetResponse(onroad, scope)); await settle();
   assert.equal(app.render().loaded, true);
   assert.equal(app.render().loadError, "");
   app.unmount();
@@ -153,11 +159,24 @@ test("cross-tab closure refreshes a same-size fleet snapshot and failure recover
   assert.equal(app.timeouts.size, 0);
 });
 
+test("the fleet count refreshes when the server's next midnight arrives", async () => {
+  const app = harness("useDashboardEquipment");
+  const scope = {restrictToScope: true, allowedSites: ["Majri OB"], allowedRegions: []};
+  app.render(); app.effects();
+  app.requests[0].respond(fleetResponse(oldEquipment, scope)); await settle();
+  app.render(); app.effects();
+  const midnight = [...app.timeouts.values()].find(({duration}) => duration > 15_000);
+  assert.ok(midnight, "a refresh is scheduled for the next operating day");
+  midnight.fn(); app.render(); app.effects();
+  assert.equal(app.requests.length, 2);
+  app.unmount();
+});
+
 test("fleet refresh retains its timestamp through errors and retries until success", async () => {
   const app = harness("useDashboardEquipment");
   const scope = {restrictToScope: true, allowedSites: ["Majri OB"], allowedRegions: []};
   app.render(); app.effects();
-  app.requests[0].respond({records: oldEquipment, scope}); await settle();
+  app.requests[0].respond(fleetResponse(oldEquipment, scope)); await settle();
   const checked = app.render().updatedAt;
   assert.ok(checked > 0);
   app.tick(10_000);
@@ -167,7 +186,7 @@ test("fleet refresh retains its timestamp through errors and retries until succe
   app.render().retry(); app.render(); app.effects();
   assert.equal(app.render().loaded, true);
   assert.equal(app.render().loadError, "Offline", "retry alone must not restore Live");
-  app.requests[2].respond({records: newEquipment, scope}); await settle();
+  app.requests[2].respond(fleetResponse(newEquipment, scope)); await settle();
   assert.equal(app.render().loadError, "");
   assert.ok(app.render().updatedAt >= checked);
   app.unmount();
@@ -176,7 +195,7 @@ test("fleet refresh retains its timestamp through errors and retries until succe
 for (const status of [401, 403]) test(`fleet HTTP ${status} clears cached records and scope`, async () => {
   const app = harness("useDashboardEquipment");
   app.render(); app.effects();
-  app.requests[0].respond({records: oldEquipment, scope: {restrictToScope: true, allowedSites: ["Majri OB"], allowedRegions: []}}); await settle();
+  app.requests[0].respond(fleetResponse(oldEquipment, {restrictToScope: true, allowedSites: ["Majri OB"], allowedRegions: []})); await settle();
   app.tick(10_000);
   app.requests[1].respond("not JSON", false, status); await settle();
   assert.equal(app.render().loaded, false);

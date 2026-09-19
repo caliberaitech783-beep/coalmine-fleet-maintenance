@@ -237,7 +237,7 @@ import "./dashboard-spacing.css";
 import "./mobile-phone-optimization.css";
 import "./dashboard-night.css";
 import { APP_VERSION } from "./app-version.js";
-import { trackCountChange, formatCountDelta, BREAKDOWN_COUNT_STORAGE_KEY } from "./fleet-count-trend.mjs";
+import { formatCountDelta } from "./fleet-count-trend.mjs";
 
 const vehicles = [];
 const breakdowns = [];
@@ -1048,6 +1048,8 @@ function dashboardRecordDate(record = {}) {
 function useDashboardEquipment() {
   const [records, setRecords] = useState([]);
   const [scope, setScope] = useState(null);
+  const [breakdownCountChange, setBreakdownCountChange] = useState(null);
+  const [nextCountDayAt, setNextCountDayAt] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -1062,6 +1064,8 @@ function useDashboardEquipment() {
       loadedFleetScope.current = {token: authToken, loaded: false};
       setRecords([]);
       setScope(null);
+      setBreakdownCountChange(null);
+      setNextCountDayAt("");
       setUpdatedAt(0);
       setLoadError("");
     }
@@ -1091,8 +1095,15 @@ function useDashboardEquipment() {
           || (data.scope.allowedSites !== null && !Array.isArray(data.scope.allowedSites))
           || (data.scope.allowedRegions !== null && !Array.isArray(data.scope.allowedRegions)))
           throw new Error("Fleet scope response was invalid. Please retry.");
+        const change = data.breakdownCountChange;
+        if (!change || !Number.isSafeInteger(change.open) || !Number.isSafeInteger(change.current)
+          || change.delta !== change.current - change.open || !/^\d{4}-\d{2}-\d{2}$/.test(change.day)
+          || !Number.isFinite(Date.parse(data.nextCountDayAt)))
+          throw new Error("Fleet daily count response was invalid. Please retry.");
         if (!activeRequest) return;
         loadedFleetScope.current.loaded = true;
+        setBreakdownCountChange(change);
+        setNextCountDayAt(data.nextCountDayAt);
         setRecords(data.records);
         setScope(data.scope);
         setLoaded(true);
@@ -1105,6 +1116,8 @@ function useDashboardEquipment() {
             loadedFleetScope.current.loaded = false;
             setRecords([]);
             setScope(null);
+            setBreakdownCountChange(null);
+            setNextCountDayAt("");
             setUpdatedAt(0);
           }
           setLoaded(loadedFleetScope.current.loaded);
@@ -1120,7 +1133,12 @@ function useDashboardEquipment() {
     };
   }, [loadAttempt, authToken]);
   const sameSession = loadedFleetScope.current.token === authToken;
-  return {records: sameSession ? records : [], scope: sameSession ? scope : null, loaded: sameSession && loaded, loadError: sameSession ? loadError : "", updatedAt: sameSession ? updatedAt : 0, retry: () => setLoadAttempt((attempt) => attempt + 1)};
+  useEffect(() => {
+    if (!sameSession || !nextCountDayAt) return undefined;
+    const timer = window.setTimeout(() => setLoadAttempt((attempt) => attempt + 1), Math.max(0, Date.parse(nextCountDayAt) - Date.now() + 250));
+    return () => window.clearTimeout(timer);
+  }, [sameSession, nextCountDayAt]);
+  return {records: sameSession ? records : [], scope: sameSession ? scope : null, breakdownCountChange: sameSession ? breakdownCountChange : null, loaded: sameSession && loaded, loadError: sameSession ? loadError : "", updatedAt: sameSession ? updatedAt : 0, retry: () => setLoadAttempt((attempt) => attempt + 1)};
 }
 
 function FleetDataState({ error = "", retry, className = "" }) {
@@ -1385,7 +1403,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     window.addEventListener('resize', updateOffset);
     return () => { observer.disconnect(); window.removeEventListener('resize', updateOffset); };
   }, []);
-  const {records:equipmentRecords,scope:equipmentScope,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
+  const {records:equipmentRecords,scope:equipmentScope,breakdownCountChange,loaded:equipmentLoaded,loadError:equipmentLoadError,updatedAt:equipmentUpdatedAt = 0,retry:retryEquipmentLoad}=useDashboardEquipment();
   const dashboardReconnecting = equipmentLoaded && Boolean(requestsError || equipmentLoadError);
   const dashboardUpdatedAt = Math.min(requestsUpdatedAt || equipmentUpdatedAt, equipmentUpdatedAt || requestsUpdatedAt);
   const [assetDrilldown, setAssetDrilldown] = useState("");
@@ -1432,10 +1450,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const [dashboardOem, setDashboardOem] = useState("all");
   const [oemDrilldownKind, setOemDrilldownKind] = useState(null);
   const [oemToolbarTarget, setOemToolbarTarget] = useState(null);
-  const [breakdownCountChange, setBreakdownCountChange] = useState(null);
-  const [breakdownCountDay, setBreakdownCountDay] = useState(0);
   const [hourlyBreakdownVisible, setHourlyBreakdownVisible] = useState(false);
-  const openBreakdownList = () => setAssetDrilldown("fleet-breakdown:all");
+  const openBreakdownList = () => setAssetDrilldown("fleet-breakdown:account");
   const [showFleetWatermark, setShowFleetWatermark] = useState(() => localStorage.getItem("nerveCenterFleetWatermark") !== "false");
   const [fleetIntelligenceView, setFleetIntelligenceView] = useState(() => localStorage.getItem("nerveCenterFleetIntelligenceView") || "combined");
   const [requestTrendDays, setRequestTrendDays] = useState(7);
@@ -1496,17 +1512,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     .map((record)=>{const equipment=equipmentForRequest(record);return {...record,make:equipment?.make||record.make||"",model:equipment?.model||record.model||""}});
   const liveFleetCounts = fleetChartCounts(visibleEquipment, liveBreakdowns);
   const liveBreakdownAssetCount = liveFleetCounts.breakdown.total;
-  const breakdownCountReady = equipmentLoaded && (requestsUpdatedAt > 0 || requests.length > 0);
-  useEffect(() => {
-    if (!breakdownCountReady) return;
-    const change = trackCountChange(typeof localStorage === "undefined" ? null : localStorage, BREAKDOWN_COUNT_STORAGE_KEY, liveBreakdownAssetCount);
-    setBreakdownCountChange((current) => (current && change && current.open === change.open && current.delta === change.delta ? current : change));
-  }, [breakdownCountReady, liveBreakdownAssetCount, equipmentUpdatedAt, breakdownCountDay]);
-  useEffect(() => {
-    const now = new Date();
-    const timer = setTimeout(() => setBreakdownCountDay((day) => day + 1), new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() - now.getTime() + 1000);
-    return () => clearTimeout(timer);
-  }, [breakdownCountDay]);
+  const breakdownCountReady = equipmentLoaded && Boolean(breakdownCountChange);
+  const accountBreakdownCount = breakdownCountChange?.current ?? liveBreakdownAssetCount;
   const trendAvailableSites = [...new Set((selectedRegion ? activeSites : availableRegions.flatMap((region) => region.sites))
     .filter((site) => !normalizedAllowedSites?.length || normalizedAllowedSites.some((allowed) => recordBelongsToSite({ site: allowed }, site))))];
   const activeTrendSite = breakdownTrendSite === "all" || trendAvailableSites.includes(breakdownTrendSite) ? breakdownTrendSite : "all";
@@ -1800,9 +1807,10 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
         && categories.includes(String(record.category || "").trim().toLowerCase()));
     }
     if (key.startsWith("fleet-breakdown:") || key.startsWith("offroad-site:")) {
+      const accountWide = key === "fleet-breakdown:account";
       const region = key.startsWith("fleet-breakdown:region:") ? availableRegions.find((item) => item.code === key.slice(23)) : null;
       const [offroadSite, offroadCategory = ""] = key.startsWith("offroad-site:") ? key.slice(13).split("|") : ["", ""];
-      return visibleEquipment.filter((record) => liveEquipmentRoadStatus(record, liveBreakdowns) === "offroad"
+      return (accountWide ? scopedEquipment : visibleEquipment).filter((record) => liveEquipmentRoadStatus(record, accountWide ? scopedBreakdowns : liveBreakdowns) === "offroad"
         && (!offroadSite || recordBelongsToSite(record, offroadSite))
         && (!key.startsWith("fleet-breakdown:region:") || region?.sites.some((site) => recordBelongsToSite(record, site)))
         && ((key !== "fleet-breakdown:equipment" && offroadCategory !== "equipment") || ["equipment", "equipments"].includes(String(record.category || "").trim().toLowerCase()))
@@ -1863,7 +1871,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   };
   // Drilldown keys whose rows are requests (or request lifecycle events) rather than fleet assets.
   const requestDrilldownKey = (key = "") => key === "open-cases" || ["site-repair:", "repair:", "status:", "event:", "movement:", "balance:", "trend:"].some((prefix) => key.startsWith(prefix));
-  const fleetDrilldownRequests = (key = "") => ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
+  const fleetDrilldownRequests = (key = "") => key === "fleet-breakdown:account" ? scopedBreakdowns : ["road-availability", "onroad", "offroad", "idle", "unknown"].includes(key) || key.startsWith("site-status:") ? availabilityRequests : liveBreakdowns;
   // Fleet (asset) lists carry each asset's current breakdown request so they show Status, Started and Days of breakdown too.
   const assetDrilldownRows = requestDrilldownKey(assetDrilldown) ? rowsForAssetDrilldown(assetDrilldown) : fleetAssetRequestDetails(rowsForAssetDrilldown(assetDrilldown), fleetDrilldownRequests(assetDrilldown));
   const assetDrilldownRegions = availableRegions.map((region) => ({
@@ -1897,8 +1905,8 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ? assetDrilldown.startsWith("trend:forecast") ? `Forecast basis · Recorded requests · 56 days through ${formatDisplayDate(breakdownTrendAnchorKey)}`
       : `Recorded breakdown requests · ${assetDrilldown.startsWith("trend:actual:") ? formatDisplayDate(assetDrilldown.split(":")[2]) : formatDisplayDateRange(actualTrendDays[0]?.date, breakdownTrendAnchorKey)}`
     : "";
-  const fleetBreakdownDrilldownTitle = fleetBreakdownDrilldown ? `${assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] + " · " + (assetDrilldown.endsWith("|vehicles") ? "Vehicles · " : assetDrilldown.endsWith("|equipment") ? "Equipment · " : "") : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) + " · " : assetDrilldown === "fleet-breakdown:equipment" ? "Equipment · " : assetDrilldown === "fleet-breakdown:vehicles" ? "Vehicles · " : ""}BD Balance` : "";
-  // BD Balance names the existing fleet breakdown drilldown; its scope stays unchanged.
+  const fleetBreakdownDrilldownTitle = fleetBreakdownDrilldown ? `${assetDrilldown === "fleet-breakdown:account" ? "All assigned sites · " : assetDrilldown.startsWith("offroad-site:") ? assetDrilldown.slice(13).split("|")[0] + " · " + (assetDrilldown.endsWith("|vehicles") ? "Vehicles · " : assetDrilldown.endsWith("|equipment") ? "Equipment · " : "") : assetDrilldown.startsWith("fleet-breakdown:region:") ? assetDrilldown.slice(23) + " · " : assetDrilldown === "fleet-breakdown:equipment" ? "Equipment · " : assetDrilldown === "fleet-breakdown:vehicles" ? "Vehicles · " : ""}BD Balance` : "";
+  // The account count opens the breakdown fleet across every assigned site.
   const siteTotalDrilldownTitle = assetDrilldown.startsWith("category-group:")
     ? `${assetDrilldown.slice(15).split("|").slice(1).join("|")} · ${assetDrilldown.startsWith("category-group:vehicle|") ? "Vehicles" : "Equipment"}`
     : siteTotalDrilldownParts.length ? `${siteTotalDrilldownParts[0]} · ${siteTotalDrilldownParts[1] === "vehicles" ? "Vehicle" : "Equipment"} records` : "";
@@ -1993,15 +2001,15 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-fleet-chart-heading">
               <h2>{showOemBreakdowns ? "OEM BD" : "Total Fleet"}</h2>
               <div className="mine-fleet-chart-toggle" role="group" aria-label="Fleet chart view">
-                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <div key={mode} className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && breakdownCountReady && breakdownCountChange ? `${mode} trend-${breakdownCountChange.direction}` : mode}`}>
+                {[["total", "Total"], ["oem", "OEM BD"], ["breakdown", "Breakdown"]].map(([mode, label]) => <div key={mode} className={`mine-fleet-view-option ${fleetChartMode === mode ? "active" : ""} ${mode === "oem" ? "mine-oem-tab" : mode === "breakdown" && !showOemBreakdowns && breakdownCountReady ? `${mode} trend-${breakdownCountChange.direction}` : mode}`}>
                   <button type="button" disabled={!equipmentLoaded} aria-pressed={fleetChartMode === mode} aria-controls={mode === "oem" ? "oem-breakdown-plot" : "fleet-region-plot"} onClick={() => setFleetChartMode(mode)}>{label}</button>
-                  <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={`View ${label} list: ${mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : (showOemBreakdowns ? oemChart.rows.length : liveBreakdownAssetCount)} assets`} onClick={() => {
+                  <button type="button" className="mine-fleet-toggle-count" disabled={!equipmentLoaded} aria-label={`View ${label} list: ${mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : (showOemBreakdowns ? oemChart.rows.length : accountBreakdownCount)} assets${mode === "breakdown" && !showOemBreakdowns ? " across all assigned sites" : ""}`} onClick={() => {
                     if (mode === "oem") { setFleetChartMode("oem"); openOemDrilldown(); }
                     else if (mode === "total") { if (showOemBreakdowns) setOemDrilldownKind("fleet"); else openAssetDrilldown("all"); }
                     else if (showOemBreakdowns) openOemDrilldown();
                     else openBreakdownList();
-                  }}>{equipmentLoaded ? (mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : (showOemBreakdowns ? oemChart.rows.length : liveBreakdownAssetCount)).toLocaleString() : "—"}</button>
-                  {mode === "breakdown" && breakdownCountReady && breakdownCountChange && <i key={breakdownCountChange.delta} className={`mine-fleet-count-trend ${breakdownCountChange.direction}`} title={`Change since today's opening count of ${breakdownCountChange.open.toLocaleString()}`}>{breakdownCountChange.direction === "up" ? <ArrowUp aria-hidden="true" /> : breakdownCountChange.direction === "down" ? <ArrowDown aria-hidden="true" /> : null}<span>{formatCountDelta(breakdownCountChange.delta)}</span></i>}
+                  }}>{equipmentLoaded ? (mode === "oem" ? oemChart.rows.length : mode === "total" ? (showOemBreakdowns ? oemFleetEquipment.length : assetCounts.total) : (showOemBreakdowns ? oemChart.rows.length : accountBreakdownCount)).toLocaleString() : "—"}</button>
+                  {mode === "breakdown" && !showOemBreakdowns && breakdownCountReady && <i key={`${breakdownCountChange.day}:${breakdownCountChange.delta}`} className={`mine-fleet-count-trend ${breakdownCountChange.direction}`} title={`Change since ${breakdownCountChange.day} 12:00 AM IST across all assigned sites (opening count ${breakdownCountChange.open.toLocaleString()})`}>{breakdownCountChange.direction === "up" ? <ArrowUp aria-hidden="true" /> : breakdownCountChange.direction === "down" ? <ArrowDown aria-hidden="true" /> : null}<span>{formatCountDelta(breakdownCountChange.delta)}</span></i>}
                 </div>)}
 
               </div>
@@ -2187,7 +2195,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {assetDrilldown && <Modal className="dashboard-asset-modal" overlayClassName="dashboard-asset-overlay" title={initialDrilldownSite && assetDrilldownTitle.startsWith(initialDrilldownSite) ? <><span className="dashboard-heading-site">{initialDrilldownSite}</span>{assetDrilldownTitle.slice(initialDrilldownSite.length)}</> : assetDrilldownTitle} close={closeAssetDrilldown}>
         {breakdownDayReturnSite && <button type="button" className="dashboard-breakdown-day-back" onClick={closeAssetDrilldown}>Back to day-wise report</button>}
-        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={assetDrilldown === "fleet-breakdown:all" ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
+        <DashboardRecordBrowser key={assetDrilldown} rows={assetDrilldownRows} regions={assetDrilldownRegions} rowsAreScoped={true} title={assetDrilldownTitle} initialRegion={initialDrilldownRegion} initialSite={initialDrilldownSite} hideCurrentLocation={hideFleetChartLocation} hideEquipmentCategory={hideFleetChartCategory} requestRecords={requestAssetDrilldown} lifecycleRecords={assetDrilldown.startsWith("event:")} lifecycleEvent={lifecycleDrilldownParts[1]} showBdClosingTime={movementDrilldownParts[0] === "outgoing"} ActionsTable={ActionsTable} Status={Status} formatDate={formatTwelveHourDateTime} RequestTimelineButton={RequestTimelineButton} timelineToken={authToken} onHourlyReport={["fleet-breakdown:all", "fleet-breakdown:account"].includes(assetDrilldown) ? () => setHourlyBreakdownVisible(true) : undefined} bdBalanceColumns={fleetBreakdownDrilldown} Dialog={Modal} Remarks={MaintenanceRemarks}
           movementDateControl={movementDrilldownParts[0] === "open" ? {
             label: "Opening balance date",
             value: encodeDateRange(movementDrilldownParts[1], movementDrilldownParts[2]),

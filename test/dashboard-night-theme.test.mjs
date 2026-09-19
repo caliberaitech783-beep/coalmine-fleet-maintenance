@@ -46,7 +46,7 @@ test("Dashboard PDF downloads keep the Day palette when the screen is in Night m
 });
 
 test("Dashboard prints keep the screen's Night palette, dark to the edge of the paper", async () => {
-  const pdf = await read("dashboard-pdf.mjs");
+  const pdf = (await read("dashboard-pdf.mjs")).replace(/\r\n/g, "\n");
   assert.equal((pdf.match(/captureDashboard\(dashboard, \{forPrint: true, section\}\)/g) || []).length, 2, "Smart Print and the browser print window both keep the screen palette");
   assert.match(pdf, /const background = forPrint \? pageBackground\(dashboard\) : "";/, "the paper takes the colour behind the dashboard on screen");
   const print = pdf.slice(pdf.indexOf("export async function dashboardPrintPdf("), pdf.indexOf("async function printDashboardCanvas("));

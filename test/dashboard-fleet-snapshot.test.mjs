@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {dashboardFleetSnapshot} from '../dashboard-fleet-snapshot.mjs';
 import {liveEquipmentMetrics, fleetChartCounts} from '../dashboard-equipment-metrics.mjs';
+import {dailyCountChange,indiaCountDayWindow} from '../src/fleet-count-trend.mjs';
 import * as access from '../dashboard-equipment-access.mjs';
 
 const assets = Object.freeze([
@@ -79,7 +80,7 @@ test('actual read-only dashboard route derives status before enforcing every rol
   const route=source.slice(source.indexOf("app.get('/api/dashboard/equipment'"),source.indexOf("app.get('/api/reports/master-data'"));
   let handlers,authorization;
   const queries=[];
-  const dependencies={...access,dashboardFleetSnapshot,
+  const dependencies={...access,dashboardFleetSnapshot,fleetChartCounts,dailyCountChange,indiaCountDayWindow,
     app:{get(path,...registered){assert.equal(path,'/api/dashboard/equipment');handlers=registered;}},
     requireSession(req,res,next){next();},
     currentDashboardAuthorization:async()=>authorization,
