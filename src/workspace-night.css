@@ -1,0 +1,28 @@
+/* Shared Night surfaces; screen-only to preserve light printed reports. */
+@media screen {
+  :root[data-theme="dark"] { --panel: #241d27; --ink: #f6f0f7; --muted: #c4b8ca; --line: #64546f; --night-raised: #302637; --night-link: #d6b7ff; }
+  :root[data-theme="dark"] :is(.manager-kpi-grid > button, .manager-kpi-tooltip, .close-request-list button, .searchable-select-menu, .request-timeline-stages article, .request-timeline-events article, .modal, .panel) { background: var(--panel); border-color: var(--line); color: var(--ink); }
+  :root[data-theme="dark"] .manager-kpi-grid button:not(:disabled):is(:hover, :focus-visible) { background: var(--night-raised); border-color: var(--night-link); }
+  :root[data-theme="dark"] .manager-kpi-grid :is(strong, .manager-kpi-tooltip b, .manager-kpi-tooltip i) { color: var(--ink); }
+  :root[data-theme="dark"] .manager-kpi-grid :is(span, small) { color: var(--muted); }
+  :root[data-theme="dark"] .manager-kpi-grid .manager-kpi-drilldown-icon { color: var(--night-link); }
+  :root[data-theme="dark"] .manager-kpi-tooltip { box-shadow: 0 10px 30px #0008; }
+  :root[data-theme="dark"] :is(.manager-role-tabs, .manager-queue-tabs, .mobile-tabs) button { background: var(--night-raised); color: var(--muted); border: 1px solid var(--line); }
+  :root[data-theme="dark"] :is(.manager-role-tabs, .manager-queue-tabs, .mobile-tabs) button:is(.active, [aria-selected="true"]) { background: #513470; color: #fff; border-color: #bd94eb; }
+  :root[data-theme="dark"] :is(.manager-role-tabs, .manager-queue-tabs, .mobile-tabs) button:hover { background: #463253; color: #fff; }
+  :root[data-theme="dark"] :is(.manager-detail-panel > header p, .form small, .request-timeline-record-note, .request-timeline-events small, .request-timeline-stages small) { color: var(--muted); }
+  :root[data-theme="dark"] :is(.table-search-toolbar, .shared-table-actions-toolbar, .modal > header, .modal .form footer, .report-table-filter-toolbar) { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  :root[data-theme="dark"] :is(.pagepanel, .mobile-workspace, .manager-dashboard, .modal) :is(th, td) { color: var(--ink); border-color: var(--line); }
+  :root[data-theme="dark"] :is(.pagepanel, .mobile-workspace, .manager-dashboard, .modal) th { background: var(--night-raised); }
+  :root[data-theme="dark"] :is(.pagepanel, .mobile-workspace, .manager-dashboard, .modal) tbody tr:hover > td { background: var(--night-raised); }
+  :root[data-theme="dark"] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea) { background: #1c1722; color: var(--ink); border-color: var(--line); }
+  :root[data-theme="dark"] :is(input, textarea)::placeholder { color: var(--muted); opacity: 1; }
+  :root[data-theme="dark"] .form :is(input[readonly], input:disabled, select:disabled, textarea:disabled) { background: var(--night-raised); color: var(--muted); opacity: 1; }
+  :root[data-theme="dark"] :is(.form label, .details b, .modal > header h3) { color: var(--ink); }
+  :root[data-theme="dark"] :is(.request-timeline-link, .timeline-total-formula, .timeline-sequence-arrow, .request-timeline-modal > header .request-timeline-print) { color: var(--night-link); }
+  :root[data-theme="dark"] .request-timeline-identity { background: var(--night-raised); color: var(--ink); }
+  :root[data-theme="dark"] .request-timeline-identity span { color: var(--muted); }
+  :root[data-theme="dark"] :is(.report-actions-popover, .report-actions-submenu, .export-menu-popover, .table-parameter-filter-popover, .column-filter-popover) { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  :root[data-theme="dark"] :is(.report-actions-popover, .report-actions-submenu, .export-menu-popover) button { color: var(--ink); }
+  :root[data-theme="dark"] :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #d6b7ff; outline-offset: 3px; }
+}
