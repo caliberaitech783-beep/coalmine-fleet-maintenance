@@ -6,8 +6,8 @@ const main=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8').repla
 const guide=readFileSync(new URL('../src/recovery-guide.jsx',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 const topbar=readFileSync(new URL('../src/topbar.css',import.meta.url),'utf8').replace(/\r\n/g,'\n');
 
-test('Recovery guide is an Administration page after Backup Schedule, for Admin and Super Admin only',()=>{
-  assert.match(main,/\["Backup Schedule", CalendarDays\],\n  \["Recovery guide", LifeBuoy\],\n  \["Audit Trail", History\],/);
+test('Recovery guide is an Administration page before Audit Trail, for Admin and Super Admin only',()=>{
+  assert.match(main,/\["Recovery guide", LifeBuoy\],\n  \["Audit Trail", History\],\n\];/);
   assert.match(main,/"Recovery guide": "recovery"/);
   assert.match(main,/if\(name==="Recovery guide"\)return isAdministrator;/);
   assert.match(main,/active === "Recovery guide" \? \(\s*<RecoveryGuide onNavigate=\{selectMenu\} \/>/);

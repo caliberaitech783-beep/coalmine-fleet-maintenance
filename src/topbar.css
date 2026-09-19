@@ -863,6 +863,7 @@
 .header-nav-item[data-nav="workspaces"] { --hn-a: #ec4899; --hn-b: #b72d6e; --hn-glow: rgba(183, 45, 110, 0.5); }
 .header-nav-item[data-nav="reports"] { --hn-a: #f472b6; --hn-b: #c9306e; --hn-glow: rgba(201, 48, 110, 0.5); }
 .header-nav-item[data-nav="tickets"] { --hn-a: #fb7185; --hn-b: #d63b5d; --hn-glow: rgba(214, 59, 93, 0.5); }
+.header-nav-item[data-nav="backup"] { --hn-a: #2dd4bf; --hn-b: #0f766e; --hn-glow: rgba(15, 118, 110, 0.5); }
 .header-nav-item[data-nav="admin"] { --hn-a: #f97373; --hn-b: #f04e53; --hn-glow: rgba(240, 78, 83, 0.5); }
 .header-nav-item[data-nav="transfers"] { --hn-a: #fb923c; --hn-b: #ea580c; --hn-glow: rgba(234, 88, 12, 0.5); }
 /* Icon motion while hovered / focused / active. */
@@ -884,3 +885,6 @@
   .header-nav-icon,
   .header-nav-icon svg { animation: none !important; transition: none !important; }
 }
+.header-nav-item[data-nav="backup"]:hover .header-nav-icon svg, .header-nav-item[data-nav="backup"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="backup"].active .header-nav-icon svg { animation: ws-rewind 1.6s ease-in-out infinite; }
+.backup-dropdown { min-width: 262px; padding: 8px; }
+.backup-dropdown .nav-config-row + .nav-config-row { margin-top: 4px; }
