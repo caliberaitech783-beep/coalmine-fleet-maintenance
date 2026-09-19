@@ -67,18 +67,3 @@
 .notification-sound-play:hover, .notification-sound-play:focus-visible { transform: translateY(-1px); box-shadow: 0 6px 14px #6b2fa859; }
 .notification-sound-play svg { width: 18px; height: 18px; }
 .notification-sound-filter small { font-weight: 500; color: #6b7891; }
-
-/* Ticket raiser call button (Tickets table, Call column). */
-.ticket-call-cell { white-space: nowrap; }
-.ticket-call { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border: 1px solid #bbf7d0; border-radius: 999px; background: #f0fdf4; color: #166534; font-size: 13px; font-weight: 700; text-decoration: none; transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
-.ticket-call:hover, .ticket-call:focus-visible { transform: translateY(-1px); background: #dcfce7; box-shadow: 0 8px 18px #16a34a33; outline: none; }
-.ticket-call-icon { position: relative; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; background: linear-gradient(135deg, #4ade80, #16a34a); box-shadow: 0 4px 10px #16a34a59; }
-.ticket-call-icon::after { content: ""; position: absolute; inset: -3px; border: 2px solid #4ade80; border-radius: 50%; opacity: 0; animation: ticket-call-ring 2.4s ease-out infinite; pointer-events: none; }
-.ticket-call-icon svg { width: 15px; height: 15px; transform-origin: 50% 50%; }
-.ticket-call:hover .ticket-call-icon svg, .ticket-call:focus-visible .ticket-call-icon svg { animation: ticket-call-shake 0.6s ease-in-out infinite; }
-.ticket-call-number { font-variant-numeric: tabular-nums; }
-.ticket-call-missing { color: var(--muted, #71809d); font-size: 12px; }
-:root[data-theme="dark"] .ticket-call { border-color: #14532d; background: #052e16; color: #86efac; }
-@keyframes ticket-call-ring { 0% { opacity: 0.85; transform: scale(1); } 60%, 100% { opacity: 0; transform: scale(1.45); } }
-@keyframes ticket-call-shake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(5deg); } }
-@media (prefers-reduced-motion: reduce) { .ticket-call, .ticket-call-icon::after, .ticket-call-icon svg { animation: none !important; transition: none !important; } }

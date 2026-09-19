@@ -5,7 +5,6 @@ import * as scope from '../region-scope.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {managerRoleSelection} from '../admin-access.mjs';
 import {managerUserRole} from '../ticket-workflow.mjs';
-import {phonesByLogin,withCreatorContact} from '../ticket-contact.mjs';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const evaluate=(source,deps)=>new Function(...Object.keys(deps),source)(...Object.values(deps));
@@ -26,10 +25,10 @@ async function listTickets(session,{query={},record=manager}={}){
   const start=server.indexOf("app.get('/api/tickets',");
   assert.ok(start>=0);
   evaluate(server.slice(start,server.indexOf('\napp.',start+1)),{
-    ...scope,canonicalSiteName,managerRoleSelection,managerUserRole,phonesByLogin,withCreatorContact,TICKET_CATEGORIES:['Maintenance'],ticketProjection:()=>'*',
+    ...scope,canonicalSiteName,managerRoleSelection,managerUserRole,TICKET_CATEGORIES:['Maintenance'],ticketProjection:()=>'*',
     app:{get:(_path,...handlers)=>{handler=handlers.at(-1);}},requireSession(){},currentUserRecord:async()=>record,
     pool:{query:async(text,params)=>{
-      if(!/FROM crm_tickets/.test(text))return {rows:[]}; // creator phone lookup for the Call column
+      if(!/FROM crm_tickets/.test(text))return {rows:[]};
       sql=text;values=params;return {rows:tickets};
     }},
   });
