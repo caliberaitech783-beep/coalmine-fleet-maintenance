@@ -69,7 +69,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
     return {rows:[current(saved)],rowCount:1};
   },release(){assert.equal(tx,false);released=true;}};
   const context={...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
-    requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),
+    requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
     pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,
     validMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,

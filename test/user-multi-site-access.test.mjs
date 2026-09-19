@@ -19,7 +19,7 @@ async function invoke(method,path,{record=user,session=sessionFor(),query={},bod
   const start=server.indexOf(`app.${method}('${path}',`);
   assert.ok(start>=0);
   evaluate(server.slice(start,server.indexOf('\napp.',start+1)),{
-    ...scope,canonicalSiteName,app:{[method]:(_path,...handlers)=>{handler=handlers.at(-1);}},requireSession(){},requirePermission:()=>()=>{},
+    ...scope,canonicalSiteName,app:{[method]:(_path,...handlers)=>{handler=handlers.at(-1);}},requireSession(){},requirePermission:()=>()=>{},requireMaintenanceUpdatePermission:()=>()=>{},maintenanceManagerSession:()=>false,
     currentUserRecord:async()=>record,...dependencies,
   });
   await handler({session,query,body,params:{reference:'TEST'}},{set(){},status(code){result.status=code;return this;},json(body){result.body=body;}},error=>{throw error;});

@@ -1996,6 +1996,17 @@ function requirePermission(permission,{role}={}){
   };
 }
 
+// Maintenance Managers may edit and post daily updates on active requests at the sites they manage.
+function maintenanceManagerSession(session){
+  if(session?.role!=='super'||session?.permissions?.adminLevel!=='Manager')return false;
+  const permissions=session.permissions;
+  return managerRoleSelection(permissions.managerRoles?.length?permissions.managerRoles:permissions.managerRole).includes('Maintenance Manager');
+}
+function requireMaintenanceUpdatePermission(permission){
+  const maintenanceUser=requirePermission(permission,{role:'Maintenance User'});
+  return (req,res,next)=>maintenanceManagerSession(req.session)?next():maintenanceUser(req,res,next);
+}
+
 async function requireSuper(req,res,next){
   try{
     const session=await readSession(req);
@@ -4795,6 +4806,7 @@ const arrivalDelaySql=`((acceptance_required=TRUE AND accepted_at IS NULL AND st
 const arrivalFlagReadySql=`(NOT ${arrivalDelaySql} OR (arrival_flagged_at IS NOT NULL AND length(btrim(arrival_flag_remark,E' \\t\\n\\r'))>0))`;
 const arrivalRedFlagError=()=>Object.assign(new Error('Raise a red flag and save the arrival delay reason before continuing with this request.'),{status:409,code:'ARRIVAL_RED_FLAG_REQUIRED'});
 function requireArrivalFlagPermission(req,res,next){
+  if(maintenanceManagerSession(req.session))return next();
   return requirePermission(req.session?.permissions?.editRequests===true?'editRequests':'closeRequests',{role:'Maintenance User'})(req,res,next);
 }
 function maintenanceWriteFailure(error,res,next){
@@ -4814,6 +4826,8 @@ async function withMaintenanceArrivalGuard(req,reference,write){
       const user=await currentUserRecord(req.session,client);
       const assignedScope=userSiteScope(user);
       if(!reportScopeIncludesSite(assignedScope,rows[0].site))throw Object.assign(new Error('This vehicle is outside your assigned maintenance location.'),{status:403});
+    }else if(maintenanceManagerSession(req.session)&&!userManagesSite(await currentUserRecord(req.session,client),rows[0].site)){
+      throw Object.assign(new Error('This vehicle is outside your assigned sites.'),{status:403});
     }
     if(!rows[0].arrival_flag_ready)throw arrivalRedFlagError();
     const result=await write(client,rows[0]);
@@ -4824,7 +4838,7 @@ async function withMaintenanceArrivalGuard(req,reference,write){
   finally{client.release()}
 }
 
-app.post('/api/requests/:reference/daily-remarks',requireSession,requirePermission('closeRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+app.post('/api/requests/:reference/daily-remarks',requireSession,requireMaintenanceUpdatePermission('closeRequests'),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const remark=String(req.body?.remark||'').trim();
@@ -4882,6 +4896,8 @@ app.patch('/api/requests/:reference/arrival-flag',requireSession,requireArrivalF
       const assignedScope=userSiteScope(user);
       if(!reportScopeIncludesSite(assignedScope,current.site))
         return res.status(403).json({error:'This vehicle is outside your assigned maintenance location.'});
+    }else if(maintenanceManagerSession(req.session)&&!userManagesSite(await currentUserRecord(req.session),current.site)){
+      return res.status(403).json({error:'This vehicle is outside your assigned sites.'});
     }
     if(current.arrivalFlaggedAt&&String(current.arrivalFlagRemark||'').trim())return res.json((await attachDailyRemarks(currentRows))[0]);
     const {rows}=await pool.query(`UPDATE maintenance_requests
@@ -5004,7 +5020,7 @@ app.post('/api/requests',requireSession,requirePermission('createRequests'),asyn
 });
 
 
-app.patch('/api/requests/:reference',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+app.patch('/api/requests/:reference',requireSession,requireMaintenanceUpdatePermission('editRequests'),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const {category='Maintenance request',complaint,expectedCompletionAt,meterType='',openingMeterReading='',openingMeterFile='',openingMeterFileName=''}=req.body||{};
@@ -5481,8 +5497,10 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
     const superCanView=(master)=>req.session.role==='super'&&(masterAccessAllows(req.session.permissions,master)||masterAccessAllows(req.session.permissions,master,'mobileMasterAccess'));
     const canViewEquipment=superCanView('Equipment master')||req.session.permissions?.viewEquipment===true;
-    const canViewRepairTypes=superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
-    const canViewDelayedReasons=superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true||req.session.permissions?.editRequests===true;
+    // The edit and daily-update forms need these lists even when the manager's visible masters omit them.
+    const maintenanceManager=maintenanceManagerSession(req.session);
+    const canViewRepairTypes=maintenanceManager||superCanView('Repair type master')||req.session.permissions?.viewRepairTypes===true;
+    const canViewDelayedReasons=maintenanceManager||superCanView('Delayed Reason')||req.session.permissions?.closeRequests===true||req.session.permissions?.editRequests===true;
     if(!canViewEquipment&&!canViewRepairTypes&&!canViewDelayedReasons)
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
@@ -5493,7 +5511,8 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       if(req.session.role==='super'){
         // Request creators need the sub-category list even when the master itself is not ticked for them.
         const subCategoryForRequests=row.master_name==='Breakdown Sub-Category'&&canViewRepairTypes;
-        if(!subCategoryForRequests&&!masterAccessAllows(req.session.permissions,row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name,'mobileMasterAccess'))continue;
+        const maintenanceManagerList=maintenanceManager&&['Repair type master','Delayed Reason'].includes(row.master_name);
+        if(!subCategoryForRequests&&!maintenanceManagerList&&!masterAccessAllows(req.session.permissions,row.master_name)&&!masterAccessAllows(req.session.permissions,row.master_name,'mobileMasterAccess'))continue;
       }else{
         if(row.master_name==='Equipment master'&&!canViewEquipment)continue;
         if(row.master_name==='Repair type master'&&!canViewRepairTypes)continue;
@@ -6085,7 +6104,7 @@ async function sendScheduledAuditLogExports(now=new Date()){
   }finally{auditLogExportRunning=false}
 }
 
-app.patch('/api/requests/:reference/delayed-reason',requireSession,requirePermission('editRequests',{role:'Maintenance User'}),async(req,res,next)=>{
+app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMaintenanceUpdatePermission('editRequests'),async(req,res,next)=>{
   try{
     const reference=String(req.params.reference||'').trim();
     const delayedReason=approvedDelayedReason(req.body?.delayedReason);

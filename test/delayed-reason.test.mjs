@@ -18,7 +18,7 @@ test('the requests table only displays the delayed reason; only approved reasons
   assert.match(server,/delayed_reason_master_approved_only_v1/);
   assert.match(server,/DELETE FROM master_records WHERE master_name='Delayed Reason'\s+AND NOT \(lower\(trim\(COALESCE\(record_data->>'delayedReason',''\)\)\) = ANY\(\$1::text\[\]\)\)/);
   const route=server.slice(server.indexOf("app.patch('/api/requests/:reference/delayed-reason'"),server.indexOf('app.use(express.static(staticRoot))'));
-  assert.match(route,/requirePermission\('editRequests',\{role:'Maintenance User'\}\)/);
+  assert.match(route,/requireMaintenanceUpdatePermission\('editRequests'\)/);
   assert.match(route,/withMaintenanceArrivalGuard/);
   assert.match(route,/const delayedReason=approvedDelayedReason\(req\.body\?\.delayedReason\);/);
   assert.match(route,/SET delayed_reason=\$1 WHERE reference=\$2/);

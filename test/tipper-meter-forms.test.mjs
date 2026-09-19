@@ -73,7 +73,7 @@ async function runRoute(action, body) {
   evaluate(route, {
     ...workflow,
     app: {patch: (_path, ...handlers) => { handler = handlers.at(-1); }},
-    requireSession: () => {}, requirePermission: () => () => {},
+    requireSession: () => {}, requirePermission: () => () => {}, requireMaintenanceUpdatePermission: () => () => {},
     withMaintenanceArrivalGuard: async (_req, _ref, callback) => callback({query: async (sql, values) => {
       if (/^UPDATE/.test(sql)) { writes.push({sql, values}); return {rows: [tipper]}; }
       return {rows: [{...tipper, meter_type: "KMR", opening_meter_file: "saved-opening", closing_meter_file: "saved-closing"}]};

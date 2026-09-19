@@ -9,6 +9,6 @@ test("production request table follows the approved column order", () => {
   assert.match(source, /orderedColumns = columnOrder \? \[\.\.\.columns\.filter\(\(\[key\]\) => key === "requestAction"\), \.\.\.columnOrder\.map\(\(orderKey\) => columns\.find\(\(\[key\]\) => key === orderKey\)\)\.filter\(Boolean\)\] : columns,/);
   assert.match(source, /filterColumns = orderedColumns\.filter\(/);
   assert.match(source, /\{orderedColumns\.map\(\(\[key, label\]\) => \(/);
-  assert.match(source, /\{columnOrder \? orderedColumns\.map\(\(\[key\]\) => <React\.Fragment key=\{key\}>\{breakdownCell\(key, r, \{ showReadOnlyAction, onApproveIdeal, onCancelIdeal, requestActions \}\)\}<\/React\.Fragment>\) : <>/);
+  assert.match(source, /\{columnOrder \? orderedColumns\.map\(\(\[key\]\) => <React\.Fragment key=\{key\}>\{breakdownCell\(key, r, \{ showReadOnlyAction: showActionColumn, onApproveIdeal, onCancelIdeal, requestActions \}\)\}<\/React\.Fragment>\) : <>/);
   assert.match(source, /exportTitle=\{workspaceReportTitles\.requests\} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder=\{PRODUCTION_REQUEST_COLUMNS\} \{\.\.\.adminDeleteProps\} \/>/);
 });

@@ -1200,8 +1200,9 @@ function ConnectionRecoveryNotice({ updatedAt = 0, retry }) {
   </div>;
 }
 
-function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal }) {
+function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = "", managerDesignationKey = "", requests = [], requestsLoaded = false, requestsError = "", requestsUpdatedAt = 0, onRefreshRequests, gotoEquipment, onApproveIdeal, onCancelIdeal, onUpdateRequest, onAddDailyRemark }) {
   const [queueTab,setQueueTab]=useState("active");
+  const [requestUpdate, setRequestUpdate] = useState(null);
   const [managerDrilldown,setManagerDrilldown]=useState("");
   const [idleConfirmation, setIdleConfirmation] = useState(null);
   const availableRoles=managerRoles.length?managerRoles:[managerRole].filter(Boolean);
@@ -1252,6 +1253,9 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
         ];
   const canApproveIdle=true; // Every manager profile can approve within its assigned site scope.
   const canCancelIdle=managerRoleSelection(managerRoles.length?managerRoles:managerRole).includes("Maintenance Manager");
+  const canUpdateRequests=activeManagerRole==="Maintenance Manager"&&queueTab==="active"&&!managerReconnecting&&Boolean(onUpdateRequest&&onAddDailyRemark);
+  // An overdue arrival needs its red-flag reason first, as in the Maintenance workspace.
+  const openRequestUpdate=(row,kind)=>setRequestUpdate(arrivalRedFlagRequired(row)?{kind:"arrival",request:row,next:kind}:{kind,request:row});
   const idealRows=canApproveIdle?requestRows.filter((request)=>["idle","ideal"].includes(String(request.status||"").trim().toLowerCase())):[];
   const activeRows=activeManagerRole==="MIS Manager"?pendingVerification:openRequests;
   const visibleActiveRows=activeManagerRole==="Maintenance Manager"?maintenanceActiveRequests:activeRows;
@@ -1305,10 +1309,36 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
     </Modal>}
     <div className="mobile-tabs manager-queue-tabs" role="tablist"><button data-nav="active" className={queueTab==="active"?"active":""} onClick={()=>setQueueTab("active")}>Active requests</button>{canApproveIdle&&<button data-nav="idle" className={queueTab==="ideal"?"active":""} onClick={()=>setQueueTab("ideal")}>Idle approvals ({managerDataReady?idealRows.length:"—"})</button>}<button data-nav="history" className={queueTab==="history"?"active":""} onClick={()=>setQueueTab("history")}>Closed history</button></div>
     {managerDataReady && <>
-<article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showClosedAt={queueTab==="history"} showCompletionDetails={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} stableToolbar /></article>
+<article className="panel manager-detail-panel"><header><div><h2>{queueTab==="history"?"Closed request history":queueTab==="ideal"?"Idle requests awaiting on-road approval":productionManagerView ? "Active production interruptions" : activeManagerRole === "Maintenance Manager" ? "Maintenance workload details" : "Requests awaiting verification"}</h2><p>{visibleDetailRows.length} record{visibleDetailRows.length === 1 ? "" : "s"} in this view</p></div></header><BreakdownTable rows={visibleDetailRows} showMakeModel showReason showClosedBy={queueTab==="history"} showClosedAt={queueTab==="history"} showCompletionDetails={queueTab==="history"} showBreakdownDays={activeManagerRole !== "MIS Manager"} showTurnaroundTime={activeManagerRole === "MIS Manager"} onApproveIdeal={!managerReconnecting&&queueTab==="ideal"&&onApproveIdeal?(row)=>setIdleConfirmation({request:row,action:"approve"}):null} onCancelIdeal={!managerReconnecting&&queueTab==="ideal"&&canCancelIdle&&onCancelIdeal?(row)=>setIdleConfirmation({request:row,action:"cancel"}):null} onEdit={canUpdateRequests?(row)=>openRequestUpdate(row,"edit"):null} onRemark={canUpdateRequests?(row)=>openRequestUpdate(row,"remark"):null} stableToolbar /></article>
     </>}
+    {requestUpdate && <ManagerRequestUpdate update={requestUpdate} request={requestRows.find((row) => row.ref === requestUpdate.request.ref) || requestUpdate.request} equipmentRecords={equipmentRecords} onChange={setRequestUpdate} onUpdateRequest={onUpdateRequest} onAddDailyRemark={onAddDailyRemark} />}
     {managerDataReady && !managerReconnecting && idleConfirmation && <ManagerIdleConfirmation request={idleConfirmation.request} action={idleConfirmation.action} close={() => setIdleConfirmation(null)} onConfirm={idleConfirmation.action === "approve" ? onApproveIdeal : onCancelIdeal} />}
   </section>;
+}
+// Edit, Daily update and arrival red-flag dialogs opened from the Maintenance Manager's workload table.
+function ManagerRequestUpdate({ update, request, equipmentRecords = [], onChange, onUpdateRequest, onAddDailyRemark }) {
+  const [repairTypeRecords, , repairTypesLoaded] = useMasterRecords("Repair type master");
+  const close = () => onChange(null);
+  const requireArrival = (error, next) => {
+    if (error?.code !== "ARRIVAL_RED_FLAG_REQUIRED") return false;
+    onChange({ kind: "arrival", request, next });
+    return true;
+  };
+  const saveEdit = async (payload) => {
+    try { await onUpdateRequest(payload.ref, payload); close(); }
+    catch (error) { if (!requireArrival(error, "edit")) throw error; }
+  };
+  const saveRemark = async (payload) => {
+    try { await onAddDailyRemark(request.ref, payload); close(); }
+    catch (error) { if (!requireArrival(error, "remark")) alert(error.message); }
+  };
+  const saveArrivalFlag = async (payload) => {
+    const saved = await onUpdateRequest(request.ref, payload, "arrival-flag");
+    onChange(update.next ? { kind: update.next, request: saved } : null);
+  };
+  if (update.kind === "edit") return <RequestEditForm request={request} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={close} onSave={saveEdit} onRequireArrivalFlag={(row) => onChange({ kind: "arrival", request: row, next: "edit" })} />;
+  if (update.kind === "remark") return <DailyRemarkForm request={request} close={close} onSave={saveRemark} />;
+  return <RequestRedFlagForm flagKind="arrival" request={request} close={close} onSave={saveArrivalFlag} />;
 }
 const OEM_CHART_VIEWPORT_GAP = 24;
 // Room left on screen for the OEM bars: what is below the plot's own top, less the
@@ -2200,15 +2230,24 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     default: return null;
   }
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showCompletionDetails = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", onDelete, onDeleteSelected, canDeleteRow, exportTitle = "Breakdown report", columnOrder = null }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showCompletionDetails = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", onDelete, onDeleteSelected, canDeleteRow, onEdit, onRemark, exportTitle = "Breakdown report", columnOrder = null }) {
+  const showActionColumn = showReadOnlyAction || Boolean(onEdit || onRemark);
+  // Edits and daily updates apply only to active, unverified requests, matching the server's rule.
+  const rowUpdatable = (row) => !["closed", "idle", "ideal"].includes(String(row.status || "").trim().toLowerCase()) && !row.verifiedAt;
   const rowDeletable = (row) => Boolean(canDeleteRow ? canDeleteRow(row) : !["idle", "ideal"].includes(String(row.status || "").toLowerCase()));
   const [selectedRefs, setSelectedRefs] = useState(() => new Set());
   const toggleSelected = (ref, checked) => setSelectedRefs((current) => { const next = new Set(current); if (checked) next.add(ref); else next.delete(ref); return next; });
   useEffect(() => { setSelectedRefs((current) => { const present = new Set(rows.map((row) => row.ref)); const next = new Set([...current].filter((ref) => present.has(ref))); return next.size === current.size ? current : next; }); }, [rows]);
-  const requestActions = (onDelete || onDeleteSelected) ? (row) => <>
-    {onDeleteSelected && <label className="request-select" title={rowDeletable(row) ? `Select ${row.ref} for deletion` : "This request cannot be deleted"}><input type="checkbox" aria-label={`Select ${row.ref} for deletion`} checked={selectedRefs.has(row.ref)} disabled={!rowDeletable(row)} onChange={(event) => toggleSelected(row.ref, event.target.checked)} /></label>}
-    {onDelete && rowDeletable(row) ? <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button> : <span>Read only</span>}
-  </> : null;
+  const requestActions = (onDelete || onDeleteSelected || onEdit || onRemark) ? (row) => {
+    const canEdit = onEdit && rowUpdatable(row), canRemark = onRemark && rowUpdatable(row), canDelete = onDelete && rowDeletable(row);
+    return <>
+      {onDeleteSelected && <label className="request-select" title={rowDeletable(row) ? `Select ${row.ref} for deletion` : "This request cannot be deleted"}><input type="checkbox" aria-label={`Select ${row.ref} for deletion`} checked={selectedRefs.has(row.ref)} disabled={!rowDeletable(row)} onChange={(event) => toggleSelected(row.ref, event.target.checked)} /></label>}
+      {canEdit && <button type="button" onClick={() => onEdit(row)}><Pencil /> Edit</button>}
+      {canDelete && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
+      {canRemark && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
+      {!canEdit && !canRemark && !canDelete && <span>Read only</span>}
+    </>;
+  } : null;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   const [breakdownNow, setBreakdownNow] = useState(() => Date.now());
@@ -2221,7 +2260,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     return () => window.clearInterval(timer);
   }, [showBreakdownDays]);
   const columns = [
-      ...(showReadOnlyAction ? [["requestAction", "Actions"]] : []), ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
+      ...(showActionColumn ? [["requestAction", "Actions"]] : []), ["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ...(showMakeModel ? [["make", "Make"], ["model", "Model"]] : []), ["site", "Site location"],
       ...(showReason ? [["complaint", "Breakdown reason"]] : []), ...(showCreatedBy ? [["createdBy", "Created by"]] : []), ...(showClosedBy ? [["closedBy", "Closed by"]] : []),
       ...(showAudio ? [["chassis", "Chassis no."]] : []),
       ...(showCompletionDetails ? [["maintenanceWork", "Work completion action taken"], ["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"]] : []),
@@ -2287,8 +2326,8 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
           {sortedRows.length ? (
             sortedRows.map((r) => (
               <tr key={r.ref} className={requestAwaitingAcceptance(r, breakdownNow) ? "request-awaiting-acceptance" : ""}>
-                {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction, onApproveIdeal, onCancelIdeal, requestActions })}</React.Fragment>) : <>
-                {showReadOnlyAction && <td className="row-actions"><span>Read only</span></td>}
+                {columnOrder ? orderedColumns.map(([key]) => <React.Fragment key={key}>{breakdownCell(key, r, { showReadOnlyAction: showActionColumn, onApproveIdeal, onCancelIdeal, requestActions })}</React.Fragment>) : <>
+                {showActionColumn && <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td>}
                 <td><b>{r.ref}</b></td>
                 <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
                 <td>{r.door}</td>
@@ -10248,7 +10287,7 @@ function App() {
           {active === "Dashboard" ? (
             requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
           ) : active === "Manager Profile" ? (
-            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} />
+            <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} />
           ) : active === "Tickets" ? (
             <TicketPage session={session} />
           ) : active === "Admin locks" ? (

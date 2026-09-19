@@ -79,7 +79,7 @@ test('Admin sessions get Delete and Delete selected in every workspace table; Ma
   assert.match(table,/Delete selected \(\{selectedRefs\.size\}\)/);
   assert.match(table,/Select all shown/);
   const breakdown=client.slice(client.indexOf('function BreakdownTable('),client.indexOf('const masterFields ='));
-  assert.match(breakdown,/const requestActions = \(onDelete \|\| onDeleteSelected\) \? \(row\) =>/);
+  assert.match(breakdown,/const requestActions = \(onDelete \|\| onDeleteSelected \|\| onEdit \|\| onRemark\) \? \(row\) =>/);
   assert.match(breakdown,/Delete selected \(\{selectedRefs\.size\}\)/);
   assert.match(client,/case "requestAction": return showReadOnlyAction \? <td className="row-actions">\{requestActions \? requestActions\(r\) : <span>Read only<\/span>\}<\/td> : null;/);
   assert.match(client,/deleteRequestsBulk = async \(references, reason\) => \{\s*const response = await fetch\("\/api\/requests\/bulk-delete", \{method: "POST"/);
