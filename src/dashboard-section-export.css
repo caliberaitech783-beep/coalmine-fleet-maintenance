@@ -1,0 +1,36 @@
+/* Export menu (Download as PDF, Download as Excel, Smart Print) in the header of each Fleet
+   control dashboard section: Total Fleet, Daily BD balance, Tracking Vehicle Throughput,
+   Request Lifecycle and Breakdown trend. One compact trigger for all five, drawn with the
+   panel colour variables so Night mode follows; the portaled popover is themed in
+   sortable-table.css and theme.css. The whole-dashboard PDF capture drops .export-menu. */
+.mine-dashboard .mine-section-export.export-menu-trigger {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  box-sizing: border-box; min-height: 38px; padding: 5px 12px;
+  border: 1px solid var(--mine-line); border-radius: 8px;
+  background: var(--mine-panel, #fff); color: var(--brand-purple, #522e90);
+  font-family: Manrope, sans-serif; font-weight: 800; line-height: 1.2; white-space: nowrap; cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.mine-dashboard .mine-section-export.export-menu-trigger span { color: inherit; font-weight: 800; }
+.mine-dashboard .mine-section-export.export-menu-trigger svg { flex: none; width: 15px; height: 15px; color: inherit; }
+.mine-dashboard .mine-section-export.export-menu-trigger svg:last-child { width: 13px; height: 13px; }
+.mine-dashboard .mine-section-export.export-menu-trigger:hover:not(:disabled),
+.mine-dashboard .mine-section-export.export-menu-trigger[aria-expanded="true"] { border-color: var(--brand-purple, #522e90); background: var(--brand-purple, #522e90); color: #fff; }
+.mine-dashboard .mine-section-export.export-menu-trigger:focus-visible { outline: 2px solid var(--brand-purple, #522e90); outline-offset: 2px; }
+.mine-dashboard .mine-section-export.export-menu-trigger:disabled { opacity: .65; cursor: wait; }
+.mine-dashboard.mine-dashboard-night .mine-section-export.export-menu-trigger { color: #c9a8f0; }
+.mine-dashboard.mine-dashboard-night .mine-section-export.export-menu-trigger:hover:not(:disabled),
+.mine-dashboard.mine-dashboard-night .mine-section-export.export-menu-trigger[aria-expanded="true"] { border-color: #7b4cc0; background: #7b4cc0; color: #fff; }
+
+/* Daily BD balance: level with its 44px Site, date and period controls. */
+.mine-dashboard .bd-balance-controls .mine-section-export.export-menu-trigger { min-height: 44px; }
+
+/* Narrow screens: the throughput header wraps so its tabs, Export and filter eye stay visible. */
+@media (max-width: 700px) {
+  .mine-dashboard .mine-maintenance-availability-head { flex-wrap: wrap; }
+}
+
+/* A printed page has no use for the menu trigger. */
+@media print {
+  .mine-dashboard .mine-section-export { display: none !important; }
+}

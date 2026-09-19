@@ -25,6 +25,7 @@ import {dashboardFleetSnapshot} from "../dashboard-fleet-snapshot.mjs";
 import * as displayDates from "../date-time-format.mjs";
 import {tableModel, tableExportModel} from "../src/table-actions-model.mjs";
 import {isDurationColumn, compareDurationValues} from "../src/duration-sort.mjs";
+import * as sectionExport from "../src/dashboard-section-export.mjs";
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const componentSource = source.slice(source.indexOf("function Dashboard("), source.indexOf("const PRODUCTION_REQUEST_COLUMNS"));
@@ -194,7 +195,7 @@ function harness({equipment = assets, regions = [{code: "WCL", sites: ["Sasti OB
     isDurationColumn, compareDurationValues,
     ...Object.fromEntries(componentNames.map((name) => [name, Null])),
     OemBreakdownChart,
-    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters,
+    ...metrics, ...movement, ...dailyBalance, ...actions, ...dates, ...forecast, ...model, ...displayDates, ...oemBreakdown, ...oemFilters, ...sectionExport,
     availabilityRequestsForDate, dashboardFleetSnapshot,
     dashboardKpiExportColumns: [],
     React, useState, useEffect() {}, useMemo: (calculate) => calculate(), useRef: (initial) => useState(() => ({current: initial}))[0],
@@ -1057,4 +1058,46 @@ test("every site equipment and vehicle total opens exactly its registered assets
       }
     }
   }
+});
+
+test("each dashboard section offers its own Export menu with the figures it shows, following its view and filters", () => {
+  const view = harness();
+  let tree = view.render();
+  const menus = () => findAll(tree, (node) => node.props.className === "mine-section-export");
+  const menu = (name) => menus().find((node) => node.props.title.startsWith(`${name} · `));
+  const cell = (exported, row, label) => exported.props.columns.find((column) => column.label === label).value(row);
+  assert.deepEqual(menus().map((node) => node.props.title.split(" · ")[0]), ["Total Fleet", "Tracking Vehicle Throughput", "Request Lifecycle", "Breakdown trend"]);
+  // Daily BD balance draws its own menu from the shared component the dashboard hands it.
+  assert.deepEqual(findAll(tree, (node) => node.props.ExportMenu && node.props.onInspect).map((node) => node.props.ExportMenu), [Null]);
+  // Total Fleet: the site row matches the figures under its bars, then the WCL footer and the dashboard total.
+  const fleet = menu("Total Fleet");
+  assert.match(fleet.props.title, / · Live fleet$/);
+  assert.deepEqual(fleet.props.rows.map((row) => row.name), ["Sasti OB", "WCL total", "All sites"]);
+  const [site] = fleet.props.rows;
+  assert.equal(text(byClass(tree, "mine-fleet-site-summary")), `${cell(fleet, site, "Site name")}BD Balance ${cell(fleet, site, "BD balance")}Total Fleet ${cell(fleet, site, "Total fleet")}BD (%) ${cell(fleet, site, "BD (%)")}`);
+  // Tracking Vehicle Throughput follows its open tab and period, matching the site row on screen.
+  let throughput = menu("Tracking Vehicle Throughput");
+  assert.match(throughput.props.title, /^Tracking Vehicle Throughput · Site-wise BD Movement · /);
+  assert.ok(throughput.props.title.endsWith(` · Availability: live · ${todayLabel}`));
+  const movement = throughput.props.rows[0];
+  assert.ok(byClass(tree, "mine-breakdown-site-row").props["aria-label"].startsWith(`${movement.name}: ${movement.open} open, ${movement.incoming} in, ${movement.outgoing} out, ${movement.balance} balance; ${movement.availability}% availability count with ${movement.onRoad} on road, ${movement.offRoad} off road and ${movement.idle} idle.`));
+  assert.ok(throughput.props.rows.some((row) => row.name === "All sites total") && throughput.props.rows.some((row) => row.name === "Summary · BD Out"));
+  button(tree, "Availability Count").props.onClick();
+  tree = view.render();
+  throughput = menu("Tracking Vehicle Throughput");
+  assert.match(throughput.props.title, /^Tracking Vehicle Throughput · Availability Count · /);
+  const road = throughput.props.rows[0];
+  assert.ok(byClass(tree, "mine-road-site-row").props["aria-label"].startsWith(`${road.name}: ${road.onRoad} on road, ${road.offRoad} off road and ${road.idle} idle.`));
+  // Request Lifecycle and Breakdown trend: one row per day in the selected range, then their summary cards.
+  const lifecycle = menu("Request Lifecycle");
+  assert.ok(lifecycle.props.title.endsWith(` · ${displayDates.formatDisplayDateRange(todayKey, todayKey, " - ")}`));
+  assert.deepEqual(lifecycle.props.columns.map((column) => column.label), ["Date", "Day", "Production Request", "Closed", "Verified", "Idle Vehicles", "Open in Maintenance", "Open in MIS"]);
+  assert.deepEqual(lifecycle.props.rows.map((row) => row.label), [todayLabel, "Summary cards"]);
+  assert.deepEqual(menu("Breakdown trend").props.rows.map((row) => row.label), [todayLabel, "Recorded", "Daily baseline"]);
+  // The OEM BD view shows only the fleet chart, so only its export remains, now per OEM.
+  button(byLabel(tree, "Fleet chart view"), "OEM BD").props.onClick();
+  tree = view.render();
+  assert.deepEqual(menus().map((node) => node.props.title.split(" · ")[0]), ["OEM BD"]);
+  assert.deepEqual(menus()[0].props.columns.map((column) => column.label), ["Region", "Site name", "OEM", "BD count", "Share of OEM BD (%)"]);
+  assert.equal(menus()[0].props.rows.at(-1).name, "All sites");
 });

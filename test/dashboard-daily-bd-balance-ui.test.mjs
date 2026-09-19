@@ -9,6 +9,7 @@ import {dashboardCountScale} from '../src/dashboard-count-scale.mjs';
 import {recordedBreakdownRangeLength} from '../src/dashboard-breakdown-forecast.mjs';
 import {recordBelongsToSite} from '../site-location.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
+import {dailyBdBalanceExport} from '../src/dashboard-section-export.mjs';
 
 const source = readFileSync(new URL('../src/daily-bd-balance-chart.jsx', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
 const {code} = await transformWithOxc(source, 'daily-bd-balance-chart.jsx', {jsx: {runtime: 'classic'}});
@@ -28,7 +29,7 @@ const button = (tree, value) => find(tree, node => node.type === 'button' && tex
 function harness() {
   const slots = [], calls = []; let cursor = 0;
   const bindings = {
-    React, ...ledger, dashboardCountScale, recordedBreakdownRangeLength, recordBelongsToSite, formatDisplayDate,
+    React, ...ledger, dashboardCountScale, recordedBreakdownRangeLength, recordBelongsToSite, formatDisplayDate, dailyBdBalanceExport,
     useMemo: fn => fn(),
     useState(initial) {const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => {slots[i] = value;}];},
     ...Object.fromEntries(['ArrowDown', 'ArrowRight', 'ArrowUp', 'Info', 'MapPin', 'RotateCcw'].map(name => [name, () => null])),
@@ -167,4 +168,24 @@ test('Today follows the current day, custom dates persist, and clearing dates re
   assert.equal(label(tree, 'Daily BD balance from date').props.value, '2026-09-13');
   assert.equal(label(tree, 'Daily BD balance to date').props.value, '2026-09-13');
   assert.equal(button(tree, 'Today').props['aria-pressed'], true);
+});
+
+test('an Export menu beside the period buttons exports the days and totals on screen, following the site and range', () => {
+  const ExportMenu = () => null;
+  const menuOf = tree => find(tree, node => node.type === ExportMenu)[0];
+  const cells = menu => menu.props.rows.map(row => menu.props.columns.map(column => column.value(row)));
+  const view = harness();
+  assert.equal(menuOf(view.render()), undefined, 'nothing without the shared menu');
+  assert.equal(menuOf(view.render({ExportMenu, ready: false})), undefined, 'nothing while loading');
+  let menu = menuOf(view.render({ExportMenu}));
+  assert.equal(menu.props.className, 'mine-section-export');
+  assert.equal(menu.props.title, 'Daily BD balance · All regions · 11-09-2026 to 11-09-2026 · Today so far');
+  assert.deepEqual(cells(menu), [['11-09-2026', 'Today · live', 2, 1, 1, 2, 0, '0', '0.0%']]);
+  button(view.render({ExportMenu}), '7D').props.onClick();
+  menu = menuOf(view.render({ExportMenu}));
+  assert.equal(menu.props.title, 'Daily BD balance · All regions · 05-09-2026 to 11-09-2026 · Today so far');
+  assert.equal(menu.props.rows.length, 8, 'seven days and the selected period');
+  assert.deepEqual(cells(menu).at(-1), ['Selected period', '05-09-2026 to 11-09-2026', 1, 2, 1, 2, 0, '+1', '+100.0%']);
+  label(view.render({ExportMenu}), 'Daily BD balance site').props.onChange({target: {value: 'Majri OB'}});
+  assert.match(menuOf(view.render({ExportMenu})).props.title, /^Daily BD balance · Majri OB · 05-09-2026 to 11-09-2026/);
 });
