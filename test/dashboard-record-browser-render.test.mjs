@@ -48,7 +48,7 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     ["All lifecycle requests", "all", timingColumns],
   ]) {
     let table;
-    const props = {rows: [row], regions: REGION_DATA, rowsAreScoped: true, requestRecords: true, lifecycleRecords: true, lifecycleEvent: event, title,
+    const props = {rows: [{...row, idleReason: "No driver"}], regions: REGION_DATA, rowsAreScoped: true, requestRecords: true, lifecycleRecords: true, lifecycleEvent: event, title,
       Status: ({children}) => children, formatDate: formatDisplayDateTime,
       ActionsTable: received => {table = received; return React.createElement("table", null, received.children);}};
     const html = renderToStaticMarkup(React.createElement(Browser, props));
@@ -61,15 +61,17 @@ test("each lifecycle metric supplies only its relevant timestamp columns to the 
     assert.equal(table.printTitle, table.exportTitle, title);
     assert.doesNotMatch(html, /1 of 1 records/); // The shared toolbar owns the only count.
     assert.equal(table.toolbarPortal, true);
-    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 13 + expected.length + (event === "idle" ? 1 : 0), title);
+    assert.equal(descendants(dataRows[0], node => node.type === "td").length, 13 + expected.length + (event === "idle" ? 2 : 0), title);
     if (event === "idle") {
       assert.equal(columns[2].label, "Idle Vehicle Date");
+      assert.equal(columns[columns.findIndex(column => column.label === "Breakdown reason") + 1].label, "Idle reason");
+      assert.equal(exported.columns.find(column => column.label === "Idle reason").value(exported.rows[0]), "No driver");
       assert.ok(html.includes("Not recorded"));
     }
     for (const column of timingColumns.filter(label => !expected.includes(label))) assert.ok(!html.includes(`<th>${column}</th>`), `${title}: ${column}`);
     if (expected.includes("Closed")) assert.equal(exported.columns.find(column => column.label === "Closed").value(exported.rows[0]), "10-09-2026 11:00:00 AM", title);
     const empty = renderToStaticMarkup(React.createElement(Browser, {...props, rows: []}));
-    assert.ok(empty.includes(`colSpan="${13 + expected.length + (event === "idle" ? 1 : 0)}"`), `${title}: empty table alignment`);
+    assert.ok(empty.includes(`colSpan="${13 + expected.length + (event === "idle" ? 2 : 0)}"`), `${title}: empty table alignment`);
   }
 });
 

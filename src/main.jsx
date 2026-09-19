@@ -1774,6 +1774,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       repairCategory: request.category || "—",
       delayedReason: request.delayedReason || "—",
       breakdownReason: request.complaint || "—",
+      idleReason: request.idleReason || "—",
       dailyRemarks: Array.isArray(request.dailyRemarks) ? request.dailyRemarks : [],
       requestIdleAt: request.idealRequestedAt || request.idleRequestedAt || "",
       requestStart: request.start || "—",
