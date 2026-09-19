@@ -40,6 +40,11 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, gro
     columns.splice(columns.indexOf(idleDate), 1);
     columns.splice(columns.indexOf(started) + 1, 0, idleDate);
   }
+  const idleReason = columns.find(column => /^idle reason$/i.test(column.label.trim()));
+  if (idleDate && idleReason) {
+    columns.splice(columns.indexOf(idleReason), 1);
+    columns.splice(columns.indexOf(idleDate) + 1, 0, idleReason);
+  }
   const schema = columns.map((column) => column.key).join("|");
   return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
 }

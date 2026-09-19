@@ -33,6 +33,13 @@ const load = (file, overrides = {}) => {
   return new Function(...Object.keys(values), compiled[file])(...Object.values(values));
 };
 const RecordDateRange = load("record-date-range");
+test("Idle reason follows Idle Vehicle Date in the shared display and export column order", () => {
+  const Shared = load("shared-actions-table");
+  const labels = ["Status", "Started", "Idle Vehicle Date", "Breakdown reason", "Idle reason"];
+  const tree = Shared({ preserveColumnOrder: true, children: h("thead", null, h("tr", null, labels.map(label => h("th", {key: label}, label)))) });
+  assert.deepEqual(tree.props.columns.map(column => column.label), ["Status", "Started", "Idle Vehicle Date", "Idle reason", "Breakdown reason"]);
+  assert.deepEqual(tree.props.columns.map(column => column.index), [0, 1, 2, 4, 3]);
+});
 const nodes = (node, predicate) => Array.isArray(node) ? node.flatMap(child => nodes(child, predicate))
   : React.isValidElement(node) ? [...(predicate(node) ? [node] : []), ...nodes(node.props.children, predicate)] : [];
 const one = (tree, predicate) => { const found = nodes(tree, predicate); assert.equal(found.length, 1); return found[0]; };
