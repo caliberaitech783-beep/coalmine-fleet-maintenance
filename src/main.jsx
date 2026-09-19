@@ -224,6 +224,7 @@ import "./backup-administration.css";
 import "./daily-bd-balance.css";
 import "./print-preview.css";
 import "./nav-motion.css";
+import "./dashboard-bar-motion.css";
 import "./workspace-readability.css";
 import DailyBdBalanceChart from "./daily-bd-balance-chart.jsx";
 import {dailyBdRecordsForMetric} from "./daily-bd-balance.mjs";

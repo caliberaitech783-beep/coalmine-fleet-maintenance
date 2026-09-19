@@ -1,0 +1,86 @@
+/* Fleet control dashboard filter bar (and the Manager dashboard bar): graphical
+   and animated, CSS only. Sizes, layout, the Caliber brand mark and the native
+   selects / date inputs stay exactly as they are; this file adds a slow sheen
+   across the gradient, a self-drawing title underline, a pulsing eyebrow dot,
+   colour markers and hover / focus glow on the filters, a live pulse trace in
+   the status chip, a hover state for Export KPIs and a blinking eye toggle.
+   Everything is disabled under prefers-reduced-motion. */
+
+/* Bar sheen (the bar keeps its own position: sticky on the page, relative in a dialog). */
+.mine-dashboard-head { isolation: isolate; }
+.mine-dashboard-head.in-dialog { position: relative; }
+.mine-dashboard-head::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(110deg, transparent 40%, #ffffff1f 50%, transparent 60%); background-size: 250% 100%; animation: bar-sheen 9s linear infinite; pointer-events: none; }
+
+/* Eyebrow dot and self-drawing title underline. */
+.mine-dashboard-head .mine-eyebrow { display: inline-flex; align-items: center; gap: 7px; }
+.mine-dashboard-head .mine-eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #7dd3fc; box-shadow: 0 0 0 0 #7dd3fcb3; animation: bar-beat 1.6s ease-out infinite; flex: 0 0 auto; }
+.mine-dashboard-head h1 { position: relative; width: max-content; max-width: 100%; }
+.mine-dashboard-head h1::after { content: ""; position: absolute; left: 0; bottom: -5px; height: 3px; width: 100%; border-radius: 3px; background: linear-gradient(90deg, #ffd166, #fff); transform: scaleX(0); transform-origin: left; animation: bar-draw 1.1s 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+
+/* Filters: colour marker per field, staggered entrance, lift + glow + coloured underline on hover / focus. */
+.mine-dashboard-head .mine-head-actions label { --m: #ffffff; position: relative; animation: bar-rise 0.5s both; }
+.mine-dashboard-head .mine-head-actions label:nth-child(2) { animation-delay: 0.08s; }
+.mine-dashboard-head .mine-head-actions label:nth-child(3) { animation-delay: 0.16s; }
+.mine-dashboard-head .mine-head-actions label:nth-child(4) { animation-delay: 0.24s; }
+.mine-dashboard-head .mine-head-actions label:nth-child(5) { animation-delay: 0.32s; }
+.mine-dashboard-head .mine-head-actions label > span { display: inline-flex; align-items: center; gap: 6px; }
+.mine-dashboard-head .mine-head-actions label > span::before { content: ""; width: 7px; height: 7px; border-radius: 2px; background: var(--m); box-shadow: 0 0 0 2px #ffffff40; transform: rotate(45deg); flex: 0 0 auto; }
+.mine-dashboard-head .mine-head-actions label:has(> select[aria-label="Region"]) { --m: #7dd3fc; }
+.mine-dashboard-head .mine-head-actions label.mine-site-filter { --m: #4ade80; }
+.mine-dashboard-head .mine-head-actions label.mine-oem-filter { --m: #c084fc; }
+.mine-dashboard-head .mine-head-actions label:has(> input[aria-label="Dashboard from date"]) { --m: #fbbf24; }
+.mine-dashboard-head .mine-head-actions label:has(> input[aria-label="Dashboard to date"]) { --m: #fb7185; }
+.mine-dashboard-head .mine-head-actions label::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 2px; border-radius: 2px; background: var(--m); transform: scaleX(0); transform-origin: left; transition: transform 0.3s ease; pointer-events: none; }
+.mine-dashboard-head .mine-head-actions label:hover::after, .mine-dashboard-head .mine-head-actions label:focus-within::after { transform: scaleX(1); }
+.mine-dashboard-head .mine-head-actions label :is(select, input) { transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease; }
+.mine-dashboard-head .mine-head-actions label:hover :is(select, input), .mine-dashboard-head .mine-head-actions label:focus-within :is(select, input) { transform: translateY(-2px); background: #ffffff38 !important; border-color: #ffffffb3 !important; box-shadow: 0 10px 22px #00000033, 0 0 0 3px color-mix(in srgb, var(--m) 40%, transparent) !important; }
+
+/* Status chip: live pulse trace (left to right) and a heartbeat dot. */
+.mine-dashboard-head .mine-updated { gap: 8px; }
+.mine-dashboard-head .mine-updated::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 #4ade80b3; animation: bar-beat 1.4s ease-out infinite; flex: 0 0 auto; }
+.mine-dashboard-head .mine-updated svg { overflow: visible; filter: drop-shadow(0 0 3px #ffffff80); }
+.mine-dashboard-head .mine-updated svg path { stroke-dasharray: 26 64; animation: bar-trace 1.6s linear infinite; }
+
+/* Export KPIs: violet gradient and a bobbing download icon on hover (no transform: the menu opens from it). */
+.mine-dashboard-head .dashboard-export-trigger { position: relative; isolation: isolate; transition: color 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
+.mine-dashboard-head .dashboard-export-trigger::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(135deg, #a855f7, #6b2fa8); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+.mine-dashboard-head .dashboard-export-trigger:hover, .mine-dashboard-head .dashboard-export-trigger:focus-within { color: #fff; border-color: #ffb4f5; box-shadow: 0 10px 22px #00000040; }
+.mine-dashboard-head .dashboard-export-trigger:hover::before, .mine-dashboard-head .dashboard-export-trigger:focus-within::before { opacity: 1; }
+.mine-dashboard-head .dashboard-export-trigger:hover span, .mine-dashboard-head .dashboard-export-trigger:focus-within span { color: #fff !important; }
+.mine-dashboard-head .dashboard-export-trigger:hover > svg:first-child, .mine-dashboard-head .dashboard-export-trigger:hover > button > svg:first-child { animation: bar-drop 0.7s ease-in-out infinite; }
+
+/* Eye toggle: glass round button that blinks and grows on hover. */
+.mine-dashboard-head .dashboard-banner-toggle { border: 1px solid #ffffff73; border-radius: 50%; background: #ffffff29; transition: transform 0.2s ease, background 0.2s ease; }
+.mine-dashboard-head .dashboard-banner-toggle:hover, .mine-dashboard-head .dashboard-banner-toggle:focus-visible { transform: scale(1.1); background: #ffffff4d; }
+.mine-dashboard-head .dashboard-banner-toggle svg { transform-origin: center; animation: bar-blink 4s ease-in-out infinite; }
+
+/* Manager dashboard bar: sheen, eyebrow dot, title underline, badge pulse, export hover. */
+.manager-dashboard-head { position: relative; isolation: isolate; }
+.manager-dashboard-head::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(110deg, transparent 40%, #ffffff1f 50%, transparent 60%); background-size: 250% 100%; animation: bar-sheen 9s linear infinite; pointer-events: none; }
+.manager-dashboard-head > div > span { display: inline-flex; align-items: center; gap: 7px; }
+.manager-dashboard-head > div > span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #7dd3fc; box-shadow: 0 0 0 0 #7dd3fcb3; animation: bar-beat 1.6s ease-out infinite; flex: 0 0 auto; }
+.manager-dashboard-head h1 { position: relative; width: max-content; max-width: 100%; }
+.manager-dashboard-head h1::after { content: ""; position: absolute; left: 0; bottom: -5px; height: 3px; width: 100%; border-radius: 3px; background: linear-gradient(90deg, #ffd166, #fff); transform: scaleX(0); transform-origin: left; animation: bar-draw 1.1s 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
+.manager-dashboard-badge svg { animation: bar-pulse 1.6s ease-in-out infinite; }
+.manager-dashboard-head .dashboard-export-trigger { position: relative; isolation: isolate; transition: color 0.25s ease, box-shadow 0.25s ease; }
+.manager-dashboard-head .dashboard-export-trigger::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(135deg, #a855f7, #6b2fa8); opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+.manager-dashboard-head .dashboard-export-trigger:hover, .manager-dashboard-head .dashboard-export-trigger:focus-within { color: #fff; box-shadow: 0 10px 22px #00000040; }
+.manager-dashboard-head .dashboard-export-trigger:hover::before, .manager-dashboard-head .dashboard-export-trigger:focus-within::before { opacity: 1; }
+.manager-dashboard-head .dashboard-export-trigger:hover span { color: #fff !important; }
+
+@keyframes bar-sheen { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+@keyframes bar-beat { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 8px transparent; } }
+@keyframes bar-draw { to { transform: scaleX(1); } }
+@keyframes bar-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes bar-trace { to { stroke-dashoffset: 90; } }
+@keyframes bar-drop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+@keyframes bar-blink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
+@keyframes bar-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mine-dashboard-head::before, .mine-dashboard-head .mine-eyebrow::before, .mine-dashboard-head h1::after, .mine-dashboard-head .mine-head-actions label, .mine-dashboard-head .mine-head-actions label::after, .mine-dashboard-head .mine-head-actions label :is(select, input),
+  .mine-dashboard-head .mine-updated::before, .mine-dashboard-head .mine-updated svg path, .mine-dashboard-head .dashboard-export-trigger, .mine-dashboard-head .dashboard-export-trigger::before, .mine-dashboard-head .dashboard-export-trigger > svg:first-child, .mine-dashboard-head .dashboard-banner-toggle, .mine-dashboard-head .dashboard-banner-toggle svg,
+  .manager-dashboard-head::before, .manager-dashboard-head > div > span::before, .manager-dashboard-head h1::after, .manager-dashboard-badge svg, .manager-dashboard-head .dashboard-export-trigger, .manager-dashboard-head .dashboard-export-trigger::before { animation: none !important; transition: none !important; }
+  .mine-dashboard-head h1::after { transform: scaleX(1); }
+  .manager-dashboard-head h1::after { transform: scaleX(1); }
+}
