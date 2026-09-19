@@ -33,6 +33,7 @@ import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./
 import { closedTimeAfterStartedColumns } from "./table-actions-model.mjs";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
+import RecoveryGuide from "./recovery-guide.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
 import { playNotificationSound, loadNotificationSound, saveNotificationSound, NOTIFICATION_SOUNDS } from "./notification-chime.mjs";
 import LiveTemperatureChip from "./live-temperature-chip.jsx";
@@ -195,6 +196,7 @@ import {
   Flag,
   HardDrive,
   Volume2,
+  LifeBuoy,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -341,6 +343,7 @@ const adminNav = [
   ["Export Backup", Download],
   ["Import Backup", Upload],
   ["Backup Schedule", CalendarDays],
+  ["Recovery guide", LifeBuoy],
   ["Audit Trail", History],
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
@@ -348,7 +351,7 @@ const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "B
 const adminMenuKeys = {
   "User Sessions": "sessions", "Access structure": "access", "Hierarchy levels": "levels", "Reporting structure": "reporting",
   "People by designation": "people", "Print helper": "print", "Request corrections": "corrections", "Backup": "backup",
-  "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule", "Audit Trail": "history", "Admin locks": "locks",
+  "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule", "Recovery guide": "recovery", "Audit Trail": "history", "Admin locks": "locks",
 };
 // [page name, icon, badge key]: the key picks the badge colour and hover animation (topbar.css).
 const masterNav = [
@@ -9949,6 +9952,7 @@ function App() {
     if(name==="User Sessions")return isAdministrator;
     if(backupAdminPages.has(name))return isAdministrator;
     if(name==="Audit Trail")return isAdministrator;
+    if(name==="Recovery guide")return isAdministrator;
     if(name==="Print helper")return isAdministrator;
     if(name==="Admin locks")return isAdministrator&&adminPermissions.adminLevel==="Super Admin";
     if(name==="Manager Profile")return adminPermissions.adminLevel==="Manager";
@@ -10360,6 +10364,8 @@ function App() {
             <RequestCorrections session={session} requests={requests} Dialog={Modal} />
           ) : active === "User Sessions" ? (
             <UserSessionsPage session={session} />
+          ) : active === "Recovery guide" ? (
+            <RecoveryGuide onNavigate={selectMenu} />
           ) : backupAdminPages.has(active) ? (
             <BackupAdministration section={active} session={session} onNavigate={selectMenu} />
           ) : active === "Vehicle transfers" ? (

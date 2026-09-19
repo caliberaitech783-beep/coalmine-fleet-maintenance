@@ -614,6 +614,7 @@
 .workspace-menu-item[data-workspace="export"] .workspace-icon { --ws-a: #4ade80; --ws-b: #15803d; --ws-shadow: rgba(21, 128, 61, 0.45); --ws-ring: rgba(74, 222, 128, 0.4); }
 .workspace-menu-item[data-workspace="import"] .workspace-icon { --ws-a: #22d3ee; --ws-b: #0e7490; --ws-shadow: rgba(14, 116, 144, 0.45); --ws-ring: rgba(34, 211, 238, 0.4); }
 .workspace-menu-item[data-workspace="schedule"] .workspace-icon { --ws-a: #38bdf8; --ws-b: #0369a1; --ws-shadow: rgba(3, 105, 161, 0.45); --ws-ring: rgba(56, 189, 248, 0.4); }
+.workspace-menu-item[data-workspace="recovery"] .workspace-icon { --ws-a: #fb923c; --ws-b: #dc2626; --ws-shadow: rgba(220, 38, 38, 0.45); --ws-ring: rgba(251, 146, 60, 0.4); }
 .workspace-menu-item[data-workspace="locks"] .workspace-icon { --ws-a: #f87171; --ws-b: #b91c1c; --ws-shadow: rgba(185, 28, 28, 0.45); --ws-ring: rgba(248, 113, 113, 0.4); }
 
 .workspace-menu-item:hover .workspace-icon,
@@ -719,6 +720,9 @@
 .workspace-menu-item[data-workspace="import"]:hover .workspace-icon svg,
 .workspace-menu-item[data-workspace="import"]:focus-visible .workspace-icon svg,
 .workspace-menu-item[data-workspace="import"].active .workspace-icon svg { animation: ws-rise 1s ease-in-out infinite; }
+.workspace-menu-item[data-workspace="recovery"]:hover .workspace-icon svg,
+.workspace-menu-item[data-workspace="recovery"]:focus-visible .workspace-icon svg,
+.workspace-menu-item[data-workspace="recovery"].active .workspace-icon svg { animation: ws-spin 2.4s linear infinite; }
 .workspace-menu-item[data-workspace="schedule"]:hover .workspace-icon svg,
 .workspace-menu-item[data-workspace="schedule"]:focus-visible .workspace-icon svg,
 .workspace-menu-item[data-workspace="schedule"].active .workspace-icon svg { animation: ws-tick 1s ease-in-out infinite; }
