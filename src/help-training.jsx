@@ -2,31 +2,9 @@ import React, {useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 import {CheckCircle2, CircleHelp, Languages, PlayCircle, X} from "lucide-react";
 import {userGuideStorageKey, userGuideVideo, userGuidesForRoles} from "./help-training.mjs";
-import {fetchLiveTemperature, formatTemperature, resolveTemperatureCoordinates, TEMPERATURE_REFRESH_MS} from "./live-temperature.mjs";
+import {formatTemperature} from "./live-temperature.mjs";
+import {useLiveTemperature} from "./live-temperature-chip.jsx";
 import "./help-training.css";
-
-// Live outdoor temperature while the dialog is open (viewer position, else the assigned site).
-function useLiveTemperature(site, active) {
-  const [reading, setReading] = useState({celsius: null, place: "", error: false});
-  useEffect(() => {
-    if (!active) return undefined;
-    let stopped = false;
-    const controller = new AbortController();
-    const load = async () => {
-      try {
-        const coordinates = await resolveTemperatureCoordinates(site);
-        const result = await fetchLiveTemperature({...coordinates, signal: controller.signal});
-        if (!stopped) setReading({celsius: result.celsius, place: coordinates.place, error: false});
-      } catch {
-        if (!stopped) setReading((current) => ({...current, error: true}));
-      }
-    };
-    void load();
-    const timer = setInterval(load, TEMPERATURE_REFRESH_MS);
-    return () => { stopped = true; controller.abort(); clearInterval(timer); };
-  }, [site, active]);
-  return reading;
-}
 
 export default function HelpTraining({role = "", roles = [], location = ""}) {
   const guides = useMemo(() => userGuidesForRoles([role, ...(Array.isArray(roles) ? roles : [roles])]), [role, roles]);

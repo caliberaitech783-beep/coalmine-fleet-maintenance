@@ -1,0 +1,15 @@
+/* Live outside temperature chip in the admin header (next to the theme switch). */
+.live-temperature-chip{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px 0 10px;border:1px solid #f4c9a8;border-radius:999px;background:linear-gradient(135deg,#fff7e6,#ffe3cc);color:#8a3b12;font-size:13px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;box-shadow:0 2px 8px #f9731622}
+.live-temperature-chip svg{width:16px;height:16px;flex:0 0 auto;color:#ea580c;animation:live-temperature-tilt 3s ease-in-out infinite}
+.live-temperature-chip::after{content:"";width:8px;height:8px;border-radius:50%;background:#f97316;box-shadow:0 0 0 0 #f9731699;animation:live-temperature-live 1.6s ease-out infinite}
+.live-temperature-chip b{font-weight:800}
+.live-temperature-chip.is-loading{opacity:.7}
+.live-temperature-chip.is-error{border-color:#d9e1ed;background:#f1f4f9;color:#6b7891}
+.live-temperature-chip.is-error svg{color:#9aa7ba;animation:none}
+.live-temperature-chip.is-error::after{background:#9aa7ba;animation:none}
+:root[data-theme="dark"] .live-temperature-chip{border-color:#f9731666;background:#f9731626;color:#ffb27a;box-shadow:none}
+:root[data-theme="dark"] .live-temperature-chip.is-error{border-color:#34435a;background:#17243a;color:#9aa7ba}
+@keyframes live-temperature-live{0%{box-shadow:0 0 0 0 #f9731699}100%{box-shadow:0 0 0 8px #f9731600}}
+@keyframes live-temperature-tilt{0%,100%{transform:rotate(0)}50%{transform:rotate(-8deg)}}
+@media (max-width:600px){.live-temperature-chip{height:32px;padding:0 9px 0 8px;font-size:11px}}
+@media (prefers-reduced-motion:reduce){.live-temperature-chip svg,.live-temperature-chip::after{animation:none!important}}

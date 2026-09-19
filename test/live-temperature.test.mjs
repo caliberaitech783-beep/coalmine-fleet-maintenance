@@ -42,8 +42,8 @@ test('the reading comes from Open-Meteo and failures throw',async()=>{
 
 test('the dialog shows the live reading before the icon and the icon matches the header badge',()=>{
   assert.match(dialog,/export default function HelpTraining\(\{role = "", roles = \[\], location = ""\}\)/);
+  assert.match(dialog,/import \{useLiveTemperature\} from "\.\/live-temperature-chip\.jsx";/,'shared hook');
   assert.match(dialog,/const temperature = useLiveTemperature\(location, open\);/,'only polls while the dialog is open');
-  assert.match(dialog,/const timer = setInterval\(load, TEMPERATURE_REFRESH_MS\);/);
   assert.match(dialog,/<span className="help-training-heading-lead">\s*<span className=\{`help-training-weather[^`]*`\}[^>]*role="status" aria-live="polite"[^>]*>\{formatTemperature\(temperature\.celsius\)\}<\/span>\s*<span className="help-training-heading-icon"><CircleHelp \/><\/span>\s*<\/span>/);
   assert.match(styles,/\.help-training-dialog>header\{grid-template-columns:auto minmax\(0,1fr\) auto 40px\}/);
   assert.match(styles,/\.help-training-weather\{[^}]*font-variant-numeric:tabular-nums\}/);

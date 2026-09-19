@@ -34,6 +34,7 @@ import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
 import { playTempleBell, shouldChime } from "./notification-chime.mjs";
+import LiveTemperatureChip from "./live-temperature-chip.jsx";
 import BackupAdministration from "./backup-administration.jsx";
 import VehicleTransferWorkflow from "./vehicle-transfer-workflow.jsx";
 import RequestCorrections from "./request-corrections.jsx";
@@ -10224,6 +10225,7 @@ function App() {
           </div>
           <HeaderClock />
           <div>
+            <LiveTemperatureChip location={profileLocation} />
             <ThemeToggle theme={theme} onToggle={toggleTheme} />
             {adminPermissions.adminLevel === "Manager" && <HelpTraining roles={adminPermissions.managerRoles} location={profileLocation} />}
             <AiFeeder role={adminPermissions.adminLevel === "Manager" ? "Manager" : "Admin"} session={session} />
