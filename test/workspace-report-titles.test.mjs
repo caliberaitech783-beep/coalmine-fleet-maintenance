@@ -14,3 +14,9 @@ test("workspace report names are visible and used by print, PDF, and Excel expor
   assert.match(source, /<PrintButton title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} \/>/);
   assert.match(source, /<ExportMenu title=\{exportTitle\} columns=\{filterColumns\} rows=\{sortedRows\} \/>/);
 });
+
+test("the manager requests table shows a single Smart Print", () => {
+  // The table brings its own Smart Print when it has a print title, so the toolbar drops its duplicate.
+  assert.ok(source.includes('printTitle={stableToolbar ? "Manager dashboard requests" : ""}'));
+  assert.ok(source.includes("{!stableToolbar && <PrintButton title={exportTitle} columns={filterColumns} rows={sortedRows} />}"));
+});
