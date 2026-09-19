@@ -56,7 +56,7 @@ test('server: admin-only key management and a keyed download of the latest compl
 
 test('the setup script schedules a daily verified copy and never stores the key in plain text',()=>{
   assert.ok(!/[^\x00-\x7F]/.test(script),'plain ASCII for Windows PowerShell 5.1');
-  assert.match(script,/\r\n/,'Windows line endings');
+  assert.match(client,/\.replace\(\/\\r\?\\n\/g,'\\r\\n'\);/,'the page hands out Windows line endings whatever the checkout used');
   assert.match(script,/\$AppUrl = 'https:\/\/bdms\.cmll\.in'/);
   assert.match(script,/Read-Host 'Paste the PC backup key from Nerve Center, then press Enter' -AsSecureString/);
   assert.match(script,/ConvertFrom-SecureString \| Set-Content -Path \(Join-Path \$WorkDir 'key\.dat'\)/,'DPAPI-encrypted for this Windows user');

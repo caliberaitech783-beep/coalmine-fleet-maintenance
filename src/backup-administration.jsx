@@ -115,7 +115,8 @@ function PcBackupCopy({session}){
     try{
       const response=await fetch('/pc-backup/Nerve-Center-Backup-Setup.ps1',{cache:'no-store'});
       if(!response.ok)throw new Error('Could not load the PC setup script.');
-      const script=(await response.text()).replace("$AppUrl = 'https://bdms.cmll.in'",`$AppUrl = '${window.location.origin}'`);
+      // Windows line endings for Notepad and PowerShell, whatever the server's checkout used.
+      const script=(await response.text()).replace("$AppUrl = 'https://bdms.cmll.in'",`$AppUrl = '${window.location.origin}'`).replace(/\r?\n/g,'\r\n');
       const url=URL.createObjectURL(new Blob([script],{type:'text/plain'}));
       const link=document.createElement('a');link.href=url;link.download='Nerve-Center-Backup-Setup.ps1';document.body.appendChild(link);link.click();link.remove();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
