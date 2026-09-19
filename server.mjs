@@ -3155,6 +3155,9 @@ const userManagesSite=(user,site)=>reportScopeIncludesSite(managerReportScope(us
 async function ticketVisibleToSession(ticket,session){
   if(session?.role==='super'&&session?.permissions?.adminLevel!=='Manager')return true;
   if(session?.role!=='super')return String(ticket?.creatorLogin||'').trim().toLowerCase()===String(session?.login||'').trim().toLowerCase();
+  // Managers always see the tickets they raised themselves, as in the ticket list.
+  const viewerLogin=String(session?.login||'').trim().toLowerCase();
+  if(viewerLogin&&String(ticket?.creatorLogin||'').trim().toLowerCase()===viewerLogin)return true;
   const manager=await currentUserRecord(session);
   const creatorRoles=managerRoleSelection(session?.permissions?.managerRoles?.length
     ?session.permissions.managerRoles:session?.permissions?.managerRole).map(managerUserRole);
@@ -3994,7 +3997,7 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
     const category=TICKET_CATEGORIES.includes(String(req.query.category||''))?String(req.query.category):'';
     const values=[];
     const conditions=[];
-    let managerScope=null;
+    let managerScope=null,managerLogin='';
     if(req.session.role!=='super'){
       values.push(String(req.session.login||'').trim().toLowerCase());
       conditions.push(`lower(creator_login)=$${values.length}`);
@@ -4002,13 +4005,17 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
     }else if(req.session.permissions?.adminLevel==='Manager'){
       const user=await currentUserRecord(req.session);
       values.push(managerRoleSelection(req.session.permissions?.managerRoles?.length?req.session.permissions.managerRoles:req.session.permissions?.managerRole).map(managerUserRole));
-      conditions.push(`creator_role=ANY($${values.length}::text[])`);
+      // A manager's own tickets always list, including ones filed under "Not assigned" because their record has no site of its own.
+      managerLogin=String(req.session.login||'').trim().toLowerCase();
+      values.push(managerLogin);
+      conditions.push(`(creator_role=ANY($${values.length-1}::text[]) OR ($${values.length} <> '' AND lower(creator_login)=$${values.length}))`);
       managerScope=managerReportScope(user);
     }
     if(category){values.push(category);conditions.push(`category=$${values.length}`)}
     const where=conditions.length?`WHERE ${conditions.join(' AND ')}`:'';
     const {rows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets ${where} ORDER BY created_at DESC`,values);
-    const visibleRows=managerScope?rows.filter((ticket)=>reportScopeIncludesSite(managerScope,ticket.site)):rows;
+    const ownTicket=(ticket)=>Boolean(managerLogin)&&String(ticket.creatorLogin||'').trim().toLowerCase()===managerLogin;
+    const visibleRows=managerScope?rows.filter((ticket)=>ownTicket(ticket)||reportScopeIncludesSite(managerScope,ticket.site)):rows;
     let payload=visibleRows.map(normalizeOperationalSiteFields);
     // Admins and managers can call the person who raised the ticket (phone from the Users & employees record).
     if(req.session.role==='super'&&payload.length){
