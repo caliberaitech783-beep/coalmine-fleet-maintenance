@@ -14,7 +14,7 @@
 /* Eyebrow dot and self-drawing title underline. */
 .mine-dashboard-head .mine-eyebrow { display: inline-flex; align-items: center; gap: 7px; }
 .mine-dashboard-head .mine-eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #7dd3fc; box-shadow: 0 0 0 0 #7dd3fcb3; animation: bar-beat 1.6s ease-out infinite; flex: 0 0 auto; }
-.mine-dashboard-head h1 { position: relative; width: max-content; max-width: 100%; }
+.mine-dashboard-head h1 { position: relative; }
 .mine-dashboard-head h1::after { content: ""; position: absolute; left: 0; bottom: -5px; height: 3px; width: 100%; border-radius: 3px; background: linear-gradient(90deg, #ffd166, #fff); transform: scaleX(0); transform-origin: left; animation: bar-draw 1.1s 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
 
 /* Filters: colour marker per field, staggered entrance, lift + glow + coloured underline on hover / focus. */
@@ -39,7 +39,7 @@
 .mine-dashboard-head .mine-updated { gap: 8px; }
 .mine-dashboard-head .mine-updated::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 0 #4ade80b3; animation: bar-beat 1.4s ease-out infinite; flex: 0 0 auto; }
 .mine-dashboard-head .mine-updated svg { overflow: visible; filter: drop-shadow(0 0 3px #ffffff80); }
-.mine-dashboard-head .mine-updated svg path { stroke-dasharray: 26 64; animation: bar-trace 1.6s linear infinite; }
+.mine-dashboard-head .mine-updated svg path { stroke-dasharray: 52 20; animation: bar-trace 1.6s linear infinite; }
 
 /* Export KPIs: violet gradient and a bobbing download icon on hover (no transform: the menu opens from it). */
 .mine-dashboard-head .dashboard-export-trigger { position: relative; isolation: isolate; transition: color 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
@@ -59,7 +59,7 @@
 .manager-dashboard-head::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(110deg, transparent 40%, #ffffff1f 50%, transparent 60%); background-size: 250% 100%; animation: bar-sheen 9s linear infinite; pointer-events: none; }
 .manager-dashboard-head > div > span { display: inline-flex; align-items: center; gap: 7px; }
 .manager-dashboard-head > div > span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #7dd3fc; box-shadow: 0 0 0 0 #7dd3fcb3; animation: bar-beat 1.6s ease-out infinite; flex: 0 0 auto; }
-.manager-dashboard-head h1 { position: relative; width: max-content; max-width: 100%; }
+.manager-dashboard-head h1 { position: relative; }
 .manager-dashboard-head h1::after { content: ""; position: absolute; left: 0; bottom: -5px; height: 3px; width: 100%; border-radius: 3px; background: linear-gradient(90deg, #ffd166, #fff); transform: scaleX(0); transform-origin: left; animation: bar-draw 1.1s 0.3s cubic-bezier(0.22, 0.61, 0.36, 1) forwards; }
 .manager-dashboard-badge svg { animation: bar-pulse 1.6s ease-in-out infinite; }
 .manager-dashboard-head .dashboard-export-trigger { position: relative; isolation: isolate; transition: color 0.25s ease, box-shadow 0.25s ease; }
@@ -72,7 +72,7 @@
 @keyframes bar-beat { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 8px transparent; } }
 @keyframes bar-draw { to { transform: scaleX(1); } }
 @keyframes bar-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes bar-trace { to { stroke-dashoffset: 90; } }
+@keyframes bar-trace { to { stroke-dashoffset: 72; } }
 @keyframes bar-drop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
 @keyframes bar-blink { 0%, 92%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
 @keyframes bar-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }

@@ -22,8 +22,10 @@ test('the bar keeps its size and brand mark: only decoration, hover and motion a
   for(const [sel,colour] of [['label:has\\(> select\\[aria-label="Region"\\]\\)','#7dd3fc'],['label\\.mine-site-filter','#4ade80'],['label\\.mine-oem-filter','#c084fc'],['label:has\\(> input\\[aria-label="Dashboard from date"\\]\\)','#fbbf24'],['label:has\\(> input\\[aria-label="Dashboard to date"\\]\\)','#fb7185']])
     assert.match(css,new RegExp(`\\.mine-dashboard-head \\.mine-head-actions ${sel} \\{ --m: ${colour}; \\}`),sel);
   assert.match(css,/label:hover :is\(select, input\), \.mine-dashboard-head \.mine-head-actions label:focus-within :is\(select, input\) \{ transform: translateY\(-2px\);/);
-  assert.match(css,/\.mine-dashboard-head \.mine-updated svg path \{ stroke-dasharray: 26 64; animation: bar-trace 1\.6s linear infinite; \}/);
-  assert.match(css,/@keyframes bar-trace \{ to \{ stroke-dashoffset: 90; \} \}/,'positive offset runs the Activity trace left to right');
+  assert.match(css,/\.mine-dashboard-head \.mine-updated svg path \{ stroke-dasharray: 52 20; animation: bar-trace 1\.6s linear infinite; \}/);
+  assert.match(css,/\.mine-dashboard-head h1 \{ position: relative; \}/,'the title keeps wrapping inside the brand block');
+  assert.doesNotMatch(css,/h1 \{[^}]*max-content/,'never widen the title into the filters');
+  assert.match(css,/@keyframes bar-trace \{ to \{ stroke-dashoffset: 72; \} \}/,'positive offset runs the Activity trace left to right');
   assert.doesNotMatch(css,/\.dashboard-export-trigger[^{]*\{[^}]*transform: translate/,'the export menu opens from its trigger, so it never moves');
   assert.match(css,/\.mine-dashboard-head \.dashboard-banner-toggle svg \{ transform-origin: center; animation: bar-blink 4s ease-in-out infinite; \}/);
   assert.match(css,/\.manager-dashboard-head::before \{[^}]*animation: bar-sheen 9s linear infinite;/,'Manager dashboard bar gets the same sheen');
