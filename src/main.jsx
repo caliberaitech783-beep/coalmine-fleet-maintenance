@@ -9437,7 +9437,7 @@ function NotificationBell({ session, onOpenEntry }) {
       if (!controller.signal.aborted) timer = window.setTimeout(load, delay);
     };
     void load();
-    return () => { controller.abort(); window.clearTimeout(timer); sound.close(); };
+    return () => { controller.abort(); window.clearTimeout(timer); };
   }, [session?.token]);
   const dismissAlert = (id) => setAlerts((current) => current.filter((item) => String(item.id) !== id));
   useEffect(() => {
