@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   calculateBreakdownDays,
   calculateBreakdownDaysFromStart,
+  calculateBreakdownDaysUntilClose,
   calculateBreakdownMinutes,
   formatBreakdownDaysHours,
 } from "../breakdown-duration.mjs";
@@ -54,6 +55,23 @@ test("breakdown minutes give a numeric sort value, with unknown starts first", (
   assert.equal(calculateBreakdownMinutes("2026-09-10 · 09:00:00", "—", now), 210);
   assert.equal(calculateBreakdownMinutes("2026-09-05 09:00:00", "2026-09-09 08:00:00", now), 5700);
   assert.equal(calculateBreakdownMinutes("Not available", "—", now), -1);
+});
+
+test("closed MIS requests display the same breakdown duration used by high-to-low sorting", () => {
+  const now = new Date("2026-09-19T12:02:00.000Z");
+  const requests = [
+    { start: "2026-09-14 09:30:20", closedAt: "2026-09-18 14:35:02" },
+    { start: "2026-09-16 09:58:17", closedAt: "2026-09-19 15:15:54" },
+    { start: "2026-09-16 09:04:37", closedAt: "2026-09-18 16:09:44" },
+    { start: "2026-09-15 15:51:34", closedAt: "2026-09-17 18:51:23" },
+    { start: "2026-09-16 10:26:18", closedAt: "2026-09-18 12:44:51" },
+  ];
+  const sorted = [...requests].sort((a, b) =>
+    calculateBreakdownMinutes(b.start, b.closedAt, now) - calculateBreakdownMinutes(a.start, a.closedAt, now),
+  );
+  assert.deepEqual(sorted.map((row) => calculateBreakdownDaysUntilClose(row.start, row.closedAt, now)), [4, 3, 2, 2, 2]);
+  assert.equal(calculateBreakdownDaysUntilClose(requests[0].start, requests[0].closedAt, new Date("2026-09-25T12:02:00.000Z")), 4);
+  assert.equal(calculateBreakdownDaysUntilClose("2026-09-16 09:04:37", "", now), 3);
 });
 
 test("duration labels convert to minutes for sorting, with dashes first", async () => {

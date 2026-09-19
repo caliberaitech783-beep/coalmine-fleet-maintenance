@@ -66,6 +66,12 @@ export function calculateBreakdownMinutes(startValue, endValue, now = new Date()
   return Math.floor(Math.max(0, finishedAt - startedAt) / (60 * 1000));
 }
 
+// Keep the whole-day label on the same elapsed interval used for duration sorting.
+export function calculateBreakdownDaysUntilClose(startValue, endValue, now = new Date()) {
+  const minutes = calculateBreakdownMinutes(startValue, endValue, now);
+  return Math.max(0, Math.floor(minutes / (24 * 60)));
+}
+
 export function formatBreakdownDaysHours(startValue, endValue, now = new Date()) {
   const minutes = calculateBreakdownMinutes(startValue, endValue, now);
   if (minutes < 0) return "—";

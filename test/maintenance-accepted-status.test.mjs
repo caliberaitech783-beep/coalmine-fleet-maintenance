@@ -51,7 +51,7 @@ function harness(name = 'MobileWorkflowTable') {
     ActionsTable: ({ children }) => React.createElement('table', {}, children), MaintenanceRemarks: Null, Modal: Null,
     RequestTimelineButton: ({ reference }) => React.createElement('b', {}, reference), authToken: 'fixture',
     formatTwelveHourDateTime: value => value || '—', normalizeEquipmentGroup: value => value,
-    calculateBreakdownDaysFromStart: () => 1, MeterFileCell: Null, TripCardCell: Null,
+    calculateBreakdownDaysUntilClose: () => 1, MeterFileCell: Null, TripCardCell: Null,
     TranslatedText: ({ text }) => React.createElement('span', {}, String(text ?? '')),
   };
   for (const icon of ['Menu', 'Search', 'ListFilter', 'MapPin', 'Flag', 'Pencil', 'Trash2', 'CheckCircle2', 'MessageCircle', 'ShieldCheck']) scope[icon] = Null;

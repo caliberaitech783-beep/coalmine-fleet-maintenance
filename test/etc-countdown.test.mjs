@@ -163,7 +163,7 @@ function renderTable(props) {
     formatTwelveHourDateTime: formatDisplayDateTime, firstTripTimestamp: row => row.firstTripAt,
     matchesSmartSearch: () => true, tableRowMatchesFilters: () => true, tableFilterText: value => String(value ?? ''),
     sortCollator: new Intl.Collator(), useSortableRows: rows => [rows, {}, () => {}],
-    calculateBreakdownDaysFromStart: () => 0, elapsedLabel: () => '', authToken: 'fixture',
+    calculateBreakdownDaysUntilClose: () => 0, elapsedLabel: () => '', authToken: 'fixture',
     RequestTimelineButton: ({label}) => React.createElement('b', {}, label),
     EtcCountdown: props => React.createElement(EtcCountdown, {...props, now}),
     etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue,

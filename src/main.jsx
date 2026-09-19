@@ -77,7 +77,7 @@ import { userMasterRole } from "./user-master-role.mjs";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
 import { formatDisplayDate, formatDisplayDateRange, formatDisplayDateTime, formatDisplayTime } from "../date-time-format.mjs";
-import { calculateBreakdownDaysFromStart, calculateBreakdownMinutes, durationLabelMinutes } from "../breakdown-duration.mjs";
+import { calculateBreakdownDaysUntilClose, calculateBreakdownMinutes, durationLabelMinutes } from "../breakdown-duration.mjs";
 import { delayedReasonsForRepairType } from "../delayed-reason.mjs";
 import { breakdownSubCategoryNames } from "../breakdown-sub-category.mjs";
 import { requestAcceptedLate, requestAwaitingAcceptance, arrivalRedFlagRequired, hasArrivalRedFlagReason } from "../request-acceptance.mjs";
@@ -2326,7 +2326,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     displayRows = showBreakdownDays
       ? sourceRows.map((row) => ({
           ...row,
-          breakdownDays: calculateBreakdownDaysFromStart(row.start, breakdownNow),
+          breakdownDays: calculateBreakdownDaysUntilClose(row.start, row.closedAt, breakdownNow),
         }))
       : sourceRows,
     filterColumns = orderedColumns.filter(([key]) => !["idealAction", "requestAction"].includes(key)).map(([key, label]) => ({
@@ -8588,7 +8588,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
       {key: "acceptedBy", label: "Received by", value: (row) => row.acceptedBy || "Pending"},
     ] : []),
     ...(showTurnaroundTime ? [{key: "hours", label: "Turn around time (TAT)", value: (row) => row.hours}] : []),
-    {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysFromStart(row.start, now)},
+    {key: "breakdownDays", label: "Days of breakdown", value: (row) => calculateBreakdownDaysUntilClose(row.start, row.closedAt, now)},
     ...(showEtc ? [
       {key: "etc", label: "ETC", value: (row) => row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "—"},
       {key: "etcRemaining", label: "Time left for ETC", value: (row) => etcCountdown(row, now).summary},
@@ -8661,7 +8661,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
-            const days = calculateBreakdownDaysFromStart(row.start, now);
+            const days = calculateBreakdownDaysUntilClose(row.start, row.closedAt, now);
             const etcLabel = showEtc && row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "";
             const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
             return <tr key={row.ref} className={requestAwaitingAcceptance(row, now) ? "request-awaiting-acceptance" : highlightLateAcceptance && requestAcceptedLate(row) ? "request-accepted-late" : ""}>
