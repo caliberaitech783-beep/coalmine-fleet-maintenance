@@ -28,3 +28,29 @@
 @keyframes backup-transfer-stripes{from{background-position:0 0}to{background-position:28px 0}}
 @keyframes backup-transfer-sweep{0%{left:-35%}100%{left:100%}}
 @media (prefers-reduced-motion:reduce){.backup-transfer,.backup-transfer-fill,.backup-transfer-fill::after{animation:none!important;transition:none!important}.backup-transfer-preparing .backup-transfer-fill{left:0;width:100%;opacity:.5}}
+
+/* Copy backups to a PC (Backup Schedule tab). */
+.pc-backup-copy{margin-top:22px;padding:18px;border:1px solid #e3dcf3;border-radius:12px;background:linear-gradient(135deg,#faf7ff,#f4f7fc)}
+.pc-backup-copy>header{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px}
+.pc-backup-copy h3{margin:0 0 4px;font-size:17px}
+.pc-backup-copy header p{margin:0;color:#5c6b83;font-size:13px;line-height:1.5}
+.pc-backup-icon{display:grid;place-items:center;flex:0 0 auto;width:40px;height:40px;border-radius:11px;color:#fff;background:linear-gradient(135deg,#a855f7,#6b2fa8);box-shadow:0 6px 14px #6b2fa859}
+.pc-backup-icon svg{width:20px;height:20px}
+.pc-backup-steps{display:grid;gap:12px;margin:0 0 16px;padding-left:22px}
+.pc-backup-steps li{display:grid;gap:8px}
+.pc-backup-steps li>small{color:#5c6b83;font-size:12px;line-height:1.5}
+.pc-backup-steps button{display:inline-flex;align-items:center;gap:6px;width:max-content}
+.pc-backup-create{display:flex;flex-wrap:wrap;gap:8px}
+.pc-backup-create input{flex:1 1 260px;min-height:40px;padding:8px 12px;border:1px solid #d9d4e6;border-radius:8px;font:inherit}
+.pc-backup-key{display:grid;gap:8px;padding:12px;border:1px dashed #a855f7;border-radius:10px;background:#fff}
+.pc-backup-key small{color:#9a3412;font-weight:700}
+.pc-backup-key code{display:block;padding:10px;border-radius:8px;background:#f5f3ff;color:#3f2675;font-size:13px;word-break:break-all;user-select:all}
+.pc-backup-keys h4{margin:0 0 8px;font-size:14px}
+.pc-backup-keys table{width:100%;border-collapse:collapse;font-size:13px}
+.pc-backup-keys th{text-align:left;padding:6px 8px;color:#7f8ba0;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e3e8f0}
+.pc-backup-keys td{padding:8px;border-bottom:1px solid #f1f4f8;vertical-align:top}
+.pc-backup-keys td small{display:block;color:#7f8ba0;font-size:11px}
+.pc-backup-keys td button{display:inline-flex;align-items:center;gap:4px}
+:root[data-theme="dark"] .pc-backup-copy{border-color:#3a2d4a;background:linear-gradient(135deg,#1b1424,#171e2c)}
+:root[data-theme="dark"] .pc-backup-key{background:#171219}
+:root[data-theme="dark"] .pc-backup-key code{background:#2a2036;color:#e9dcff}

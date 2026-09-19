@@ -10,6 +10,7 @@ import os from 'node:os';
 import {Transform} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {createHash,randomUUID} from 'node:crypto';
+import {PC_BACKUP_KEY_LIMIT,PC_BACKUP_KEY_SETTING,createAttemptLimiter,createPcBackupKey,matchPcBackupKey,normalizePcBackupKeys,publicPcBackupKeys} from './pc-backup-keys.mjs';
 import {certificateSummary,generatePrintHelperSigning,resolvePrintHelperSigning,signPrintRequest} from './print-helper-signing.mjs';
 import {createSessionStore} from './auth-session.mjs';
 import {repairLegacySessionDefaults} from './auth-session-schema.mjs';
@@ -2523,6 +2524,66 @@ app.get('/api/backups/:backupId/download',requireSuper,requireAdministrator,asyn
     req.audit={eventType:'Administration',module:'Backup',action:'Download stored backup',targetType:'Database backup',targetReference:backup.file_name,changedFields:[]};
     res.set('Cache-Control','no-store');
     res.download(target,backup.file_name);
+  }catch(error){next(error)}
+});
+
+// ---- Scheduled copy to a PC: revocable keys + keyed download of the latest completed backup.
+const pcBackupLimited=createAttemptLimiter({limit:30,windowMs:3600000});
+async function readPcBackupKeys(){
+  const {rows}=await pool.query('SELECT setting_value FROM app_settings WHERE setting_key=$1',[PC_BACKUP_KEY_SETTING]);
+  return normalizePcBackupKeys(rows[0]?.setting_value);
+}
+async function writePcBackupKeys(keys){
+  await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+    ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,[PC_BACKUP_KEY_SETTING,JSON.stringify({keys})]);
+}
+app.get('/api/backups/pc-keys',requireSuper,requireAdministrator,async(_req,res,next)=>{
+  try{res.set('Cache-Control','no-store');res.json({keys:publicPcBackupKeys(await readPcBackupKeys())});}catch(error){next(error)}
+});
+app.post('/api/backups/pc-keys',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const keys=await readPcBackupKeys();
+    if(keys.length>=PC_BACKUP_KEY_LIMIT)return res.status(409).json({error:`Revoke an unused PC key first (at most ${PC_BACKUP_KEY_LIMIT}).`});
+    const {key,record}=createPcBackupKey({label:req.body?.label,createdBy:req.session.name||req.session.login});
+    await writePcBackupKeys([...keys,record]);
+    req.audit={eventType:'Security',module:'Backup',action:'Create PC backup key',targetType:'PC backup key',targetReference:`${record.label} (...${record.hint})`,changedFields:[]};
+    res.set('Cache-Control','no-store');
+    res.status(201).json({key,record:publicPcBackupKeys([record])[0]});
+  }catch(error){next(error)}
+});
+app.delete('/api/backups/pc-keys/:keyId',requireSuper,requireAdministrator,async(req,res,next)=>{
+  try{
+    const keys=await readPcBackupKeys();
+    const target=keys.find((item)=>item.id===String(req.params.keyId||''));
+    if(!target)return res.status(404).json({error:'PC backup key not found.'});
+    await writePcBackupKeys(keys.filter((item)=>item.id!==target.id));
+    req.audit={eventType:'Security',module:'Backup',action:'Revoke PC backup key',targetType:'PC backup key',targetReference:`${target.label} (...${target.hint})`,changedFields:[]};
+    res.status(204).end();
+  }catch(error){next(error)}
+});
+app.get('/api/backups/pc-download/latest',async(req,res,next)=>{
+  try{
+    const address=auditIpAddress(req)||'unknown';
+    res.set('Cache-Control','no-store');
+    if(pcBackupLimited(address))return res.status(429).json({error:'Too many backup copy attempts. Try again in an hour.'});
+    const keys=await readPcBackupKeys();
+    const match=matchPcBackupKey(keys,req.get('x-backup-key'));
+    if(!match){
+      req.audit={eventType:'Security',module:'Backup',action:'Refuse PC backup copy',targetType:'Database backup',targetReference:'latest',actorLogin:'pc-backup',actorName:'Unknown PC',actorRole:'PC backup key',changedFields:[]};
+      return res.status(401).json({error:'This PC backup key is not valid or has been revoked.'});
+    }
+    const {rows}=await pool.query(`SELECT id,file_name,storage_path,checksum,size_bytes FROM backup_runs
+      WHERE status='Completed' AND storage_path<>'' ORDER BY completed_at DESC NULLS LAST,started_at DESC LIMIT 5`);
+    const backup=rows.find((row)=>{const file=path.resolve(row.storage_path);return file.startsWith(`${backupStorageRoot}${path.sep}`)&&existsSync(file);});
+    if(!backup)return res.status(404).json({error:'No completed backup is stored on the server yet. Run a backup or wait for the schedule.'});
+    const usedAt=new Date().toISOString();
+    await writePcBackupKeys(keys.map((item)=>item.id===match.id?{...item,lastUsedAt:usedAt,lastUsedIp:address}:item)).catch(()=>{});
+    req.audit={eventType:'Administration',module:'Backup',action:'Copy backup to PC',targetType:'Database backup',targetReference:backup.file_name,
+      actorLogin:`pc-backup:${match.hint}`,actorName:match.label,actorRole:'PC backup key',reason:`Copied ${backup.size_bytes} bytes to ${match.label}`,changedFields:[]};
+    res.set('X-Backup-File',backup.file_name);
+    res.set('X-Backup-Checksum',String(backup.checksum||''));
+    res.set('X-Backup-Id',String(backup.id));
+    res.download(path.resolve(backup.storage_path),backup.file_name);
   }catch(error){next(error)}
 });
 

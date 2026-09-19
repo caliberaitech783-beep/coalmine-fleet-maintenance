@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {responseTotalBytes,trackedBody,transferLabel,transferPercent} from './transfer-progress.mjs';
-import {AlertTriangle,CalendarClock,CheckCircle2,CloudCog,Database,Download,FileArchive,FolderOpen,HardDrive,History,KeyRound,RefreshCw,RotateCcw,Save,ShieldCheck,Trash2,Upload} from 'lucide-react';
+import {AlertTriangle,CalendarClock,CheckCircle2,CloudCog,Copy,Database,Download,FileArchive,FolderOpen,HardDrive,History,KeyRound,Laptop,RefreshCw,RotateCcw,Save,ShieldCheck,Trash2,Upload} from 'lucide-react';
 
 const backupTabs=['Backup','Export Backup','Import Backup','Backup Schedule'];
 const weekdays=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
@@ -69,6 +69,71 @@ function TransferProgress({progress}){
     <div className="backup-transfer-head"><span className="backup-transfer-title"><b>{heading}</b><small>{detail}</small></span><strong className="backup-transfer-percent">{percent===null?'…':`${percent}%`}</strong></div>
     <div className="backup-transfer-track"><i className="backup-transfer-fill" style={{width:percent===null?undefined:`${percent}%`}} /></div>
   </div>;
+}
+
+// Copy every scheduled backup to a PC: revocable key + a one-time setup script.
+function PcBackupCopy({session}){
+  const [keys,setKeys]=useState(null);
+  const [label,setLabel]=useState('');
+  const [created,setCreated]=useState(null);
+  const [working,setWorking]=useState('');
+  const [problem,setProblem]=useState('');
+  const [copied,setCopied]=useState(false);
+  const loadKeys=async()=>{
+    try{
+      const response=await fetch('/api/backups/pc-keys',{cache:'no-store',headers:authHeaders(session)});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'Could not load PC backup keys.');
+      setKeys(result.keys||[]);setProblem('');
+    }catch(loadError){setProblem(loadError.message||'Could not load PC backup keys.');}
+  };
+  useEffect(()=>{void loadKeys();},[session?.token]);
+  const createKey=async()=>{
+    setWorking('create');setProblem('');setCreated(null);setCopied(false);
+    try{
+      const response=await fetch('/api/backups/pc-keys',{method:'POST',headers:authHeaders(session,{'Content-Type':'application/json'}),body:JSON.stringify({label:label.trim()||'Backup PC'})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(result.error||'Could not create the PC key.');
+      setCreated(result);setLabel('');await loadKeys();
+    }catch(createError){setProblem(createError.message||'Could not create the PC key.');}
+    finally{setWorking('');}
+  };
+  const revokeKey=async(key)=>{
+    if(!window.confirm(`Revoke the PC key "${key.label}"? That PC will stop receiving backup copies.`))return;
+    setWorking(`revoke-${key.id}`);setProblem('');
+    try{
+      const response=await fetch(`/api/backups/pc-keys/${encodeURIComponent(key.id)}`,{method:'DELETE',headers:authHeaders(session)});
+      if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||'Could not revoke the PC key.');}
+      if(created?.record?.id===key.id)setCreated(null);
+      await loadKeys();
+    }catch(revokeError){setProblem(revokeError.message||'Could not revoke the PC key.');}
+    finally{setWorking('');}
+  };
+  const copyKey=async()=>{try{await navigator.clipboard.writeText(created.key);setCopied(true);}catch{setCopied(false);}};
+  const downloadSetup=async()=>{
+    setWorking('script');setProblem('');
+    try{
+      const response=await fetch('/pc-backup/Nerve-Center-Backup-Setup.ps1',{cache:'no-store'});
+      if(!response.ok)throw new Error('Could not load the PC setup script.');
+      const script=(await response.text()).replace("$AppUrl = 'https://bdms.cmll.in'",`$AppUrl = '${window.location.origin}'`);
+      const url=URL.createObjectURL(new Blob([script],{type:'text/plain'}));
+      const link=document.createElement('a');link.href=url;link.download='Nerve-Center-Backup-Setup.ps1';document.body.appendChild(link);link.click();link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(scriptError){setProblem(scriptError.message||'Could not load the PC setup script.');}
+    finally{setWorking('');}
+  };
+  const when=(value)=>value?new Date(value).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Never';
+  return <section className="pc-backup-copy" aria-labelledby="pc-backup-copy-title">
+    <header><span className="pc-backup-icon"><Laptop /></span><div><h3 id="pc-backup-copy-title">Copy backups to a PC</h3><p>Every day the PC downloads the latest completed backup, checks its SHA-256 checksum and keeps the number of copies you choose. Create a key, download the setup script, and run it once on that PC.</p></div></header>
+    {problem&&<div className="backup-alert error" role="alert"><AlertTriangle /><span>{problem}</span></div>}
+    <ol className="pc-backup-steps">
+      <li><b>Create a key for the PC</b><div className="pc-backup-create"><input value={label} maxLength={60} placeholder="PC name, e.g. Head office desktop" aria-label="PC name" onChange={(event)=>setLabel(event.target.value)} /><button type="button" className="primary" disabled={Boolean(working)} onClick={createKey}><KeyRound />{working==='create'?'Creating...':'Create PC key'}</button></div>
+        {created&&<div className="pc-backup-key" role="status"><small>Copy this key now. It is shown only once and will be asked for by the setup script.</small><code>{created.key}</code><button type="button" className="secondary" onClick={copyKey}><Copy />{copied?'Copied':'Copy key'}</button></div>}</li>
+      <li><b>Download the setup script</b><button type="button" className="secondary" disabled={Boolean(working)} onClick={downloadSetup}><Download />{working==='script'?'Preparing...':'Download PC setup script'}</button></li>
+      <li><b>On that PC, right-click the script and choose "Run with PowerShell"</b><small>Choose the folder, the daily time (03:00 suits the 02:00 server backup), how many copies to keep, and paste the key. The first copy runs immediately.</small></li>
+    </ol>
+    <div className="pc-backup-keys"><h4>PCs receiving copies</h4>{keys===null?<p>Loading...</p>:keys.length?<table><thead><tr><th>PC</th><th>Key ends</th><th>Created</th><th>Last copy</th><th /></tr></thead><tbody>{keys.map((key)=><tr key={key.id}><td><b>{key.label}</b><small>{key.createdBy}</small></td><td><code>...{key.hint}</code></td><td>{when(key.createdAt)}</td><td>{when(key.lastUsedAt)}{key.lastUsedIp&&<small>{key.lastUsedIp}</small>}</td><td><button type="button" className="danger" disabled={Boolean(working)} onClick={()=>revokeKey(key)}><Trash2 />{working===`revoke-${key.id}`?'Revoking...':'Revoke'}</button></td></tr>)}</tbody></table>:<p>No PC is set up yet.</p>}</div>
+  </section>;
 }
 
 function ScheduleTime({value,onChange}){
@@ -217,6 +282,6 @@ export default function BackupAdministration({section='Backup',session,onNavigat
     </div>}
     {active==='Export Backup'&&<div className="backup-content backup-task-layout"><div className="backup-task-main"><span className="backup-feature-icon"><Download /></span><h2>Export a complete database backup</h2><p>The browser asks where to save the compressed recovery file. The export is streamed, checksum-verified, and never held as one large value in application memory.</p><div className="backup-includes"><span><CheckCircle2 />All business and master data</span><span><CheckCircle2 />Users, sessions, permissions, and audit records</span><span><CheckCircle2 />Workflow, reporting, and integration settings</span><span><CheckCircle2 />Every current PostgreSQL public table</span></div><button type="button" className="primary backup-primary-action" disabled={Boolean(busy)} onClick={exportBackup}><FolderOpen />{busy==='export'?'Preparing full backup...':'Choose location and export'}</button></div><aside className="backup-security-note"><KeyRound /><h3>Treat exports as confidential</h3><p>A complete recovery file contains operational data, password hashes, and any integration credentials stored in application settings. Save it only in an encrypted, access-controlled company folder.</p></aside></div>}
     {active==='Import Backup'&&<div className="backup-content backup-task-layout"><div className="backup-task-main"><span className="backup-feature-icon danger"><RotateCcw /></span><h2>Inspect and restore a backup</h2><p>A selected archive is fully checked before restore is enabled. BDMS automatically creates a new safety backup of the current system before replacing data.</p>{!isTrueSuper?<div className="backup-permission"><ShieldCheck /><div><b>Super Admin approval required</b><p>Only a Super Admin can replace live production data.</p></div></div>:<><label className="backup-file-picker"><Upload /><div><b>{file?.name||'Select a BDMS backup file'}</b><small>{file?formatBytes(file.size):'.ndjson.gz files up to 2 GB'}</small></div><input type="file" accept=".ndjson.gz,application/gzip" onChange={(event)=>{setFile(event.target.files?.[0]||null);setInspection(null);setConfirmation('');}} /></label><button type="button" className="secondary backup-inspect" onClick={inspectImport} disabled={!file||Boolean(busy)}>{busy==='inspect'?'Checking every record...':'Inspect backup integrity'}</button>{inspection&&<div className="backup-inspection"><h3><CheckCircle2 />Backup verified</h3><dl><div><dt>Created</dt><dd>{displayDateTime(inspection.createdAt)}</dd></div><div><dt>Tables</dt><dd>{inspection.tableCount}</dd></div><div><dt>Total rows</dt><dd>{Number(inspection.totalRows||0).toLocaleString('en-IN')}</dd></div><div><dt>File size</dt><dd>{formatBytes(inspection.sizeBytes)}</dd></div></dl><label><span>Type <b>RESTORE BDMS</b> to authorize replacement of production data</span><input value={confirmation} onChange={(event)=>setConfirmation(event.target.value)} autoComplete="off" /></label><button type="button" className="danger-action" disabled={confirmation!=='RESTORE BDMS'||Boolean(busy)} onClick={restoreBackup}><RotateCcw />{busy==='restore'?'Creating safety backup and restoring...':'Create safety backup and restore'}</button></div>}</>}</div><aside className="backup-security-note danger"><AlertTriangle /><h3>Restore changes live data</h3><p>Users may be signed out, and every included table is returned to the state recorded in the selected file.</p></aside></div>}
-    {active==='Backup Schedule'&&settings&&<div className="backup-content backup-schedule"><div className="backup-schedule-header"><div><h2>Automatic backup schedule</h2><p>Backups run in India Standard Time and are retained in protected server storage.</p></div><label className="backup-toggle"><input type="checkbox" checked={settings.enabled} onChange={(event)=>setSettings({...settings,enabled:event.target.checked})}/><span />{settings.enabled?'Active':'Paused'}</label></div><div className="backup-form-grid"><fieldset><legend>Weekdays</legend><div className="backup-weekdays">{weekdays.map(day=><label key={day}><input type="checkbox" checked={settings.weekdays.includes(day)} onChange={(event)=>setSettings({...settings,weekdays:event.target.checked?[...settings.weekdays,day]:settings.weekdays.filter(item=>item!==day)})}/><span>{day.slice(0,3)}</span></label>)}</div></fieldset><label><span>Backup time (IST)</span><ScheduleTime value={settings.scheduleTime} onChange={(scheduleTime)=>setSettings({...settings,scheduleTime})}/></label><label><span>Storage folder</span><div className="backup-input-icon"><FolderOpen /><input value={settings.storageFolder} onChange={(event)=>setSettings({...settings,storageFolder:event.target.value})}/></div><small>Inside protected root: {data.storageRoot}</small></label><label><span>Retention days</span><input type="number" min="1" max="365" value={settings.retentionDays} onChange={(event)=>setSettings({...settings,retentionDays:Number(event.target.value)})}/></label><label><span>Maximum stored backups</span><input type="number" min="1" max="365" value={settings.maxBackups} onChange={(event)=>setSettings({...settings,maxBackups:Number(event.target.value)})}/></label></div><footer><button type="button" className="secondary" disabled={Boolean(busy)} onClick={runBackup}><CloudCog />{busy==='run'?'Running...':'Run backup now'}</button><button type="button" className="primary" disabled={Boolean(busy)} onClick={saveSettings}><Save />{busy==='settings'?'Saving...':'Save schedule'}</button></footer></div>}
+    {active==='Backup Schedule'&&settings&&<div className="backup-content backup-schedule"><div className="backup-schedule-header"><div><h2>Automatic backup schedule</h2><p>Backups run in India Standard Time and are retained in protected server storage.</p></div><label className="backup-toggle"><input type="checkbox" checked={settings.enabled} onChange={(event)=>setSettings({...settings,enabled:event.target.checked})}/><span />{settings.enabled?'Active':'Paused'}</label></div><div className="backup-form-grid"><fieldset><legend>Weekdays</legend><div className="backup-weekdays">{weekdays.map(day=><label key={day}><input type="checkbox" checked={settings.weekdays.includes(day)} onChange={(event)=>setSettings({...settings,weekdays:event.target.checked?[...settings.weekdays,day]:settings.weekdays.filter(item=>item!==day)})}/><span>{day.slice(0,3)}</span></label>)}</div></fieldset><label><span>Backup time (IST)</span><ScheduleTime value={settings.scheduleTime} onChange={(scheduleTime)=>setSettings({...settings,scheduleTime})}/></label><label><span>Storage folder</span><div className="backup-input-icon"><FolderOpen /><input value={settings.storageFolder} onChange={(event)=>setSettings({...settings,storageFolder:event.target.value})}/></div><small>Inside protected root: {data.storageRoot}</small></label><label><span>Retention days</span><input type="number" min="1" max="365" value={settings.retentionDays} onChange={(event)=>setSettings({...settings,retentionDays:Number(event.target.value)})}/></label><label><span>Maximum stored backups</span><input type="number" min="1" max="365" value={settings.maxBackups} onChange={(event)=>setSettings({...settings,maxBackups:Number(event.target.value)})}/></label></div><footer><button type="button" className="secondary" disabled={Boolean(busy)} onClick={runBackup}><CloudCog />{busy==='run'?'Running...':'Run backup now'}</button><button type="button" className="primary" disabled={Boolean(busy)} onClick={saveSettings}><Save />{busy==='settings'?'Saving...':'Save schedule'}</button></footer><PcBackupCopy session={session} /></div>}
   </section>;
 }

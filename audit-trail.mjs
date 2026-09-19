@@ -112,12 +112,14 @@ export function auditRouteDetails(method = "", path = "") {
   if (route.startsWith("/api/user-sessions")) return { module: "User sessions", eventType: "Security", action: verb === "DELETE" ? "Force close session" : "View user sessions" };
   if (route.startsWith("/api/user-activity")) return { module: "User activity", eventType: "Activity", action: "Record user activity" };
   if (route.startsWith("/api/backups")) {
-    const action = verb === "DELETE" ? "Delete backup"
+    const action = verb === "DELETE" && !route.includes("/pc-keys") ? "Delete backup"
       : route.endsWith("/settings") ? (verb === "GET" ? "View backup schedule" : "Update backup schedule")
       : route.endsWith("/run") ? "Create stored backup"
       : route.endsWith("/export") ? "Export full backup"
       : route.endsWith("/import/inspect") ? "Inspect imported backup"
       : route.endsWith("/import/restore") ? "Restore imported backup"
+      : route.includes("/pc-download/") ? "Copy backup to PC"
+      : route.includes("/pc-keys") ? (verb === "POST" ? "Create PC backup key" : verb === "DELETE" ? "Revoke PC backup key" : "View PC backup keys")
       : route.endsWith("/download") ? "Download stored backup"
       : "View backup history";
     return {module:"Backup",eventType:"Administration",action};
