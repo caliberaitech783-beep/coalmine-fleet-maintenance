@@ -44,6 +44,11 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, gro
   if (idleDate && idleReason) {
     columns.splice(columns.indexOf(idleReason), 1);
     columns.splice(columns.indexOf(idleDate) + 1, 0, idleReason);
+    const idleDays = columns.find(column => /^days of idle$/i.test(column.label.trim()));
+    if (idleDays) {
+      columns.splice(columns.indexOf(idleDays), 1);
+      columns.splice(columns.indexOf(idleReason) + 1, 0, idleDays);
+    }
   }
   const schema = columns.map((column) => column.key).join("|");
   return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;

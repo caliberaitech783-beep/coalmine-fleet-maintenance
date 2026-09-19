@@ -33,6 +33,15 @@ const load = (file, overrides = {}) => {
   return new Function(...Object.keys(values), compiled[file])(...Object.values(values));
 };
 const RecordDateRange = load("record-date-range");
+test("idle duration measures the idle timestamp in IST, including zoned API dates", () => {
+  const measure = new Function(compiled["dashboard-record-browser"].replace("return DashboardRecordBrowser;", "return idleDuration;"))();
+  const now = new Date("2026-09-19T10:00:00Z");
+  assert.equal(measure("2026-09-18 13:00:00", now), "1d 2h 30m");
+  assert.equal(measure("2026-09-18T07:30:00Z", now), "1d 2h 30m");
+  assert.equal(measure("", now), "—");
+  assert.equal(measure("invalid", now), "—");
+  assert.equal(measure("2026-09-20T07:30:00Z", now), "—");
+});
 test("Idle reason follows Idle Vehicle Date in the shared display and export column order", () => {
   const Shared = load("shared-actions-table");
   const labels = ["Status", "Started", "Idle Vehicle Date", "Breakdown reason", "Idle reason"];

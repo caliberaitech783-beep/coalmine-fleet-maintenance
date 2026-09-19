@@ -22,7 +22,7 @@ test("request lists retain job, equipment, site and lifecycle details", () => {
   assert.match(source, /requestSite: request\.site \|\| request\.location/);
   assert.ok(browser.includes('<th>Status</th><th>Days of breakdown</th>'));
   assert.ok(browser.includes('<th data-filter-mode={requestRecords ? undefined : "date-sort"}>Started</th>'));
-  assert.ok(browser.includes('<th>Serial / chassis no.</th>{requestRecords && <><th>Breakdown type</th><th>Delayed reason</th><th>Breakdown reason</th>{idleDateFilter && <th>Idle reason</th>}</>}'));
+  assert.ok(browser.includes('<th>Serial / chassis no.</th>{requestRecords && <><th>Breakdown type</th><th>Delayed reason</th><th>Breakdown reason</th>{idleDateFilter && <><th>Idle reason</th><th>Days of idle</th></>}</>}'));
   assert.match(browser, /<td>\{record\.repairCategory\}<\/td><td>\{record\.delayedReason \|\| "—"\}<\/td>/);
   assert.match(browser, /formatBreakdownDaysHours\(record\.requestStart, record\.requestClosed, now\)/);
   assert.match(browser, /<Status>\{record\.requestStatus \|\| "—"\}<\/Status>/);
