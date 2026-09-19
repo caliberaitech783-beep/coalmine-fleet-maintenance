@@ -334,24 +334,17 @@ const nav = [
 const adminNav = [
   ["User Sessions", UserRound],
   ["Access structure", Users],
-  ["Hierarchy levels", Network],
   ["Reporting structure", Building2],
-  ["People by designation", User],
   ["Print helper", Printer],
   ["Request corrections", Pencil],
-  ["Backup", HardDrive],
-  ["Export Backup", Download],
-  ["Import Backup", Upload],
-  ["Backup Schedule", CalendarDays],
   ["Recovery guide", LifeBuoy],
   ["Audit Trail", History],
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
 // Badge colour / animation key for each Administration menu entry (topbar.css).
 const adminMenuKeys = {
-  "User Sessions": "sessions", "Access structure": "access", "Hierarchy levels": "levels", "Reporting structure": "reporting",
-  "People by designation": "people", "Print helper": "print", "Request corrections": "corrections", "Backup": "backup",
-  "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule", "Recovery guide": "recovery", "Audit Trail": "history", "Admin locks": "locks",
+  "User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",
+  "Print helper": "print", "Request corrections": "corrections", "Recovery guide": "recovery", "Audit Trail": "history", "Admin locks": "locks",
 };
 // [page name, icon, badge key]: the key picks the badge colour and hover animation (topbar.css).
 const masterNav = [

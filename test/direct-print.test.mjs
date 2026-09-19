@@ -204,7 +204,7 @@ test('the Print helper page is for administrators; the key is created once and n
   assert.ok(routes.length>1000,'the print helper routes were found');
   assert.doesNotMatch(routes,/\.(?:json|send)\((?:created|printHelperStoredCache|existing)\)/,'stored signing material is never returned as-is');
   assert.deepEqual([...routes.matchAll(/\.(?:json|send)\(([^;]*)\);?/g)].map((match)=>match[1]).filter((sent)=>/privateKey/.test(sent)&&!/signPrintRequest\(/.test(sent)),[],'the key is only ever used to sign');
-  assert.match(main,/\["People by designation", User\],\n  \["Print helper", Printer\],/);
+  assert.match(main,/\["Reporting structure", Building2\],\n  \["Print helper", Printer\],/);
   assert.match(main,/if\(name==="Print helper"\)return isAdministrator;/);
   assert.match(main,/active === "Print helper" \? \(\n\s+<PrintHelperSetupPage session=\{session\} \/>/);
   const page=read('../src/print-helper-setup.jsx');

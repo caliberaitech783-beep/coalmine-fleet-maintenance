@@ -91,11 +91,13 @@ test("the chart resolves designations like the WhatsApp report flow, except that
   assert.equal(chartPerson({}).name, "Unnamed");
 });
 
-test("four read-only pages sit in the Administration menu for Admin and Super Admin only", () => {
+test("selected read-only organisation pages sit in the Administration menu for Admin and Super Admin only", () => {
   assert.deepEqual(ORGANISATION_PAGE_NAMES, ["Access structure", "Hierarchy levels", "Reporting structure", "People by designation"]);
   assert.equal(ORGANISATION_PAGES.reporting, "Reporting structure");
   assert.equal(ORGANISATION_PAGES.people, "People by designation");
-  assert.match(main, /const adminNav = \[\n  \["User Sessions", UserRound\],\n  \["Access structure", Users\],\n  \["Hierarchy levels", Network\],\n  \["Reporting structure", Building2\],\n  \["People by designation", User\],/, "the pages sit in the Administration dropdown, after User Sessions");
+  const adminNavSource=main.slice(main.indexOf("const adminNav = ["),main.indexOf("const backupAdminPages"));
+  assert.match(adminNavSource, /\["User Sessions", UserRound\][\s\S]*\["Access structure", Users\][\s\S]*\["Reporting structure", Building2\]/, "the remaining organisation pages sit in the Administration dropdown");
+  assert.doesNotMatch(adminNavSource, /Hierarchy levels|People by designation/, "hidden organisation pages are removed from the Administration dropdown");
   assert.doesNotMatch(main, /\["Hierarchy master", Network\],\n  \["Access structure"/, "and no longer in Masters");
   assert.match(main, /if\(ORGANISATION_PAGE_NAMES\.includes\(name\)\)return isAdministrator;/);
   assert.match(main, /ORGANISATION_PAGE_NAMES\.includes\(active\) \? \(\n\s+<OrganisationChartPage view=\{Object\.keys\(ORGANISATION_PAGES\)\.find\(\(key\) => ORGANISATION_PAGES\[key\] === active\)\} \/>/);

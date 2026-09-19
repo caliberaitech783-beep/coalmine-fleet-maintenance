@@ -13,11 +13,10 @@ test('stores backup metadata separately and never stores archive payloads in Pos
   assert.match(server,/exportDatabase\(\{client,output:filePath\}\)/);
 });
 
-test('exposes separate protected Admin backup pages',()=>{
-  assert.match(main,/\["Backup", HardDrive\]/);
-  assert.match(main,/\["Export Backup", Download\]/);
-  assert.match(main,/\["Import Backup", Upload\]/);
-  assert.match(main,/\["Backup Schedule", CalendarDays\]/);
+test('keeps protected backup pages available without listing them in the Admin dropdown',()=>{
+  const adminNavSource=main.slice(main.indexOf("const adminNav = ["),main.indexOf("const backupAdminPages"));
+  assert.doesNotMatch(adminNavSource,/Backup|Export Backup|Import Backup|Backup Schedule/);
+  assert.match(main,/const backupAdminPages = new Set\(\["Backup", "Export Backup", "Import Backup", "Backup Schedule"\]\)/);
   assert.match(main,/<BackupAdministration section=\{active\} session=\{session\} onNavigate=\{selectMenu\}/);
 });
 
