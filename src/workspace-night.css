@@ -59,6 +59,7 @@
   :root[data-theme="dark"] .ticket-page :is(p, td small, .ticket-toolbar > span) { color: var(--muted); }
   :root[data-theme="dark"] .ticket-page-head > div > span { color: #9bd8ff; }
   :root[data-theme="dark"] .ticket-page-head .export-menu-trigger span { color: inherit; }
+  /* Date controls remain readable when empty, selected, or cleared. */
   :root[data-theme="dark"] .record-date-range > label { color: var(--ink); }
   :root[data-theme="dark"] :is(.record-date-range-basis, .record-date-range-hint) { color: var(--muted); }
   :root[data-theme="dark"] .record-date-range-hint[role="alert"] { color: #ff9bac; }

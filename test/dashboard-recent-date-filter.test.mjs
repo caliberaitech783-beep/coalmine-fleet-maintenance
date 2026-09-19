@@ -28,6 +28,8 @@ test("dashboard replaces recent cases with a site-wise selectable breakdown tren
 
 test("breakdown toolbar renders and clears the date control", () => {
   assert.match(source, /className="table-date-filter"><CalendarDays \/><input aria-label="Filter by started date" type="date"/);
-  assert.match(source, /setParameterFilters\(\{\}\); setStatusFilter\(""\); setDateFilter\(""\);/);
+  // The duplicate filter/reset button was removed. The date field itself
+  // accepts an empty value when cleared through its native date control.
+  assert.match(source, /type="date" value=\{dateFilter\} onChange=\{\(event\) => setDateFilter\(event.target.value\)\}/);
   assert.match(styles, /\.table-search-toolbar \.table-date-filter\{flex:0 1 190px;min-width:170px\}/);
 });
