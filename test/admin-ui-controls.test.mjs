@@ -16,10 +16,14 @@ test("employee rows place Change password before Edit and normalize identity fie
   assert.match(server, /login:String\(record\.login\|\|''\)\.trim\(\)\.toUpperCase\(\)/);
 });
 
-test("Actions sits immediately before Filter across master and workspace toolbars", () => {
-  assert.match(source, /function BreakdownTable\([\s\S]*?actionsBesideSearch = true/);
-  assert.match(source, /className="toolbar-actions-end">\s*<div className="master-actions-slot"[\s\S]*?<TableParameterFilter/);
-  assert.match(source, /className="toolbar-actions-end"><div className="workflow-actions-slot"[\s\S]*?<TableParameterFilter/);
+test("request toolbars use the Actions filter without a duplicate beside Smart Print", () => {
+  const breakdown = source.slice(source.indexOf("function BreakdownTable("), source.indexOf("const masterFields"));
+  const workflow = source.slice(source.indexOf("function MobileWorkflowTable("), source.indexOf("function RequestEditForm("));
+  assert.match(breakdown, /className="master-actions-slot"[\s\S]*?<PrintButton[\s\S]*?<ExportMenu/);
+  assert.match(workflow, /className="workflow-actions-slot"[\s\S]*?<PrintButton[\s\S]*?<ExportMenu/);
+  assert.doesNotMatch(breakdown, /<TableParameterFilter columns=\{filterColumns\}/);
+  assert.doesNotMatch(workflow, /<TableParameterFilter columns=\{filterColumns\}/);
+  assert.match(source, /role="menuitem" onClick=\{\(\) => run\(onFilter\)\}><ListFilter \/><span>Filter<\/span>/);
   assert.match(tableStyles, /\.toolbar > \.toolbar-actions-end,[\s\S]*margin-left: auto/);
 });
 

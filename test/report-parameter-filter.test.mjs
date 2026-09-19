@@ -11,9 +11,9 @@ test("report views expose parameter filters through the report actions control",
   assert.match(source, /function TableParameterFilter\(/);
   assert.match(source, /aria-label="Filter report parameters"/);
   assert.match(source, /function tableRowMatchesFilters\(/);
-  assert.match(breakdown, /<TableParameterFilter columns=\{filterColumns\}/);
+  assert.match(breakdown, /<ActionsTable[^>]*className="breakdown-table-auto-fit"/);
   assert.match(breakdown, /tableRowMatchesFilters\(row, filterColumns, parameterFilters\)/);
-  assert.match(mobileWorkflow, /<TableParameterFilter columns=\{filterColumns\}/);
+  assert.match(mobileWorkflow, /<ActionsTable[^>]*className="workflow-table"/);
   assert.match(mobileWorkflow, /tableRowMatchesFilters\(row, filterColumns, parameterFilters\)/);
   assert.doesNotMatch(reportTable, /All statuses/);
   assert.match(reportTable, /<ReportActionsMenu/);

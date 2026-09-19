@@ -153,7 +153,7 @@ test('search, status filter, column filter, sorting, print and export agree with
   statusHeader.props.onFilterChange('Accepted');
   tree = app.render(props);
   assert.deepEqual(rowKeys(tree), ['REQ-RECEIVED', 'REQ-WORKING']);
-  find(tree, TableParameterFilter).props.onClearFilters();
+  all(tree, node => node.type === FilterableHeader && node.props.sortKey === 'status')[0].props.onFilterChange('');
   tree = app.render(props);
   all(tree, node => node.type === FilterableHeader && node.props.sortKey === 'status')[0].props.onSort('status', 'asc');
   tree = app.render(props);
