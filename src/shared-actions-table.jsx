@@ -14,7 +14,7 @@ import "./sortable-table.css";
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
 const sharedTablePageSize = () => typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0;
 
-export default function SharedActionsTable({ closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, ...tableProps }) {
+export default function SharedActionsTable({ closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
   const isWorkflowTable = /\b(workflow-table|breakdown-table-auto-fit)\b/.test(tableProps.className || "");
   const columns = preserveColumnOrder ? jobReferenceColumnsLast(originalColumns) : isWorkflowTable ? requestColumnsInWorkflowOrder(originalColumns, /\bworkflow-table\b/.test(tableProps.className || "")) : jobReferenceColumnsLast(dateColumnsFirst(originalColumns));
@@ -51,10 +51,10 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, gro
     }
   }
   const schema = columns.map((column) => column.key).join("|");
-  return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }} />;
+  return <TableView key={schema} {...{ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }} />;
 }
 
-function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, tableProps }) {
+function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
   const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}`;
   const [visible, setVisibleState] = useState(() => restoreColumnOrder(columnStorageKey, columns.map((column) => column.key)));
@@ -100,6 +100,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
     setFilters({});
     selectSite("");
     columns.forEach((column) => { if (column.header.props.filterValue) column.header.props.onFilterChange?.(""); });
+    onClearToolbarFilters?.();
   };
   const applySort = (key, direction) => {
     const column = columns.find((item) => item.key === key);

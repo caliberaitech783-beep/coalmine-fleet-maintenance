@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const source = await readFile(new URL("../src/main.jsx", import.meta.url), "utf8");
+const sharedTable = await readFile(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
 const styles = await readFile(new URL("../src/style.css", import.meta.url), "utf8");
 
 test("dashboard replaces recent cases with a site-wise selectable breakdown trend", () => {
@@ -28,8 +29,9 @@ test("dashboard replaces recent cases with a site-wise selectable breakdown tren
 
 test("breakdown toolbar renders and clears the date control", () => {
   assert.match(source, /className="table-date-filter"><CalendarDays \/><input aria-label="Filter by started date" type="date"/);
-  // The duplicate filter/reset button was removed. The date field itself
-  // accepts an empty value when cleared through its native date control.
+  // The date can be cleared directly or through Actions → Clear filters.
   assert.match(source, /type="date" value=\{dateFilter\} onChange=\{\(event\) => setDateFilter\(event.target.value\)\}/);
+  assert.match(source, /onClearToolbarFilters=\{\(\) => \{ setStatusFilter\(""\); setDateFilter\(""\); \}\}/);
+  assert.match(sharedTable, /const clearFilters = \(\) => \{[\s\S]*?onClearToolbarFilters\?\.\(\);/);
   assert.match(styles, /\.table-search-toolbar \.table-date-filter\{flex:0 1 190px;min-width:170px\}/);
 });

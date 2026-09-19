@@ -23,7 +23,7 @@ test("the serial column is added exactly once to export data", () => {
 
 test("shared tables number every row by default with the Sr. No. label and forward it to their exports", () => {
   const shared = read("../src/shared-actions-table.jsx");
-  assert.match(shared, /showRowNumbers = true, \.\.\.tableProps \}\) \{/);
+  assert.match(shared, /showRowNumbers = true, onClearToolbarFilters = null, \.\.\.tableProps \}\) \{/);
   assert.match(shared, /const numberColumn = \{ key: SERIAL_COLUMN_KEY, label: SERIAL_COLUMN_LABEL, value: \(row\) => rowNumbers\.get\(row\) \};/);
   assert.match(shared, /<th key="row-number" className="table-serial-header" scope="col" rowSpan=\{[^}]+\}>\{SERIAL_COLUMN_LABEL\}<\/th>/);
   assert.match(shared, /<td key="row-number" className="table-serial-cell">/);

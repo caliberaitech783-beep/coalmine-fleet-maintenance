@@ -12,7 +12,7 @@ test("every operational workspace places Actions beside the status selector", ()
   const workflowTable = main.slice(start, end);
 
   assert.match(workflowTable, /<option value="">All statuses<\/option>[\s\S]*className="workflow-actions-slot"/);
-  assert.ok(workflowTable.includes('<ActionsTable className="workflow-table" closedTimeAfterStarted={closedTimeAfterStarted} recordDateFilter={idleDateFilter ? { label: "Idle Vehicle Date", value: idleDateRange, onChange: setIdleDateRange } : null} toolbarTarget={actionsToolbarTarget} toolbarPortal>'));
+  assert.ok(workflowTable.includes('<ActionsTable className="workflow-table" closedTimeAfterStarted={closedTimeAfterStarted} recordDateFilter={idleDateFilter ? { label: "Idle Vehicle Date", value: idleDateRange, onChange: setIdleDateRange } : null} toolbarTarget={actionsToolbarTarget} toolbarPortal onClearToolbarFilters={() => setStatusFilter("")}>'));
   assert.match(sharedTable, /toolbarTarget \? createPortal\(combinedToolbar, toolbarTarget\) : toolbarPortal \? null : combinedToolbar/);
   assert.match(styles, /\.workflow-actions-slot \.shared-table-actions-toolbar,[\s\S]*\.master-actions-slot \.shared-table-actions-toolbar \{ position: static; width: auto;/);
 });

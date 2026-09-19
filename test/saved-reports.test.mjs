@@ -64,7 +64,7 @@ test("every Actions table offers Report, Save report and Saved reports and print
   assert.match(main, /<FolderOpen \/><span>Saved reports<\/span>/);
   assert.match(main, /const printSavedReport = \(\{ title, columns, rows, reportGrouping \}\) => openSmartPrint\(\{ title, columns, rows, reportGrouping, onPrint: printTableReport, formatCell: exportCellText \}\);/);
   assert.match(main, /<SharedActionsTable \{\.\.\.props\} printReport=\{printSavedReport\} SavedReports=\{SavedReportsPanel\}/);
-  assert.match(shared, /printReport = null, SavedReports = null, showRowNumbers = true, \.\.\.tableProps \}\) \{/);
+  assert.match(shared, /printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, \.\.\.tableProps \}\) \{/);
   assert.match(shared, /onSaveReport=\{SavedReports \? \(\) => setSavedReportDialog\("save"\) : undefined\} onSavedReports=\{SavedReports \? \(\) => setSavedReportDialog\("saved"\) : undefined\}/);
   assert.match(shared, /<SavedReports title=\{reportTitle\} tableKey=\{tableProps\.className \|\| ""\} columns=\{columns\} open=\{savedReportDialog\} onOpenChange=\{setSavedReportDialog\} currentView=\{currentView\} onApply=\{applySavedView\} canPrint=\{canPrintReport\} onPrint=\{printCurrentView\} \/>/);
   assert.doesNotMatch(shared, /savedReportKey|serializeTableView|sanitizeTableView/, "the shared table stays free of saved-report helpers so source-evaluating tests keep working");
