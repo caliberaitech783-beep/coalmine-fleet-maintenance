@@ -13,3 +13,13 @@ test('all generated reports keep real headers sticky inside their bounded two-ax
   assert.match(jsx,/className="reports-detail-table emptytable"/);
   assert.match(jsx,/<table className="report-filter-table">/);
 });
+
+test('a hovered report row stays readable in Night mode instead of turning white under light text', () => {
+  const css = readFileSync(new URL('../src/reports-workspace.css', import.meta.url), 'utf8');
+  assert.match(css, /\.generated-report-section \.report-filter-table tbody tr:hover td \{\s*background: color-mix\(in srgb, var\(--report-soft\) 55%, #fff\);/, 'Day hover is a light tint');
+  const night = css.match(/:root\[data-theme="dark"\] \.generated-report-section \.report-filter-table tbody tr:hover td \{([^}]*)\}/);
+  assert.ok(night, 'Night mode overrides the hover');
+  assert.match(night[1], /background: color-mix\(in srgb, var\(--report-accent\) 22%, #142136\);/);
+  assert.match(night[1], /color: #fff;/);
+  assert.ok(css.indexOf(night[0]) > css.indexOf('tbody tr:hover td {\r\n  background: color-mix(in srgb, var(--report-soft)') || css.indexOf(night[0]) > css.indexOf('tbody tr:hover td {\n  background: color-mix(in srgb, var(--report-soft)'), 'the Night rule comes after the Day rule');
+});

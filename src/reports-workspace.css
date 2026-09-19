@@ -543,6 +543,13 @@
   border-color: #2c415e;
 }
 
+/* Night mode: a hovered row keeps a dark tint of the report colour, so its light text stays readable
+   (the Day hover mixes the row colour with white). */
+:root[data-theme="dark"] .generated-report-section .report-filter-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--report-accent) 22%, #142136);
+  color: #fff;
+}
+
 :root[data-theme="dark"] .generated-report-section .report-row-limit,
 :root[data-theme="dark"] .generated-report-section .report-actions-trigger,
 :root[data-theme="dark"] .generated-report-section .export-menu-trigger {
