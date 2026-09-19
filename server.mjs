@@ -21,6 +21,7 @@ import {generatePasswordResetOtp,PASSWORD_RESET_MAX_ATTEMPTS,PASSWORD_RESET_MAX_
 import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
+import {phonesByLogin,withCreatorContact} from './ticket-contact.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
@@ -4008,7 +4009,13 @@ app.get('/api/tickets',requireSession,async(req,res,next)=>{
     const where=conditions.length?`WHERE ${conditions.join(' AND ')}`:'';
     const {rows}=await pool.query(`SELECT ${ticketProjection()} FROM crm_tickets ${where} ORDER BY created_at DESC`,values);
     const visibleRows=managerScope?rows.filter((ticket)=>reportScopeIncludesSite(managerScope,ticket.site)):rows;
-    const payload=visibleRows.map(normalizeOperationalSiteFields);
+    let payload=visibleRows.map(normalizeOperationalSiteFields);
+    // Admins and managers can call the person who raised the ticket (phone from the Users & employees record).
+    if(req.session.role==='super'&&payload.length){
+      const logins=[...new Set(payload.map((ticket)=>String(ticket.creatorLogin||'').trim().toLowerCase()).filter(Boolean))];
+      const {rows:userRows}=await pool.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees' AND lower(record_data->>'login')=ANY($1::text[])`,[logins]);
+      payload=withCreatorContact(payload,phonesByLogin(userRows.map((row)=>row.record_data)));
+    }
     if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'tickets',payload);
     return res.json(payload);
   }catch(error){next(error)}
