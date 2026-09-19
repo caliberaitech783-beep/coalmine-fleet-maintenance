@@ -136,7 +136,7 @@ export default function DashboardRecordBrowser({ rows, toolbarTarget: hostToolba
       {summaryLabel && <div className="dashboard-record-summary"><h4>{summaryLabel}</h4></div>}
       <div className="dashboard-record-toolbar-row">
         <div className="dashboard-record-toolbar" ref={setToolbarTarget} />
-        <label className="dashboard-fleet-search">Search fleet<input autoFocus data-smart-search type="search" aria-label="Search fleet" placeholder="Search door number, chassis, site, model or status" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>
+        <label className="dashboard-fleet-search"><span className="dashboard-fleet-search-label">Search fleet</span><input autoFocus data-smart-search type="search" aria-label="Search fleet" placeholder="Search door number, chassis, site, model or status" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>
       </div>
       <div className="dashboard-asset-list" ref={listRef}>
 <ActionsTable key={tableKey} toolbarTarget={toolbarTarget} toolbarPortal exportTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} groupBySite={groupBySite} summaryTarget={summaryTarget} preserveColumnOrder printTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} showRowNumbers={showRowNumbers} disableDateColumnFilter={!showDateFilter} recordDateFilter={showDateFilter ? movementDateControl || { label: idleDateFilter ? "Idle Vehicle Date" : "Started", value: recordDateRange, onChange: setRecordDateRange } : false} className={bdBalanceColumns || requestRecords ? "dashboard-location-dates" : undefined} data-verification-last={lifecycleRecords && lifecycleEvent === "mis" ? "true" : undefined}>
