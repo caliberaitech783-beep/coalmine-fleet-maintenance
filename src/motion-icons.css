@@ -59,3 +59,11 @@
   .bell-ring-icon .bell-body, .bell-ring-icon .bell-clapper, .bell-ring-icon .bell-wave, .notification-center > button, .notification-center > button.ringing i, .notification-center > button.ringing::before,
   .sign-out-button, .sign-out-button .sign-out-label, .door-exit-icon .door-panel, .door-exit-icon .door-arrow { animation: none !important; transition: none !important; }
 }
+
+/* Bell sound picker inside the notification panel. */
+.notification-sound-filter { grid-column: 1 / -1; }
+.notification-sound-controls { display: grid; grid-template-columns: minmax(0, 1fr) 42px; gap: 8px; align-items: stretch; }
+.notification-sound-play { display: grid; place-items: center; min-height: 40px; padding: 0; border: 1px solid #ffffff66; border-radius: 7px; background: linear-gradient(135deg, #a855f7, #6b2fa8); color: #fff; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.notification-sound-play:hover, .notification-sound-play:focus-visible { transform: translateY(-1px); box-shadow: 0 6px 14px #6b2fa859; }
+.notification-sound-play svg { width: 18px; height: 18px; }
+.notification-sound-filter small { font-weight: 500; color: #6b7891; }

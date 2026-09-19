@@ -35,7 +35,9 @@ test('temple bell: bronze partials with long decays, rung only when unread grows
 
 test('the bell, sign out, search, avatar and theme switch are wired and styled everywhere they appear',()=>{
   assert.match(main,/import \{ PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon \} from "\.\/motion-icons\.jsx";/);
-  assert.match(main,/const previousUnreadRef = useRef\(null\);\s*useEffect\(\(\) => \{\s*if \(shouldChime\(previousUnreadRef\.current, unread\)\) playTempleBell\(\);\s*previousUnreadRef\.current = unread;\s*\}, \[unread\]\);/);
+  assert.match(main,/import \{ playNotificationSound, loadNotificationSound, saveNotificationSound, NOTIFICATION_SOUNDS \} from "\.\/notification-chime\.mjs";/);
+  assert.match(main,/soundRef\.current = \{ play: \(\) => playNotificationSound\(bellSoundRef\.current\) \};/,'the incoming toast plays the chosen bell sound once per notification');
+  assert.doesNotMatch(main,/createNotificationSound\(\)/,'the old two-note beep is gone');
   assert.match(main,/<button ref=\{triggerRef\} type="button" className=\{unread > 0 \? "ringing" : ""\} onClick=\{toggle\}[^>]*><BellRingIcon ringing=\{unread > 0\} \/>/);
   assert.equal((main.match(/aria-label="Sign out" className="sign-out-button">/g)||[]).length,2,'admin and operational headers');
   assert.equal((main.match(/<DoorExitIcon \/><span className="sign-out-label">Sign out<\/span>/g)||[]).length,2);

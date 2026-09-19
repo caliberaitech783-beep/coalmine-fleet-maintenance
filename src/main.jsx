@@ -16,7 +16,7 @@ import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, par
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
-import { createNotificationTracker, createNotificationSound } from "./notification-alerts.mjs";
+import { createNotificationTracker } from "./notification-alerts.mjs";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
@@ -33,7 +33,7 @@ import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
-import { playTempleBell, shouldChime } from "./notification-chime.mjs";
+import { playNotificationSound, loadNotificationSound, saveNotificationSound, NOTIFICATION_SOUNDS } from "./notification-chime.mjs";
 import LiveTemperatureChip from "./live-temperature-chip.jsx";
 import BackupAdministration from "./backup-administration.jsx";
 import VehicleTransferWorkflow from "./vehicle-transfer-workflow.jsx";
@@ -193,6 +193,7 @@ import {
   Smartphone,
   Flag,
   HardDrive,
+  Volume2,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -9384,6 +9385,10 @@ function NotificationBell({ session, onOpenEntry }) {
   const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const soundRef = useRef(null), playedRef = useRef(new Set());
+  // Bell sound chosen on this device; the incoming-toast effect plays it once per new notification.
+  const [bellSound, setBellSound] = useState(() => loadNotificationSound());
+  const bellSoundRef = useRef(bellSound);
+  bellSoundRef.current = bellSound;
   const centerRef = useRef(null), triggerRef = useRef(null), entryControllerRef = useRef(null), entrySequenceRef = useRef(0), onOpenEntryRef = useRef(onOpenEntry);
   onOpenEntryRef.current = onOpenEntry;
   // A silent initial snapshot followed by authenticated long polling. PostgreSQL
@@ -9391,8 +9396,7 @@ function NotificationBell({ session, onOpenEntry }) {
   useEffect(() => {
     const controller = new AbortController();
     const track = createNotificationTracker();
-    const sound = createNotificationSound();
-    soundRef.current = sound;
+    soundRef.current = { play: () => playNotificationSound(bellSoundRef.current) };
     playedRef.current = new Set();
     setItems([]); setAlerts([]); setOpen(false); setSiteFilter(""); setCategoryFilter("");
     let known = null, timer;
@@ -9445,11 +9449,6 @@ function NotificationBell({ session, onOpenEntry }) {
     };
   }, [open]);
   const unread = items.filter((item) => !item.isRead).length;
-  const previousUnreadRef = useRef(null);
-  useEffect(() => {
-    if (shouldChime(previousUnreadRef.current, unread)) playTempleBell();
-    previousUnreadRef.current = unread;
-  }, [unread]);
   const siteOptions = notificationSiteOptions(items, siteFilter);
   const siteItems = filterNotificationsBySite(items, siteFilter);
   const categoryOptions = notificationCategoryOptions(siteItems, categoryFilter);
@@ -9521,6 +9520,7 @@ function NotificationBell({ session, onOpenEntry }) {
         <div className="notification-filters">
           <label className="notification-site-filter">Filter by site<select value={siteFilter} onChange={(event) => setSiteFilter(event.target.value)}><option value="">All sites</option>{siteOptions.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>
           <label className="notification-site-filter notification-category-filter">Filter by category<select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="">All categories ({siteItems.length})</option>{categoryOptions.map(category => <option key={category.key} value={category.key}>{category.label} ({category.count})</option>)}</select></label>
+          <label className="notification-site-filter notification-sound-filter">Bell sound<span className="notification-sound-controls"><select value={bellSound} onChange={(event) => { const next = saveNotificationSound(event.target.value); setBellSound(next); playNotificationSound(next); }}>{NOTIFICATION_SOUNDS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select><button type="button" className="notification-sound-play" onClick={() => playNotificationSound(bellSound)} aria-label="Play the selected bell sound" title="Play the selected bell sound"><Volume2 /></button></span><small>{NOTIFICATION_SOUNDS.find((option) => option.id === bellSound)?.hint}</small></label>
         </div>
         <div className="notification-list">{visibleItems.length ? visibleItems.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><NotificationMessage item={item} /><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>{categoryFilter ? "No notifications for these filters." : siteFilter ? "No notifications for this site." : "No notifications yet."}</p>}</div>
       </div>}
