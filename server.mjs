@@ -4046,13 +4046,15 @@ const ticketMediaFields={
   'resolution-attachment':{column:'resolution_attachment_data',nameColumn:'resolution_attachment_name',fallbackName:'resolution-attachment'},
 };
 
-app.get('/api/tickets/:reference/media/:kind',requireSession,async(req,res,next)=>{
+// Ticket references contain "/" (TIC/SITE/DDMMYY/NNNNNN). Azure's front end decodes the %2F the browser sends,
+// so the reference can arrive as several path segments; the wildcard accepts it in either form.
+app.get('/api/tickets/*reference/media/:kind',requireSession,async(req,res,next)=>{
   try{
     const media=ticketMediaFields[String(req.params.kind||'')];
     if(!media)return res.status(404).json({error:'Ticket media is not available.'});
     const nameSelection=media.nameColumn?`,${media.nameColumn} AS name`:`,'' AS name`;
     const {rows}=await pool.query(`SELECT creator_login AS "creatorLogin",creator_role AS "creatorRole",site,
-      ${media.column} AS data${nameSelection} FROM crm_tickets WHERE reference=$1`,[String(req.params.reference||'').trim()]);
+      ${media.column} AS data${nameSelection} FROM crm_tickets WHERE reference=$1`,[[].concat(req.params.reference??[]).join('/').trim()]);
     const ticket=rows[0];
     if(!ticket||!await ticketVisibleToSession(ticket,req.session))return res.status(404).json({error:'Ticket media is not available.'});
     return sendDataUrlMedia(res,ticket.data,{name:ticket.name||media.fallbackName});

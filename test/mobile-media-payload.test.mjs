@@ -31,7 +31,7 @@ test("request, ticket and Info Pulse list projections never embed media bodies",
 
 test("media is fetched only after an authenticated user action", () => {
   assert.match(server, /app\.get\('\/api\/requests\/:reference\/audio\/:kind',requireSession/);
-  assert.match(server, /app\.get\('\/api\/tickets\/:reference\/media\/:kind',requireSession/);
+  assert.match(server, /app\.get\('\/api\/tickets\/\*reference\/media\/:kind',requireSession/);
   assert.match(server, /ticketVisibleToSession\(ticket,req\.session\)/);
   assert.match(server, /sendDataUrlMedia\(res,request\.data/);
   assert.match(media, /onClick=\{load\}/);
