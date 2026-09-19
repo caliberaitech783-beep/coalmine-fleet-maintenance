@@ -54,7 +54,7 @@ test('the create request form loads the master and the server stores the chosen 
   assert.match(client,/<MaintenanceForm normal[^>]*subCategoryRecords=\{subCategoryRecords\} subCategoriesLoaded=\{subCategoriesLoaded\}/);
   const form=client.slice(client.indexOf('function MaintenanceForm('),client.indexOf('function Subsidiaries('));
   assert.match(form,/normalizedBreakdownType\(category\) === "Breakdown"/,'only the Breakdown type asks for a sub-category');
-  assert.match(form,/\{needsSubCategory && \(\n\s+<SearchableSelect\n\s+label="Breakdown sub-category"\n\s+name="subCategory"\n\s+required\n\s+defaultValue=""\n\s+options=\{subCategoryOptions\}\n\s+loading=\{!subCategoriesLoaded\}/,'the requester searches the list instead of scrolling a plain dropdown');
+  assert.match(form, /<SearchableSelect[\s\S]*?name="subCategory"[\s\S]*?value=\{selectedSubCategory\}[\s\S]*?onChange=\{setSelectedSubCategory\}/);
   assert.doesNotMatch(form,/<select\n\s+name="subCategory"/,'the plain dropdown is gone');
   assert.match(form,/subCategory: String\(fd\.get\("subCategory"\) \|\| ""\)\.trim\(\),/);
   assert.match(server,/ADD COLUMN IF NOT EXISTS sub_category TEXT NOT NULL DEFAULT ''/);

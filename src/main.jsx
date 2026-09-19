@@ -4678,6 +4678,7 @@ function TranslatedText({ text, language = "", as: Tag = "span", className = "",
   );
 }
 function EnhancedSpeechComplaint({
+  initialText = "",
   label = "Reason / complaint *",
   name = "complaint",
   audioName = "complaintAudio",
@@ -4685,7 +4686,7 @@ function EnhancedSpeechComplaint({
   placeholder = "Type here, or select Hindi / English and speak in that language.",
   required = true,
 }) {
-  const [text, setText] = useState(""),
+  const [text, setText] = useState(initialText),
     [lang, setLang] = useState(() => speechLocaleForLanguage(preferredLanguageCodes()[0] || "hi")),
     [listening, setListening] = useState(false),
     [working, setWorking] = useState(false),
@@ -4924,6 +4925,7 @@ function readMeterEvidence(file) {
 function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [], equipmentLoaded = false, repairTypeRecords = [], repairTypesLoaded = false, subCategoryRecords = [], subCategoriesLoaded = false, assignedLocation = "", activeRequestRecords = [] }) {
   const displayTime = (value) => typeof formatDisplayTime === "function" ? formatDisplayTime(value) : String(value || "");
   const [equipmentGroup, setEquipmentGroup] = useState(""),
+    [selectedSubCategory, setSelectedSubCategory] = useState(""),
     [equipmentId, setEquipmentId] = useState(""),
     [category, setCategory] = useState(""),
     [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -5139,7 +5141,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               name="category"
               required
               value={category}
-              onChange={(event) => setCategory(event.target.value)}
+              onChange={(event) => { setCategory(event.target.value); setSelectedSubCategory(""); }}
               disabled={!repairTypesLoaded || !repairTypeRecords.length}
               aria-busy={!repairTypesLoaded}
             >
@@ -5157,6 +5159,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
                     {String(record.repairType).trim()}
                   </option>
                 ))}
+              {!repairTypeRecords.some(record => /^others?$/i.test(String(record.repairType || "").trim())) && <option value="Other">Other</option>}
             </select>
           </label>
           {needsSubCategory && (
@@ -5164,7 +5167,8 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
               label="Breakdown sub-category"
               name="subCategory"
               required
-              defaultValue=""
+              value={selectedSubCategory}
+              onChange={setSelectedSubCategory}
               options={subCategoryOptions}
               loading={!subCategoriesLoaded}
               disabled={!subCategoriesLoaded || !subCategoryOptions.length}
@@ -5226,7 +5230,7 @@ function MaintenanceForm({ close, normal = false, onSubmit, equipmentRecords = [
             {driverLookup.status === "found" && <small>Fetched from {driverLookup.source}</small>}
             {driverLookup.status === "temporary" && <small>{driverLookup.source === "Lookup unavailable" ? "Driver lookup is temporarily unavailable." : driverLookup.source === "Not found" ? "No driver was found for this vehicle and time." : "Manually entered driver."} Enter the actual name if known, or leave it blank. Oracle will retry the lookup automatically.</small>}
           </label>
-          <SpeechComplaint />
+          <SpeechComplaint key={`${category}|${selectedSubCategory}`} initialText={needsSubCategory && !/^others?$/i.test(selectedSubCategory) ? selectedSubCategory : ""} />
           <ComplaintMediaInputs />
         </div>
         {v && (
