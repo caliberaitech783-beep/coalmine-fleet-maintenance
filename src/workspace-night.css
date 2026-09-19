@@ -25,4 +25,73 @@
   :root[data-theme="dark"] :is(.report-actions-popover, .report-actions-submenu, .export-menu-popover, .table-parameter-filter-popover, .column-filter-popover) { background: var(--panel); color: var(--ink); border-color: var(--line); }
   :root[data-theme="dark"] :is(.report-actions-popover, .report-actions-submenu, .export-menu-popover) button { color: var(--ink); }
   :root[data-theme="dark"] :is(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid #d6b7ff; outline-offset: 3px; }
+  /* Standalone pages do not all use .panel. Pair their inherited light text
+     with a dark surface, including sticky table cells and portal dialogs. */
+  :root[data-theme="dark"] :is(
+      .ticket-page-head, .ticket-toolbar, .ticket-table-wrap,
+      .reports-page > header, .reports-category-tabs, .report-name-tabs,
+      .generated-report-section .reports-section-heading, .generated-report-section .reports-detail-table,
+      .record-date-range > label, .table-search-toolbar label,
+      .report-period-dialog, .report-period-dialog header, .report-period-dialog footer,
+      .saved-report-dialog, .wrs-dialog, .wrs-card, .wrs-footer, .wrs-preview pre,
+      .report-schedule-fields, .report-schedule-list > article, .report-schedule-editor-list > article,
+      .report-week-grid article, .report-zip-groups section, .report-zip-groups label,
+      .report-recipient-picker, .report-assignment-picker, .report-assignment-picker label,
+      .report-assignment-empty, .report-schedule-switch, .report-week-grid.compact article.active,
+      .org-summary article, .org-summary button.org-summary-card, .org-panel, .org-node, .org-company, .org-dialog,
+      .region-site-tabs, .region-metric, .region-search, .admin-lock-status,
+      .hierarchy-site-strip, .hierarchy-matrix-scroll, .hierarchy-access-grid label,
+      .hierarchy-report-legend span, .hierarchy-weekday-selector label, .hierarchy-time-selector label,
+      .backup-overview-kpis, .backup-inspection dl, .backup-input-icon,
+      .equipment-combobox-menu, .privilege-site-select, .privilege-role-field > div,
+      .manager-site-options label, .user-profile-panel, .session-message-inbox,
+      .remote-assistance-dialog, .remote-approval-dialog, .remote-approval-body dl div, .remote-control-room > footer,
+      .help-training-dialog, .help-training-dialog > header, .help-training-coachmark,
+      .help-training-audio, .help-training-player,
+      .daily-remarks-panel .daily-remarks-list article,
+      .pulse-panel .pulse-updates-history .daily-remarks-panel .daily-remarks-list article,
+      .pulse-filter-panel, .pulse-kpi, .pulse-breakdown-row, .pulse-empty,
+      .ai-feeder-panel, .ai-feeder-item, .ai-feeder-chart > div, .ai-feeder-footer,
+      .notification-list, .notification-entry-fields > div, .notification-entry-section, .incoming-notification
+  ) { background: var(--panel); color: var(--ink); border-color: var(--line); }
+
+  :root[data-theme="dark"] .ticket-page :is(h1, td, td b, label) { color: var(--ink); }
+  :root[data-theme="dark"] .ticket-page :is(p, td small, .ticket-toolbar > span) { color: var(--muted); }
+  :root[data-theme="dark"] .ticket-page-head > div > span { color: #9bd8ff; }
+  :root[data-theme="dark"] .ticket-page-head .export-menu-trigger span { color: inherit; }
+  :root[data-theme="dark"] .record-date-range > label { color: var(--ink); }
+  :root[data-theme="dark"] :is(.record-date-range-basis, .record-date-range-hint) { color: var(--muted); }
+  :root[data-theme="dark"] .record-date-range-hint[role="alert"] { color: #ff9bac; }
+
+  /* An opaque matching background is required for frozen columns too. */
+  :root[data-theme="dark"] table tbody td { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  :root[data-theme="dark"] .hierarchy-matrix :is(th, td):nth-child(n) { background: var(--panel); color: var(--ink); border-color: var(--line); }
+  :root[data-theme="dark"] table thead th,
+  :root[data-theme="dark"] .hierarchy-matrix thead th:nth-child(n) { background: var(--night-raised); color: var(--muted); }
+  :root[data-theme="dark"] table tbody tr:hover > td { background: var(--night-raised); }
+
+  :root[data-theme="dark"] :is(.backup-admin-page, .org-panel, .org-summary, .org-dialog,
+      .help-training-dialog, .report-schedule-fields, .saved-report-dialog, .wrs-dialog,
+      .remote-assistance-dialog, .remote-approval-dialog, .user-profile-panel)
+      :is(h1, h2, h3, h4, legend, label, dt, dd, strong) { color: var(--ink); }
+  :root[data-theme="dark"] :is(.backup-admin-page, .org-panel, .org-summary, .org-dialog,
+      .help-training-dialog, .report-schedule-fields, .saved-report-dialog, .wrs-dialog,
+      .remote-assistance-dialog, .remote-approval-dialog, .user-profile-panel)
+      :is(p, small) { color: var(--muted); }
+
+  :root[data-theme="dark"] :is(.camera-upload-button, .etc-replace-button, .daily-remarks-order button,
+      .pulse-panel .pulse-updates-history .daily-remarks-order button,
+      .backup-icon-action, .backup-weekdays span, .region-main-tabs button, .region-site-tabs button,
+      .hierarchy-view-tab, .hierarchy-row-edit, .hierarchy-delivery-heading button,
+      .report-time-field button, .report-zip-toolbar button, .report-schedule-reset,
+      .table-layout-controls button, .org-site-chips button, .help-training-role-tabs button,
+      .help-training-close, .saved-report-form footer button, .saved-report-actions button,
+      .wrs-outline-button, .wrs-save, .remote-assistance-dialog footer button,
+      .remote-approval-dialog footer button, .remote-assistance-active button,
+      .pulse-refresh, .pulse-load-more, .notification-entry-state button) {
+    background: var(--night-raised); color: var(--night-link); border-color: var(--line);
+  }
+  :root[data-theme="dark"] :is(.region-main-tabs button, .region-site-tabs button,
+      .hierarchy-view-tab, .help-training-role-tabs button).active,
+  :root[data-theme="dark"] .backup-weekdays input:checked + span { background: #513470; color: #fff; border-color: #bd94eb; }
 }
