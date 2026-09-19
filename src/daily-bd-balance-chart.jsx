@@ -19,7 +19,7 @@ function BalanceChange({row}) {
   </span>;
 }
 
-export default function DailyBdBalanceChart({records = [], sites = [], scopeLabel = 'All regions', today, ready = true, error = '', stale = false, onRefresh, onInspect, ExportMenu = null}) {
+export default function DailyBdBalanceChart({records = [], sites = [], scopeLabel = 'All regions', today, ready = true, error = '', stale = false, onRefresh, onInspect, ExportMenu = null, exportRef = null}) {
   const [site, setSite] = useState('');
   const [range, setRange] = useState({days: 1, from: '', to: ''});
   const [rangeError, setRangeError] = useState('');
@@ -40,6 +40,9 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
     setRange({days: 0, from: start, to: end}); setRangeError('');
   };
   const unavailable = !ready || Boolean(error);
+  // The table its Export menu offers, also handed to the dashboard for the whole-dashboard Excel workbook.
+  const exported = unavailable || !ledger.days.length ? null : dailyBdBalanceExport({ledger, from, to, today, stale, place: activeSite || scopeLabel});
+  if (exportRef) exportRef.current = exported;
   return <article className="mine-panel daily-bd-balance" aria-label="Daily BD balance chart">
     <header className="bd-balance-header">
       <div><span className="mine-eyebrow">Daily breakdown movement</span><h2>Daily BD balance</h2><p>Opening + BD In − BD Out = Closing + Idle <ArrowRight aria-hidden="true"/> Idle shown separately</p></div>
@@ -48,7 +51,7 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
         <label><span>From</span><input aria-label="Daily BD balance from date" type="date" value={from} max={today} onChange={event => changeDate('from', event.target.value)}/></label>
         <label><span>To</span><input aria-label="Daily BD balance to date" type="date" value={to} max={today} onChange={event => changeDate('to', event.target.value)}/></label>
         <div className="mine-trend-period" role="group" aria-label="Daily BD balance period">{[1,7,14,30].map(days => <button type="button" key={days} aria-pressed={range.days === days} className={range.days === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}</div>
-        {ExportMenu && !unavailable && ledger.days.length > 0 && <ExportMenu {...dailyBdBalanceExport({ledger, from, to, today, stale, place: activeSite || scopeLabel})} className="mine-section-export"/>}
+        {ExportMenu && exported && <ExportMenu {...exported} className="mine-section-export" printSection/>}
       </div>
     </header>
     {unavailable ? <div className="bd-balance-empty" role={error ? 'alert' : 'status'}><b>{error ? 'BD movement is unavailable' : 'Loading BD movement…'}</b>{error && <><span>{error}</span><button type="button" onClick={onRefresh}><RotateCcw/> Retry</button></>}</div> : <>

@@ -746,7 +746,7 @@ test("site-wise From/To updates inclusive movement, availability, exports and li
   assert.match(site.props["aria-label"], /1 on road, 2 off road and 0 idle/);
   assert.ok(!text(byLabel(tree, "Site-wise BD date range")).includes("Availability as of"), "redundant filter note is removed; table caption retains the date");
   assert.equal(text(byLabel(tree, "Site-wise BD table period")), "From: 01-09-2026To: 08-09-2026Availability as of 08-09-2026");
-  const exported = findAll(tree, (node) => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
+  const exported = findAll(tree, (node) => node.props.title === "Fleet control dashboard")[0].props.rows;
   const incoming = exported.find((row) => row.section === "Breakdown movement" && row.metric === "BD In");
   assert.equal(incoming.value, 2);
   assert.equal(incoming.scope, displayDates.formatDisplayDateRange("2026-09-01", "2026-09-08"));
@@ -804,7 +804,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     assert.equal(text(byLabel(tree, "Site-wise BD table period")), todayCaption);
     assert.equal(button(tree, "Reset dates").props.disabled, true);
     assert.match(byClass(tree, "mine-breakdown-site-row").props["aria-label"], /2 open, 0 in, 0 out, 1 balance/);
-    const exported = findAll(tree, node => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
+    const exported = findAll(tree, node => node.props.title === "Fleet control dashboard")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, displayDates.formatDisplayDateRange(todayKey, todayKey));
   };
   const assertAllTime = () => {
@@ -823,7 +823,7 @@ test("throughput defaults to today, clearing either date shows all time and Rese
     const types = findAll(byLabel(tree, "Breakdown type percentage of open BD balance"), node => node.type === "article");
     assert.ok(types.some(card => text(card).includes("WGM0%0 requests")));
     assert.ok(types.some(card => text(card).includes("Breakdown100%1 request")));
-    const exported = findAll(tree, node => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
+    const exported = findAll(tree, node => node.props.title === "Fleet control dashboard")[0].props.rows;
     assert.equal(exported.find(row => row.section === "Breakdown movement" && row.metric === "BD In").scope, "All time");
   };
   assertToday();
@@ -888,7 +888,7 @@ test("throughput region and dependent site filters scope cards, types, tables, e
       }
       const siteRows = findAll(tree, node => node.props.className === "mine-breakdown-site-row");
       assert.equal(siteRows.length, site === "all" ? 2 : 1);
-      const exported = findAll(tree, node => node.props.title === "Fleet control dashboard KPI report")[0].props.rows;
+      const exported = findAll(tree, node => node.props.title === "Fleet control dashboard")[0].props.rows;
       assert.equal(exported.find(row => row.section === "Breakdown movement").details, site === "all" ? "WCL" : site);
       button(tree, "Availability Count").props.onClick(); tree = view.render(rows);
       const snapshotRequests = availabilityRequestsForDate(selectedRows, day);
@@ -1100,4 +1100,37 @@ test("each dashboard section offers its own Export menu with the figures it show
   assert.deepEqual(menus().map((node) => node.props.title.split(" · ")[0]), ["OEM BD"]);
   assert.deepEqual(menus()[0].props.columns.map((column) => column.label), ["Region", "Site name", "OEM", "BD count", "Share of OEM BD (%)"]);
   assert.equal(menus()[0].props.rows.at(-1).name, "All sites");
+});
+
+test("section Smart Print captures the panel, and the whole dashboard exports every section to Excel from the banner, open or collapsed", () => {
+  const view = harness();
+  let tree = view.render();
+  const sectionMenus = findAll(tree, (node) => node.props.className === "mine-section-export");
+  assert.equal(sectionMenus.length, 4);
+  assert.ok(sectionMenus.every((node) => node.props.printSection === true), "every section prints as it is on screen");
+  const dashboardMenu = () => findAll(tree, (node) => node.props.label === "Export dashboard");
+  assert.equal(dashboardMenu().length, 1, "one whole-dashboard menu in the open banner");
+  const [menu] = dashboardMenu();
+  assert.equal(menu.props.title, "Fleet control dashboard");
+  assert.equal(menu.props.dashboardPdf, true, "PDF and Smart Print capture the dashboard as it is");
+  assert.equal(menu.props.className, "dashboard-export-trigger");
+  const names = () => dashboardMenu()[0].props.excelSheets().map((sheet) => sheet.name);
+  assert.deepEqual(names(), ["KPIs", "Total Fleet", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend"]);
+  const sheets = menu.props.excelSheets();
+  assert.ok(sheets.every((sheet) => sheet.title && Array.isArray(sheet.columns) && Array.isArray(sheet.rows)));
+  assert.match(sheets[2].title, /^Tracking Vehicle Throughput · Site-wise BD Movement · /);
+  assert.match(sheets[3].title, /^Tracking Vehicle Throughput · Availability Count · /);
+  // The Daily BD balance chart hands its current table over; the workbook then includes it after Total Fleet.
+  const chart = findAll(tree, (node) => node.props.exportRef && node.props.onInspect)[0];
+  chart.props.exportRef.current = {title: "Daily BD balance · test", columns: [{label: "Date", value: (row) => row.date}], rows: [{date: "19-09-2026"}]};
+  assert.deepEqual(names(), ["KPIs", "Total Fleet", "Daily BD balance", "BD Movement", "Availability Count", "Request Lifecycle", "Breakdown trend"]);
+  // A collapsed banner keeps the same whole-dashboard menu beside its eye toggle.
+  const banner = findAll(tree, (node) => node.props.collapsedAction)[0];
+  assert.equal(banner.props.collapsedAction.props.label, "Export dashboard");
+  assert.equal(banner.props.collapsedAction.props.className, "dashboard-banner-export");
+  assert.equal(banner.props.collapsedAction.props.excelSheets().length, 7);
+  // The OEM BD view shows only the fleet chart, so its workbook is the KPIs and the OEM table.
+  button(byLabel(tree, "Fleet chart view"), "OEM BD").props.onClick();
+  tree = view.render();
+  assert.deepEqual(names(), ["KPIs", "OEM BD"]);
 });

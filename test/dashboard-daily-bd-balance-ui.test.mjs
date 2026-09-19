@@ -189,3 +189,15 @@ test('an Export menu beside the period buttons exports the days and totals on sc
   label(view.render({ExportMenu}), 'Daily BD balance site').props.onChange({target: {value: 'Majri OB'}});
   assert.match(menuOf(view.render({ExportMenu})).props.title, /^Daily BD balance · Majri OB · 05-09-2026 to 11-09-2026/);
 });
+
+test('the Export menu prints the chart as it is on screen and hands its table to the dashboard workbook', () => {
+  const ExportMenu = () => null;
+  const exportRef = {current: 'untouched'};
+  const view = harness();
+  const menu = find(view.render({ExportMenu, exportRef}), node => node.type === ExportMenu)[0];
+  assert.equal(menu.props.printSection, true, 'Smart Print captures the section, not a table');
+  assert.equal(exportRef.current.title, menu.props.title);
+  assert.deepEqual(exportRef.current.rows, menu.props.rows);
+  view.render({ExportMenu, exportRef, ready: false});
+  assert.equal(exportRef.current, null, 'nothing to export while loading');
+});

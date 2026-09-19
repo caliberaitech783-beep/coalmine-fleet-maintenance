@@ -467,7 +467,7 @@ test('Export beside Refresh offers PDF, Excel and Smart Print for every breakdow
   // The panel hands over the shared menu, whose popover and "preparing file" overlay are raised above the full-screen panel.
   const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
   assert.match(main, /<InfoPulseContent breakdowns=\{breakdowns\}[^\r\n]* ExportMenu=\{ExportMenu\} \/>/);
-  assert.match(main, /function ExportMenu\(\{[^\r\n]*, portalClassName = "" \}\) \{/);
+  assert.match(main, /function ExportMenu\(\{[^\r\n]*, portalClassName = "", printSection = false, excelSheets = null \}\) \{/);
   assert.match(main, /className=\{`export-menu-popover\$\{portalClassName \? ` \$\{portalClassName\}` : ""\}`\}/);
   assert.match(main, /<CaliberActivityOverlay message=\{downloadActivity\} className=\{portalClassName\} \/>/);
   const css = readFileSync(new URL('../src/info-pulse-content.css', import.meta.url), 'utf8');

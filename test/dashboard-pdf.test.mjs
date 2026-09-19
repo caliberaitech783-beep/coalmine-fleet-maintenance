@@ -16,7 +16,7 @@ test("dashboard PDF reports an unavailable dashboard without downloading", async
 
 test("both KPI exports opt into visual PDF without changing ordinary table exports", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.equal((source.match(/label="Export KPIs" dashboardPdf/g) || []).length, 2);
+  assert.equal((source.match(/label="Export (?:KPIs|dashboard)" dashboardPdf/g) || []).length, 2, "the manager KPI export and the whole fleet dashboard export");
   assert.match(source, /dashboardPdf = false/);
   assert.match(source, /if \(dashboardPdf\) \{[\s\S]*?downloadDashboardPdf[\s\S]*?return;\s*\}/);
   assert.match(source, /fetch\("\/api\/exports\/pdf"/);
@@ -30,8 +30,8 @@ test("Smart Print on a dashboard prints the dashboard itself, not the KPI table"
   assert.match(printReport, /onPrint: \(\{ pageSize, printOptions \}\) => printDashboardReport\(\{ dashboard, title, pageSize, printOptions \}\)/);
   assert.match(printReport, /onPrint: printTableReport, formatCell: exportCellText \}\);/, "every other report still prints its table");
   const dashboardPrint = source.slice(source.indexOf("function printDashboardReport("), source.indexOf("function printTableReportInBrowser("));
-  assert.match(dashboardPrint, /printReportDirect\(\{ title, pageSize, printOptions \}, async \(page\) => \(await loadCapture\(\)\)\.dashboardPrintPdf\(dashboard, page\)\)/, "the print helper gets the captured dashboard at the chosen paper size");
-  assert.match(dashboardPrint, /if \(!sent\) await \(await loadCapture\(\)\)\.printDashboard\(dashboard, title\);/, "without the helper the captured dashboard opens in the browser print window");
+  assert.match(dashboardPrint, /printReportDirect\(\{ title, pageSize, printOptions \}, async \(page\) => \(await loadCapture\(\)\)\.dashboardPrintPdf\(dashboard, page, section\)\)/, "the print helper gets the captured dashboard at the chosen paper size");
+  assert.match(dashboardPrint, /if \(!sent\) await \(await loadCapture\(\)\)\.printDashboard\(dashboard, title, section\);/, "without the helper the captured dashboard opens in the browser print window");
   assert.match(source, /if \(buildPdf\) pdf = await buildPdf\(page\);\n\s+else \{/, "the preview and printer receive that PDF instead of the table");
 });
 
@@ -62,4 +62,6 @@ test("a print starts with the clock row and keeps the sticky banner in its place
   assert.match(source, /root\.querySelectorAll\("\.export-menu, \.overlay, \[role=dialog\]"\)\.forEach\(node => node\.remove\(\)\);/);
   assert.match(source, /root\.querySelectorAll\("\*"\)\.forEach\(node => \{\n\s+const style = getComputedStyle\(node\);\n[^\n]*\n\s+if \(style\.position === "sticky"\) node\.style\.position = "static";/, "a banner pinned while the page is scrolled is not pushed down over the charts");
   assert.match(source, /const canvas = await toCanvas\(root, /, "the capture covers the clock row and the dashboard together");
+  assert.match(source, /section\?\.setAttribute\("data-print-section", ""\);\n\s+const clone = dashboard\.cloneNode\(true\);\n\s+section\?\.removeAttribute\("data-print-section"\);/, "a section is marked only while the dashboard is copied");
+  assert.match(source, /if \(section\) root = root\.querySelector\("\[data-print-section\]"\) \|\| root;\n\s+const width = /, "a section prints alone, rendered from inside the full copy");
 });

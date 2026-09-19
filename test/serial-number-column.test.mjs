@@ -45,7 +45,7 @@ test("print and Excel downloads carry the serial column and the record count", (
   const main = read("../src/main.jsx");
   assert.match(main, /const serial = withSerialColumn\(columns, exportRows\);\r?\n  const headings = serial\.columns\.map/);
   assert.match(main, /colspan="\$\{serial\.columns\.length\}">No records available/);
-  assert.match(main, /const summaryRows = \[\[title \|\| "Nerve Center report"\], \[recordCountLine\(exportRows\.length, formatDisplayDateTime\(new Date\(\)\)\)\]\];/);
+  assert.match(main, /const summaryRows = \[\[sheetTitle \|\| title \|\| "Nerve Center report"\], \[recordCountLine\(exportRows\.length, formatDisplayDateTime\(new Date\(\)\)\)\]\];/);
   assert.match(main, /const worksheetRows = \[\.\.\.summaryRows, labels, \.\.\.serial\.rows\];/);
   const server = read("../server.mjs");
   assert.match(server, /const dataColumnCount=requestedColumns\.length-\(String\(requestedColumns\[0\]\?\.label\?\?''\)\.trim\(\)==='Sr\. No\.'\?1:0\);/);

@@ -1663,6 +1663,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const oemFleetEquipment = visibleEquipment.filter(record => dashboardOem === "all" || oemLabel(record).toLowerCase() === dashboardOem);
   // Measure the space the OEM chart may use so the panel never needs a page scroll.
   const fleetChartRef = useRef(null);
+  const dailyBdExportRef = useRef(null);
   const [oemPlotSpace, setOemPlotSpace] = useState(0);
   useEffect(() => {
     const fitOemChart = () => setOemPlotSpace(oemChartPlotSpace(fleetChartRef.current));
@@ -1952,7 +1953,28 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
   const trendPointAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, label, equipmentLoaded, "button", { selector: "i, b, small", backgroundKey: "trend:all" });
   const cardAction = (key, label) => dashboardListTrigger(openSiteScopedDrilldown, key, `${label}. Open full list`, equipmentLoaded, "group");
   if (hourlyBreakdownVisible) return <HourlyBreakdownView ActionsTable={ActionsTable} requests={scopedBreakdowns.map(request => ({ ...request, door: request.door || equipmentForRequest(request)?.door }))} sites={availableRegions.flatMap(region => region.sites).filter(site => !restrictToScope || normalizedAllowedSites?.some(allowed => recordBelongsToSite({site: allowed}, site)))} onBack={() => setHourlyBreakdownVisible(false)} />;
-  const renderDashboardHeader = (inDialog = false) => <DashboardFilterBar inDialog={inDialog} bannerRef={inDialog ? undefined : dashboardBannerRef}><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{<label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion?.code || ""} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>From</span><input aria-label="Dashboard from date" type="date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><input aria-label="Dashboard to date" type="date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => setDashboardOem(event.target.value)}><option value="all">All OEMs</option>{oemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}</span><ExportMenu title="Fleet control dashboard KPI report" columns={dashboardKpiExportColumns} rows={dashboardExportRows} className="dashboard-export-trigger" label="Export KPIs" dashboardPdf />{inDialog && <button type="button" className="dashboard-export-trigger dashboard-filter-reset" onClick={resetOemFilters}>Reset filters</button>}</DashboardFilterBar>;
+  // Each section's export table: its Export menu offers it, and the whole dashboard's Excel workbook has a sheet
+  // per section (both Tracking Vehicle Throughput tabs) after the KPI sheet. Tables are built only when asked for.
+  const fleetSectionTable = () => fleetSectionExport({ mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: liveFleetCounts, oemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : oemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: oemLive ? "Current breakdowns" : filteredDateLabel });
+  const throughputSectionTable = (tab = maintenanceAvailabilityTab) => throughputSectionExport({ tab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis });
+  const lifecycleSectionTable = () => requestLifecycleExport({ trend: requestLifecycleTrend, readings: requestLifecycleReadings, place: requestLifecycleSite || requestLifecycleRegion?.code || dashboardScopeLabel, rangeLabel: requestLifecycleRangeLabel });
+  const trendSectionTable = () => breakdownTrendExport({ trend: breakdownTrend, place: activeTrendSite === "all" ? dashboardScopeLabel : activeTrendSite, from: breakdownTrendStartKey, to: breakdownTrendAnchorKey, total: breakdownTrendTotal, average: breakdownTrendAverage });
+  const dashboardExcelSheets = () => [
+    { name: "KPIs", title: "Fleet control dashboard KPIs", columns: dashboardKpiExportColumns, rows: dashboardExportRows },
+    ...(!equipmentLoaded ? [] : [
+      { name: showOemBreakdowns ? "OEM BD" : "Total Fleet", ...fleetSectionTable() },
+      ...(showOemBreakdowns ? [] : [
+        dailyBdExportRef.current && { name: "Daily BD balance", ...dailyBdExportRef.current },
+        { name: "BD Movement", ...throughputSectionTable("breakdown") },
+        { name: "Availability Count", ...throughputSectionTable("road") },
+        { name: "Request Lifecycle", ...lifecycleSectionTable() },
+        breakdownTrend.length > 0 && { name: "Breakdown trend", ...trendSectionTable() },
+      ]),
+    ]),
+  ].filter(Boolean);
+  // The whole dashboard: PDF and Smart Print capture it as it is on screen; Excel has every section.
+  const dashboardExportMenu = (className) => <ExportMenu title="Fleet control dashboard" columns={dashboardKpiExportColumns} rows={dashboardExportRows} excelSheets={dashboardExcelSheets} className={className} label="Export dashboard" dashboardPdf />;
+  const renderDashboardHeader = (inDialog = false) => <DashboardFilterBar inDialog={inDialog} bannerRef={inDialog ? undefined : dashboardBannerRef} collapsedAction={inDialog ? null : dashboardExportMenu("dashboard-banner-export")}><label><span>Region</span><select aria-label="Region" value={dashboardRegion} onChange={(event) => { setDashboardRegion(event.target.value); setDashboardSite("all"); }}><option value="all">{restrictToScope?"All assigned sites":"All regions"}</option>{availableRegions.map((region) => <option key={region.code} value={region.code}>{region.code}</option>)}</select></label>{<label className="mine-site-filter"><span>Site</span><select aria-label="Site" value={dashboardSite} onChange={(event) => setDashboardSite(event.target.value)}><option value="all">All {selectedRegion?.code || ""} sites</option>{selectedSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label>}<label className="mine-date-filter"><span>From</span><input aria-label="Dashboard from date" type="date" value={dashboardFrom} max={dashboardTo || todayKey} onChange={(event) => updateDashboardRange("from", event.target.value)} /></label><label className="mine-date-filter"><span>To</span><input aria-label="Dashboard to date" type="date" value={dashboardTo} min={dashboardFrom || undefined} max={todayKey} onChange={(event) => updateDashboardRange("to", event.target.value)} /></label>{showOemBreakdowns && <label className="mine-oem-filter"><span>OEM</span><select aria-label="OEM" value={dashboardOem} onChange={(event) => setDashboardOem(event.target.value)}><option value="all">All OEMs</option>{oemChart.oems.map((oem) => <option key={oem.key} value={oem.key}>{oem.label}</option>)}</select></label>}<span className="mine-updated"><Activity /> {!equipmentLoaded ? (equipmentLoadError ? "Unavailable" : "Loading") : dashboardReconnecting ? "Reconnecting" : dashboardIsLive ? "Live" : "Filtered"} · {filteredDateLabel}</span>{dashboardExportMenu("dashboard-export-trigger")}{inDialog && <button type="button" className="dashboard-export-trigger dashboard-filter-reset" onClick={resetOemFilters}>Reset filters</button>}</DashboardFilterBar>;
   return (
     <div className={`mine-dashboard ${theme === "dark" ? "mine-dashboard-night" : "mine-dashboard-day"}${showFleetBreakdowns ? " breakdown-dashboard-view" : ""}${showOemBreakdowns ? " mine-oem-view" : ""}`}>
       {renderDashboardHeader()}
@@ -1983,7 +2005,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
 
               </div>
             </div>
-            <div className="mine-fleet-chart-tools">{!showOemBreakdowns && <div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div>}{equipmentLoaded && <ExportMenu {...fleetSectionExport({ mode: fleetChartMode, place: dashboardScopeLabel, regions: fleetRegionInsights, totals: liveFleetCounts, oemChart, stale: dashboardReconnecting, oemLabel: dashboardOem === "all" ? "All OEMs" : oemChart.oems.find((oem) => oem.key === dashboardOem)?.label || dashboardOem, period: oemLive ? "Current breakdowns" : filteredDateLabel })} className="mine-section-export" />}<button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
+            <div className="mine-fleet-chart-tools">{!showOemBreakdowns && <div className="mine-fleet-chart-legend"><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:equipment" : "equipment", showFleetBreakdowns ? "Equipment breakdown requests" : "Equipment records")}><i className="equipment" />Equipment</span><span {...listAction(showFleetBreakdowns ? "fleet-breakdown:vehicles" : "vehicle", showFleetBreakdowns ? "Vehicle breakdown requests" : "Vehicle records")}><i className="vehicles" />Vehicles</span>{showFleetBreakdowns && <span {...listAction(fleetChartAllKey, "All breakdown requests")}><i className="breakdown" />Breakdown</span>}</div>}{equipmentLoaded && <ExportMenu {...fleetSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-fleet-watermark-toggle" aria-pressed={showFleetWatermark} title={`${showFleetWatermark ? "Hide" : "Show"} Caliber watermark`} onClick={() => setShowFleetWatermark((visible) => !visible)}>{showFleetWatermark ? <Eye /> : <EyeOff />}<span>Watermark</span></button></div>
           </header>
           {equipmentLoaded ? (showOemBreakdowns ? <OemBreakdownChart chart={oemChart} from={oemFrom} to={oemTo} availableHeight={oemPlotSpace} onSelect={openOemDrilldown} onReset={resetOemFilters} /> : <><div className="mine-fleet-chart-layout" id="fleet-region-plot" aria-label={showFleetBreakdowns ? "Total fleet with breakdowns included at the bottom of each bar" : "Total fleet by region and site"}>
             <div className="mine-fleet-chart-plot">
@@ -2002,7 +2024,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
           </div>
           <div className="mine-fleet-chart-x" aria-hidden="true">Region and site</div></>) : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-fleet-chart-state" />}
         </article>
-        {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} />}
+        {!showOemBreakdowns && <DailyBdBalanceChart records={locationBreakdowns} sites={trendAvailableSites} scopeLabel={dashboardSite !== "all" ? dashboardSite : selectedRegion?.code || "All regions"} today={todayKey} ready={equipmentLoaded} error={!equipmentLoaded ? equipmentLoadError : ""} stale={dashboardReconnecting} onRefresh={() => { retryEquipmentLoad(); return onRefreshRequests?.(); }} onInspect={(metric, from, to, site) => openAssetDrilldown(`balance:${metric}|${from}|${to}|${site}`)} ExportMenu={ExportMenu} exportRef={dailyBdExportRef} />}
         {!showOemBreakdowns && <article {...cardAction(maintenanceAvailabilityTab === "breakdown" ? movementKey() : "road-availability", "Tracking Vehicle Throughput")} className="mine-panel mine-maintenance-availability-panel" aria-label="Tracking vehicle throughput">
           <header className="mine-maintenance-availability-head">
             <div><h2>Tracking Vehicle Throughput</h2></div>
@@ -2010,7 +2032,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "breakdown"} className={maintenanceAvailabilityTab === "breakdown" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("breakdown")}><Wrench />Site-wise BD Movement</button>
               <button type="button" role="tab" aria-selected={maintenanceAvailabilityTab === "road"} className={maintenanceAvailabilityTab === "road" ? "active" : ""} onClick={() => setMaintenanceAvailabilityTab("road")}><Gauge />Availability Count</button>
             </div>
-            {equipmentLoaded && <ExportMenu {...throughputSectionExport({ tab: maintenanceAvailabilityTab, place: throughputScopeLabel, period: breakdownSummaryPeriodLabel, availabilityLabel: availabilityStatusLabel, sites: breakdownSiteSummary, roadBySite: roadAvailabilityBySiteName, movementTotals: breakdownMovementTotals, openBalance: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "active-balance").length, idleRequests: movementRequestRows(throughputRequests, breakdownSummaryStartKey, breakdownSummaryEndKey, "idle").length, typeMix: breakdownTypeSummary, availabilitySites: availabilityCountBySite, availabilityTotals: availabilityKpis })} className="mine-section-export" />}
+            {equipmentLoaded && <ExportMenu {...throughputSectionTable()} className="mine-section-export" printSection />}
             <button type="button" className="throughput-filter-eye" title={throughputFiltersHidden ? "Show region and date filters" : "Hide region and date filters"} aria-label={throughputFiltersHidden ? "Show region and date filters" : "Hide region and date filters"} aria-expanded={!throughputFiltersHidden} aria-controls="throughput-region-date-filters" onClick={(event) => { event.stopPropagation(); setThroughputFiltersHidden(hidden => !hidden); }}>{throughputFiltersHidden ? <EyeOff /> : <Eye />}</button>
           </header>
           <div id="throughput-region-date-filters" hidden={throughputFiltersHidden} ref={throughputFiltersRef} className="dashboard-breakdown-period-controls dashboard-breakdown-summary-controls" role="group" aria-label="Site-wise BD date range">
@@ -2112,7 +2134,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
                 <label><span>To</span><input type="date" aria-label="Request lifecycle to date" value={requestTrendTo || requestTrendEndKey} min={requestTrendFrom || undefined} max={localDateKey(now)} onChange={(event) => setRequestTrendTo(event.target.value)} /></label>
                 <label><span>Region</span><select aria-label="Request lifecycle region" value={requestLifecycleRegion || requestLifecycleSite ? requestTrendRegion : "all"} onChange={(event) => setRequestTrendRegion(event.target.value)}><option value="all">All regions</option>{requestLifecycleRegions.map((region) => <optgroup key={region.code} label={region.code}><option value={region.code}>{region.code}</option>{region.sites.map((site) => <option key={site} value={`site:${site}`}>{site}</option>)}</optgroup>)}</select></label>
               </div>
-              {equipmentLoaded && <ExportMenu {...requestLifecycleExport({ trend: requestLifecycleTrend, readings: requestLifecycleReadings, place: requestLifecycleSite || requestLifecycleRegion?.code || dashboardScopeLabel, rangeLabel: requestLifecycleRangeLabel })} className="mine-section-export" />}
+              {equipmentLoaded && <ExportMenu {...lifecycleSectionTable()} className="mine-section-export" printSection />}
             </div>
           </header>
           {equipmentLoaded?<><div className="mine-request-lifecycle-summary">
@@ -2182,7 +2204,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
       </Modal>}
       {!showOemBreakdowns && <section className="mine-dashboard-lower-grid">
       <section {...cardAction("trend:all", "Breakdown trend")} className="mine-panel mine-breakdown-trend">
-        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><label className="mine-trend-anchor"><span>From</span><input aria-label="Breakdown trend from date" type="date" max={todayKey} value={breakdownTrendStartKey} onChange={(event) => updateBreakdownTrendRange("from", event.target.value)} /></label><label className="mine-trend-anchor"><span>To</span><input aria-label="Breakdown trend to date" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => updateBreakdownTrendRange("to", event.target.value)} /></label><div className="mine-trend-summary-row"><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendPeriodDays === days ? "active" : ""} onClick={() => { setBreakdownTrendDays(days); setBreakdownTrendFrom(""); setBreakdownTrendRangeError(""); }}>{days}D</button>)}</div>{equipmentLoaded && breakdownTrend.length > 0 && <ExportMenu {...breakdownTrendExport({ trend: breakdownTrend, place: activeTrendSite === "all" ? dashboardScopeLabel : activeTrendSite, from: breakdownTrendStartKey, to: breakdownTrendAnchorKey, total: breakdownTrendTotal, average: breakdownTrendAverage })} className="mine-section-export" />}<button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button>{equipmentLoaded && <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendPeriodDays} selected days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>}</div></div>{breakdownTrendRangeError && <small role="alert">{breakdownTrendRangeError}</small>}</header>
+        <header><div><span className="mine-eyebrow">Reliability intelligence</span><h2>Breakdown trend</h2><p>Recorded breakdown history</p></div><div className="mine-trend-controls"><label><MapPin /><select aria-label="Breakdown trend site" value={activeTrendSite} onChange={(event) => setBreakdownTrendSite(event.target.value)}><option value="all">All visible sites</option>{trendAvailableSites.map((site) => <option key={site} value={site}>{site}</option>)}</select></label><label className="mine-trend-anchor"><span>From</span><input aria-label="Breakdown trend from date" type="date" max={todayKey} value={breakdownTrendStartKey} onChange={(event) => updateBreakdownTrendRange("from", event.target.value)} /></label><label className="mine-trend-anchor"><span>To</span><input aria-label="Breakdown trend to date" type="date" max={todayKey} value={breakdownTrendAnchorKey} onChange={(event) => updateBreakdownTrendRange("to", event.target.value)} /></label><div className="mine-trend-summary-row"><div className="mine-trend-period" role="group" aria-label="Breakdown trend period">{[7, 14, 30].map((days) => <button type="button" key={days} className={breakdownTrendPeriodDays === days ? "active" : ""} onClick={() => { setBreakdownTrendDays(days); setBreakdownTrendFrom(""); setBreakdownTrendRangeError(""); }}>{days}D</button>)}</div>{equipmentLoaded && breakdownTrend.length > 0 && <ExportMenu {...trendSectionTable()} className="mine-section-export" printSection />}<button type="button" className="mine-trend-view-all" onClick={() => openAssetDrilldown("trend:all")}>View all <ChevronRight /></button>{equipmentLoaded && <div className="mine-trend-summary"><article {...listAction("trend:all", "All recorded breakdown requests")}><span>Recorded</span><strong>{breakdownTrendTotal.toLocaleString()}</strong><small>{breakdownTrendPeriodDays} selected days</small></article><article {...listAction("trend:all", "Recorded requests for the daily baseline")}><span>Daily baseline</span><strong>{breakdownTrendAverage}</strong><small>Recorded per day</small></article></div>}</div></div>{breakdownTrendRangeError && <small role="alert">{breakdownTrendRangeError}</small>}</header>
         {equipmentLoaded?<div className="mine-breakdown-trend-body">
           <section className="mine-trend-visual"><div className="mine-trend-legend"><span {...listAction("trend:all", "All recorded breakdown requests")}><i className="actual" />Actual</span><b aria-label="Breakdown trend selected period">From: {formatDisplayDate(breakdownTrendStartKey)} · To: {formatDisplayDate(breakdownTrendAnchorKey)}</b></div><div className="mine-trend-chart" aria-label={`${breakdownTrendPeriodDays} day recorded breakdown chart`}><div className="mine-trend-chart-days" style={{ minWidth: `${Math.max(0, breakdownTrend.length * 26 - 4)}px` }}><div className="mine-trend-chart-grid" aria-hidden="true">{breakdownTrendScale.ticks.map((tick) => <i key={tick} style={{ bottom: `${tick / maxBreakdownTrend * 100}%` }} />)}</div>{breakdownTrend.map((day, index) => <div {...trendPointAction(`trend:${day.kind}:${day.date}`, `${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast, open supporting records" : "recorded breakdown requests"}`)} className={`mine-trend-day ${day.kind}${day.anchor ? " anchor" : ""}`} key={`${day.kind}-${day.date}`} title={`${formatDisplayDate(day.date)}: ${day.count} ${day.kind === "forecast" ? "forecast" : "recorded"} breakdown${day.count === 1 ? "" : "s"}`}><span><i style={{ height: `${day.count / maxBreakdownTrend * 100}%` }}><b>{day.count}</b></i></span><small>{index === 0 || index === breakdownTrend.length - 1 || breakdownTrendPeriodDays <= 14 || index % 5 === 0 || day.anchor ? formatDisplayDate(day.date) : ""}</small></div>)}</div></div></section>
         </div>:<FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-breakdown-trend-state" />}
@@ -2984,28 +3006,45 @@ function excelCellReference(columnIndex, rowIndex) {
   }
   return `${column}${rowIndex + 1}`;
 }
-function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set()) {
-  const serial = withSerialColumn(columns, exportRows);
-  const labels = serial.columns.map((column) => column.label);
-  const summaryRows = [[title || "Nerve Center report"], [recordCountLine(exportRows.length, formatDisplayDateTime(new Date()))]];
-  const firstDataRow = summaryRows.length + 1;
-  const worksheetRows = [...summaryRows, labels, ...serial.rows];
-  const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}"${rowIndex >= firstDataRow && highlightedRows.has(rowIndex - firstDataRow) ? ' s="1"' : ""} t="inlineStr"><is><t>${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
-  const widths = labels.map((label, index) => {
-    const maxLength = Math.max(String(label || "").length, ...serial.rows.map((row) => String(row[index] || "").length));
-    return `<col min="${index + 1}" max="${index + 1}" width="${Math.min(48, Math.max(12, maxLength + 2))}" customWidth="1"/>`;
-  }).join("");
+// An Excel workbook with one worksheet per table ({name, title, columns, rows, highlightedRows}): each sheet
+// has its title, record count, column headings with the Sr. No. column, and rows, highlighted rows filled.
+// Sheet names are made Excel-safe and unique.
+function buildXlsxSheetsWorkbook(title, sheets = []) {
+  const usedNames = new Set();
+  const sheetName = (name, index) => {
+    const base = String(name || "").replace(/[[\]:*?/\x5c]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || `Sheet ${index + 1}`;
+    let unique = base;
+    for (let copy = 2; usedNames.has(unique.toLowerCase()); copy++) unique = `${base.slice(0, 27)} ${copy}`;
+    usedNames.add(unique.toLowerCase());
+    return unique;
+  };
+  const worksheets = sheets.map(({ name, title: sheetTitle, columns = [], rows: exportRows = [], highlightedRows = new Set() }, sheetIndex) => {
+    const serial = withSerialColumn(columns, exportRows);
+    const labels = serial.columns.map((column) => column.label);
+    const summaryRows = [[sheetTitle || title || "Nerve Center report"], [recordCountLine(exportRows.length, formatDisplayDateTime(new Date()))]];
+    const firstDataRow = summaryRows.length + 1;
+    const worksheetRows = [...summaryRows, labels, ...serial.rows];
+    const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}"${rowIndex >= firstDataRow && highlightedRows.has(rowIndex - firstDataRow) ? ' s="1"' : ""} t="inlineStr"><is><t>${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
+    const widths = labels.map((label, index) => {
+      const maxLength = Math.max(String(label || "").length, ...serial.rows.map((row) => String(row[index] || "").length));
+      return `<col min="${index + 1}" max="${index + 1}" width="${Math.min(48, Math.max(12, maxLength + 2))}" customWidth="1"/>`;
+    }).join("");
+    return { name: sheetName(name, sheetIndex), part: `xl/worksheets/sheet${sheetIndex + 1}.xml`, content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>` };
+  });
   const workbookTitle = escapeExportHtml(title || "Nerve Center report");
   return zipStoredFiles([
-    { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
+    { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${worksheets.map((sheet) => `<Override PartName="/${sheet.part}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
     { name: "_rels/.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
     { name: "docProps/core.xml", content: `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${workbookTitle}</dc:title><dc:creator>Nerve Center</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>` },
     { name: "docProps/app.xml", content: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Nerve Center</Application></Properties>` },
-    { name: "xl/_rels/workbook.xml.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+    { name: "xl/_rels/workbook.xml.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${worksheets.map((sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${worksheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
     { name: "xl/styles.xml", content: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CACA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
-    { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Report" sheetId="1" r:id="rId1"/></sheets></workbook>` },
-    { name: "xl/worksheets/sheet1.xml", content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>` },
+    { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${worksheets.map((sheet, index) => `<sheet name="${escapeExportHtml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>` },
+    ...worksheets.map((sheet) => ({ name: sheet.part, content: sheet.content })),
   ]);
+}
+function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set()) {
+  return buildXlsxSheetsWorkbook(title, [{ name: "Report", title, columns, rows: exportRows, highlightedRows }]);
 }
 // Smart Print goes straight to the printer through the print helper (QZ Tray) when it is installed on this PC:
 // the helper, unlike a web page, can set the paper to the chosen A3 / A4. Without the helper, or if the job
@@ -3058,15 +3097,16 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
 }
 // Smart Print of a dashboard prints the dashboard itself, captured as it is on screen, never a KPI table.
 // Through the print helper it gets the same preview, paper, printer, pages, sides and copies as any report;
-// without the helper the captured dashboard opens in the browser print window.
-function printDashboardReport({ dashboard, title, pageSize, printOptions }) {
+// without the helper the captured dashboard opens in the browser print window. A section's Smart Print passes its panel,
+// and only that panel is captured, laid out and coloured as it is on screen.
+function printDashboardReport({ dashboard, section = null, title, pageSize, printOptions }) {
   if (!dashboard) {
     alert("Dashboard is not available. Please reopen it and try again.");
     return;
   }
   const loadCapture = () => import("./dashboard-pdf.mjs");
-  void printReportDirect({ title, pageSize, printOptions }, async (page) => (await loadCapture()).dashboardPrintPdf(dashboard, page))
-    .then(async (sent) => { if (!sent) await (await loadCapture()).printDashboard(dashboard, title); })
+  void printReportDirect({ title, pageSize, printOptions }, async (page) => (await loadCapture()).dashboardPrintPdf(dashboard, page, section))
+    .then(async (sent) => { if (!sent) await (await loadCapture()).printDashboard(dashboard, title, section); })
     .catch((error) => alert(error?.message || "The dashboard could not be printed."));
 }
 function printTableReportInBrowser({ title, columns = [], rows = [], highlightRow, reportGrouping, pageSize }) {
@@ -3141,7 +3181,9 @@ function PrintButton({ title, columns = [], rows = [], className = "secondary", 
   return <button type="button" className={`${className} print-table-trigger`} onClick={() => openSmartPrint({ title, columns, rows, highlightRow, onPrint: printTableReport, formatCell: exportCellText })}><Printer /><span>Smart Print</span></button>;
 }
 // portalClassName reaches the export menu and the "preparing file" overlay, both portaled to the body: a caller inside a higher overlay (Info Pulse) uses it to raise them above itself.
-function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Export", printOnly = false, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "" }) {
+// printSection: Smart Print captures the dashboard section (.mine-panel) holding the menu, as it is on screen.
+// excelSheets: a function returning [{name, title, columns, rows}]; Excel then has one sheet per table.
+function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = columns, smartPrintRows = rows, className = "secondary", label = "Export", printOnly = false, highlightRow, reportGrouping, dashboardPdf = false, portalClassName = "", printSection = false, excelSheets = null }) {
   const [open, setOpen] = useState(false), [downloadActivity, setDownloadActivity] = useState("");
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
@@ -3188,8 +3230,10 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
     }, 50);
   };
   const downloadExcel = () => runDownload("Preparing Excel report...", () => {
-    recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:`${rows.length} records`});
-    downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows), exportFileName(title, "xlsx"));
+    const sheets = excelSheets?.();
+    recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:sheets ? `${sheets.length} sheets` : `${rows.length} records`});
+    if (sheets) downloadExportFile(buildXlsxSheetsWorkbook(title, sheets.map((sheet) => ({ ...sheet, rows: sheet.rows.map((row) => sheet.columns.map((column) => exportCellText(column.value?.(row)))) }))), exportFileName(title, "xlsx"));
+    else downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows), exportFileName(title, "xlsx"));
   });
   const downloadPdf = () => runDownload("Preparing PDF report...", async () => {
       recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
@@ -3211,6 +3255,12 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
   });
   const printReport = () => {
     setOpen(false);
+    if (printSection) {
+      const dashboard = triggerRef.current?.closest(".mine-dashboard, .manager-dashboard");
+      const section = triggerRef.current?.closest(".mine-panel");
+      openSmartPrint({ title, snapshot: "This section prints exactly as it looks on screen, with its chart and figures. Choose the paper and printer next.", onPrint: ({ pageSize, printOptions }) => printDashboardReport({ dashboard, section, title, pageSize, printOptions }) });
+      return;
+    }
     if (dashboardPdf) {
       const dashboard = triggerRef.current?.closest(".mine-dashboard, .manager-dashboard");
       openSmartPrint({ title, snapshot: "The dashboard prints exactly as it looks on screen, with every panel and chart. Choose the paper and printer next.", onPrint: ({ pageSize, printOptions }) => printDashboardReport({ dashboard, title, pageSize, printOptions }) });

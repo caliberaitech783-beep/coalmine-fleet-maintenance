@@ -30,7 +30,21 @@
   .mine-dashboard .mine-maintenance-availability-head { flex-wrap: wrap; }
 }
 
-/* A printed page has no use for the menu trigger. */
+/* Collapsed dashboard banner: the whole-dashboard Export (PDF, Excel with every section, Smart Print) stays
+   one click away beside the eye toggle, in white on the banner gradient. */
+.dashboard-filter-bar > .dashboard-banner-action { position: absolute; top: 2px; right: 44px; display: flex; align-items: center; }
+.mine-dashboard .dashboard-filter-bar .dashboard-banner-export.export-menu-trigger {
+  display: inline-flex; align-items: center; gap: 6px; box-sizing: border-box; height: 28px; min-height: 28px; padding: 0 10px;
+  border: 1px solid #ffffff8c; border-radius: 6px; background: #ffffff1f; color: #fff;
+  font-family: Manrope, sans-serif; font-size: 12px !important; font-weight: 800; line-height: 1; white-space: nowrap; cursor: pointer;
+}
+.mine-dashboard .dashboard-filter-bar .dashboard-banner-export.export-menu-trigger span { color: inherit; font-size: 12px !important; font-weight: 800; }
+.mine-dashboard .dashboard-filter-bar .dashboard-banner-export.export-menu-trigger svg { width: 14px; height: 14px; color: inherit; }
+.mine-dashboard .dashboard-filter-bar .dashboard-banner-export.export-menu-trigger:hover:not(:disabled),
+.mine-dashboard .dashboard-filter-bar .dashboard-banner-export.export-menu-trigger[aria-expanded="true"] { background: #fff; color: var(--brand-purple, #522e90); }
+.mine-dashboard .dashboard-filter-bar .dashboard-banner-export.export-menu-trigger:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* A printed page has no use for the menu triggers. */
 @media print {
-  .mine-dashboard .mine-section-export { display: none !important; }
+  .mine-dashboard :is(.mine-section-export, .dashboard-banner-export) { display: none !important; }
 }

@@ -1,11 +1,14 @@
 // Capture the rendered dashboard, not a separate table of KPI values.
 // A print keeps the screen's Day or Night palette and the clock row the dashboard sits under;
 // a PDF download stays on the Day palette.
-async function captureDashboard(dashboard, {forPrint = false} = {}) {
+async function captureDashboard(dashboard, {forPrint = false, section = null} = {}) {
   if (!dashboard) throw new Error("Dashboard is not available. Please reopen it and try again.");
   const {toCanvas} = await import("html-to-image");
   await document.fonts.ready;
+  // A single section is marked while the dashboard is copied, so its copy can be found and rendered alone.
+  section?.setAttribute("data-print-section", "");
   const clone = dashboard.cloneNode(true);
+  section?.removeAttribute("data-print-section");
   // Reports stay on the Day palette even when the screen is in Night mode.
   if (!forPrint) clone.classList.replace("mine-dashboard-night", "mine-dashboard-day");
   const background = forPrint ? pageBackground(dashboard) : "";
@@ -54,6 +57,8 @@ async function captureDashboard(dashboard, {forPrint = false} = {}) {
         node.style.overflowX = "visible";
       }
     });
+    // The section is rendered from inside the full copy, so its layout, palette and every dashboard rule stay as on screen.
+    if (section) root = root.querySelector("[data-print-section]") || root;
     const width = Math.ceil(Math.max(root.scrollWidth, root.getBoundingClientRect().width));
     const height = Math.ceil(root.scrollHeight);
     const canvas = await toCanvas(root, {width, height, pixelRatio: Math.min(2, Math.sqrt(24000000 / (width * height))), backgroundColor: background || getComputedStyle(clone).backgroundColor || "#ffffff"});
@@ -105,8 +110,8 @@ export async function downloadDashboardPdf(dashboard, filename) {
   pdf.save(filename);
 }
 
-export async function printDashboard(dashboard, title) {
-  const {canvas, background} = await captureDashboard(dashboard, {forPrint: true});
+export async function printDashboard(dashboard, title, section = null) {
+  const {canvas, background} = await captureDashboard(dashboard, {forPrint: true, section});
   await printDashboardCanvas(canvas, title, background);
 }
 
@@ -144,9 +149,9 @@ function blankRowDetector(canvas) {
   };
 }
 
-/** The dashboard as it is on screen, on landscape pages of the paper chosen in Smart Print. */
-export async function dashboardPrintPdf(dashboard, page = {widthMm: 297, heightMm: 210}) {
-  const {canvas, background} = await captureDashboard(dashboard, {forPrint: true});
+/** The dashboard, or one of its sections, as it is on screen, on landscape pages of the paper chosen in Smart Print. */
+export async function dashboardPrintPdf(dashboard, page = {widthMm: 297, heightMm: 210}, section = null) {
+  const {canvas, background} = await captureDashboard(dashboard, {forPrint: true, section});
   const {jsPDF} = await import("jspdf");
   const paper = hexColor(background);
   const pageWidth = page.widthMm * MM_TO_PT, pageHeight = page.heightMm * MM_TO_PT, margin = PRINT_MARGIN_MM * MM_TO_PT;
