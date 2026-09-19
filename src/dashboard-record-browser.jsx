@@ -110,8 +110,7 @@ export default function DashboardRecordBrowser({ rows, toolbarTarget: hostToolba
       ? <RequestTimelineButton reference={reference} token={timelineToken} Dialog={Dialog} label={label} />
       : <b>{label}</b>;
   };
-  return <div className="dashboard-record-browser" style={{ gridTemplateRows: hideHierarchyFilters ? "auto minmax(0, 1fr)" : "auto auto minmax(0, 1fr)" }}>
-    <label className="dashboard-fleet-search">Search fleet<input autoFocus data-smart-search type="search" aria-label="Search fleet" placeholder="Search door number, chassis, site, model or status" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>
+  return <div className="dashboard-record-browser" style={{ gridTemplateRows: hideHierarchyFilters ? "minmax(0, 1fr)" : "auto minmax(0, 1fr)" }}>
     {!hideHierarchyFilters && <details className="dashboard-record-controls">
       <summary className={`dashboard-record-filter-summary${onHourlyReport ? " has-hourly-report" : ""}`}>
         <b>Filters</b>
@@ -125,16 +124,20 @@ export default function DashboardRecordBrowser({ rows, toolbarTarget: hostToolba
           {view.regions.map((region, index) => <button key={region.code} type="button" role="tab" id={`${id}-${region.code}`} aria-selected={view.selection.region === region.code} aria-controls={`${id}-records`} tabIndex={view.selection.region === region.code ? 0 : -1}
             onClick={() => choose("region", region.code)} onKeyDown={(event) => moveBetweenTabs(event, index, view.regions.map((item) => ({ value: item.code })), (next) => choose("region", next), '[role="tab"]')}><span>{region.label}</span><b>{region.rows.length.toLocaleString()}</b></button>)}
         </div>
+        {visibleLevel >= 1 && Array.isArray(view.options.site) && <FilterTabRow key={`site-${view.selection.region}`} name="site" label="Site" allLabel="All sites" options={view.options.site} value={view.selection.site} choose={choose} resultsId={`${id}-records`} />}
         <button type="button" className="dashboard-record-reset" onClick={reset} disabled={!(showDateFilter && recordDateRange) && !activeFilterCount && visibleLevel <= selectedLevel}><RotateCcw size={14} />Reset selection</button>
       </div>
       {visibleLevel === 0 && <p className="dashboard-record-hierarchy-hint">No regions available in your current scope.</p>}
       <div className="dashboard-record-hierarchy">
-        {fields.slice(0, visibleLevel).map(([name, label, allLabel], index) => (index === 0 || view.options[fields[index - 1][0]].length > 0) && <FilterTabRow key={`${name}-${levels.slice(0, index + 1).map((parent) => view.selection[parent]).join("|")}`} name={name} label={label} allLabel={allLabel} options={view.options[name]} value={view.selection[name]} choose={choose} resultsId={`${id}-records`} />)}
+        {fields.slice(0, visibleLevel).map(([name, label, allLabel], index) => index >= 1 && view.options[fields[index - 1][0]].length > 0 && <FilterTabRow key={`${name}-${levels.slice(0, index + 1).map((parent) => view.selection[parent]).join("|")}`} name={name} label={label} allLabel={allLabel} options={view.options[name]} value={view.selection[name]} choose={choose} resultsId={`${id}-records`} />)}
       </div>
     </details>}
     <div id={`${id}-records`} className="dashboard-record-results" role="tabpanel" aria-label={hideHierarchyFilters ? `${title} records` : undefined} aria-labelledby={!hideHierarchyFilters && view.selection.region ? `${id}-${view.selection.region}` : undefined}>
       {summaryLabel && <div className="dashboard-record-summary"><h4>{summaryLabel}</h4></div>}
-      <div className="dashboard-record-toolbar" ref={setToolbarTarget} />
+      <div className="dashboard-record-toolbar-row">
+        <div className="dashboard-record-toolbar" ref={setToolbarTarget} />
+        <label className="dashboard-fleet-search">Search fleet<input autoFocus data-smart-search type="search" aria-label="Search fleet" placeholder="Search door number, chassis, site, model or status" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>
+      </div>
       <div className="dashboard-asset-list" ref={listRef}>
 <ActionsTable key={tableKey} toolbarTarget={toolbarTarget} toolbarPortal exportTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} groupBySite={groupBySite} summaryTarget={summaryTarget} preserveColumnOrder printTitle={hideHierarchyFilters ? title : `${title} · ${view.regionLabel}`} showRowNumbers={showRowNumbers} disableDateColumnFilter={!showDateFilter} recordDateFilter={showDateFilter ? movementDateControl || { label: idleDateFilter ? "Idle Vehicle Date" : "Started", value: recordDateRange, onChange: setRecordDateRange } : false} className={bdBalanceColumns || requestRecords ? "dashboard-location-dates" : undefined} data-verification-last={lifecycleRecords && lifecycleEvent === "mis" ? "true" : undefined}>
           <thead><tr>{requestRecords && <th>Job reference</th>}<th>Status</th><th>Days of breakdown</th>{bdBalanceColumns && showLocationColumn && <th>Current location</th>}<th data-filter-mode={requestRecords ? undefined : "date-sort"}>Started</th>{showIdleDate && <th>Idle Vehicle Date</th>}{showBdClosingTime && <th>BD closing time</th>}<th>Machine / Door no.</th>{showCategoryColumn && <th>Equipment category</th>}{bdBalanceColumns && <><th>Type of breakdown</th><th>Reason of breakdown</th></>}{showUpdatesColumn && bdBalanceColumns && <th>Daily updates</th>}<th>Equipment group</th><th>Model</th>{bdBalanceColumns && <><th>Opening HMR</th><th>Opening KMR</th></>}{!bdBalanceColumns && showLocationColumn && <th>{requestRecords ? "Request site" : "Current location"}</th>}<th>Serial / chassis no.</th>{requestRecords && <><th>Breakdown type</th><th>Delayed reason</th><th>Breakdown reason</th></>}{showUpdatesColumn && !bdBalanceColumns && <th>Daily updates</th>}{showClosedColumn && <th>Closed</th>}{showVerificationColumns && <><th>MIS verified at</th><th>First trip time</th></>}{extraColumns.map(column => <th key={column.key}>{column.label}</th>)}</tr></thead>

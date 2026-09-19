@@ -100,3 +100,60 @@
 :root[data-theme="dark"] .mine-oem-filter-toggle:is(:hover, [aria-pressed="true"]) { border-color: #a67bd3; }
 :root[data-theme="dark"] :is(.site-report-summary .site-summary-button, .mine-oem-filter-toggle):focus-visible { outline-color: #c9a8f0; }
 :root[data-theme="dark"] .dashboard-record-level[data-level="site"] .dashboard-record-level-tabs > button[aria-pressed="true"] b { background: #ffffff29; }
+
+/* Layout: Site chips beside the Region chips, Search fleet inside the records
+   bar on the right, and a graphical treatment for every chip row (region,
+   site, equipment, type) shared by all dashboard drilldowns. */
+.dashboard-record-topline::before { content: "Region"; display: inline-flex; align-items: center; padding-left: 10px; border-left: 3px solid #7c3aed; color: var(--muted, #647892); font: 750 11px Manrope, sans-serif; text-transform: uppercase; letter-spacing: .08em; }
+.dashboard-record-topline > .dashboard-record-level { display: inline-grid; grid-template-columns: auto minmax(0, 1fr); flex: 1 1 360px; min-width: 0; margin-top: 0; padding-top: 0; border-top: 0; animation: none; }
+.dashboard-record-level-label { padding-left: 10px; border-left: 3px solid var(--level-mark, #522e9040); text-transform: uppercase; letter-spacing: .08em; }
+.dashboard-record-level-label::before { display: none; }
+.dashboard-record-level[data-level="site"] { --level-mark: #0ea5e9; }
+.dashboard-record-level[data-level="category"] { --level-mark: #059669; }
+.dashboard-record-level[data-level="group"] { --level-mark: #d97706; }
+
+.dashboard-record-toolbar-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; flex-shrink: 0; min-width: 0; background: var(--panel, #fff); }
+.dashboard-record-toolbar-row > .dashboard-record-toolbar { flex: 1 1 560px; min-width: 0; }
+.dashboard-record-toolbar-row > .dashboard-fleet-search { position: relative; display: block; flex: 0 1 380px; min-width: 240px; margin-left: auto; padding: 6px 12px 6px 0; font-size: 0; line-height: 0; }
+.dashboard-record-toolbar-row > .dashboard-fleet-search::before { content: ""; position: absolute; left: 12px; top: calc(50% - 9px); width: 18px; height: 18px; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2.4' stroke-linecap='round'><circle cx='10' cy='10' r='6.5'/><path d='M15 15l5.5 5.5'/></svg>") center / contain no-repeat; transform-origin: 60% 60%; animation: record-search-scan 3.2s ease-in-out infinite; pointer-events: none; }
+.dashboard-record-toolbar-row > .dashboard-fleet-search input { width: 100%; min-height: 42px; padding: 8px 12px 8px 40px; border: 1px solid #e3e8f0; border-radius: 999px; background: var(--panel, #fff); color: inherit; font: inherit; font-size: 14px; line-height: 1.3; box-sizing: border-box; transition: box-shadow .2s ease, border-color .2s ease; }
+.dashboard-record-toolbar-row > .dashboard-fleet-search input:focus { border-color: #a855f7; box-shadow: 0 0 0 3px #a855f72e; outline: 0; }
+
+.dashboard-record-tabs, .dashboard-record-level-tabs { padding: 5px; gap: 6px; border: 1px solid #e3e8f0; border-radius: 12px; background: linear-gradient(135deg, #f3f0fb, #eef3fa); }
+.dashboard-record-tabs button, .dashboard-record-level-tabs > button { position: relative; isolation: isolate; overflow: hidden; min-height: 40px; border: 1px solid transparent !important; border-radius: 9px !important; transition: transform .2s ease, box-shadow .2s ease, background .2s ease, color .2s ease; animation: record-chip-in .5s both; }
+.dashboard-record-tabs button:nth-child(2), .dashboard-record-level-tabs > button:nth-child(2) { animation-delay: .06s; }
+.dashboard-record-tabs button:nth-child(3), .dashboard-record-level-tabs > button:nth-child(3) { animation-delay: .12s; }
+.dashboard-record-tabs button:nth-child(n+4), .dashboard-record-level-tabs > button:nth-child(n+4) { animation-delay: .18s; }
+.dashboard-record-tabs button::before, .dashboard-record-level-tabs > button::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(110deg, transparent 30%, #ffffff8c 50%, transparent 70%); transform: translateX(-130%); transition: transform .6s ease; }
+.dashboard-record-tabs button:hover::before, .dashboard-record-level-tabs > button:hover::before { transform: translateX(130%); }
+.dashboard-record-tabs button:hover, .dashboard-record-level-tabs > button:hover { transform: translateY(-1px); background: var(--panel, #fff); color: var(--record-purple); box-shadow: 0 8px 18px #3f267524; border-color: #d8cdf2 !important; }
+.dashboard-record-tabs button b, .dashboard-record-level-tabs > button b { min-width: 26px; padding: 3px 7px; border-radius: 7px; background: var(--panel, #fff); color: var(--record-purple); box-shadow: inset 0 0 0 1px #e3e8f0; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; transition: transform .2s ease; }
+.dashboard-record-tabs button:hover b, .dashboard-record-level-tabs > button:hover b { transform: scale(1.08); }
+.dashboard-record-tabs button[aria-selected="true"], .dashboard-record-level-tabs > button[aria-pressed="true"], .dashboard-record-level[data-level="site"] .dashboard-record-level-tabs > button[aria-pressed="true"] { color: #fff; background: linear-gradient(135deg, #7c3aed, #4c1d95); box-shadow: 0 8px 18px #4c1d9559, inset 0 1px 0 #ffffff40; border-color: transparent !important; }
+.dashboard-record-tabs button[aria-selected="true"] b, .dashboard-record-level-tabs > button[aria-pressed="true"] b, .dashboard-record-level[data-level="site"] .dashboard-record-level-tabs > button[aria-pressed="true"] b { background: #ffffff38; color: #fff; box-shadow: inset 0 0 0 1px #ffffff59; }
+.dashboard-record-tabs button[aria-selected="true"]::after, .dashboard-record-level-tabs > button[aria-pressed="true"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 4px; height: 2px; border-radius: 2px; background: #ffd166; transform-origin: left; animation: record-underline .5s ease-out both; }
+
+.dashboard-record-reset { border: 1px solid #e3e8f0; border-radius: 9px; background: var(--panel, #fff); transition: transform .2s ease, box-shadow .2s ease; }
+.dashboard-record-reset:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18px #3f267524; }
+.dashboard-record-reset:hover:not(:disabled) svg { animation: record-reset-spin .8s linear; }
+
+:root[data-theme="dark"] .dashboard-record-tabs, :root[data-theme="dark"] .dashboard-record-level-tabs { border-color: #3a2d4a; background: linear-gradient(135deg, #1b1424, #171e2c); }
+:root[data-theme="dark"] .dashboard-record-tabs button:hover, :root[data-theme="dark"] .dashboard-record-level-tabs > button:hover { background: #2a2036; color: #e9dcff; }
+:root[data-theme="dark"] .dashboard-record-tabs button b, :root[data-theme="dark"] .dashboard-record-level-tabs > button b { background: #2a2036; color: #d8c6ff; box-shadow: inset 0 0 0 1px #3a2d4a; }
+:root[data-theme="dark"] .dashboard-record-reset { border-color: #3a2d4a; background: #1b1424; }
+:root[data-theme="dark"] .dashboard-record-toolbar-row > .dashboard-fleet-search input { border-color: #806c87; }
+
+@keyframes record-chip-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes record-underline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes record-reset-spin { to { transform: rotate(-360deg); } }
+@keyframes record-search-scan { 0%, 60%, 100% { transform: rotate(0); } 15% { transform: rotate(-14deg) scale(1.08); } 35% { transform: rotate(12deg) scale(1.08); } }
+
+@media (max-width: 700px) {
+  .dashboard-record-topline::before { display: none; }
+  .dashboard-record-topline > .dashboard-record-level { flex-basis: 100%; }
+  .dashboard-record-toolbar-row > .dashboard-fleet-search { flex-basis: 100%; min-width: 0; margin-left: 0; padding: 6px 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-record-tabs button, .dashboard-record-level-tabs > button, .dashboard-record-tabs button::before, .dashboard-record-level-tabs > button::before, .dashboard-record-tabs button[aria-selected="true"]::after, .dashboard-record-level-tabs > button[aria-pressed="true"]::after,
+  .dashboard-record-reset, .dashboard-record-reset svg, .dashboard-record-toolbar-row > .dashboard-fleet-search::before { animation: none !important; transition: none !important; }
+}
