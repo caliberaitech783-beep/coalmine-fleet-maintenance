@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from 'react';
+import {responseTotalBytes,trackedBody,transferLabel,transferPercent} from './transfer-progress.mjs';
 import {AlertTriangle,CalendarClock,CheckCircle2,CloudCog,Database,Download,FileArchive,FolderOpen,HardDrive,History,KeyRound,RefreshCw,RotateCcw,Save,ShieldCheck,Trash2,Upload} from 'lucide-react';
 
 const backupTabs=['Backup','Export Backup','Import Backup','Backup Schedule'];
@@ -35,21 +36,39 @@ const fileNameFromResponse=(response,fallback)=>{
   try{return decodeURIComponent(encoded||plain||fallback);}catch{return plain||fallback;}
 };
 
-async function saveResponseToComputer(response,suggestedName){
+async function saveResponseToComputer(response,suggestedName,onProgress){
   if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||'The backup could not be downloaded.');}
   const fileName=fileNameFromResponse(response,suggestedName);
   if(typeof window.showSaveFilePicker==='function'){
     const handle=await window.showSaveFilePicker({suggestedName:fileName,types:[{description:'BDMS compressed backup',accept:{'application/gzip':['.gz']}}]});
     const writable=await handle.createWritable();
-    await response.body.pipeTo(writable);
+    await trackedBody(response,onProgress).pipeTo(writable);
     return fileName;
   }
-  const blob=await response.blob();
+  const blob=await new Response(trackedBody(response,onProgress)).blob();
   const url=URL.createObjectURL(blob);
   const link=document.createElement('a');
   link.href=url;link.download=fileName;document.body.appendChild(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
   return fileName;
+}
+
+function TransferProgress({progress}){
+  const [now,setNow]=useState(()=>Date.now());
+  useEffect(()=>{
+    if(!progress||progress.phase==='done')return undefined;
+    const timer=setInterval(()=>setNow(Date.now()),500);
+    return()=>clearInterval(timer);
+  },[progress]);
+  if(!progress)return null;
+  const percent=progress.phase==='done'?100:progress.phase==='sending'?transferPercent(progress.loaded,progress.total):null;
+  const seconds=Math.max(0,Math.round((now-progress.startedAt)/1000));
+  const heading=progress.phase==='preparing'?'Preparing the backup on the server':progress.phase==='sending'?'Sending the backup to your computer':'Backup saved';
+  const detail=progress.phase==='preparing'?`Collecting every table and compressing… ${seconds}s`:progress.phase==='sending'?transferLabel(progress.loaded,progress.total,formatBytes):`${formatBytes(progress.total||progress.loaded)} written to ${progress.fileName||'the selected location'}`;
+  return <div className={`backup-transfer backup-transfer-${progress.phase}`} role="progressbar" aria-label={progress.label} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent??undefined} aria-valuetext={percent===null?heading:`${percent}%`}>
+    <div className="backup-transfer-head"><span className="backup-transfer-title"><b>{heading}</b><small>{detail}</small></span><strong className="backup-transfer-percent">{percent===null?'…':`${percent}%`}</strong></div>
+    <div className="backup-transfer-track"><i className="backup-transfer-fill" style={{width:percent===null?undefined:`${percent}%`}} /></div>
+  </div>;
 }
 
 function ScheduleTime({value,onChange}){
@@ -80,6 +99,7 @@ export default function BackupAdministration({section='Backup',session,onNavigat
   const [data,setData]=useState({settings:null,history:[],storageRoot:''});
   const [loading,setLoading]=useState(true);
   const [busy,setBusy]=useState('');
+  const [transfer,setTransfer]=useState(null);
   const [error,setError]=useState('');
   const [notice,setNotice]=useState('');
   const [file,setFile]=useState(null);
@@ -111,27 +131,34 @@ export default function BackupAdministration({section='Backup',session,onNavigat
     finally{setBusy('');}
   };
   const exportBackup=async()=>{
-    setBusy('export');setError('');setNotice('');
+    setBusy('export');setError('');setNotice('');setTransfer(null);
     try{
       let handle=null;
       const suggested=`BDMS-Full-Backup-${new Date().toISOString().slice(0,10)}.ndjson.gz`;
       if(typeof window.showSaveFilePicker==='function')handle=await window.showSaveFilePicker({suggestedName:suggested,types:[{description:'BDMS compressed backup',accept:{'application/gzip':['.gz']}}]});
+      const startedAt=Date.now();
+      setTransfer({label:'Export backup',phase:'preparing',loaded:0,total:0,startedAt});
       const response=await fetch('/api/backups/export',{method:'POST',headers:authHeaders(session)});
       if(!response.ok){const result=await response.json().catch(()=>({}));throw new Error(result.error||'Could not export the backup.');}
       const fileName=fileNameFromResponse(response,suggested);
-      if(handle){const writable=await handle.createWritable();await response.body.pipeTo(writable);}
-      else await saveResponseToComputer(response,fileName);
+      const onProgress=(loaded,total)=>setTransfer({label:'Export backup',phase:'sending',loaded,total,startedAt,fileName});
+      if(handle){const writable=await handle.createWritable();await trackedBody(response,onProgress).pipeTo(writable);}
+      else await saveResponseToComputer(response,fileName,onProgress);
+      setTransfer((current)=>({...current,phase:'done',fileName}));
       setNotice(`${fileName} was exported to the selected location.`);await load();
-    }catch(exportError){if(exportError.name!=='AbortError')setError(exportError.message||'Could not export the backup.');}
+    }catch(exportError){setTransfer(null);if(exportError.name!=='AbortError')setError(exportError.message||'Could not export the backup.');}
     finally{setBusy('');}
   };
   const downloadStored=async(row)=>{
-    setBusy(`download-${row.id}`);setError('');
+    setBusy(`download-${row.id}`);setError('');setTransfer(null);
     try{
+      const startedAt=Date.now();
+      setTransfer({label:`Download ${row.fileName}`,phase:'preparing',loaded:0,total:0,startedAt});
       const response=await fetch(`/api/backups/${encodeURIComponent(row.id)}/download`,{headers:authHeaders(session)});
-      await saveResponseToComputer(response,row.fileName);
+      await saveResponseToComputer(response,row.fileName,(loaded,total)=>setTransfer({label:`Download ${row.fileName}`,phase:'sending',loaded,total,startedAt,fileName:row.fileName}));
+      setTransfer((current)=>current&&({...current,phase:'done',fileName:row.fileName}));
       setNotice(`${row.fileName} was saved to the selected location.`);
-    }catch(downloadError){if(downloadError.name!=='AbortError')setError(downloadError.message||'Could not download the backup.');}
+    }catch(downloadError){setTransfer(null);if(downloadError.name!=='AbortError')setError(downloadError.message||'Could not download the backup.');}
     finally{setBusy('');}
   };
   const deleteStored=async(row)=>{
@@ -181,6 +208,7 @@ export default function BackupAdministration({section='Backup',session,onNavigat
     <nav className="backup-tabs" aria-label="Backup administration sections">{backupTabs.map(tab=><button type="button" key={tab} className={active===tab?'active':''} onClick={()=>onNavigate(tab)}>{tab==='Backup'?<ShieldCheck />:tab==='Export Backup'?<Download />:tab==='Import Backup'?<Upload />:<CalendarClock />}{tab}</button>)}</nav>
     {error&&<div className="backup-alert error" role="alert"><AlertTriangle /><span>{error}</span></div>}
     {notice&&<div className="backup-alert success" role="status"><CheckCircle2 /><span>{notice}</span></div>}
+    <TransferProgress progress={transfer} />
     {active==='Backup'&&<div className="backup-content">
       <div className="backup-overview-kpis"><article><Database /><div><small>Database protection</small><b>{latest?'Protected':'Backup required'}</b><p>{latest?displayDateTime(latest.completedAt||latest.startedAt):'Create the first full backup'}</p></div></article><article><HardDrive /><div><small>Protected storage</small><b>{data.history.filter(row=>row.downloadable).length} files</b><p>{data.storageRoot||'Loading storage location'}</p></div></article><article><CalendarClock /><div><small>Automatic schedule</small><b>{settings?.enabled?'Active':'Paused'}</b><p>{settings?`${displayScheduleTime(settings.scheduleTime)} IST · ${settings.weekdays.length} days/week`:'Loading schedule'}</p></div></article></div>
       <div className="backup-overview-heading"><div><h2>Disaster recovery coverage</h2><p>These layers are required to rebuild BDMS after an application, database, or hosting failure.</p></div><button type="button" className="primary" onClick={runBackup} disabled={Boolean(busy)}><FileArchive />{busy==='run'?'Creating backup...':'Create backup now'}</button></div>
