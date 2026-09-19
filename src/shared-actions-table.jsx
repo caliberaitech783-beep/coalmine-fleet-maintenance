@@ -214,7 +214,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
       <TableLayoutSelect store={layoutStore} visibleKeys={visible} onSelect={setVisible} />
       <Menu resetLabel="Reset table" activeFilterCount={Object.values(effectiveFilters).filter(Boolean).length} onColumns={() => setDialog("columns")} onFilter={() => setDialog("filter")} onSort={() => setDialog("sort")} onClearSort={() => applySort("", "asc")} onReset={reset} onSaveReport={SavedReports ? () => setSavedReportDialog("save") : undefined} onSavedReports={SavedReports ? () => setSavedReportDialog("saved") : undefined} />
       {!printData && dateRangeControl}
-      {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} reportGrouping={reportGrouping} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} />}
+      {exportData && <ExportMenu title={exportTitle} columns={exportData.columns} rows={exportData.rows} reportGrouping={reportGrouping} smartPrintColumns={smartPrintData.columns} smartPrintRows={smartPrintData.rows} smartPrintItem={!printData} />}
       {dialog === "columns" && <ColumnsDialog columns={columns} visibleColumnKeys={visible} layoutStore={layoutStore} onApply={(keys) => { setVisible(keys); setDialog(""); }} onClose={() => setDialog("")} />}
       {dialog === "sort" && <SortDialog columns={columns} sort={sort.key ? sort : externalSort || sort} onApply={applySort} onClose={() => setDialog("")} />}
       {SavedReports && <SavedReports title={reportTitle} tableKey={tableProps.className || ""} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentView} onApply={applySavedView} canPrint={canPrintReport} onPrint={printCurrentView} />}
