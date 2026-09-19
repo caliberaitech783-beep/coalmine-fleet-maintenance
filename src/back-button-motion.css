@@ -1,0 +1,103 @@
+/* Back buttons everywhere: the page back arrow in the admin crumb, the back
+   arrow in modal headers, and the "Back" pill on the hourly breakdown view.
+   One graphical treatment: a violet gradient badge, the arrow nudging left
+   every few seconds, and on hover the badge lifts, the arrow slides left with
+   a motion trail behind it and a ripple ring. CSS only; static under
+   prefers-reduced-motion. */
+
+.crumb .page-back,
+.modal-back-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid #ffffff66 !important;
+  border-radius: 50% !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #a855f7, #6b2fa8) !important;
+  box-shadow: 0 6px 14px #6b2fa859, inset 0 1px 0 #ffffff59;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.crumb .page-back:not(:disabled):hover, .crumb .page-back:not(:disabled):focus-visible,
+.modal-back-button:not(:disabled):hover, .modal-back-button:not(:disabled):focus-visible {
+  transform: translateX(-2px) scale(1.06);
+  filter: brightness(1.1);
+  background: linear-gradient(135deg, #c084fc, #7c3aed) !important;
+  box-shadow: 0 10px 22px #6b2fa899, 0 0 0 3px #a855f74d, inset 0 1px 0 #ffffff66;
+  outline: none;
+  color: #fff !important;
+}
+.crumb .page-back > svg,
+.modal-back-button > span {
+  position: relative;
+  z-index: 1;
+  display: block;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: back-nudge 3.2s ease-in-out infinite;
+  filter: drop-shadow(0 1px 1px #0000004d);
+}
+.crumb .page-back > svg { width: 18px; height: 18px; stroke-width: 2.4; }
+.crumb .page-back:not(:disabled):hover > svg, .crumb .page-back:not(:disabled):focus-visible > svg,
+.modal-back-button:not(:disabled):hover > span, .modal-back-button:not(:disabled):focus-visible > span { animation: none; transform: translateX(-3px); }
+/* Motion trail behind the arrow. */
+.crumb .page-back::before,
+.modal-back-button::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #ffffffe6, transparent);
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: width 0.35s ease, opacity 0.3s ease;
+  pointer-events: none;
+}
+.crumb .page-back:not(:disabled):hover::before, .crumb .page-back:not(:disabled):focus-visible::before,
+.modal-back-button:not(:disabled):hover::before, .modal-back-button:not(:disabled):focus-visible::before { width: 44%; opacity: 0.9; }
+/* Ripple ring. */
+.crumb .page-back::after,
+.modal-back-button::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border: 2px solid #ffffffb3;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+.crumb .page-back:not(:disabled):hover::after, .crumb .page-back:not(:disabled):focus-visible::after,
+.modal-back-button:not(:disabled):hover::after, .modal-back-button:not(:disabled):focus-visible::after { animation: back-ring 1.2s ease-out infinite; }
+/* Disabled page back (no previous page): muted and still. */
+.crumb .page-back:disabled { background: #e6e9f0 !important; border-color: #d9e1ed !important; color: #9aa7ba !important; box-shadow: none; cursor: default; }
+.crumb .page-back:disabled > svg { animation: none; filter: none; }
+:root[data-theme="dark"] .crumb .page-back:disabled { background: #17253a !important; border-color: #34435a !important; color: #55627a !important; }
+
+/* Hourly breakdown "Back" pill. */
+.dashboard-breakdown-day-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #ffffff66 !important;
+  border-radius: 999px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #a855f7, #6b2fa8) !important;
+  box-shadow: 0 6px 14px #6b2fa859, inset 0 1px 0 #ffffff59;
+  font-weight: 700;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.dashboard-breakdown-day-back:hover, .dashboard-breakdown-day-back:focus-visible { transform: translateX(-2px); filter: brightness(1.1); box-shadow: 0 10px 22px #6b2fa899, 0 0 0 3px #a855f74d, inset 0 1px 0 #ffffff66; outline: none; }
+.dashboard-breakdown-day-back > svg { transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); animation: back-nudge 3.2s ease-in-out infinite; }
+.dashboard-breakdown-day-back:hover > svg, .dashboard-breakdown-day-back:focus-visible > svg { animation: none; transform: translateX(-4px); }
+
+@keyframes back-nudge { 0%, 80%, 100% { transform: translateX(0); } 88% { transform: translateX(-3px); } 94% { transform: translateX(1px); } }
+@keyframes back-ring { 0% { opacity: 0.9; transform: scale(0.85); } 100% { opacity: 0; transform: scale(1.35); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .crumb .page-back, .modal-back-button, .dashboard-breakdown-day-back,
+  .crumb .page-back > svg, .modal-back-button > span, .dashboard-breakdown-day-back > svg,
+  .crumb .page-back::before, .modal-back-button::before, .crumb .page-back::after, .modal-back-button::after { animation: none !important; transition: none !important; }
+}
