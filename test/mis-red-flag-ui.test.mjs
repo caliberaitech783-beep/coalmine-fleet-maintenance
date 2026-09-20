@@ -114,6 +114,25 @@ test('MIS report displays and exports remark, actor, time and verification statu
   assert.equal(html.includes('<img'),false);
 });
 
+test('MIS verification shows the production creator, maintenance acceptor and maintenance closer without changing other tables',()=>{
+  const people={...request,owner:'Production operator',requesterLogin:'production-login',acceptedBy:'Maintenance acceptor',closedBy:'Maintenance closer'};
+  const tree=harness().render('MobileWorkflowTable',{rows:[people],showMisPeople:true,showActions:true,onVerify:()=>{}});
+  const columns=find(tree,ExportMenu).props.columns;
+  const expected=[
+    ['productionPerson','Production person (created)','Production operator'],
+    ['maintenanceAcceptedBy','Maintenance person (accepted)','Maintenance acceptor'],
+    ['maintenanceClosedBy','Maintenance person (closed)','Maintenance closer'],
+  ];
+  assert.deepEqual(columns.slice(3,6).map(({key,label})=>[key,label]),expected.map(([key,label])=>[key,label]));
+  for(const [key,,value] of expected)assert.equal(columns.find(column=>column.key===key).value(people),value);
+  const html=renderToStaticMarkup(tree);
+  for(const [,label,value] of expected){assert.ok(html.includes(label),label);assert.ok(html.includes(value),value);}
+  const withoutNames=harness().render('MobileWorkflowTable',{rows:[people]});
+  assert.ok(!find(withoutNames,ExportMenu).props.columns.some(column=>expected.some(([key])=>column.key===key)));
+  assert.match(source,/isMis && tab === "requests"[^\n]*showMisPeople/);
+  assert.match(source,/isMis && tab === "verify"[^\n]*showMisPeople/);
+});
+
 test('MIS form rejects whitespace, trims saves and prevents concurrent submissions',async()=>{
   const app=harness();
   const payloads=[];
