@@ -29,6 +29,7 @@ export function equipmentMetrics(records = []) {
   const operational = records.filter((record) => equipmentRoadStatus(record) === "onroad").length;
   const offRoad = records.filter((record) => equipmentRoadStatus(record) === "offroad").length;
   const idle = records.filter((record) => equipmentRoadStatus(record) === "idle").length;
+  const available = operational + idle;
   return {
     total: records.length,
     onRoad: operational,
@@ -36,7 +37,7 @@ export function equipmentMetrics(records = []) {
     idle,
     unknown: records.length - operational - offRoad - idle,
     availability: records.length
-      ? Math.round((operational / records.length) * 100)
+      ? Math.round((available / records.length) * 100)
       : 0,
   };
 }
@@ -180,13 +181,14 @@ export function liveEquipmentMetrics(records = [], requests = []) {
   const onRoad = statuses.filter((status) => status === "onroad").length;
   const offRoad = statuses.filter((status) => status === "offroad").length;
   const idle = statuses.filter((status) => status === "idle").length;
+  const available = onRoad + idle;
   return {
     total: records.length,
     onRoad,
     offRoad,
     idle,
     unknown: records.length - onRoad - offRoad - idle,
-    availability: records.length ? Math.round((onRoad / records.length) * 100) : 0,
+    availability: records.length ? Math.round((available / records.length) * 100) : 0,
   };
 }
 

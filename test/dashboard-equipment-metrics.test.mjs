@@ -83,7 +83,7 @@ test('live asset status respects specific identities and assigned sites, not sha
   ];
   const requests=[{equipment:'Dumper',door:'S1',chassis:'CH1',site:'Sasti OB',status:'Idle'}];
   assert.deepEqual(records.map(record=>liveEquipmentRoadStatus(record,requests)),['idle','onroad','onroad']);
-  assert.deepEqual(liveEquipmentMetrics(records,requests),{total:3,onRoad:2,offRoad:0,idle:1,unknown:0,availability:67});
+  assert.deepEqual(liveEquipmentMetrics(records,requests),{total:3,onRoad:2,offRoad:0,idle:1,unknown:0,availability:100});
   const opened=requests.map(request=>({...request,status:'Awaiting parts'}));
   assert.equal(fleetChartCounts(records,opened).breakdown.total,1);
   assert.equal(liveEquipmentMetrics(records,opened).offRoad,1);
@@ -131,7 +131,7 @@ test("off-road totals exclude blank and neutral statuses", () => {
 test("idle is a distinct fleet state and is not counted on-road or off-road", () => {
   assert.deepEqual(equipmentMetrics([
     {status:"Operational"}, {status:"Idle"}, {status:"Off road"}, {status:"Idling"},
-  ]), {total:4,onRoad:1,offRoad:1,idle:2,unknown:0,availability:25});
+  ]), {total:4,onRoad:1,offRoad:1,idle:2,unknown:0,availability:75});
   assert.equal(equipmentRoadStatus({status:"Idle"}), "idle");
 });
 
@@ -163,7 +163,7 @@ test("live dashboard availability derives idle and off-road status only from act
     offRoad: 1,
     idle: 1,
     unknown: 0,
-    availability: 50,
+    availability: 75,
   });
 });
 
@@ -264,7 +264,7 @@ test("multiple requests for one asset count once and active maintenance takes pr
   requests[0].status = "Closed";
   requests[1].status = "Closed";
   assert.deepEqual(liveEquipmentMetrics(records, requests), {
-    total: 2, onRoad: 1, offRoad: 0, idle: 1, unknown: 0, availability: 50,
+    total: 2, onRoad: 1, offRoad: 0, idle: 1, unknown: 0, availability: 100,
   });
 });
 
@@ -368,7 +368,7 @@ test("formatted identifiers still respect site scope and duplicate requests coun
     { door: "S1REG01", chassis: "CH01", site: "Majri II", status: "Awaiting parts" },
     { door: "S2", chassis: "CH03", site: "Majri II", status: "Idle" },
   ];
-  assert.deepEqual(liveEquipmentMetrics(records, requests), { total: 3, onRoad: 1, offRoad: 1, idle: 1, unknown: 0, availability: 33 });
+  assert.deepEqual(liveEquipmentMetrics(records, requests), { total: 3, onRoad: 1, offRoad: 1, idle: 1, unknown: 0, availability: 67 });
   assert.deepEqual(fleetChartCounts(records, requests).breakdown, { equipment: 0, vehicles: 1, total: 1 });
 });
 

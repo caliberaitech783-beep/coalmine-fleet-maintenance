@@ -2095,7 +2095,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             </div>
           </div> : <div className="mine-site-road-view">
             <div className="mine-site-road-summary">
-              <button type="button" className="availability" onClick={() => openAssetDrilldown("road-availability")}><span className="mine-site-road-gauge" style={{ "--availability": `${roadStatusShare(availabilityKpis.onRoad) * 3.6}deg` }}><b>{availabilityKpis.availability}%</b><small>Available</small></span><span><strong>{roadStatusTotal.toLocaleString()}</strong><small>Total fleet</small></span></button>
+              <button type="button" className="availability" onClick={() => openAssetDrilldown("road-availability")}><span className="mine-site-road-gauge" style={{ "--availability": `${roadStatusShare(availabilityKpis.onRoad + availabilityKpis.idle) * 3.6}deg` }}><b>{availabilityKpis.availability}%</b><small>Available</small></span><span><strong>{roadStatusTotal.toLocaleString()}</strong><small>Total fleet</small></span></button>
               <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><small>On road</small><strong>{availabilityKpis.onRoad.toLocaleString()}</strong></span></button>
               <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><small>Off road</small><strong>{availabilityKpis.offRoad.toLocaleString()}</strong></span></button>
               <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><small>Idle</small><strong>{availabilityKpis.idle.toLocaleString()}</strong></span></button>

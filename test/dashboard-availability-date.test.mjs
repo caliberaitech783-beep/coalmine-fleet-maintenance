@@ -25,8 +25,8 @@ test("availability follows the selected day's outstanding requests, closures and
   const expected = [
     ["2026-09-04", 4, 0, 0, 100],
     ["2026-09-07", 2, 2, 0, 50],
-    ["2026-09-08", 1, 2, 1, 25],
-    ["2026-09-09", 2, 1, 1, 50],
+    ["2026-09-08", 1, 2, 1, 50],
+    ["2026-09-09", 2, 1, 1, 75],
   ];
   const original = structuredClone(requests);
   for (const [date, onRoad, offRoad, idle, availability] of expected) {
