@@ -82,8 +82,8 @@ export function dailyUpdatesExportRows(updates, { category = "" } = {}) {
   }));
 }
 
-// Complete, stable text for PDF, Excel and Smart Print. The export is chronological regardless of
-// the reader's on-screen newest/oldest preference, and each saved update stays on its own line.
+// Complete, stable text for detailed exports. The export is chronological regardless of the
+// reader's on-screen newest/oldest preference, and each saved update stays on its own line.
 export function dailyUpdatesExportText(updates, { category = "" } = {}) {
   const records = dailyUpdatesExportRows(updates, { category });
   if (!records.length) return "—";

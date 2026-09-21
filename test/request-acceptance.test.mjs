@@ -72,7 +72,7 @@ test("requests accepted more than one hour after production timing are highlight
   const workflowCss = readFileSync(new URL("../src/mobile-workflow.css", import.meta.url), "utf8");
   assert.match(client, /highlightLateAcceptance && requestAcceptedLate\(row\) \? "request-accepted-late"/);
   assert.match(client, /exportTitle=\{workspaceReportTitles\.close\} showAcceptedTime highlightLateAcceptance/);
-  assert.match(client, /rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\} highlightLateAcceptance/);
+  assert.match(client, /rows=\{historyRows\} exportTitle=\{workspaceReportTitles\.history\}(?: showStatusFilter=\{false\})? highlightLateAcceptance/);
   assert.match(client, /rows=\{activeRequests\} exportTitle=\{workspaceReportTitles\.requests\} highlightLateAcceptance showMakeModel/);
   assert.match(workflowCss, /\.request-accepted-late > td \{\s*background: #f8caca !important;/);
   assert.match(workflowCss, /\.request-accepted-late > td:first-child \{\s*box-shadow: inset 4px 0 #d92f45;/);

@@ -12,6 +12,18 @@ export function selectedPrintColumns(options,ids) {
   const selected=new Set(ids);
   return options.filter(option=>selected.has(option.id)).map(option=>option.column);
 }
+const dailyUpdatesColumn=column=>column?.key==='dailyRemarks'||/daily\s+(?:updates?|remarks?)/i.test(String(column?.label||''));
+/** Smart Print keeps one maintenance record to a normal row instead of putting its full update journal in one cell. */
+export function compactDailyUpdatesForPrint(value){
+  const lines=String(value??'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  if(!lines.length||lines.every(line=>line==='—'))return '—';
+  const latest=lines.at(-1);
+  const dateTime=latest.match(/^#\d+\s*\|\s*([^|]+)/)?.[1]?.trim();
+  return `${lines.length} update${lines.length===1?'':'s'}${dateTime?`\nLatest ${dateTime}`:''}`;
+}
+export function compactSmartPrintColumns(columns=[]){
+  return columns.map(column=>dailyUpdatesColumn(column)?{...column,value:row=>compactDailyUpdatesForPrint(column.value?.(row))}:column);
+}
 export function normalizePrintLayoutName(value) {
   const name=String(value??'').replace(/\s+/g,' ').trim();
   if(!name)throw new Error('Enter a report name.');
@@ -141,7 +153,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   // A selected saved layout supplies both its columns and its report name to print and export alike.
   const currentReport=()=>{
     const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
-    return {reportTitle:layout?.name||title,chosen:selectedPrintColumns(options,layout?layout.columns:selected)};
+    return {reportTitle:layout?.name||title,chosen:compactSmartPrintColumns(selectedPrintColumns(options,layout?layout.columns:selected))};
   };
   // Second step after the page size: which pages, single or double-sided, and how many copies.
   const askPrintOptions=(pageSize,run)=>{

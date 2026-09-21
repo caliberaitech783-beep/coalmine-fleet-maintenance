@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {printColumnOptions,selectedPrintColumns,nextPrintLayout,normalizePrintLayoutName,printLayoutStorageKey,removePrintLayout,openSmartPrint,printFitScale,printPageSize,PRINT_PAGE_SIZES,normalizePageRanges,normalizePrintOptions,loadPrintOptions,savePrintOptions,PRINT_DUPLEX_OPTIONS,DEFAULT_PRINT_OPTIONS} from '../src/smart-print.mjs';
+import {printColumnOptions,selectedPrintColumns,nextPrintLayout,normalizePrintLayoutName,printLayoutStorageKey,removePrintLayout,openSmartPrint,printFitScale,printPageSize,PRINT_PAGE_SIZES,normalizePageRanges,normalizePrintOptions,loadPrintOptions,savePrintOptions,PRINT_DUPLEX_OPTIONS,DEFAULT_PRINT_OPTIONS,compactDailyUpdatesForPrint,compactSmartPrintColumns} from '../src/smart-print.mjs';
 test('only chosen headings and values reach print in table order',()=>{
  const columns=[{label:'Door',value:r=>r.door},{label:'Private',value:()=>{throw Error('Excluded value read');}},{label:'Status',value:r=>r.status}];
  const options=printColumnOptions(columns);
@@ -137,6 +137,17 @@ test('wide reports are scaled down to the page and never enlarged',()=>{
  assert.equal(printPageSize('a3').widthMm,420);
  assert.equal(printPageSize('unknown').name,'A4');
  assert.deepEqual(PRINT_PAGE_SIZES.map(page=>page.name),['A4','A3']);
+});
+
+test('daily update journals stay compact in Smart Print while ordinary columns are unchanged',()=>{
+ const ordinary={key:'door',label:'Door',value:row=>row.door};
+ const daily={key:'dailyRemarks',label:'Daily updates',value:row=>row.updates};
+ const fitted=compactSmartPrintColumns([ordinary,daily]);
+ const row={door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-2026 | By: A | Update: Removed\n#2 | 9:19 PM 03-09-2026 | By: B | Update: Fitted'};
+ assert.equal(fitted[0],ordinary);
+ assert.equal(fitted[1].value(row),'2 updates\nLatest 9:19 PM 03-09-2026');
+ assert.equal(compactDailyUpdatesForPrint('#1 | Date not recorded | By: A | Update: Checked'),'1 update\nLatest Date not recorded');
+ assert.equal(compactDailyUpdatesForPrint('—'),'—');
 });
 
 test('print options: page ranges are validated, sides and copies are normalised and remembered',()=>{
