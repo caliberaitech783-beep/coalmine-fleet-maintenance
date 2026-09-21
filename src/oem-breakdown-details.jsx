@@ -12,7 +12,6 @@ const latestUpdateStamp = remarks => (Array.isArray(remarks) ? remarks : []).red
 
 const extraColumns = [
   { key: "oem", label: "OEM", render: record => record.make || "—" },
-  { key: "reason", label: "Reason", render: record => <div className="request-reason-text mine-oem-reason">{record.requestDetails.complaint || "—"}</div> },
   { key: "createdBy", label: "Created by", render: record => record.requestDetails.owner || record.requestDetails.requesterLogin || "—" },
   { key: "closedBy", label: "Closed by", render: record => record.requestDetails.closedBy || "—" },
   { key: "tat", label: "Turn around time (TAT)", render: record => record.requestDetails.hours || "—" },
