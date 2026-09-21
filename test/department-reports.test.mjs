@@ -71,8 +71,20 @@ test('department reports include the two red flag reports alongside existing rep
   assert.deepEqual(reports.map(r=>r.title),DEPARTMENT_REPORT_TITLES);
   assert.equal(reports.filter(r=>r.category==='maintenance').length,4);
   assert.equal(reports.filter(r=>r.category==='mis').length,6);
-  assert.equal(reports.filter(r=>r.category==='production').length,3);
+  assert.equal(reports.filter(r=>r.category==='production').length,4);
   assert.ok(!reports.some(r=>r.title==='Vehicle Transfer Report'));
+});
+test('production first-trip report compares production and MIS timings',()=>{
+  const [report]=build([{
+    ref:'REQ-PROD-TRIP',status:'Closed',site:'Sasti OB',door:'D1',closedAt:'2026-09-17 10:00:00',
+    productionFirstTripAt:'2026-09-17 10:20:00',productionFirstTripBy:'Production User',productionFirstTripRemark:'First loading trip started',
+    firstTripAt:'2026-09-17 10:35:00',verifiedAt:'2026-09-17 10:40:00',
+  }]).filter(r=>r.title==='Production vs MIS First Trip Report');
+  assert.equal(report.rows.length,1);
+  assert.equal(cell(report,'productionFirstTripAt',report.rows[0]),'2026-09-17 10:20:00');
+  assert.equal(cell(report,'misFirstTripAt',report.rows[0]),'2026-09-17 10:35:00');
+  assert.equal(cell(report,'productionDelay',report.rows[0]),'20m');
+  assert.equal(cell(report,'misDelay',report.rows[0]),'35m');
 });
 test('pending includes all open and in-progress requests regardless of remarks',()=>{
   const report=build([

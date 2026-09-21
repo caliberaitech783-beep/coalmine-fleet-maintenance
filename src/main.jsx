@@ -6280,6 +6280,12 @@ function firstTripTimestamp(request) {
   const time = String(request.firstTripTime || "").trim();
   return date ? [date, time].filter(Boolean).join(" ") : "";
 }
+function productionFirstTripTimestamp(request) {
+  if (String(request.productionFirstTripAt || "").trim()) return String(request.productionFirstTripAt).trim();
+  const date = String(request.productionFirstTripDate || "").trim();
+  const time = String(request.productionFirstTripTime || "").trim();
+  return date ? [date, time].filter(Boolean).join(" ") : "";
+}
 function roadStatusLabel(record, requests = []) {
   const status = liveEquipmentRoadStatus(record, requests);
   return status === "onroad" ? "On road" : status === "offroad" ? "Off road" : status === "idle" ? "Idle" : "Status not set";
@@ -8637,8 +8643,8 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showStatusFilter = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onVehicleHistory, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
-  if (onDelete || onDeleteSelected) showActions = true;
+function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showStatusFilter = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showProductionFirstTrip = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onVehicleHistory, onEdit, onDelete, onClose, onVerify, onProductionFirstTrip, onMisFlag, onRemark }) {
+  if (onDelete || onDeleteSelected || onProductionFirstTrip) showActions = true;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
   // Deletion: the caller decides which rows qualify (Admins may remove Idle rows too); Verified rows never qualify.
@@ -8722,6 +8728,12 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
       {key: "closingKmr", label: "Closing KMR", value: (row) => requestMeterReadings(row, "closing").KMR || "—"},
     ] : []),
     ...(showTripCard ? [{key: "tripCard", label: "Trip card image", value: (row) => row.firstTripCardUploaded ? "Uploaded" : "Not uploaded"}] : []),
+    ...(showProductionFirstTrip ? [
+      {key: "productionFirstTripAt", label: "Production first-trip time", value: (row) => formatTwelveHourDateTime(productionFirstTripTimestamp(row), true)},
+      {key: "productionFirstTripBy", label: "Production accepted by", value: (row) => row.productionFirstTripBy || "Pending"},
+      {key: "misFirstTripAt", label: "MIS first-trip time", value: (row) => formatTwelveHourDateTime(firstTripTimestamp(row), true)},
+      {key: "productionFirstTripRemark", label: "Production first-trip note", value: (row) => row.productionFirstTripRemark || "—"},
+    ] : []),
     ...(showComplaintAudio ? [{key: "complaintAudio", label: "Complaint audio", value: (row) => row.complaintAudioAvailable ? "Available" : "Not available"}] : []),
   ];
   // Exports and prints follow the on-screen layout: the closing time sits beside Started when the table asks for it.
@@ -8755,6 +8767,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     {onDelete && rowDeletable(row) && <button type="button" className="danger" onClick={() => onDelete(row)}><Trash2 /> Delete</button>}
     {onClose && !lockedIdeal && <button type="button" className="primary" onClick={() => onClose(row)}><CheckCircle2 /> Click for onroad</button>}
     {onRemark && String(row.status).toLowerCase() !== "closed" && !lockedIdeal && <button type="button" onClick={() => onRemark(row)}><MessageCircle /> Daily update</button>}
+    {onProductionFirstTrip && !row.productionFirstTripAt && <button type="button" className="primary" onClick={() => onProductionFirstTrip(row)}><CheckCircle2 /> First trip</button>}
     {onVerify && <button type="button" className="primary" onClick={() => onVerify(row)}><ShieldCheck /> Verify</button>}
     {onMisFlag && (row.misFlaggedAt || (String(row.status).toLowerCase() === "closed" && !row.verifiedAt)) && <button type="button" className="mis-red-flag" onClick={() => onMisFlag(row)} title={row.misFlaggedAt ? "View the saved MIS red flag and remark" : "Report an issue found during MIS verification"}><Flag /> {row.misFlaggedAt ? "View red flag" : "Red flag"}</button>}
   </td>;
@@ -8775,7 +8788,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
           {workflowHeader("ref", "Job reference")}{workflowHeader("equipmentGroup", "Equipment group")}{workflowHeader("door", "Door no.")}{showMisPeople && <>{workflowHeader("productionPerson", "Production person (created)")}{workflowHeader("maintenanceAcceptedBy", "Maintenance person (accepted)")}{workflowHeader("maintenanceClosedBy", "Maintenance person (closed)")}</>}{showMakeModel && <>{workflowHeader("make", "Make")}{workflowHeader("model", "Model")}</>}{workflowHeader("site", "Site location")}{workflowHeader("category", "Breakdown type")}
           {workflowHeader("delayedReason", "Delayed reason")}
           {showMisFlagData && <>{workflowHeader("misFlaggedAt", "MIS red flag raised")}{workflowHeader("misFlaggedBy", "Flagged by")}{workflowHeader("misFlagRemark", "MIS remark")}{workflowHeader("misVerificationStatus", "Verification status")}</>}
-          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{showEtc && <>{workflowHeader("etc", "ETC")}{workflowHeader("etcRemaining", "Time left for ETC")}</>}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
+          {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{showEtc && <>{workflowHeader("etc", "ETC")}{workflowHeader("etcRemaining", "Time left for ETC")}</>}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showProductionFirstTrip && <>{workflowHeader("productionFirstTripAt", "Production first-trip time")}{workflowHeader("productionFirstTripBy", "Production accepted by")}{workflowHeader("misFirstTripAt", "MIS first-trip time")}{workflowHeader("productionFirstTripRemark", "Production first-trip note")}</>}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
           {sortedRows.length ? sortedRows.map((row) => {
@@ -8808,12 +8821,13 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               {showWorkCompletion && <td className="request-reason-cell"><div className="request-reason-text"><TranslatedText text={row.maintenanceWork} language={row.maintenanceWorkLanguage} /></div></td>}
               {showMeterData && <><td><b>{requestMeterReadings(row, "opening").KMR || "—"}</b><small><MeterFileCell request={row} stage="opening" /></small></td><td><b>{requestMeterReadings(row, "opening").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").HMR || "—"}</b></td><td><b>{requestMeterReadings(row, "closing").KMR || "—"}</b><small><MeterFileCell request={row} stage="closing" /></small></td></>}
               {showTripCard && <td><TripCardCell request={row} /></td>}
+              {showProductionFirstTrip && <><td>{formatTwelveHourDateTime(productionFirstTripTimestamp(row), true)}</td><td>{row.productionFirstTripBy || "Pending"}</td><td>{formatTwelveHourDateTime(firstTripTimestamp(row), true)}</td><td className="request-reason-cell"><div className="request-reason-text">{row.productionFirstTripRemark || "—"}</div></td></>}
               {showComplaintAudio && <td className="maintenance-complaint-audio">
                 {row.complaintAudioAvailable ? <ProtectedAudio url={`/api/requests/${encodeURIComponent(row.ref)}/audio/complaint`} token={authToken} label="Complaint audio" /> : "—"}
               </td>}
               {!actionsFirst && workflowActions(row, lockedIdeal)}
             </tr>;
-          }) : <tr><td colSpan={10 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showMisPeople ? 3 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showEtc ? 2 : 0) + (showMeterData ? 3 : 0) + (showTripCard ? 1 : 0) + (showComplaintAudio ? 1 : 0) + (showWorkCompletion ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
+          }) : <tr><td colSpan={10 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showMisPeople ? 3 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showEtc ? 2 : 0) + (showMeterData ? 3 : 0) + (showTripCard ? 1 : 0) + (showProductionFirstTrip ? 4 : 0) + (showComplaintAudio ? 1 : 0) + (showWorkCompletion ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </ActionsTable>
     </div></>
@@ -9102,6 +9116,55 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
       </div>
       {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
       <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Verifying…" : "Verify request"} <ChevronRight /></button></footer>
+    </form>
+  </Modal>;
+}
+
+function ProductionFirstTripForm({ request, close, onSave }) {
+  const displayDateTime = (value) => typeof formatDisplayDateTime === "function" ? formatDisplayDateTime(value) : String(value || "—");
+  const today = requestStartParts("");
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const closeDialog = () => { if (!submitLock.current) close(); };
+  return <Modal title={`Production first trip · ${request.ref}`} close={closeDialog}>
+    <form className="form" onSubmit={async (event) => {
+      event.preventDefault();
+      if (submitLock.current) return;
+      const form = new FormData(event.currentTarget);
+      const remark = String(form.get("productionFirstTripRemark") || "").trim();
+      if (!remark) return setFormError("Enter the work-start note before saving.");
+      setFormError("");
+      submitLock.current = true;
+      setSubmitting(true);
+      try {
+        await onSave({
+          firstTripDate: form.get("firstTripDate"),
+          firstTripTime: form.get("firstTripTime"),
+          productionFirstTripRemark: remark,
+        });
+      } catch (error) {
+        setFormError(error?.message || "Could not save the production first trip. Please refresh and try again.");
+      } finally {
+        submitLock.current = false;
+        setSubmitting(false);
+      }
+    }}>
+      <div className="details request-linked-details">
+        <div><span>Equipment group</span><b>{normalizeEquipmentGroup(request.equipmentGroup) || request.equipment || "—"}</b></div>
+        <div><span>Door number</span><b>{request.door || "—"}</b></div>
+        <div><span>Chassis number</span><b>{request.chassis || "—"}</b></div>
+        <div><span>Site location</span><b>{request.site || "Not assigned"}</b></div>
+        <div><span>Made on road by Maintenance</span><b>{displayDateTime(request.closedAt)}</b></div>
+        <div><span>Maintenance closed by</span><b>{request.closedBy || "—"}</b></div>
+      </div>
+      <div className="formgrid">
+        <label>Production first-trip date *<DateInput name="firstTripDate" required defaultValue={today.date} /><small>Enter when the vehicle/equipment actually started work after Maintenance made it on road.</small></label>
+        <label>Production first-trip time (HH:MM:SS) *<input name="firstTripTime" required pattern={TIME_24H_PATTERN} defaultValue={today.time} /></label>
+        <label className="full">Production first-trip note *<textarea name="productionFirstTripRemark" required maxLength={1000} placeholder="Example: Vehicle started loading work / first dispatch started / no driver assigned but unit received." /></label>
+      </div>
+      {formError && <p role="alert" className="hierarchy-save-error">{formError}</p>}
+      <footer><button type="button" onClick={closeDialog} disabled={submitting}>Cancel</button><button className="primary" disabled={submitting}>{submitting ? "Saving…" : "Save first trip"} <ChevronRight /></button></footer>
     </form>
   </Modal>;
 }
@@ -9618,25 +9681,47 @@ function NotificationMessage({ item }) {
   return <span className="notification-message"><span className="notification-meta"><strong className="notification-site">Site: {site}</strong><span className={`notification-category ${category.key}`}><i className="notification-category-dot" aria-hidden="true" />{category.label}</span></span><span className="notification-details">{[door ? `Door No. ${door}` : "", details].filter(Boolean).join(" — ")}</span></span>;
 }
 
-function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef }) {
+function isResolvedTicketNotification(item) {
+  const message = String(item?.message || "").trim().toLowerCase();
+  return Boolean(item?.ticketReference && /^ticket\b[\s\S]*\bwas resolved\b/.test(message));
+}
+
+function resolvedTicketDismissKey(session) {
+  return `bdms:resolved-ticket-popups:${String(session?.login || session?.token || "user").trim().toLowerCase()}`;
+}
+
+function readDismissedResolvedTickets(session) {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(resolvedTicketDismissKey(session)) || "[]");
+    return new Set(Array.isArray(stored) ? stored.map(String) : []);
+  } catch { return new Set(); }
+}
+
+function saveDismissedResolvedTickets(session, ids) {
+  try { window.localStorage.setItem(resolvedTicketDismissKey(session), JSON.stringify([...ids].slice(-200))); } catch {}
+}
+
+function IncomingNotification({ item, onOpen, onDismiss, soundRef, playedRef, persistent = false }) {
   useEffect(() => {
     const id = String(item.id);
     if (!playedRef.current.has(id)) {
       playedRef.current.add(id);
       soundRef.current?.play();
     }
+    if (persistent) return undefined;
     const timer = window.setTimeout(() => onDismiss(id), 15000);
     return () => window.clearTimeout(timer);
-  }, [item.id]);
-  return <div className="incoming-notification" role="status" aria-live="polite"><button className="incoming-notification-link" type="button" onClick={() => { onDismiss(String(item.id)); void onOpen(item); }}><Bell /><span><b>New notification</b><NotificationMessage item={item} /><small>Click for more details.</small></span></button><button type="button" className="incoming-notification-close" aria-label="Dismiss notification" onClick={() => onDismiss(String(item.id))}><X /></button></div>;
+  }, [item.id, persistent]);
+  return <div className={`incoming-notification${persistent ? " persistent-ticket-resolution" : ""}`} role={persistent ? "alertdialog" : "status"} aria-live="polite" aria-modal={persistent ? "false" : undefined}><button className="incoming-notification-link" type="button" onClick={() => { onDismiss(String(item.id)); void onOpen(item); }}><Bell /><span><b>{persistent ? "Ticket resolved" : "New notification"}</b><NotificationMessage item={item} /><small>{persistent ? "This will stay here until you close it." : "Click for more details."}</small></span></button><button type="button" className="incoming-notification-close" aria-label="Dismiss notification" onClick={() => onDismiss(String(item.id))}><X /></button></div>;
 }
 
 function NotificationBell({ session, onOpenEntry }) {
   const [siteFilter, setSiteFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [items, setItems] = useState([]), [open, setOpen] = useState(false), [entryState, setEntryState] = useState(null);
-  const [alerts, setAlerts] = useState([]);
+  const [alerts, setAlerts] = useState([]), [resolvedTicketAlerts, setResolvedTicketAlerts] = useState([]);
   const soundRef = useRef(null), playedRef = useRef(new Set());
+  const dismissedResolvedRef = useRef(new Set());
   // Bell sound chosen on this device; the incoming-toast effect plays it once per new notification.
   const [bellSound, setBellSound] = useState(() => loadNotificationSound());
   const bellSoundRef = useRef(bellSound);
@@ -9650,8 +9735,17 @@ function NotificationBell({ session, onOpenEntry }) {
     const track = createNotificationTracker();
     soundRef.current = { play: () => playNotificationSound(bellSoundRef.current) };
     playedRef.current = new Set();
-    setItems([]); setAlerts([]); setOpen(false); setSiteFilter(""); setCategoryFilter("");
+    dismissedResolvedRef.current = readDismissedResolvedTickets(session);
+    setItems([]); setAlerts([]); setResolvedTicketAlerts([]); setOpen(false); setSiteFilter(""); setCategoryFilter("");
     let known = null, timer;
+    const showResolvedTicketAlerts = (candidates) => {
+      const eligible = candidates.filter((item) => isResolvedTicketNotification(item) && !item.isRead && !dismissedResolvedRef.current.has(String(item.id)));
+      if (!eligible.length) return;
+      setResolvedTicketAlerts((current) => {
+        const seen = new Set(current.map((item) => String(item.id)));
+        return [...current, ...eligible.filter((item) => !seen.has(String(item.id)))];
+      });
+    };
     const load = async () => {
       // Bound requests during rolling upgrades when an older backend may not
       // understand long polling yet. Received events still alert immediately.
@@ -9669,9 +9763,13 @@ function NotificationBell({ session, onOpenEntry }) {
         const fresh = track(next);
         known = next.map((item) => String(item.id)).join(",");
         setItems(next);
+        showResolvedTicketAlerts(next);
         // The bell retains every notification; keep only the two newest toast
         // cards so bursts cannot cover the phone screen.
-        if (fresh.length) setAlerts((current) => [...current, ...fresh].slice(-2));
+        if (fresh.length) {
+          const transient = fresh.filter((item) => !isResolvedTicketNotification(item));
+          if (transient.length) setAlerts((current) => [...current, ...transient].slice(-2));
+        }
       } catch (error) {
         if (controller.signal.aborted) return;
         console.warn("Notification refresh failed; retaining the last successful list.", error);
@@ -9682,7 +9780,17 @@ function NotificationBell({ session, onOpenEntry }) {
     void load();
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [session?.token]);
-  const dismissAlert = (id) => setAlerts((current) => current.filter((item) => String(item.id) !== id));
+  const dismissAlert = (id) => {
+    setAlerts((current) => current.filter((item) => String(item.id) !== id));
+    setResolvedTicketAlerts((current) => {
+      const target = current.find((item) => String(item.id) === id);
+      if (target) {
+        dismissedResolvedRef.current.add(id);
+        saveDismissedResolvedTickets(session, dismissedResolvedRef.current);
+      }
+      return current.filter((item) => String(item.id) !== id);
+    });
+  };
   useEffect(() => {
     if (!open) return undefined;
     const closeOutside = (event) => {
@@ -9777,7 +9885,7 @@ function NotificationBell({ session, onOpenEntry }) {
         <div className="notification-list">{visibleItems.length ? visibleItems.map((item) => <button type="button" key={item.id} onClick={() => openEntry(item)}><NotificationMessage item={item} /><small>{formatDisplayDateTime(item.createdAt)}</small></button>) : <p>{categoryFilter ? "No notifications for these filters." : siteFilter ? "No notifications for this site." : "No notifications yet."}</p>}</div>
       </div>}
     </div>
-    {alerts.length > 0 && createPortal(<div className="incoming-notification-stack" aria-label="New notifications">{alerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} />)}</div>, document.body)}
+    {(alerts.length > 0 || resolvedTicketAlerts.length > 0) && createPortal(<div className="incoming-notification-stack" aria-label="New notifications">{resolvedTicketAlerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} persistent />)}{alerts.map((item) => <IncomingNotification key={item.id} item={item} onOpen={openEntry} onDismiss={dismissAlert} soundRef={soundRef} playedRef={playedRef} />)}</div>, document.body)}
     <NotificationEntryDialog state={entryState} onClose={closeEntry} token={session.token} />
   </>;
 }
@@ -9786,7 +9894,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const mobileRole = session?.assignedRole || "Mobile User";
   const isGeneral = mobileRole === "General User";
-  const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null), [vehicleHistoryTarget, setVehicleHistoryTarget] = useState(null);
+  const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [productionFirstTrip, setProductionFirstTrip] = useState(null), [remarking, setRemarking] = useState(null), [vehicleHistoryTarget, setVehicleHistoryTarget] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
@@ -9829,6 +9937,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const workspaceReportTitles = {
     requests: isProduction ? "Active Production Requests" : isMaintenance ? "Active Maintenance Requests" : "MIS Requests Awaiting Verification",
     verify: "MIS Verification Requests",
+    productionFirstTrip: "Production First Trip Entry",
     history: isGeneral ? "Closed Request History" : isProduction ? "Closed Production Requests" : isMaintenance ? "Closed Maintenance Requests" : "Closed MIS Requests",
     idle: "Idle Vehicles",
     close: "Maintenance Close Request Form",
@@ -9843,7 +9952,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     if(!allowed[section])setSection(Object.keys(allowed).find((key)=>allowed[key])||"");
   },[isGeneral,embedded,section,showDashboardMenu,showRequestsMenu,showReportsMenu,showTicketsMenu]);
   useEffect(()=>{
-    const allowed=tab==="tickets"?showTicketsMenu:tab==="transfers"?isMis:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
+    const allowed=tab==="tickets"?showTicketsMenu:tab==="transfers"?isMis:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="productionFirstTrip"?isProduction:tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
     if(allowed)return;
     if(showRequestsMenu&&canSeeRequestMenu("View requests"))setTab("requests");
     else if(showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU))setTab("verify");
@@ -9905,6 +10014,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     catch (error) { if (!requireArrivalReason(remarking, error)) alert(error.message); }
   };
   const verifyRequest = async (payload) => { await onUpdateRequest(verifying.ref, payload, "verify"); setVerifying(null); setCreatedRequestRef("Vehicle Verified"); };
+  const saveProductionFirstTrip = async (payload) => { await onUpdateRequest(productionFirstTrip.ref, payload, "production-first-trip"); setProductionFirstTrip(null); setCreatedRequestRef("Production first trip recorded"); setTab("productionFirstTrip"); };
   const saveMisFlag = async (payload) => { await onUpdateRequest(misFlagging.ref, payload, "mis-flag"); setMisFlagging(null); };
   const saveArrivalFlag = async (payload) => {
     const saved = await onUpdateRequest(arrivalFlagging.ref, payload, "arrival-flag");
@@ -9961,6 +10071,8 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const visibleRows = isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests;
   const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
+  const productionFirstTripRows=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.closedAt||"").trim()&&!String(row.productionFirstTripAt||"").trim());
+  const productionFirstTripReportRows=closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim());
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
@@ -9975,6 +10087,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button data-nav="requests" className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button data-nav="create" className="primary" onClick={() => {refreshEquipmentRecords();refreshRepairTypes();setShow(true);}}><Plus /> Create request</button>}
+        {showRequestsMenu&&isProduction&&<button data-nav="productionFirstTrip" className={tab === "productionFirstTrip" ? "active" : ""} onClick={() => setTab("productionFirstTrip")}>First trip entry{productionFirstTripRows.length ? ` (${productionFirstTripRows.length})` : ""}</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU)&&<button data-nav="verify" className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>MIS verification</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button data-nav="history" className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button data-nav="idle" className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
@@ -9983,7 +10096,9 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       </div>
       </div>
       {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
+      {isProduction && productionFirstTripRows.length > 0 && tab !== "productionFirstTrip" && <div className="workflow-success-popup production-first-trip-popup"><div className="hierarchy-save-message" role="alert"><CheckCircle2 /><span>{productionFirstTripRows.length} vehicle/equipment first-trip entry pending after Maintenance made on road.</span><button type="button" className="primary" onClick={() => setTab("productionFirstTrip")}>Open</button></div></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} {...adminDeleteProps} /></section></>}
+      {isProduction && tab === "productionFirstTrip" && <><h3 className="sectiontitle">{workspaceReportTitles.productionFirstTrip}</h3><section className="panel"><MobileWorkflowTable rows={productionFirstTripRows} exportTitle={workspaceReportTitles.productionFirstTrip} showMakeModel showReason showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showMeterData showProductionFirstTrip showActions actionsFirst onProductionFirstTrip={setProductionFirstTrip} /></section><h3 className="sectiontitle">Production and MIS First Trip Timing Report</h3><section className="panel"><MobileWorkflowTable rows={productionFirstTripReportRows} exportTitle="Production and MIS First Trip Timing Report" showStatusFilter={false} showMakeModel showClosedBy showClosedAt closedAtLabel="Maintenance on-road time" showVerifiedBy showVerifiedAt showProductionFirstTrip showMeterData startedFirst /></section></>}
       {isGeneral && tab === "requests" && canSeeRequestMenu("View requests") && <><h3 className="sectiontitle">Active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
       {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} canDeleteRow={canDeleteRow} onDeleteSelected={deleteSelectedRequests} onVehicleHistory={setVehicleHistoryTarget} /></section></>}
       {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} {...adminDeleteProps} onVehicleHistory={setVehicleHistoryTarget} /></section></>}
@@ -9999,6 +10114,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     {editing && <RequestEditForm request={requests.find((row) => row.ref === editing.ref) || editing} equipmentRecords={equipmentRecords} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} close={() => setEditing(null)} onSave={saveEdit} onRequireArrivalFlag={openArrivalFlag} />}
     {closing && <CloseRequestForm request={closing} equipmentRecords={equipmentRecords} close={() => setClosing(null)} onSave={closeRequest} />}
     {verifying && <VerifyRequestForm request={verifying} equipmentRecords={equipmentRecords} close={() => setVerifying(null)} onSave={verifyRequest} />}
+    {productionFirstTrip && <ProductionFirstTripForm request={requests.find((row) => row.ref === productionFirstTrip.ref) || productionFirstTrip} close={() => setProductionFirstTrip(null)} onSave={saveProductionFirstTrip} />}
     {misFlagging && <RequestRedFlagForm request={requests.find((row) => row.ref === misFlagging.ref) || misFlagging} close={() => setMisFlagging(null)} onSave={saveMisFlag} />}
     {arrivalFlagging && <RequestRedFlagForm flagKind="arrival" request={requests.find((row) => row.ref === arrivalFlagging.ref) || arrivalFlagging} close={() => {setArrivalFlagging(null);setArrivalFlagNextAction(null);}} onSave={saveArrivalFlag} />}
   </div>;
@@ -10328,7 +10444,7 @@ function App() {
       return saved;
     },
     updateRequest = async (reference, payload, action = "edit") => {
-      const endpoint = action === "delayed-reason" ? `/api/requests/${encodeURIComponent(reference)}/delayed-reason` : action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
+      const endpoint = action === "delayed-reason" ? `/api/requests/${encodeURIComponent(reference)}/delayed-reason` : action === "close" ? `/api/requests/${encodeURIComponent(reference)}/close` : action === "verify" ? `/api/requests/${encodeURIComponent(reference)}/verify` : action === "production-first-trip" ? `/api/requests/${encodeURIComponent(reference)}/production-first-trip` : action === "ideal-onroad" ? `/api/requests/${encodeURIComponent(reference)}/ideal-onroad` : action === "idle-cancel" ? `/api/requests/${encodeURIComponent(reference)}/idle-cancel` : action === "arrival-flag" ? `/api/requests/${encodeURIComponent(reference)}/arrival-flag` : action === "mis-flag" ? `/api/requests/${encodeURIComponent(reference)}/mis-flag` : `/api/requests/${encodeURIComponent(reference)}`;
       const before = requests.find((row) => row.ref === reference) || {ref: reference};
       const confirmUncertainWrite = async () => {
         try {

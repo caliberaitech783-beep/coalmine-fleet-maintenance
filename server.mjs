@@ -497,6 +497,21 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS maintenance_daily_remarks_request_idx ON maintenance_daily_remarks (request_reference, created_at DESC);
     ALTER TABLE maintenance_daily_remarks ADD COLUMN IF NOT EXISTS delayed_reason TEXT NOT NULL DEFAULT '';
+    CREATE TABLE IF NOT EXISTS production_first_trip_acceptances (
+      request_reference TEXT PRIMARY KEY REFERENCES maintenance_requests(reference) ON DELETE CASCADE,
+      site TEXT NOT NULL DEFAULT '',
+      equipment_group TEXT NOT NULL DEFAULT '',
+      door_number TEXT NOT NULL DEFAULT '',
+      chassis_number TEXT NOT NULL DEFAULT '',
+      maintenance_closed_at TIMESTAMPTZ,
+      production_first_trip_at TIMESTAMPTZ NOT NULL,
+      production_first_trip_by TEXT NOT NULL DEFAULT '',
+      production_first_trip_login TEXT NOT NULL DEFAULT '',
+      production_first_trip_remark TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS production_first_trip_acceptances_site_idx
+      ON production_first_trip_acceptances (site, production_first_trip_at DESC);
     CREATE TABLE IF NOT EXISTS request_corrections (
       id BIGSERIAL PRIMARY KEY,
       request_reference TEXT NOT NULL REFERENCES maintenance_requests(reference) ON DELETE RESTRICT,
@@ -2003,6 +2018,12 @@ function maintenanceManagerSession(session){
   if(session?.role!=='super'||session?.permissions?.adminLevel!=='Manager')return false;
   const permissions=session.permissions;
   return managerRoleSelection(permissions.managerRoles?.length?permissions.managerRoles:permissions.managerRole).includes('Maintenance Manager');
+}
+function productionFirstTripSession(session){
+  if(session?.role==='normal'&&session.assignedRole==='Production User')return true;
+  if(session?.role!=='super'||session?.permissions?.adminLevel!=='Manager')return false;
+  const permissions=session.permissions;
+  return managerRoleSelection(permissions.managerRoles?.length?permissions.managerRoles:permissions.managerRole).includes('Production Manager');
 }
 function requireMaintenanceUpdatePermission(permission){
   const maintenanceUser=requirePermission(permission,{role:'Maintenance User'});
@@ -4354,6 +4375,10 @@ const requestProjection=`reference AS ref, equipment_name AS equipment, equipmen
   verified_by AS "verifiedBy", first_trip_done AS "firstTripDone",
   to_char(first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') AS "firstTripAt",
   first_trip_by AS "firstTripBy", (first_trip_card_image <> '') AS "firstTripCardUploaded",
+  (SELECT to_char(pfta.production_first_trip_at AT TIME ZONE 'Asia/Kolkata','YYYY-MM-DD HH24:MI:SS') FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference) AS "productionFirstTripAt",
+  COALESCE((SELECT pfta.production_first_trip_by FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripBy",
+  COALESCE((SELECT pfta.production_first_trip_login FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripLogin",
+  COALESCE((SELECT pfta.production_first_trip_remark FROM production_first_trip_acceptances pfta WHERE pfta.request_reference=maintenance_requests.reference),'') AS "productionFirstTripRemark",
   meter_type AS "meterType", opening_meter_reading AS "openingMeterReading",
   opening_meter_readings AS "openingMeterReadings", closing_meter_readings AS "closingMeterReadings",
   (opening_meter_file <> '') AS "openingMeterFileUploaded", opening_meter_file_name AS "openingMeterFileName",
@@ -5381,6 +5406,57 @@ app.patch('/api/requests/:reference/mis-flag',requireSession,requirePermission('
     req.audit={eventType:'Workflow',module:'Maintenance Requests',action:'Raise MIS red flag',targetType:'Maintenance request',targetReference:reference,reason:remark,changedFields:[{field:'misFlaggedAt',before:'',after:rows[0].misFlaggedAt},{field:'misFlaggedBy',before:'',after:rows[0].misFlaggedBy},{field:'misFlagRemark',before:'',after:rows[0].misFlagRemark}]};
     res.json((await attachDailyRemarks(rows))[0]);
   }catch(error){next(error)}
+});
+
+app.patch('/api/requests/:reference/production-first-trip',requireSession,async(req,res,next)=>{
+  const client=await pool.connect();
+  try{
+    if(!productionFirstTripSession(req.session))return res.status(403).json({error:'Only Production users or Production Managers can record the first production trip.'});
+    const reference=String(req.params.reference||'').trim();
+    const firstTripAt=parseRequestTimelineTimestamp(`${req.body?.firstTripDate}T${req.body?.firstTripTime}`);
+    const remark=String(req.body?.productionFirstTripRemark||req.body?.remark||'').trim();
+    if(!firstTripAt)return res.status(400).json({error:'Enter a valid production first-trip date and time in HH:MM:SS format.'});
+    if(!remark)return res.status(400).json({error:'Enter the production first-trip remark or work-start note.'});
+    if(remark.length>1000)return res.status(400).json({error:'Keep the production first-trip remark within 1,000 characters.'});
+    const user=await currentUserRecord(req.session,client);
+    const scope=req.session.role==='normal'?userSiteScope(user):managerReportScope(user);
+    if(!scope.sites?.length)return res.status(403).json({error:'A location must be assigned before recording the production first trip.'});
+    await client.query('BEGIN');
+    const {rows:requestRows}=await client.query(`SELECT reference,site,status,closed_at,equipment_group,door_number,chassis_number
+      FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
+    const request=requestRows[0];
+    if(!request)throw Object.assign(new Error('This request no longer exists.'),{status:404});
+    if(!reportScopeIncludesSite(scope,request.site))throw Object.assign(new Error('This request belongs to a different production location.'),{status:403});
+    if(String(request.status||'').trim()!=='Closed'||!request.closed_at)throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
+    const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
+    if(closedAt&&firstTripAt.getTime()<closedAt.getTime())throw Object.assign(new Error('Production first-trip time cannot be before the vehicle was made on road.'),{status:400});
+    if(firstTripAt.getTime()>Date.now())throw Object.assign(new Error('Production first-trip time cannot be in the future.'),{status:400});
+    const actorName=req.session.name||user?.employee||req.session.login||'Production User';
+    const actorLogin=String(req.session.login||user?.login||'').trim().toLowerCase();
+    const insert=await client.query(`INSERT INTO production_first_trip_acceptances
+        (request_reference,site,equipment_group,door_number,chassis_number,maintenance_closed_at,production_first_trip_at,production_first_trip_by,production_first_trip_login,production_first_trip_remark)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ON CONFLICT (request_reference) DO NOTHING
+      RETURNING request_reference`,[
+      request.reference,request.site||'',request.equipment_group||'',request.door_number||'',request.chassis_number||'',closedAt,firstTripAt,actorName,actorLogin,remark,
+    ]);
+    if(!insert.rowCount)throw Object.assign(new Error('Production first trip has already been recorded for this request. Refresh to see the latest entry.'),{status:409});
+    const {rows}=await client.query(`SELECT ${requestProjection} FROM maintenance_requests WHERE reference=$1`,[reference]);
+    await client.query('COMMIT');
+    const saved=rows[0];
+    req.audit={eventType:'Workflow',module:'Maintenance Requests',action:'Record production first trip',targetType:'Maintenance request',targetReference:reference,reason:remark,changedFields:[
+      {field:'productionFirstTripAt',before:'',after:saved.productionFirstTripAt||firstTripAt.toISOString()},
+      {field:'productionFirstTripBy',before:'',after:saved.productionFirstTripBy||actorName},
+      {field:'site',before:'',after:saved.site||request.site||''},
+      {field:'door',before:'',after:saved.door||request.door_number||''},
+    ]};
+    const [withRemarks]=await attachDailyRemarks([saved]);
+    res.json(withRemarks);
+  }catch(error){
+    await client.query('ROLLBACK').catch(()=>{});
+    if(error.status)return res.status(error.status).json({error:error.message});
+    next(error);
+  }finally{client.release()}
 });
 
 app.patch('/api/requests/:reference/verify',requireSession,requirePermission('verifyRequests',{role:'MIS User'}),async(req,res,next)=>{

@@ -13,6 +13,7 @@ export function requestWriteOutcomeConfirmed(before = {}, after = {}, action = "
     return Boolean(text(after.closedAt)) || ["closed", "idle", "ideal"].includes(status(after));
   }
   if (action === "verify") return Boolean(text(after.verifiedAt));
+  if (action === "production-first-trip") return Boolean(text(after.productionFirstTripAt));
   if (action === "arrival-flag") return Boolean(text(after.arrivalFlaggedAt));
   if (action === "mis-flag") return Boolean(text(after.misFlaggedAt));
   if (action === "ideal-onroad") return Boolean(text(after.idealApprovedAt) || text(after.closedAt));

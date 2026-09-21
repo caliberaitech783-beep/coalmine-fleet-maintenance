@@ -8,13 +8,14 @@ import {MIS_IN_OUT_REPORT_COLUMNS, MIS_IN_OUT_REPORT_DESCRIPTION, buildSiteInOut
 import {requestTimelineDurations,formatTimelineDuration,requestTimelineEvents} from './request-timeline.mjs';
 import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
 
-const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report'];
+const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report', 'Production vs MIS First Trip Report'];
 export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6);
 export const TICKET_ACCEPTANCE_REPORT_TITLE = REPORT_TITLES[10];
 const clean = value => String(value ?? '').trim();
 const status = row => clean(row.status).toLowerCase();
 const verified = row => Boolean(row.verifiedAt || row.verifiedBy);
 const firstTrip = row => row.firstTripAt || (row.firstTripDate ? `${row.firstTripDate} ${row.firstTripTime || '00:00:00'}` : '');
+const productionFirstTrip = row => row.productionFirstTripAt || (row.productionFirstTripDate ? `${row.productionFirstTripDate} ${row.productionFirstTripTime || '00:00:00'}` : '');
 const col = (key, label, value = row => row[key]) => ({key, label, value});
 const duration = (a, b) => Number.isFinite(indiaDateTimeEpoch(a)) && indiaDateTimeEpoch(b) >= indiaDateTimeEpoch(a) ? elapsedLabel(a, b) : 'Not recorded';
 const ids = [col('door', 'Door no.', r => r.reportDoor || r.door), col('chassis', 'Chassis No', r => r.chassis || r.chassisNo || r.manufacturerSerialNo)];
@@ -136,5 +137,18 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
       ref,
       col('closureEvent','Closure type / recorded by',summaryClosure),
     ],requests.filter(r => r.verifiedAt),r => r.start || r.createdAt),
+    report('production', REPORT_TITLES[15], 'Closed/on-road vehicles with Production first-trip/work-start timing beside MIS first-trip verification timing.', [
+      ...productionLead,
+      col('closedAt','Maintenance On Road Date & Time',r => r.closedAt || 'Not recorded'),
+      col('productionFirstTripAt','Production First Trip / Work Start Time',r => productionFirstTrip(r) || 'Pending'),
+      col('productionFirstTripBy','Production accepted by',r => clean(r.productionFirstTripBy) || 'Pending'),
+      col('misFirstTripAt','MIS First Trip Time',r => firstTrip(r) || 'Pending'),
+      col('verifiedAt','MIS Verification Date & Time',r => r.verifiedAt || 'Pending'),
+      col('productionDelay','Maintenance on-road to Production first trip',r => duration(r.closedAt,productionFirstTrip(r))),
+      col('misDelay','Maintenance on-road to MIS first trip',r => duration(r.closedAt,firstTrip(r))),
+      col('productionFirstTripRemark','Production note',r => clean(r.productionFirstTripRemark) || 'Not recorded'),
+      ref,
+      ids[1],
+    ],finished.filter(r => productionFirstTrip(r) || firstTrip(r)),r => productionFirstTrip(r) || firstTrip(r) || r.closedAt),
   ];
 }
