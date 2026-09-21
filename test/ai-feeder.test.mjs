@@ -190,7 +190,7 @@ test("Info Pulse fails closed when an operational user has no assigned location"
   assert.deepEqual(scopeInfoPulseRequests([{ref:"REQ-1",site:"Sasti OB"}],scope),[]);
 });
 
-test("Info Pulse auto-opens after login and unlocks manual dismissal after its countdown", () => {
+test("Info Pulse loads in the background and opens only on request with immediate dismissal", () => {
   const mainSource = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
   const styles = fs.readFileSync(new URL("../src/ai-feeder.css", import.meta.url), "utf8");
   const serverSource = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
@@ -202,20 +202,17 @@ test("Info Pulse auto-opens after login and unlocks manual dismissal after its c
   assert.match(serverSource, /app\.get\('\/api\/info-pulse',requireSession/);
   assert.match(serverSource, /currentDashboardAuthorization\(req\.session\)[\s\S]*infoPulseRequestScope\(authorization\.session,authorization\.user\)/);
   assert.match(serverSource, /scopeInfoPulseRequests\(rows,scope\)/);
-  // The server decides whether the login prompt opens: once per four hours per user.
-  assert.match(mainSource, /fetch\(`\/api\/info-pulse\/prompt\?t=\$\{Date\.now\(\)\}`, \{method: "POST"/);
   assert.match(serverSource, /app\.post\('\/api\/info-pulse\/prompt',requireSession/);
   assert.match(serverSource, /claimInfoPulsePrompt\(/);
   assert.match(serverSource, /CREATE TABLE IF NOT EXISTS info_pulse_prompts/);
   const panel = mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder("));
-  assert.match(panel, /remainingSeconds === 0 && <button/);
-  assert.match(panel, /Date\.now\(\) >= closeAvailableAt\) onClose\(\)/);
+  assert.match(panel, /aria-label="Close Info Pulse"/);
   assert.match(panel, /if \(event\.key === "Escape"\) closeRef\.current\(\)/);
+  assert.doesNotMatch(panel, /remainingSeconds|closeAvailableAt|role="timer"/);
   assert.match(mainSource, /watchRequestRefresh\(load, \{intervalMs: 30000\}\)/);
   assert.match(mainSource, /window\.setInterval\(\(\) => setNow\(Date\.now\(\)\), 60000\)/);
-  assert.match(mainSource, /setOpenMode\("login"\)/);
-  assert.match(mainSource, /onClick=\{\(\) => setOpenMode\(current => current \|\| "manual"\)\}/);
-  assert.match(mainSource, /Date\.now\(\) \+ Math\.max\(0, Number\(body\.closeAfterMs\) \|\| 0\)/);
+  assert.doesNotMatch(mainSource.slice(mainSource.indexOf("function AiFeeder("), mainSource.indexOf("function NotificationEntryField(")), /\/api\/info-pulse\/prompt|setOpenMode\("login"\)|loginCloseAvailableAt/);
+  assert.match(mainSource, /onClick=\{\(\) => setOpen\(true\)\}/);
   assert.doesNotMatch(mainSource, /aiFeederGreeted/);
   assert.doesNotMatch(mainSource.slice(mainSource.indexOf("function AiFeederPanel("), mainSource.indexOf("function AiFeeder(")), /setPaused|onMouseEnter|onMouseLeave/);
   assert.match(mainSource, /INFO PULSE<\/span>/);
@@ -228,5 +225,4 @@ test("Info Pulse auto-opens after login and unlocks manual dismissal after its c
   assert.doesNotMatch(mainSource, /<AiFeeder[^>]*role=\{mobileRole\}/);
   assert.doesNotMatch(mainSource.match(/<div className="normal-header-actions">.*/)[0], /<AiFeeder\b/);
   assert.match(styles, /@keyframes ai-feeder-blink/);
-  assert.match(styles, /ai-feeder-countdown/);
 });

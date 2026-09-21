@@ -149,7 +149,10 @@ test('search, status filter, column filter, sorting, print and export agree with
   }
   find(tree, 'select').props.onChange({ target: { value: '' } });
   tree = app.render(props);
-  const statusHeader = all(tree, node => node.type === FilterableHeader && node.props.sortKey === 'status')[0];
+  let statusHeader = all(tree, node => node.type === FilterableHeader && node.props.sortKey === 'status')[0];
+  statusHeader.props.onToggle('status');
+  tree = app.render(props);
+  statusHeader = all(tree, node => node.type === FilterableHeader && node.props.sortKey === 'status')[0];
   assert.ok(statusHeader.props.values.includes('Accepted'));
   statusHeader.props.onFilterChange('Accepted');
   tree = app.render(props);

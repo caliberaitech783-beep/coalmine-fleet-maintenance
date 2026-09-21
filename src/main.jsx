@@ -2358,10 +2358,8 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
     else delete next[key];
     return next;
   });
-  const columnValues = Object.fromEntries(filterColumns.map((column) => [
-    column.key,
-    [...new Set(displayRows.map((row) => tableFilterText(column.value(row))))].sort((a, b) => sortCollator.compare(a, b)),
-  ]));
+  const activeFilterColumn = openFilter ? filterColumns.find((column) => column.key === openFilter) : null;
+  const columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(displayRows, activeFilterColumn)} : {};
   useEffect(() => {
     if (!openFilter) return undefined;
     const closeFilter = (event) => {
@@ -2851,6 +2849,9 @@ function tableFilterText(value) {
   if (value && typeof value === "object") return Object.values(value).map(tableFilterText).filter(Boolean).join(" · ");
   return String(value ?? "").trim();
 }
+function tableColumnValues(rows, column) {
+  return [...new Set(rows.map((row) => tableFilterText(column.value?.(row))))].sort((a, b) => sortCollator.compare(a, b));
+}
 function tableRowMatchesFilters(row, columns, filters) {
   return columns.every((column) => {
     const selected = filters[column.key];
@@ -2872,12 +2873,9 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
   const triggerRef = useRef(null);
   const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const activeFilterCount = columns.filter((column) => filters[column.key]).length;
-  const columnValues = Object.fromEntries(
-    columns.map((column) => [
-      column.key,
-      [...new Set(rows.map((row) => tableFilterText(column.value?.(row))))].sort((a, b) => sortCollator.compare(a, b)),
-    ]),
-  );
+  const columnValues = useMemo(() => open ? Object.fromEntries(
+    columns.map((column) => [column.key, tableColumnValues(rows, column)]),
+  ) : {}, [open, columns, rows]);
   useEffect(() => {
     if (!open || dialogMode) return undefined;
     const closeFilter = (event) => {
@@ -2917,7 +2915,7 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
             <option value="">All {column.label}</option>
             {parseDateRange(filters[column.key]) && <option value={filters[column.key]}>{describeDateRange(parseDateRange(filters[column.key]))}</option>}
             {parseFilterValues(filters[column.key]).length > 1 && <option value={filters[column.key]}>{describeFilterValues(filters[column.key])}</option>}
-            {columnValues[column.key].map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
+            {(columnValues[column.key] || []).map((value) => <option key={value || EMPTY_TABLE_FILTER_VALUE} value={value || EMPTY_TABLE_FILTER_VALUE}>{value || "(Blank)"}</option>)}
           </select></label>
         ))}
       </div>
@@ -3506,12 +3504,8 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const [page, setPage] = useState(0);
   const columnValue = (row, column) => tableFilterText(column.value?.(row));
   const displayedColumns = visibleColumnKeys.length ? visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean) : columns;
-  const columnValues = Object.fromEntries(
-    columns.map((column) => [
-      column.key,
-      [...new Set(rows.map((row) => columnValue(row, column)))].sort((a, b) => sortCollator.compare(a, b)),
-    ]),
-  );
+  const activeFilterColumn = openFilter ? columns.find((column) => column.key === openFilter) : null;
+  const columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(rows, activeFilterColumn)} : {};
   const filteredRows = rows.filter((row) =>
     matchesSmartSearch(query, row) &&
     tableRowMatchesFilters(row, columns, columnFilters),
@@ -3584,7 +3578,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
             onSort={changeSort}
             open={openFilter === column.key}
             onToggle={(key) => setOpenFilter((current) => current === key ? null : key)}
-            values={columnValues[column.key]}
+            values={columnValues[column.key] || []}
             filterValue={columnFilters[column.key] || ""}
             onFilterChange={(value) => updateColumnFilter(column.key, value)}
           />
@@ -7020,12 +7014,8 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
       return type === "checkbox" ? (isCheckedValue(record[key]) ? "Yes" : "No") : String(formatMasterFieldValue(key, record[key]) ?? "").trim();
     },
     filterColumns = displayFields.map(([key, label]) => ({ key, label, value: (record) => masterValue(record, key) })),
-    columnValues = Object.fromEntries(
-      displayFields.map(([key]) => [
-        key,
-        [...new Set(records.map((record) => masterValue(record, key)))].sort((a, b) => sortCollator.compare(a, b)),
-      ]),
-    ),
+    activeFilterColumn = openFilter ? filterColumns.find((column) => column.key === openFilter) : null,
+    columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(records, activeFilterColumn)} : {},
     filteredRows = records.filter((record) =>
       matchesSmartSearch(q, record) &&
       tableRowMatchesFilters(record, filterColumns, columnFilters),
@@ -7199,7 +7189,7 @@ function MasterPage({ name, records = [], onAdd, onEdit, onDelete, onDeleteAll, 
                   onSort={changeSort}
                   open={openFilter === key}
                   onToggle={(column) => setOpenFilter((current) => current === column ? null : column)}
-                  values={columnValues[key]}
+                  values={columnValues[key] || []}
                   filterValue={columnFilters[key] || ""}
                   onFilterChange={(value) => updateColumnFilter(key, value)}
                 />
@@ -7456,6 +7446,7 @@ function useMasterRecords(name, seed = []) {
     [loadError, setLoadError] = useState(""),
     [loadAttempt, setLoadAttempt] = useState(0);
   const loadedMasterScope = useRef({name, token: authToken, loaded: false});
+  const masterResponseCache = useRef({name, token: authToken, etag: ""});
   useEffect(() => watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document}), []);
   useEffect(() => {
     let activeRequest = true;
@@ -7464,21 +7455,27 @@ function useMasterRecords(name, seed = []) {
     const sameScope = loadedMasterScope.current.name === name && loadedMasterScope.current.token === authToken;
     if (!sameScope) {
       loadedMasterScope.current = {name, token: authToken, loaded: false};
+      masterResponseCache.current = {name, token: authToken, etag: ""};
       setRecords(seed);
     }
     setLoaded(sameScope && loadedMasterScope.current.loaded);
     setLoadError("");
-    fetch(`/api/masters?t=${Date.now()}`, {cache:"no-store", signal: controller.signal, headers: {Authorization: "Bearer " + authToken}})
+    const responseEtag = sameScope ? masterResponseCache.current.etag : "";
+    fetch(`/api/masters?names=${encodeURIComponent(name)}&t=${Date.now()}`, {cache:"no-store", signal: controller.signal, headers: {Authorization: "Bearer " + authToken, ...(responseEtag ? {"If-None-Match": responseEtag} : {})}})
       .then(async (response) => {
+        if (response.status === 304) return {notModified: true};
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data?.error || "Could not load " + name + ".");
         if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Could not load " + name + ".");
         if (data[name] != null && !Array.isArray(data[name])) throw new Error("Could not load " + name + ".");
-        return data;
+        return {data, etag: response.headers?.get?.("etag") || ""};
       })
-      .then((data) => {
+      .then(({data, etag, notModified}) => {
         if (!activeRequest) return;
-        setRecords([...seed, ...(data[name] || [])]);
+        if (!notModified) {
+          masterResponseCache.current = {name, token: authToken, etag};
+          setRecords([...seed, ...(data[name] || [])]);
+        }
         loadedMasterScope.current.loaded = true;
         setLoaded(true);
       })
@@ -8731,10 +8728,8 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     else delete next[key];
     return next;
   });
-  const columnValues = Object.fromEntries(filterColumns.map((column) => [
-    column.key,
-    [...new Set(rows.map((row) => tableFilterText(column.value(row))))].sort((a, b) => sortCollator.compare(a, b)),
-  ]));
+  const activeFilterColumn = openFilter ? filterColumns.find((column) => column.key === openFilter) : null;
+  const columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(rows, activeFilterColumn)} : {};
   const workflowHeader = (key, label) => <FilterableHeader key={key} label={label} sortKey={key} sort={sort} onSort={changeSort} open={openFilter === key} onToggle={(filterKey) => setOpenFilter((current) => current === filterKey ? null : filterKey)} values={columnValues[key] || []} filterValue={parameterFilters[key] || ""} onFilterChange={(value) => updateColumnFilter(key, value)} />;
   const lateAcceptanceHighlight = highlightLateAcceptance ? requestAcceptedLate : undefined;
   const startedHeader = () => <>{workflowHeader("start", startedLabel)}{showIdleDate && workflowHeader("idleDate", "Idle Vehicle Date")}</>;
@@ -9339,21 +9334,10 @@ function TicketPage({ session }) {
   </section>;
 }
 
-function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
+function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose }) {
   const panelRef = useRef(null);
-  const [remainingSeconds, setRemainingSeconds] = useState(() => Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
   const closeRef = useRef(onClose);
-  closeRef.current = () => { if (Date.now() >= closeAvailableAt) onClose(); };
-  useEffect(() => {
-    const updateCountdown = () => setRemainingSeconds(Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
-    updateCountdown();
-    if (Date.now() >= closeAvailableAt) return undefined;
-    const timer = window.setInterval(() => {
-      updateCountdown();
-      if (Date.now() >= closeAvailableAt) window.clearInterval(timer);
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [closeAvailableAt]);
+  closeRef.current = onClose;
   useEffect(() => {
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
@@ -9377,8 +9361,7 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
       <header>
         <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><PulseIcon /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Open breakdowns</h2></div>
         <div className="ai-feeder-actions">
-          {closeAvailableAt > 0 && <span className="ai-feeder-countdown" role="timer" aria-live="off" aria-label={remainingSeconds > 0 ? "Time until Info Pulse can be closed" : "Info Pulse can now be closed"}><small>{remainingSeconds > 0 ? "Close available in" : "You can close"}</small><b>{String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}</b></span>}
-          {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
+          <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>
         </div>
       </header>
       <InfoPulseContent breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} />
@@ -9387,8 +9370,7 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
 }
 
 function AiFeeder({ role = "", session }) {
-  const [openMode, setOpenMode] = useState("");
-  const [loginCloseAvailableAt, setLoginCloseAvailableAt] = useState(0);
+  const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [requests, setRequests] = useState([]);
   const [scope, setScope] = useState({kind: "location", label: "Assigned location", sites: []});
@@ -9447,33 +9429,16 @@ function AiFeeder({ role = "", session }) {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    setOpenMode("");
-    if (!session?.token) return undefined;
-    let active = true;
-    // The server remembers when each user last saw the login prompt, so it
-    // opens once per four hours however many times they sign in.
-    fetch(`/api/info-pulse/prompt?t=${Date.now()}`, {method: "POST", cache: "no-store", headers: {Authorization: `Bearer ${session.token}`}})
-      .then(response => response.ok ? response.json() : null)
-      .then(body => {
-        if (!active || body?.show !== true) return;
-        setLoginCloseAvailableAt(Date.now() + Math.max(0, Number(body.closeAfterMs) || 0));
-        setOpenMode("login");
-      })
-      .catch(() => {});
-    return () => { active = false; };
+    setOpen(false);
   }, [session?.token]);
-  const closePanel = () => {
-    if (openMode === "login" && Date.now() < loginCloseAvailableAt) return;
-    setOpenMode("");
-  };
   const ready = loadState.token === session?.token && loadState.ready;
   // BD balance: every open request that is not idle, closed or verified, longest standing first.
   const breakdowns = useMemo(() => ready ? buildInfoPulseBreakdowns(requests) : [], [requests, ready]);
   return <>
-    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
       <PulseIcon /><span>INFO PULSE</span>{ready && breakdowns.length > 0 && <><b className="ai-feeder-trigger-count">{breakdowns.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} breakdowns={breakdowns} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
+    {open && <AiFeederPanel key={session?.token} breakdowns={breakdowns} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={() => setOpen(false)} />}
   </>;
 }
 

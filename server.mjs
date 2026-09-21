@@ -5576,6 +5576,7 @@ app.get('/api/reports/master-data',requireSession,async(req,res,next)=>{
 
 app.get('/api/masters',requireSession,async(req,res,next)=>{
   try{
+    const requestedMasters=[...new Set(String(req.query?.names||'').split('|').map(value=>value.trim()).filter(Boolean))];
     const superCanView=(master)=>req.session.role==='super'&&(masterAccessAllows(req.session.permissions,master)||masterAccessAllows(req.session.permissions,master,'mobileMasterAccess'));
     const canViewEquipment=superCanView('Equipment master')||req.session.permissions?.viewEquipment===true;
     // The edit and daily-update forms need these lists even when the manager's visible masters omit them.
@@ -5586,7 +5587,9 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
     const managerScope=managerRecord?(req.session.role==='normal'?userSiteScope(managerRecord):managerReportScope(managerRecord)):null;
-    const {rows}=await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
+    const {rows}=requestedMasters.length
+      ?await pool.query('SELECT id, master_name, record_data FROM master_records WHERE master_name = ANY($1::text[]) ORDER BY created_at ASC',[requestedMasters])
+      :await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
     const grouped={},privilegesByUsername=new Map();
     for(const row of rows){
       if(req.session.role==='super'){
@@ -5620,6 +5623,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       }
       (grouped[row.master_name]??=[]).push({id:row.id,...record});
     }
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,`masters:${requestedMasters.slice().sort().join('|')||'all'}`,grouped);
     res.json(grouped);
   }catch(error){next(error)}
 });

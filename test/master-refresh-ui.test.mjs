@@ -50,7 +50,7 @@ function harness(hookName = "useMasterRecords") {
     watchRequestRefresh: (refresh, environment) => watchRequestRefresh(refresh, {...environment, now: () => now}),
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({
       url, options, reject,
-      respond(data, ok = true, status = ok ? 200 : 503) {resolve({ok, status, json: async () => data, text: async () => JSON.stringify(data)});},
+      respond(data, ok = true, status = ok ? 200 : 503, responseHeaders = {}) {resolve({ok, status, headers: {get: name => responseHeaders[String(name).toLowerCase()] || null}, json: async () => data, text: async () => JSON.stringify(data)});},
     })),
   };
   const api = new Function(...Object.keys(scope), `${hookName === "useMasterRecords" ? hook : dashboardHook}; return {run: ${hookName}, setToken(value) {authToken = value;}};`)(...Object.values(scope));
@@ -75,11 +75,25 @@ test("refresh replaces a successful empty equipment result with newly added mast
   assert.deepEqual(result[0], []);
   result[7](); app.render(); app.effects();
   assert.equal(app.requests.length, 2);
+  assert.match(app.requests[1].url, /^\/api\/masters\?names=Equipment%20master&t=/);
   assert.equal(app.requests[1].options.cache, "no-store");
   app.requests[1].respond({"Equipment master": newEquipment}); await settle();
   result = app.render();
   assert.deepEqual(result[0], newEquipment);
   assert.equal(result[2], true);
+});
+
+test("master refreshes use an ETag and retain the confirmed snapshot after 304", async () => {
+  const app = harness();
+  app.render(); app.effects();
+  app.requests[0].respond({"Equipment master": oldEquipment}, true, 200, {etag: '"equipment-v1"'}); await settle();
+  assert.deepEqual(app.render()[0], oldEquipment);
+  app.render()[7](); app.render(); app.effects();
+  assert.equal(app.requests[1].options.headers["If-None-Match"], '"equipment-v1"');
+  app.requests[1].respond(null, false, 304); await settle();
+  assert.deepEqual(app.render()[0], oldEquipment);
+  assert.equal(app.render()[2], true);
+  app.unmount();
 });
 
 for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${hookName}: mounted role views refresh on focus/visibility and their live polling interval, never while hidden`, async () => {
