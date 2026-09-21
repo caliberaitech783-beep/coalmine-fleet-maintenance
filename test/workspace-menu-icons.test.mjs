@@ -103,7 +103,7 @@ test('operational, manager and workspace navigation get the graphical treatment 
   }
   assert.match(header,/<button data-nav="requests" className=\{section === "profile" \? "active" : ""\}[\s\S]*?><Wrench \/> \{isGeneral \? "Requests" : mobileRole\}<\/button>/);
   const tabs=source.slice(source.indexOf('<div className="mobile-tabs" role="tablist">'),source.indexOf('</div>\n      </div>',source.indexOf('<div className="mobile-tabs" role="tablist">')));
-  for(const key of ['requests','create','verify','history','idle','close'])assert.match(tabs,new RegExp(`<button data-nav="${key}" `),key);
+  for(const key of ['requests','create','productionFirstTrip','verify','history','idle','close'])assert.match(tabs,new RegExp(`<button data-nav="${key}" `),key);
   assert.match(tabs,/>Requests<\/button>/,'tab text unchanged');
   const manager=source.match(/<div className="mobile-tabs manager-queue-tabs"[\s\S]*?<\/div>/)[0];
   for(const key of ['active','idle','history'])assert.match(manager,new RegExp(`<button data-nav="${key}" `),key);
@@ -115,7 +115,7 @@ test('operational, manager and workspace navigation get the graphical treatment 
   assert.match(motion,/\.normal-header-nav button\[data-nav="transfers"\] \{ --hn-a: #f97373; --hn-b: #f04e53;/);
   assert.match(motion,/\.normal-header-nav button\[data-nav\]::after \{[\s\S]*transform: scaleX\(0\);\s*transform-origin: left center;/);
   assert.match(motion,/\.mobile-tabs button\[data-nav\]::before \{[\s\S]*border-radius: 50%;/,'tabs get a colour dot');
-  for(const key of ['requests','create','verify','history','idle','close','role'])assert.match(motion,new RegExp(`\\.mobile-tabs button\\[data-nav="${key}"\\][^{]*\\{ --tab-a: #[0-9a-f]{6}; --tab-b: #[0-9a-f]{6};`),key);
+  for(const key of ['requests','create','productionFirstTrip','verify','history','idle','close','role'])assert.match(motion,new RegExp(`\\.mobile-tabs button\\[data-nav="${key}"\\][^{]*\\{ --tab-a: #[0-9a-f]{6}; --tab-b: #[0-9a-f]{6};`),key);
   for(const name of ['hn-pulse','hn-wiggle','hn-press','hn-tick','hn-shuttle','hn-dot'])assert.match(motion,new RegExp(`@keyframes ${name} \\{`),name);
   assert.match(motion,/@media \(prefers-reduced-motion: reduce\)/);
 });

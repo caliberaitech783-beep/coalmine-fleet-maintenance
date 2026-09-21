@@ -9952,7 +9952,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     if(!allowed[section])setSection(Object.keys(allowed).find((key)=>allowed[key])||"");
   },[isGeneral,embedded,section,showDashboardMenu,showRequestsMenu,showReportsMenu,showTicketsMenu]);
   useEffect(()=>{
-    const allowed=tab==="tickets"?showTicketsMenu:tab==="transfers"?isMis:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="productionFirstTrip"?isProduction:tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
+    const allowed=tab==="tickets"?showTicketsMenu:tab==="transfers"?isMis:tab==="productionFirstTrip"?isProduction:showRequestsMenu&&(tab==="requests"?canSeeRequestMenu("View requests"):tab==="close"?canSeeRequestMenu("Close request form"):tab==="verify"?canSeeRequestMenu(MIS_VERIFICATION_MENU):tab==="history"||tab==="idle"?canSeeRequestMenu("Closed history"):true);
     if(allowed)return;
     if(showRequestsMenu&&canSeeRequestMenu("View requests"))setTab("requests");
     else if(showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU))setTab("verify");
@@ -10087,7 +10087,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button data-nav="requests" className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
         {showRequestsMenu&&canCreate&&canSeeRequestMenu("Create request")&&<button data-nav="create" className="primary" onClick={() => {refreshEquipmentRecords();refreshRepairTypes();setShow(true);}}><Plus /> Create request</button>}
-        {showRequestsMenu&&isProduction&&<button data-nav="productionFirstTrip" className={tab === "productionFirstTrip" ? "active" : ""} onClick={() => setTab("productionFirstTrip")}>First trip entry{productionFirstTripRows.length ? ` (${productionFirstTripRows.length})` : ""}</button>}
+        {isProduction&&<button data-nav="productionFirstTrip" className={tab === "productionFirstTrip" ? "active" : ""} onClick={() => setTab("productionFirstTrip")}>First trip entry{productionFirstTripRows.length ? ` (${productionFirstTripRows.length})` : ""}</button>}
         {showRequestsMenu&&isMis&&canSeeRequestMenu(MIS_VERIFICATION_MENU)&&<button data-nav="verify" className={tab === "verify" ? "active" : ""} onClick={() => setTab("verify")}>MIS verification</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button data-nav="history" className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Closed history</button>}
         {showRequestsMenu&&canSeeRequestMenu("Closed history")&&<button data-nav="idle" className={tab === "idle" ? "active" : ""} onClick={() => setTab("idle")}>Idle Vehicles</button>}
