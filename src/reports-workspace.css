@@ -592,3 +592,48 @@
     background: #17253a;
   }
 }
+
+.reports-page > .vehicle-history-page { margin: 12px 20px 20px; }
+
+.vehicle-history-report-filter {
+  display: grid;
+  grid-template-columns: minmax(240px, 360px);
+  gap: 4px;
+  min-width: min(360px, 40vw);
+}
+.vehicle-history-report-filter label > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--report-accent-strong);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.vehicle-history-report-filter label > span svg { width: 13px; }
+.vehicle-history-report-filter select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid color-mix(in srgb, var(--report-accent) 30%, #d5deea);
+  border-radius: 7px;
+  background: #fff;
+  padding: 7px 32px 7px 10px;
+  color: #243650;
+  font-size: 11px;
+  font-weight: 700;
+}
+.vehicle-history-report-filter small { color: #65758b; font-size: 9px; }
+.vehicle-history-report-filter small b { color: var(--report-accent-strong); }
+
+:root[data-theme="dark"] .vehicle-history-report-filter select {
+  border-color: #36516f;
+  background: #17253a;
+  color: #eef3fb;
+}
+
+@media (max-width: 700px) {
+  .reports-page > .vehicle-history-page { margin: 10px 12px 12px; }
+  .vehicle-history-report-filter { min-width: 100%; grid-template-columns: minmax(0, 1fr); }
+}

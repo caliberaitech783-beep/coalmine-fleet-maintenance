@@ -67,6 +67,7 @@ import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldo
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
 import { visibleInProductionHistory } from "./production-history.mjs";
 import { visibleInMaintenanceHistory } from "./maintenance-history.mjs";
+import { latestCompletedVehicleRepair, vehicleHistoryKey, vehicleRepairHistoryOptions, vehicleRepairHistoryRows } from "./vehicle-repair-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "./mis-history.mjs";
 import { indiaWorkflowDateTimeParts } from "./workflow-clock.mjs";
 import { watchVisibleMasterRefresh } from "./master-refresh.mjs";
@@ -2283,7 +2284,8 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     default: return null;
   }
 }
-function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showCompletionDetails = false, showMakeModel = false, showDateFilter = false, showStatusFilter = true, rowLimit = 0, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", onDelete, onDeleteSelected, canDeleteRow, onEdit, onRemark, exportTitle = "Breakdown report", columnOrder = null }) {
+function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHeader = false, showAudio = false, showTurnaroundTime = false, showReason = true, showCreatedBy = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showCompletionDetails = false, showMakeModel = false, showDateFilter = false, rowLimit = 0, showStatusFilter = true, onApproveIdeal, onCancelIdeal, showReadOnlyAction = false, stableToolbar = false, actionsBesideSearch = true, statusPanelId = "", statusPanelLabelledBy = "", onDelete, onDeleteSelected, canDeleteRow, onEdit, onRemark, exportTitle = "Breakdown report", columnOrder = null }) {
+  if (exportTitle === "Closed Production Requests") showStatusFilter = false;
   const showActionColumn = showReadOnlyAction || Boolean(onEdit || onRemark);
   // Edits and daily updates apply only to active, unverified requests, matching the server's rule.
   const rowUpdatable = (row) => !["closed", "idle", "ideal"].includes(String(row.status || "").trim().toLowerCase()) && !row.verifiedAt;
@@ -5651,6 +5653,7 @@ const reportCategoryTabs = [
   {id: "maintenance", label: "Maintenance report", description: "Repair turnaround, open off-road cases, and availability. Oracle utilization pending.", icon: Wrench},
   {id: "mis", label: "MIS Report", description: "Verification, first-trip mismatch, transfers, fleet, and daily in/out reports.", icon: ShieldCheck},
 ];
+const VEHICLE_REPAIR_HISTORY_REPORT = "Vehicle Repair History";
 const reportWeekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const reportDesignationOptions = Object.entries(HIERARCHY_REPORT_DESIGNATIONS).map(([key, designation]) => ({key, ...designation}));
 function reportScheduleKind(schedule) {
@@ -6288,6 +6291,70 @@ function locationCountRows(records = []) {
   });
   return [...groups.values()].sort((a, b) => sortCollator.compare(a.location, b.location));
 }
+function vehicleRepairHistoryColumns(onVehicleHistory) {
+  return [
+    {key: "door", label: "Door no.", value: (request) => request.reportDoor || request.door, render: (request) => {
+      const door = request.reportDoor || request.door;
+      return door && onVehicleHistory ? <button type="button" className="vehicle-history-link" onClick={() => onVehicleHistory(request)} aria-label={`View repair history for door number ${door}`} title="View breakdown and repair history"><History />{door}</button> : <b>{door || "—"}</b>;
+    }},
+    {key: "reference", label: "Job reference", value: (request) => request.ref},
+    {key: "equipment", label: "Equipment group", value: (request) => normalizeEquipmentGroup(request.equipmentGroup) || request.reportEquipment || request.equipment},
+    {key: "make", label: "Make", value: (request) => request.reportMake || request.make},
+    {key: "model", label: "Model", value: (request) => request.reportModel || request.model},
+    {key: "site", label: "Location", value: (request) => request.reportSite || request.site},
+    {key: "category", label: "Repair category", value: (request) => request.category || request.type},
+    {key: "complaint", label: "Reported problem", value: (request) => request.complaint},
+    {key: "maintenanceWork", label: "Work completed", value: (request) => request.maintenanceWork},
+    {key: "openedAt", label: "Opened at", value: (request) => formatTwelveHourDateTime(request.start), sortValue: (request) => request.start, render: (request) => formatTwelveHourDateTime(request.start)},
+    {key: "closedAt", label: "Closed at", value: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—", sortValue: (request) => request.closedAt, render: (request) => request.closedAt ? formatTwelveHourDateTime(request.closedAt) : "—"},
+    {key: "tat", label: "TAT", value: (request) => request.hours || elapsedLabel(request.start, request.closedAt), sortValue: (request) => elapsedMilliseconds(request.start, request.closedAt)},
+    {key: "status", label: "Status", value: requestStatusLabel, sortValue: (request) => requestStatusSortRank(requestStatusLabel(request)), render: (request) => <Status>{requestStatusLabel(request)}</Status>},
+    {key: "openingMeter", label: "Opening KMR/HMR", value: (request) => requestMeterReadingLabel(request, "opening")},
+    {key: "closingMeter", label: "Closing KMR/HMR", value: (request) => requestMeterReadingLabel(request, "closing")},
+    {key: "maintenanceUser", label: "Maintenance user", value: (request) => request.closedBy},
+    {key: "dailyUpdates", label: "Daily updates", value: (request) => dailyUpdatesExportText(request.dailyRemarks, { category: request.category })},
+  ];
+}
+function VehicleRepairHistoryPage({ vehicle, rows = [], onBack, backLabel = "Back to maintenance" }) {
+  const historyRows = vehicleRepairHistoryRows(rows, vehicle);
+  const latestRepair = latestCompletedVehicleRepair(rows, vehicle);
+  const vehicleDetails = historyRows[0] || vehicle || {};
+  const door = vehicleDetails.reportDoor || vehicleDetails.door || "Vehicle";
+  const equipment = normalizeEquipmentGroup(vehicleDetails.equipmentGroup) || vehicleDetails.reportEquipment || vehicleDetails.equipment || "Equipment details not available";
+  const model = vehicleDetails.reportModel || vehicleDetails.model || "";
+  const completedRepairs = historyRows.filter((request) => String(request.status || "").toLowerCase() === "closed" || (request.closedAt && request.maintenanceWork));
+  const columns = vehicleRepairHistoryColumns();
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
+  const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
+  return <section className="vehicle-history-page" aria-labelledby="vehicle-history-title">
+    <header className="vehicle-history-header">
+      <div className="vehicle-history-heading">
+        <button type="button" className="vehicle-history-back" onClick={onBack}><ArrowLeft /> {backLabel}</button>
+        <span><History /></span>
+        <div><small>Breakdown &amp; repair history</small><h1 id="vehicle-history-title">Door no. {door}</h1><p>{[equipment, model].filter(Boolean).join(" · ")}</p></div>
+      </div>
+      <div className="vehicle-history-header-actions"><div ref={setTableToolbarTarget} /><ExportMenu title={`${VEHICLE_REPAIR_HISTORY_REPORT} - ${door}`} columns={columns} rows={historyRows} label="Download history" /></div>
+    </header>
+    <div className="vehicle-history-summary">
+      <article><History /><span><small>Total maintenance visits</small><b>{historyRows.length}</b></span></article>
+      <article><CheckCircle2 /><span><small>Completed repairs</small><b>{completedRepairs.length}</b></span></article>
+      <article><Clock /><span><small>Last repair closed</small><b>{latestRepair?.closedAt ? formatTwelveHourDateTime(latestRepair.closedAt) : "No completed repair"}</b></span></article>
+    </div>
+    <article className={`vehicle-last-repair${latestRepair ? "" : " empty"}`}>
+      <div className="vehicle-last-repair-title"><Wrench /><span><small>What was done last time</small><h2>{latestRepair ? latestRepair.maintenanceWork || "Work details were not recorded" : "No completed repair has been recorded"}</h2></span></div>
+      {latestRepair && <dl>
+        <div><dt>Job reference</dt><dd>{latestRepair.ref || "—"}</dd></div>
+        <div><dt>Reported problem</dt><dd>{latestRepair.complaint || "—"}</dd></div>
+        <div><dt>Repair category</dt><dd>{latestRepair.category || "—"}</dd></div>
+        <div><dt>Completed by</dt><dd>{latestRepair.closedBy || "—"}</dd></div>
+      </dl>}
+    </article>
+    <div className="vehicle-history-table">
+      <div className="vehicle-history-table-title"><div><h2>Complete history</h2><p>Newest visit first, including the current open breakdown if one exists.</p></div><span>{historyRows.length} record{historyRows.length === 1 ? "" : "s"}</span></div>
+      <div className="reports-detail-table emptytable"><ReportTable title={`${VEHICLE_REPAIR_HISTORY_REPORT} - ${door}`} layoutKey="Vehicle Repair History Detail" columns={columns} visibleColumnKeys={visibleColumnKeys} onVisibleColumnsChange={setVisibleColumnKeys} rows={historyRows} emptyMessage="No maintenance history is available for this vehicle" rowKey={(request, index) => request.ref || `${door}-${index}`} toolbarTarget={tableToolbarTarget} toolbarPortal /></div>
+    </div>
+  </section>;
+}
 function ReportSection({ title, description, category = "general", icon: ReportIcon = FileBarChart, rows = [], columns = [], query = "", emptyMessage = "No records available", rowKey, rowClassName, headingControl = null, children }) {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => columns.map((column) => column.key));
   const [tableToolbarTarget, setTableToolbarTarget] = useState(null);
@@ -6369,6 +6436,8 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const [reportZipOpen, setReportZipOpen] = useState(false);
   const [selectedZipReports, setSelectedZipReports] = useState([]);
   const [reportZipDownloading, setReportZipDownloading] = useState(false);
+  const [vehicleHistorySelection, setVehicleHistorySelection] = useState("");
+  const [reportVehicleHistoryTarget, setReportVehicleHistoryTarget] = useState(null);
   const [reportZipFrom, setReportZipFrom] = useState(() => indiaDateTimeInputValue(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)));
   const [reportZipTo, setReportZipTo] = useState(() => indiaDateTimeInputValue(new Date(Date.now() + 60 * 1000)));
   const reportGeneratedAt = useMemo(() => indiaDateTimeInputValue(new Date()), []);
@@ -6420,6 +6489,11 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   const closedBreakdownRows = reportRequests.filter((request) => String(request.closedAt || "").trim() || String(request.status || "").trim().toLowerCase() === "closed");
   const misVerificationRows = reportRequests.filter((request) => String(request.verifiedAt || "").trim() || String(request.verifiedBy || "").trim());
   const idleRequestRows = reportRequests.filter((request) => String(request.status || "").trim().toLowerCase() === "idle" || String(request.idleReason || "").trim());
+  const vehicleHistoryOptions = useMemo(() => vehicleRepairHistoryOptions(reportRequests), [reportRequests]);
+  const selectedVehicleHistoryOption = vehicleHistoryOptions.find((option) => option.key === vehicleHistorySelection);
+  const vehicleHistoryReportRows = vehicleHistorySelection
+    ? vehicleRepairHistoryRows(reportRequests, vehicleHistorySelection)
+    : reportRequests.filter((request) => vehicleHistoryKey(request));
   const fleetStatusRows = equipmentRecords.map((record, index) => ({
     ...record,
     reportId: record.id || `${record.equipmentName || record.door || "equipment"}-${index}`,
@@ -6503,6 +6577,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     {key: "createdBy", label: "Production user", value: (request) => request.owner || request.requesterLogin},
     {key: "closedBy", label: "Maintenance user", value: (request) => request.closedBy},
   ];
+  const repairHistoryColumns = vehicleRepairHistoryColumns(setReportVehicleHistoryTarget);
   const legacyReportGroups = [
     {category: "production", title: "Location wise opened BD", description: "Open production breakdown cases grouped with location and category details.", rows: openBreakdownRows, columns: requestColumns, dateValue: (row) => row.start, emptyMessage: "No open breakdown cases available"},
     {category: "maintenance", title: "Location wise closing BD", description: "Closed maintenance breakdown cases with location, category, closure user, and closure time.", rows: closedBreakdownRows, columns: closureColumns, dateValue: (row) => row.closedAt, emptyMessage: "No closed maintenance cases available"},
@@ -6546,10 +6621,17 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
   ];
   const reportGroups = [
     ...legacyReportGroups.filter((report) => report.category === "general"),
+    {category: "maintenance", title: VEHICLE_REPAIR_HISTORY_REPORT, description: "Complete breakdown and repair history for a selected vehicle, including the reported problem and work completed.", rows: vehicleHistoryReportRows, columns: repairHistoryColumns, dateValue: (row) => row.closedAt || row.start, emptyMessage: "No repair history is available for the selected vehicle", vehicleHistoryFilter: true},
     ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
       ...report,
       // Department reports return plain status text; render it as the same coloured pill the other reports use.
-      columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
+      columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column).map((column) => {
+        if (report.category === "maintenance" && column.key === "door") return { ...column, render: (request) => {
+          const door = column.value?.(request) || request.reportDoor || request.door;
+          return door ? <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(request)} aria-label={`View repair history for door number ${door}`} title="View breakdown and repair history"><History />{door}</button> : "—";
+        }};
+        return column;
+      }),
     })),
   ];
   const accessibleReportGroups = reportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
@@ -6847,7 +6929,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             aria-selected={activeCategory.id === category.id}
             data-category={category.id}
             className={activeCategory.id === category.id ? "active" : ""}
-            onClick={() => setActiveReportCategory(category.id)}
+            onClick={() => { setReportVehicleHistoryTarget(null); setActiveReportCategory(category.id); }}
           >
             <span className="report-category-icon"><CategoryIcon aria-hidden="true" /></span>
             <span className="report-category-copy"><b>{category.label}</b><small>{category.description}</small></span>
@@ -6855,6 +6937,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           </button>;
         })}
       </div>
+      {reportVehicleHistoryTarget ? <VehicleRepairHistoryPage vehicle={reportVehicleHistoryTarget} rows={reportRequests} backLabel="Back to reports" onBack={() => setReportVehicleHistoryTarget(null)} /> : <>
       {!reportAccessLoaded ? <div className="reports-section reports-empty-definition"><div className="reports-section-heading"><div><h2>Loading assigned reports…</h2><p>Your report access is being prepared.</p></div></div></div> : activeReports.length ? <div className="report-name-tabs" role="tablist" aria-label={`${activeCategory.label} reports`}>
         {activeReports.map((report) => (
           <button
@@ -6893,11 +6976,15 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
             <input type="checkbox" role="switch" checked={showAllAcceptances} onChange={(event) => setShowAllAcceptances(event.target.checked)} />
             <span className="report-acceptance-track" aria-hidden="true" />
             <span>Show total</span>
-          </label> : null}
+          </label> : selectedReport.vehicleHistoryFilter ? <div className="vehicle-history-report-filter">
+              <label><span><Truck /> Vehicle / door number</span><select value={vehicleHistorySelection} onChange={(event) => setVehicleHistorySelection(event.target.value)}><option value="">All vehicles</option>{vehicleHistoryOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></label>
+              <small>{selectedVehicleHistoryOption ? <>Showing <b>{selectedVehicleHistoryOption.door || selectedVehicleHistoryOption.label}</b></> : "Select a vehicle to download its history"}</small>
+            </div> : null}
           rowKey={selectedReport.rowKey || ((row, index) => `${selectedReport.title}-${row.ref || row.reportId || row.location || index}`)}
           rowClassName={selectedReport.rowClassName}
         />
       )}
+      </>}
     </section>
   );
 }
@@ -8535,7 +8622,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onVehicleHistory, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
   if (onDelete || onDeleteSelected) showActions = true;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
@@ -8687,7 +8774,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
               <td><b>{row.ref}</b></td>
               <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
-              <td>{row.door || "—"}</td>
+              <td>{row.door && onVehicleHistory ? <button type="button" className="vehicle-history-link" onClick={() => onVehicleHistory(row)} aria-label={`View repair history for door number ${row.door}`} title="View breakdown and repair history"><History />{row.door}</button> : row.door || "—"}</td>
               {showMisPeople && <><td>{row.owner || row.requesterLogin || "—"}</td><td>{row.acceptedBy || "—"}</td><td>{row.closedBy || "—"}</td></>}
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
@@ -9685,7 +9772,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const mobileRole = session?.assignedRole || "Mobile User";
   const isGeneral = mobileRole === "General User";
-  const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null);
+  const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [remarking, setRemarking] = useState(null), [vehicleHistoryTarget, setVehicleHistoryTarget] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
   const [arrivalFlagging, setArrivalFlagging] = useState(null);
@@ -9869,6 +9956,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
       {!embedded&&!showDashboardMenu&&!showRequestsMenu&&!showReportsMenu&&!showTicketsMenu&&<section className="panel"><h2>No menus assigned</h2><p>Contact your administrator to enable access.</p></section>}
       {(embedded||section==="profile")&&showRequestsMenu&&<div ref={operationalWorkspaceRef} data-operational={isProduction || isMaintenance || isMis ? "true" : undefined} data-active-tab={tab} className={`mobile-workspace${isMaintenance ? " maintenance-workspace" : ""}`}>
+      {vehicleHistoryTarget && isMaintenance ? <VehicleRepairHistoryPage vehicle={vehicleHistoryTarget} rows={requestRows} onBack={() => setVehicleHistoryTarget(null)} /> : <>
       <div className="welcome workspace-hero"><div className="workspace-hero-intro"><div><small>{dateLabel}</small><h1>{isGeneral ? "Requests" : isProduction ? "Production Maintenance Request" : isMaintenance ? "Maintenance workspace" : "MIS Verification"}</h1><p>{isGeneral ? "View requests for your assigned location." : isProduction ? "Create and view your requests." : isMaintenance ? "Edit, close and manage maintenance requests." : "Verify closed requests and record first-trip completion."}</p></div><Wrench /></div>
       <div className="mobile-tabs" role="tablist">
         {showRequestsMenu&&canSeeRequestMenu("View requests")&&<button data-nav="requests" className={tab === "requests" ? "active" : ""} onClick={() => setTab("requests")}>Requests</button>}
@@ -9883,12 +9971,13 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
       {createdRequestRef && <div className="workflow-success-popup"><div className="hierarchy-save-message" role="status" aria-live="polite"><CheckCircle2 /><span>{createdRequestRef}</span><button type="button" aria-label="Dismiss request confirmation" onClick={() => setCreatedRequestRef("")}><X /></button></div></div>}
       {isProduction && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel table"><BreakdownTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} showReadOnlyAction showMakeModel showReason showCreatedBy showBreakdownDays columnOrder={PRODUCTION_REQUEST_COLUMNS} {...adminDeleteProps} /></section></>}
       {isGeneral && tab === "requests" && canSeeRequestMenu("View requests") && <><h3 className="sectiontitle">Active requests · Read only</h3><section className="panel table"><BreakdownTable rows={activeRequests} showMakeModel showReason showCreatedBy showBreakdownDays /></section></>}
-      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} canDeleteRow={canDeleteRow} onDeleteSelected={deleteSelectedRequests} /></section></>}
-      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} {...adminDeleteProps} /></section></>}
+      {isMaintenance && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests} exportTitle={workspaceReportTitles.requests} highlightLateAcceptance showMakeModel showReason showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showAcceptanceStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onEdit={permissions.editRequests ? (row) => openMaintenanceAction(row, "edit") : null} onDelete={permissions.deleteRequests ? deleteRequest : null} canDeleteRow={canDeleteRow} onDeleteSelected={deleteSelectedRequests} onVehicleHistory={setVehicleHistoryTarget} /></section></>}
+      {isMaintenance && tab === "close" && <><h3 className="sectiontitle">{workspaceReportTitles.close}</h3><section className="panel"><MobileWorkflowTable rows={activeRequests.filter((row) => !row.verifiedAt && (!row.acceptanceRequired || row.acceptedAt) && !["idle","ideal"].includes(String(row.status||"").toLowerCase()))} exportTitle={workspaceReportTitles.close} showAcceptedTime highlightLateAcceptance showMakeModel showCreatedBy showComplaintAudio showMeterData showActions actionsFirst showInProgressStatus showEtc onFlagArrival={permissions.editRequests || permissions.closeRequests ? openArrivalFlag : null} onRemark={(row) => openMaintenanceAction(row, "remark")} onClose={(row) => openMaintenanceAction(row, "close")} {...adminDeleteProps} onVehicleHistory={setVehicleHistoryTarget} /></section></>}
       {isMis && tab === "requests" && <><h3 className="sectiontitle">{workspaceReportTitles.requests}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.requests} showMisPeople showMakeModel showReason showClosedAt closedAtLabel="Closed time" closedTimeAfterStarted showTurnaroundTime showMeterData startedFirst showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} {...adminDeleteProps} /></section></>}
       {isMis && tab === "verify" && <><h3 className="sectiontitle">{workspaceReportTitles.verify}</h3><section className="panel"><MobileWorkflowTable rows={visibleRows} exportTitle={workspaceReportTitles.verify} showMisPeople showMakeModel showTurnaroundTime showMeterData showActions onVerify={setVerifying} onMisFlag={permissions.verifyRequests ? setMisFlagging : null} {...adminDeleteProps} /></section></>}
-      {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays showClosedAt showStatusFilter={false} />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showWorkCompletion={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} closedTimeAfterStarted {...adminDeleteProps} />}</section></>}
-      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime {...adminDeleteProps} /></section></>}
+      {tab === "history" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.history}</h3><section className="panel">{isProduction?<BreakdownTable rows={historyRows} exportTitle={workspaceReportTitles.history} showReadOnlyAction showMakeModel showReason showCreatedBy showClosedBy showBreakdownDays showClosedAt />:<MobileWorkflowTable rows={historyRows} exportTitle={workspaceReportTitles.history} highlightLateAcceptance showMakeModel showReason showClosedBy showClosedAt={isMaintenance || isMis} closedAtLabel={closedHistoryClosingLabel} showVerifiedBy={isMis} showVerifiedAt={isMis} showTripCard={isMis} showMeterData showComplaintAudio={isMaintenance} showWorkCompletion={isMaintenance} showTurnaroundTime={isMis} startedFirst={isMis} startedLabel={isMis ? "Production date and time" : "Started"} onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} closedTimeAfterStarted {...adminDeleteProps} />}</section></>}
+      {tab === "idle" && (!isGeneral || canSeeRequestMenu("Closed history")) && <><h3 className="sectiontitle">{workspaceReportTitles.idle}</h3><section className="panel"><MobileWorkflowTable rows={idleRows} exportTitle={workspaceReportTitles.idle} showMakeModel showReason showCreatedBy showTurnaroundTime onVehicleHistory={isMaintenance ? setVehicleHistoryTarget : null} {...adminDeleteProps} /></section></>}
+      </>}
       </div>}
     </main>
     {canCreate && show && <MaintenanceForm normal onSubmit={createRequest} equipmentRecords={equipmentRecords} equipmentLoaded={equipmentLoaded} repairTypeRecords={repairTypeRecords} repairTypesLoaded={repairTypesLoaded} subCategoryRecords={subCategoryRecords} subCategoriesLoaded={subCategoriesLoaded} assignedLocation={assignedLocation} activeRequestRecords={dashboardRequests} close={() => setShow(false)} />}
