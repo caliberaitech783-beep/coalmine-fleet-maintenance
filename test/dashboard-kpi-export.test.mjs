@@ -24,6 +24,6 @@ test("fleet KPI exports retain active scope, period, movement, type and road ava
   assert.match(source, /section: "Breakdown movement"/);
   assert.match(source, /section: "Breakdown type"/);
   assert.match(source, /section: "Site summary"/);
-  assert.match(source, /Availability \$\{road\.availability\}%/);
+  assert.match(source, /Availability \$\{availabilityPercentFromCounts\(road\)\}%/);
   assert.match(source, /section: "Request lifecycle"/);
 });

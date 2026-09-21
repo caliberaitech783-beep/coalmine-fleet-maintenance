@@ -9454,8 +9454,9 @@ function AiFeeder({ role = "", session }) {
     setOpenMode("");
     if (!session?.token) return undefined;
     let active = true;
-    // The server remembers when each user last saw the login prompt, so it
-    // opens once per four hours however many times they sign in.
+    // This mandatory login prompt is an intentional product requirement. The
+    // server remembers when each user last saw it, so it opens once per four
+    // hours however many times they sign in.
     fetch(`/api/info-pulse/prompt?t=${Date.now()}`, {method: "POST", cache: "no-store", headers: {Authorization: `Bearer ${session.token}`}})
       .then(response => response.ok ? response.json() : null)
       .then(body => {
