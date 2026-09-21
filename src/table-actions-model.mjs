@@ -19,6 +19,9 @@ export function tableCellText(node) {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(tableCellText).filter(Boolean).join(" ");
   if (!React.isValidElement(node)) return "";
+  // Rich cells (for example the expandable Daily updates journal) can provide their complete
+  // printable value explicitly instead of losing it when only their component children are read.
+  if (node.props["data-export-value"] !== undefined) return String(node.props["data-export-value"] ?? "");
   if (node.type === "input") return node.props.type === "checkbox" ? (node.props.checked ? "Yes" : "No") : String(node.props.value ?? "");
   if (node.type === "select" || node.type === "textarea") return String(node.props.value ?? "");
   return tableCellText(node.props.children) || node.props.label || "";

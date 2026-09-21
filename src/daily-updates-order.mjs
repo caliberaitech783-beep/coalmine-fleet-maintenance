@@ -1,3 +1,5 @@
+import { reportTime12 } from "../report-time-format.mjs";
+
 // Ordering of the daily maintenance updates listed inside table cells.
 // One preference covers every list in the app: a reader who prefers a breakdown's history
 // first-to-last sees it that way in every table, and the choice is remembered on this device.
@@ -63,4 +65,21 @@ export function dailyUpdateReason(update) {
 
 export function dailyUpdatesCountLabel(count) {
   return `${count} update${count === 1 ? "" : "s"}`;
+}
+
+const exportField = (value, fallback = "Not recorded") => String(value ?? "").replace(/\s+/g, " ").trim() || fallback;
+
+// Complete, stable text for PDF, Excel and Smart Print. The export is chronological regardless of
+// the reader's on-screen newest/oldest preference, and each saved update stays on its own line.
+export function dailyUpdatesExportText(updates, { category = "" } = {}) {
+  const records = sortDailyUpdates(updates, "oldest");
+  if (!records.length) return "—";
+  return records.map((item) => [
+    `#${item.ordinal}`,
+    dailyUpdateStamp(item) ? reportTime12(dailyUpdateStamp(item)) : "Date not recorded",
+    `By: ${exportField(dailyUpdateAuthor(item))}`,
+    `Update: ${exportField(item.remark)}`,
+    ...(category ? [`Type: ${exportField(category)}`] : []),
+    `Delayed reason: ${exportField(dailyUpdateReason(item))}`,
+  ].join(" | ")).join("\n");
 }

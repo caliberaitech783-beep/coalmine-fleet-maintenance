@@ -60,7 +60,7 @@ import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import DailyUpdatesList, { DailyUpdatesPanel } from "./daily-updates-list.jsx";
-import { latestDailyUpdateStamp } from "./daily-updates-order.mjs";
+import { dailyUpdatesExportText, latestDailyUpdateStamp } from "./daily-updates-order.mjs";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
@@ -2341,6 +2341,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
         if (key === "start") return formatTwelveHourDateTime(row.start);
         if (key === "closedAt") return formatTwelveHourDateTime(row.closedAt);
         if (key === "audio") return row.complaintAudioAvailable || row.maintenanceAudioAvailable ? "Available" : "Not available";
+        if (key === "dailyRemarks") return dailyUpdatesExportText(row.dailyRemarks, { category: row.category });
         return row[key];
       },
     })),
@@ -2931,7 +2932,8 @@ function TableParameterFilter({ columns = [], rows = [], filters = {}, onFilterC
   );
 }
 function exportCellText(value) {
-  return reportTime12(tableFilterText(value).replace(/\s+/g, " ").trim()) || "—";
+  const text = tableFilterText(value).split(/\r?\n/).map((line) => line.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
+  return reportTime12(text) || "—";
 }
 function exportFileName(title, extension) {
   const safeTitle = String(title || "nerve-center-report").toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "nerve-center-report";
@@ -3050,7 +3052,7 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     const summaryRows = [[sheetTitle || title || "Nerve Center report"], [recordCountLine(exportRows.length, formatDisplayDateTime(new Date()))]];
     const firstDataRow = summaryRows.length + 1;
     const worksheetRows = [...summaryRows, labels, ...serial.rows];
-    const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}"${rowIndex >= firstDataRow && highlightedRows.has(rowIndex - firstDataRow) ? ' s="1"' : ""} t="inlineStr"><is><t>${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
+    const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}" s="${rowIndex >= firstDataRow && highlightedRows.has(rowIndex - firstDataRow) ? 2 : 1}" t="inlineStr"><is><t xml:space="preserve">${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
     const widths = labels.map((label, index) => {
       const maxLength = Math.max(String(label || "").length, ...serial.rows.map((row) => String(row[index] || "").length));
       return `<col min="${index + 1}" max="${index + 1}" width="${Math.min(48, Math.max(12, maxLength + 2))}" customWidth="1"/>`;
@@ -3064,7 +3066,7 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     { name: "docProps/core.xml", content: `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${workbookTitle}</dc:title><dc:creator>Nerve Center</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>` },
     { name: "docProps/app.xml", content: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Nerve Center</Application></Properties>` },
     { name: "xl/_rels/workbook.xml.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${worksheets.map((sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${worksheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
-    { name: "xl/styles.xml", content: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CACA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
+    { name: "xl/styles.xml", content: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CACA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
     { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${worksheets.map((sheet, index) => `<sheet name="${escapeExportHtml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>` },
     ...worksheets.map((sheet) => ({ name: sheet.part, content: sheet.content })),
   ]);
@@ -3164,7 +3166,7 @@ function printTableReportInBrowser({ title, columns = [], rows = [], highlightRo
     return;
   }
   printDocument.open();
-  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:12mm}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}.site-print-table{margin:16px 0;table-layout:fixed}.site-print-table td{overflow-wrap:anywhere;white-space:pre-wrap}.site-print-table tr{break-inside:avoid}.site-print-title th{background:#eee8f6;color:#522e90;font-size:12px;text-transform:none}.site-print-summary{margin:12px 0 16px;font-size:11px;line-height:1.5;color:#17233c}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}td,th{overflow-wrap:break-word}tr{break-inside:avoid}html,body{height:auto}body>:last-child{margin-bottom:0}.paper-warning{display:none;margin:6px 0 10px;padding:8px 10px;border:2px solid #c62828;border-radius:4px;color:#c62828;font-size:13px;font-weight:700}@media print{@page{size:landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}@media print and (${page.name === "A3" ? "max-width" : "min-width"}:350mm){.paper-warning{display:block}}</style></head><body><h1>${escapeExportHtml(title)}</h1><div class="paper-warning">Paper size does not match: this report was prepared for ${page.name}. In this print window open More settings and set Paper size to ${page.name}. This notice disappears once it matches.</div><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p>${groupedReport || `<table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table>`}</body></html>`);
+  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:12mm}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}.site-print-table{margin:16px 0;table-layout:fixed}.site-print-table td{overflow-wrap:anywhere;white-space:pre-wrap}.site-print-table tr{break-inside:avoid}.site-print-title th{background:#eee8f6;color:#522e90;font-size:12px;text-transform:none}.site-print-summary{margin:12px 0 16px;font-size:11px;line-height:1.5;color:#17233c}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}td,th{overflow-wrap:break-word}td{white-space:pre-wrap}tr{break-inside:avoid}html,body{height:auto}body>:last-child{margin-bottom:0}.paper-warning{display:none;margin:6px 0 10px;padding:8px 10px;border:2px solid #c62828;border-radius:4px;color:#c62828;font-size:13px;font-weight:700}@media print{@page{size:landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}@media print and (${page.name === "A3" ? "max-width" : "min-width"}:350mm){.paper-warning{display:block}}</style></head><body><h1>${escapeExportHtml(title)}</h1><div class="paper-warning">Paper size does not match: this report was prepared for ${page.name}. In this print window open More settings and set Paper size to ${page.name}. This notice disappears once it matches.</div><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p>${groupedReport || `<table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table>`}</body></html>`);
   printDocument.close();
   window.setTimeout(() => {
     frame.contentWindow?.focus();
@@ -8598,7 +8600,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
       {key: "etc", label: "ETC", value: (row) => row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "—"},
       {key: "etcRemaining", label: "Time left for ETC", value: (row) => etcCountdown(row, now).summary},
     ] : []),
-    {key: "dailyRemarks", label: "Daily remarks", value: (row) => row.dailyRemarks},
+    {key: "dailyRemarks", label: "Daily remarks", value: (row) => dailyUpdatesExportText(row.dailyRemarks, { category: row.category })},
     ...(showWorkCompletion ? [{key: "maintenanceWork", label: "Work completion action taken", value: (row) => row.maintenanceWork}] : []),
     ...(showMeterData ? [
       {key: "openingKmr", label: "Opening KMR", value: (row) => requestMeterReadings(row, "opening").KMR || "—"},

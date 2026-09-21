@@ -5,7 +5,7 @@ import {formatDisplayDateTime} from './date-time-format.mjs';
 import {withSerialColumn} from './serial-column.mjs';
 
 const COLORS={navy:'#10284c',muted:'#65758b',line:'#cbd7e6',soft:'#f4f7fb',white:'#ffffff',highlight:'#f8caca'};
-const clean=(value,fallback='—')=>reportPdfText(value).replace(/\s+/g,' ').trim()||fallback;
+const clean=(value,fallback='—')=>reportPdfText(value).split(/\r?\n/).map(line=>line.replace(/\s+/g,' ').trim()).filter(Boolean).join('\n')||fallback;
 
 function collect(doc){
   const chunks=[];

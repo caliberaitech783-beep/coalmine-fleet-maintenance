@@ -20,6 +20,7 @@
 .smart-print-preview { overflow: auto; }
 .smart-print-preview table { border-collapse: collapse; width: 100%; font-size: 12px; }
 .smart-print-preview :is(th,td) { border: 1px solid #d7dfeb; padding: 9px; text-align: left; }
+.smart-print-preview td { vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
 .smart-print-notice { font-size: 13px; }
 .smart-print-dialog > footer { border-top: 1px solid #d7dfeb; flex-wrap: wrap; }
 @media(max-width:600px) { .smart-print-body,.smart-print-dialog > header,.smart-print-dialog > footer { padding: 12px; } .smart-print-columns { grid-template-columns: 1fr; } }

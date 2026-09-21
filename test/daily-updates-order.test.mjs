@@ -131,10 +131,10 @@ test("every place that lists updates renders the shared panel and sorts its colu
   assert.match(main, /import dailyUpdatesPrintCss from "\.\/daily-updates\.css\?raw";/);
   assert.match(main, /printRequestTimeline\(content, [^\n]*`\$\{requestTimelinePrintCss\}\\n\$\{dailyUpdatesPrintCss\}`\)/);
   const browser = readFileSync(new URL("../src/dashboard-record-browser.jsx", import.meta.url), "utf8");
-  assert.equal((browser.match(/<td data-sort-value=\{latestUpdateStamp\(record\.dailyRemarks\)\}><Remarks remarks=\{record\.dailyRemarks\} \/><\/td>/g) || []).length, 2);
-  assert.match(browser, /<td key=\{column\.key\} data-sort-value=\{column\.sortValue \? column\.sortValue\(record\) : undefined\}>\{column\.render\(record\)\}<\/td>/);
+  assert.equal((browser.match(/<td data-sort-value=\{latestUpdateStamp\(record\.dailyRemarks\)\} data-export-value=\{dailyUpdatesExportText\(record\.dailyRemarks, \{ category: record\.repairCategory \}\)\}><Remarks remarks=\{record\.dailyRemarks\} category=\{record\.repairCategory\} \/><\/td>/g) || []).length, 2);
+  assert.match(browser, /<td key=\{column\.key\} data-sort-value=\{column\.sortValue \? column\.sortValue\(record\) : undefined\} data-export-value=\{column\.exportValue \? column\.exportValue\(record\) : undefined\}>\{column\.render\(record\)\}<\/td>/);
   const oem = readFileSync(new URL("../src/oem-breakdown-details.jsx", import.meta.url), "utf8");
-  assert.match(oem, /\{ key: "remarks", label: "Daily remarks", sortValue: record => latestUpdateStamp\(record\.requestDetails\.dailyRemarks\), render: /);
+  assert.match(oem, /\{ key: "remarks", label: "Daily remarks", sortValue: record => latestUpdateStamp\(record\.requestDetails\.dailyRemarks\), exportValue: record => dailyUpdatesExportText/);
   const pulse = readFileSync(new URL("../src/info-pulse-content.jsx", import.meta.url), "utf8");
   assert.match(pulse, /import \{DailyUpdatesPanel\} from '\.\/daily-updates-list\.jsx';/);
   assert.match(pulse, /<h4>Daily updates <span>Read only<\/span><\/h4>\{updates\.length \? <DailyUpdatesPanel remarks=\{updates\} formatDateTime=\{value => `\$\{formatDisplayDateTime\(value\)\} IST`\} missingLabel="Not recorded" \/> : <p>No daily updates recorded\.<\/p>\}/);
