@@ -127,7 +127,8 @@ const AVAILABILITY_COLUMNS = [
   {label: 'Status distribution', value: row => row.total ? `On road ${percent(row.onRoad, row.total)}% · Off road ${percent(row.offRoad, row.total)}% · Idle ${percent(row.idle, row.total)}%` : ''},
 ];
 const NO_ROAD = {total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0};
-const roadFigures = road => ({idle: road.idle, availability: road.availability, onRoad: road.onRoad, offRoad: road.offRoad, total: road.total});
+const availabilityPercent = road => road?.total ? Math.round(((road.onRoad + road.idle) / road.total) * 100) : 0;
+const roadFigures = road => ({idle: road.idle, availability: availabilityPercent(road), onRoad: road.onRoad, offRoad: road.offRoad, total: road.total});
 
 // Tracking Vehicle Throughput follows its open tab. Site-wise BD Movement: the site table (movement
 // and its availability count impact), the all-sites total, the four summary cards and the BD Type

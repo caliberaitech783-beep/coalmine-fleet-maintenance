@@ -1066,6 +1066,11 @@ function dashboardRecordDate(record = {}) {
   return requestEventDate(record, "opened");
 }
 
+function availabilityPercentFromCounts(row = {}) {
+  const total = Number(row.total) || 0;
+  return total ? Math.round((((Number(row.onRoad) || 0) + (Number(row.idle) || 0)) / total) * 100) : 0;
+}
+
 function useDashboardEquipment() {
   const [records, setRecords] = useState([]);
   const [scope, setScope] = useState(null);
@@ -1947,7 +1952,7 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
     ...breakdownTypeSummary.map((type) => ({ section: "Breakdown type", metric: type.label, value: type.count, scope: dashboardPeriodLabel, details: `${type.percentage}% of open BD balance` })),
     ...breakdownSiteSummary.map((site) => {
       const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
-      return { section: "Site summary", metric: site.site, value: site.balance, scope: dashboardPeriodLabel, details: `Open ${site.open}; In ${site.incoming}; Out ${site.outgoing}; Availability ${road.availability}%; On road ${road.onRoad}; Off road ${road.offRoad}; Idle ${road.idle}; Total ${road.total}` };
+      return { section: "Site summary", metric: site.site, value: site.balance, scope: dashboardPeriodLabel, details: `Open ${site.open}; In ${site.incoming}; Out ${site.outgoing}; Availability ${availabilityPercentFromCounts(road)}%; On road ${road.onRoad}; Off road ${road.offRoad}; Idle ${road.idle}; Total ${road.total}` };
     }),
     { section: "Request lifecycle", metric: "Opened", value: requestLifecycleRows.opened.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
     { section: "Request lifecycle", metric: "Closed", value: requestLifecycleRows.closed.length, scope: requestLifecycleRangeLabel, details: dashboardScopeLabel },
@@ -2086,16 +2091,17 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
               <div className="mine-breakdown-site-body">
                 {breakdownSiteSummary.length ? breakdownSiteSummary.map((site) => {
                   const road = roadAvailabilityBySiteName.get(site.site) || { total: 0, onRoad: 0, offRoad: 0, idle: 0, availability: 0 };
-                  return <button type="button" role="row" key={site.site} className="mine-breakdown-site-row" onClick={() => { setBreakdownDetailSite(site.site); setBreakdownDetailDays(5); setBreakdownDetailFrom(breakdownSummaryStartKey || throughputRequests.filter((record) => recordBelongsToSite(record, site.site)).map(breakdownOpenedDate).filter(Boolean).reduce((earliest, date) => date < earliest ? date : earliest, todayKey)); setBreakdownDetailTo(breakdownSummaryEndKey || todayKey); }} aria-label={`${site.site}: ${site.open} open, ${site.incoming} in, ${site.outgoing} out, ${site.balance} balance; ${road.availability}% availability count with ${road.onRoad} on road, ${road.offRoad} off road and ${road.idle} idle. Open linked day-wise details.`}>
+                  const roadAvailability = availabilityPercentFromCounts(road);
+                  return <button type="button" role="row" key={site.site} className="mine-breakdown-site-row" onClick={() => { setBreakdownDetailSite(site.site); setBreakdownDetailDays(5); setBreakdownDetailFrom(breakdownSummaryStartKey || throughputRequests.filter((record) => recordBelongsToSite(record, site.site)).map(breakdownOpenedDate).filter(Boolean).reduce((earliest, date) => date < earliest ? date : earliest, todayKey)); setBreakdownDetailTo(breakdownSummaryEndKey || todayKey); }} aria-label={`${site.site}: ${site.open} open, ${site.incoming} in, ${site.outgoing} out, ${site.balance} balance; ${roadAvailability}% availability count with ${road.onRoad} on road, ${road.offRoad} off road and ${road.idle} idle. Open linked day-wise details.`}>
                     <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric open"><b>{site.open}</b></span><span className="metric incoming"><b>+{site.incoming}</b></span><span className="metric outgoing"><b>-{site.outgoing}</b></span><span className="metric balance"><b>{site.balance}</b></span><span className="metric idle"><b>{road.idle}</b></span>
-                    <span className="mine-breakdown-road-impact"><span><b>{road.availability}%</b><small>{road.onRoad} On · {road.offRoad} Off · {road.idle} Idle</small></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${road.total ? (road.onRoad / road.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${road.total ? (road.offRoad / road.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${road.total ? (road.idle / road.total) * 100 : 0}%` }} /></span><em>Availability count <ChevronRight /></em></span><ChevronRight />
+                    <span className="mine-breakdown-road-impact"><span><b>{roadAvailability}%</b><small>{road.onRoad} On · {road.offRoad} Off · {road.idle} Idle</small></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${road.total ? (road.onRoad / road.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${road.total ? (road.offRoad / road.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${road.total ? (road.idle / road.total) * 100 : 0}%` }} /></span><em>Availability count <ChevronRight /></em></span><ChevronRight />
                   </button>;
                 }) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}
               </div>
             </div>
           </div> : <div className="mine-site-road-view">
             <div className="mine-site-road-summary">
-              <button type="button" className="availability" onClick={() => openAssetDrilldown("road-availability")}><span className="mine-site-road-gauge" style={{ "--availability": `${roadStatusShare(availabilityKpis.onRoad + availabilityKpis.idle) * 3.6}deg` }}><b>{availabilityKpis.availability}%</b><small>Available</small></span><span><strong>{roadStatusTotal.toLocaleString()}</strong><small>Total fleet</small></span></button>
+              <button type="button" className="availability" onClick={() => openAssetDrilldown("road-availability")}><span className="mine-site-road-gauge" style={{ "--availability": `${roadStatusShare(availabilityKpis.onRoad + availabilityKpis.idle) * 3.6}deg` }}><b>{availabilityPercentFromCounts(availabilityKpis)}%</b><small>Available</small></span><span><strong>{roadStatusTotal.toLocaleString()}</strong><small>Total fleet</small></span></button>
               <button type="button" className="onroad" onClick={() => openAssetDrilldown("onroad")}><CheckCircle2 /><span><small>On road</small><strong>{availabilityKpis.onRoad.toLocaleString()}</strong></span></button>
               <button type="button" className="offroad" onClick={() => openAssetDrilldown("offroad")}><AlertTriangle /><span><small>Off road</small><strong>{availabilityKpis.offRoad.toLocaleString()}</strong></span></button>
               <button type="button" className="idle" onClick={() => openAssetDrilldown("idle")}><Clock /><span><small>Idle</small><strong>{availabilityKpis.idle.toLocaleString()}</strong></span></button>
@@ -2103,9 +2109,12 @@ function Dashboard({ goto = () => {}, gotoEquipment = () => {}, gotoBreakdownFle
             <div className="mine-road-site-table" role="table" aria-label="Site-wise availability count">
               <div className="dashboard-breakdown-table-period" role="caption" aria-label="Availability table period">{breakdownSummaryFrom ? <><span>From: <b>{formatDisplayDate(breakdownSummaryStartKey)}</b></span><span>To: <b>{formatDisplayDate(breakdownSummaryEndKey)}</b></span></> : <span><b>All time</b></span>}<small>{availabilityStatusLabel}</small></div>
               <div className="mine-road-site-head" role="row"><span>Site name</span><span>Total fleet</span><span>On road</span><span>Off road</span><span>Idle</span><span>Availability</span><span>Status distribution</span><span aria-hidden="true" /></div>
-              <div className="mine-road-site-body">{availabilityCountBySite.length ? availabilityCountBySite.map((site) => <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site-status:${site.site}|all`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
-                <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric total"><b>{site.total}</b></span><span className="metric onroad"><b>{site.onRoad}</b></span><span className="metric offroad"><b>{site.offRoad}</b></span><span className="metric idle"><b>{site.idle}</b></span><span className="availability"><b>{site.availability}%</b></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${site.total ? (site.onRoad / site.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${site.total ? (site.offRoad / site.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${site.total ? (site.idle / site.total) * 100 : 0}%` }} /></span><ChevronRight />
-              </button>) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}</div>
+              <div className="mine-road-site-body">{availabilityCountBySite.length ? availabilityCountBySite.map((site) => {
+                const siteAvailability = availabilityPercentFromCounts(site);
+                return <button type="button" role="row" key={site.site} className={`mine-road-site-row${roadFocusSite === site.site ? " focused" : ""}`} onClick={() => openAssetDrilldown(`site-status:${site.site}|all`)} aria-label={`${site.site}: ${site.onRoad} on road, ${site.offRoad} off road and ${site.idle} idle. Open fleet details.`}>
+                <span className="site"><MapPin /><b>{site.site}</b></span><span className="metric total"><b>{site.total}</b></span><span className="metric onroad"><b>{site.onRoad}</b></span><span className="metric offroad"><b>{site.offRoad}</b></span><span className="metric idle"><b>{site.idle}</b></span><span className="availability"><b>{siteAvailability}%</b></span><span className="mine-road-site-bar" aria-hidden="true"><i className="onroad" style={{ width: `${site.total ? (site.onRoad / site.total) * 100 : 0}%` }} /><i className="offroad" style={{ width: `${site.total ? (site.offRoad / site.total) * 100 : 0}%` }} /><i className="idle" style={{ width: `${site.total ? (site.idle / site.total) * 100 : 0}%` }} /></span><ChevronRight />
+              </button>;
+              }) : <div className="mine-empty">No sites are available for the selected dashboard scope.</div>}</div>
             </div>
           </div> : <FleetDataState error={equipmentLoadError} retry={retryEquipmentLoad} className="dashboard-maintenance-availability-state" />}
         </article>}

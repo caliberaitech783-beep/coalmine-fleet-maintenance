@@ -99,11 +99,15 @@ const all = (tree, predicate) => {
   return found;
 };
 const text = node => Array.isArray(node) ? node.map(text).join("") : React.isValidElement(node) ? text(node.props.children) : node == null ? "" : String(node);
+const availabilityPercentFromCounts = (row = {}) => {
+  const total = Number(row.total) || 0;
+  return total ? Math.round((((Number(row.onRoad) || 0) + (Number(row.idle) || 0)) / total) * 100) : 0;
+};
 
 function dashboardSection(date) {
   const scope = {
     dashboardReconnecting: false,
-    React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite,
+    React, availabilityRequestsForDate, dashboardFleetSnapshot, liveEquipmentMetrics, liveEquipmentRoadStatus, recordBelongsToSite, availabilityPercentFromCounts,
     throughputRequests: requests, dashboardDate: "2026-01-01", breakdownSummaryFrom: date, breakdownSummaryTo: date, todayKey: "2026-09-10", throughputEquipment: assets,
     breakdownSummaryStartKey: "2026-09-01", breakdownSummaryEndKey: date || "2026-09-10", formatDisplayDate,
     throughputSites: ["Majri OB", "Jayant OB"], roadFocusSite: "", openAssetDrilldown: () => {},
@@ -132,6 +136,7 @@ test("date changes update the rendered availability cards, every site row and th
     rows.forEach((row, index) => {
       const site = section.availabilityCountBySite[index];
       assert.deepEqual(all(row, node => node.props.className?.startsWith("metric ")).map(node => Number(text(node))), [site.total, site.onRoad, site.offRoad, site.idle]);
+      assert.equal(text(all(row, node => node.props.className === "availability")[0]), `${availabilityPercentFromCounts(site)}%`);
     });
     for (const [key, count] of [["onroad", metrics.onRoad], ["offroad", metrics.offRoad], ["idle", metrics.idle]]) {
       assert.equal(section.rowsForAssetDrilldown(key).length, count);

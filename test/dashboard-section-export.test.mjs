@@ -107,9 +107,9 @@ test('Tracking Vehicle Throughput exports the open tab: site movement with avail
   assert.equal(movement.title, 'Tracking Vehicle Throughput · Site-wise BD Movement · WCL · 19-09-2026 to 19-09-2026 · Availability: live · 19-09-2026');
   assert.deepEqual(labels(movement), ['Site name', 'BD Open', 'BD In', 'BD Out', 'BD Balance', 'Idle Vehicles', 'Availability count (%)', 'On road', 'Off road', 'Total fleet', 'Share of open BD balance (%)']);
   assert.deepEqual(cells(movement), [
-    ['Sasti OB', 2, 1, 1, 2, 1, 70, 7, 2, 10, ''],
+    ['Sasti OB', 2, 1, 1, 2, 1, 80, 7, 2, 10, ''],
     ['Majri OB', 0, 0, 0, 0, 0, 0, 0, 0, 0, ''],
-    ['All sites total', 2, 1, 1, 2, 1, 75, 9, 2, 12, ''],
+    ['All sites total', 2, 1, 1, 2, 1, 83, 9, 2, 12, ''],
     ['Summary · BD In (opening + new)', '', 3, '', '', '', '', '', '', '', ''],
     ['Summary · BD Out', '', '', 1, '', '', '', '', '', '', ''],
     ['Summary · BD Balance (open, excluding idle)', '', '', '', 1, '', '', '', '', '', ''],
@@ -124,9 +124,9 @@ test('Tracking Vehicle Throughput exports the open tab: site movement with avail
   ]});
   assert.equal(availability.title, 'Tracking Vehicle Throughput · Availability Count · WCL · 19-09-2026 to 19-09-2026 · Availability: live · 19-09-2026');
   assert.deepEqual(cells(availability), [
-    ['Sasti OB', 10, 7, 2, 1, 70, 'On road 70.0% · Off road 20.0% · Idle 10.0%'],
+    ['Sasti OB', 10, 7, 2, 1, 80, 'On road 70.0% · Off road 20.0% · Idle 10.0%'],
     ['Majri OB', 0, 0, 0, 0, 0, ''],
-    ['All sites total', 12, 9, 2, 1, 75, 'On road 75.0% · Off road 16.7% · Idle 8.3%'],
+    ['All sites total', 12, 9, 2, 1, 83, 'On road 75.0% · Off road 16.7% · Idle 8.3%'],
   ]);
   assertPlainExport(availability);
 });
