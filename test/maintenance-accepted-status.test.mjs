@@ -10,6 +10,7 @@ import {requestStatusLabel, requestStatusSortRank} from '../src/request-status.m
 import {requestMeterReadings, requestMeterReadingLabel} from '../request-equipment.mjs';
 import {isDurationColumn, compareDurationValues, defaultDurationSort} from '../src/duration-sort.mjs';
 import {calculateBreakdownMinutes} from '../breakdown-duration.mjs';
+import {dailyUpdatesExportText} from '../src/daily-updates-order.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const component = source.slice(source.indexOf('function Status('), source.indexOf('function ThemeToggle('))
@@ -44,7 +45,7 @@ function harness(name = 'MobileWorkflowTable') {
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
   const scope = {
-    isDurationColumn, compareDurationValues, defaultDurationSort, calculateBreakdownMinutes,
+    isDurationColumn, compareDurationValues, defaultDurationSort, calculateBreakdownMinutes, dailyUpdatesExportText,
     requestMeterReadings, requestMeterReadingLabel,
     React: { ...React, useId: () => 'workflow-controls' }, useState, useEffect: () => {}, useMemo: fn => fn(),
     ...acceptance, requestStatusLabel, requestStatusSortRank, durationLabelMinutes: () => -1, elapsedMilliseconds: () => null, parseDateRange: () => null, matchesDateRange: () => false, cellMatchesFilterValues: (text, selected) => !selected || String(text || "") === selected, matchesSmartSearch, FilterableHeader, ExportMenu, PrintButton, TableParameterFilter,

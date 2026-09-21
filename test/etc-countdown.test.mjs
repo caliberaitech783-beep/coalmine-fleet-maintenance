@@ -13,6 +13,7 @@ import {defaultDurationSort} from '../src/duration-sort.mjs';
 import {ETC_SOON_MS, etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue, formatEtcDuration} from '../src/etc-countdown.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import {dateColumnsFirst, requestColumnsInWorkflowOrder} from '../src/table-actions-model.mjs';
+import {dailyUpdatesExportText} from '../src/daily-updates-order.mjs';
 
 const now = at('2026-09-18 14:00:00');
 const open = {ref: 'REQ-ETC-1', door: 'LDM6 - 1064', site: 'Sasti OB', status: 'Open', start: '2026-09-18 10:00:00', expectedCompletionAt: '2026-09-18 18:00'};
@@ -166,7 +167,7 @@ function renderTable(props) {
     calculateBreakdownDaysUntilClose: () => 0, elapsedLabel: () => '', authToken: 'fixture',
     RequestTimelineButton: ({label}) => React.createElement('b', {}, label),
     EtcCountdown: props => React.createElement(EtcCountdown, {...props, now}),
-    etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue,
+    etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue, dailyUpdatesExportText,
   };
   for (const icon of ['Flag', 'Menu', 'Search', 'ListFilter', 'MapPin', 'Pencil', 'Trash2', 'CheckCircle2', 'MessageCircle', 'ShieldCheck']) scope[icon] = Null;
   const MobileWorkflowTable = new Function(...Object.keys(scope), `${compiledTable};return MobileWorkflowTable;`)(...Object.values(scope));
