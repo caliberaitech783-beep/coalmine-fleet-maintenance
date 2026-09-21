@@ -7,6 +7,7 @@ import { transformWithOxc } from "vite";
 import { recordDateKey, filterRecordsByDate, primaryRecordDateColumn } from "../src/record-date-range.mjs";
 import { describeDateRange, encodeDateRange, parseDateRange } from "../src/date-range-filter.mjs";
 import { tableModel, tableExportModel } from "../src/table-actions-model.mjs";
+import DateInput from '../src/date-input.mjs';
 
 test("non-report record dates prefer Started over closure/verification and ignore undated masters", () => {
   const columns = ["Status", "MIS verified at", "Closed", "Started", "Days of breakdown"].map((label, index) => ({key: `${index}:${label}`, label}));
@@ -54,9 +55,9 @@ const descendants=(node,predicate)=>Array.isArray(node)?node.flatMap(child=>desc
 test("visible From and To fields apply valid ranges, preserve the prior filter for reversed dates, and reset", () => {
   let state, currentValue="";
   const bindings={React,describeDateRange,encodeDateRange,parseDateRange,useId:()=>"date-test",useEffect(){},useState(initial){if(state===undefined)state=initial();return[state,next=>{state=next;}];}};
-  const Component=new Function(...Object.keys(bindings),`${code};return RecordDateRange;`)(...Object.values(bindings));
+  const Component=new Function('DateInput',...Object.keys(bindings),`${code};return RecordDateRange;`)(DateInput,...Object.values(bindings));
   const render=()=>Component({label:"Started",value:currentValue,onChange:value=>{currentValue=value;}});
-  const change=(label,value)=>descendants(render(),node=>node.type==="input"&&node.props["aria-label"]===label)[0].props.onChange({target:{value}});
+  const change=(label,value)=>descendants(render(),node=>(node.type==="input"||node.type===DateInput)&&node.props["aria-label"]===label)[0].props.onChange({target:{value}});
   assert.match(renderToStaticMarkup(render()), /Started from date/);
   change("Started from date","2026-09-09");
   change("Started to date","2026-09-10");

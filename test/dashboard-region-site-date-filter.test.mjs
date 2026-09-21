@@ -29,8 +29,8 @@ test("dashboard date filters opening-date analysis without filtering live fleet 
   assert.match(source, /liveEquipmentMetrics\(visibleEquipment, liveBreakdowns\)/);
   assert.match(source, /fleetChartCounts\(visibleEquipment, liveBreakdowns\)/);
   assert.doesNotMatch(source, /dashboardDate \? locationBreakdowns\.filter/);
-  assert.match(source, /<input aria-label="Dashboard from date" type="date" value=\{dashboardFrom\} max=\{dashboardTo \|\| todayKey\}/);
-  assert.match(source, /<input aria-label="Dashboard to date" type="date" value=\{dashboardTo\} min=\{dashboardFrom \|\| undefined\} max=\{todayKey\}/);
+  assert.match(source, /<DateInput aria-label="Dashboard from date" value=\{dashboardFrom\} max=\{dashboardTo \|\| todayKey\}/);
+  assert.match(source, /<DateInput aria-label="Dashboard to date" value=\{dashboardTo\} min=\{dashboardFrom \|\| undefined\} max=\{todayKey\}/);
   assert.match(source, /dashboardReconnecting \? "Reconnecting" : dashboardIsLive \? "Live" : "Filtered"\} · \{filteredDateLabel\}/);
   // Every other From/To pair also starts on today.
   for (const name of ["breakdownTrendAnchor", "breakdownTrendFrom", "requestTrendFrom", "requestTrendTo", "breakdownSummaryFrom", "breakdownSummaryTo"]) {

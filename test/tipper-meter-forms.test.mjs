@@ -8,10 +8,11 @@ import {transformWithOxc} from "vite";
 import * as equipment from "../request-equipment.mjs";
 import * as workflow from "../request-workflow.mjs";
 import {approvedDelayedReason} from '../delayed-reason.mjs';
+import DateInput from '../src/date-input.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
-const evaluate = (code, dependencies) => new Function(...Object.keys(dependencies), code)(...Object.values(dependencies));
+const evaluate = (code, dependencies) => new Function("DateInput", ...Object.keys(dependencies), code)(DateInput, ...Object.values(dependencies));
 const tipper = {ref: "REQ-T1", equipmentGroup: "TIPPERS", meterType: "KMR", door: "T1", chassis: "CH1", site: "Sasti OB", status: "In progress", openingMeterReading: "1000", openingMeterFileUploaded: true};
 const snippet = source.slice(source.indexOf("function MeterReadingFields"), source.indexOf("function VerifyRequestForm"));
 const transformed = await transformWithOxc(snippet, "request-forms.jsx", {jsx: {runtime: "classic"}});

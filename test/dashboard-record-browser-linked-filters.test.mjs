@@ -16,6 +16,7 @@ import { formatDisplayDateTime } from "../date-time-format.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
 import { REGION_DATA } from "../region-scope.mjs";
 import { matchesSmartSearch } from "../smart-search.mjs";
+import DateInput from '../src/date-input.mjs';
 
 const h = React.createElement;
 const names = { "dashboard-record-browser": "DashboardRecordBrowser", "shared-actions-table": "SharedActionsTable", "record-date-range": "RecordDateRange" };
@@ -30,7 +31,7 @@ const bindings = { React, createPortal, ...drilldown, ...tableModel, ...recordDa
   ChevronLeft: empty, ChevronRight: empty, RotateCcw: empty, Eye: empty, ArrowDown: empty, ArrowUp: empty, ArrowUpDown: empty };
 const load = (file, overrides = {}) => {
   const values = { ...bindings, ...overrides };
-  return new Function(...Object.keys(values), compiled[file])(...Object.values(values));
+  return new Function("DateInput", ...Object.keys(values), compiled[file])(DateInput, ...Object.values(values));
 };
 const RecordDateRange = load("record-date-range");
 test("idle duration measures the idle timestamp in IST, including zoned API dates", () => {

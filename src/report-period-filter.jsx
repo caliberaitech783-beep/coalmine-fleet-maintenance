@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import {Filter,ChevronLeft,ChevronRight,X,CalendarDays} from 'lucide-react';
 import {PERIOD_PRESETS,indiaToday,presetDates,calendarDays,shiftMonth,displayDate,periodBounds,timeParts,timeFromParts} from './report-period-model.mjs';
 import './report-period-filter.css';
+import DateInput from "./date-input.mjs";
 
 function TimeField({label,value,onChange}) {
   const parts=timeParts(value);
@@ -48,8 +49,8 @@ export function ReportPeriodDialog({from,to,onApply,onClose}) {
         </div>
         <p className="period-hint" aria-live="polite">{pickingEnd?'Choose the end date.':'Choose a preset or select a start and end date.'}</p>
         <div className="report-period-times">
-          <div><TimeField label="Start time" value={startTime} onChange={value=>{setStartTime(value);setPreset('');}}/><label className="period-date">Start date<input aria-label="Start date" type="date" required value={start} onChange={e=>{setStart(e.target.value);if(e.target.value)setMonth(e.target.value.slice(0,7));setPreset('');setPickingEnd(false);}}/></label></div>
-          <div><TimeField label="End time" value={endTime} onChange={value=>{setEndTime(value);setPreset('');}}/><label className="period-date">End date<input aria-label="End date" type="date" required value={end} onChange={e=>{setEnd(e.target.value);setPreset('');setPickingEnd(false);}}/></label></div>
+          <div><TimeField label="Start time" value={startTime} onChange={value=>{setStartTime(value);setPreset('');}}/><label className="period-date">Start date<DateInput aria-label="Start date" required value={start} onChange={e=>{setStart(e.target.value);if(e.target.value)setMonth(e.target.value.slice(0,7));setPreset('');setPickingEnd(false);}}/></label></div>
+          <div><TimeField label="End time" value={endTime} onChange={value=>{setEndTime(value);setPreset('');}}/><label className="period-date">End date<DateInput aria-label="End date" required value={end} onChange={e=>{setEnd(e.target.value);setPreset('');setPickingEnd(false);}}/></label></div>
         </div>
         {!bounds&&<p className="period-error" role="alert">Select both dates; the end must not be before the start.</p>}
       </div>
@@ -69,8 +70,8 @@ export default function ReportPeriodFilter({from,to,onApply}) {
   };
   const format=value=>value?`${displayDate(value.slice(0,10))} ${timeParts(value.slice(11,16)).hour}:${timeParts(value.slice(11,16)).minute} ${timeParts(value.slice(11,16)).period}`:'Any time';
   return <div className="report-period-filter"><button type="button" className="secondary" aria-haspopup="dialog" aria-expanded={open} onClick={()=>setOpen(true)}><Filter size={17}/>Filter</button>
-    <label className="report-period-date"><span>From</span><input aria-label="Report from date" type="date" value={from?.slice(0,10)||''} max={to?.slice(0,10)||undefined} onChange={e=>updateDate('from',e.target.value)}/></label>
-    <label className="report-period-date"><span>To</span><input aria-label="Report to date" type="date" value={to?.slice(0,10)||''} min={from?.slice(0,10)||undefined} onChange={e=>updateDate('to',e.target.value)}/></label>
+    <label className="report-period-date"><span>From</span><DateInput aria-label="Report from date" value={from?.slice(0,10)||''} max={to?.slice(0,10)||undefined} onChange={e=>updateDate('from',e.target.value)}/></label>
+    <label className="report-period-date"><span>To</span><DateInput aria-label="Report to date" value={to?.slice(0,10)||''} min={from?.slice(0,10)||undefined} onChange={e=>updateDate('to',e.target.value)}/></label>
     {(from||to)&&<button type="button" className="secondary" onClick={()=>onApply('','')}>Clear dates</button>}
     <span aria-live="polite">{from||to?`${format(from)} – ${format(to)} (IST)`:'All dates'}</span>
     {open&&<ReportPeriodDialog from={from} to={to} onClose={()=>setOpen(false)} onApply={(start,end)=>{onApply(start,end);setOpen(false);}}/>}

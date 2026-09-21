@@ -3,6 +3,7 @@ import {CheckCircle2,Eye,ImageUp,LockKeyhole,Pencil,RefreshCw,Search,Send,Shield
 import {REQUEST_CORRECTION_STATUS,REQUEST_CORRECTION_TYPES,requestCorrectionFields} from '../request-correction-policy.mjs';
 import SearchableSelect from './searchable-select.jsx';
 import './request-corrections.css';
+import DateInput from "./date-input.mjs";
 
 const requestValue=(request,key)=>{
   const aliases={startedAt:'start',superiorName:'superior'};
@@ -38,7 +39,8 @@ function CorrectionField({field,value,onChange,options=[]}){
   if(field.kind==='boolean')return <label className="correction-checkbox"><input type="checkbox" checked={value===true} onChange={(event)=>onChange(event.target.checked)} /><span>{field.label}</span></label>;
   if(field.kind==='textarea')return <label><span>{field.label}</span><textarea value={value??''} onChange={(event)=>onChange(event.target.value)} rows="3" /></label>;
   if(field.kind==='select')return <label><span>{field.label}</span><select value={value??''} onChange={(event)=>onChange(event.target.value)}>{field.options.map((option)=><option value={option} key={option||'blank'}>{option||'Not recorded'}</option>)}</select></label>;
-  return <label><span>{field.label}</span><input type={field.kind==='datetime'?'datetime-local':field.kind==='meter'?'number':'text'} step={field.kind==='datetime'?1:field.kind==='meter'?'0.01':undefined} value={field.kind==='datetime'?localInputValue(value):value??''} onChange={(event)=>onChange(event.target.value)} /></label>;
+  const InputControl=field.kind==='datetime'?DateInput:'input';
+  return <label><span>{field.label}</span><InputControl type={field.kind==='datetime'?'datetime-local':field.kind==='meter'?'number':'text'} step={field.kind==='datetime'?1:field.kind==='meter'?'0.01':undefined} value={field.kind==='datetime'?localInputValue(value):value??''} onChange={(event)=>onChange(event.target.value)} /></label>;
 }
 
 function EvidenceViewer({record,token,Modal,onClose}){

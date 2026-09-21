@@ -5,6 +5,7 @@ import {recordedBreakdownRangeLength} from './dashboard-breakdown-forecast.mjs';
 import {recordBelongsToSite} from '../site-location.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
 import {dailyBdBalanceExport} from './dashboard-section-export.mjs';
+import DateInput from "./date-input.mjs";
 
 const MOVEMENT_BARS = DAILY_BD_METRICS.filter(({key}) => key === 'incoming' || key === 'outgoing');
 const signedCount = value => `${value > 0 ? '+' : ''}${value.toLocaleString()}`;
@@ -48,8 +49,8 @@ export default function DailyBdBalanceChart({records = [], sites = [], scopeLabe
       <div><span className="mine-eyebrow">Daily breakdown movement</span><h2>Daily BD balance</h2><p>Opening + BD In − BD Out = Closing + Idle <ArrowRight aria-hidden="true"/> Idle shown separately</p></div>
       <div className="bd-balance-controls">
         <label><span><MapPin aria-hidden="true"/> Site</span><select aria-label="Daily BD balance site" value={activeSite} onChange={event => setSite(event.target.value)}><option value="">All sites</option>{sites.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
-        <label><span>From</span><input aria-label="Daily BD balance from date" type="date" value={from} max={today} onChange={event => changeDate('from', event.target.value)}/></label>
-        <label><span>To</span><input aria-label="Daily BD balance to date" type="date" value={to} max={today} onChange={event => changeDate('to', event.target.value)}/></label>
+        <label><span>From</span><DateInput aria-label="Daily BD balance from date" value={from} max={today} onChange={event => changeDate('from', event.target.value)}/></label>
+        <label><span>To</span><DateInput aria-label="Daily BD balance to date" value={to} max={today} onChange={event => changeDate('to', event.target.value)}/></label>
         <div className="mine-trend-period" role="group" aria-label="Daily BD balance period">{[1,7,14,30].map(days => <button type="button" key={days} aria-pressed={range.days === days} className={range.days === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}</div>
         {ExportMenu && exported && <ExportMenu {...exported} className="mine-section-export" printSection/>}
       </div>

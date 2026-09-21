@@ -10,6 +10,7 @@ import * as equipment from "../request-equipment.mjs";
 import * as dailyUpdatesOrder from "../src/daily-updates-order.mjs";
 import { formatDisplayDateTime } from "../date-time-format.mjs";
 import { renderToStaticMarkup } from "react-dom/server";
+import DateInput from '../src/date-input.mjs';
 
 const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export (?:default )?function /g, "function ");
 const code = (await transformWithOxc(source, "request-timeline.jsx", {jsx: {runtime: "classic"}})).code;
@@ -17,7 +18,7 @@ const code = (await transformWithOxc(source, "request-timeline.jsx", {jsx: {runt
 const panelSource = readFileSync(new URL("../src/daily-updates-list.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/^export (default )?/gm, "");
 const panelCode = (await transformWithOxc(panelSource, "daily-updates-list.jsx", {jsx: {runtime: "classic"}})).code;
 const panelBindings = {React, useSyncExternalStore: React.useSyncExternalStore, ...dailyUpdatesOrder, formatDisplayDateTime};
-const {DailyUpdatesPanel} = new Function(...Object.keys(panelBindings), panelCode + "; return {DailyUpdatesPanel};")(...Object.values(panelBindings));
+const {DailyUpdatesPanel} = new Function("DateInput", ...Object.keys(panelBindings), panelCode + "; return {DailyUpdatesPanel};")(DateInput, ...Object.values(panelBindings));
 const panelText = node => renderToStaticMarkup(node).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 const main = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 test("time breakdown wraps explanations instead of inheriting table-cell nowrap", () => {
@@ -91,7 +92,7 @@ function harness(name, extra = {}) {
     ...extra,
   };
   const compiled = formCode[name] || code;
-  const component = new Function(...Object.keys(scope), `${compiled}; return ${name};`)(...Object.values(scope));
+  const component = new Function("DateInput", ...Object.keys(scope), `${compiled}; return ${name};`)(DateInput, ...Object.values(scope));
   return {
     requests,
     render(next = props) {props = next; cursor = 0; return component(props);},

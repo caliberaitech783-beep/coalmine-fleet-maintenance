@@ -5,6 +5,7 @@ import React from 'react';
 import {transformWithOxc} from 'vite';
 import * as model from '../src/report-period-model.mjs';
 import {reportRowsWithinRange} from '../report-date-range.mjs';
+import DateInput from '../src/date-input.mjs';
 
 test('all preset ranges use Monday weeks, inclusive fortnight and calendar boundaries',()=>{
   const expected={today:['2026-09-09','2026-09-09'],yesterday:['2026-09-08','2026-09-08'],last7:['2026-09-03','2026-09-09'],thisWeek:['2026-09-07','2026-09-09'],lastWeek:['2026-08-31','2026-09-06'],fortnight:['2026-08-27','2026-09-09'],last30:['2026-08-11','2026-09-09'],thisMonth:['2026-09-01','2026-09-09'],lastMonth:['2026-08-01','2026-08-31'],thisQuarter:['2026-07-01','2026-09-09'],thisYear:['2026-01-01','2026-09-09']};
@@ -35,7 +36,7 @@ function harness(componentName='ReportPeriodDialog') {
   const useState=initial=>{const key=index++;if(!(key in slots))slots[key]=typeof initial==='function'?initial():initial;return [slots[key],value=>slots[key]=typeof value==='function'?value(slots[key]):value];};
   const names=['React','useState','useEffect','useRef','useId','createPortal','document',...Object.keys(model),'Filter','ChevronLeft','ChevronRight','X','CalendarDays'];
   const values=[React,useState,()=>{},()=>({current:null}),()=>'qa',tree=>tree,{body:{}},...Object.values(model),...Array(5).fill(()=>null)];
-  const component=new Function(...names,`${code};return ${componentName};`)(...values);
+  const component=new Function('DateInput',...names,`${code};return ${componentName};`)(DateInput,...values);
   return {applied,closed,render(props={}){index=0;return component({from:'2026-09-01T00:00:00',to:'2026-09-09T23:59:59.999',onApply:(...args)=>applied.push(args),onClose:()=>closed.push(true),...props});}};
 }
 const all=(tree,predicate)=>{const result=[];const visit=n=>{if(Array.isArray(n))return n.forEach(visit);if(!React.isValidElement(n))return;if(predicate(n))result.push(n);visit(n.props.children);};visit(tree);return result;};
@@ -70,7 +71,7 @@ test('shared date toolbar and popup are used for every selected report',()=>{
 
 test('visible dates apply inclusive days immediately and reflect popup changes',()=>{
   const app=harness('ReportPeriodFilter');
-  const field=(tree,label)=>all(tree,n=>n.type==='input'&&n.props['aria-label']===label)[0];
+  const field=(tree,label)=>all(tree,n=>(n.type==='input'||n.type===DateInput)&&n.props['aria-label']===label)[0];
   let tree=app.render({from:'',to:''});
   field(tree,'Report from date').props.onChange({target:{value:'2026-09-03'}});
   assert.deepEqual(app.applied.at(-1),['2026-09-03T00:00:00','2026-09-03T23:59:59.999']);
@@ -90,6 +91,6 @@ test('visible dates apply inclusive days immediately and reflect popup changes',
 
 test('inline edits keep reversed dates ordered like the dashboard',()=>{
   const app=harness('ReportPeriodFilter'),tree=app.render();
-  all(tree,n=>n.type==='input'&&n.props['aria-label']==='Report from date')[0].props.onChange({target:{value:'2026-09-12'}});
+  all(tree,n=>(n.type==='input'||n.type===DateInput)&&n.props['aria-label']==='Report from date')[0].props.onChange({target:{value:'2026-09-12'}});
   assert.deepEqual(app.applied.at(-1),['2026-09-12T00:00:00','2026-09-12T23:59:59.999']);
 });

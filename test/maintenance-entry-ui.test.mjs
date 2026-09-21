@@ -10,6 +10,7 @@ import { indiaWorkflowDateTimeParts } from '../src/workflow-clock.mjs';
 import { submitMaintenanceRequest } from '../request-submit.mjs';
 import { normalizedBreakdownType } from '../dashboard-breakdown-movement.mjs';
 import { breakdownSubCategoryNames } from '../breakdown-sub-category.mjs';
+import DateInput from '../src/date-input.mjs';
 
 const source = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const formStart = source.indexOf('function MaintenanceForm(');
@@ -41,7 +42,7 @@ function harness(code, name, extra = {}) {
     return [slots[index], value => { slots[index] = typeof value === 'function' ? value(slots[index]) : value; }];
   };
   const scope = { ComplaintMediaInputs: () => null, readComplaintMedia: async () => [], React, useState, normalizedBreakdownType, breakdownSubCategoryNames, useRef: value => useState(() => ({ current: value }))[0], useEffect: () => {}, indiaWorkflowDateTimeParts, TranslatedText: ({ text, as: Tag = 'span', fallback = '—', helper = false }) => helper ? null : React.createElement(Tag, null, String(text ?? '').trim() || fallback), ...extra };
-  const component = new Function(...Object.keys(scope), `${code}; return ${name};`)(...Object.values(scope));
+  const component = new Function("DateInput", ...Object.keys(scope), `${code}; return ${name};`)(DateInput, ...Object.values(scope));
   return { render(props = {}) { cursor = 0; return component(props); } };
 }
 const records = [

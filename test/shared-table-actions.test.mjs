@@ -146,8 +146,8 @@ test("date column headings open only From / To date pickers", () => {
   assert.match(main, /dateColumn = looksLikeDateColumn\(values\)/);
   assert.match(main, / : dateColumn \? <div className="column-filter-range" role="group"/, "date columns open only the From / To pickers");
   assert.doesNotMatch(main, /rangeOpen|Filter by date range/);
-  assert.match(main, /<label><span>From<\/span><input type="date" autoFocus value=\{dateRange\.from\}/);
-  assert.match(main, /<label><span>To<\/span><input type="date" value=\{dateRange\.to\}/);
+  assert.match(main, /<label><span>From<\/span><DateInput autoFocus value=\{dateRange\.from\}/);
+  assert.match(main, /<label><span>To<\/span><DateInput value=\{dateRange\.to\}/);
   assert.match(main, /const range = parseDateRange\(selected\);\s*if \(range\) return matchesDateRange\(value, range\);/);
   assert.match(main, /parseDateRange\(filters\[column\.key\]\) && <option value=\{filters\[column\.key\]\}>/);
 });

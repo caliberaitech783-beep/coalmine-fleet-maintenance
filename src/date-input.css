@@ -1,0 +1,22 @@
+/* Hide the locale-ordered native text and paint data-dmy (day-first) over it. */
+input.dmy-date-input { position: relative; }
+input.dmy-date-input::-webkit-datetime-edit,
+input.dmy-date-input::-webkit-datetime-edit-fields-wrapper,
+input.dmy-date-input::-webkit-datetime-edit-text,
+input.dmy-date-input::-webkit-datetime-edit-day-field,
+input.dmy-date-input::-webkit-datetime-edit-month-field,
+input.dmy-date-input::-webkit-datetime-edit-year-field,
+input.dmy-date-input::-webkit-datetime-edit-hour-field,
+input.dmy-date-input::-webkit-datetime-edit-minute-field,
+input.dmy-date-input::-webkit-datetime-edit-second-field,
+input.dmy-date-input::-webkit-datetime-edit-ampm-field { color: transparent; background: transparent; }
+input.dmy-date-input::before {
+  content: attr(data-dmy);
+  position: absolute; top: 0; bottom: 0; left: 0;
+  padding-left: inherit;
+  display: flex; align-items: center;
+  white-space: nowrap; pointer-events: none;
+  color: inherit;
+}
+input.dmy-date-input[data-empty]::before { opacity: .55; }
+input.dmy-date-input:not(:disabled):not([readonly]) { cursor: pointer; }

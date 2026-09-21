@@ -28,9 +28,9 @@ test("dashboard replaces recent cases with a site-wise selectable breakdown tren
 });
 
 test("breakdown toolbar renders and clears the date control", () => {
-  assert.match(source, /className="table-date-filter"><CalendarDays \/><input aria-label="Filter by started date" type="date"/);
+  assert.match(source, /className="table-date-filter"><CalendarDays \/><DateInput aria-label="Filter by started date"/);
   // The date can be cleared directly or through Actions → Clear filters.
-  assert.match(source, /type="date" value=\{dateFilter\} onChange=\{\(event\) => setDateFilter\(event.target.value\)\}/);
+  assert.match(source, /<DateInput aria-label="Filter by started date" value=\{dateFilter\} onChange=\{\(event\) => setDateFilter\(event.target.value\)\}/);
   assert.match(source, /onClearToolbarFilters=\{\(\) => \{ setStatusFilter\(""\); setDateFilter\(""\); \}\}/);
   assert.match(sharedTable, /const clearFilters = \(\) => \{[\s\S]*?onClearToolbarFilters\?\.\(\);/);
   assert.match(styles, /\.table-search-toolbar \.table-date-filter\{flex:0 1 190px;min-width:170px\}/);

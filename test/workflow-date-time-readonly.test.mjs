@@ -7,7 +7,7 @@ test("workflow date and time fields are read only except MIS first-trip verifica
   const fieldNames = ["date", "time", "closingDate", "closingTime"];
 
   for (const name of fieldNames) {
-    const inputs = [...source.matchAll(new RegExp(`<input[^>]*name="${name}"[^>]*>`, "g"))];
+    const inputs = [...source.matchAll(new RegExp(`<(?:input|DateInput)[^>]*name="${name}"[^>]*>`, "g"))];
     assert.ok(inputs.length, `${name} should be present`);
     for (const [input] of inputs) {
       if (!/\btype="hidden"/.test(input)) {
@@ -18,7 +18,7 @@ test("workflow date and time fields are read only except MIS first-trip verifica
   }
 
   for (const name of ["firstTripDate", "firstTripTime"]) {
-    const inputs = [...source.matchAll(new RegExp(`<input[^>]*name="${name}"[^>]*>`, "g"))];
+    const inputs = [...source.matchAll(new RegExp(`<(?:input|DateInput)[^>]*name="${name}"[^>]*>`, "g"))];
     assert.equal(inputs.length, 1, `${name} should only exist in the MIS verify form`);
     assert.doesNotMatch(inputs[0][0], /\breadOnly\b/, `${name} must be editable in the MIS verify form`);
     assert.doesNotMatch(inputs[0][0], /\bdisabled\b/, `${name} must be enabled in the MIS verify form`);

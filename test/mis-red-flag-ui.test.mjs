@@ -11,6 +11,7 @@ import {requestsVisibleToMisWorkspace} from '../mis-request-visibility.mjs';
 import {requestStatusLabel} from '../src/request-status.mjs';
 import {defaultDurationSort} from '../src/duration-sort.mjs';
 import {dailyUpdatesExportText} from '../src/daily-updates-order.mjs';
+import DateInput from '../src/date-input.mjs';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const componentSource=source.slice(source.indexOf('function RequestRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('))+'\n'+source.slice(source.indexOf('function Normal('),source.indexOf('function App('));
@@ -63,8 +64,8 @@ function harness(){
     visibleInMisRequests:()=>true,visibleInMisHistory:()=>true,visibleInProductionHistory:()=>true,visibleInMaintenanceHistory:()=>true,preventTableAutoScroll:()=>{},
   };
   for(const icon of ['Flag','Menu','Search','ListFilter','MapPin','Pencil','Trash2','CheckCircle2','MessageCircle','ShieldCheck','Wrench','Plus','ChevronRight'])scope[icon]=Null;
-  const components=new Function(...Object.keys(scope),`${compiled};return {RequestRedFlagForm,MobileWorkflowTable,Normal};`)(...Object.values(scope));
-  components.ActualRequestEditForm=new Function(...Object.keys(scope),`${compiledEditor};return RequestEditForm;`)(...Object.values(scope));
+  const components=new Function('DateInput',...Object.keys(scope),`${compiled};return {RequestRedFlagForm,MobileWorkflowTable,Normal};`)(DateInput,...Object.values(scope));
+  components.ActualRequestEditForm=new Function('DateInput',...Object.keys(scope),`${compiledEditor};return RequestEditForm;`)(DateInput,...Object.values(scope));
   return {render(name,props){cursor=0;return components[name](props);}};
 }
 

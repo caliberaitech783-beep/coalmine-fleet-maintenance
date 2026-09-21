@@ -8,6 +8,7 @@ import {pulseDailyUpdates, pulseDelayReason} from './info-pulse-reasons.mjs';
 import {DailyUpdatesPanel} from './daily-updates-list.jsx';
 import {PULSE_TIERS, pulseBreakdownRows, pulseElapsed, pulseTierCounts} from './info-pulse-timing.mjs';
 import {pulseExportColumns} from './info-pulse-export.mjs';
+import DateInput from "./date-input.mjs";
 
 const tierIcons = {all: Activity, critical: AlertTriangle, warning: Clock, open: Truck};
 const PERIODS = [1, 7, 14, 30];
@@ -87,8 +88,8 @@ export default function InfoPulseContent({breakdowns = [], scope, now, updatedAt
       <div className="pulse-filter-dates">
         <b className="pulse-record-count" role="status">{shown.length} of {view.total} records</b>
         <span className="pulse-filter-dates-label">Started</span>
-        <label><span>From</span><input type="date" aria-label="Info Pulse from date" value={filters.from} max={filters.to || undefined} onChange={event => choose('from', event.target.value)} /></label>
-        <label><span>To</span><input type="date" aria-label="Info Pulse to date" value={filters.to} min={filters.from || undefined} onChange={event => choose('to', event.target.value)} /></label>
+        <label><span>From</span><DateInput aria-label="Info Pulse from date" value={filters.from} max={filters.to || undefined} onChange={event => choose('from', event.target.value)} /></label>
+        <label><span>To</span><DateInput aria-label="Info Pulse to date" value={filters.to} min={filters.from || undefined} onChange={event => choose('to', event.target.value)} /></label>
         <div className="pulse-period" role="group" aria-label="Info Pulse period"><button type="button" aria-pressed={untilToday} className={untilToday ? 'active' : ''} onClick={() => { setRowLimit(INITIAL_VISIBLE_ROWS); setFilters(current => ({...current, from: '', to: today})); }}>Until today</button>{PERIODS.map(days => <button type="button" key={days} aria-pressed={periodDays === days} className={periodDays === days ? 'active' : ''} onClick={() => preset(days)}>{days === 1 ? 'Today' : `${days}D`}</button>)}<button type="button" aria-pressed={!filters.from && !filters.to} className={!filters.from && !filters.to ? 'active' : ''} onClick={() => { setRowLimit(INITIAL_VISIBLE_ROWS); setFilters(current => ({...current, from: '', to: ''})); }}>All dates</button></div>
         <span className="pulse-filter-caption">{dateCaption}</span>
       </div>

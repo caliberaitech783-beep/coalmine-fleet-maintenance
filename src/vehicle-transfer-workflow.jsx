@@ -5,6 +5,7 @@ import {canonicalSiteName} from '../site-location.mjs';
 import {VEHICLE_TRANSFER_STATUS, VEHICLE_TRANSFER_VIEW, vehicleTransferProgress, vehicleTransferStatus, vehicleTransferViewRecords} from '../vehicle-transfer-workflow.mjs';
 import SearchableSelect from './searchable-select.jsx';
 import './vehicle-transfer-workflow.css';
+import DateInput from "./date-input.mjs";
 
 const indiaDateInput = () => {
   const parts = new Intl.DateTimeFormat('en-GB', {timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit'})
@@ -75,7 +76,7 @@ function TransferForm({Dialog, equipment, sites, token, onClose, onSaved}) {
       <div className="vehicle-transfer-form-intro"><Send /><span><b>MIS submits the transfer</b><small>The source-site PM approves dispatch, destination MIS verifies the arrival, then the destination-site PM accepts it.</small></span></div>
       <div className="formgrid">
         <SearchableSelect label="Vehicle / equipment" name="equipmentMasterId" options={equipmentOptions} value={equipmentId} onChange={setEquipmentId} required placeholder="Search door, registration, make, model, chassis, or site" emptyText="No matching vehicle or equipment found." />
-        <label>Transfer date *<input name="transferDate" type="date" required defaultValue={indiaDateInput()} /></label>
+        <label>Transfer date *<DateInput name="transferDate" required defaultValue={indiaDateInput()} /></label>
         <label>Transfer number<input name="transferNo" placeholder="Auto-generated if left blank" /></label>
         <label>Current source site<input value={source} readOnly placeholder="Select a vehicle" /></label>
         <label>Destination site *

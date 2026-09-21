@@ -12,6 +12,7 @@ import * as timing from '../src/info-pulse-timing.mjs';
 import * as reasons from '../src/info-pulse-reasons.mjs';
 import * as exportModel from '../src/info-pulse-export.mjs';
 import * as dailyUpdatesOrder from '../src/daily-updates-order.mjs';
+import DateInput from '../src/date-input.mjs';
 
 const source = readFileSync(new URL('../src/info-pulse-content.jsx', import.meta.url), 'utf8')
   .replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
@@ -20,7 +21,7 @@ const {code} = await transformWithOxc(source, 'pulse-content.jsx', {jsx: {runtim
 const panelSource = readFileSync(new URL('../src/daily-updates-list.jsx', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace(/^export (default )?/gm, '');
 const panelCode = (await transformWithOxc(panelSource, 'daily-updates-list.jsx', {jsx: {runtime: 'classic'}})).code;
 const panelBindings = {React, useSyncExternalStore: React.useSyncExternalStore, ...dailyUpdatesOrder, formatDisplayDateTime: dates.formatDisplayDateTime};
-const {DailyUpdatesPanel} = new Function(...Object.keys(panelBindings), panelCode + '; return {DailyUpdatesPanel};')(...Object.values(panelBindings));
+const {DailyUpdatesPanel} = new Function("DateInput", ...Object.keys(panelBindings), panelCode + '; return {DailyUpdatesPanel};')(DateInput, ...Object.values(panelBindings));
 const NOW = Date.parse('2026-09-16T11:00:00+05:30');
 function descendants(tree, predicate) {
   const result = [];
@@ -63,7 +64,7 @@ function harness() {
     clearTimeout() {},
     ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle', 'Activity', 'Clock', 'RotateCcw', 'Eye'].map(name => [name, () => null])),
   };
-  const Component = new Function(...Object.keys(bindings), `${code}; return InfoPulseContent;`)(...Object.values(bindings));
+  const Component = new Function("DateInput", ...Object.keys(bindings), `${code}; return InfoPulseContent;`)(DateInput, ...Object.values(bindings));
   return {effects, timers, render(overrides = {}) {
     cursor = 0;
     const requests = overrides.requests || REQUESTS;

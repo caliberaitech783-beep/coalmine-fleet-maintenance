@@ -10,6 +10,7 @@ import {recordedBreakdownRangeLength} from '../src/dashboard-breakdown-forecast.
 import {recordBelongsToSite} from '../site-location.mjs';
 import {formatDisplayDate} from '../date-time-format.mjs';
 import {dailyBdBalanceExport} from '../src/dashboard-section-export.mjs';
+import DateInput from '../src/date-input.mjs';
 
 const source = readFileSync(new URL('../src/daily-bd-balance-chart.jsx', import.meta.url), 'utf8').replace(/^import .*;\r?\n/gm, '').replace('export default function', 'function');
 const {code} = await transformWithOxc(source, 'daily-bd-balance-chart.jsx', {jsx: {runtime: 'classic'}});
@@ -34,7 +35,7 @@ function harness() {
     useState(initial) {const i = cursor++; if (!(i in slots)) slots[i] = initial; return [slots[i], value => {slots[i] = value;}];},
     ...Object.fromEntries(['ArrowDown', 'ArrowRight', 'ArrowUp', 'Info', 'MapPin', 'RotateCcw'].map(name => [name, () => null])),
   };
-  const Chart = new Function(...Object.keys(bindings), `${code}; return DailyBdBalanceChart;`)(...Object.values(bindings));
+  const Chart = new Function("DateInput", ...Object.keys(bindings), `${code}; return DailyBdBalanceChart;`)(DateInput, ...Object.values(bindings));
   const props = {today: '2026-09-11', sites: ['Sasti OB', 'Majri OB'], records: [
     {ref: 'OLD', site: 'Sasti OB', start: '2026-09-01', status: 'Open'},
     {ref: 'NEW', site: 'Sasti OB', start: '2026-09-10', status: 'Closed', closedAt: '2026-09-11'},

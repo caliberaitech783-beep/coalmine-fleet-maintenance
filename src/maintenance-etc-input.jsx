@@ -1,5 +1,6 @@
 import React, {useState} from 'react';
 import './maintenance-etc-input.css';
+import DateInput from "./date-input.mjs";
 
 const INDIA_OFFSET_MS = 330 * 60_000;
 const MINUTE_MS = 60_000;
@@ -78,7 +79,7 @@ export default function MaintenanceEtcInput({value, displayValue = value, onChan
   return <fieldset className="full etc-field maintenance-etc-input">
     <legend>ETC (Expected Time For Completion) *</legend>
     <div className="maintenance-etc-controls">
-      <label>Date<input type="date" required min={minimum.slice(0, 10)} value={parts.date} disabled={!editing} onChange={e => change('date', e.target.value)} /></label>
+      <label>Date<DateInput required min={minimum.slice(0, 10)} value={parts.date} disabled={!editing} onChange={e => change('date', e.target.value)} /></label>
       <label>AM/PM<select required value={parts.period} disabled={!editing} onChange={e => change('period', e.target.value)}><option value="">AM/PM</option>{['AM', 'PM'].map(period => <option key={period} disabled={etcPeriodDisabled(parts.date, period, minimum)}>{period}</option>)}</select></label>
       <label>Hour<select required value={parts.hour} disabled={!editing || !parts.period} onChange={e => change('hour', e.target.value)}><option value="">Hour</option>{hours.map(hour => <option key={hour} disabled={etcHourDisabled(parts, hour, minimum)}>{hour}</option>)}</select></label>
       <label>Minute<select required value={parts.minute} disabled={!editing || !parts.period || !parts.hour} onChange={e => change('minute', e.target.value)}><option value="">Minute</option>{minutes.map(minute => <option key={minute} disabled={etcMinuteDisabled(parts, minute, minimum)}>{minute}</option>)}</select></label>

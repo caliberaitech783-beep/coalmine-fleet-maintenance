@@ -147,7 +147,7 @@ test("administrators can delete audit entries older than N days, and the purge i
   assert.match(client, /query: `upToDate=\$\{key\}`/, "the dialog can delete up to a chosen date");
   assert.match(client, /query: `olderThanDays=\$\{count\}`/);
   assert.match(client, /if \(key >= indiaDateKey\(\)\) return \{ error: "Select a date before today/, "today can never be chosen");
-  assert.match(client, /<input type="date" value=\{date\} max=\{yesterdayDateKey\(\)\}/);
+  assert.match(client, /<DateInput value=\{date\} max=\{yesterdayDateKey\(\)\}/);
   assert.match(client, /Up to a date/);
   assert.match(client, /<PurgeWindowFields mode=\{purgeMode\}/);
   assert.match(client, /<Modal title="Delete old audit logs"/);

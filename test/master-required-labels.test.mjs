@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import React from "react";
 import { transformWithOxc } from "vite";
+import DateInput from '../src/date-input.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const schema = source.slice(source.indexOf("const masterFields ="), source.indexOf("const isCheckedValue ="));
@@ -51,7 +52,7 @@ function render(name, componentName) {
     SearchableSelect: SearchableSelectFixture,
     ...Object.fromEntries(["RefreshCw", "Trash2", "Save", "Upload", "Plus", "X", "Search", "Pencil", "CheckCircle2", "LockKeyhole", "Modal", "ExportMenu", "MultiTextField", "UserTypeAccessFields", "TableParameterFilter", "ActionsTable", "FilterableHeader", "MasterActions"].map(key => [key, Null])),
   };
-  const Component = new Function(...Object.keys(scope), `${codes[componentName]}; return ${componentName};`)(...Object.values(scope));
+  const Component = new Function("DateInput", ...Object.keys(scope), `${codes[componentName]}; return ${componentName};`)(DateInput, ...Object.values(scope));
   return Component({name, records: []});
 }
 

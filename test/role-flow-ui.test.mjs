@@ -12,6 +12,7 @@ import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 import * as requestEquipment from "../request-equipment.mjs";
 import { managerRoleSelection } from "../admin-access.mjs";
 import { requestsVisibleToMisWorkspace } from "../mis-request-visibility.mjs";
+import DateInput from '../src/date-input.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const codes = {};
@@ -73,7 +74,7 @@ function harness(name, extra = {}) {
     ...Object.fromEntries(["Wrench", "Plus", "ShieldCheck", "CheckCircle2", "X", "ChevronRight", "Flag"].map(name => [name, Null])),
     ...extra,
   };
-  const component = new Function(...Object.keys(scope), `${codes[name]}; return ${name};`)(...Object.values(scope));
+  const component = new Function("DateInput", ...Object.keys(scope), `${codes[name]}; return ${name};`)(DateInput, ...Object.values(scope));
   return {render(props) { cursor = 0; return component(name === "ManagerDashboard" ? {requestsLoaded: true, requestsUpdatedAt: 1788854400000, ...props} : props); }};
 }
 
