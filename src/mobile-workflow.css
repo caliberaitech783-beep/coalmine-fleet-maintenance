@@ -259,6 +259,7 @@
   color: #2454c6;
   font: inherit;
   font-weight: 800;
+  text-decoration: none;
   cursor: pointer;
 }
 .vehicle-history-link:hover { color: #163d9c; }
@@ -272,6 +273,21 @@
   border-radius: 12px;
   background: #f6f8fc;
 }
+.overlay.vehicle-history-overlay { padding: 0; place-items: stretch; }
+.overlay.vehicle-history-overlay > .modal.vehicle-history-modal {
+  display: flex;
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  flex-direction: column;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0;
+  resize: none;
+}
+.vehicle-history-modal > .vehicle-history-page { min-height: 0; border-radius: 0; }
 .vehicle-history-header {
   display: flex;
   align-items: center;

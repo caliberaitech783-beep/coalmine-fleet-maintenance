@@ -64,7 +64,7 @@ export default function HourlyBreakdownView({ requests, sites, onBack, ActionsTa
         <ActionsTable key={`${hours}|${site}`} exportTitle={`Hourly breakdown activity · ${title}`} printTitle={`Hourly breakdown activity · ${title}`} recordDateFilter={false} toolbarTarget={toolbarTarget} toolbarPortal>
           <thead><tr><th>Sites</th><th>Door No</th><th>In/Out</th><th>BD Timing</th></tr></thead>
           <tbody>{view.rows.length ? view.rows.map((row) => <tr key={row.key}>
-            <td>{row.site}</td><td>{row.door}</td><td>{row.direction}</td>
+            <td>{row.site}</td><td>{row.door && row.door !== "—" ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); window.dispatchEvent(new CustomEvent("nerve-center:open-vehicle-history", {detail: row})); }} aria-label={`View repair history for door number ${row.door}`} title="View breakdown and repair history">{row.door}</a> : "—"}</td><td>{row.direction}</td>
             <td className={row.closedAt != null ? "hourly-bd-out" : "hourly-bd-in"} data-sort-value={row.startedAt == null ? "" : Math.max(0, (row.closedAt ?? now) - row.startedAt)}>{breakdownElapsed(row, now)}</td>
           </tr>) : <tr><td colSpan={4}><div className="dashboard-record-empty"><b>No breakdown activity</b><span>No BD In or BD Out events for {site || "any site"} in the last {windowLabel(hours)}.</span></div></td></tr>}</tbody>
         </ActionsTable>

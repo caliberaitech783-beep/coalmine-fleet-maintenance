@@ -2259,7 +2259,7 @@ function breakdownCell(key, r, { showReadOnlyAction = false, onApproveIdeal, onC
     case "requestAction": return showReadOnlyAction ? <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td> : null;
     case "ref": return <td><b>{r.ref}</b></td>;
     case "equipment": return <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>;
-    case "door": return <td>{r.door}</td>;
+    case "door": return <td>{r.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openVehicleRepairHistory(r); }} aria-label={`View repair history for door number ${r.door}`} title="View breakdown and repair history">{r.door}</a> : "—"}</td>;
     case "make": return <td>{r.make || "—"}</td>;
     case "model": return <td>{r.model || "—"}</td>;
     case "site": return <td><MapPin /> {r.site}</td>;
@@ -2388,7 +2388,7 @@ function BreakdownTable({ rows = breakdowns, showBreakdownDays = false, stickyHe
                 {showActionColumn && <td className="row-actions">{requestActions ? requestActions(r) : <span>Read only</span>}</td>}
                 <td><b>{r.ref}</b></td>
                 <td>{normalizeEquipmentGroup(r.equipmentGroup) || r.equipment || "—"}</td>
-                <td>{r.door}</td>
+                <td>{r.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openVehicleRepairHistory(r); }} aria-label={`View repair history for door number ${r.door}`} title="View breakdown and repair history">{r.door}</a> : "—"}</td>
                 {showMakeModel && <><td>{r.make || "—"}</td><td>{r.model || "—"}</td></>}
                 <td>
                   <MapPin /> {r.site}
@@ -4474,7 +4474,7 @@ function Equipment({
                     <MapPin /> {v.currentLocation || v.location}
                   </td>
                   <td>
-                    <b>{v.equipmentName || v.door}</b>
+                    <b>{v.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); openVehicleRepairHistory(v); }} aria-label={`View repair history for door number ${v.door}`} title="View breakdown and repair history">{v.equipmentName || v.door}</a> : v.equipmentName || "—"}</b>
                     <small>{v.reg}</small>
                   </td>
                   <td>
@@ -5607,7 +5607,7 @@ function Generic({ name, requests = [] }) {
                   const age = requestAgeInDays(request);
                   return (
                     <tr key={request.ref} className={requestAgeClass(age)}>
-                      <td><b>{request.ref}</b></td><td>{request.door}</td><td>{request.site}</td><td><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
+                      <td><b>{request.ref}</b></td><td>{request.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${request.door}`} title="View breakdown and repair history">{request.door}</a> : "—"}</td><td>{request.site}</td><td><TranslatedText text={request.complaint} language={request.complaintLanguage} fallback="" /></td>
                       <td>{request.start}</td><td><RequestTimelineButton reference={request.ref} token={authToken} Dialog={Modal} label={`${age} ${age === 1 ? "day" : "days"}`} /></td><td><Status>{requestStatusLabel(request)}</Status></td>
                     </tr>
                   );
@@ -6293,11 +6293,15 @@ function locationCountRows(records = []) {
   });
   return [...groups.values()].sort((a, b) => sortCollator.compare(a.location, b.location));
 }
+const VEHICLE_HISTORY_OPEN_EVENT = "nerve-center:open-vehicle-history";
+function openVehicleRepairHistory(record) {
+  window.dispatchEvent(new CustomEvent(VEHICLE_HISTORY_OPEN_EVENT, {detail: record}));
+}
 function vehicleRepairHistoryColumns(onVehicleHistory) {
   return [
     {key: "door", label: "Door no.", value: (request) => request.reportDoor || request.door, render: (request) => {
       const door = request.reportDoor || request.door;
-      return door && onVehicleHistory ? <button type="button" className="vehicle-history-link" onClick={() => onVehicleHistory(request)} aria-label={`View repair history for door number ${door}`} title="View breakdown and repair history"><History />{door}</button> : <b>{door || "—"}</b>;
+      return door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (onVehicleHistory) onVehicleHistory(request); else openVehicleRepairHistory(request); }} aria-label={`View repair history for door number ${door}`} title="View breakdown and repair history"><History />{door}</a> : "—";
     }},
     {key: "reference", label: "Job reference", value: (request) => request.ref},
     {key: "equipment", label: "Equipment group", value: (request) => normalizeEquipmentGroup(request.equipmentGroup) || request.reportEquipment || request.equipment},
@@ -6627,15 +6631,18 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
     ...buildDepartmentReports({ requests: reportRequests, equipmentRecords, transferRecords, from: reportFrom || availabilityFrom, to: reportTo || availabilityTo, now: reportNow, showAllAcceptances }).map((report) => ({
       ...report,
       // Department reports return plain status text; render it as the same coloured pill the other reports use.
-      columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column).map((column) => {
-        if (report.category === "maintenance" && column.key === "door") return { ...column, render: (request) => {
-          const door = column.value?.(request) || request.reportDoor || request.door;
-          return door ? <button type="button" className="vehicle-history-link" onClick={() => setReportVehicleHistoryTarget(request)} aria-label={`View repair history for door number ${door}`} title="View breakdown and repair history"><History />{door}</button> : "—";
-        }};
-        return column;
-      }),
+      columns: report.columns.map((column) => column.key === "status" && !column.render ? { ...column, render: (row) => <Status>{column.value(row) || "—"}</Status> } : column),
     })),
-  ];
+  ].map((report) => ({
+    ...report,
+    columns: report.columns.map((column) => column.key === "door" ? {
+      ...column,
+      render: (record) => {
+        const door = column.value?.(record) || record.reportDoor || record.door;
+        return door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); setReportVehicleHistoryTarget(record); }} aria-label={`View repair history for door number ${door}`} title="View breakdown and repair history"><History />{door}</a> : "—";
+      },
+    } : column),
+  }));
   const accessibleReportGroups = reportGroups.filter((report) => allowedReportCategoryIds.includes(report.category));
   const availableReportCategories = departmentReportCategoryTabs.filter((category) => accessibleReportGroups.some((report) => report.category === category.id));
   const activeReports = accessibleReportGroups.filter((report) => report.category === activeCategory.id);
@@ -8624,7 +8631,7 @@ function MeterFileCell({ request, stage = "opening" }) {
     : <button type="button" className="compact" onClick={load} disabled={loading}>{loading ? "Loading…" : "View file"}</button>;
 }
 
-function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showStatusFilter = true, showActions = false, actionsFirst = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onVehicleHistory, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
+function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showActions = false, actionsFirst = true, showStatusFilter = true, showAcceptedTime = false, showAcceptanceStatus = false, showInProgressStatus = false, showArrivalFlagData = false, showMisFlagData = false, showComplaintAudio = false, showWorkCompletion = false, showTurnaroundTime = false, showEtc = false, showReason = true, showCreatedBy = false, showMisPeople = false, showVerifiedBy = false, showVerifiedAt = false, showClosedBy = false, showClosedAt = false, closedAtLabel = "Closing time", showTripCard = false, showMeterData = false, showMakeModel = false, highlightLateAcceptance = false, startedFirst = false, startedLabel = "Started", exportTitle = "Workflow report", onDelayedReason, onDeleteSelected, canDeleteRow, onFlagArrival, onVehicleHistory, onEdit, onDelete, onClose, onVerify, onMisFlag, onRemark }) {
   if (onDelete || onDeleteSelected) showActions = true;
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const mobileControlsId = React.useId();
@@ -8776,7 +8783,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showSt
               {showAcceptedTime && <td><b>{elapsedLabel(row.start, row.acceptedAt)}</b></td>}
               <td><b>{row.ref}</b></td>
               <td>{normalizeEquipmentGroup(row.equipmentGroup) || row.equipment || "—"}</td>
-              <td>{row.door && onVehicleHistory ? <button type="button" className="vehicle-history-link" onClick={() => onVehicleHistory(row)} aria-label={`View repair history for door number ${row.door}`} title="View breakdown and repair history"><History />{row.door}</button> : row.door || "—"}</td>
+              <td>{row.door ? <a href="#vehicle-repair-history" className="vehicle-history-link" onClick={(event) => { event.preventDefault(); event.stopPropagation(); if (onVehicleHistory) onVehicleHistory(row); else openVehicleRepairHistory(row); }} aria-label={`View repair history for door number ${row.door}`} title="View breakdown and repair history">{row.door}</a> : "—"}</td>
               {showMisPeople && <><td>{row.owner || row.requesterLogin || "—"}</td><td>{row.acceptedBy || "—"}</td><td>{row.closedBy || "—"}</td></>}
               {showMakeModel && <><td>{row.make || "—"}</td><td>{row.model || "—"}</td></>}
               <td><MapPin /> {row.site || "Not assigned"}</td>
@@ -10010,13 +10017,19 @@ function App() {
       const saved = localStorage.getItem("nerveCenterTheme");
       if (saved === "light" || saved === "dark") return saved;
       return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    });
+    }),
+    [globalVehicleHistoryTarget, setGlobalVehicleHistoryTarget] = useState(null);
   const menuLoadStartedAt = useRef(performance.now());
   const pageHistory = useRef([LOGIN_LANDING_PAGE]);
   const requestLoadSequence = useRef(0);
   const requestResponseCache = useRef({token: "", etag: ""});
   const [responsiveMobile,setResponsiveMobile]=useState(()=>window.matchMedia("(max-width: 900px)").matches);
   useEffect(()=>{const query=window.matchMedia("(max-width: 900px)");const update=()=>setResponsiveMobile(query.matches);query.addEventListener("change",update);return()=>query.removeEventListener("change",update)},[]);
+  useEffect(() => {
+    const openHistory = (event) => setGlobalVehicleHistoryTarget(event.detail || null);
+    window.addEventListener(VEHICLE_HISTORY_OPEN_EVENT, openHistory);
+    return () => window.removeEventListener(VEHICLE_HISTORY_OPEN_EVENT, openHistory);
+  }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
@@ -10405,6 +10418,12 @@ function App() {
     setProfileLocation("");
     setSession(nextSession);
   };
+  const globalVehicleHistoryDialog = globalVehicleHistoryTarget ? <Modal
+    title={`Vehicle repair history · ${globalVehicleHistoryTarget.reportDoor || globalVehicleHistoryTarget.door || "Vehicle"}`}
+    close={() => setGlobalVehicleHistoryTarget(null)}
+    className="vehicle-history-modal"
+    overlayClassName="vehicle-history-overlay"
+  ><VehicleRepairHistoryPage vehicle={globalVehicleHistoryTarget} rows={requests} backLabel="Close history" onBack={() => setGlobalVehicleHistoryTarget(null)} /></Modal> : null;
   if (!session) return <Login onLogin={completeLogin} theme={theme} toggleTheme={toggleTheme} />;
   if (session.role === "normal")
     return (
@@ -10423,6 +10442,7 @@ function App() {
         />
         <SessionMessageInbox session={session} />
         <RemoteAssistanceAgent session={session} />
+        {globalVehicleHistoryDialog}
       </>
     );
   return (
@@ -10549,6 +10569,7 @@ function App() {
       )}
       <SessionMessageInbox session={session} />
       <RemoteAssistanceAgent session={session} />
+      {globalVehicleHistoryDialog}
     </div>
   );
 }
