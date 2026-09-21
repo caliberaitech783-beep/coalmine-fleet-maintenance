@@ -256,7 +256,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       return;
     }
     for(const {input,id} of checkboxes)input.checked=selected.includes(id);
-    const chosen=selectedPrintColumns(options,selected);printButton.disabled=!chosen.length;
+    const {chosen}=currentReport();printButton.disabled=!chosen.length;
     const savedSelected=layouts.some(item=>String(item.number)===layoutSelect.value);
     printSavedButton.disabled=!savedSelected;
     deleteSavedButton.disabled=!savedSelected||Boolean(storageError);

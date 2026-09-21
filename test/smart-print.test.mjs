@@ -150,6 +150,33 @@ test('daily update journals stay compact in Smart Print while ordinary columns a
  assert.equal(compactDailyUpdatesForPrint('—'),'—');
 });
 
+test('the visible Smart Print preview uses the compact daily update column',()=>{
+ class Element {
+  constructor(tag){this.tag=tag;this.children=[];this.value='';}
+  append(...nodes){this.children.push(...nodes);}
+  replaceChildren(...nodes){this.children=nodes;}
+  setAttribute(){} addEventListener(){} showModal(){} close(){} remove(){}
+ }
+ const body=new Element('body'),data=new Map([['nerveCenterSession',JSON.stringify({login:'tester'})]]);
+ const storage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value)};
+ const oldDocument=globalThis.document,oldWindow=globalThis.window;
+ globalThis.document={body,activeElement:null,createElement:tag=>new Element(tag)};
+ globalThis.window={localStorage:storage,sessionStorage:storage};
+ const all=node=>[node,...node.children.flatMap(all)];
+ try{
+  openSmartPrint({
+   title:'BD Balance',
+   columns:[{key:'door',label:'Machine / Door no.',value:row=>row.door},{key:'dailyRemarks',label:'Daily updates',value:row=>row.updates}],
+   rows:[{door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-2026 | By: A | Update: Removed\n#2 | 9:19 PM 03-09-2026 | By: B | Update: Fitted'}],
+   onPrint(){},
+   onExport:null,
+  });
+  const cells=all(body.children.at(-1)).filter(node=>node.tag==='td').map(node=>node.textContent);
+  assert.deepEqual(cells,['1','LDM6 - 1064','2 updates\nLatest 9:19 PM 03-09-2026']);
+  assert.equal(cells.some(cell=>String(cell).includes('Update: Removed')),false);
+ }finally{globalThis.document=oldDocument;globalThis.window=oldWindow;}
+});
+
 test('print options: page ranges are validated, sides and copies are normalised and remembered',()=>{
   assert.equal(normalizePageRanges(''),'');
   assert.equal(normalizePageRanges(' 1-3, 5 ,8-8 '),'1-3,5,8');
