@@ -69,17 +69,30 @@ export function dailyUpdatesCountLabel(count) {
 
 const exportField = (value, fallback = "Not recorded") => String(value ?? "").replace(/\s+/g, " ").trim() || fallback;
 
+// Structured rows let Excel keep one saved update per worksheet row. This avoids Excel's
+// maximum row-height limit while retaining the same values used by PDF and Smart Print.
+export function dailyUpdatesExportRows(updates, { category = "" } = {}) {
+  return sortDailyUpdates(updates, "oldest").map((item) => ({
+    number: item.ordinal,
+    dateTime: dailyUpdateStamp(item) ? reportTime12(dailyUpdateStamp(item)) : "Date not recorded",
+    author: exportField(dailyUpdateAuthor(item)),
+    update: exportField(item.remark),
+    breakdownType: exportField(category),
+    delayedReason: exportField(dailyUpdateReason(item)),
+  }));
+}
+
 // Complete, stable text for PDF, Excel and Smart Print. The export is chronological regardless of
 // the reader's on-screen newest/oldest preference, and each saved update stays on its own line.
 export function dailyUpdatesExportText(updates, { category = "" } = {}) {
-  const records = sortDailyUpdates(updates, "oldest");
+  const records = dailyUpdatesExportRows(updates, { category });
   if (!records.length) return "—";
   return records.map((item) => [
-    `#${item.ordinal}`,
-    dailyUpdateStamp(item) ? reportTime12(dailyUpdateStamp(item)) : "Date not recorded",
-    `By: ${exportField(dailyUpdateAuthor(item))}`,
-    `Update: ${exportField(item.remark)}`,
-    ...(category ? [`Type: ${exportField(category)}`] : []),
-    `Delayed reason: ${exportField(dailyUpdateReason(item))}`,
+    `#${item.number}`,
+    item.dateTime,
+    `By: ${item.author}`,
+    `Update: ${item.update}`,
+    ...(category ? [`Type: ${item.breakdownType}`] : []),
+    `Delayed reason: ${item.delayedReason}`,
   ].join(" | ")).join("\n");
 }

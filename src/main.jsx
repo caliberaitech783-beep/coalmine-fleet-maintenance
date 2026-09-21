@@ -61,6 +61,7 @@ import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdow
 import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import DailyUpdatesList, { DailyUpdatesPanel } from "./daily-updates-list.jsx";
 import { dailyUpdatesExportText, latestDailyUpdateStamp } from "./daily-updates-order.mjs";
+import { prepareXlsxExportSheets } from "./xlsx-daily-updates.mjs";
 import { dashboardListTrigger, movementRequestRows, allLifecycleRequestRows, recordedTrendRows, forecastBasisRows } from "./dashboard-card-actions.mjs";
 import { equipmentCategoryLabel, equipmentGroupLabel } from "./dashboard-drilldown-model.mjs";
 import { equipmentGroupValue, normalizeEquipmentGroup } from "../equipment-group.mjs";
@@ -3052,12 +3053,19 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     const summaryRows = [[sheetTitle || title || "Nerve Center report"], [recordCountLine(exportRows.length, formatDisplayDateTime(new Date()))]];
     const firstDataRow = summaryRows.length + 1;
     const worksheetRows = [...summaryRows, labels, ...serial.rows];
-    const sheetData = worksheetRows.map((row, rowIndex) => `<row r="${rowIndex + 1}">${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}" s="${rowIndex >= firstDataRow && highlightedRows.has(rowIndex - firstDataRow) ? 2 : 1}" t="inlineStr"><is><t xml:space="preserve">${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`).join("");
+    const sheetData = worksheetRows.map((row, rowIndex) => {
+      const style = rowIndex === 0 ? 3 : rowIndex === 1 ? 4 : rowIndex === 2 ? 5 : highlightedRows.has(rowIndex - firstDataRow) ? 2 : 1;
+      const height = rowIndex === 0 ? ' ht="24" customHeight="1"' : rowIndex === 2 ? ' ht="30" customHeight="1"' : "";
+      return `<row r="${rowIndex + 1}"${height}>${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`;
+    }).join("");
     const widths = labels.map((label, index) => {
-      const maxLength = Math.max(String(label || "").length, ...serial.rows.map((row) => String(row[index] || "").length));
+      const maxLength = Math.max(String(label || "").length, ...serial.rows.map((row) => Math.max(...String(row[index] || "").split(/\r?\n/).map((line) => line.length))));
       return `<col min="${index + 1}" max="${index + 1}" width="${Math.min(48, Math.max(12, maxLength + 2))}" customWidth="1"/>`;
     }).join("");
-    return { name: sheetName(name, sheetIndex), part: `xl/worksheets/sheet${sheetIndex + 1}.xml`, content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${widths}</cols><sheetData>${sheetData}</sheetData></worksheet>` };
+    const lastCell = excelCellReference(Math.max(0, labels.length - 1), Math.max(2, worksheetRows.length - 1));
+    const filterRange = `A3:${excelCellReference(Math.max(0, labels.length - 1), Math.max(2, worksheetRows.length - 1))}`;
+    const mergedTo = excelCellReference(Math.max(0, labels.length - 1), 0).replace(/1$/, "");
+    return { name: sheetName(name, sheetIndex), part: `xl/worksheets/sheet${sheetIndex + 1}.xml`, content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${lastCell}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>${widths}</cols><sheetData>${sheetData}</sheetData>${labels.length > 1 ? `<mergeCells count="2"><mergeCell ref="A1:${mergedTo}1"/><mergeCell ref="A2:${mergedTo}2"/></mergeCells>` : ""}<autoFilter ref="${filterRange}"/><printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>` };
   });
   const workbookTitle = escapeExportHtml(title || "Nerve Center report");
   return zipStoredFiles([
@@ -3066,13 +3074,16 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     { name: "docProps/core.xml", content: `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${workbookTitle}</dc:title><dc:creator>Nerve Center</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>` },
     { name: "docProps/app.xml", content: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Nerve Center</Application></Properties>` },
     { name: "xl/_rels/workbook.xml.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${worksheets.map((sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${worksheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
-    { name: "xl/styles.xml", content: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CACA"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
+    { name: "xl/styles.xml", content: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><color rgb="FF10284C"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><i/><sz val="10"/><color rgb="FF65758B"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CACA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF10284C"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
     { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${worksheets.map((sheet, index) => `<sheet name="${escapeExportHtml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>` },
     ...worksheets.map((sheet) => ({ name: sheet.part, content: sheet.content })),
   ]);
 }
-function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set()) {
-  return buildXlsxSheetsWorkbook(title, [{ name: "Report", title, columns, rows: exportRows, highlightedRows }]);
+function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set(), sourceRows = null) {
+  const sheets = sourceRows
+    ? prepareXlsxExportSheets({ title, sheets: [{ name: "Report", title, columns, rows: sourceRows, highlightedRows }], formatCell: exportCellText })
+    : [{ name: "Report", title, columns, rows: exportRows, highlightedRows }];
+  return buildXlsxSheetsWorkbook(title, sheets);
 }
 // Smart Print goes straight to the printer through the print helper (QZ Tray) when it is installed on this PC:
 // the helper, unlike a web page, can set the paper to the chosen A3 / A4. Without the helper, or if the job
@@ -3187,7 +3198,7 @@ async function exportSmartPrintSelection({ format, title, columns = [], rows = [
   const highlightedRows = new Set(rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []));
   if (format === "xlsx") {
     recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:`${rows.length} records`});
-    downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows), exportFileName(title, "xlsx"));
+    downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows, rows), exportFileName(title, "xlsx"));
     return;
   }
   recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
@@ -3260,8 +3271,8 @@ function ExportMenu({ title, columns = [], rows = [], smartPrintColumns = column
   const downloadExcel = () => runDownload("Preparing Excel report...", () => {
     const sheets = excelSheets?.();
     recordUserActivity({module:"Reports",action:"Download Excel report",targetReference:title,reason:sheets ? `${sheets.length} sheets` : `${rows.length} records`});
-    if (sheets) downloadExportFile(buildXlsxSheetsWorkbook(title, sheets.map((sheet) => ({ ...sheet, rows: sheet.rows.map((row) => sheet.columns.map((column) => exportCellText(column.value?.(row)))) }))), exportFileName(title, "xlsx"));
-    else downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows), exportFileName(title, "xlsx"));
+    if (sheets) downloadExportFile(buildXlsxSheetsWorkbook(title, prepareXlsxExportSheets({ title, sheets, formatCell: exportCellText })), exportFileName(title, "xlsx"));
+    else downloadExportFile(buildXlsxWorkbook(title, columns, exportRows, highlightedRows, rows), exportFileName(title, "xlsx"));
   });
   const downloadPdf = () => runDownload("Preparing PDF report...", async () => {
       recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
@@ -6696,7 +6707,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
         }
         const folder = reportCategoryTabs.find((category) => category.id === report.category)?.label || "Reports";
         const baseName = exportFileName(report.title, "").replace(/\.$/, "");
-        const xlsx = buildXlsxWorkbook(report.title, report.columns, exportRows);
+        const xlsx = buildXlsxWorkbook(report.title, report.columns, exportRows, new Set(), filteredRows);
         return [
           { name: `${folder}/${baseName}.pdf`, content: new Uint8Array(await (await pdfResponse.blob()).arrayBuffer()) },
           { name: `${folder}/${baseName}.xlsx`, content: new Uint8Array(await xlsx.arrayBuffer()) },
