@@ -9343,10 +9343,21 @@ function TicketPage({ session }) {
   </section>;
 }
 
-function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose }) {
+function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
   const panelRef = useRef(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(() => Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
   const closeRef = useRef(onClose);
-  closeRef.current = onClose;
+  closeRef.current = () => { if (Date.now() >= closeAvailableAt) onClose(); };
+  useEffect(() => {
+    const updateCountdown = () => setRemainingSeconds(Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
+    updateCountdown();
+    if (Date.now() >= closeAvailableAt) return undefined;
+    const timer = window.setInterval(() => {
+      updateCountdown();
+      if (Date.now() >= closeAvailableAt) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [closeAvailableAt]);
   useEffect(() => {
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
@@ -9370,7 +9381,8 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
       <header>
         <div className="pulse-title"><div className="ai-feeder-heading-line"><span className="ai-feeder-kicker"><PulseIcon /> INFO PULSE</span><span className="pulse-scope"><MapPin aria-hidden="true" /> Scope: {scope?.label || "Assigned location"}</span></div><h2 id="ai-feeder-title">Open breakdowns</h2></div>
         <div className="ai-feeder-actions">
-          <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>
+          {closeAvailableAt > 0 && <span className="ai-feeder-countdown" role="timer" aria-live="off" aria-label={remainingSeconds > 0 ? "Time until Info Pulse can be closed" : "Info Pulse can now be closed"}><small>{remainingSeconds > 0 ? "Close available in" : "You can close"}</small><b>{String(Math.floor(remainingSeconds / 60)).padStart(2, "0")}:{String(remainingSeconds % 60).padStart(2, "0")}</b></span>}
+          {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
       <InfoPulseContent breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} />
@@ -9379,7 +9391,8 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
 }
 
 function AiFeeder({ role = "", session }) {
-  const [open, setOpen] = useState(false);
+  const [openMode, setOpenMode] = useState("");
+  const [loginCloseAvailableAt, setLoginCloseAvailableAt] = useState(0);
   const [now, setNow] = useState(() => Date.now());
   const [requests, setRequests] = useState([]);
   const [scope, setScope] = useState({kind: "location", label: "Assigned location", sites: []});
@@ -9438,16 +9451,33 @@ function AiFeeder({ role = "", session }) {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    setOpen(false);
+    setOpenMode("");
+    if (!session?.token) return undefined;
+    let active = true;
+    // The server remembers when each user last saw the login prompt, so it
+    // opens once per four hours however many times they sign in.
+    fetch(`/api/info-pulse/prompt?t=${Date.now()}`, {method: "POST", cache: "no-store", headers: {Authorization: `Bearer ${session.token}`}})
+      .then(response => response.ok ? response.json() : null)
+      .then(body => {
+        if (!active || body?.show !== true) return;
+        setLoginCloseAvailableAt(Date.now() + Math.max(0, Number(body.closeAfterMs) || 0));
+        setOpenMode("login");
+      })
+      .catch(() => {});
+    return () => { active = false; };
   }, [session?.token]);
+  const closePanel = () => {
+    if (openMode === "login" && Date.now() < loginCloseAvailableAt) return;
+    setOpenMode("");
+  };
   const ready = loadState.token === session?.token && loadState.ready;
   // BD balance: every open request that is not idle, closed or verified, longest standing first.
   const breakdowns = useMemo(() => ready ? buildInfoPulseBreakdowns(requests) : [], [requests, ready]);
   return <>
-    <button type="button" className="ai-feeder-trigger" onClick={() => setOpen(true)} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
+    <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
       <PulseIcon /><span>INFO PULSE</span>{ready && breakdowns.length > 0 && <><b className="ai-feeder-trigger-count">{breakdowns.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {open && <AiFeederPanel key={session?.token} breakdowns={breakdowns} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={() => setOpen(false)} />}
+    {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} breakdowns={breakdowns} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
   </>;
 }
 
