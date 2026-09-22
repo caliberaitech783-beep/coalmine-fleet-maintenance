@@ -23,6 +23,7 @@ import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
+import {productionFirstTripCutoffMs} from './info-pulse-data.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
@@ -5489,6 +5490,7 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
     const closedAtMs=closedAt instanceof Date?closedAt.getTime():Number(closedAt);
     if(!Number.isFinite(closedAtMs))throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
+    if(closedAtMs<productionFirstTripCutoffMs())throw Object.assign(new Error('Production first-trip entry is available only for requests made on road from 21-09-2026 onward.'),{status:409});
     if(closedAt&&firstTripAt.getTime()<closedAt.getTime())throw Object.assign(new Error('Production first-trip time cannot be before the vehicle was made on road.'),{status:400});
     if(firstTripAt.getTime()>Date.now())throw Object.assign(new Error('Production first-trip time cannot be in the future.'),{status:400});
     const actorName=req.session.name||user?.employee||req.session.login||'Production User';

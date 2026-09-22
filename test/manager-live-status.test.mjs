@@ -8,6 +8,7 @@ import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
 import { recordBelongsToSite } from "../site-location.mjs";
 import { managerRoleSelection } from "../admin-access.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mjs";
+import { isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import {isNetworkFailure, isTransientStatus} from "../src/api-transient-retry.mjs";
 import {requestWriteConnectionMessage, requestWriteOutcomeConfirmed} from "../src/request-write-recovery.mjs";
 
@@ -58,7 +59,7 @@ function managerHarness(equipment, equipmentState = {}) {
   };
   const scope = {
     React, useState, fleetAssetRequestDetails, liveEquipmentMetrics, liveEquipmentRoadStatus, requestWithEquipmentMasterDetails,
-    recordBelongsToSite, managerRoleSelection, visibleInMisRequests, visibleInMisHistory,
+    recordBelongsToSite, managerRoleSelection, visibleInMisRequests, visibleInMisHistory, isProductionFirstTripPending,
     equipmentGroupLabel: (row) => row.group || row.category || "Unspecified",
     useDashboardEquipment: () => ({ records: equipment, loaded: true, scope: { restrictToScope: true, allowedSites: ["Sasti OB"] }, ...equipmentState }),
     preventTableAutoScroll: () => {}, BreakdownTable, MobileWorkflowTable, DashboardRecordBrowser, Modal, RequestDataState, FleetDataState, ManagerIdleConfirmation, ConnectionRecoveryNotice: DashboardConnectionNotice,

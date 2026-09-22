@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {aiFeederAlerts, parseIstTimestamp} from '../ai-feeder.mjs';
-import {buildInfoPulseBreakdowns, buildInfoPulseCases, buildInfoPulseFirstTripPending, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView, isActiveBreakdown, isProductionFirstTripPending} from '../info-pulse-data.mjs';
+import {buildInfoPulseBreakdowns, buildInfoPulseCases, buildInfoPulseFirstTripPending, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView, isActiveBreakdown, isProductionFirstTripPending, productionFirstTripCutoffMs} from '../info-pulse-data.mjs';
 import {infoPulseRequestScope, scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 
 const NOW = Date.parse('2026-09-10T12:00:00+05:30');
@@ -121,7 +121,7 @@ test('total breakdowns count every open non-idle request once, longest standing 
   assert.deepEqual(records.filter(isActiveBreakdown).map(row => row.ref), ['quiet', 'old', 'new', 'new', 'majri']);
 });
 
-test('production first-trip pending queue mirrors the MIS pending queue and excludes completed production entries', () => {
+test('production first-trip pending queue includes only rollout on-road records and excludes completed production entries', () => {
   const records = [
     {...base, ref: 'old-pending', status: 'Closed', start: '2026-09-08 09:00', closedAt: '2026-09-08 10:00', productionFirstTripAt: '', door: 'D0'},
     {...base, ref: 'rollout-pending', status: 'Closed', start: '2026-09-21 00:00', closedAt: '2026-09-21 00:30', productionFirstTripAt: '', door: 'D1'},
@@ -132,11 +132,12 @@ test('production first-trip pending queue mirrors the MIS pending queue and excl
     {...base, ref: 'open', status: 'Open'},
   ];
   const rows = buildInfoPulseFirstTripPending(records, {now: Date.parse('2026-09-22T12:00:00+05:30')});
-  assert.equal(isProductionFirstTripPending(records[0], {now: NOW}), true);
+  assert.equal(new Date(productionFirstTripCutoffMs() + 330 * 60_000).toISOString().slice(0, 19), '2026-09-21T00:00:00');
+  assert.equal(isProductionFirstTripPending(records[0], {now: NOW}), false);
   assert.equal(isProductionFirstTripPending(records[1], {now: NOW}), true);
   assert.equal(isProductionFirstTripPending(records[4], {now: NOW}), false);
-  assert.deepEqual(rows.map(row => row.key), ['old-pending', 'rollout-pending', 'today-pending']);
-  assert.equal(rows[0].date, '2026-09-08');
+  assert.deepEqual(rows.map(row => row.key), ['rollout-pending', 'today-pending']);
+  assert.equal(rows[0].date, '2026-09-21');
   assert.equal(infoPulseView(rows, {from: '2026-09-22', to: '2026-09-22'}).totals.total, 1);
 });
 
