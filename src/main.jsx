@@ -15,7 +15,8 @@ import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
-import React, { lazy, Suspense, useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { ApplicationErrorBoundary, createLazyFeature } from "./lazy-feature.jsx";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
@@ -123,22 +124,22 @@ import RequestTimelineButton from "./request-timeline.jsx";
 // Keep specialist administration and remote-support code out of the startup
 // bundle. Vite emits these as separate chunks and downloads them only when a
 // signed-in user opens the corresponding feature.
-const BackupAdministration=lazy(()=>import("./backup-administration.jsx"));
-const VehicleTransferWorkflow=lazy(()=>import("./vehicle-transfer-workflow.jsx"));
-const RequestCorrections=lazy(()=>import("./request-corrections.jsx"));
-const PrintHelperSetupPage=lazy(()=>import("./print-helper-setup.jsx"));
-const OrganisationChartView=lazy(()=>import("./organisation-chart.jsx"));
-const UserLoginHistory=lazy(()=>import("./user-login-history.jsx").then(module=>({default:module.UserLoginHistory})));
-const UserLoginActivity=lazy(()=>import("./user-login-history.jsx").then(module=>({default:module.UserLoginActivity})));
-const RemoteAssistanceAction=lazy(()=>import("./remote-assistance.jsx").then(module=>({default:module.RemoteAssistanceAction})));
-const RemoteAssistanceAgent=lazy(()=>import("./remote-assistance.jsx").then(module=>({default:module.RemoteAssistanceAgent})));
-const SavedReportsPanel=lazy(()=>import("./saved-reports.jsx").then(module=>({default:module.SavedReportsPanel})));
-const HourlyBreakdownView=lazy(()=>import("./hourly-breakdown-view.jsx"));
-const WhatsAppReportSettingsButton=lazy(()=>import("./whatsapp-report-settings.jsx"));
-const RecoveryGuide=lazy(()=>import("./recovery-guide.jsx"));
-const HelpTraining=lazy(()=>import("./help-training.jsx"));
-const DashboardRecordBrowser=lazy(()=>import("./dashboard-record-browser.jsx"));
-const InfoPulseContent=lazy(()=>import("./info-pulse-content.jsx"));
+const BackupAdministration=createLazyFeature(()=>import("./backup-administration.jsx"),undefined,{loadingLabel:"Loading backup administration…"});
+const VehicleTransferWorkflow=createLazyFeature(()=>import("./vehicle-transfer-workflow.jsx"),undefined,{loadingLabel:"Loading vehicle transfers…"});
+const RequestCorrections=createLazyFeature(()=>import("./request-corrections.jsx"),undefined,{loadingLabel:"Loading request corrections…"});
+const PrintHelperSetupPage=createLazyFeature(()=>import("./print-helper-setup.jsx"),undefined,{loadingLabel:"Loading print helper…"});
+const OrganisationChartView=createLazyFeature(()=>import("./organisation-chart.jsx"),undefined,{loadingLabel:"Loading organisation chart…"});
+const UserLoginHistory=createLazyFeature(()=>import("./user-login-history.jsx"),module=>module.UserLoginHistory,{loadingLabel:"Loading login history…"});
+const UserLoginActivity=createLazyFeature(()=>import("./user-login-history.jsx"),module=>module.UserLoginActivity,{loadingLabel:"Loading login activity…"});
+const RemoteAssistanceAction=createLazyFeature(()=>import("./remote-assistance.jsx"),module=>module.RemoteAssistanceAction,{compact:true,silent:true});
+const RemoteAssistanceAgent=createLazyFeature(()=>import("./remote-assistance.jsx"),module=>module.RemoteAssistanceAgent,{compact:true,silent:true});
+const SavedReportsPanel=createLazyFeature(()=>import("./saved-reports.jsx"),module=>module.SavedReportsPanel,{loadingLabel:"Loading saved reports…"});
+const HourlyBreakdownView=createLazyFeature(()=>import("./hourly-breakdown-view.jsx"),undefined,{loadingLabel:"Loading hourly breakdown…"});
+const WhatsAppReportSettingsButton=createLazyFeature(()=>import("./whatsapp-report-settings.jsx"),undefined,{compact:true,silent:true});
+const RecoveryGuide=createLazyFeature(()=>import("./recovery-guide.jsx"),undefined,{loadingLabel:"Loading recovery guide…"});
+const HelpTraining=createLazyFeature(()=>import("./help-training.jsx"),undefined,{compact:true,silent:true});
+const DashboardRecordBrowser=createLazyFeature(()=>import("./dashboard-record-browser.jsx"),undefined,{loadingLabel:"Loading records…"});
+const InfoPulseContent=createLazyFeature(()=>import("./info-pulse-content.jsx"),undefined,{loadingLabel:"Loading Info Pulse…"});
 import {
   LayoutDashboard,
   Truck,
@@ -10770,7 +10771,7 @@ function App() {
   );
 }
 createRoot(document.getElementById("root")).render(
-  <Suspense fallback={<div className="app-loading" role="status">Loading workspace…</div>}>
+  <ApplicationErrorBoundary>
     <App />
-  </Suspense>,
+  </ApplicationErrorBoundary>,
 );

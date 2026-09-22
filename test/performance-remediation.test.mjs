@@ -4,6 +4,8 @@ import test from 'node:test';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const client=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+const lazyFeature=readFileSync(new URL('../src/lazy-feature.jsx',import.meta.url),'utf8');
+const indexHtml=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const workflow=readFileSync(new URL('../.github/workflows/azure-hosting_coalmine-fleet-azure-783.yml',import.meta.url),'utf8');
 const azure=readFileSync(new URL('../scripts/configure-azure-performance.sh',import.meta.url),'utf8');
 
@@ -38,9 +40,21 @@ test('specialist browser features are emitted as lazy chunks',()=>{
     'remote-assistance.jsx','backup-administration.jsx','vehicle-transfer-workflow.jsx',
     'request-corrections.jsx','organisation-chart.jsx','whatsapp-report-settings.jsx',
     'info-pulse-content.jsx','saved-reports.jsx','recovery-guide.jsx',
-  ])assert.match(client,new RegExp(`lazy\\(\\(\\)=>import\\("\\./${module.replaceAll('.','\\.')}"\\)`));
-  assert.match(client,/<Suspense fallback=/);
+  ])assert.match(client,new RegExp(`createLazyFeature\\(\\(\\)=>import\\("\\./${module.replaceAll('.','\\.')}"\\)`));
+  assert.match(lazyFeature,/lazy\(\(\) => importer\(\)/);
+  assert.match(lazyFeature,/<Suspense fallback=/);
   assert.match(client,/enabled:needsRequestFormMasters/);
+});
+
+test('lazy screens cannot replace the entire workspace with a blank page',()=>{
+  assert.match(client,/<ApplicationErrorBoundary>/);
+  assert.doesNotMatch(client,/<Suspense fallback=.*<App \/>/s);
+  assert.match(lazyFeature,/failed to fetch dynamically imported module/);
+  assert.match(lazyFeature,/window\.location\.replace\(nextUrl\.toString\(\)\)/);
+  assert.match(lazyFeature,/Refresh application/);
+  assert.match(indexHtml,/id="boot-status"/);
+  assert.match(indexHtml,/Nerve Center could not finish loading/);
+  assert.match(indexHtml,/unhandledrejection/);
 });
 
 test('deployment keeps App Service warm and caches only fingerprinted static assets',()=>{
@@ -48,6 +62,9 @@ test('deployment keeps App Service warm and caches only fingerprinted static ass
   assert.match(workflow,/bash scripts\/configure-azure-performance\.sh/);
   assert.match(azure,/--always-on true/);
   assert.match(azure,/--http20-enabled true/);
+  assert.match(azure,/LIVE_URL:\?LIVE_URL is required/);
+  assert.match(azure,/\.properties\.hostName/);
+  assert.match(azure,/live_domain_id/);
   assert.match(azure,/patternsToMatch: \["\/assets\/\*"\]/);
   assert.match(azure,/queryStringCachingBehavior: "IgnoreQueryString"/);
   assert.match(azure,/isCompressionEnabled: true/);

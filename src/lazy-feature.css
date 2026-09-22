@@ -1,0 +1,86 @@
+.lazy-feature-loading {
+  min-height: 12rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .8rem;
+  padding: 2rem;
+  color: #39205f;
+  font: 700 1rem/1.4 Inter, system-ui, sans-serif;
+}
+
+.lazy-feature-loading.compact {
+  min-height: 0;
+  display: inline-flex;
+  padding: .25rem .4rem;
+  font-size: .8rem;
+}
+
+.lazy-feature-spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  border: 3px solid rgba(82, 46, 144, .2);
+  border-top-color: #522e90;
+  border-radius: 50%;
+  animation: lazy-feature-spin .75s linear infinite;
+}
+
+.application-recovery {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 1.5rem;
+  background: linear-gradient(145deg, #faf7fb, #f2ecf8);
+  color: #241338;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.application-recovery-card {
+  width: min(34rem, 100%);
+  box-sizing: border-box;
+  padding: 2rem;
+  border: 1px solid rgba(82, 46, 144, .18);
+  border-radius: 1.25rem;
+  background: #fff;
+  box-shadow: 0 1rem 3rem rgba(45, 24, 76, .13);
+  text-align: center;
+}
+
+.application-recovery-mark {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  background: #522e90;
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 900;
+}
+
+.application-recovery h1 { margin: 0 0 .6rem; font-size: 1.45rem; }
+.application-recovery p { margin: 0 auto 1.25rem; color: #655773; line-height: 1.55; }
+.application-recovery button,
+.lazy-feature-error button {
+  border: 0;
+  border-radius: .65rem;
+  padding: .7rem 1rem;
+  background: #522e90;
+  color: #fff;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lazy-feature-error.compact { display: inline-flex; align-items: center; gap: .4rem; color: #9c1c2d; }
+.lazy-feature-error.compact button { padding: .3rem .55rem; }
+
+@keyframes lazy-feature-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lazy-feature-spinner { animation-duration: 1.5s; }
+}
