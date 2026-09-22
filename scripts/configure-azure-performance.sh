@@ -22,10 +22,10 @@ az webapp config set \
   --http20-enabled true \
   --output none
 
-# Azure recommends a distinct cached route for static files so authenticated
-# API responses can never enter the shared edge cache. Clone the active /*
-# route attached to the live custom domain (not merely the first endpoint
-# route), then narrow that identical domain/origin configuration to assets.
+# Keep the dedicated static route out of traffic. In this environment Azure
+# Front Door accepts the route but stalls browser Accept-Encoding requests
+# before returning any response bytes. The enabled /* route remains the proven
+# delivery path and does not cache authenticated API responses.
 endpoint_id="$(az afd endpoint list \
   --resource-group "$AZURE_RESOURCE_GROUP" \
   --profile-name "$AZURE_FRONT_DOOR_PROFILE" \
@@ -61,20 +61,8 @@ fi
 
 route_body="$(jq -n --argjson source "$source_route" '
   {properties: {
-    cacheConfiguration: {
-      compressionSettings: {
-        contentTypesToCompress: [],
-        # Front Door compression on this route has returned headers but then
-        # stalled browser Accept-Encoding requests before sending any body.
-        # API responses still negotiate compression at the origin. Fingerprinted
-        # assets are deliberately identity encoded and cached at the edge.
-        isCompressionEnabled: false
-      },
-      queryParameters: "",
-      queryStringCachingBehavior: "IgnoreQueryString"
-    },
     customDomains: ($source.properties.customDomains // []),
-    enabledState: "Enabled",
+    enabledState: "Disabled",
     forwardingProtocol: $source.properties.forwardingProtocol,
     httpsRedirect: $source.properties.httpsRedirect,
     linkToDefaultDomain: $source.properties.linkToDefaultDomain,
@@ -94,21 +82,15 @@ if ! route_update_output="$(az rest \
   --headers 'Content-Type=application/json' \
   --body "$route_body" \
   --output none 2>&1)"; then
-  if grep -q 'AuthorizationFailed' <<<"$route_update_output"; then
-    echo "::warning title=Front Door cache permission required::App Service Always On and HTTP/2 were applied, but the deployment identity needs Microsoft.Cdn/profiles/afdEndpoints/routes/write to create the static-assets route. Continuing the application deployment without edge caching."
-    exit 0
-  fi
   printf '%s\n' "$route_update_output" >&2
   exit 1
 fi
 
 configured_route="$(az rest --method get --url "${endpoint_id}/routes/static-assets?api-version=2024-09-01")"
 jq -e --arg live_domain_id "$live_domain_id" '
-  .properties.enabledState == "Enabled"
+  .properties.enabledState == "Disabled"
   and .properties.patternsToMatch == ["/assets/*"]
   and any(.properties.customDomains[]?; ((.id // "") | ascii_downcase) == ($live_domain_id | ascii_downcase))
-  and .properties.cacheConfiguration.queryStringCachingBehavior == "IgnoreQueryString"
-  and .properties.cacheConfiguration.compressionSettings.isCompressionEnabled == false
 ' <<<"$configured_route" >/dev/null
 
-echo "Azure performance configuration verified: Always On, HTTP/2, and cached /assets/* route."
+echo "Azure performance configuration verified: Always On, HTTP/2, and unsafe /assets/* route disabled."

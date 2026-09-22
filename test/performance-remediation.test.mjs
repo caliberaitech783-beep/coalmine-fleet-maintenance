@@ -57,7 +57,7 @@ test('lazy screens cannot replace the entire workspace with a blank page',()=>{
   assert.match(indexHtml,/unhandledrejection/);
 });
 
-test('deployment keeps App Service warm and caches only fingerprinted static assets',()=>{
+test('deployment keeps App Service warm and disables the unsafe static route',()=>{
   assert.match(workflow,/Enforce Azure performance configuration/);
   assert.match(workflow,/bash scripts\/configure-azure-performance\.sh/);
   assert.match(azure,/--always-on true/);
@@ -66,10 +66,9 @@ test('deployment keeps App Service warm and caches only fingerprinted static ass
   assert.match(azure,/\.properties\.hostName/);
   assert.match(azure,/live_domain_id/);
   assert.match(azure,/patternsToMatch: \["\/assets\/\*"\]/);
-  assert.match(azure,/queryStringCachingBehavior: "IgnoreQueryString"/);
-  assert.match(azure,/isCompressionEnabled: false/);
+  assert.match(azure,/enabledState: "Disabled"/);
+  assert.match(azure,/\.properties\.enabledState == "Disabled"/);
   assert.match(workflow,/curl --compressed[^\n]+\$\{LIVE_URL\}\$\{asset\}/);
-  assert.match(azure,/AuthorizationFailed/);
-  assert.match(azure,/Continuing the application deployment without edge caching/);
+  assert.doesNotMatch(azure,/Continuing the application deployment/);
   assert.doesNotMatch(azure,/patternsToMatch: \["\/api\/\*"\]/);
 });
