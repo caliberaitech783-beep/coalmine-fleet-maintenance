@@ -5825,7 +5825,7 @@ function AuditTrailPage({ session }) {
   const [events, setEvents] = useState([]), [summary, setSummary] = useState(null), [nextCursor, setNextCursor] = useState(null), [hasMore, setHasMore] = useState(false), [loading, setLoading] = useState(true), [loadingMore, setLoadingMore] = useState(false), [query, setQuery] = useState(""), [filters, setFilters] = useState({}), [deviceType, setDeviceType] = useState("All"), [platform, setPlatform] = useState("All"), [openFilter, setOpenFilter] = useState(null), [actionsToolbarTarget, setActionsToolbarTarget] = useState(null);
   const [purgeOpen, setPurgeOpen] = useState(false), [purgeDays, setPurgeDays] = useState("2"), [purging, setPurging] = useState(false);
   const [purgeMode, setPurgeMode] = useState("days"), [purgeDate, setPurgeDate] = useState(yesterdayDateKey);
-  const [retention, setRetention] = useState(null), [retentionOpen, setRetentionOpen] = useState(false), [retentionDraft, setRetentionDraft] = useState({auditDays:"5", activityDays:"0"}), [savingRetention, setSavingRetention] = useState(false);
+  const [retention, setRetention] = useState(null), [retentionOpen, setRetentionOpen] = useState(false), [retentionDraft, setRetentionDraft] = useState({auditDays:"5", activityDays:"0", whatsappDays:"0", notificationDays:"0", mediaDays:"0"}), [savingRetention, setSavingRetention] = useState(false);
   const load = async ({append=false,dateRange=appliedDateRange.current} = {}) => {
     const loadSequence = append ? auditLoadSequence.current : ++auditLoadSequence.current;
     if (append) setLoadingMore(true);
@@ -5902,7 +5902,7 @@ function AuditTrailPage({ session }) {
   useEffect(() => {
     let active = true;
     fetch("/api/log-retention", {cache:"no-store", headers:retentionHeaders}).then((response) => response.ok ? response.json() : null)
-      .then((result) => { if (active && result) { setRetention(result); setRetentionDraft({auditDays:String(result.auditDays), activityDays:String(result.activityDays)}); } })
+      .then((result) => { if (active && result) { setRetention(result); setRetentionDraft({auditDays:String(result.auditDays), activityDays:String(result.activityDays), whatsappDays:String(result.whatsappDays ?? 0), notificationDays:String(result.notificationDays ?? 0), mediaDays:String(result.mediaDays ?? 0)}); } })
       .catch(() => {});
     return () => { active = false; };
   }, [session?.token]);
@@ -5911,12 +5911,12 @@ function AuditTrailPage({ session }) {
     event.preventDefault();
     setSavingRetention(true);
     try {
-      const response = await fetch("/api/log-retention", {method:"PUT", cache:"no-store", headers:{...retentionHeaders, "Content-Type":"application/json"}, body:JSON.stringify({auditDays:Number(retentionDraft.auditDays), activityDays:Number(retentionDraft.activityDays)})});
+      const response = await fetch("/api/log-retention", {method:"PUT", cache:"no-store", headers:{...retentionHeaders, "Content-Type":"application/json"}, body:JSON.stringify({auditDays:Number(retentionDraft.auditDays), activityDays:Number(retentionDraft.activityDays), whatsappDays:Number(retentionDraft.whatsappDays), notificationDays:Number(retentionDraft.notificationDays), mediaDays:Number(retentionDraft.mediaDays)})});
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Could not save the automatic clean-up setting.");
       setRetention(result);
       setRetentionOpen(false);
-      alert(`Automatic clean-up saved: Audit Trail keeps ${retentionLabel(result.auditDays)}, user activity ${retentionLabel(result.activityDays)}. It runs within a few minutes and then once every day.`);
+      alert(`Automatic clean-up saved: Audit Trail keeps ${retentionLabel(result.auditDays)}, user activity ${retentionLabel(result.activityDays)}, WhatsApp history ${retentionLabel(result.whatsappDays)}, notifications ${retentionLabel(result.notificationDays)}, verified-request photos and audio ${retentionLabel(result.mediaDays)}. It runs within a few minutes and then once every day.`);
     } catch (error) { alert(error.message); }
     finally { setSavingRetention(false); }
   };
@@ -5959,6 +5959,9 @@ function AuditTrailPage({ session }) {
         <div className="formgrid">
           <label>Audit Trail · days to keep *<input type="number" min="0" max="3650" step="1" value={retentionDraft.auditDays} onChange={(event) => setRetentionDraft((current) => ({...current, auditDays:event.target.value}))} required autoFocus /></label>
           <label>User activity · days to keep *<input type="number" min="0" max="3650" step="1" value={retentionDraft.activityDays} onChange={(event) => setRetentionDraft((current) => ({...current, activityDays:event.target.value}))} required /></label>
+          <label>WhatsApp delivery history · days to keep *<input type="number" min="0" max="3650" step="1" value={retentionDraft.whatsappDays} onChange={(event) => setRetentionDraft((current) => ({...current, whatsappDays:event.target.value}))} required /></label>
+          <label>In-app notifications and dismissed messages · days to keep *<input type="number" min="0" max="3650" step="1" value={retentionDraft.notificationDays} onChange={(event) => setRetentionDraft((current) => ({...current, notificationDays:event.target.value}))} required /></label>
+          <label className="full">Photos and audio on MIS-verified requests · days to keep *<input type="number" min="0" max="3650" step="1" value={retentionDraft.mediaDays} onChange={(event) => setRetentionDraft((current) => ({...current, mediaDays:event.target.value}))} required /><small>Counted from MIS verification. The request, its readings, remarks and history are kept; only the complaint photos, complaint and maintenance audio and the trip card image are removed. They can be recovered only from a backup taken before the removal.</small></label>
         </div>
         <p className="audit-purge-note">{retention?.lastRunAt ? `Last automatic run ${formatTwelveHourDateTime(retention.lastRunAt)}.` : "Not run yet."}{retention?.updatedBy ? ` Setting last changed by ${retention.updatedBy}.` : ""}</p>
         <footer><button type="button" onClick={() => setRetentionOpen(false)} disabled={savingRetention}>Cancel</button><button className="primary" disabled={savingRetention}><Save /> {savingRetention ? "Saving..." : "Save"}</button></footer>

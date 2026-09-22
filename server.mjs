@@ -1418,7 +1418,12 @@ app.delete('/api/user-login-history',requireSuper,requireAdministrator,async(req
 // Trail entries and, when enabled, of user activity. 0 turns a part off.
 // Defaults: Audit Trail 5 days, user activity off.
 const LOG_RETENTION_SETTING_KEY='log_retention';
-const LOG_RETENTION_DEFAULTS=Object.freeze({auditDays:5,activityDays:0});
+// Every part defaults to off except the Audit Trail, so nothing new is ever
+// deleted until an administrator chooses how many days to keep.
+const LOG_RETENTION_DEFAULTS=Object.freeze({auditDays:5,activityDays:0,whatsappDays:0,notificationDays:0,mediaDays:0});
+const LOG_RETENTION_KEYS=Object.freeze(Object.keys(LOG_RETENTION_DEFAULTS));
+const LOG_RETENTION_LABELS=Object.freeze({auditDays:'Audit Trail',activityDays:'User activity',whatsappDays:'WhatsApp delivery history',
+  notificationDays:'In-app notifications and dismissed messages',mediaDays:'Photos and audio on MIS-verified requests'});
 const retentionDays=(value)=>{const days=Number(value);return Number.isInteger(days)&&days>=0&&days<=AUDIT_PURGE_MAX_DAYS?days:null;};
 async function storedLogRetention(){
   const {rows}=await pool.query('SELECT setting_value,updated_at FROM app_settings WHERE setting_key=$1',[LOG_RETENTION_SETTING_KEY]);
@@ -1427,6 +1432,9 @@ async function storedLogRetention(){
   return {
     auditDays:retentionDays(stored.auditDays)??LOG_RETENTION_DEFAULTS.auditDays,
     activityDays:retentionDays(stored.activityDays)??LOG_RETENTION_DEFAULTS.activityDays,
+    whatsappDays:retentionDays(stored.whatsappDays)??LOG_RETENTION_DEFAULTS.whatsappDays,
+    notificationDays:retentionDays(stored.notificationDays)??LOG_RETENTION_DEFAULTS.notificationDays,
+    mediaDays:retentionDays(stored.mediaDays)??LOG_RETENTION_DEFAULTS.mediaDays,
     updatedAt:rows[0]?.updated_at||null,updatedBy:String(stored.updatedBy||''),
     lastRunDate:last[0]?.value||'',lastRunAt:last[0]?.updated_at||null,maxDays:AUDIT_PURGE_MAX_DAYS,
   };
@@ -1437,10 +1445,13 @@ async function runLogRetention(now=new Date()){
   logRetentionRunning=true;
   try{
     const retention=await storedLogRetention();
-    if(!retention.auditDays&&!retention.activityDays)return {skipped:true,reason:'automatic clean-up is off'};
+    if(!LOG_RETENTION_KEYS.some((key)=>retention[key]))return {skipped:true,reason:'automatic clean-up is off'};
     const todayKey=auditIndiaDateKey(now);
     if(retention.lastRunDate===todayKey)return {skipped:true,reason:'already ran today'};
-    const result={date:todayKey,auditDays:retention.auditDays,activityDays:retention.activityDays,auditDeleted:0,loginHistoryDeleted:0,sessionActivityDeleted:0};
+    const result={date:todayKey,auditDays:retention.auditDays,activityDays:retention.activityDays,auditDeleted:0,loginHistoryDeleted:0,sessionActivityDeleted:0,
+      whatsappDays:retention.whatsappDays,notificationDays:retention.notificationDays,mediaDays:retention.mediaDays,
+      whatsappHistoryDeleted:0,notificationsDeleted:0,sessionMessagesDeleted:0,requestMediaCleared:0};
+    const cutoffFor=(days)=>new Date(now.getTime()-days*86400000).toISOString();
     if(retention.auditDays){
       const cutoff=new Date(now.getTime()-retention.auditDays*86400000).toISOString();
       const {rowCount}=await pool.query('DELETE FROM audit_events WHERE occurred_at<$1',[cutoff]);
@@ -1452,6 +1463,30 @@ async function runLogRetention(now=new Date()){
       const activity=await pool.query('DELETE FROM user_session_activity WHERE last_seen_at<$1',[cutoff]);
       result.loginHistoryDeleted=Number(history.rowCount||0);result.sessionActivityDeleted=Number(activity.rowCount||0);
     }
+    // One row per recipient per message; the delivery outcome is only needed for
+    // recent troubleshooting.
+    if(retention.whatsappDays){
+      const {rowCount}=await pool.query('DELETE FROM whatsapp_alert_history WHERE created_at<$1',[cutoffFor(retention.whatsappDays)]);
+      result.whatsappHistoryDeleted=Number(rowCount||0);
+    }
+    // The bell only shows recent items. Messages an administrator sent are kept
+    // until the reader has dismissed them, however old they are.
+    if(retention.notificationDays){
+      const cutoff=cutoffFor(retention.notificationDays);
+      const notifications=await pool.query('DELETE FROM crm_notifications WHERE created_at<$1',[cutoff]);
+      const messages=await pool.query('DELETE FROM session_messages WHERE dismissed_at IS NOT NULL AND created_at<$1',[cutoff]);
+      result.notificationsDeleted=Number(notifications.rowCount||0);result.sessionMessagesDeleted=Number(messages.rowCount||0);
+    }
+    // Photos and audio are the largest part of the database. Only requests whose
+    // whole cycle ended with MIS verification lose them; the request, its readings,
+    // its remarks and its history stay. Backups taken earlier still hold the files.
+    if(retention.mediaDays){
+      const {rowCount}=await pool.query(`UPDATE maintenance_requests
+        SET complaint_audio='',complaint_media='[]'::jsonb,maintenance_audio='',first_trip_card_image=''
+        WHERE verified_at IS NOT NULL AND verified_at<$1
+          AND (complaint_audio<>'' OR complaint_media<>'[]'::jsonb OR maintenance_audio<>'' OR first_trip_card_image<>'')`,[cutoffFor(retention.mediaDays)]);
+      result.requestMediaCleared=Number(rowCount||0);
+    }
     await pool.query(`INSERT INTO app_metadata (key,value,updated_at) VALUES ('log_retention_last_run',$1,NOW())
       ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value,updated_at=NOW()`,[todayKey]);
     return result;
@@ -1462,17 +1497,20 @@ app.get('/api/log-retention',requireSuper,requireAdministrator,async(req,res,nex
 });
 app.put('/api/log-retention',requireSuper,requireAdministrator,async(req,res,next)=>{
   try{
-    const auditDays=retentionDays(req.body?.auditDays),activityDays=retentionDays(req.body?.activityDays);
-    if(auditDays==null||activityDays==null)return res.status(400).json({error:`Enter whole numbers of days from 0 (off) to ${AUDIT_PURGE_MAX_DAYS}.`});
     const before=await storedLogRetention();
+    // A page opened before this release sends only the first two numbers; the
+    // others keep their saved value rather than failing the save.
+    const next=Object.fromEntries(LOG_RETENTION_KEYS.map((key)=>[key,req.body?.[key]===undefined?before[key]:retentionDays(req.body[key])]));
+    if(LOG_RETENTION_KEYS.some((key)=>next[key]==null))return res.status(400).json({error:`Enter whole numbers of days from 0 (off) to ${AUDIT_PURGE_MAX_DAYS}.`});
+    const {auditDays,activityDays}=next;
     await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
       ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,
-      [LOG_RETENTION_SETTING_KEY,JSON.stringify({auditDays,activityDays,updatedBy:String(req.session?.login||'')})]);
+      [LOG_RETENTION_SETTING_KEY,JSON.stringify({...next,updatedBy:String(req.session?.login||'')})]);
     // A changed setting applies at the next check today, not tomorrow.
     await pool.query("DELETE FROM app_metadata WHERE key='log_retention_last_run'");
     req.audit={eventType:'Configuration',module:'Audit Trail',action:'Update automatic log clean-up',targetType:'Log retention',
-      targetReference:`Audit Trail ${auditDays?`${auditDays} days`:'off'} · user activity ${activityDays?`${activityDays} days`:'off'}`,
-      changedFields:[{field:'Audit Trail days kept',before:String(before.auditDays),after:String(auditDays)},{field:'User activity days kept',before:String(before.activityDays),after:String(activityDays)}]};
+      targetReference:LOG_RETENTION_KEYS.map((key)=>`${LOG_RETENTION_LABELS[key]} ${next[key]?`${next[key]} days`:'off'}`).join(' · '),
+      changedFields:LOG_RETENTION_KEYS.filter((key)=>before[key]!==next[key]).map((key)=>({field:`${LOG_RETENTION_LABELS[key]} days kept`,before:String(before[key]),after:String(next[key])}))};
     res.set('Cache-Control','no-store');
     res.json(await storedLogRetention());
   }catch(error){next(error)}

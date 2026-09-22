@@ -156,10 +156,10 @@ test("administrators can delete audit entries older than N days, and the purge i
 });
 
 test("the Audit Trail is cleaned up automatically once a day, keeping five days unless an administrator changes it", () => {
-  assert.match(server, /const LOG_RETENTION_DEFAULTS=Object\.freeze\(\{auditDays:5,activityDays:0\}\);/, "five days of Audit Trail by default; user activity clean-up off until switched on");
+  assert.match(server, /const LOG_RETENTION_DEFAULTS=Object\.freeze\(\{auditDays:5,activityDays:0,whatsappDays:0,notificationDays:0,mediaDays:0\}\);/, "five days of Audit Trail by default; every other part off until switched on");
   assert.match(server, /async function runLogRetention\(now=new Date\(\)\)/);
   assert.match(server, /if\(retention\.lastRunDate===todayKey\)return \{skipped:true,reason:'already ran today'\};/, "one run per India calendar day");
-  assert.match(server, /if\(!retention\.auditDays&&!retention\.activityDays\)return \{skipped:true,reason:'automatic clean-up is off'\};/);
+  assert.match(server, /if\(!LOG_RETENTION_KEYS\.some\(\(key\)=>retention\[key\]\)\)return \{skipped:true,reason:'automatic clean-up is off'\};/);
   assert.match(server, /retention\.auditDays\*86400000\)\.toISOString\(\);\r?\n\s+const \{rowCount\}=await pool\.query\('DELETE FROM audit_events WHERE occurred_at<\$1',\[cutoff\]\);/);
   assert.match(server, /DELETE FROM user_login_history WHERE last_seen_at<\$1',\[cutoff\]\);\r?\n\s+const activity=await pool\.query\('DELETE FROM user_session_activity WHERE last_seen_at<\$1',\[cutoff\]\);/);
   assert.match(server, /VALUES \('log_retention_last_run',\$1,NOW\(\)\)/);
@@ -167,7 +167,7 @@ test("the Audit Trail is cleaned up automatically once a day, keeping five days 
   assert.match(server, /\},5\*60\*1000,47_000\);\r?\n\s+logRetentionTimer\.unref\?\.\(\);/);
   assert.match(server, /app\.get\('\/api\/log-retention',requireSuper,requireAdministrator/);
   assert.match(server, /app\.put\('\/api\/log-retention',requireSuper,requireAdministrator/);
-  assert.match(server, /if\(auditDays==null\|\|activityDays==null\)return res\.status\(400\)/);
+  assert.match(server, /if\(LOG_RETENTION_KEYS\.some\(\(key\)=>next\[key\]==null\)\)return res\.status\(400\)/);
   assert.match(server, /DELETE FROM app_metadata WHERE key='log_retention_last_run'/, "a saved change applies the same day");
   assert.match(server, /action:'Update automatic log clean-up'/);
   assert.match(client, /<Clock \/> Auto clean-up\{retention \? ` · \$\{retentionLabel\(retention\.auditDays\)\}` : ""\}/);
@@ -175,6 +175,31 @@ test("the Audit Trail is cleaned up automatically once a day, keeping five days 
   assert.match(client, /fetch\("\/api\/log-retention", \{method:"PUT"/);
   assert.match(client, /Audit Trail · days to keep/);
   assert.match(client, /User activity · days to keep/);
+});
+
+test("automatic clean-up also covers WhatsApp history, in-app notifications and old media, all off by default", () => {
+  const job = server.slice(server.indexOf("async function runLogRetention("), server.indexOf("app.get('/api/log-retention'"));
+  assert.match(job, /DELETE FROM whatsapp_alert_history WHERE created_at<\$1',\[cutoffFor\(retention\.whatsappDays\)\]/);
+  assert.match(job, /DELETE FROM crm_notifications WHERE created_at<\$1',\[cutoff\]/);
+  assert.match(job, /DELETE FROM session_messages WHERE dismissed_at IS NOT NULL AND created_at<\$1',\[cutoff\]/,
+    "a message is never removed before its reader has dismissed it");
+  // Media: only fully verified requests, and only the files; the request row stays.
+  assert.match(job, /UPDATE maintenance_requests\s+SET complaint_audio='',complaint_media='\[\]'::jsonb,maintenance_audio='',first_trip_card_image=''\s+WHERE verified_at IS NOT NULL AND verified_at<\$1/);
+  assert.doesNotMatch(job, /DELETE FROM maintenance_requests/, "the clean-up never deletes a request");
+  for (const key of ["whatsappDays", "notificationDays", "mediaDays"]) {
+    assert.match(job, new RegExp(`if\\(retention\\.${key}\\)\\{`), `${key} runs only when switched on`);
+  }
+
+  const save = server.slice(server.indexOf("app.put('/api/log-retention'"), server.indexOf("app.put('/api/log-retention'") + 2400);
+  assert.match(save, /req\.body\?\.\[key\]===undefined\?before\[key\]:retentionDays\(req\.body\[key\]\)/,
+    "a page opened before this release can still save without resetting the new parts");
+  assert.match(save, /changedFields:LOG_RETENTION_KEYS\.filter\(\(key\)=>before\[key\]!==next\[key\]\)/, "the Audit Trail records exactly what changed");
+
+  for (const label of ["WhatsApp delivery history · days to keep", "In-app notifications and dismissed messages · days to keep", "Photos and audio on MIS-verified requests · days to keep"]) {
+    assert.ok(client.includes(label), label);
+  }
+  assert.match(client, /They can be recovered only from a backup taken before the removal\./);
+  assert.match(client, /whatsappDays:Number\(retentionDraft\.whatsappDays\), notificationDays:Number\(retentionDraft\.notificationDays\), mediaDays:Number\(retentionDraft\.mediaDays\)/);
 });
 
 test("the Audit Trail page stays responsive with hundreds of events", () => {
