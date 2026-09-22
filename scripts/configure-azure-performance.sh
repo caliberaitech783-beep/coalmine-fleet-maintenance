@@ -63,12 +63,12 @@ route_body="$(jq -n --argjson source "$source_route" '
   {properties: {
     cacheConfiguration: {
       compressionSettings: {
-        contentTypesToCompress: [
-          "text/css", "text/javascript", "application/javascript",
-          "application/json", "image/svg+xml", "application/wasm",
-          "font/woff", "font/woff2"
-        ],
-        isCompressionEnabled: true
+        contentTypesToCompress: [],
+        # Front Door compression on this route has returned headers but then
+        # stalled browser Accept-Encoding requests before sending any body.
+        # The origin already negotiates compression; keep edge caching enabled
+        # while allowing the origin response to pass through unchanged.
+        isCompressionEnabled: false
       },
       queryParameters: "",
       queryStringCachingBehavior: "IgnoreQueryString"
@@ -108,7 +108,7 @@ jq -e --arg live_domain_id "$live_domain_id" '
   and .properties.patternsToMatch == ["/assets/*"]
   and any(.properties.customDomains[]?; ((.id // "") | ascii_downcase) == ($live_domain_id | ascii_downcase))
   and .properties.cacheConfiguration.queryStringCachingBehavior == "IgnoreQueryString"
-  and .properties.cacheConfiguration.compressionSettings.isCompressionEnabled == true
+  and .properties.cacheConfiguration.compressionSettings.isCompressionEnabled == false
 ' <<<"$configured_route" >/dev/null
 
 echo "Azure performance configuration verified: Always On, HTTP/2, and cached /assets/* route."

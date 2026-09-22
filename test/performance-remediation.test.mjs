@@ -67,7 +67,8 @@ test('deployment keeps App Service warm and caches only fingerprinted static ass
   assert.match(azure,/live_domain_id/);
   assert.match(azure,/patternsToMatch: \["\/assets\/\*"\]/);
   assert.match(azure,/queryStringCachingBehavior: "IgnoreQueryString"/);
-  assert.match(azure,/isCompressionEnabled: true/);
+  assert.match(azure,/isCompressionEnabled: false/);
+  assert.match(workflow,/curl --compressed[^\n]+\$\{LIVE_URL\}\$\{asset\}/);
   assert.match(azure,/AuthorizationFailed/);
   assert.match(azure,/Continuing the application deployment without edge caching/);
   assert.doesNotMatch(azure,/patternsToMatch: \["\/api\/\*"\]/);
