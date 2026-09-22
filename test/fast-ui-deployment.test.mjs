@@ -27,7 +27,7 @@ test("fast lane builds complete current and rollback packages", () => {
 test("fast lane verifies production and restores the previous package on failure", () => {
   assert.match(fast, /az webapp deploy/);
   assert.match(fast, /\/api\/health\?fast-ui=/);
-  assert.match(fast, /grep -oE 'src="\/assets\//);
+  assert.match(fast, /grep -oE 'src="\/app-assets\//);
   assert.match(fast, /"\$\{LIVE_URL\}\$\{asset\}"/);
   assert.match(fast, /h\.commit!==process\.env\.EXPECTED_COMMIT/);
   assert.match(fast, /Restore previous complete package on failure/);

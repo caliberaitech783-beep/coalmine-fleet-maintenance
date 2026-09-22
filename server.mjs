@@ -96,7 +96,7 @@ app.use(compression({
     // Front Door caches these fingerprinted files. Serving their origin bytes
     // without transfer compression avoids a zero-byte streaming failure seen
     // when a cached route and the origin both negotiate Accept-Encoding.
-    if(req.path.startsWith('/assets/'))return false;
+    if(req.path.startsWith('/assets/')||req.path.startsWith('/app-assets/'))return false;
     return compression.filter(req,res);
   }
 }));
@@ -6491,9 +6491,9 @@ app.patch('/api/requests/:reference/delayed-reason',requireSession,requireMainte
   }catch(error){maintenanceWriteFailure(error,res,next)}
 });
 
-// Vite fingerprints every file under /assets, so a deploy changes the URL and
+// Vite fingerprints every file under /app-assets, so a deploy changes the URL and
 // browsers may keep these for a year. index.html is still revalidated.
-app.use('/assets',express.static(path.join(staticRoot,'assets'),{immutable:true,maxAge:'1y'}));
+app.use('/app-assets',express.static(path.join(staticRoot,'app-assets'),{immutable:true,maxAge:'1y'}));
 app.use(express.static(staticRoot));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(staticRoot,'index.html')));
 app.use((error,req,res,next)=>{

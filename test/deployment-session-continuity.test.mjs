@@ -44,17 +44,20 @@ test("building embeds the stable version without dirtying the tracked source mod
   const original = "export const APP_VERSION = 'tracked-placeholder';\n";
   await writeFile(versionModule, original);
   let embeddedVersion = "";
+  let buildOptions;
 
   const builtVersion = await buildSite({
     cwd,
     env: { GITHUB_SHA: currentSha },
-    buildClient: async () => {
+    buildClient: async (options) => {
+      buildOptions = options;
       embeddedVersion = await readFile(versionModule, "utf8");
     },
   });
 
   assert.equal(builtVersion, currentSha);
   assert.match(embeddedVersion, new RegExp(currentSha));
+  assert.equal(buildOptions.build.assetsDir, "app-assets");
   assert.equal(await readFile(versionModule, "utf8"), original);
   assert.equal(await readFile(path.join(cwd, "dist", "app-version.txt"), "utf8"), currentSha);
 });

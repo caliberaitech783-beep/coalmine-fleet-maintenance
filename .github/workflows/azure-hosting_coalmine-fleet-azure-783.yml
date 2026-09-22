@@ -218,7 +218,7 @@ jobs:
             if response="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/api/health?deployment=${DEPLOY_SHA}")" && \
               HEALTH_RESPONSE="$response" EXPECTED_COMMIT="$DEPLOY_SHA" node -e "const h=JSON.parse(process.env.HEALTH_RESPONSE); if(h.status!=='ok'||h.database!=='connected'||h.commit!==process.env.EXPECTED_COMMIT||h.scheduledJobsEnabled!==true) process.exit(1)"; then
               page="$(curl --fail --silent --show-error --max-time 20 "${LIVE_URL}/")"
-              asset="$(printf '%s' "$page" | grep -oE 'src="/assets/[^"]+\.js"' | head -1 | cut -d'"' -f2)"
+              asset="$(printf '%s' "$page" | grep -oE 'src="/app-assets/[^"]+\.js"' | head -1 | cut -d'"' -f2)"
               test -n "$asset"
               curl --compressed --fail --silent --show-error --max-time 20 --output /dev/null "${LIVE_URL}${asset}"
               echo "Production verified at ${DEPLOY_SHA}: ${response}"

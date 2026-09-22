@@ -59,7 +59,10 @@ export async function buildSite({ cwd = process.cwd(), env = process.env, buildC
   const originalVersionModule = await readFile(versionModulePath).catch(() => null);
   await writeFile(versionModulePath, `export const APP_VERSION = ${JSON.stringify(appVersion)};\n`);
   try {
-    await buildClient({ root: cwd });
+    // /assets/* is reserved by an Azure Front Door route that can take several
+    // minutes to leave the data plane after it is disabled. A distinct bundle
+    // directory keeps every deployment reachable through the proven /* route.
+    await buildClient({ root: cwd, build: { assetsDir: "app-assets" } });
   } finally {
     if (originalVersionModule === null) await rm(versionModulePath, { force: true });
     else await writeFile(versionModulePath, originalVersionModule);

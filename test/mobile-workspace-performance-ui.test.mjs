@@ -28,7 +28,7 @@ test("phone tables render in small windows and offer an explicit load-more contr
 test("large authenticated feeds use compression and conditional private responses", () => {
   assert.match(server, /app\.use\(compression\(\{/);
   assert.match(server, /threshold:1024/);
-  assert.match(server, /if\(req\.path\.startsWith\('\/assets\/'\)\)return false/);
+  assert.match(server, /req\.path\.startsWith\('\/app-assets\/'\)/);
   assert.match(server, /return compression\.filter\(req,res\)/);
   for (const endpoint of ["info-pulse", "requests", "dashboard-equipment"])
     assert.match(server, new RegExp(`sendPrivateJson\\(req,res,'${endpoint}'`));
