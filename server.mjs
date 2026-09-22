@@ -1440,6 +1440,9 @@ app.post('/api/user-activity',requireSession,async(req,res,next)=>{
 
 app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
   try{
+    // A bundled export uses one compact report plus a complete detail appendix.
+    // Keep a small section ceiling so a print request cannot become unbounded.
+    const maxReportSections=6;
     const title=String(req.body?.title||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,2000)||'Nerve Center report';
     let reportCharacters=0;
     const pageSize=String(req.body?.pageSize||'').trim().toUpperCase()==='A4'?'A4':'A3';
@@ -1465,7 +1468,7 @@ app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
       return {title:String(input?.title||`Report ${index+1}`).replace(/\s+/g,' ').trim().slice(0,200)||`Report ${index+1}`,columns,rows,highlights};
     };
     const requestedTables=Array.isArray(req.body?.tables)?req.body.tables:null;
-    if(requestedTables?.length>6)return res.status(400).json({error:'Select no more than 6 report sections.'});
+    if(requestedTables?.length>maxReportSections)return res.status(400).json({error:`Select no more than ${maxReportSections} report sections.`});
     let pdf;
     if(requestedTables?.length){
       const tables=requestedTables.map(cleanTable);
