@@ -1439,6 +1439,25 @@ async function storedLogRetention(){
     lastRunDate:last[0]?.value||'',lastRunAt:last[0]?.updated_at||null,maxDays:AUDIT_PURGE_MAX_DAYS,
   };
 }
+// One-time: on 22-09-2026 the owner asked to keep 2 days of Audit Trail and
+// 10 days of WhatsApp delivery history and in-app notifications. Applied once at
+// startup; the other parts keep their saved value, and any later change made in
+// the Auto clean-up dialog wins.
+const OWNER_LOG_RETENTION_MARKER='log_retention_owner_2026_09_22';
+const OWNER_LOG_RETENTION=Object.freeze({auditDays:2,whatsappDays:10,notificationDays:10});
+async function applyOwnerLogRetention(){
+  const {rows:applied}=await pool.query('SELECT key FROM app_metadata WHERE key=$1',[OWNER_LOG_RETENTION_MARKER]);
+  if(applied.length)return {skipped:true};
+  const before=await storedLogRetention();
+  const next={...Object.fromEntries(LOG_RETENTION_KEYS.map((key)=>[key,before[key]])),...OWNER_LOG_RETENTION};
+  await pool.query(`INSERT INTO app_settings (setting_key,setting_value,updated_at) VALUES ($1,$2::jsonb,NOW())
+    ON CONFLICT (setting_key) DO UPDATE SET setting_value=EXCLUDED.setting_value,updated_at=NOW()`,
+    [LOG_RETENTION_SETTING_KEY,JSON.stringify({...next,updatedBy:'Owner request 22-09-2026'})]);
+  await pool.query("DELETE FROM app_metadata WHERE key='log_retention_last_run'");
+  await pool.query(`INSERT INTO app_metadata (key,value,updated_at) VALUES ($1,'applied',NOW())
+    ON CONFLICT (key) DO NOTHING`,[OWNER_LOG_RETENTION_MARKER]);
+  return {before,next};
+}
 let logRetentionRunning=false;
 async function runLogRetention(now=new Date()){
   if(logRetentionRunning)return {skipped:true,reason:'already running'};
@@ -6594,6 +6613,11 @@ async function initializeDatabase(){
     databaseError='';
     const expiredSessions=await sessionStore.pruneExpired();
     if(expiredSessions)console.log(`Session cleanup closed ${expiredSessions} session${expiredSessions===1?'':'s'} idle for more than 30 minutes.`);
+    await applyOwnerLogRetention().then(async(result)=>{
+      if(result.skipped)return;
+      await appendBackendProcessAudit({module:'Audit Trail',action:'Update automatic log clean-up',targetReference:'Audit Trail 2 days · WhatsApp delivery history 10 days · In-app notifications 10 days',
+        reason:`Owner request 22-09-2026. Before: Audit Trail ${result.before.auditDays}, WhatsApp ${result.before.whatsappDays}, notifications ${result.before.notificationDays} days (0 = off).`});
+    }).catch(error=>console.error('Applying the requested log clean-up settings failed.',error));
     await appendBackendProcessAudit({module:'Cloud deployment',action:'Start application runtime',targetReference:deploymentSha||'Unknown commit',reason:`Database migration completed; scheduled jobs ${scheduledJobsEnabled?'enabled':'disabled'}.`});
     console.log('Database initialization completed.');
     if(scheduledJobsEnabled){

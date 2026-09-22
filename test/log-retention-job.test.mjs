@@ -73,3 +73,35 @@ test('stored values outside 0 to 3650 fall back to the safe default', async () =
   assert.equal(retention.notificationDays, 0);
   assert.equal(retention.mediaDays, 0, 'an unreadable media setting must never switch media removal on');
 });
+
+test("the owner's 22-09-2026 numbers are applied once and keep every other part", async () => {
+  const writes = [];
+  let marker = false;
+  const stored = {auditDays: 5, activityDays: 30, whatsappDays: 0, notificationDays: 0, mediaDays: 0};
+  const pool = {
+    async query(sql, values = []) {
+      if (sql.startsWith('SELECT key FROM app_metadata')) return {rows: marker ? [{key: values[0]}] : []};
+      if (sql.startsWith('SELECT setting_value')) return {rows: [{setting_value: stored, updated_at: null}]};
+      if (sql.startsWith('SELECT value,updated_at FROM app_metadata')) return {rows: []};
+      writes.push({sql: sql.replace(/\s+/g, ' ').trim(), values});
+      if (sql.includes('INSERT INTO app_metadata')) marker = true;
+      return {rowCount: 1, rows: []};
+    },
+  };
+  const {applyOwnerLogRetention} = new Function('pool', 'AUDIT_PURGE_MAX_DAYS', 'auditIndiaDateKey',
+    `${slice};return {applyOwnerLogRetention};`)(pool, 3650, () => '2026-09-22');
+
+  const result = await applyOwnerLogRetention();
+  assert.deepEqual(result.next, {auditDays: 2, activityDays: 30, whatsappDays: 10, notificationDays: 10, mediaDays: 0});
+  const saved = JSON.parse(writes.find(({sql}) => sql.startsWith('INSERT INTO app_settings')).values[1]);
+  assert.equal(saved.auditDays, 2);
+  assert.equal(saved.whatsappDays, 10);
+  assert.equal(saved.notificationDays, 10);
+  assert.equal(saved.activityDays, 30, 'user activity keeps its saved value');
+  assert.equal(saved.mediaDays, 0, 'photos and audio stay off');
+  assert.ok(writes.some(({sql}) => sql.startsWith("DELETE FROM app_metadata WHERE key='log_retention_last_run'")), 'applies today');
+
+  const count = writes.length;
+  assert.deepEqual(await applyOwnerLogRetention(), {skipped: true});
+  assert.equal(writes.length, count, 'a later restart never overwrites a change made in the dialog');
+});
