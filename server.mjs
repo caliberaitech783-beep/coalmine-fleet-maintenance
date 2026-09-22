@@ -90,7 +90,16 @@ const app=express();
 // every visitor shares the proxy's address, so per-IP limits (password reset
 // OTP requests) fired for the whole site instead of one user.
 app.set('trust proxy',true);
-app.use(compression({threshold:1024}));
+app.use(compression({
+  threshold:1024,
+  filter(req,res){
+    // Front Door caches these fingerprinted files. Serving their origin bytes
+    // without transfer compression avoids a zero-byte streaming failure seen
+    // when a cached route and the origin both negotiate Accept-Encoding.
+    if(req.path.startsWith('/assets/'))return false;
+    return compression.filter(req,res);
+  }
+}));
 const slowRequestThresholdMs=Math.max(250,Number(process.env.SLOW_REQUEST_THRESHOLD_MS||1000));
 app.use((req,res,next)=>{
   const startedAt=process.hrtime.bigint();

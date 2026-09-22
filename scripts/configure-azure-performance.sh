@@ -66,8 +66,8 @@ route_body="$(jq -n --argjson source "$source_route" '
         contentTypesToCompress: [],
         # Front Door compression on this route has returned headers but then
         # stalled browser Accept-Encoding requests before sending any body.
-        # The origin already negotiates compression; keep edge caching enabled
-        # while allowing the origin response to pass through unchanged.
+        # API responses still negotiate compression at the origin. Fingerprinted
+        # assets are deliberately identity encoded and cached at the edge.
         isCompressionEnabled: false
       },
       queryParameters: "",
