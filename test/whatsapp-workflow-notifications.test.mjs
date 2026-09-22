@@ -64,6 +64,17 @@ test('workflow WhatsApp recipients are independently selected and rechecked at d
   assert.match(server,/whatsappRecipients\?\?logins/);
 });
 
+test('on-road closure sends a dedicated first-trip pending notice to the production team',()=>{
+  assert.match(server,/async function productionFirstTripNotificationLogins/);
+  assert.match(server,/profile\.assignedRole==='Production User'/);
+  assert.match(server,/managerRoles\.includes\('Production Manager'\)/);
+  assert.match(server,/async function notifyProductionFirstTripPending/);
+  assert.match(server,/Production team must record the first trip\/work start entry/);
+  assert.match(server,/sendWhatsAppNotifications\(pool,recipients,request\.ref,message,null,\{site:request\.site,purpose:'requestClosed'\}\)/);
+  assert.match(server,/await notifyProductionFirstTripPending\(rows\[0\],closedAt,closedBy\)/);
+  assert.match(server,/await notifyProductionFirstTripPending\(rows\[0\],new Date\(\),req\.session\.name\|\|'Project \/ Production Manager'\)/);
+});
+
 test('workbook escalation and repeat intervals use a deduplicated scheduler',()=>{
   assert.match(server,/CREATE TABLE IF NOT EXISTS whatsapp_workflow_dispatches/);
   assert.match(server,/UNIQUE\(event_type,request_reference,recipient_login,slot_key\)/);

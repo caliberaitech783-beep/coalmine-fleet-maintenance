@@ -105,8 +105,11 @@ test('operational, manager and workspace navigation get the graphical treatment 
   const tabs=source.slice(source.indexOf('<div className="mobile-tabs" role="tablist">'),source.indexOf('</div>\n      </div>',source.indexOf('<div className="mobile-tabs" role="tablist">')));
   for(const key of ['requests','create','productionFirstTrip','verify','history','idle','close'])assert.match(tabs,new RegExp(`<button data-nav="${key}" `),key);
   assert.match(tabs,/>Requests<\/button>/,'tab text unchanged');
+  assert.match(source,/const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows\.length>0/,'only Production Managers lock request creation while first trips are pending');
+  assert.match(source,/className=\{`primary\$\{createLockedByFirstTrip\?" create-locked-by-first-trip":""\}`\}/,'create button carries the manager-only locked state');
+  assert.match(source,/first-trip-pending-tab first-trip-pending-alert/,'first trip tab flashes while pending');
   const manager=source.match(/<div className="mobile-tabs manager-queue-tabs"[\s\S]*?<\/div>/)[0];
-  for(const key of ['active','idle','history'])assert.match(manager,new RegExp(`<button data-nav="${key}" `),key);
+  for(const key of ['active','idle','productionFirstTrip','history'])assert.match(manager,new RegExp(`<button data-nav="${key}" `),key);
   assert.match(source,/<button type="button" key=\{role\} data-nav="role" className=\{activeManagerRole===role\?"active":""\}/);
   const imports=[...source.matchAll(/import ["'](.+\.css)["'];/g)].map(m=>m[1]);
   assert.ok(imports.indexOf('./nav-motion.css')>imports.indexOf('./brand-theme.css')&&imports.indexOf('./nav-motion.css')<imports.indexOf('./workspace-readability.css'),'loaded after the brand theme, before the pinned last five');

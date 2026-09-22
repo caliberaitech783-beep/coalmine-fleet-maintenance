@@ -343,14 +343,19 @@ table{font-size:13px}th{font-size:11px;padding:13px 18px}td{padding:15px 18px}.s
 .incoming-notification-stack{position:fixed;top:20px;right:20px;z-index:9000;width:min(440px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;display:grid;gap:12px;overscroll-behavior:contain}
 .overlay.notification-entry-overlay{z-index:21000}
 .incoming-notification{display:flex;align-items:flex-start;background:#fff;color:#19365a;border:1px solid #d9cee9;border-left:5px solid #6336a3;border-radius:12px;box-shadow:0 8px 30px #15213a30;padding:12px}
+.incoming-notification.persistent-ticket-resolution{border-color:#b8e4cc;border-left-color:#16a34a;background:#f3fff8}
 .incoming-notification-link{display:flex;gap:12px;flex:1;min-width:0;text-align:left;background:transparent!important;color:inherit!important;border:0!important;padding:4px!important;cursor:pointer}
 .incoming-notification-link>svg{flex-shrink:0;color:#6336a3;margin-top:3px}
+.persistent-ticket-resolution .incoming-notification-link>svg{color:#16a34a}
 .incoming-notification-link>span{display:grid;gap:6px;min-width:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
 .incoming-notification-link small{color:#6336a3;font-size:12px}
+.persistent-ticket-resolution .incoming-notification-link small{color:#147b3c;font-weight:700}
 .incoming-notification-close{background:transparent!important;border:0!important;color:inherit!important;padding:4px!important;cursor:pointer}
 .incoming-notification :focus-visible{outline:2px solid #6336a3;outline-offset:2px}
 [data-theme="dark"] .incoming-notification{background:#111d30;color:#e5ebf5;border-color:#65517e}
+[data-theme="dark"] .incoming-notification.persistent-ticket-resolution{background:#102819;color:#e9fff0;border-color:#2f8750}
 [data-theme="dark"] .incoming-notification-link small,[data-theme="dark"] .incoming-notification-link>svg{color:#ceb4ff}
+[data-theme="dark"] .persistent-ticket-resolution .incoming-notification-link small,[data-theme="dark"] .persistent-ticket-resolution .incoming-notification-link>svg{color:#8af0ad}
 .notification-message .notification-site{display:inline-block!important;position:static!important;font-size:16px!important;font-weight:800!important;line-height:1.4!important;background:#eee6fa!important;color:#542d8b!important;border-radius:6px;padding:4px 8px;margin:0 0 7px;overflow-wrap:anywhere}
 .notification-message .notification-details{display:block!important}
 .notification-popover .notification-site-filter{display:grid;flex:0 0 auto;gap:6px;padding:12px 16px;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:var(--ink);background:#fff}
@@ -382,6 +387,8 @@ th.report-wrap-header .sort-header>span{white-space:normal;overflow-wrap:break-w
 [data-theme="dark"] .notification-category.other{--notification-category-color:#c2cada}
 @media(max-width:380px){.notification-filters{grid-template-columns:1fr;gap:8px}}
 .manager-kpi-grid button:not(:disabled){cursor:pointer}.manager-kpi-drilldown-icon{position:absolute;right:15px;top:15px;width:16px;color:#8090aa;transition:transform .15s ease}.manager-kpi-grid button:not(:disabled):hover .manager-kpi-drilldown-icon,.manager-kpi-grid button:not(:disabled):focus-visible .manager-kpi-drilldown-icon{transform:translateX(2px);color:#315ea8}
+.first-trip-pending-tab{position:relative;border-color:#22c55e!important;color:#146c43!important;background:#ecfdf5!important;box-shadow:0 0 0 1px #22c55e33,0 8px 22px #16a34a22!important}.first-trip-pending-tab::after{content:"";width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 0 #22c55e66}.first-trip-pending-alert{animation:first-trip-alert-flash 10s ease-in-out infinite}.create-locked-by-first-trip{cursor:not-allowed!important;opacity:.72;filter:saturate(.75)}.create-locked-by-first-trip:hover,.create-locked-by-first-trip:focus-visible{transform:none!important;box-shadow:none!important}.manager-first-trip-alert{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid #8ee0b3;border-radius:10px;color:#116342;background:#ecfdf5;box-shadow:0 12px 28px #16a34a1f;font-weight:800}.manager-first-trip-alert svg{width:22px;height:22px;flex:0 0 auto}.manager-first-trip-alert span{flex:1}.manager-first-trip-alert button{min-height:40px;padding:0 14px}@keyframes first-trip-alert-flash{0%,8%,16%{filter:brightness(1.03);box-shadow:0 0 0 0 #22c55e55,0 10px 24px #16a34a22}4%,12%{filter:brightness(1.22);box-shadow:0 0 0 8px #22c55e22,0 18px 36px #16a34a36}20%,100%{filter:none}}
+@media (prefers-reduced-motion: reduce){.first-trip-pending-alert{animation:none}}
 
 /* Dialog windows can be resized by dragging their bottom-right corner (desktop only). */
 .modal{resize:both;min-width:min(340px,100vw);min-height:160px;max-width:100vw}

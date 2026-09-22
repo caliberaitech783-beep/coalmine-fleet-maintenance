@@ -4098,6 +4098,37 @@ async function requestStakeholderLogins(client,{site,requesterLogin}){
   return [...new Set(recipients.filter(Boolean))];
 }
 
+async function productionFirstTripNotificationLogins(client,{site}){
+  const {rows}=await client.query(`SELECT record_data FROM master_records WHERE master_name='Users & employees'`);
+  const requestSite=canonicalSiteName(site);
+  const recipients=[];
+  for(const row of rows){
+    const user=row.record_data||{};
+    const login=String(user.login||'').trim().toLowerCase();
+    if(!login)continue;
+    const profile=resolveMobileAccess({user});
+    const siteMatches=reportScopeIncludesSite(userSiteScope(user),requestSite);
+    const managerRoles=managerRoleSelection(profile.permissions?.managerRoles?.length?profile.permissions.managerRoles:profile.permissions?.managerRole);
+    if(profile.sessionRole==='normal'&&profile.assignedRole==='Production User'&&siteMatches)recipients.push(login);
+    if(profile.sessionRole==='super'&&profile.permissions?.adminLevel==='Manager'&&managerRoles.includes('Production Manager')&&userManagesSite(user,site))recipients.push(login);
+  }
+  return [...new Set(recipients)];
+}
+
+async function notifyProductionFirstTripPending(request,closedAt,closedBy){
+  try{
+    const recipients=await productionFirstTripNotificationLogins(pool,{site:request.site});
+    if(!recipients.length)return;
+    const equipmentDetails=requestEquipmentNotificationDetails(request);
+    const closedAtLabel=requestNotificationTime(closedAt);
+    const message=`First trip entry pending for ${request.ref}. ${equipmentDetails} at ${request.site} was made On Road by ${closedBy} at ${closedAtLabel}. Production team must record the first trip/work start entry.`;
+    await addTicketNotificationsBestEffort(pool,recipients,request.ref,message,null,{whatsapp:false,site:request.site});
+    await sendWhatsAppNotifications(pool,recipients,request.ref,message,null,{site:request.site,purpose:'requestClosed'});
+  }catch(error){
+    console.error(`Request ${request?.ref||''} was made On Road, but production first-trip notification failed.`,error);
+  }
+}
+
 app.get('/api/tickets',requireSession,async(req,res,next)=>{
   try{
     const category=TICKET_CATEGORIES.includes(String(req.query.category||''))?String(req.query.category):'';
@@ -5260,6 +5291,7 @@ app.patch('/api/requests/:reference/close',requireSession,requirePermission('clo
         await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} closed for ${equipmentDetails}. Breakdown: ${rows[0].category}. Closing date & time: ${closedAtLabel}. Maintenance work: ${rows[0].maintenanceWork}. Closed by: ${closedBy}.`,
           {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].site,closedBy,closedAtLabel,rows[0].hours||'Not available',workflowRequestLink(rows[0].ref,publicBaseUrl())],context:{request:rows[0]}},
           {whatsapp:true,whatsappRecipients,workflowType:'closed',site:rows[0].site});
+        await notifyProductionFirstTripPending(rows[0],closedAt,closedBy);
       }catch(error){
         console.error(`Request ${rows[0].ref} was closed, but its notification recipients could not be resolved.`,error);
       }
@@ -5296,6 +5328,7 @@ app.patch('/api/requests/:reference/ideal-onroad',requireSession,async(req,res,n
     await addTicketNotificationsBestEffort(pool,recipients,rows[0].ref,`Request ${rows[0].ref} was approved on road and closed at ${approvedAt} by ${req.session.name||'Project / Production Manager'}. It is now awaiting MIS verification.`,
       {templateKey:'requestClosed',parameters:[rows[0].ref,equipmentDetails,rows[0].site,req.session.name||'Project / Production Manager',approvedAt,rows[0].hours||'Not available',workflowRequestLink(rows[0].ref,publicBaseUrl())],context:{request:rows[0]}},
       {whatsapp:true,whatsappRecipients,workflowType:'closed',site:rows[0].site});
+    await notifyProductionFirstTripPending(rows[0],new Date(),req.session.name||'Project / Production Manager');
     }catch(error){
       console.error(`Request ${rows[0].ref} was approved on road, but its notification recipients could not be resolved.`,error);
     }
