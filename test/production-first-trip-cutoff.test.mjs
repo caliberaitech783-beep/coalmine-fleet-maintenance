@@ -13,4 +13,5 @@ test('production first trip API rejects requests closed before the cutoff', () =
   const route = server.slice(server.indexOf("app.patch('/api/requests/:reference/production-first-trip'"), server.indexOf("app.patch('/api/requests/:reference/verify'"));
   assert.match(route, /productionFirstTripCutoffMs\(\)/);
   assert.match(route, /Production first-trip entry is available only for vehicles\/equipment made on road from yesterday onward\./);
+  assert.match(route, /MIS verification is completed/);
 });

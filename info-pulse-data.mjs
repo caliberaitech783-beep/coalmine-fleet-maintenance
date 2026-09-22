@@ -97,6 +97,9 @@ export function productionFirstTripCutoffMs(now = Date.now()) {
 
 export function isProductionFirstTripPending(request = {}, options = {}) {
   const status = String(request.status || '').trim().toLowerCase();
+  const verificationStatus = String(request.verificationStatus || request.verification_status || '').trim().toLowerCase();
+  const verifiedAt = request.verifiedAt ?? request.verified_at;
+  if (status === 'verified' || verificationStatus === 'verified' || String(verifiedAt || '').trim()) return false;
   const closedValue = request.closedAt ?? request.closed_at;
   const closedAt = closedValue instanceof Date ? closedValue.getTime() : parseIstTimestamp(closedValue);
   const productionFirstTripAt = request.productionFirstTripAt ?? request.production_first_trip_at;

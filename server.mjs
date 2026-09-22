@@ -5480,12 +5480,13 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     const scope=req.session.role==='normal'?userSiteScope(user):managerReportScope(user);
     if(!scope.sites?.length)return res.status(403).json({error:'A location must be assigned before recording the production first trip.'});
     await client.query('BEGIN');
-    const {rows:requestRows}=await client.query(`SELECT reference,site,status,closed_at,equipment_group,door_number,chassis_number
+    const {rows:requestRows}=await client.query(`SELECT reference,site,status,closed_at,verified_at,verification_status,equipment_group,door_number,chassis_number
       FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
     const request=requestRows[0];
     if(!request)throw Object.assign(new Error('This request no longer exists.'),{status:404});
     if(!reportScopeIncludesSite(scope,request.site))throw Object.assign(new Error('This request belongs to a different production location.'),{status:403});
     if(String(request.status||'').trim()!=='Closed'||!request.closed_at)throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
+    if(request.verified_at||String(request.verification_status||'').trim()==='Verified')throw Object.assign(new Error('Production first-trip entry is already closed because MIS verification is completed.'),{status:409});
     const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
     const closedAtMs=closedAt instanceof Date?closedAt.getTime():Number(closedAt);
     if(!Number.isFinite(closedAtMs)||closedAtMs<productionFirstTripCutoffMs())throw Object.assign(new Error('Production first-trip entry is available only for vehicles/equipment made on road from yesterday onward.'),{status:409});

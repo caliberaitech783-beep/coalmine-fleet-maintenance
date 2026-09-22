@@ -127,6 +127,7 @@ test('production first-trip pending queue includes only requests made on road fr
     {...base, ref: 'yesterday-pending', status: 'Closed', closedAt: '2026-09-09 00:00', productionFirstTripAt: '', door: 'D1'},
     {...base, ref: 'today-pending', status: 'Closed', closedAt: '2026-09-10 09:00', door: 'D2'},
     {...base, ref: 'done', status: 'Closed', closedAt: '2026-09-09 10:00', productionFirstTripAt: '2026-09-09 11:00'},
+    {...base, ref: 'verified', status: 'Closed', closedAt: '2026-09-09 10:00', verifiedAt: '2026-09-09 11:30'},
     {...base, ref: 'not-on-road', status: 'Closed', closedAt: ''},
     {...base, ref: 'open', status: 'Open'},
   ];
@@ -134,6 +135,7 @@ test('production first-trip pending queue includes only requests made on road fr
   assert.equal(new Date(productionFirstTripCutoffMs(NOW) + 330 * 60_000).toISOString().slice(0, 19), '2026-09-09T00:00:00');
   assert.equal(isProductionFirstTripPending(records[0], {now: NOW}), false);
   assert.equal(isProductionFirstTripPending(records[1], {now: NOW}), true);
+  assert.equal(isProductionFirstTripPending(records[4], {now: NOW}), false);
   assert.deepEqual(rows.map(row => row.key), ['yesterday-pending', 'today-pending']);
   assert.equal(rows[0].date, '2026-09-09');
   assert.equal(infoPulseView(rows, {from: '2026-09-10', to: '2026-09-10'}).totals.total, 1);
