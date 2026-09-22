@@ -122,6 +122,10 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.build.outputs.source_sha }}
+          fetch-depth: 1
       - name: Download deployment artifact
         uses: actions/download-artifact@v8
         with:
@@ -133,6 +137,10 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8EC4CD9D1EEF4C5FBC24D96A16BD3880 }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_1D33A1D8AAEB4638B2DA49BF9F257B08 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_1CF007C6A6C04A10855D16EB25E5D816 }}
+
+      - name: Enforce Azure performance configuration
+        shell: bash
+        run: bash scripts/configure-azure-performance.sh
 
       - name: Start staging slot and discover its URL
         shell: bash

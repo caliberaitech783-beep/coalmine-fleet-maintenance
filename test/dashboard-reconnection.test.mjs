@@ -96,6 +96,6 @@ test("mobile retry remains reconnecting until the next response actually succeed
 test("admin and production/maintenance/MIS dashboard gates retain only same-session successful data", () => {
   assert.match(source, /requestsLoaded \? <Dashboard/);
   assert.match(source, /requestState.token === session\?\.token && requestState.loaded/);
-  assert.match(source, /dashboardState.token === session\?\.token && dashboardState.loaded\)/);
-  assert.match(source, /requestsError=\{dashboardState.error\} requestsUpdatedAt=\{dashboardState.updatedAt\}/);
+  assert.match(source, /dashboardState.token === session\?\.token && dashboardState.loaded/);
+  assert.match(source, /requestsError=\{dashboardRequestsError\} requestsUpdatedAt=\{dashboardRequestsUpdatedAt\}/);
 });

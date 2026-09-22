@@ -10,6 +10,7 @@ import {canonicalSiteName} from '../site-location.mjs';
 import {arrivalRedFlagRequired} from '../request-acceptance.mjs';
 import {requestDateTimeValue,requestMayBeChanged,requestMayBeVerified,validMeterReading,validMeterReadings,validTripCardImageDataUrl} from '../request-workflow.mjs';
 import * as timeline from '../request-timeline.mjs';
+import {isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL} from '../info-pulse-data.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const slice=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end));
@@ -45,7 +46,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
     app:{patch(_path,...handlers){chain=handlers;}},readSession:async req=>req.testSession,
     ...siteAccess,currentUserRecord:async()=>user,flowDesignationForUser,managerRoleSelection,canonicalSiteName,
     userManagesSite:(manager,site)=>reportScopeIncludesSite(managerReportScope(manager),site),
-    requestProjection:'*',requestDateTimeValue,validTripCardImageDataUrl,validMeterReading,validMeterReadings,
+    requestProjection:'*',requestDateTimeValue,validTripCardImageDataUrl,validMeterReading,validMeterReadings,isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,
     pool:{async query(sql,values){
       queries.push({sql,values});
       if(sql==='BEGIN'){snapshot=structuredClone(saved);return {rows:[]};}

@@ -7,7 +7,7 @@ const workflow=readFileSync(new URL('../.github/workflows/azure-hosting_coalmine
 
 test('staging can disable every scheduled background job',()=>{
   assert.match(server,/DISABLE_SCHEDULED_JOBS/);
-  assert.match(server,/if\(scheduledJobsEnabled\)\{[\s\S]*setInterval/);
+  assert.match(server,/if\(scheduledJobsEnabled\)\{[\s\S]*setStaggeredInterval/);
   assert.match(server,/Scheduled background jobs are disabled for this deployment slot/);
 });
 

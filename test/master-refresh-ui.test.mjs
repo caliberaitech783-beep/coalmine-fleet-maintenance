@@ -104,7 +104,7 @@ for (const hookName of ["useMasterRecords", "useDashboardEquipment"]) test(`${ho
   app.render(); app.effects();
   app.requests[0].respond(response(oldEquipment)); await settle();
   app.render();
-  assert.deepEqual([...app.timers.values()].map(timer => timer.duration), [hookName === "useMasterRecords" ? 60_000 : 10_000]);
+  assert.deepEqual([...app.timers.values()].map(timer => timer.duration), [hookName === "useMasterRecords" ? 60_000 : 30_000]);
   app.visibility("hidden"); app.focus(); app.tick(); app.render(); app.effects();
   assert.equal(app.requests.length, 1);
   app.visibility("visible"); app.focus(); app.render(); app.effects();

@@ -50,7 +50,7 @@ test('it is a Masters sub menu that administrators can add to, edit and delete, 
 
 test('the create request form loads the master and the server stores the chosen sub-category with the request',()=>{
   assert.match(client,/import \{ breakdownSubCategoryNames \} from "\.\.\/breakdown-sub-category\.mjs";/);
-  assert.match(client,/useMasterRecords\("Breakdown Sub-Category"\)/,'the request page loads the Breakdown Sub-Category master');
+  assert.match(client,/useMasterRecords\("Breakdown Sub-Category",\[\],\{enabled:needsRequestFormMasters\}\)/,'the request page lazily loads the Breakdown Sub-Category master when a form opens');
   assert.match(client,/<MaintenanceForm normal[^>]*subCategoryRecords=\{subCategoryRecords\} subCategoriesLoaded=\{subCategoriesLoaded\}/);
   const form=client.slice(client.indexOf('function MaintenanceForm('),client.indexOf('function Subsidiaries('));
   assert.match(form,/normalizedBreakdownType\(category\) === "Breakdown"/,'only the Breakdown type asks for a sub-category');

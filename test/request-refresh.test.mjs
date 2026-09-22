@@ -42,12 +42,12 @@ function deferred() {
   return {promise, resolve, reject};
 }
 
-test("request refresh polls every ten seconds only while visible and cleans up all listeners", async () => {
+test("request refresh polls every thirty seconds only while visible and cleans up all listeners", async () => {
   const b = browser();
   let calls = 0;
   const stop = watchRequestRefresh(() => { calls++; }, b.options);
   assert.equal(calls, 0, "the existing initial load is not duplicated");
-  assert.equal([...b.timers.values()][0].delay, 10_000);
+  assert.equal([...b.timers.values()][0].delay, 30_000);
   b.poll();
   await flush();
   assert.equal(calls, 1);

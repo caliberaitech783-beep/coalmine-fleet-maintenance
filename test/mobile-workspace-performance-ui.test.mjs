@@ -34,10 +34,11 @@ test("large authenticated feeds use compression and conditional private response
   assert.match(main, /response\.status === 304/);
 });
 
-test("operational dashboard polling stops while the user is in a workflow screen", () => {
+test("only production dashboard and reports use the dedicated site-wide poller", () => {
   const normal = main.slice(main.indexOf("function Normal("), main.indexOf("function App("));
-  assert.match(normal, /if \(section !== "dashboard"\) return undefined/);
-  assert.match(normal, /\[session\?\.token,session\?\.assignedRole,embedded,isGeneral,section\]/);
+  assert.match(normal, /if \(!needsDedicatedDashboardFeed\) return undefined/);
+  assert.match(normal, /if \(!\['dashboard','reports'\]\.includes\(section\)\) return undefined/);
+  assert.match(normal, /\[session\?\.token,needsDedicatedDashboardFeed,section\]/);
 });
 
 test("the final phone layer keeps core actions visible while collapsing secondary chrome", () => {
@@ -61,6 +62,6 @@ test("phone report and ticket layouts retain every workflow in compact horizonta
 test("phone alerts are bounded and unchanged feeds avoid expensive workflow rerenders", () => {
   assert.match(phoneCss, /\.incoming-notification \.notification-details\s*\{[^}]*-webkit-line-clamp:\s*3/);
   assert.match(phoneCss, /\.incoming-notification-close\s*\{[^}]*min-width:\s*40px[^}]*min-height:\s*40px/);
-  assert.match(main, /setInterval\(checkVersion, adaptiveRefreshInterval\(window, 10_000\)\)/);
+  assert.match(main, /setInterval\(checkVersion, adaptiveRefreshInterval\(window, 5 \* 60_000\)\)/);
   assert.match(main, /if \(responsiveMobile && selectedOperationalRole && current\.token === session\.token && current\.loaded && !current\.error\) return current/);
 });

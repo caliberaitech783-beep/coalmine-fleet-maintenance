@@ -91,11 +91,25 @@ const app=express();
 // OTP requests) fired for the whole site instead of one user.
 app.set('trust proxy',true);
 app.use(compression({threshold:1024}));
+const slowRequestThresholdMs=Math.max(250,Number(process.env.SLOW_REQUEST_THRESHOLD_MS||1000));
+app.use((req,res,next)=>{
+  const startedAt=process.hrtime.bigint();
+  const originalEnd=res.end;
+  res.end=function(...args){
+    const durationMs=Number(process.hrtime.bigint()-startedAt)/1e6;
+    if(!res.headersSent)res.setHeader('Server-Timing',`app;dur=${durationMs.toFixed(1)}`);
+    if(req.path.startsWith('/api/')&&durationMs>=slowRequestThresholdMs){
+      console.warn(JSON.stringify({event:'slow_http_request',method:req.method,path:req.path,status:res.statusCode,durationMs:Number(durationMs.toFixed(1)),databasePool:{total:pool?.totalCount??0,idle:pool?.idleCount??0,waiting:pool?.waitingCount??0}}));
+    }
+    return originalEnd.apply(this,args);
+  };
+  next();
+});
 // The shared request feed is only reused between writes. Clearing on the way in
 // stops a poll that overlaps a write from repopulating stale rows, and clearing
 // again when the write has answered means the refresh that follows a click
 // always reads the database.
-const requestFeedCache=createFeedCache({ttlMs:3000});
+const requestFeedCache=createFeedCache({ttlMs:30_000});
 app.use((req,res,next)=>{
   if(req.method!=='GET'&&req.method!=='HEAD'){
     requestFeedCache.clear();
@@ -122,15 +136,30 @@ const deploymentShaCandidate=String(process.env.DEPLOYMENT_SHA||(
 )).trim().toLowerCase();
 const deploymentSha=/^[0-9a-f]{40}$/.test(deploymentShaCandidate)?deploymentShaCandidate:'';
 
-function sendPrivateJson(req,res,namespace,payload){
-  const body=JSON.stringify(payload);
-  const etag=jsonEntityTag(namespace,body);
+function setPrivateResponseHeaders(res,etag){
   res.set('Cache-Control','private, no-store');
   res.set('ETag',etag);
-  res.set('X-Payload-Bytes',String(Buffer.byteLength(body)));
   res.vary('Authorization');
+}
+
+function sendPrivateJson(req,res,namespace,payload,{etag:providedEtag}={}){
+  const body=JSON.stringify(payload);
+  const etag=providedEtag||jsonEntityTag(namespace,body);
+  setPrivateResponseHeaders(res,etag);
+  res.set('X-Payload-Bytes',String(Buffer.byteLength(body)));
   if(requestEtagMatches(req.get('If-None-Match'),etag))return res.status(304).end();
   return res.type('application/json').send(body);
+}
+
+function privateVersionEtag(namespace,revisions,scope){
+  return jsonEntityTag(`${namespace}:version`,JSON.stringify({revisions,scope}));
+}
+
+function sendPrivateNotModified(req,res,etag){
+  if(!requestEtagMatches(req.get('If-None-Match'),etag))return false;
+  setPrivateResponseHeaders(res,etag);
+  res.status(304).end();
+  return true;
 }
 
 function sendDataUrlMedia(res,data,{name='attachment',fallbackType='application/octet-stream'}={}){
@@ -166,6 +195,15 @@ const pool=new Pool({
   idleTimeoutMillis:30000,
   connectionTimeoutMillis:10000
 });
+
+async function currentDataRevisions(keys,client=pool){
+  const normalized=[...new Set(keys.map(value=>String(value||'').trim()).filter(Boolean))].sort();
+  if(!normalized.length)return {};
+  const {rows}=await client.query('SELECT revision_key,revision FROM data_revisions WHERE revision_key=ANY($1::text[])',[normalized]);
+  const revisions=Object.fromEntries(normalized.map(key=>[key,'0']));
+  for(const row of rows)revisions[row.revision_key]=String(row.revision);
+  return revisions;
+}
 // An idle pooled client that loses its connection (PostgreSQL restart, slot
 // swap, network blip) emits 'error' on the pool. Without a listener Node
 // treats that as an unhandled 'error' event and exits the whole process,
@@ -500,6 +538,13 @@ async function migrate(){
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS in_progress_by TEXT NOT NULL DEFAULT '';
     CREATE INDEX IF NOT EXISTS maintenance_requests_requester_login_idx
       ON maintenance_requests (requester_login, created_at DESC);
+    CREATE INDEX IF NOT EXISTS maintenance_requests_site_created_at_idx
+      ON maintenance_requests (site, created_at DESC);
+    CREATE INDEX IF NOT EXISTS maintenance_requests_timeline_idx
+      ON maintenance_requests (started_at, closed_at);
+    CREATE INDEX IF NOT EXISTS maintenance_requests_active_site_idx
+      ON maintenance_requests (site, started_at, closed_at)
+      WHERE lower(trim(status)) <> 'closed';
     CREATE TABLE IF NOT EXISTS maintenance_daily_remarks (
       id BIGSERIAL PRIMARY KEY,
       request_reference TEXT NOT NULL REFERENCES maintenance_requests(reference) ON DELETE CASCADE,
@@ -561,6 +606,40 @@ async function migrate(){
     );
     CREATE INDEX IF NOT EXISTS master_records_master_name_idx
       ON master_records (master_name, created_at DESC);
+    CREATE INDEX IF NOT EXISTS master_records_user_login_idx
+      ON master_records ((lower(trim(record_data->>'login'))))
+      WHERE master_name='Users & employees';
+    CREATE INDEX IF NOT EXISTS master_records_user_employee_idx
+      ON master_records ((lower(trim(record_data->>'employee'))))
+      WHERE master_name='Users & employees';
+    CREATE TABLE IF NOT EXISTS data_revisions (
+      revision_key TEXT PRIMARY KEY,
+      revision BIGINT NOT NULL DEFAULT 1,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    INSERT INTO data_revisions (revision_key) VALUES ('request-feed'),('master-data')
+      ON CONFLICT (revision_key) DO NOTHING;
+    CREATE OR REPLACE FUNCTION bump_data_revision() RETURNS TRIGGER AS $$
+    BEGIN
+      INSERT INTO data_revisions (revision_key,revision,updated_at)
+        VALUES (TG_ARGV[0],2,NOW())
+        ON CONFLICT (revision_key) DO UPDATE
+          SET revision=data_revisions.revision+1,updated_at=NOW();
+      RETURN NULL;
+    END;
+    $$ LANGUAGE plpgsql;
+    DROP TRIGGER IF EXISTS maintenance_requests_revision_trigger ON maintenance_requests;
+    CREATE TRIGGER maintenance_requests_revision_trigger
+      AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_requests
+      FOR EACH STATEMENT EXECUTE FUNCTION bump_data_revision('request-feed');
+    DROP TRIGGER IF EXISTS maintenance_daily_remarks_revision_trigger ON maintenance_daily_remarks;
+    CREATE TRIGGER maintenance_daily_remarks_revision_trigger
+      AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON maintenance_daily_remarks
+      FOR EACH STATEMENT EXECUTE FUNCTION bump_data_revision('request-feed');
+    DROP TRIGGER IF EXISTS master_records_revision_trigger ON master_records;
+    CREATE TRIGGER master_records_revision_trigger
+      AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE ON master_records
+      FOR EACH STATEMENT EXECUTE FUNCTION bump_data_revision('master-data');
     UPDATE maintenance_requests AS request
       SET requester_role=CASE
         WHEN lower(COALESCE(NULLIF(employee.record_data->>'userGroup',''),NULLIF(employee.record_data->>'mobileRole',''),NULLIF(employee.record_data->>'assignedRole',''),NULLIF(employee.record_data->>'department',''),'')) LIKE '%production%' THEN 'Production User'
@@ -2955,7 +3034,11 @@ app.get('/api/health',async(_req,res)=>{
     const result=await pool.query('SELECT NOW() AS database_time');
     databaseReady=true;
     databaseError='';
-    res.json({status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled,crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED});
+    res.json({
+      status:'ok',database:'connected',databaseTime:result.rows[0].database_time,commit:deploymentSha,scheduledJobsEnabled,
+      crmAdminLockPolicyPaused:ADMIN_LOCK_POLICY_PAUSED,
+      performance:{databasePool:{total:pool.totalCount,idle:pool.idleCount,waiting:pool.waitingCount},requestFeedCache:requestFeedCache.stats,slowRequestThresholdMs},
+    });
   }catch(error){
     databaseReady=false;
     databaseError=error instanceof Error?error.message:'Database connection failed.';
@@ -4593,10 +4676,13 @@ app.get('/api/info-pulse',requireSession,async(req,res,next)=>{
     if(authorization.session.role!=='super'&&!operationalRole&&authorization.session.permissions?.readRequests!==true)
       return res.status(403).json({error:'Your assigned role is not authorized to view Info Pulse.'});
     const scope=infoPulseRequestScope(authorization.session,authorization.user);
+    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data']):{};
+    const etag=typeof privateVersionEtag==='function'?privateVersionEtag('info-pulse',revisions,{scope,login:authorization.session.login,role:authorization.session.role,assignedRole:authorization.session.assignedRole}):'';
+    if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
     const {rows}=await pool.query(`SELECT ${infoPulseProjection} FROM maintenance_requests ORDER BY created_at DESC`);
     const visibleRows=requestsVisibleToSession(scopeInfoPulseRequests(rows,scope),authorization.session);
     const payload={requests:await attachDailyRemarks(visibleRows),scope};
-    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'info-pulse',payload);
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'info-pulse',payload,{etag});
     return res.json(payload);
   }catch(error){next(error)}
 });
@@ -4636,6 +4722,12 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
       const manager=await currentUserRecord(req.session);
       scopedManagerSites=managerReportScope({...manager,site:assignedUserSiteName(manager)}).sites;
     }
+    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data']):{};
+    const etag=typeof privateVersionEtag==='function'?privateVersionEtag('requests',revisions,{
+      dashboardScope,requesterLogin,scopedSite,scopedManagerSites,
+      role:req.session.role,assignedRole:req.session.assignedRole,permissions:req.session.permissions,
+    }):'';
+    if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
     // Production users read their own rows, which is a small indexed query. Every
     // other role reads the same full feed, so those polls share one read and its
     // remarks for a few seconds instead of repeating both per user.
@@ -4650,7 +4742,7 @@ app.get('/api/requests',requireSession,async(req,res,next)=>{
         ? rows.filter((row)=>reportScopeIncludesSite(scopedSite,row.site))
         : [];
     const payload=requestsVisibleToSession(siteVisibleRows,req.session);
-    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'requests',payload);
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'requests',payload,{etag});
     return res.json(payload);
   }catch(error){next(error)}
 });
@@ -5691,6 +5783,9 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
     const scope=dashboardEquipmentScope(authorization.session,authorization.user);
     if(!dashboardEquipmentScopeIsUsable(scope))
       return res.status(409).json({error:'No dashboard site or region is assigned to this account. Contact an administrator.'});
+    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['request-feed','master-data']):{};
+    const etag=typeof privateVersionEtag==='function'?privateVersionEtag('dashboard-equipment',revisions,{scope,login:authorization.session.login,role:authorization.session.role,assignedRole:authorization.session.assignedRole}):'';
+    if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
     const {rows}=await pool.query(`SELECT id,record_data FROM master_records
       WHERE master_name='Equipment master' ORDER BY created_at ASC`);
     const records=rows.map(({id,record_data})=>({
@@ -5729,7 +5824,7 @@ app.get('/api/dashboard/equipment',(req,res,next)=>{
       breakdownCountChange,
       nextCountDayAt:countDay.nextMidnightAt.toISOString(),
     };
-    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'dashboard-equipment',payload);
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,'dashboard-equipment',payload,{etag});
     return res.json(payload);
   }catch(error){next(error)}
 });
@@ -5768,6 +5863,11 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       return res.status(403).json({error:'Your assigned role is not authorized to view master records.'});
     const managerRecord=(req.session.role==='super'&&req.session.permissions?.adminLevel==='Manager')||req.session.role==='normal'?await currentUserRecord(req.session):null;
     const managerScope=managerRecord?(req.session.role==='normal'?userSiteScope(managerRecord):managerReportScope(managerRecord)):null;
+    const revisions=typeof currentDataRevisions==='function'?await currentDataRevisions(['master-data']):{};
+    const etag=typeof privateVersionEtag==='function'?privateVersionEtag(`masters:${requestedMasters.slice().sort().join('|')||'all'}`,revisions,{
+      managerScope,role:req.session.role,assignedRole:req.session.assignedRole,permissions:req.session.permissions,
+    }):'';
+    if(etag&&typeof sendPrivateNotModified==='function'&&sendPrivateNotModified(req,res,etag))return;
     const {rows}=requestedMasters.length
       ?await pool.query('SELECT id, master_name, record_data FROM master_records WHERE master_name = ANY($1::text[]) ORDER BY created_at ASC',[requestedMasters])
       :await pool.query('SELECT id, master_name, record_data FROM master_records ORDER BY created_at ASC');
@@ -5804,7 +5904,7 @@ app.get('/api/masters',requireSession,async(req,res,next)=>{
       }
       (grouped[row.master_name]??=[]).push({id:row.id,...record});
     }
-    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,`masters:${requestedMasters.slice().sort().join('|')||'all'}`,grouped);
+    if(typeof sendPrivateJson==='function')return sendPrivateJson(req,res,`masters:${requestedMasters.slice().sort().join('|')||'all'}`,grouped,{etag});
     res.json(grouped);
   }catch(error){next(error)}
 });
@@ -6426,6 +6526,20 @@ async function runAuditedBackendProcess({module,action,targetReference=''},task)
   }
 }
 
+function scheduleBackgroundStart(task,delayMs){
+  const timer=setTimeout(task,delayMs);
+  timer.unref?.();
+  return timer;
+}
+
+function setStaggeredInterval(task,intervalMs,offsetMs=0){
+  return scheduleBackgroundStart(()=>{
+    task();
+    const timer=setInterval(task,intervalMs);
+    timer.unref?.();
+  },intervalMs+offsetMs);
+}
+
 async function initializeDatabase(){
   try{
     await migrate();
@@ -6436,37 +6550,19 @@ async function initializeDatabase(){
     await appendBackendProcessAudit({module:'Cloud deployment',action:'Start application runtime',targetReference:deploymentSha||'Unknown commit',reason:`Database migration completed; scheduled jobs ${scheduledJobsEnabled?'enabled':'disabled'}.`});
     console.log('Database initialization completed.');
     if(scheduledJobsEnabled){
-      if(oracleConfigured)void runAuditedBackendProcess({module:'Oracle synchronization',action:'Synchronize request drivers'},()=>syncTemporaryRequestDrivers())
-        .then(result=>console.log('Oracle request-driver sync completed.',result))
-        .catch(error=>console.error('Oracle request-driver startup sync failed.',error));
-      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
-        .then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result))
-        .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
-      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports())
-        .then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result))
-        .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
-      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles())
-        .then(result=>console.log('Scheduled Director WhatsApp report check completed.',result))
-        .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
-      void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles())
-        .then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result))
-        .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
-      void runAuditedBackendProcess({module:'WhatsApp Integration',action:'Send workflow reminders'},()=>sendScheduledWorkflowWhatsAppReminders())
-        .then(result=>console.log('Scheduled workflow WhatsApp reminder check completed.',result))
-        .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
-      void runAuditedBackendProcess({module:'Audit Trail',action:'Generate two-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
-        .then(result=>console.log('Scheduled Audit Trail export check completed.',result))
-        .catch(error=>console.error('Scheduled Audit Trail export check failed.',error));
-      void runScheduledBackup()
-        .then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)})
-        .catch(error=>console.error('Scheduled database backup failed.',error));
-      void auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error));
-      void metaWhatsAppRuntimeEnv().then((whatsappEnv)=>{
-        if(whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID)return syncStandardWhatsAppTemplates({submit:true})
-          .then(result=>console.log('Meta WhatsApp template synchronization completed.',result))
-          .catch(error=>console.error('Meta WhatsApp template synchronization failed.',error));
-        return null;
-      }).catch(error=>console.error('Meta WhatsApp template configuration check failed.',error));
+      const startupJobs=[
+        ()=>oracleConfigured&&runAuditedBackendProcess({module:'Oracle synchronization',action:'Synchronize request drivers'},()=>syncTemporaryRequestDrivers()).then(result=>console.log('Oracle request-driver sync completed.',result)).catch(error=>console.error('Oracle request-driver startup sync failed.',error)),
+        ()=>runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports()).then(result=>console.log('Scheduled consolidated WhatsApp report check completed.',result)).catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error)),
+        ()=>runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports()).then(result=>console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)).catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error)),
+        ()=>runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles()).then(result=>console.log('Scheduled Director WhatsApp report check completed.',result)).catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error)),
+        ()=>runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles()).then(result=>console.log('Scheduled hierarchy WhatsApp report check completed.',result)).catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error)),
+        ()=>runAuditedBackendProcess({module:'WhatsApp Integration',action:'Send workflow reminders'},()=>sendScheduledWorkflowWhatsAppReminders()).then(result=>console.log('Scheduled workflow WhatsApp reminder check completed.',result)).catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error)),
+        ()=>runAuditedBackendProcess({module:'Audit Trail',action:'Generate two-day audit and user activity reports'},()=>sendScheduledAuditLogExports()).then(result=>console.log('Scheduled Audit Trail export check completed.',result)).catch(error=>console.error('Scheduled Audit Trail export check failed.',error)),
+        ()=>runScheduledBackup().then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)}).catch(error=>console.error('Scheduled database backup failed.',error)),
+        ()=>auditAdminLockIncidents().catch(error=>console.error('CRM admin-lock audit failed.',error)),
+        ()=>metaWhatsAppRuntimeEnv().then((whatsappEnv)=>whatsappEnv.META_WHATSAPP_BUSINESS_ACCOUNT_ID?syncStandardWhatsAppTemplates({submit:true}):null).then(result=>{if(result)console.log('Meta WhatsApp template synchronization completed.',result)}).catch(error=>console.error('Meta WhatsApp template configuration check failed.',error)),
+      ];
+      startupJobs.forEach((job,index)=>scheduleBackgroundStart(()=>void job(),3_000+(index*6_000)));
     }else{
       console.log('Scheduled background jobs are disabled for this deployment slot.');
     }
@@ -6480,76 +6576,76 @@ async function initializeDatabase(){
 
 void initializeDatabase();
 if(scheduledJobsEnabled){
-  const whatsappTemplateStatusTimer=setInterval(()=>{
+  const whatsappTemplateStatusTimer=setStaggeredInterval(()=>{
     if(databaseReady)void syncStandardWhatsAppTemplates().catch(error=>console.error('WhatsApp template status refresh failed.',error.message));
-  },15*60*1000);
+  },15*60*1000,5_000);
   whatsappTemplateStatusTimer.unref?.();
-  const requestDriverSyncTimer=setInterval(()=>{
+  const requestDriverSyncTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Oracle synchronization',action:'Synchronize request drivers'},()=>syncTemporaryRequestDrivers())
       .then(result=>console.log('Scheduled Oracle request-driver sync completed.',result))
       .catch(error=>console.error('Scheduled Oracle request-driver sync failed.',error));
-  },driverSyncIntervalMs);
+  },driverSyncIntervalMs,11_000);
   requestDriverSyncTimer.unref?.();
-  const consolidatedWhatsAppTimer=setInterval(()=>{
+  const consolidatedWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated fleet report'},()=>sendScheduledConsolidatedWhatsAppReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled consolidated WhatsApp report check failed.',error));
-  },60*1000);
+  },60*1000,5_000);
   consolidatedWhatsAppTimer.unref?.();
-  const consolidatedTicketWhatsAppTimer=setInterval(()=>{
+  const consolidatedTicketWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate consolidated CRM report'},()=>sendScheduledConsolidatedTicketReports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled consolidated CRM WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled consolidated CRM WhatsApp report check failed.',error));
-  },60*1000);
+  },60*1000,12_000);
   consolidatedTicketWhatsAppTimer.unref?.();
-  const directorWhatsAppTimer=setInterval(()=>{
+  const directorWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate Director report bundle'},()=>sendScheduledDirectorReportBundles())
       .then(result=>{if(!result?.skipped)console.log('Scheduled Director WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled Director WhatsApp report check failed.',error));
-  },60*1000);
+  },60*1000,19_000);
   directorWhatsAppTimer.unref?.();
-  const hierarchyWhatsAppTimer=setInterval(()=>{
+  const hierarchyWhatsAppTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Scheduled reports',action:'Generate hierarchy report bundle'},()=>sendScheduledHierarchyReportBundles())
       .then(result=>{if(!result?.skipped)console.log('Scheduled hierarchy WhatsApp report check completed.',result)})
       .catch(error=>console.error('Scheduled hierarchy WhatsApp report check failed.',error));
-  },60*1000);
+  },60*1000,26_000);
   hierarchyWhatsAppTimer.unref?.();
-  const workflowReminderTimer=setInterval(()=>{
+  const workflowReminderTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'WhatsApp Integration',action:'Send workflow reminders'},()=>sendScheduledWorkflowWhatsAppReminders())
       .then(result=>{if(!result?.skipped)console.log('Scheduled workflow WhatsApp reminder check completed.',result)})
       .catch(error=>console.error('Scheduled workflow WhatsApp reminder check failed.',error));
-  },60*1000);
+  },60*1000,33_000);
   workflowReminderTimer.unref?.();
-  const auditLogExportTimer=setInterval(()=>{
+  const auditLogExportTimer=setStaggeredInterval(()=>{
     void runAuditedBackendProcess({module:'Audit Trail',action:'Generate two-day audit and user activity reports'},()=>sendScheduledAuditLogExports())
       .then(result=>{if(!result?.skipped)console.log('Scheduled Audit Trail export completed.',result)})
       .catch(error=>console.error('Scheduled Audit Trail export failed.',error));
-  },60*1000);
+  },60*1000,40_000);
   auditLogExportTimer.unref?.();
-  const logRetentionTimer=setInterval(()=>{
+  const logRetentionTimer=setStaggeredInterval(()=>{
     if(!databaseReady)return;
     void runAuditedBackendProcess({module:'Audit Trail',action:'Automatic log clean-up'},()=>runLogRetention())
       .then(result=>{if(!result?.skipped)console.log('Automatic log clean-up completed.',result)})
       .catch(error=>console.error('Automatic log clean-up failed.',error));
-  },5*60*1000);
+  },5*60*1000,47_000);
   logRetentionTimer.unref?.();
-  const databaseBackupTimer=setInterval(()=>{
+  const databaseBackupTimer=setStaggeredInterval(()=>{
     void runScheduledBackup()
       .then(result=>{if(!result?.skipped)console.log('Scheduled database backup completed.',result)})
       .catch(error=>console.error('Scheduled database backup failed.',error));
-  },60*1000);
+  },60*1000,47_000);
   databaseBackupTimer.unref?.();
-  const adminLockAuditTimer=setInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000);
+  const adminLockAuditTimer=setStaggeredInterval(()=>void auditAdminLockIncidents().catch(error=>console.error('Scheduled CRM admin-lock audit failed.',error)),60*1000,54_000);
   adminLockAuditTimer.unref?.();
 }
-const backupImportCleanupTimer=setInterval(()=>{
+const backupImportCleanupTimer=setStaggeredInterval(()=>{
   void prunePendingBackupImports().catch(error=>console.error('Backup import cleanup failed.',error));
-},10*60*1000);
+},10*60*1000,23_000);
 backupImportCleanupTimer.unref?.();
-const expiredSessionCleanupTimer=setInterval(()=>{
+const expiredSessionCleanupTimer=setStaggeredInterval(()=>{
   if(databaseReady){
     void sessionStore.pruneExpired().catch(error=>console.error('Idle session cleanup failed.',error));
     void expireRemoteAssistanceSessions().catch(error=>console.error('Remote assistance cleanup failed.',error));
   }
-},60*1000);
+},60*1000,47_000);
 expiredSessionCleanupTimer.unref?.();

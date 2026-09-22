@@ -6,19 +6,16 @@ import { showPrintPreview } from "./print-preview.mjs";
 import { printRequestTimeline } from "./request-timeline-print.mjs";
 import requestTimelinePrintCss from "./request-timeline.css?raw";
 import dailyUpdatesPrintCss from "./daily-updates.css?raw";
-import { SavedReportsPanel } from "./saved-reports.jsx";
-import OrganisationChartView from "./organisation-chart.jsx";
 import { ORGANISATION_PAGES, ORGANISATION_PAGE_NAMES, buildOrganisationChart } from "./organisation-chart.mjs";
 import "./smart-print.css";
 import "./date-input.css";
-import HourlyBreakdownView from "./hourly-breakdown-view.jsx";
 import { describeDateRange, encodeDateRange, looksLikeDateColumn, matchesDateRange, parseDateRange } from "./date-range-filter.mjs";
 import { cellMatchesFilterValues, describeFilterValues, filterValueSelected, parseFilterValues, toggleFilterValue } from "./multi-value-filter.mjs";
 import { TIME_24H_PATTERN } from "../request-time.mjs";
 import { recordCountLine, withSerialColumn } from "../serial-column.mjs";
 import { notificationParts, notificationSiteOptions, filterNotificationsBySite, notificationCategory, notificationCategoryOptions, filterNotificationsByCategory } from "../notification-text.mjs";
 import { createNotificationTracker } from "./notification-alerts.mjs";
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { lazy, Suspense, useState, useRef, useEffect, useMemo } from "react";
 import ReportPeriodFilter from "./report-period-filter.jsx";
 import MaintenanceEtcInput from "./maintenance-etc-input.jsx";
 import SharedActionsTable from "./shared-actions-table.jsx";
@@ -28,23 +25,14 @@ import {ComplaintMediaInputs,ComplaintMediaView} from "./complaint-media.jsx";
 import {ProtectedAttachment,ProtectedAudio} from "./protected-media.jsx";
 import {readComplaintMedia} from "../complaint-media.mjs";
 import './camera-upload.css';
-import {UserLoginHistory,UserLoginActivity} from "./user-login-history.jsx";
 import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./duration-sort.mjs";
 import { closedTimeAfterStartedColumns, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
-import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
-import RecoveryGuide from "./recovery-guide.jsx";
 import { PulseIcon, SearchScanIcon, BellRingIcon, DoorExitIcon } from "./motion-icons.jsx";
 import { playNotificationSound, loadNotificationSound, saveNotificationSound, NOTIFICATION_SOUNDS } from "./notification-chime.mjs";
 import LiveTemperatureChip from "./live-temperature-chip.jsx";
-import BackupAdministration from "./backup-administration.jsx";
-import VehicleTransferWorkflow from "./vehicle-transfer-workflow.jsx";
-import RequestCorrections from "./request-corrections.jsx";
-import PrintHelperSetupPage from "./print-helper-setup.jsx";
 import {REQUEST_CORRECTION_MANAGER_ROLES} from "../request-correction-policy.mjs";
-import {RemoteAssistanceAction, RemoteAssistanceAgent} from "./remote-assistance.jsx";
-import HelpTraining from "./help-training.jsx";
 import EquipmentCombobox from "./equipment-combobox.jsx";
 import SearchableSelect from "./searchable-select.jsx";
 import { preventTableAutoScroll } from "./table-scroll.mjs";
@@ -59,7 +47,6 @@ import { dashboardCountScale } from "./dashboard-count-scale.mjs";
 import { availabilityRequestsForDate } from "./dashboard-availability.mjs";
 import { dashboardFleetSnapshot } from "../dashboard-fleet-snapshot.mjs";
 import { fleetBreakdownCategory, fleetBreakdownRequests } from "./fleet-breakdown-drilldown.mjs";
-import DashboardRecordBrowser from "./dashboard-record-browser.jsx";
 import DailyUpdatesList, { DailyUpdatesPanel } from "./daily-updates-list.jsx";
 import { dailyUpdatesExportText, latestDailyUpdateStamp } from "./daily-updates-order.mjs";
 import { prepareXlsxExportSheets } from "./xlsx-daily-updates.mjs";
@@ -103,7 +90,6 @@ import { buildInfoPulseBreakdowns, buildInfoPulseFirstTripPending, isProductionF
 import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
 import EtcCountdown from "./etc-countdown.jsx";
 import { etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue } from "./etc-countdown.mjs";
-import InfoPulseContent from "./info-pulse-content.jsx";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import {
   findRequestEquipment,
@@ -133,6 +119,26 @@ import {adaptiveRefreshInterval, mobileTablePageSize} from "./mobile-performance
 import {startVisiblePoll} from "./visible-poll.mjs";
 import VerificationTimeField from "./verification-time-field.jsx";
 import RequestTimelineButton from "./request-timeline.jsx";
+
+// Keep specialist administration and remote-support code out of the startup
+// bundle. Vite emits these as separate chunks and downloads them only when a
+// signed-in user opens the corresponding feature.
+const BackupAdministration=lazy(()=>import("./backup-administration.jsx"));
+const VehicleTransferWorkflow=lazy(()=>import("./vehicle-transfer-workflow.jsx"));
+const RequestCorrections=lazy(()=>import("./request-corrections.jsx"));
+const PrintHelperSetupPage=lazy(()=>import("./print-helper-setup.jsx"));
+const OrganisationChartView=lazy(()=>import("./organisation-chart.jsx"));
+const UserLoginHistory=lazy(()=>import("./user-login-history.jsx").then(module=>({default:module.UserLoginHistory})));
+const UserLoginActivity=lazy(()=>import("./user-login-history.jsx").then(module=>({default:module.UserLoginActivity})));
+const RemoteAssistanceAction=lazy(()=>import("./remote-assistance.jsx").then(module=>({default:module.RemoteAssistanceAction})));
+const RemoteAssistanceAgent=lazy(()=>import("./remote-assistance.jsx").then(module=>({default:module.RemoteAssistanceAgent})));
+const SavedReportsPanel=lazy(()=>import("./saved-reports.jsx").then(module=>({default:module.SavedReportsPanel})));
+const HourlyBreakdownView=lazy(()=>import("./hourly-breakdown-view.jsx"));
+const WhatsAppReportSettingsButton=lazy(()=>import("./whatsapp-report-settings.jsx"));
+const RecoveryGuide=lazy(()=>import("./recovery-guide.jsx"));
+const HelpTraining=lazy(()=>import("./help-training.jsx"));
+const DashboardRecordBrowser=lazy(()=>import("./dashboard-record-browser.jsx"));
+const InfoPulseContent=lazy(()=>import("./info-pulse-content.jsx"));
 import {
   LayoutDashboard,
   Truck,
@@ -7489,15 +7495,18 @@ function OrganisationChartPage({ view = "reporting" }) {
   const refresh = () => { refreshUsers?.(); refreshPrivileges?.(); refreshHierarchy?.(); };
   return <OrganisationChartView key={view} view={view} chart={chart} loading={!loaded} error={usersError || privilegesError || hierarchyError || ""} updatedAt={updatedAt} onRefresh={refresh} />;
 }
-function useMasterRecords(name, seed = []) {
+function useMasterRecords(name, seed = [], {enabled = true} = {}) {
   const [records, setRecords] = useState(seed),
     [loaded, setLoaded] = useState(false),
     [loadError, setLoadError] = useState(""),
     [loadAttempt, setLoadAttempt] = useState(0);
   const loadedMasterScope = useRef({name, token: authToken, loaded: false});
   const masterResponseCache = useRef({name, token: authToken, etag: ""});
-  useEffect(() => watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document}), []);
+  useEffect(() => enabled
+    ? watchVisibleMasterRefresh(() => setLoadAttempt((attempt) => attempt + 1), {win: window, doc: document})
+    : undefined, [enabled]);
   useEffect(() => {
+    if (!enabled) return undefined;
     let activeRequest = true;
     const controller = new AbortController();
     const loadStartedAt = performance.now();
@@ -7541,7 +7550,7 @@ function useMasterRecords(name, seed = []) {
       activeRequest = false;
       controller.abort();
     };
-  }, [name, loadAttempt, authToken]);
+  }, [name, loadAttempt, authToken, enabled]);
   const add = async (incoming, { silent = false } = {}) => {
     const batches = batchMasterRecords(incoming);
     const saved = [];
@@ -9925,10 +9934,15 @@ function NotificationBell({ session, onOpenEntry }) {
   </>;
 }
 
-function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDeleteRequest, onDeleteRequests, onAddDailyRemark, onRefreshRequests, theme, toggleTheme, embedded = false }) {
+function Normal({ logout, requests, requestsLoaded = true, requestsError = "", requestsUpdatedAt = 0, session, onCreate, onUpdateRequest, onDeleteRequest, onDeleteRequests, onAddDailyRemark, onRefreshRequests, theme, toggleTheme, embedded = false }) {
   const displayDate = (value) => typeof formatDisplayDate === "function" ? formatDisplayDate(value) : new Date(value).toLocaleDateString("en-GB").replaceAll("/", "-");
   const mobileRole = session?.assignedRole || "Mobile User";
   const isGeneral = mobileRole === "General User";
+  // Production's ordinary feed intentionally contains only that requester's
+  // rows, so its dashboard still needs the broader site feed. Maintenance,
+  // MIS and General users already receive the correct site-wide feed and must
+  // not start a second identical poller.
+  const needsDedicatedDashboardFeed = !embedded && mobileRole === "Production User";
   const [show, setShow] = useState(false), [tab, setTab] = useState("requests"), [editing, setEditing] = useState(null), [closing, setClosing] = useState(null), [verifying, setVerifying] = useState(null), [productionFirstTrip, setProductionFirstTrip] = useState(null), [remarking, setRemarking] = useState(null), [vehicleHistoryTarget, setVehicleHistoryTarget] = useState(null);
   const [section,setSection]=useState(embedded?"profile":"dashboard");
   const [misFlagging, setMisFlagging] = useState(null);
@@ -9937,8 +9951,17 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const [userReportCategory, setUserReportCategory] = useState("general");
   const [dashboardState,setDashboardState]=useState({token:"",records:[],loaded:false,error:"",updatedAt:0});
   const dashboardLoader=useRef(null);
-  const dashboardRequests=embedded || isGeneral ? requests : dashboardState.records;
-  const dashboardRequestsReady=embedded || isGeneral || (dashboardState.token === session?.token && dashboardState.loaded);
+  const dashboardRequests=needsDedicatedDashboardFeed ? dashboardState.records : requests;
+  const dashboardRequestsReady=needsDedicatedDashboardFeed
+    ? dashboardState.token === session?.token && dashboardState.loaded
+    : requestsLoaded;
+  const dashboardRequestsError=needsDedicatedDashboardFeed
+    ? (dashboardState.token===session?.token?dashboardState.error:"")
+    : requestsError;
+  const dashboardRequestsUpdatedAt=needsDedicatedDashboardFeed?dashboardState.updatedAt:requestsUpdatedAt;
+  const refreshDashboardRequests=()=>needsDedicatedDashboardFeed
+    ? dashboardLoader.current?.load(session?.token||authToken)
+    : onRefreshRequests?.();
   const [createdRequestRef, setCreatedRequestRef] = useState("");
   const [workspaceRefreshing, setWorkspaceRefreshing] = useState(false);
   const refreshWorkspace = async () => {
@@ -9999,17 +10022,18 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
     else if(showTicketsMenu)setTab("tickets");
   },[responsiveMobile,showRequestsMenu,showTicketsMenu,visibleRequestMenus?.join("|"),mobileRole]);
   const [equipmentRecords, , equipmentLoaded, , , , , refreshEquipmentRecords] = useMasterRecords("Equipment master", canCreate ? vehicles : []);
-  const [repairTypeRecords, , repairTypesLoaded, , , , , refreshRepairTypes] = useMasterRecords("Repair type master");
-  const [subCategoryRecords, , subCategoriesLoaded] = useMasterRecords("Breakdown Sub-Category");
+  const needsRequestFormMasters=show||Boolean(editing)||Boolean(closing)||Boolean(remarking);
+  const [repairTypeRecords, , repairTypesLoaded, , , , , refreshRepairTypes] = useMasterRecords("Repair type master",[],{enabled:needsRequestFormMasters});
+  const [subCategoryRecords, , subCategoriesLoaded] = useMasterRecords("Breakdown Sub-Category",[],{enabled:needsRequestFormMasters});
   const [assignedLocation, setAssignedLocation] = useState(String(session?.location || "").trim());
   useEffect(()=>{
-    if (embedded || isGeneral) return undefined;
-    if (section !== "dashboard") return undefined;
+    if (!needsDedicatedDashboardFeed) return undefined;
+    if (!['dashboard','reports'].includes(section)) return undefined;
     const loader=createDashboardRequestLoader({onState:setDashboardState});
     dashboardLoader.current=loader;
     const stop=watchRequestRefresh(()=>loader.load(session?.token||authToken),{win:window,doc:document,initial:true});
     return()=>{stop();loader.cancel();dashboardLoader.current=null;};
-  },[session?.token,session?.assignedRole,embedded,isGeneral,section]);
+  },[session?.token,needsDedicatedDashboardFeed,section]);
   useEffect(() => {
     let active = true;
     fetch("/api/me/profile", {headers: {Authorization: `Bearer ${session?.token || authToken}`}})
@@ -10115,7 +10139,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}
     <main>
-      {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardState.error} requestsUpdatedAt={dashboardState.updatedAt} onRefreshRequests={()=>dashboardLoader.current?.load(session?.token)} theme={theme} /> : <RequestDataState error={dashboardState.token===session?.token?dashboardState.error:""} retry={()=>dashboardLoader.current?.load(session?.token)} />)}
+      {!embedded&&section==="dashboard"&&showDashboardMenu&&(dashboardRequestsReady ? <Dashboard requests={misDashboardRequests} requestsError={dashboardRequestsError} requestsUpdatedAt={dashboardRequestsUpdatedAt} onRefreshRequests={refreshDashboardRequests} theme={theme} /> : <RequestDataState error={dashboardRequestsError} retry={refreshDashboardRequests} />)}
       {!embedded&&section==="reports"&&showReportsMenu&&<ReportsPage requests={isMaintenance ? requests : isMis ? misWorkspaceRequests : dashboardRequests} activeReportCategory={userReportCategory} setActiveReportCategory={setUserReportCategory} permissions={{...permissions, department: mobileRole}} session={session} />}
       {!embedded&&section==="tickets"&&showTicketsMenu&&<TicketPage session={session} />}
       {!embedded&&section==="transfers"&&isMis&&<VehicleTransferWorkflow session={session} Dialog={Modal} />}
@@ -10310,10 +10334,16 @@ function App() {
       }
     };
     checkVersion();
-    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 10_000));
+    // Deploy checks do not need to wake every signed-in browser every ten
+    // seconds. Focus/pageshow refreshes already catch returning users quickly.
+    const timer = window.setInterval(checkVersion, adaptiveRefreshInterval(window, 5 * 60_000));
+    window.addEventListener("focus",checkVersion);
+    window.addEventListener("pageshow",checkVersion);
     return () => {
       stopped = true;
       window.clearInterval(timer);
+      window.removeEventListener("focus",checkVersion);
+      window.removeEventListener("pageshow",checkVersion);
     };
   }, []);
   const selectMenu = (name) => {
@@ -10590,6 +10620,9 @@ function App() {
       <>
         <Normal
           requests={requests}
+          requestsLoaded={requestsLoaded}
+          requestsError={requestsError}
+          requestsUpdatedAt={requestState.updatedAt}
           onCreate={addRequest}
           onUpdateRequest={updateRequest}
           onDeleteRequest={deleteRequest} onDeleteRequests={deleteRequestsBulk}
@@ -10705,6 +10738,9 @@ function App() {
               <Normal
                   embedded
               requests={requests}
+              requestsLoaded={requestsLoaded}
+              requestsError={requestsError}
+              requestsUpdatedAt={requestState.updatedAt}
               onCreate={addRequest}
               onUpdateRequest={updateRequest}
                   onDeleteRequest={deleteRequest} onDeleteRequests={deleteRequestsBulk}
@@ -10733,4 +10769,8 @@ function App() {
     </div>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <Suspense fallback={<div className="app-loading" role="status">Loading workspace…</div>}>
+    <App />
+  </Suspense>,
+);

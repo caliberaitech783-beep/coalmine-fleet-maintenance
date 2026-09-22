@@ -57,7 +57,7 @@ test('a failed read is never handed to the next poll', async () => {
 
 test('the requests route shares the feed and every write clears it', () => {
   assert.match(server, /import \{createFeedCache\} from '\.\/request-feed-cache\.mjs';/);
-  assert.match(server, /const requestFeedCache=createFeedCache\(\{ttlMs:3000\}\);/);
+  assert.match(server, /const requestFeedCache=createFeedCache\(\{ttlMs:30_000\}\);/);
   const guard = server.slice(server.indexOf('const requestFeedCache=createFeedCache('), server.indexOf('const port=Number('));
   assert.match(guard, /if\(req\.method!=='GET'&&req\.method!=='HEAD'\)\{/);
   assert.match(guard, /requestFeedCache\.clear\(\);/);
@@ -69,6 +69,9 @@ test('the requests route shares the feed and every write clears it', () => {
     'a production user reads only their own rows, so that query is not shared');
   assert.match(route, /const payload=requestsVisibleToSession\(siteVisibleRows,req\.session\)/,
     'every response is still filtered for the signed-in user');
+  assert.match(route, /currentDataRevisions\(\['request-feed','master-data'\]\)/,
+    'unchanged polling responses must be decided before the full request query');
+  assert.match(route, /sendPrivateNotModified\(req,res,etag\)\)return;/);
 });
 
 test('a click never waits for WhatsApp delivery to Meta', () => {

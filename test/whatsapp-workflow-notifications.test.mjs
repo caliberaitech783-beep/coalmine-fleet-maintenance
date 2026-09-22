@@ -46,7 +46,7 @@ test('scheduled consolidated reporting remains registered independently of immed
   assert.match(server,/async function sendScheduledConsolidatedWhatsAppReports/);
   assert.match(server,/whatsapp_consolidated_report_runs/);
   assert.match(server,/templateKey:'consolidatedRequestReport'/);
-  assert.match(server,/setInterval\(\(\)=>\{[\s\S]*sendScheduledConsolidatedWhatsAppReports/);
+  assert.match(server,/setStaggeredInterval\(\(\)=>\{[\s\S]*sendScheduledConsolidatedWhatsAppReports/);
 });
 
 test('the sender excludes reports-only logins and has no legacy blanket Super Admin exclusion',()=>{
@@ -85,5 +85,5 @@ test('workbook escalation and repeat intervals use a deduplicated scheduler',()=
   assert.match(server,/ideal_requested_at<=\$1::timestamptz-\(\$3::int\*INTERVAL '1 hour'\)/);
   assert.match(server,/workflowReminderSlot\(eventType,eventTime,now,reportSettings\)/);
   assert.match(server,/ON CONFLICT DO NOTHING RETURNING id/);
-  assert.match(server,/const workflowReminderTimer=setInterval/);
+  assert.match(server,/const workflowReminderTimer=setStaggeredInterval/);
 });

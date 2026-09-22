@@ -21,7 +21,7 @@ export function notifyRequestChange(win = globalThis.window) {
 export function watchRequestRefresh(refresh, {
   win = globalThis.window,
   doc = win?.document,
-  intervalMs = 10_000,
+  intervalMs = 30_000,
   now = Date.now,
   burstMs = 1_000,
   initial = false,

@@ -9,6 +9,7 @@ import * as equipment from "../request-equipment.mjs";
 import * as workflow from "../request-workflow.mjs";
 import {approvedDelayedReason} from '../delayed-reason.mjs';
 import DateInput from '../src/date-input.mjs';
+import {isProductionFirstTripRequired,PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL} from '../info-pulse-data.mjs';
 
 const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const server = readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
@@ -88,7 +89,7 @@ async function runRoute(action, body) {
     requestWorkflowWhatsAppLogins: async () => [], requestEquipmentNotificationDetails: () => "", requestNotificationTime: () => "",
     addTicketNotificationsBestEffort: async () => {}, workflowRequestLink: () => "", publicBaseUrl: () => "",
     requireAllowedRequestSite: async () => true, assignedRequestScope: async () => ({}), requestSiteIsAllowed: () => true,
-    parseIndiaRequestDateTime: () => new Date(), requestProjection: "reference AS ref",
+    parseIndiaRequestDateTime: () => new Date(), requestProjection: "reference AS ref", isProductionFirstTripRequired, PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL,
     ...siteAccess,currentUserRecord: async () => ({site: tipper.site}), canonicalSiteName: value => value,
     pool: {query: async (sql, values) => {
       if (/^UPDATE/.test(sql)) { writes.push({sql, values}); return {rows: [tipper]}; }

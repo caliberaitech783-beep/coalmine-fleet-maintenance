@@ -4,7 +4,7 @@
 // that land in that window share it. Any write clears the window immediately,
 // so a user never sees their own change missing from the next refresh.
 
-export function createFeedCache({ttlMs = 3000, now = Date.now} = {}) {
+export function createFeedCache({ttlMs = 30_000, now = Date.now} = {}) {
   let entry = null;
   let hits = 0;
   let reads = 0;
