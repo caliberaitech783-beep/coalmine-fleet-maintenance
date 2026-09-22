@@ -855,6 +855,7 @@
 }
 /* Tints follow the header gradient from left (purple) to right (coral). */
 .header-nav-item[data-nav="dashboard"] { --hn-a: #8b5cf6; --hn-b: #522e90; --hn-glow: rgba(82, 46, 144, 0.5); }
+.header-nav-item[data-nav="cd"] { --hn-a: #7c3aed; --hn-b: #2563eb; --hn-glow: rgba(37, 99, 235, 0.45); }
 .header-nav-item[data-nav="manager"],
 .header-nav-item[data-nav="masters"] { --hn-a: #a855f7; --hn-b: #6b2fa8; --hn-glow: rgba(107, 47, 168, 0.5); }
 .header-nav-item[data-nav="correction"],
@@ -867,6 +868,7 @@
 .header-nav-item[data-nav="transfers"] { --hn-a: #fb923c; --hn-b: #ea580c; --hn-glow: rgba(234, 88, 12, 0.5); }
 /* Icon motion while hovered / focused / active. */
 .header-nav-item[data-nav="dashboard"]:hover .header-nav-icon svg, .header-nav-item[data-nav="dashboard"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="dashboard"].active .header-nav-icon svg { animation: ws-shield 1.2s ease-in-out infinite; }
+.header-nav-item[data-nav="cd"]:hover .header-nav-icon svg, .header-nav-item[data-nav="cd"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="cd"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
 .header-nav-item[data-nav="masters"]:hover .header-nav-icon svg, .header-nav-item[data-nav="masters"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="masters"].active .header-nav-icon svg { animation: ws-shuttle 1s ease-in-out infinite; }
 .header-nav-item[data-nav="whatsapp"]:hover .header-nav-icon svg, .header-nav-item[data-nav="whatsapp"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="whatsapp"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
 .header-nav-item[data-nav="workspaces"]:hover .header-nav-icon svg, .header-nav-item[data-nav="workspaces"]:focus-visible .header-nav-icon svg, .header-nav-item[data-nav="workspaces"].active .header-nav-icon svg { animation: ws-rise 1s ease-in-out infinite; }
@@ -883,6 +885,24 @@
   .app > aside nav button.header-nav-item::after,
   .header-nav-icon,
   .header-nav-icon svg { animation: none !important; transition: none !important; }
+}
+
+.caliber-directory-page {
+  width: 100%;
+  min-height: calc(100vh - 118px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 14px 38px rgba(23, 35, 60, 0.08);
+}
+
+.caliber-directory-page iframe {
+  display: block;
+  width: 100%;
+  min-height: calc(100vh - 120px);
+  border: 0;
+  background: #fff;
 }
 
 /* Administration lists eleven entries since the backup pages joined it. Keep the

@@ -14,6 +14,7 @@ export const ADMIN_MASTER_OPTIONS = [
 
 export const ADMIN_TAB_OPTIONS = [
   "Dashboard",
+  "CD",
   "Masters",
   "WhatsApp Integration",
   "Reports",

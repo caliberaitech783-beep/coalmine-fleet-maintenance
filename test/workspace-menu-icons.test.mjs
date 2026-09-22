@@ -75,7 +75,7 @@ test('the Administration menu maps each entry to a badge key without changing th
 });
 
 test('the top-level header buttons get glass badges in the header gradient tones with a sliding underline and sheen',()=>{
-  assert.equal((source.match(/className=\{`header-nav-item\$\{active === n \? " active" : ""\}`\}\s*data-nav=\{n\.toLowerCase\(\)\}[\s\S]*?<span className="header-nav-icon" aria-hidden="true"><I \/><\/span>\s*<span className="nav-label">\{n\}<\/span>/g)||[]).length,2,'Dashboard and Tickets style buttons');
+  assert.equal((source.match(/className=\{`header-nav-item\$\{active === n \? " active" : ""\}`\}\s*data-nav=\{n\.toLowerCase\(\)\}[\s\S]*?<span className="header-nav-icon" aria-hidden="true"><I \/><\/span>\s*<span className="nav-label">\{n\}<\/span>/g)||[]).length,2,'direct top-level nav render loops');
   for(const [key,icon,label] of [['masters','Menu','Masters'],['whatsapp','MessageCircle','WhatsApp Integration'],['workspaces','Users','Operational Workspaces'],['reports','FileBarChart','Reports']]){
     assert.match(source,new RegExp(`data-nav="${key}"[\\s\\S]*?<span className="header-nav-icon" aria-hidden="true"><${icon} \\/><\\/span>\\s*<span className="nav-label">${label}<\\/span>`),key);
   }
@@ -87,8 +87,9 @@ test('the top-level header buttons get glass badges in the header gradient tones
   assert.match(styles,/\.app > aside nav button\.header-nav-item::after \{[\s\S]*transform: scaleX\(0\);\s*transform-origin: left center;/,'underline slides in from the left');
   assert.match(styles,/\.header-nav-icon \{[\s\S]*background: linear-gradient\(135deg, var\(--hn-a, #8b5cf6\), var\(--hn-b, #522e90\)\)/);
   assert.match(styles,/\.header-nav-item\[data-nav="dashboard"\] \{ --hn-a: #8b5cf6; --hn-b: #522e90;/,'leftmost button uses the header purple');
+  assert.match(styles,/\.header-nav-item\[data-nav="cd"\] \{ --hn-a: #7c3aed; --hn-b: #2563eb;/,'CD gets its own main menu badge');
   assert.match(styles,/\.header-nav-item\[data-nav="admin"\] \{ --hn-a: #f97373; --hn-b: #f04e53;/,'rightmost button uses the header coral');
-  for(const key of ['masters','whatsapp','workspaces','reports','tickets','manager','correction','approvals'])assert.match(styles,new RegExp(`\\.header-nav-item\\[data-nav="${key}"\\][^{]*\\{ --hn-a: #[0-9a-f]{6}; --hn-b: #[0-9a-f]{6};`),key);
+  for(const key of ['cd','masters','whatsapp','workspaces','reports','tickets','manager','correction','approvals'])assert.match(styles,new RegExp(`\\.header-nav-item\\[data-nav="${key}"\\][^{]*\\{ --hn-a: #[0-9a-f]{6}; --hn-b: #[0-9a-f]{6};`),key);
   assert.match(styles,/\[data-nav="tickets"\]:hover \.header-nav-icon svg[^{]*\{ animation: ws-tick/);
   assert.match(styles,/\[data-nav="masters"\]:hover \.header-nav-icon svg[^{]*\{ animation: ws-shuttle/);
   assert.match(styles,/button > svg:first-child \{\s*display: none;\s*\}\s*\.app > aside nav > \.nav-config-row > button > \.header-nav-icon,\s*\.app > aside nav > \.masters-menu > \.nav-config-row > button > \.header-nav-icon \{\s*display: none;\s*\}/,'mid-width layout still hides the header icons');

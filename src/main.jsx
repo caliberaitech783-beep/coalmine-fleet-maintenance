@@ -200,6 +200,7 @@ import {
   ListFilter,
   Printer,
   FolderOpen,
+  BookOpen,
   Columns3,
   RotateCcw,
   Monitor,
@@ -340,6 +341,7 @@ if (typeof window !== "undefined" && typeof window.fetch === "function" && !wind
 const subsidiaryData = REGION_DATA;
 const nav = [
   ["Dashboard", LayoutDashboard],
+  ["CD", BookOpen],
   ["Tickets", Ticket],
   ["Reports", FileBarChart],
 ];
@@ -5694,6 +5696,17 @@ function Generic({ name, requests = [] }) {
     </section>
   );
 }
+function CaliberDirectoryPage() {
+  return (
+    <section className="caliber-directory-page" aria-label="Caliber Directory">
+      <iframe
+        title="Caliber Directory"
+        src="/cd/caliber-directory.html"
+        loading="eager"
+      />
+    </section>
+  );
+}
 
 const reportCategoryTabs = [
   {id: "general", label: "General Report", description: "Common road status, fleet location, transfer, and recent breakdown reports.", icon: FileBarChart},
@@ -10698,6 +10711,8 @@ function App() {
         <div className="body">
           {active === "Dashboard" ? (
             requestsLoaded ? <Dashboard goto={selectMenu} gotoEquipment={gotoEquipment} gotoBreakdownFleet={gotoBreakdownFleet} requests={requests} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} theme={theme} /> : <RequestDataState error={requestsError} retry={loadRequests} />
+          ) : active === "CD" ? (
+            <CaliberDirectoryPage />
           ) : active === "Manager Profile" ? (
             <ManagerDashboard managerRole={adminPermissions.managerRole} managerRoles={adminPermissions.managerRoles} managerLocation={profileLocation} managerDesignationKey={profileDesignationKey} requests={requests} requestsLoaded={requestsLoaded} requestsError={requestsError} requestsUpdatedAt={requestState.updatedAt} onRefreshRequests={loadRequests} gotoEquipment={gotoEquipment} onApproveIdeal={(row)=>updateRequest(row.ref,{},"ideal-onroad")} onCancelIdeal={(row)=>updateRequest(row.ref,{},"idle-cancel")} onUpdateRequest={updateRequest} onAddDailyRemark={addDailyRemark} />
           ) : active === "Tickets" ? (
