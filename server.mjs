@@ -23,7 +23,6 @@ import {equipmentIdentity} from './equipment-identity.mjs';
 import {mergePrivilegeRecords} from './privilege-record.mjs';
 import {generalUserCanAccessMenu,loginRecordCandidates,normalizeUserAccessLabels,resolveMobileAccess,userLoginCandidates} from './mobile-access.mjs';
 import {REQUEST_CLOSE_STATUSES,requestDateTimeValue,validMeterEvidenceDataUrl,validMeterReading,validMeterReadings,validRequestAudioDataUrl,validTripCardImageDataUrl} from './request-workflow.mjs';
-import {productionFirstTripCutoffMs} from './info-pulse-data.mjs';
 import {validComplaintMedia} from './complaint-media.mjs';
 import {accessAllows,managerRoleSelection,masterAccessAllows} from './admin-access.mjs';
 import {JSON_BODY_CONTENT_TYPES} from './request-body-transport.mjs';
@@ -5480,7 +5479,7 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     const scope=req.session.role==='normal'?userSiteScope(user):managerReportScope(user);
     if(!scope.sites?.length)return res.status(403).json({error:'A location must be assigned before recording the production first trip.'});
     await client.query('BEGIN');
-    const {rows:requestRows}=await client.query(`SELECT reference,site,status,created_at,started_at,closed_at,verified_at,verification_status,equipment_group,door_number,chassis_number
+    const {rows:requestRows}=await client.query(`SELECT reference,site,status,closed_at,verified_at,verification_status,equipment_group,door_number,chassis_number
       FROM maintenance_requests WHERE reference=$1 FOR UPDATE`,[reference]);
     const request=requestRows[0];
     if(!request)throw Object.assign(new Error('This request no longer exists.'),{status:404});
@@ -5489,10 +5488,7 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     if(request.verified_at||String(request.verification_status||'').trim()==='Verified')throw Object.assign(new Error('Production first-trip entry is already closed because MIS verification is completed.'),{status:409});
     const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
     const closedAtMs=closedAt instanceof Date?closedAt.getTime():Number(closedAt);
-    const startedAt=request.started_at instanceof Date?request.started_at:request.created_at instanceof Date?request.created_at:parseRequestTimelineTimestamp(request.started_at||request.created_at);
-    const startedAtMs=startedAt instanceof Date?startedAt.getTime():Number(startedAt);
-    const rolloutCutoffMs=productionFirstTripCutoffMs();
-    if(!Number.isFinite(closedAtMs)||!Number.isFinite(startedAtMs)||closedAtMs<rolloutCutoffMs||startedAtMs<rolloutCutoffMs)throw Object.assign(new Error('Production first-trip entry is available only for requests started and made on road from 21-09-2026 onward.'),{status:409});
+    if(!Number.isFinite(closedAtMs))throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
     if(closedAt&&firstTripAt.getTime()<closedAt.getTime())throw Object.assign(new Error('Production first-trip time cannot be before the vehicle was made on road.'),{status:400});
     if(firstTripAt.getTime()>Date.now())throw Object.assign(new Error('Production first-trip time cannot be in the future.'),{status:400});
     const actorName=req.session.name||user?.employee||req.session.login||'Production User';
