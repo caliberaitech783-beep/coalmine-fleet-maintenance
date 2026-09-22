@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {aiFeederAlerts, parseIstTimestamp} from '../ai-feeder.mjs';
-import {buildInfoPulseBreakdowns, buildInfoPulseCases, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView, isActiveBreakdown} from '../info-pulse-data.mjs';
+import {buildInfoPulseBreakdowns, buildInfoPulseCases, buildInfoPulseFirstTripPending, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView, isActiveBreakdown} from '../info-pulse-data.mjs';
 import {infoPulseRequestScope, scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 
 const NOW = Date.parse('2026-09-10T12:00:00+05:30');
@@ -119,6 +119,20 @@ test('total breakdowns count every open non-idle request once, longest standing 
   assert.deepEqual(view.sites.map(site => [site.label, site.total]), [['Sasti OB', 3], ['Majri OB', 1]]);
   assert.equal(infoPulseView(rows, {from: '2026-09-10'}).totals.total, 1);
   assert.deepEqual(records.filter(isActiveBreakdown).map(row => row.ref), ['quiet', 'old', 'new', 'new', 'majri']);
+});
+
+test('production first-trip pending queue contains closed on-road requests until production records the first trip', () => {
+  const records = [
+    {...base, ref: 'old-pending', status: 'Closed', closedAt: '2026-09-09 09:00', productionFirstTripAt: '', door: 'D1'},
+    {...base, ref: 'new-pending', status: 'Closed', closedAt: '2026-09-10 09:00', door: 'D2'},
+    {...base, ref: 'done', status: 'Closed', closedAt: '2026-09-09 10:00', productionFirstTripAt: '2026-09-09 11:00'},
+    {...base, ref: 'not-on-road', status: 'Closed', closedAt: ''},
+    {...base, ref: 'open', status: 'Open'},
+  ];
+  const rows = buildInfoPulseFirstTripPending(records);
+  assert.deepEqual(rows.map(row => row.key), ['old-pending', 'new-pending']);
+  assert.equal(rows[0].date, '2026-09-09');
+  assert.equal(infoPulseView(rows, {from: '2026-09-10', to: '2026-09-10'}).totals.total, 1);
 });
 
 test('verified, closed, idle and future requests are classified correctly', () => {

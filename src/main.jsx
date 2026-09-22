@@ -99,7 +99,7 @@ import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequ
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownOpenedDate, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
-import { buildInfoPulseBreakdowns } from "../info-pulse-data.mjs";
+import { buildInfoPulseBreakdowns, buildInfoPulseFirstTripPending } from "../info-pulse-data.mjs";
 import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
 import EtcCountdown from "./etc-countdown.jsx";
 import { etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue } from "./etc-countdown.mjs";
@@ -9450,7 +9450,7 @@ function TicketPage({ session }) {
   </section>;
 }
 
-function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
+function AiFeederPanel({ breakdowns = [], firstTripPending = [], session = null, scope, now, updatedAt, ready, error, refreshing, onRefresh, onClose, closeAvailableAt = 0 }) {
   const panelRef = useRef(null);
   const [remainingSeconds, setRemainingSeconds] = useState(() => Math.max(0, Math.ceil((closeAvailableAt - Date.now()) / 1000)));
   const closeRef = useRef(onClose);
@@ -9492,7 +9492,7 @@ function AiFeederPanel({ breakdowns = [], scope, now, updatedAt, ready, error, r
           {remainingSeconds === 0 && <button type="button" onClick={() => closeRef.current()} aria-label="Close Info Pulse"><X /></button>}
         </div>
       </header>
-      <InfoPulseContent breakdowns={breakdowns} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} />
+      <InfoPulseContent breakdowns={breakdowns} firstTripPending={firstTripPending} session={session} scope={scope} now={now} updatedAt={updatedAt} ready={ready} error={error} refreshing={refreshing} onRefresh={onRefresh} ExportMenu={ExportMenu} />
     </div>
   </div>, document.body);
 }
@@ -9581,11 +9581,12 @@ function AiFeeder({ role = "", session }) {
   const ready = loadState.token === session?.token && loadState.ready;
   // BD balance: every open request that is not idle, closed or verified, longest standing first.
   const breakdowns = useMemo(() => ready ? buildInfoPulseBreakdowns(requests) : [], [requests, ready]);
+  const firstTripPending = useMemo(() => ready ? buildInfoPulseFirstTripPending(requests) : [], [requests, ready]);
   return <>
     <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
       <PulseIcon /><span>INFO PULSE</span>{ready && breakdowns.length > 0 && <><b className="ai-feeder-trigger-count">{breakdowns.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
     </button>
-    {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} breakdowns={breakdowns} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
+    {openMode && <AiFeederPanel key={`${session?.token}:${openMode}`} closeAvailableAt={openMode === "login" ? loginCloseAvailableAt : 0} breakdowns={breakdowns} firstTripPending={firstTripPending} session={session} scope={scope} now={now} updatedAt={loadState.updatedAt} ready={ready} error={loadState.error} refreshing={loadState.refreshing} onRefresh={() => refreshRef.current()} onClose={closePanel} />}
   </>;
 }
 

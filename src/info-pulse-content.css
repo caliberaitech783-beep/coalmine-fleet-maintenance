@@ -100,11 +100,12 @@
 .pulse-filter-caption { margin-left: auto; font-size: 13px; font-weight: 700; color: #536179; }
 
 /* KPI cards: BD balance (all), critical ≥ 24h, warning ≥ 12h, open < 12h */
-.pulse-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.pulse-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
 .pulse-kpi { --kpi: #522e90; --kpi-soft: #efe9f8; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: 'icon label count' 'icon hint count'; align-items: center; column-gap: 12px; row-gap: 2px; min-height: 84px; padding: 14px 18px; border: 2px solid #e4e0ee; border-radius: 14px; background: #fff; color: #26344a; font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; }
 .pulse-kpi.critical { --kpi: #b01c37; --kpi-soft: #fde8ec; }
 .pulse-kpi.warning { --kpi: #a06400; --kpi-soft: #fff1cf; }
 .pulse-kpi.open { --kpi: #522e90; --kpi-soft: #efe9f8; }
+.pulse-kpi.firstTripPending { --kpi: #0f766e; --kpi-soft: #e6fbf7; }
 .pulse-kpi:hover { border-color: var(--kpi); transform: translateY(-1px); box-shadow: 0 6px 18px #1e104214; }
 .pulse-kpi.selected { border-color: var(--kpi); background: var(--kpi-soft); box-shadow: inset 0 0 0 1px var(--kpi), 0 8px 22px #1e104218; }
 .pulse-kpi-icon { grid-area: icon; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--kpi-soft); color: var(--kpi); }
@@ -116,6 +117,7 @@
 .pulse-results-line h3 { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 0; font-size: 16px; font-weight: 800; color: #522e90; }
 .pulse-results-line h3.critical { color: #b01c37; }
 .pulse-results-line h3.warning { color: #a06400; }
+.pulse-results-line h3.firstTripPending { color: #0f766e; }
 .pulse-results-line h3 span { font-size: 13px; font-weight: 500; color: #6b7891; }
 .pulse-results-line > span { font-size: 13px; font-weight: 700; color: #536179; }
 
@@ -124,6 +126,7 @@
 .pulse-breakdown-row { --tier: #7c5cbf; --tier-soft: #efe9f8; --tier-text: #522e90; display: grid; grid-template-columns: 40px minmax(200px, .85fr) minmax(220px, 1.5fr) auto; align-items: center; gap: 8px 18px; padding: 12px 16px 12px 12px; border: 1px solid #e4e0ee; border-left: 5px solid var(--tier); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px #1e10420f; }
 .pulse-breakdown-row.critical { --tier: #c8233f; --tier-soft: #fde8ec; --tier-text: #b01c37; background: #fffafb; border-color: #f3c1cb; border-left-color: var(--tier); }
 .pulse-breakdown-row.warning { --tier: #e0a300; --tier-soft: #fff1cf; --tier-text: #8a5a00; background: #fffdf6; border-color: #f1dca4; border-left-color: var(--tier); }
+.pulse-breakdown-row.firstTripPending { --tier: #0f766e; --tier-soft: #e6fbf7; --tier-text: #0f615b; background: #f7fffd; border-color: #a9e6db; border-left-color: var(--tier); }
 .pulse-rank { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--tier-soft); color: var(--tier-text); font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .pulse-row-equipment { display: grid; gap: 3px; min-width: 0; }
 .pulse-row-site { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #7a4a9a; }

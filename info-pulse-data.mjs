@@ -86,6 +86,28 @@ export function buildInfoPulseBreakdowns(requests = [], cases = []) {
   })).sort((left, right) => standingSince(left.request) - standingSince(right.request) || left.key.localeCompare(right.key));
 }
 
+function productionFirstTripPending(request = {}) {
+  const status = String(request.status || '').trim().toLowerCase();
+  return status === 'closed' && String(request.closedAt || '').trim() && !String(request.productionFirstTripAt || '').trim();
+}
+
+// Production action queue after Maintenance makes the asset on road. These rows
+// are separate from BD balance because the request is already closed for repair.
+export function buildInfoPulseFirstTripPending(requests = []) {
+  const onRoadAt = request => {
+    const timestamp = parseIstTimestamp(request.closedAt);
+    return Number.isFinite(timestamp) ? timestamp : Infinity;
+  };
+  return uniqueInfoPulseRequests(requests).filter(productionFirstTripPending).map(request => ({
+    key: request.pulseKey,
+    request,
+    siteKey: canonicalSiteName(request.site || request.location || request.currentLocation) || 'unassigned',
+    site: displaySiteName(request.site || request.location || request.currentLocation) || 'Not assigned',
+    date: infoPulseDate(request.closedAt),
+    issues: [],
+  })).sort((left, right) => onRoadAt(left.request) - onRoadAt(right.request) || left.key.localeCompare(right.key));
+}
+
 export function infoPulseSiteOptions(requests = [], assignedSites = []) {
   const sites = new Map();
   for (const value of [...assignedSites, ...requests.filter(Boolean).map(row => row.site || row.location || row.currentLocation || '')]) {

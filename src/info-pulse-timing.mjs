@@ -43,6 +43,17 @@ export function pulseTierCounts(rows = []) {
   return counts;
 }
 
+export function pulseFirstTripPendingRows(rows = [], now = Date.now()) {
+  const pending = rows.map(row => {
+    const request = row.request || {};
+    const startedAt = parseIstTimestamp(request.closedAt);
+    const standingMs = Number.isFinite(startedAt) && now >= startedAt ? now - startedAt : 0;
+    return {...row, startedAt, standingMs, tier: 'firstTripPending', share: 0, etcState: 'none'};
+  });
+  const longest = Math.max(0, ...pending.map(row => row.standingMs));
+  return pending.map(row => ({...row, share: longest ? Math.max(0.03, row.standingMs / longest) : 0}));
+}
+
 export function pulseCaseTiming(row, now) {
   const request = row.request || {};
   const start = parseIstTimestamp(request.start), closed = parseIstTimestamp(request.closedAt), etc = effectiveInfoPulseEtcTimestamp(request);

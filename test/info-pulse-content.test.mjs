@@ -62,13 +62,13 @@ function harness() {
     useEffect(callback) {const slot = cursor++; if (!(slot in slots)) {slots[slot] = true; effects.push(callback);}},
     setTimeout(callback, delay) {timers.push({callback, delay}); return timers.length;},
     clearTimeout() {},
-    ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle', 'Activity', 'Clock', 'RotateCcw', 'Eye'].map(name => [name, () => null])),
+    ...Object.fromEntries(['RefreshCw', 'MapPin', 'Truck', 'AlertTriangle', 'Activity', 'Clock', 'RotateCcw', 'Eye', 'CheckCircle2'].map(name => [name, () => null])),
   };
   const Component = new Function("DateInput", ...Object.keys(bindings), `${code}; return InfoPulseContent;`)(DateInput, ...Object.values(bindings));
   return {effects, timers, render(overrides = {}) {
     cursor = 0;
     const requests = overrides.requests || REQUESTS;
-    const tree = Component({breakdowns: data.buildInfoPulseBreakdowns(requests), scope: {label: 'All regions', sites: null}, now: NOW, updatedAt: NOW, ready: true, error: '', refreshing: false, onRefresh() {}, ...overrides});
+    const tree = Component({breakdowns: data.buildInfoPulseBreakdowns(requests), firstTripPending: data.buildInfoPulseFirstTripPending(requests), scope: {label: 'All regions', sites: null}, now: NOW, updatedAt: NOW, ready: true, error: '', refreshing: false, onRefresh() {}, ...overrides});
     effects.splice(0).forEach(callback => callback());
     return tree;
   }};
@@ -184,6 +184,23 @@ test('clicking a KPI card narrows the list to that tier, renumbers it, and BD ba
   tree = app.render({requests: REQUESTS.filter(request => request.ref !== 'REQ-W1')});
   assert.ok(byLabel(tree, 'Warning: 0'));
   assert.match(html(tree), /No breakdowns match this selection\./);
+});
+
+test('production users and production managers see the first-trip pending Info Pulse tab only for their queue', () => {
+  const production = render({session: {role: 'normal', assignedRole: 'Production User'}});
+  assert.equal(byLabel(production, 'First trip pending: 1').props['aria-pressed'], false);
+  assert.equal(byLabel(render(), 'First trip pending: 1'), undefined);
+  assert.equal(byLabel(render({session: {role: 'normal', assignedRole: 'Maintenance User'}}), 'First trip pending: 1'), undefined);
+  assert.ok(byLabel(render({session: {role: 'super', permissions: {adminLevel: 'Manager', managerRoles: ['Production Manager']}}}), 'First trip pending: 1'));
+  const app = harness();
+  let tree = app.render({session: {role: 'normal', assignedRole: 'Production User'}});
+  byLabel(tree, 'First trip pending: 1').props.onClick();
+  tree = app.render({session: {role: 'normal', assignedRole: 'Production User'}});
+  assert.equal(byLabel(tree, 'First trip pending: 1').props['aria-pressed'], true);
+  assert.deepEqual(vehicles(byLabel(tree, 'First trip pending records, oldest pending first')), ['S55']);
+  assert.match(html(tree), /Vehicle\/equipment first-trip entry pending after Maintenance made on road/);
+  assert.match(html(tree), /Made on road/);
+  assert.match(html(tree), /Production first trip/);
 });
 
 test('region tabs, site chips and equipment/vehicle chips cascade with counts like the dashboard record browser', () => {
@@ -368,9 +385,10 @@ test('the panel header drops the total pill and the trigger badge carries the BD
   assert.match(main, /<h2 id="ai-feeder-title">Open breakdowns<\/h2><\/div>/);
   assert.ok(!main.includes('pulse-heading-total') && !main.includes('headerTarget'));
   assert.match(main, /const breakdowns = useMemo\(\(\) => ready \? buildInfoPulseBreakdowns\(requests\) : \[\], \[requests, ready\]\);/);
+  assert.match(main, /const firstTripPending = useMemo\(\(\) => ready \? buildInfoPulseFirstTripPending\(requests\) : \[\], \[requests, ready\]\);/);
   assert.match(main, /aria-label=\{`Info Pulse, \$\{ready \? "BD balance " \+ breakdowns\.length : "BD balance unavailable"\}`\}/);
   assert.match(main, /<b className="ai-feeder-trigger-count">\{breakdowns\.length\}<\/b>/);
-  assert.match(main, /<InfoPulseContent breakdowns=\{breakdowns\} scope=\{scope\} now=\{now\}/);
+  assert.match(main, /<InfoPulseContent breakdowns=\{breakdowns\} firstTripPending=\{firstTripPending\} session=\{session\} scope=\{scope\} now=\{now\}/);
   assert.ok(!main.includes('buildInfoPulseCases'));
 });
 
@@ -390,12 +408,14 @@ test('filters, KPI cards and rows follow the dashboard record-browser styling an
   assert.match(css, /\.pulse-region-tabs button\[aria-selected="true"\] \{ background: var\(--record-purple\); color: #fff;/);
   assert.match(css, /\.pulse-filter-level\[data-level="site"\] \.pulse-filter-chips > button\[aria-pressed="true"\] \{ background: var\(--record-purple\); color: #fff;/);
   assert.match(css, /\.pulse-record-count \{[^}]*background: var\(--record-purple\); color: #fff;/);
-  assert.match(css, /\.pulse-kpis \{ display: grid; grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/);
+  assert.match(css, /\.pulse-kpis \{ display: grid; grid-template-columns: repeat\(auto-fit, minmax\(250px, 1fr\)\);/);
   assert.match(css, /\.pulse-kpi\.critical \{ --kpi: #b01c37;/);
+  assert.match(css, /\.pulse-kpi\.firstTripPending \{ --kpi: #0f766e;/);
   assert.match(css, /\.pulse-kpi\.selected \{ border-color: var\(--kpi\); background: var\(--kpi-soft\);/);
   assert.match(css, /\.pulse-breakdown-row \{[^}]*grid-template-columns: 40px minmax\(200px, \.85fr\) minmax\(220px, 1\.5fr\) auto; align-items: center;/);
   assert.match(css, /\.pulse-breakdown-row\.critical \{ --tier: #c8233f;/);
   assert.match(css, /\.pulse-breakdown-row\.warning \{ --tier: #e0a300;/);
+  assert.match(css, /\.pulse-breakdown-row\.firstTripPending \{ --tier: #0f766e;/);
   assert.match(css, /@media \(max-width: 1000px\) \{[^@]*\.pulse-kpis \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\); \}[^@]*\.pulse-breakdown-row \{ grid-template-columns: 40px 1fr; \}/);
   assert.match(css, /@media \(max-width: 650px\) \{[^@]*\.pulse-region-tabs \{ width: 100%;/);
   assert.ok(!css.includes('pulse-heading-total') && !css.includes('pulse-breakdown-total') && !css.includes('pulse-case-card') && !css.includes('pulse-pagination'));
