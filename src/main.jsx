@@ -2916,6 +2916,8 @@ function useSortableRows(rows, defaultSort = "", valueForKey = (row, key) => row
   }));
   return [sortedRows, sort, changeSort];
 }
+const WORKFLOW_INITIAL_RENDER_ROWS = 100;
+const WORKFLOW_RENDER_BATCH = 100;
 function SortableHeader({ label, sortKey, sort, onSort }) {
   const active = sort.key === sortKey,
     Icon = active ? (sort.direction === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
@@ -9040,6 +9042,12 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
     return matchesText && (!statusFilter || String(statusLabel(row) || "") === statusFilter) && tableRowMatchesFilters(row, filterColumns, parameterFilters);
   });
   const [sortedRows, sort, changeSort] = useSortableRows(filteredRows, defaultDurationSort(filterColumns), (row, key) => key === "status" ? requestStatusSortRank(statusLabel(row)) : key === "misVerificationStatus" ? (row.verifiedAt ? "Verified" : "Awaiting verification") : key === "productionPerson" ? row.owner || row.requesterLogin : key === "maintenanceAcceptedBy" ? row.acceptedBy : key === "maintenanceClosedBy" ? row.closedBy : key === "etc" ? etcSortValue(row) : key === "etcRemaining" ? etcRemainingSortValue(row, now) : key === "breakdownDays" ? calculateBreakdownMinutes(row.start, row.closedAt, now) : key === "hours" ? durationLabelMinutes(row.hours) : key === "acceptedTime" ? (elapsedMilliseconds(row.start, row.acceptedAt) ?? -1) : key === "flagWaitingTime" ? (elapsedMilliseconds(row.start, row.arrivalFlaggedAt) ?? -1) : key === "arrivalDelay" ? (elapsedMilliseconds(row.start, row.acceptedAt || new Date(now)) ?? -1) : key === "dailyRemarks" ? latestDailyUpdateStamp(row.dailyRemarks) : row[key]);
+  const [visibleRowLimit, setVisibleRowLimit] = useState(WORKFLOW_INITIAL_RENDER_ROWS);
+  useEffect(() => {
+    setVisibleRowLimit(WORKFLOW_INITIAL_RENDER_ROWS);
+  }, [query, statusFilter, idleDateRange, parameterFilters, rows, sort.key, sort.direction]);
+  const visibleWorkflowRows = sortedRows.slice(0, visibleRowLimit);
+  const remainingWorkflowRows = Math.max(0, sortedRows.length - visibleWorkflowRows.length);
   const updateColumnFilter = (key, value) => setParameterFilters((current) => {
     const next = { ...current };
     if (value) next[key] = value;
@@ -9088,7 +9096,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
           {workflowHeader("status", "Status")}{workflowHeader("idleReason", "Idle reason")}{showReason && workflowHeader("complaint", "Breakdown reason")} {showCreatedBy && workflowHeader("owner", "Created by")} {startedFirst ? <>{startedHeader()}{closedByHeader()}{verifiedHeaders()}</> : <>{verifiedHeaders()} {closedByHeader()}{startedHeader()}</>}{showClosedAt && workflowHeader("closedAt", closedAtLabel)}{showArrivalFlagData && <>{workflowHeader("arrivalFlaggedAt", "Red flag raised")}{workflowHeader("arrivalFlaggedBy", "Flagged by")}{workflowHeader("flagWaitingTime", "Waiting when flagged")}{workflowHeader("acceptedAt", "Vehicle received")}{workflowHeader("arrivalDelay", "Arrival delay")}{workflowHeader("acceptedBy", "Received by")}</>}{showTurnaroundTime && workflowHeader("hours", "Turn around time (TAT)")}{workflowHeader("breakdownDays", "Days of breakdown")}{showEtc && <>{workflowHeader("etc", "ETC")}{workflowHeader("etcRemaining", "Time left for ETC")}</>}{workflowHeader("dailyRemarks", "Daily remarks")}{showWorkCompletion && workflowHeader("maintenanceWork", "Work completion action taken")}{showMeterData && <>{workflowHeader("openingKmr", "Opening KMR")}{workflowHeader("openingHmr", "Opening HMR")}{workflowHeader("closingHmr", "Closing HMR")}{workflowHeader("closingKmr", "Closing KMR")}</>}{showTripCard && workflowHeader("tripCard", "Trip card image")}{showProductionFirstTrip && <>{workflowHeader("productionFirstTripAt", "Production first-trip time")}{workflowHeader("productionFirstTripBy", "Production accepted by")}{workflowHeader("misFirstTripAt", "MIS first-trip time")}{workflowHeader("productionFirstTripRemark", "Production first-trip note")}</>}{showComplaintAudio && workflowHeader("complaintAudio", "Complaint audio")}{showActions && !actionsFirst && <th>Actions</th>}
         </tr></thead>
         <tbody>
-          {sortedRows.length ? sortedRows.map((row) => {
+          {sortedRows.length ? visibleWorkflowRows.map((row) => {
             const days = calculateBreakdownDaysUntilClose(row.start, row.closedAt, now);
             const etcLabel = showEtc && row.expectedCompletionAt ? formatTwelveHourDateTime(etcDisplayValue(row)) : "";
             const lockedIdeal = ["idle","ideal"].includes(String(row.status || "").toLowerCase());
@@ -9127,7 +9135,7 @@ function MobileWorkflowTable({ closedTimeAfterStarted = false, rows = [], showAc
           }) : <tr><td colSpan={10 + (showAcceptedTime ? 1 : 0) + (showArrivalFlagData ? 6 : 0) + (showMisFlagData ? 4 : 0) + (showMakeModel ? 2 : 0) + (showReason ? 1 : 0) + (showCreatedBy ? 1 : 0) + (showMisPeople ? 3 : 0) + (showVerifiedBy ? 1 : 0) + (showVerifiedAt ? 2 : 0) + (showClosedBy ? 1 : 0) + (showClosedAt ? 1 : 0) + (showTurnaroundTime ? 1 : 0) + (showEtc ? 2 : 0) + (showMeterData ? 3 : 0) + (showTripCard ? 1 : 0) + (showProductionFirstTrip ? 4 : 0) + (showComplaintAudio ? 1 : 0) + (showWorkCompletion ? 1 : 0) + (showActions ? 1 : 0)} className="empty-state">No records available</td></tr>}
         </tbody>
       </ActionsTable>
-    </div></>
+    </div>{remainingWorkflowRows > 0 && <div className="workflow-table-load-more" role="status"><span>Showing {visibleWorkflowRows.length} of {sortedRows.length} records</span><button type="button" onClick={() => setVisibleRowLimit((limit) => Math.min(limit + WORKFLOW_RENDER_BATCH, sortedRows.length))}>Show next {Math.min(WORKFLOW_RENDER_BATCH, remainingWorkflowRows)}</button></div>}</>
   );
 }
 
@@ -10389,17 +10397,17 @@ function Normal({ logout, requests, requestsLoaded = true, requestsError = "", r
     window.addEventListener("resize", updateToolbarOffset);
     return () => { observer.disconnect(); window.removeEventListener("resize", updateToolbarOffset); };
   }, [embedded, section, showRequestsMenu, isProduction, isMaintenance, isMis]);
-  const misWorkspaceRequests=requestsVisibleToMisWorkspace(requests,isMis);
-  const misDashboardRequests=requestsVisibleToMisWorkspace(dashboardRequests,isMis);
-  const siteRequests=!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):misWorkspaceRequests;
-  const requestRows=siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords));
-  const activeRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()!=="closed");
-  const closedRequests=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed");
-  const visibleRows = isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests;
-  const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
-  const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
-  const productionFirstTripRows=closedRequests.filter((row)=>isProductionFirstTripPending(row));
-  const productionFirstTripReportRows=closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim());
+  const misWorkspaceRequests=useMemo(()=>requestsVisibleToMisWorkspace(requests,isMis),[requests,isMis]);
+  const misDashboardRequests=useMemo(()=>requestsVisibleToMisWorkspace(dashboardRequests,isMis),[dashboardRequests,isMis]);
+  const siteRequests=useMemo(()=>!embedded&&isMaintenance?recordsForSite(requests,assignedLocation):misWorkspaceRequests,[embedded,isMaintenance,requests,assignedLocation,misWorkspaceRequests]);
+  const requestRows=useMemo(()=>siteRequests.map((request)=>requestWithEquipmentMasterDetails(request,equipmentRecords)),[siteRequests,equipmentRecords]);
+  const activeRequests=useMemo(()=>requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()!=="closed"),[requestRows]);
+  const closedRequests=useMemo(()=>requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"),[requestRows]);
+  const visibleRows=useMemo(()=>isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests,[isMis,closedRequests,activeRequests]);
+  const historyRows=useMemo(()=>isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests,[isMis,isProduction,isMaintenance,closedRequests]);
+  const idleRows=useMemo(()=>requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase())),[requestRows]);
+  const productionFirstTripRows=useMemo(()=>closedRequests.filter((row)=>visibleInMisRequests(row)&&isProductionFirstTripPending(row)),[closedRequests]);
+  const productionFirstTripReportRows=useMemo(()=>closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim()),[closedRequests]);
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>
     {!embedded && <header><CaliberBrand className="logo" subtitle="Mobile user portal" /><nav className="normal-header-nav">{showDashboardMenu&&<button data-nav="dashboard" className={section === "dashboard" ? "active" : ""} onClick={() => setSection("dashboard")}><LayoutDashboard /> Dashboard</button>}{showRequestsMenu&&<button data-nav="requests" className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}><Wrench /> {isGeneral ? "Requests" : mobileRole}</button>}{showReportsMenu&&<button data-nav="reports" className={section === "reports" ? "active" : ""} onClick={() => setSection("reports")}><FileBarChart /> Reports</button>}{showTicketsMenu&&<button data-nav="tickets" className={section === "tickets" ? "active" : ""} onClick={() => setSection("tickets")}><Ticket /> Tickets</button>}{isMis&&<button data-nav="transfers" className={section === "transfers" ? "active" : ""} onClick={() => setSection("transfers")}><ArrowRightLeft /> Vehicle Transfer</button>}</nav><HeaderClock className="normal-header-clock" /><div className="normal-header-actions">{!isGeneral&&<HelpTraining role={mobileRole} location={assignedLocation} />}<NotificationBell session={session} onOpenEntry={(target) => {const ticket=target?.kind==="ticket"&&showTicketsMenu;const transfer=target?.kind==="transfer"&&isMis;if(ticket)setSection("tickets");else if(transfer)setSection("transfers");else if(showRequestsMenu&&canSeeRequestMenu("View requests")){setSection("profile");setTab("requests")}}} /><span className="normal-header-user"><b>{mobileRole}</b><small>{session?.name || "Mobile User"}</small></span><UserProfile session={session} role={mobileRole} location={assignedLocation} /><ThemeToggle theme={theme} onToggle={toggleTheme} /><button onClick={logout} aria-label="Sign out" className="sign-out-button"><DoorExitIcon /><span className="sign-out-label">Sign out</span></button></div></header>}

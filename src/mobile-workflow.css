@@ -11,6 +11,9 @@
 .mis-red-flag-form textarea{min-height:140px;resize:vertical;white-space:pre-wrap}
 .mis-red-flag-form p{line-height:1.5}
 .mis-red-flag-error{padding:12px;border:1px solid #df7785;border-radius:8px;background:#fff0f2;color:#a91830}
+.workflow-table-load-more{display:flex;align-items:center;justify-content:center;gap:12px;padding:14px;border-top:1px solid var(--line);color:#62718a;font:700 12px Manrope,sans-serif}
+.workflow-table-load-more button{min-height:38px;border:1px solid #d7ddea;border-radius:8px;background:#fff;color:var(--primary);padding:8px 14px;font:800 12px Manrope,sans-serif}
+.workflow-table-load-more button:hover{border-color:var(--primary);background:#f4efff}
 
 .breakdown-table-auto-fit > tbody > tr > td,
 .workflow-table > tbody > tr > td {
