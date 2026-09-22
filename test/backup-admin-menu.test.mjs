@@ -26,6 +26,10 @@ test('every backup page opens from the Administration menu, for Admin and Super 
   assert.match(main,/const adminOnlyPages=new Set\(\[\.\.\.adminNav\.map\(\(\[name\]\)=>name\),'Admin locks'\]\);/,'backup pages stay administrator-only');
 });
 
+test('the longer Administration menu still fits on screen',()=>{
+  assert.match(topbar,/\.admin-dropdown \{\s*max-height: min\(70vh, 560px\);\s*overflow-y: auto;/);
+});
+
 test('the separate header Backup menu is gone',()=>{
   for(const gone of ['backupNav','backupOpen','backupSelectionClosed','backup-menu','backup-dropdown','DatabaseBackup']){
     assert.doesNotMatch(main,new RegExp(gone.replace(/[-]/g,'\\-')),`${gone} should not remain`);

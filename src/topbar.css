@@ -884,3 +884,14 @@
   .header-nav-icon,
   .header-nav-icon svg { animation: none !important; transition: none !important; }
 }
+
+/* Administration lists eleven entries since the backup pages joined it. Keep the
+   whole menu on screen on a laptop by scrolling inside it rather than running
+   past the bottom of the window. */
+.admin-dropdown {
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #3b5a8c #10213f;
+}
