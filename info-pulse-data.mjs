@@ -97,6 +97,12 @@ export function productionFirstTripCutoffMs() {
   return parseIstTimestamp(PRODUCTION_FIRST_TRIP_ROLLOUT_IST);
 }
 
+export function isProductionFirstTripRequired(request = {}) {
+  const requestStart = request.start ?? request.startedAt ?? request.started_at;
+  const startedAt = requestStart instanceof Date ? requestStart.getTime() : parseIstTimestamp(requestStart);
+  return Number.isFinite(startedAt) && startedAt >= productionFirstTripCutoffMs();
+}
+
 export function isProductionFirstTripPending(request = {}, options = {}) {
   const status = String(request.status || '').trim().toLowerCase();
   const verificationStatus = String(request.verificationStatus || request.verification_status || '').trim().toLowerCase();
@@ -105,8 +111,7 @@ export function isProductionFirstTripPending(request = {}, options = {}) {
   const closedValue = request.closedAt ?? request.closed_at;
   const closedAt = closedValue instanceof Date ? closedValue.getTime() : parseIstTimestamp(closedValue);
   const productionFirstTripAt = request.productionFirstTripAt ?? request.production_first_trip_at;
-  const cutoff = options.cutoffMs ?? productionFirstTripCutoffMs(options.now);
-  return status === 'closed' && Number.isFinite(closedAt) && closedAt >= cutoff && !String(productionFirstTripAt || '').trim();
+  return status === 'closed' && isProductionFirstTripRequired(request, options) && Number.isFinite(closedAt) && !String(productionFirstTripAt || '').trim();
 }
 
 // Production action queue after Maintenance makes the asset on road. These rows

@@ -8,6 +8,7 @@ import {validMeterReadings} from '../request-workflow.mjs';
 import {canonicalSiteName} from '../site-location.mjs';
 import {managerReportScope,reportScopeIncludesSite} from '../region-scope.mjs';
 import {approvedDelayedReason} from '../delayed-reason.mjs';
+import {isProductionFirstTripRequired} from '../info-pulse-data.mjs';
 
 const source=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
 const slice=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end));
@@ -71,7 +72,7 @@ function harness(kind,{row=active,session=kind==='verify'?mis:maintenance,user={
   const context={...timeline,Date,app:{get(path,...handlers){if(kind==='timeline'&&path==='/api/requests/:reference/timeline')registered=handlers;},patch(path,...handlers){registered=handlers;}},
     requireSession:(req,res,next)=>next(),requirePermission:()=>((req,res,next)=>next()),requireMaintenanceUpdatePermission:()=>((req,res,next)=>next()),maintenanceManagerSession:()=>false,
     currentDashboardAuthorization:async()=>noAccount?null:{session:{role:session.role,assignedRole:session.assignedRole,permissions:session.permissions},user},...siteAccess,currentUserRecord:async()=>user,
-    pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,
+    pool:{query:client.query,connect:async()=>client},requestProjection:'*',canonicalSiteName,managerReportScope,reportScopeIncludesSite,isProductionFirstTripRequired,
     validMeterReadings,validTripCardImageDataUrl:()=>true,validMeterReading:()=>true,validMeterEvidenceDataUrl:()=>true,validRequestAudioDataUrl:()=>true,
     REQUEST_CLOSE_STATUSES:['Closed','In progress','Awaiting parts'],delayedReasonRequired:()=>false,approvedDelayedReason,
     sendRequestEventReports:async()=>{},requestStakeholderLogins:async()=>[],requestWorkflowWhatsAppLogins:async()=>[],addTicketNotificationsBestEffort:async()=>{},
@@ -148,10 +149,11 @@ test('valid close and MIS first-trip capture keep actual event time separate fro
 });
 
 test('MIS verification waits for Production first-trip entry and MIS first-trip confirmation',async()=>{
-  const withoutProductionTrip=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z'),productionFirstTripAt:''}});
+  const freshStart=new Date('2026-09-22T08:00:00+05:30');
+  const withoutProductionTrip=harness('verify',{row:{...active,start:freshStart,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z'),productionFirstTripAt:''}});
   assert.equal((await withoutProductionTrip.call()).status,409);
   assert.equal(withoutProductionTrip.queries.some(row=>row.sql.startsWith('UPDATE')),false);
-  const withoutMisTrip=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z')}});
+  const withoutMisTrip=harness('verify',{row:{...active,start:freshStart,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z')}});
   assert.equal((await withoutMisTrip.call({firstTripDone:false})).status,400);
   assert.equal(withoutMisTrip.queries.some(row=>row.sql.startsWith('UPDATE')),false);
 });

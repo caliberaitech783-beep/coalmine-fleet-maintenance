@@ -13,7 +13,8 @@ test("MIS queues use lifecycle state, not the closer, verifier or historical ref
       for (const verifiedBy of ["Damini Rai", "Other verifier"]) {
         const verified = {...row, verifiedBy, verifiedAt: "2026-09-08 14:00:00"};
         assert.equal(visibleInMisRequests(verified), false);
-        assert.equal(visibleInMisHistory(verified), false);
+        assert.equal(visibleInMisHistory(verified), true);
+        assert.equal(visibleInMisHistory({...verified, start: "2999-01-01 00:00:00"}), false);
         assert.equal(visibleInMisHistory({...verified, productionFirstTripAt: "2026-09-08 13:45:00"}), true);
       }
     }
