@@ -77,9 +77,8 @@ export function adminAccessPermissions(user = {}) {
   const adminLevel = normalizeAdminLevel(user.adminLevel);
   const selectedTabs = accessSelection(user, "tabAccess", ADMIN_TAB_OPTIONS);
   const ticketAccount = adminLevel === "Manager" || ["Admin", "Manager"].includes(String(user.adminLevel || "").trim()) || String(user.userType || "").toLowerCase().includes("super");
-  const tabAccess = ticketAccount && selectedTabs != null
-    ? [...new Set([...selectedTabs, "Tickets"])]
-    : selectedTabs;
+  const requiredTabs = ["CD", ...(ticketAccount ? ["Tickets"] : [])];
+  const tabAccess = selectedTabs != null ? [...new Set([...selectedTabs, ...requiredTabs])] : selectedTabs;
   const mobileSelection=(field,options,fallback)=>accessSelection(user,`mobile${field[0].toUpperCase()}${field.slice(1)}`,options)??fallback;
   const managerRoles=managerRoleSelection(user.managerRole);
   return {

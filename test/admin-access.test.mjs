@@ -18,7 +18,7 @@ test("manager authority is retained in the admin session permissions", () => {
   const permissions = adminAccessPermissions({adminLevel: "Manager", managerRole: "Maintenance Manager", tabAccess: "Dashboard"});
   assert.equal(permissions.adminLevel, "Manager");
   assert.equal(permissions.managerRole, "Maintenance Manager");
-  assert.deepEqual(permissions.tabAccess, ["Dashboard", "Tickets"]);
+  assert.deepEqual(permissions.tabAccess, ["Dashboard", "CD", "Tickets"]);
 });
 
 test("a non-admin can manage multiple operational teams", () => {
@@ -31,7 +31,7 @@ test("a non-admin can manage multiple operational teams", () => {
 
 test("desktop and mobile menu selections remain independent per user",()=>{
   const permissions=adminAccessPermissions({adminLevel:"Manager",tabAccess:"Dashboard | Tickets",masterAccess:"Equipment master",mobileTabAccess:"Masters | Tickets",mobileMasterAccess:"Region master",mobileDashboardAccess:"",mobileTicketAccess:"Tickets"});
-  assert.deepEqual(permissions.tabAccess,["Dashboard","Tickets"]);
+  assert.deepEqual(permissions.tabAccess,["Dashboard","Tickets","CD"]);
   assert.deepEqual(permissions.mobileTabAccess,["Masters","Tickets"]);
   assert.deepEqual(navigationPermissionsForView(permissions,false).masterAccess,["Equipment master"]);
   assert.deepEqual(navigationPermissionsForView(permissions,true).masterAccess,["Region master"]);
@@ -49,7 +49,7 @@ test("new administrators receive only explicitly selected masters and tabs", () 
     tabAccess: "Audit Trail",
   });
   assert.deepEqual(permissions.masterAccess, ["Equipment master", "Region master"]);
-  assert.deepEqual(permissions.tabAccess, ["Audit Trail"]);
+  assert.deepEqual(permissions.tabAccess, ["Audit Trail", "CD"]);
   assert.equal(accessAllows(permissions.masterAccess, "OEM master"), false);
   assert.equal(ADMIN_MASTER_OPTIONS.includes("Privilege"), false);
 });
