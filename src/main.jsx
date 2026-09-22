@@ -2993,6 +2993,14 @@ function downloadExportFile(blob, filename) {
 function escapeExportHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[character]));
 }
+// SpreadsheetML uses _xHHHH_ escapes for XML control characters. Literal text
+// that already looks like one of those escapes must have its underscore escaped
+// first, otherwise Excel silently changes the user's text while opening the file.
+function escapeXlsxText(value) {
+  return escapeExportHtml(String(value ?? "")
+    .replace(/_x[0-9a-f]{4}_/gi, (match) => `_x005F_${match.slice(1)}`)
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff\r]/g, (character) => `_x${character.charCodeAt(0).toString(16).padStart(4, "0").toUpperCase()}_`));
+}
 function crc32(bytes) {
   let crc = -1;
   for (const byte of bytes) {
@@ -3063,7 +3071,7 @@ function excelCellReference(columnIndex, rowIndex) {
 function buildXlsxSheetsWorkbook(title, sheets = []) {
   const usedNames = new Set();
   const sheetName = (name, index) => {
-    const base = String(name || "").replace(/[[\]:*?/\x5c]/g, " ").replace(/\s+/g, " ").trim().slice(0, 31) || `Sheet ${index + 1}`;
+    const base = String(name || "").replace(/[\u0000-\u001f\u007f-\u009f\ufffe\uffff[\]:*?/\x5c]/g, " ").replace(/\s+/g, " ").replace(/^[\s']+|[\s']+$/g, "").slice(0, 31) || `Sheet ${index + 1}`;
     let unique = base;
     for (let copy = 2; usedNames.has(unique.toLowerCase()); copy++) unique = `${base.slice(0, 27)} ${copy}`;
     usedNames.add(unique.toLowerCase());
@@ -3078,7 +3086,7 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     const sheetData = worksheetRows.map((row, rowIndex) => {
       const style = rowIndex === 0 ? 3 : rowIndex === 1 ? 4 : rowIndex === 2 ? 5 : highlightedRows.has(rowIndex - firstDataRow) ? 2 : 1;
       const height = rowIndex === 0 ? ' ht="24" customHeight="1"' : rowIndex === 2 ? ' ht="30" customHeight="1"' : "";
-      return `<row r="${rowIndex + 1}"${height}>${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeExportHtml(cell)}</t></is></c>`).join("")}</row>`;
+      return `<row r="${rowIndex + 1}"${height}>${row.map((cell, columnIndex) => `<c r="${excelCellReference(columnIndex, rowIndex)}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXlsxText(cell)}</t></is></c>`).join("")}</row>`;
     }).join("");
     const widths = labels.map((label, index) => {
       const maxLength = Math.max(String(label || "").length, ...serial.rows.map((row) => Math.max(...String(row[index] || "").split(/\r?\n/).map((line) => line.length))));
@@ -3087,9 +3095,11 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     const lastCell = excelCellReference(Math.max(0, labels.length - 1), Math.max(2, worksheetRows.length - 1));
     const filterRange = `A3:${excelCellReference(Math.max(0, labels.length - 1), Math.max(2, worksheetRows.length - 1))}`;
     const mergedTo = excelCellReference(Math.max(0, labels.length - 1), 0).replace(/1$/, "");
-    return { name: sheetName(name, sheetIndex), part: `xl/worksheets/sheet${sheetIndex + 1}.xml`, content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${lastCell}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>${widths}</cols><sheetData>${sheetData}</sheetData>${labels.length > 1 ? `<mergeCells count="2"><mergeCell ref="A1:${mergedTo}1"/><mergeCell ref="A2:${mergedTo}2"/></mergeCells>` : ""}<autoFilter ref="${filterRange}"/><printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>` };
+    // SpreadsheetML requires autoFilter before mergeCells. Excel repairs (and may
+    // discard) the complete worksheet when these otherwise valid elements are reversed.
+    return { name: sheetName(name, sheetIndex), part: `xl/worksheets/sheet${sheetIndex + 1}.xml`, content: `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${lastCell}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>${widths}</cols><sheetData>${sheetData}</sheetData><autoFilter ref="${filterRange}"/>${labels.length > 1 ? `<mergeCells count="2"><mergeCell ref="A1:${mergedTo}1"/><mergeCell ref="A2:${mergedTo}2"/></mergeCells>` : ""}<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>` };
   });
-  const workbookTitle = escapeExportHtml(title || "Nerve Center report");
+  const workbookTitle = escapeXlsxText(title || "Nerve Center report");
   return zipStoredFiles([
     { name: "[Content_Types].xml", content: `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${worksheets.map((sheet) => `<Override PartName="/${sheet.part}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>` },
     { name: "_rels/.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>` },
@@ -3097,7 +3107,7 @@ function buildXlsxSheetsWorkbook(title, sheets = []) {
     { name: "docProps/app.xml", content: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Nerve Center</Application></Properties>` },
     { name: "xl/_rels/workbook.xml.rels", content: `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${worksheets.map((sheet, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${worksheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
     { name: "xl/styles.xml", content: `<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><color rgb="FF10284C"/><name val="Calibri"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><i/><sz val="10"/><color rgb="FF65758B"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF8CACA"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FF10284C"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="2" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>` },
-    { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${worksheets.map((sheet, index) => `<sheet name="${escapeExportHtml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>` },
+    { name: "xl/workbook.xml", content: `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${worksheets.map((sheet, index) => `<sheet name="${escapeXlsxText(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets></workbook>` },
     ...worksheets.map((sheet) => ({ name: sheet.part, content: sheet.content })),
   ]);
 }
