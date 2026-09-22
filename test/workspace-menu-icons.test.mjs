@@ -63,7 +63,7 @@ test('the Reports menu shows each category with its own icon in a badge keyed by
 });
 
 test('the Administration menu maps each entry to a badge key without changing the adminNav tuples',()=>{
-  assert.match(source,/const adminMenuKeys = \{\s*"User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",\s*"Print helper": "print", "Request corrections": "corrections", "Recovery guide": "recovery", "Audit Trail": "history", "Admin locks": "locks",\s*\};/);
+  assert.match(source,/const adminMenuKeys = \{\s*"User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",\s*"Print helper": "print", "Request corrections": "corrections", "Recovery guide": "recovery",\s*"Backup": "backup", "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule",\s*"Audit Trail": "history", "Admin locks": "locks",\s*\};/);
   assert.match(source,/adminNav\.map\(\(\[name,Icon\]\)=><div className="nav-config-row" key=\{name\}><button role="menuitem" className=\{`workspace-menu-item\$\{active===name\?" active":""\}`\} data-workspace=\{adminMenuKeys\[name\] \|\| "admin"\}[^\n]*<span className="workspace-icon" aria-hidden="true"><Icon \/><i className="workspace-icon-glow" \/><\/span><span className="nav-label">\{name\}<\/span>/);
   assert.match(source,/data-workspace=\{adminMenuKeys\["Admin locks"\]\}[^\n]*<span className="workspace-icon" aria-hidden="true"><ShieldCheck \/><i className="workspace-icon-glow" \/><\/span><span className="nav-label">Admin locks<\/span>/);
   assert.match(source,/const adminNav = \[\n  \["User Sessions", UserRound\],\n  \["Access structure", Users\],/,'the tuples stay two elements: other tests pin them');

@@ -201,7 +201,6 @@ import {
   HardDrive,
   Volume2,
   LifeBuoy,
-  DatabaseBackup,
 } from "lucide-react";
 import "./style.css";
 import "./topbar.css";
@@ -337,6 +336,8 @@ const nav = [
   ["Tickets", Ticket],
   ["Reports", FileBarChart],
 ];
+// Administration menu (Admin and Super Admin). The four backup pages live here
+// beside the Recovery guide rather than in a header menu of their own.
 const adminNav = [
   ["User Sessions", UserRound],
   ["Access structure", Users],
@@ -344,20 +345,19 @@ const adminNav = [
   ["Print helper", Printer],
   ["Request corrections", Pencil],
   ["Recovery guide", LifeBuoy],
+  ["Backup", HardDrive],
+  ["Export Backup", Download],
+  ["Import Backup", Upload],
+  ["Backup Schedule", CalendarDays],
   ["Audit Trail", History],
 ];
 const backupAdminPages = new Set(["Backup", "Export Backup", "Import Backup", "Backup Schedule"]);
-// Header "Backup" menu (Admin and Super Admin): [page, icon, badge key] - take, export, import and schedule backups.
-const backupNav = [
-  ["Backup", HardDrive, "backup"],
-  ["Export Backup", Download, "export"],
-  ["Import Backup", Upload, "import"],
-  ["Backup Schedule", CalendarDays, "schedule"],
-];
 // Badge colour / animation key for each Administration menu entry (topbar.css).
 const adminMenuKeys = {
   "User Sessions": "sessions", "Access structure": "access", "Reporting structure": "reporting",
-  "Print helper": "print", "Request corrections": "corrections", "Recovery guide": "recovery", "Audit Trail": "history", "Admin locks": "locks",
+  "Print helper": "print", "Request corrections": "corrections", "Recovery guide": "recovery",
+  "Backup": "backup", "Export Backup": "export", "Import Backup": "import", "Backup Schedule": "schedule",
+  "Audit Trail": "history", "Admin locks": "locks",
 };
 // [page name, icon, badge key]: the key picks the badge colour and hover animation (topbar.css).
 const masterNav = [
@@ -805,8 +805,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
   const [reportsSelectionClosed, setReportsSelectionClosed] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSelectionClosed, setAdminSelectionClosed] = useState(false);
-  const [backupOpen, setBackupOpen] = useState(false);
-  const [backupSelectionClosed, setBackupSelectionClosed] = useState(false);
   const [responsiveMobile, setResponsiveMobile] = useState(() => window.matchMedia("(max-width: 900px)").matches);
   const [collapsedNavigation, setCollapsedNavigation] = useState(() => window.matchMedia("(max-width: 1250px)").matches);
   useEffect(() => {
@@ -828,7 +826,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
     setWorkspacesOpen(false);
     setReportsOpen(false);
     setAdminOpen(false);
-    setBackupOpen(false);
   };
   const selectPage = (page) => {
     closeMenus();
@@ -1021,15 +1018,6 @@ function Side({ active, setActive, logout, open, permissions = {}, session, prof
           </button></div>
         ))}
         {vehicleTransferDirectAccess&&<div className="nav-config-row"><button className={`header-nav-item${active==="Vehicle transfers"?" active":""}`} data-nav="transfers" onClick={()=>selectPage("Vehicle transfers")}><span className="header-nav-icon" aria-hidden="true"><ArrowRightLeft /></span><span className="nav-label">Vehicle Transfer</span></button></div>}
-        {canViewAdmin && <div
-          className={`masters-menu backup-menu${backupOpen ? " open" : ""}${backupSelectionClosed ? " selection-closed" : ""}`}
-          onPointerLeave={() => setBackupSelectionClosed(false)}
-        >
-          <div className="nav-config-row"><button className={`header-nav-item${backupNav.some(([name]) => name === active) ? " active" : ""}`} data-nav="backup" aria-haspopup="menu" aria-expanded={backupOpen} onClick={() => {setBackupSelectionClosed(false);setBackupOpen((value) => !value);}}><span className="header-nav-icon" aria-hidden="true"><DatabaseBackup /></span><span className="nav-label">Backup</span><ChevronDown className="masters-chevron" /></button></div>
-          <div className="masters-dropdown backup-dropdown" role="menu">
-            {backupNav.map(([name,Icon,menuKey])=><div className="nav-config-row" key={name}><button role="menuitem" className={`workspace-menu-item${active===name?" active":""}`} data-workspace={menuKey} onClick={(event)=>selectDropdownPage(name,event,setBackupSelectionClosed)}><span className="workspace-icon" aria-hidden="true"><Icon /><i className="workspace-icon-glow" /></span><span className="nav-label">{name}</span></button></div>)}
-          </div>
-        </div>}
         {canViewAdmin && <div
           className={`masters-menu${adminOpen ? " open" : ""}${adminSelectionClosed ? " selection-closed" : ""}`}
           onPointerLeave={() => setAdminSelectionClosed(false)}
@@ -10259,7 +10247,7 @@ function App() {
     .includes('Project Manager');
   const correctionRequestAccess=adminPermissions.adminLevel==='Manager'&&managerRoleSelection(adminPermissions.managerRoles?.length?adminPermissions.managerRoles:adminPermissions.managerRole)
     .some((role)=>REQUEST_CORRECTION_MANAGER_ROLES.includes(role));
-  const adminOnlyPages=new Set([...adminNav.map(([name])=>name),...backupNav.map(([name])=>name),'Admin locks']);
+  const adminOnlyPages=new Set([...adminNav.map(([name])=>name),'Admin locks']);
   const canOpenAdminPage = (name) => {
     if(name==="User Sessions")return isAdministrator;
     if(backupAdminPages.has(name))return isAdministrator;
