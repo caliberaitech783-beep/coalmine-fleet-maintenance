@@ -12,6 +12,7 @@ import {requestStatusLabel} from '../src/request-status.mjs';
 import {defaultDurationSort} from '../src/duration-sort.mjs';
 import {dailyUpdatesExportText} from '../src/daily-updates-order.mjs';
 import DateInput from '../src/date-input.mjs';
+import {managerRoleSelection} from '../admin-access.mjs';
 
 const source=readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
 const componentSource=source.slice(source.indexOf('function RequestRedFlagForm('),source.indexOf('function TripCardCell('))+'\n'+source.slice(source.indexOf('function MobileWorkflowTable('),source.indexOf('function RequestEditForm('))+'\n'+source.slice(source.indexOf('function Normal('),source.indexOf('function App('));
@@ -54,7 +55,7 @@ function harness(){
     formatTwelveHourDateTime:value=>value||'—',firstTripTimestamp:row=>row.firstTripAt,
     matchesSmartSearch:()=>true,tableRowMatchesFilters:()=>true,tableFilterText:value=>String(value||''),
     sortCollator:new Intl.Collator(),defaultDurationSort,useSortableRows:rows=>[rows,{},()=>{}],
-    calculateBreakdownDaysUntilClose:()=>1,...requestAcceptance,normalizeEquipmentGroup,requestStatusLabel,dailyUpdatesExportText,elapsedLabel:()=>'',
+    calculateBreakdownDaysUntilClose:()=>1,...requestAcceptance,normalizeEquipmentGroup,requestStatusLabel,dailyUpdatesExportText,managerRoleSelection,elapsedLabel:()=>'',
     RequestEditForm,DailyRemarkForm,CloseRequestForm,VerifyRequestForm,RequestTimelineButton:({reference})=>React.createElement('b',{},reference),authToken:'fixture',alert:()=>{},
     requestStartParts:start=>({date:String(start).slice(0,10),time:String(start).slice(11)}),
     requestMeterTypeForRequest:()=> 'HMR',effectiveInfoPulseEtcTimestamp:()=>Number.NaN,indiaDateTimeInputValue:()=> '2026-09-08T10:59:00',TIME_24H_PATTERN:'.*',
