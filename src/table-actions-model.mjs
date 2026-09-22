@@ -14,11 +14,13 @@ export function tableElements(children) {
   );
 }
 
-export function tableCellText(node) {
-  if (node == null || typeof node === "boolean") return "";
-  if (typeof node === "string" || typeof node === "number") return String(node);
-  if (Array.isArray(node)) return node.map(tableCellText).filter(Boolean).join(" ");
-  if (!React.isValidElement(node)) return "";
+// React elements are immutable, so a cell's text and a row's slots can be read
+// once per element. Sorting, filtering, header values and exports all ask for the
+// same cells many times in one render; large tables froze recomputing them.
+const cellTextCache = new WeakMap();
+const rowSlotCache = new WeakMap();
+
+function elementText(node) {
   // Rich cells (for example the expandable Daily updates journal) can provide their complete
   // printable value explicitly instead of losing it when only their component children are read.
   if (node.props["data-export-value"] !== undefined) return String(node.props["data-export-value"] ?? "");
@@ -27,10 +29,28 @@ export function tableCellText(node) {
   return tableCellText(node.props.children) || node.props.label || "";
 }
 
+export function tableCellText(node) {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(tableCellText).filter(Boolean).join(" ");
+  if (!React.isValidElement(node)) return "";
+  let text = cellTextCache.get(node);
+  if (text === undefined) {
+    text = elementText(node);
+    cellTextCache.set(node, text);
+  }
+  return text;
+}
+
 export function tableSlots(row) {
-  return tableElements(row.props.children).flatMap((cell, index) =>
-    Array.from({ length: Math.max(1, Number(cell.props.colSpan) || 1) }, () => ({ cell, index })),
-  );
+  let slots = rowSlotCache.get(row);
+  if (!slots) {
+    slots = tableElements(row.props.children).flatMap((cell, index) =>
+      Array.from({ length: Math.max(1, Number(cell.props.colSpan) || 1) }, () => ({ cell, index })),
+    );
+    rowSlotCache.set(row, slots);
+  }
+  return slots;
 }
 
 // Change presentation only: model values and data-sort-value remain untouched.

@@ -12,7 +12,11 @@ import "./table-actions.css";
 import "./sortable-table.css";
 
 const isDataRow = (row) => !(tableElements(row.props.children).length === 1 && Number(tableElements(row.props.children)[0]?.props.colSpan) > 1);
-const sharedTablePageSize = () => typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0;
+// Every table renders in windows: phones keep their 25-row pages, desktops draw
+// 100 rows and add the next 100 as the user scrolls near the end. Sorting,
+// filters, counts, exports and print still use every row.
+const DESKTOP_TABLE_PAGE_SIZE = 100;
+const sharedTablePageSize = () => (typeof mobileTablePageSize === "function" ? mobileTablePageSize() : 0) || DESKTOP_TABLE_PAGE_SIZE;
 
 export default function SharedActionsTable({ closedTimeAfterStarted = false, groupBySite = false, children, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader = null, exportTitle = "", printTitle = "", toolbarTarget = null, toolbarPortal = false, summaryTarget = null, recordDateFilter = null, disableDateColumnFilter = false, preserveColumnOrder = false, printReport = null, SavedReports = null, showRowNumbers = true, onClearToolbarFilters = null, ...tableProps }) {
   const { sections, columns: originalColumns } = tableModel(children);
@@ -144,6 +148,19 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
     return [section, rendered];
   }));
   const renderedRowCount = [...renderedBodySelections.values()].flat().filter(isDataRow).length;
+  const hasMoreRows = pageSize > 0 && renderedRowCount < selectedRows.length;
+  const moreRowsRef = useRef(null);
+  useEffect(() => {
+    const sentinel = moreRowsRef.current;
+    if (!hasMoreRows || !sentinel || typeof IntersectionObserver !== "function") return undefined;
+    // Re-observing after each batch fires again at once while the end is still near,
+    // so a tall screen fills itself without the user asking.
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) setVisibleRowLimit((current) => current + pageSize);
+    }, { root: scrollingAncestor(sentinel), rootMargin: "0px 0px 600px 0px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreRows, pageSize, renderedRowCount]);
   // Number the final displayed order, including tables with more than one body.
   // Keep this presentation column out of the data's sort/filter/column indices.
   const numberedRows = showRowNumbers ? selectedRows : [];
@@ -275,9 +292,18 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
         return numbered;
       }));
     })}</table>
-    {pageSize > 0 && selectedRows.length > pageSize && <div className="mobile-table-window-status" role="status">
+    {pageSize > 0 && selectedRows.length > pageSize && <div className="mobile-table-window-status" role="status" ref={moreRowsRef}>
       <span>Showing {renderedRowCount} of {selectedRows.length} records</span>
       {renderedRowCount < selectedRows.length && <button type="button" onClick={() => setVisibleRowLimit((current) => current + pageSize)}>Show {Math.min(pageSize, selectedRows.length - renderedRowCount)} more</button>}
     </div>}
   </>;
+}
+
+// Tables usually scroll inside a panel rather than the page; watch that panel so
+// the next rows load before its end comes into view.
+function scrollingAncestor(node) {
+  for (let parent = node?.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+    if (/(auto|scroll|overlay)/.test(getComputedStyle(parent).overflowY) && parent.scrollHeight > parent.clientHeight) return parent;
+  }
+  return null;
 }
