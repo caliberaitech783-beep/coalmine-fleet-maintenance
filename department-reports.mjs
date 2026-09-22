@@ -7,8 +7,9 @@ import {visibleInMisRequests} from './src/mis-history.mjs';
 import {MIS_IN_OUT_REPORT_COLUMNS, MIS_IN_OUT_REPORT_DESCRIPTION, buildSiteInOutReportRows} from './in-out-report.mjs';
 import {requestTimelineDurations,formatTimelineDuration,requestTimelineEvents} from './request-timeline.mjs';
 import {displaySiteName,normalizeOperationalSiteFields} from './region-scope.mjs';
+import {STAGE_TIMING_GAPS,STAGE_TIMING_TOTALS,stageTimingRow,stageGapLabel,slowestStageLabel} from './stage-timing-report.mjs';
 
-const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report', 'Production vs MIS First Trip Report'];
+const REPORT_TITLES = ['Turn Around Time for Repair', 'Open Off road Cases', 'Availability Report', '30 Min. Mismatch', 'Unverified Cases', 'MIS Turn Around Time', 'Vehicle Transfer Report', 'Total Fleet', 'Total In and out count report', 'Total Request Submitted Report', 'Ticket Acceptance from Maintenance (Timelinewise)', 'Maintenance Status Pending', 'Vehicle Arrival Red Flag Report', 'MIS Red Flag Report', 'Summary Report', 'Production vs MIS First Trip Report', 'Request Stage Timing'];
 export const DEPARTMENT_REPORT_TITLES = REPORT_TITLES.filter((_,index) => index !== 6);
 export const TICKET_ACCEPTANCE_REPORT_TITLE = REPORT_TITLES[10];
 const clean = value => String(value ?? '').trim();
@@ -39,6 +40,7 @@ function breakdownDaysHours(start, now) {
   const hours = Math.floor(Math.max(0,elapsed) / 3600000);
   return `${Math.floor(hours / 24)}d ${hours % 24}h`;
 }
+const stageGapColumns = gaps => gaps.map(gap => ({key:gap.key,label:gap.label,gap,value:row => stageGapLabel(stageTimingRow(row),gap)}));
 const summaryTimingRow = row => ({...row,firstTripAt:row.firstTripAt || (row.firstTripDate && row.firstTripTime ? `${row.firstTripDate} ${row.firstTripTime}` : '')});
 const summaryDuration = (row,key) => formatTimelineDuration(requestTimelineDurations(summaryTimingRow(row))[key]);
 function summaryClosure(row) {
@@ -150,5 +152,29 @@ report('mis', REPORT_TITLES[3], 'TAT is first trip minus request closed. Mismatc
       ref,
       ids[1],
     ],finished.filter(r => productionFirstTrip(r) || firstTrip(r)),r => productionFirstTrip(r) || firstTrip(r) || r.closedAt),
+    report('general', REPORT_TITLES[16], 'Every stage of a request in order: Off Road raised by Production, accepted by Maintenance, On Road when the work is done, first trip confirmed by Production, first trip confirmed by MIS, then MIS verification. Each wait is measured from the stage before it, so no wait is counted twice, and the longest wait of the request is named in Slowest stage. A wait shows Pending while the next stage has not happened and Not recorded when a timestamp is missing; missing times are never counted as zero. Requests raised before Production first-trip confirmation existed use On Road to MIS first trip in its place. Open the job reference for the step-by-step breakdown of one request. Date filters use production submission.', [
+      site,
+      ids[0],
+      col('equipmentGroup','Equipment group',equipmentGroupValue),
+      col('raisedAt','Off Road raised (Production)',r => stageTimingRow(r).raisedAt || 'Not recorded'),
+      col('raisedBy','Raised by',r => stageTimingRow(r).raisedBy || 'Not recorded'),
+      ...stageGapColumns(STAGE_TIMING_GAPS.slice(0,1)),
+      col('acceptedAt','Maintenance accepted',r => stageTimingRow(r).acceptedAt || 'Pending'),
+      col('acceptedBy','Accepted by',r => {const stages=stageTimingRow(r);return stages.acceptedBy || (stages.acceptedAt ? 'Not recorded' : 'Pending');}),
+      ...stageGapColumns(STAGE_TIMING_GAPS.slice(1,2)),
+      col('closedAt','On Road / work done',r => stageTimingRow(r).closedAt || 'Pending'),
+      col('closedBy','On Road recorded by',r => {const stages=stageTimingRow(r);return stages.closedBy || (stages.closedAt ? 'Not recorded' : 'Pending');}),
+      ...stageGapColumns(STAGE_TIMING_GAPS.slice(2,3)),
+      col('productionFirstTripAt','First trip confirmed by Production',r => stageTimingRow(r).productionFirstTripAt || 'Pending'),
+      col('productionFirstTripBy','Production confirmed by',r => {const stages=stageTimingRow(r);return stages.productionFirstTripBy || (stages.productionFirstTripAt ? 'Not recorded' : 'Pending');}),
+      ...stageGapColumns(STAGE_TIMING_GAPS.slice(3,4)),
+      col('misFirstTripAt','First trip confirmed by MIS',r => stageTimingRow(r).misFirstTripAt || 'Pending'),
+      ...stageGapColumns(STAGE_TIMING_GAPS.slice(4)),
+      col('verifiedAt','MIS verified',r => stageTimingRow(r).verifiedAt || 'Pending'),
+      col('verifiedBy','MIS verified by',r => {const stages=stageTimingRow(r);return stages.verifiedBy || (stages.verifiedAt ? 'Not recorded' : 'Pending');}),
+      ...stageGapColumns(STAGE_TIMING_TOTALS),
+      col('slowestStage','Slowest stage',r => slowestStageLabel(stageTimingRow(r))),
+      ref,
+    ],requests,r => r.start || r.createdAt),
   ];
 }

@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from "react";
 import {formatTimelineDuration,parseRequestTimelineTimestamp} from "../request-timeline.mjs";
 import {DailyUpdatesPanel} from "./daily-updates-list.jsx";
+import {stageTimingSteps} from "../stage-timing-report.mjs";
 import "./request-timeline.css";
 
 const clock = new Intl.DateTimeFormat("en-IN", {timeZone:"Asia/Kolkata", day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false});
@@ -67,10 +68,20 @@ export function RequestTimelineView({data}) {
     if (!byEvent.get(end)?.eventAt) return endpointState(end);
     return "Not recorded";
   };
+  const steps = stageTimingSteps(request);
   return <div className="request-timeline-content">
     {identity && <p className="request-timeline-identity"><b>{identity}</b><span> · {data.reference}</span></p>}
     <p>Each duration uses the two recorded event times shown below. The three workflow stages do not overlap. Verification is shown separately, not added to the total.</p>
     {idleApproval && <p className="request-timeline-note">This request closed through a manager’s on-road approval. Its closure is not a separately recorded repair-completion time. The maintenance interval can include idle waiting.</p>}
+    <h3>Step by step</h3>
+    <p>The stages in the order they happened, each with the wait since the stage before it. The longest wait of this request is marked.</p>
+    <table className="request-timeline-steps">
+      <thead><tr><th>Step</th><th>Stage</th><th>Recorded at</th><th>By</th><th>Wait since previous stage</th></tr></thead>
+      <tbody>{steps.map(step => <tr key={step.key} className={step.slowest ? "slowest-step" : undefined}>
+        <td>{step.step}</td><td>{step.label}</td><td>{step.at ? stamp(step.at) : "Pending"}</td><td>{step.actor || "Not recorded"}</td>
+        <td>{step.gapLabel ? <span className={`stage-gap${step.slowest ? " slowest" : ""}`} title={step.gapLabel}>{step.gap}</span> : "—"}</td>
+      </tr>)}</tbody>
+    </table>
     <div className="request-timeline-stages">
       {stageDefinitions.map(([key,label,start,end], index) => <article key={key} className={key === "overall" || key === "repairElapsed" ? "timeline-total" : ""}>
         <h3><span className="timeline-stage-number">{index + 1}</span>{label}</h3><strong>{stageDuration(key,start,end)}</strong>

@@ -52,7 +52,7 @@ test("the time breakdown opens from the Days of breakdown value in every list, a
   assert.match(source, /case "breakdownDays": return <td><RequestTimelineButton reference=\{r\.ref\} token=\{authToken\} Dialog=\{Modal\} label=/);
   assert.match(source, /<td><b>\{request\.ref\}<\/b><\/td><td>\{request\.door \? <a href="#vehicle-repair-history"/);
   assert.match(source, /<td><RequestTimelineButton reference=\{request\.ref\} token=\{authToken\} Dialog=\{Modal\} label=\{`\$\{age\} \$\{age === 1 \? "day" : "days"\}`\} \/><\/td>/);
-  assert.match(source, /columns=\{withTimelineLinks\(selectedReport\.columns, session\?\.token \|\| authToken\)\}/);
+  assert.match(source, /columns=\{withTimelineLinks\(withStageGapHighlights\(selectedReport\.columns\), session\?\.token \|\| authToken\)\}/);
   assert.match(source, /const timeKey = \["days", "tat", "hours"\]\.find/);
   assert.doesNotMatch(source, /<td><RequestTimelineButton reference=\{(r|row|request)\.ref\} token=\{authToken\} Dialog=\{Modal\} \/><\/td>/);
 });

@@ -637,3 +637,15 @@
   .reports-page > .vehicle-history-page { margin: 10px 12px 12px; }
   .vehicle-history-report-filter { min-width: 100%; grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Request Stage Timing: the longest wait of each request stands out in the table. */
+.stage-gap { display: inline-block; }
+.stage-gap.slowest {
+  border-radius: 6px;
+  background: #fde2e1;
+  box-shadow: inset 0 0 0 1px #f0a9a3;
+  padding: 2px 7px;
+  color: #8f1d14;
+  font-weight: 700;
+}
+:root[data-theme="dark"] .stage-gap.slowest { background: #46221e; box-shadow: inset 0 0 0 1px #8c3a32; color: #ffd9d4; }

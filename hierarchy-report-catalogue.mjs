@@ -12,6 +12,7 @@ export const HIERARCHY_REPORTS={
   inOut:IN_OUT_REPORT_TITLE,
   // Department headings are spelled out so a reordered DEPARTMENT_REPORT_TITLES cannot shift a tick onto another report.
   summary:'Summary Report',
+  stageTiming:'Request Stage Timing',
   totalSubmitted:'Total Request Submitted Report',
   ticketAcceptance:'Ticket Acceptance from Maintenance (Timelinewise)',
   maintenancePending:'Maintenance Status Pending',
@@ -30,7 +31,7 @@ export const HIERARCHY_REPORTS={
 
 export const HIERARCHY_REPORT_GROUPS=[
   {group:'General Report',viewKey:'C',className:'common',reports:[
-    HIERARCHY_REPORTS.roadStatus,HIERARCHY_REPORTS.vehicleTransfer,HIERARCHY_REPORTS.locationWise,HIERARCHY_REPORTS.recentBreakdown,HIERARCHY_REPORTS.summary,
+    HIERARCHY_REPORTS.roadStatus,HIERARCHY_REPORTS.vehicleTransfer,HIERARCHY_REPORTS.locationWise,HIERARCHY_REPORTS.recentBreakdown,HIERARCHY_REPORTS.summary,HIERARCHY_REPORTS.stageTiming,
   ]},
   {group:'Production Report',viewKey:'P',className:'production',reports:[
     HIERARCHY_REPORTS.totalSubmitted,HIERARCHY_REPORTS.ticketAcceptance,HIERARCHY_REPORTS.maintenancePending,HIERARCHY_REPORTS.productionVsMisFirstTrip,

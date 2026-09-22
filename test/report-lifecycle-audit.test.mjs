@@ -34,9 +34,9 @@ test('every lifecycle phase appears in the appropriate reports regardless of emp
   }
 });
 
-test('all 29 report definitions produce PDF and safe Excel exports within the route column limit',async()=>{
+test('all 30 report definitions produce PDF and safe Excel exports within the route column limit',async()=>{
   const tables=buildDirectorReportTables({requests,equipmentRecords:equipment,now});
-  assert.equal(tables.length,29);
+  assert.equal(tables.length,30);
   for(const table of tables){
     assert.ok(table.columns.length>0 && table.columns.length<=24,`${table.title}: ${table.columns.length} columns`);
     assert.ok(table.rows.every(row=>row.length===table.columns.length),`${table.title}: inconsistent row width`);

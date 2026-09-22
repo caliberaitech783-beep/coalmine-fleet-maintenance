@@ -2,6 +2,7 @@ const durationKeys = new Set([
   "breakdowndays", "days", "hours", "tat", "duration", "durationms", "downtime", "acceptedtime", "flagwaitingtime", "arrivaldelay",
   "prodtomis", "mainttomis", "idletime", "mistofirsttrip", "averagetat", "difference", "delay", "closetomis", "closetofirsttrip", "firsttriptomis",
   "waitingtat", "maintenancetat", "returntoworktat", "overalltat", "repairelapsed", "verificationlag",
+  "raisedtoaccepted", "acceptedtoonroad", "onroadtoproductiontrip", "productiontriptomistrip", "mistriptoverified", "onroadtomistrip", "onroadtoverified", "raisedtoverified",
 ]);
 
 // Dates/timestamps and meter readings are not durations.

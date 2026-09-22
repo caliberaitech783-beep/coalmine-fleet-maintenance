@@ -42,3 +42,11 @@
 .request-timeline-modal > header { flex-shrink:0; }
 .request-timeline-modal > header .request-timeline-print { display:inline-flex; align-items:center; gap:6px; width:auto; white-space:nowrap; color:#522e90; font-weight:700; }
 .request-timeline-modal > .request-timeline-content { flex:1; min-height:0; overflow:auto; }
+
+/* Step-by-step stage list: the same stages and waits the Request Stage Timing report shows. */
+.request-timeline-steps { width: 100%; border-collapse: collapse; margin: 6px 0 14px; font-size: 12px; }
+.request-timeline-steps th, .request-timeline-steps td { border-bottom: 1px solid var(--line, #dde6f2); padding: 6px 8px; text-align: left; vertical-align: top; }
+.request-timeline-steps th { color: #52627a; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+.request-timeline-steps tr.slowest-step td { background: rgba(240, 169, 163, 0.16); }
+:root[data-theme="dark"] .request-timeline-steps tr.slowest-step td { background: rgba(140, 58, 50, 0.3); }
+@media (max-width: 700px) { .request-timeline-steps { font-size: 11px; } .request-timeline-steps th, .request-timeline-steps td { padding: 5px 6px; } }

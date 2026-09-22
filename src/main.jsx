@@ -77,6 +77,7 @@ import { elapsedLabel, elapsedMilliseconds } from "../report-metrics.mjs";
 import { indiaDateTimeEpoch, indiaDateTimeInputValue, reportRowsWithinRange, validReportDateRange } from "../report-date-range.mjs";
 import { IN_OUT_REPORT_TITLE } from "../in-out-report.mjs";
 import { buildDepartmentReports, TICKET_ACCEPTANCE_REPORT_TITLE } from "../department-reports.mjs";
+import { stageTimingRow, slowestStageGap } from "../stage-timing-report.mjs";
 import { HIERARCHY_REPORTS, HIERARCHY_REPORT_GROUPS, HIERARCHY_REPORT_TITLES, HIERARCHY_REPORT_CODES, normalizeHierarchyReportAccess } from "../hierarchy-report-catalogue.mjs";
 import { reportTime12 } from "../report-time-format.mjs";
 import { olderThanTenDays, recentBreakdownStatus, reportPdfHeading } from "../report-refinements.mjs";
@@ -6467,6 +6468,16 @@ function ReportSection({ title, description, category = "general", icon: ReportI
     </div>
   );
 }
+// The step a request waited in longest is marked in the table. Exports and
+// prints keep the plain duration, and the Slowest stage column names it there.
+function withStageGapHighlights(columns) {
+  if (!columns.some((column) => column.gap)) return columns;
+  return columns.map((column) => column.gap ? { ...column, render: (row) => {
+    const slowest = slowestStageGap(stageTimingRow(row));
+    const highlighted = slowest?.gap.key === column.gap.key;
+    return <span className={`stage-gap${highlighted ? " slowest" : ""}`} title={highlighted ? "Longest wait of this request" : undefined}>{String(column.value?.(row) ?? "—")}</span>;
+  } } : column);
+}
 // The request time breakdown opens from the time column (BD days, TAT or downtime); only when a report has none does it stay on the job reference.
 function withTimelineLinks(columns, token) {
   const timeKey = ["days", "tat", "hours"].find((key) => columns.some((column) => column.key === key));
@@ -7045,7 +7056,7 @@ function ReportsPage({ requests = [], activeReportCategory = "general", setActiv
           category={selectedReport.category}
           icon={activeCategory.icon}
           rows={selectedReportRows}
-          columns={withTimelineLinks(selectedReport.columns, session?.token || authToken)}
+          columns={withTimelineLinks(withStageGapHighlights(selectedReport.columns), session?.token || authToken)}
           emptyMessage={selectedReport.emptyMessage}
           headingControl={selectedReport.title === TICKET_ACCEPTANCE_REPORT_TITLE ? <label className="report-acceptance-toggle">
             <input type="checkbox" role="switch" checked={showAllAcceptances} onChange={(event) => setShowAllAcceptances(event.target.checked)} />

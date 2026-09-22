@@ -11,6 +11,7 @@ import * as dailyUpdatesOrder from "../src/daily-updates-order.mjs";
 import { formatDisplayDateTime } from "../date-time-format.mjs";
 import { renderToStaticMarkup } from "react-dom/server";
 import DateInput from '../src/date-input.mjs';
+import { stageTimingSteps } from "../stage-timing-report.mjs";
 
 const source = readFileSync(new URL("../src/request-timeline.jsx", import.meta.url), "utf8").replace(/^import .*;\r?\n/gm, "").replace(/export (?:default )?function /g, "function ");
 const code = (await transformWithOxc(source, "request-timeline.jsx", {jsx: {runtime: "classic"}})).code;
@@ -72,7 +73,7 @@ function harness(name, extra = {}) {
   const scope = {requestStatusLabel,
     ...equipment,
     React, useState, useEffect, useRef: value => useState(() => ({current: value}))[0], useMemo: fn => fn(),
-    formatTimelineDuration, parseRequestTimelineTimestamp, AbortController,
+    formatTimelineDuration, parseRequestTimelineTimestamp, stageTimingSteps, AbortController,
     fetch: (url, options) => new Promise((resolve, reject) => requests.push({url, options, reject,
       respond(data, ok = true) {resolve({ok, json: async () => data});},
       malformed() {resolve({ok: true, json: async () => {throw new Error("Bad JSON");}});},
