@@ -74,7 +74,7 @@ test('Admin sessions get Delete and Delete selected in every workspace table; Ma
   assert.match(normal,/A deletion reason is required for the Audit Trail\./);
   assert.match(normal,/Permanently delete \$\{references\.length\} request\$\{plural\}\?/);
   const table=client.slice(client.indexOf('function MobileWorkflowTable('),client.indexOf('function RequestEditForm('));
-  assert.match(table,/if \(onDelete \|\| onDeleteSelected\) showActions = true;/);
+  assert.match(table,/if \(onDelete \|\| onDeleteSelected \|\| onProductionFirstTrip\) showActions = true;/);
   assert.match(table,/\{onDelete && rowDeletable\(row\) && <button type="button" className="danger" onClick=\{\(\) => onDelete\(row\)\}><Trash2 \/> Delete<\/button>\}/);
   assert.match(table,/Delete selected \(\{selectedRefs\.size\}\)/);
   assert.match(table,/Select all shown/);

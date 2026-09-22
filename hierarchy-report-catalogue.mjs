@@ -15,6 +15,7 @@ export const HIERARCHY_REPORTS={
   totalSubmitted:'Total Request Submitted Report',
   ticketAcceptance:'Ticket Acceptance from Maintenance (Timelinewise)',
   maintenancePending:'Maintenance Status Pending',
+  productionVsMisFirstTrip:'Production vs MIS First Trip Report',
   repairTat:'Turn Around Time for Repair',
   openOffRoad:'Open Off road Cases',
   availability:'Availability Report',
@@ -32,7 +33,7 @@ export const HIERARCHY_REPORT_GROUPS=[
     HIERARCHY_REPORTS.roadStatus,HIERARCHY_REPORTS.vehicleTransfer,HIERARCHY_REPORTS.locationWise,HIERARCHY_REPORTS.recentBreakdown,HIERARCHY_REPORTS.summary,
   ]},
   {group:'Production Report',viewKey:'P',className:'production',reports:[
-    HIERARCHY_REPORTS.totalSubmitted,HIERARCHY_REPORTS.ticketAcceptance,HIERARCHY_REPORTS.maintenancePending,
+    HIERARCHY_REPORTS.totalSubmitted,HIERARCHY_REPORTS.ticketAcceptance,HIERARCHY_REPORTS.maintenancePending,HIERARCHY_REPORTS.productionVsMisFirstTrip,
   ]},
   {group:'Maintenance Report',viewKey:'M',className:'maintenance',reports:[
     HIERARCHY_REPORTS.repairTat,HIERARCHY_REPORTS.openOffRoad,HIERARCHY_REPORTS.availability,HIERARCHY_REPORTS.arrivalRedFlag,

@@ -44,10 +44,11 @@ test('department reports and all director exports retain separate verification a
   const tables = buildDirectorReportTables({requests:[request]}).filter(table => table.columns.some(c => c.key === 'verifiedAt'));
   assert.ok(tables.length >= 4);
   for (const table of tables) {
-    assert.equal(table.columns.filter(c => c.key === 'firstTripAt').length, 1, table.title);
+    const firstTripKey = table.columns.some(c => c.key === 'firstTripAt') ? 'firstTripAt' : 'misFirstTripAt';
+    assert.equal(table.columns.filter(c => ['firstTripAt','misFirstTripAt'].includes(c.key)).length, 1, table.title);
     if (!table.rows.length) continue;
     assert.equal(table.rows[0][table.columns.findIndex(c => c.key === 'verifiedAt')], request.verifiedAt, table.title);
-    assert.equal(table.rows[0][table.columns.findIndex(c => c.key === 'firstTripAt')], request.firstTripAt, table.title);
+    assert.equal(table.rows[0][table.columns.findIndex(c => c.key === firstTripKey)], request.firstTripAt, table.title);
   }
   const pendingTrip = {...request,firstTripAt:'',firstTripDone:false};
   assert.equal(report.columns.find(c => c.key === 'firstTripAt').value(pendingTrip), '');

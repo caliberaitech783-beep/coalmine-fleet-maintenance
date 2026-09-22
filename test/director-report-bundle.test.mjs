@@ -21,7 +21,7 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
     equipmentRecords:[{equipmentName:'EX-1',door:'D1',category:'Equipment',status:'On road',currentLocation:'Sasti OB',make:'Komatsu'}],
     transferRecords:[{transferNo:'VT-1',equipment:'TR-1',source:'Sasti OB',destination:'Jayant OB',transferDate:'2026-09-01'}],
   });
-  assert.equal(tables.length,28);
+  assert.equal(tables.length,29);
   const summary=tables.find(table=>table.title==='Summary Report');
   assert.equal(summary.department,'General');
   assert.equal(summary.rows.length,1);
@@ -40,6 +40,7 @@ test('Director bundle builds all department reports and real xlsx output',()=>{
   assert.equal(tables.find((table)=>table.title==='MIS Verification Report').department,'MIS');
   assert.equal(tables.find((table)=>table.title==='Idle Vehicle Report').department,'Maintenance');
   assert.equal(tables.find((table)=>table.title==='On Road with first trip veri.').department,'MIS');
+  assert.equal(tables.find((table)=>table.title==='Production vs MIS First Trip Report').department,'Production');
   const roadStatus=tables.find((table)=>table.title==='Report for On Road / Off Road & Idle');
   assert.equal(roadStatus.rows[0][roadStatus.columns.findIndex((column)=>column.key==='roadStatus')],'Off road');
   const workbook=buildXlsxWorkbookBuffer(tables[0].title,tables[0].columns,tables[0].rows);

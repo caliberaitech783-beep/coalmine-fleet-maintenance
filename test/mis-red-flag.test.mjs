@@ -5,7 +5,7 @@ import test from 'node:test';
 import {runInNewContext} from 'node:vm';
 
 const server=readFileSync(new URL('../server.mjs',import.meta.url),'utf8');
-const routeSource=server.slice(server.indexOf("app.patch('/api/requests/:reference/mis-flag'"),server.indexOf("app.patch('/api/requests/:reference/verify'"));
+const routeSource=server.slice(server.indexOf("app.patch('/api/requests/:reference/mis-flag'"),server.indexOf("app.patch('/api/requests/:reference/production-first-trip'"));
 const authSource=server.slice(server.indexOf('async function requireSession('),server.indexOf('async function requireSuper('));
 const eligible={ref:'REQ-MIS-1',site:'Sasti OB',status:'Closed',verifiedAt:null,misFlaggedAt:null};
 const allowed={role:'normal',assignedRole:'MIS User',name:'MIS inspector',login:'mis.inspector',permissions:{verifyRequests:true}};

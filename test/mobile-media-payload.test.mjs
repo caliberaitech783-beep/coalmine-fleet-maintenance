@@ -50,7 +50,7 @@ test("compact lists use validators and expose their measured payload size", () =
 });
 
 test("phone overlays and Info Pulse keep bounded work on screen", () => {
-  assert.match(main, /setAlerts\(\(current\) => \[\.\.\.current, \.\.\.fresh\]\.slice\(-2\)\)/);
+  assert.match(main, /setAlerts\(\(current\) => \[\.\.\.current, \.\.\.transient\]\.slice\(-2\)\)/);
   assert.match(styles, /\.incoming-notification-stack\{[^}]*z-index:9000/);
   assert.match(styles, /\.overlay\.notification-entry-overlay\{z-index:21000\}/);
   assert.match(pulse, /const INITIAL_VISIBLE_ROWS = 24/);
