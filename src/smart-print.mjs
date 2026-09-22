@@ -1,4 +1,5 @@
 import {withSerialColumn} from '../serial-column.mjs';
+import {DAILY_UPDATES_DETAIL_COLUMNS,prepareDailyUpdatesLayout} from './xlsx-daily-updates.mjs';
 
 export function printColumnOptions(columns=[]) {
   const seen=new Map();
@@ -24,6 +25,7 @@ export function compactDailyUpdatesForPrint(value){
 export function compactSmartPrintColumns(columns=[]){
   return columns.map(column=>dailyUpdatesColumn(column)?{...column,value:row=>compactDailyUpdatesForPrint(column.value?.(row))}:column);
 }
+const arrayColumns=columns=>columns.map((column,index)=>({...column,value:row=>row[index]}));
 export function normalizePrintLayoutName(value) {
   const name=String(value??'').replace(/\s+/g,' ').trim();
   if(!name)throw new Error('Enter a report name.');
@@ -153,7 +155,17 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   // A selected saved layout supplies both its columns and its report name to print and export alike.
   const currentReport=()=>{
     const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
-    return {reportTitle:layout?.name||title,chosen:compactSmartPrintColumns(selectedPrintColumns(options,layout?layout.columns:selected))};
+    return {reportTitle:layout?.name||title,chosen:selectedPrintColumns(options,layout?layout.columns:selected)};
+  };
+  const printableReport=()=>{
+    const {reportTitle,chosen}=currentReport();
+    const layout=prepareDailyUpdatesLayout({title:reportTitle,sheet:{name:'Report',title:reportTitle,columns:chosen,rows},formatCell});
+    const appendices=layout.detailRows.length?[{
+      title:`${reportTitle} · Daily Updates`,
+      columns:arrayColumns(DAILY_UPDATES_DETAIL_COLUMNS),
+      rows:layout.detailRows,
+    }]:[];
+    return {reportTitle,chosen:compactSmartPrintColumns(chosen),appendices};
   };
   // Second step after the page size: which pages, single or double-sided, and how many copies.
   const askPrintOptions=(pageSize,run)=>{
@@ -214,17 +226,18 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     if(!snapshot&&!currentReport().chosen.length)return;
     askChoice('Select page size to print','The report is scaled to the selected page so no columns are cut off. With the print helper installed it goes straight to the printer on this paper size; otherwise, in the print window keep Paper size set to the same size.','Select page size',PRINT_PAGE_SIZES.map(page=>({label:`${page.name} · ${page.detail}`,value:page.name})),pageSize=>{
       askPrintOptions(pageSize,printOptions=>{
-        const {reportTitle,chosen}=currentReport();if(!snapshot&&!chosen.length)return;
-        close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,pageSize,printOptions});
+        const {reportTitle,chosen,appendices}=printableReport();if(!snapshot&&!chosen.length)return;
+        close();onPrint({title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,appendices,pageSize,printOptions});
       });
     });
   };
   let exporting=false;
   const runExport=format=>{
-    const {reportTitle,chosen}=currentReport();if(!chosen.length||exporting)return;
+    const report=format==='xlsx'?{...currentReport(),appendices:[]} : printableReport();
+    const {reportTitle,chosen,appendices}=report;if(!chosen.length||exporting)return;
     const formatName=format==='pdf'?'PDF':'Excel';
     exporting=true;render();notice.textContent=`Preparing ${formatName} export…`;
-    Promise.resolve().then(()=>onExport({format,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping}))
+    Promise.resolve().then(()=>onExport({format,title:reportTitle,columns:chosen,rows,highlightRow,reportGrouping,appendices}))
       .then(()=>{notice.textContent=`${formatName} export downloaded with ${chosen.length} column${chosen.length===1?'':'s'} and ${rows.length} record${rows.length===1?'':'s'}.`;})
       .catch(error=>{notice.textContent=error?.message||`Could not create the ${formatName} export.`;})
       .finally(()=>{exporting=false;render();});
@@ -256,7 +269,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       return;
     }
     for(const {input,id} of checkboxes)input.checked=selected.includes(id);
-    const {chosen}=currentReport();printButton.disabled=!chosen.length;
+    const {chosen,appendices}=printableReport();printButton.disabled=!chosen.length;
     const savedSelected=layouts.some(item=>String(item.number)===layoutSelect.value);
     printSavedButton.disabled=!savedSelected;
     deleteSavedButton.disabled=!savedSelected||Boolean(storageError);
@@ -270,11 +283,21 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
     const previewRows=rows.slice(0,5);
     const serial=withSerialColumn(chosen.map(column=>({key:column.key,label:String(column.label||'')})),previewRows.map(row=>chosen.map(column=>formatCell(column.value?.(row)))));
     const sheet=make('div',undefined,'smart-print-sheet');
-    sheet.append(make('h4',currentReport().reportTitle),make('p',`${rows.length.toLocaleString('en-IN')} record${rows.length===1?'':'s'} · the same columns, order and rows are used for Print, PDF and Excel`));
+    sheet.append(make('h4',currentReport().reportTitle),make('p',`${rows.length.toLocaleString('en-IN')} record${rows.length===1?'':'s'} · complete update history prints in the Daily Updates section and exports to its Excel sheet`));
     const table=make('table'),thead=make('thead'),tr=make('tr');for(const column of serial.columns)tr.append(make('th',column.label));thead.append(tr);table.append(thead);
     const tbody=make('tbody');serial.rows.forEach((cells,index)=>{const line=make('tr',undefined,highlightRow?.(previewRows[index])?'highlight-row':'');for(const cell of cells)line.append(make('td',cell));tbody.append(line);});
     if(!serial.rows.length){const line=make('tr'),cell=make('td','No records available');cell.colSpan=serial.columns.length;line.append(cell);tbody.append(line);}
     table.append(tbody);sheet.append(table);preview.append(sheet);
+    for(const appendix of appendices){
+      const detail=make('div',undefined,'smart-print-sheet smart-print-appendix');
+      detail.append(make('h4',appendix.title),make('p',`Showing the first ${Math.min(10,appendix.rows.length)} of ${appendix.rows.length.toLocaleString('en-IN')} update rows · every update is included in the printed report`));
+      const detailTable=make('table'),detailHead=make('thead'),detailHeadRow=make('tr');
+      for(const column of appendix.columns)detailHeadRow.append(make('th',column.label));
+      detailHead.append(detailHeadRow);detailTable.append(detailHead);
+      const detailBody=make('tbody');
+      appendix.rows.slice(0,10).forEach((row)=>{const line=make('tr');for(const column of appendix.columns)line.append(make('td',formatCell(column.value?.(row))));detailBody.append(line);});
+      detailTable.append(detailBody);detail.append(detailTable);preview.append(detail);
+    }
   };
   button('Select all',()=>{selected=options.map(option=>option.id);layoutSelect.value='';render();},controls);
   button('Clear selection',()=>{selected=[];layoutSelect.value='';render();},controls);

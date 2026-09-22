@@ -98,3 +98,17 @@ test('legacy empty table export keeps its original single-report layout',async()
   assert.equal(pageCount(pdf),1);
   assert.match(fragments(pdf.toString('latin1')),/Legacy empty report.*0 records exported.*Reference.*No records are available for this report\./);
 });
+
+test('bundled report and complete update appendix use the selected paper size',async()=>{
+  const pdf=await buildTableBundlePdf({
+    title:'BD Balance',pageSize:'A4',generatedAt,
+    tables:[
+      {title:'Report',columns:[{label:'Daily updates'}],rows:[['2 updates · full history below']]},
+      {title:'Daily Updates',columns:[{label:'Update no.'},{label:'Daily update'}],rows:[[1,'Removed'],[2,'Fitted']]},
+    ],
+  });
+  const mediaBox=pdf.toString('latin1').match(/\/MediaBox \[0 0 ([\d.]+) ([\d.]+)\]/).slice(1).map(Number).map(Math.round);
+  assert.deepEqual(mediaBox,[842,595]);
+  const text=pageStreams(pdf).map(fragments).join(' ');
+  assert.match(text,/Report.*2 updates.*Daily Updates.*Removed.*Fitted/);
+});

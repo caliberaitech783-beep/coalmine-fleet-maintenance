@@ -82,6 +82,37 @@ export function dailyUpdatesExportRows(updates, { category = "" } = {}) {
   }));
 }
 
+// Dashboard table exports can contain rendered rows rather than the original request objects.
+// Rebuild the structured update records from the complete, line-separated export text in that case.
+export function dailyUpdatesExportRowsFromText(value, { category = "" } = {}) {
+  const lines = String(value ?? "").split(/\r?\n/).map((line) => line.trim()).filter((line) => line && line !== "—");
+  return lines.map((line, index) => {
+    const prefix = line.match(/^#(\d+)\s*\|\s*/);
+    const body = prefix ? line.slice(prefix[0].length) : line;
+    const byMarker = " | By: ", updateMarker = " | Update: ", typeMarker = " | Type: ", reasonMarker = " | Delayed reason: ";
+    const byAt = body.indexOf(byMarker), updateAt = byAt < 0 ? -1 : body.indexOf(updateMarker, byAt + byMarker.length);
+    const reasonAt = body.lastIndexOf(reasonMarker);
+    if (byAt < 0 || updateAt < 0 || reasonAt < updateAt) return {
+      number: Number(prefix?.[1]) || index + 1,
+      dateTime: "Date not recorded",
+      author: "Not recorded",
+      update: exportField(line),
+      breakdownType: exportField(category),
+      delayedReason: "Not recorded",
+    };
+    const beforeReason = body.slice(updateAt + updateMarker.length, reasonAt);
+    const typeAt = beforeReason.lastIndexOf(typeMarker);
+    return {
+      number: Number(prefix?.[1]) || index + 1,
+      dateTime: exportField(body.slice(0, byAt), "Date not recorded"),
+      author: exportField(body.slice(byAt + byMarker.length, updateAt)),
+      update: exportField(typeAt < 0 ? beforeReason : beforeReason.slice(0, typeAt)),
+      breakdownType: exportField(typeAt < 0 ? category : beforeReason.slice(typeAt + typeMarker.length)),
+      delayedReason: exportField(body.slice(reasonAt + reasonMarker.length)),
+    };
+  });
+}
+
 // Complete, stable text for detailed exports. The export is chronological regardless of the
 // reader's on-screen newest/oldest preference, and each saved update stays on its own line.
 export function dailyUpdatesExportText(updates, { category = "" } = {}) {

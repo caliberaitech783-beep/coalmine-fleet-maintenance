@@ -97,7 +97,7 @@ test('Smart Print prints through the helper and falls back to the browser print 
   assert.match(main,/if \(!\(await printHelperAvailable\(\{ token: \(\) => authToken \}\)\)\) \{\n\s+\/\/ A PC that never used the helper[^\n]*\n\s+if \(!printHelperExpected\(\)\) return false;/,'PCs without the helper still print through the browser, silently');
   assert.match(main,/The print helper \(QZ Tray\) is not running on this PC/,'where the helper is expected, a miss is never silent');
   assert.match(main,/did not accept the connection: \$\{failure \|\| "no answer"\}/,'a refused or unanswered Allow question is explained');
-  assert.match(main,/\? printReportDirect\(\{ title, columns, rows, highlightRow, pageSize, printOptions \}, buildPdf\) : false;/,'OK tries again with the same report, Cancel uses the browser print window');
+  assert.match(main,/\? printReportDirect\(\{ title, columns, rows, highlightRow, appendices, pageSize, printOptions \}, buildPdf\) : false;/,'OK tries again with the same complete report, including update appendices; Cancel uses the browser print window');
   assert.match(main,/if \(printHelperExpected\(\)\) alert\(`The report could not be sent through the print helper/);
   assert.match(main,/highlights, pageSize: page\.name \}\),/,'the PDF is built at the chosen A3 / A4 size');
   assert.match(main,/const confirmed = await showPrintPreview\(\{ pdf, title, page, printOptions, printer: printOptions\.printer \|\| rememberedPrinter\(\) \}\);\n\s+if \(!confirmed\) return true;/,'the finished PDF is previewed first; Cancel prints nothing and does not open the browser window');
@@ -218,5 +218,5 @@ test('the Print helper page is for administrators; the key is created once and n
 test('a report PDF that cannot be prepared is explained instead of silently opening the browser print window',()=>{
   assert.doesNotMatch(main,/if \(!response\.ok\) return false;\n\s+const printer = await printPdfDirect/);
   assert.match(main,/if \(!response\.ok\) \{\n\s+const details = await response\.json\(\)\.catch\(\(\) => \(\{\}\)\);\n\s+throw new Error\(details\.error \|\| `The report PDF could not be prepared \(HTTP \$\{response\.status\}\)\.`\);/);
-  assert.match(server,/if\(dataColumnCount<1\|\|dataColumnCount>48\)return res\.status\(400\)\.json\(\{error:'Select between 1 and 48 report columns\.'\}\);/,'wide tables such as the Audit Trail (27 columns) can be printed through the helper');
+  assert.match(server,/if\(dataColumnCount<1\|\|dataColumnCount>48\).*Select between 1 and 48 report columns\./,'wide tables such as the Audit Trail (27 columns) can be printed through the helper');
 });

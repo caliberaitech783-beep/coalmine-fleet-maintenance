@@ -8,11 +8,12 @@ const auth=source.slice(source.indexOf('async function requireSession('),source.
 const route=source.slice(source.indexOf("app.post('/api/exports/pdf',"),source.indexOf("app.get('/api/reports/director/timing',"));
 
 async function exportPdf(body,{session={role:'normal',assignedRole:'MIS User'}}={}){
-  let handlers,built;
+  let handlers,built,bundled;
   const pdf=Buffer.from('isolated renderer stub');
   const context={
     app:{post(_path,...chain){handlers=chain;}},readSession:async()=>session,
     buildTableExportPdf:async data=>{built=data;return pdf;},reportFilename:()=> 'sample.pdf',
+    buildTableBundlePdf:async data=>{bundled=data;return pdf;},
   };
   runInNewContext(`${auth}\n${route}`,context);
   const req={body};
@@ -23,7 +24,7 @@ async function exportPdf(body,{session={role:'normal',assignedRole:'MIS User'}}=
     if(error)throw error;
     if(!next)break;
   }
-  return {status:res.statusCode,body:res.body,built};
+  return {status:res.statusCode,body:res.body,built,bundled};
 }
 
 test('PDF route passes complete 2,000-character red-flag remarks and longer work descriptions to renderer',async()=>{
@@ -62,4 +63,17 @@ test('PDF row, column and session limits remain in force',async()=>{
   const denied=await exportPdf({columns:[{label:'Field'}],rows:[['test']]},{session:null});
   assert.equal(denied.status,401);
   assert.equal(denied.built,undefined);
+});
+
+test('PDF route preserves every daily update in a separate report section',async()=>{
+  const result=await exportPdf({title:'BD Balance',pageSize:'A4',tables:[
+    {title:'Report',columns:[{label:'Daily updates'}],rows:[['2 updates · full history below']]},
+    {title:'Daily Updates',columns:[{label:'Update no.'},{label:'Daily update'}],rows:[[1,'Removed'],[2,'Fitted']]},
+  ]});
+  assert.equal(result.status,200);
+  assert.equal(result.built,undefined);
+  assert.equal(result.bundled.pageSize,'A4');
+  assert.deepEqual(result.bundled.tables.map(table=>table.rows.length),[1,2]);
+  assert.equal(result.bundled.tables[1].rows[0][1],'Removed');
+  assert.equal(result.bundled.tables[1].rows[1][1],'Fitted');
 });

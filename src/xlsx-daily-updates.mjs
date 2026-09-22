@@ -1,4 +1,4 @@
-import { dailyUpdatesExportRows } from "./daily-updates-order.mjs";
+import { dailyUpdatesExportRows, dailyUpdatesExportRowsFromText } from "./daily-updates-order.mjs";
 
 const DAILY_UPDATES_SHEET = "Daily Updates";
 const empty = (value) => String(value ?? "").trim() || "—";
@@ -8,17 +8,26 @@ function requestRecord(row) {
   return row?.requestDetails && typeof row.requestDetails === "object" ? row.requestDetails : row || {};
 }
 
-function detailIdentity(row) {
+const usable = (value) => {
+  const text = String(value ?? "").trim();
+  return text && text !== "—" ? text : "";
+};
+const cellByLabel = (columns, values, patterns) => {
+  const index = columns.findIndex((column) => patterns.some((pattern) => pattern.test(String(column?.label || "").trim())));
+  return index < 0 ? "" : usable(values[index]);
+};
+
+function detailIdentity(row, columns = [], values = []) {
   const request = requestRecord(row);
   return {
-    reference: empty(request.requestReference || request.ref || request.reference),
-    machine: empty(request.door || request.machineDoor || request.equipmentName || request.equipment || request.assetId),
-    location: empty(request.requestSite || request.currentLocation || request.location || request.site),
-    equipmentGroup: empty(request.equipmentGroup || request.group || request.equipment),
-    model: empty(request.model),
-    serial: empty(request.manufacturerSerialNo || request.chassisNo || request.serialNo || request.serial),
-    breakdownType: empty(request.repairCategory || request.category),
-    breakdownReason: empty(request.breakdownReason || request.complaint || request.reason),
+    reference: empty(usable(request.requestReference || request.ref || request.reference) || cellByLabel(columns, values, [/^job\s+ref/i, /^reference$/i])),
+    machine: empty(usable(request.door || request.machineDoor || request.equipmentName || request.equipment || request.assetId) || cellByLabel(columns, values, [/machine.*door/i, /^door\s*(?:no\.?|number)?$/i, /^machine$/i])),
+    location: empty(usable(request.requestSite || request.currentLocation || request.location || request.site) || cellByLabel(columns, values, [/^(?:current location|request site|site location|site)$/i])),
+    equipmentGroup: empty(usable(request.equipmentGroup || request.group || request.equipment) || cellByLabel(columns, values, [/^equipment group$/i])),
+    model: empty(usable(request.model) || cellByLabel(columns, values, [/^model$/i])),
+    serial: empty(usable(request.manufacturerSerialNo || request.chassisNo || request.serialNo || request.serial) || cellByLabel(columns, values, [/serial/i, /chassis/i])),
+    breakdownType: empty(usable(request.repairCategory || request.category) || cellByLabel(columns, values, [/type of breakdown/i, /breakdown type/i, /repair category/i])),
+    breakdownReason: empty(usable(request.breakdownReason || request.complaint || request.reason) || cellByLabel(columns, values, [/reason of breakdown/i, /breakdown reason/i, /^reason$/i])),
   };
 }
 
@@ -28,31 +37,42 @@ export const DAILY_UPDATES_DETAIL_COLUMNS = [
   "Updated by", "Daily update", "Delayed reason",
 ].map((label) => ({ label }));
 
+export function prepareDailyUpdatesLayout({ title = "Nerve Center report", sheet = {}, formatCell = (value) => empty(value) } = {}) {
+  const columns = Array.isArray(sheet?.columns) ? sheet.columns : [];
+  const sourceRows = Array.isArray(sheet?.rows) ? sheet.rows : [];
+  const dailyIndex = columns.findIndex(dailyColumn);
+  const rows = sourceRows.map((row) => columns.map((column) => formatCell(column.value?.(row))));
+  const detailRows = [];
+  if (dailyIndex < 0) return { ...sheet, columns, sourceRows, rows, detailRows };
+
+  sourceRows.forEach((row, rowIndex) => {
+    const request = requestRecord(row);
+    const identity = detailIdentity(row, columns, rows[rowIndex]);
+    const savedUpdates = dailyUpdatesExportRows(request.dailyRemarks, { category: request.repairCategory || request.category });
+    const updates = savedUpdates.length ? savedUpdates : dailyUpdatesExportRowsFromText(rows[rowIndex][dailyIndex], {
+      category: identity.breakdownType === "—" ? "" : identity.breakdownType,
+    });
+    rows[rowIndex][dailyIndex] = updates.length
+      ? `${updates.length} update${updates.length === 1 ? "" : "s"} · Latest ${updates.at(-1).dateTime} · Full history in ${DAILY_UPDATES_SHEET} sheet`
+      : "—";
+    updates.forEach((update) => detailRows.push([
+      empty(sheet.title || sheet.name || title), rowIndex + 1, identity.reference, identity.machine, identity.location,
+      identity.equipmentGroup, identity.model, identity.serial,
+      identity.breakdownType === "—" ? update.breakdownType : identity.breakdownType,
+      identity.breakdownReason, update.number, update.dateTime, update.author, update.update, update.delayedReason,
+    ]));
+  });
+  return { ...sheet, columns, sourceRows, rows, detailRows };
+}
+
 // Keeps the ordinary report compact and appends one filterable workbook sheet containing every
 // saved update as its own row. The original report order and all unrelated sheets stay unchanged.
 export function prepareXlsxExportSheets({ title = "Nerve Center report", sheets = [], formatCell = (value) => empty(value) } = {}) {
   const detailRows = [];
   const prepared = sheets.map((sheet) => {
-    const columns = Array.isArray(sheet?.columns) ? sheet.columns : [];
-    const sourceRows = Array.isArray(sheet?.rows) ? sheet.rows : [];
-    const dailyIndex = columns.findIndex(dailyColumn);
-    const rows = sourceRows.map((row) => columns.map((column) => formatCell(column.value?.(row))));
-    if (dailyIndex < 0) return { ...sheet, columns, rows };
-
-    sourceRows.forEach((row, rowIndex) => {
-      const request = requestRecord(row);
-      const identity = detailIdentity(row);
-      const updates = dailyUpdatesExportRows(request.dailyRemarks, { category: request.repairCategory || request.category });
-      rows[rowIndex][dailyIndex] = updates.length
-        ? `${updates.length} update${updates.length === 1 ? "" : "s"} · Latest ${updates.at(-1).dateTime} · Full history in ${DAILY_UPDATES_SHEET} sheet`
-        : "—";
-      updates.forEach((update) => detailRows.push([
-        empty(sheet.title || sheet.name || title), rowIndex + 1, identity.reference, identity.machine, identity.location,
-        identity.equipmentGroup, identity.model, identity.serial, identity.breakdownType, identity.breakdownReason,
-        update.number, update.dateTime, update.author, update.update, update.delayedReason,
-      ]));
-    });
-    return { ...sheet, columns, rows };
+    const layout = prepareDailyUpdatesLayout({ title, sheet, formatCell });
+    detailRows.push(...layout.detailRows);
+    return { ...sheet, columns: layout.columns, rows: layout.rows };
   });
 
   if (detailRows.length) prepared.push({

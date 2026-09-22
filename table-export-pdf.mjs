@@ -116,9 +116,9 @@ export async function buildTableExportPdf({title='Nerve Center report',columns=[
 }
 
 /** One site PDF: title identifies the site; subtitle carries its reporting window. */
-export async function buildTableBundlePdf({title='Nerve Center report',subtitle='',tables=[],generatedAt=new Date()}={}){
+export async function buildTableBundlePdf({title='Nerve Center report',subtitle='',tables=[],generatedAt=new Date(),pageSize='A3'}={}){
   const sections=tables.length?tables.filter((table,index)=>index===0||table.rows?.length):[{title:'Report',columns:[],rows:[]}];
-  const doc=createTableDocument(title,generatedAt),result=collect(doc);
+  const doc=createTableDocument(title,generatedAt,pageSize),result=collect(doc);
   sections.forEach((table,index)=>{
     if(index)doc.addPage();
     drawTable(doc,table,()=>{

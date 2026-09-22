@@ -95,7 +95,7 @@ test("late acceptance red rows are carried into print, PDF and Excel exports", (
   assert.match(client, /<fgColor rgb="FFF8CACA"\/>/);
   assert.match(client, /xl\/styles\.xml/);
   assert.match(client, /rows: exportRows, highlights: \[\.\.\.highlightedRows\]/);
-  assert.match(server, /const highlights=\(Array\.isArray\(req\.body\?\.highlights\)\?req\.body\.highlights:\[\]\)/);
+  assert.match(server, /const highlights=\(Array\.isArray\(input\?\.highlights\)\?input\.highlights:\[\]\)/);
   assert.match(server, /buildTableExportPdf\(\{title,columns,rows,highlights,pageSize\}\)/);
   assert.match(pdfSource, /highlight:'#f8caca'/);
   assert.match(pdfSource, /highlighted\.has\(rowIndex\)\?COLORS\.highlight:/);

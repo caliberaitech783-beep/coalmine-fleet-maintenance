@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import React from "react";
-import { dailyUpdatesExportRows, dailyUpdatesExportText } from "../src/daily-updates-order.mjs";
+import { dailyUpdatesExportRows, dailyUpdatesExportRowsFromText, dailyUpdatesExportText } from "../src/daily-updates-order.mjs";
 import { tableModel } from "../src/table-actions-model.mjs";
-import { prepareXlsxExportSheets } from "../src/xlsx-daily-updates.mjs";
+import { prepareDailyUpdatesLayout, prepareXlsxExportSheets } from "../src/xlsx-daily-updates.mjs";
 
 test("daily updates export includes every saved update and all of its details", () => {
   const text = dailyUpdatesExportText([
@@ -33,6 +33,18 @@ test("daily updates export includes every saved update and all of its details", 
   });
 });
 
+test("complete rendered daily update text is rebuilt into one structured row per update", () => {
+  const rows = dailyUpdatesExportRowsFromText([
+    "#1 | 7:58 PM 02-09-2026 | By: SUNIL KUMAR MAHATO | Update: Compressor removed | Type: Preventive | Delayed reason: Waiting for parts",
+    "#2 | 9:19 PM 03-09-2026 | By: TARKESHWAR NATH | Update: Compressor fitted | Type: Preventive | Delayed reason: Testing pending",
+  ].join("\n"));
+
+  assert.deepEqual(rows, [
+    {number:1,dateTime:"7:58 PM 02-09-2026",author:"SUNIL KUMAR MAHATO",update:"Compressor removed",breakdownType:"Preventive",delayedReason:"Waiting for parts"},
+    {number:2,dateTime:"9:19 PM 03-09-2026",author:"TARKESHWAR NATH",update:"Compressor fitted",breakdownType:"Preventive",delayedReason:"Testing pending"},
+  ]);
+});
+
 test("Excel keeps the report compact and writes every daily update on its own detail row", () => {
   const updates = Array.from({length: 18}, (_, index) => ({
     createdAt: `2026-09-${String(index + 1).padStart(2, "0")} 19:43:00`,
@@ -58,6 +70,29 @@ test("Excel keeps the report compact and writes every daily update on its own de
   assert.deepEqual(details.rows[0].slice(0, 5), ["BD Balance", 1, "REQ-1", "LDM6 - 1064", "Sasti OB"]);
   assert.deepEqual(details.rows.map((row) => row[10]), Array.from({length:18},(_,index)=>index+1));
   assert.equal(details.rows[17][13], "Saved maintenance update 18");
+});
+
+test("Excel recovers complete updates and equipment identity from rendered dashboard rows", () => {
+  const complete = [
+    "#1 | 7:58 PM 02-09-2026 | By: SUNIL KUMAR MAHATO | Update: Compressor removed | Type: Preventive | Delayed reason: Waiting for parts",
+    "#2 | 9:19 PM 03-09-2026 | By: TARKESHWAR NATH | Update: Compressor fitted | Type: Preventive | Delayed reason: Testing pending",
+  ].join("\n");
+  const renderedRow = {cells:["LDM6 - 1064","Preventive","Air compressor assembly","DRILL MACHINE","CLG922E","LGI922EZANN901064",complete]};
+  const labels = ["Machine / Door no.","Type of breakdown","Reason of breakdown","Equipment group","Model","Serial / chassis no.","Daily updates"];
+  const columns = labels.map((label,index)=>({label,value:row=>row.cells[index]}));
+  const layout = prepareDailyUpdatesLayout({
+    title:"BD Balance",
+    sheet:{name:"Report",title:"BD Balance",columns,rows:[renderedRow]},
+    formatCell:value=>String(value ?? "—"),
+  });
+
+  assert.equal(layout.rows[0][6], "2 updates · Latest 9:19 PM 03-09-2026 · Full history in Daily Updates sheet");
+  assert.equal(layout.detailRows.length, 2);
+  assert.deepEqual(layout.detailRows[0].slice(3, 10), ["LDM6 - 1064","—","DRILL MACHINE","CLG922E","LGI922EZANN901064","Preventive","Air compressor assembly"]);
+  assert.deepEqual(layout.detailRows.map(row=>row.slice(10)), [
+    [1,"7:58 PM 02-09-2026","SUNIL KUMAR MAHATO","Compressor removed","Waiting for parts"],
+    [2,"9:19 PM 03-09-2026","TARKESHWAR NATH","Compressor fitted","Testing pending"],
+  ]);
 });
 
 test("rich table cells use their explicit complete export value", () => {

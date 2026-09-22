@@ -3102,7 +3102,7 @@ function buildXlsxWorkbook(title, columns, exportRows, highlightedRows = new Set
 function printTableReport(report) {
   void printReportDirect(report).then((sent) => { if (!sent) printTableReportInBrowser(report); });
 }
-async function printReportDirect({ title, columns = [], rows = [], highlightRow, pageSize, printOptions = {} }, buildPdf = null) {
+async function printReportDirect({ title, columns = [], rows = [], highlightRow, appendices = [], pageSize, printOptions = {} }, buildPdf = null) {
   try {
     if (!(await printHelperAvailable({ token: () => authToken }))) {
       // A PC that never used the helper prints through the browser. Where it has been used, never fall back silently.
@@ -3112,7 +3112,7 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
         ? "The print helper (QZ Tray) is not running on this PC, so the paper size cannot be set automatically.\n\nStart \"QZ Tray\" from the Windows Start menu, wait for its icon near the clock, then click OK to try again."
         : `The print helper (QZ Tray) did not accept the connection: ${failure || "no answer"}.\n\nIf QZ Tray asked for permission, click Allow (not Block), then click OK to try again.`;
       return window.confirm(`${reason}\n\nClick Cancel to use the browser print window instead and choose the Paper size there.`)
-        ? printReportDirect({ title, columns, rows, highlightRow, pageSize, printOptions }, buildPdf) : false;
+        ? printReportDirect({ title, columns, rows, highlightRow, appendices, pageSize, printOptions }, buildPdf) : false;
     }
     const page = printPageSize(pageSize);
     // A dashboard brings a PDF of itself as it is on screen; every other report is the server-built table.
@@ -3121,10 +3121,19 @@ async function printReportDirect({ title, columns = [], rows = [], highlightRow,
     else {
       const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
       const highlights = rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []);
+      const appendixTables = appendices.map((appendix) => ({
+        title: appendix.title,
+        columns: appendix.columns.map((column) => ({ label: column.label })),
+        rows: appendix.rows.map((row) => appendix.columns.map((column) => exportCellText(column.value?.(row)))),
+      }));
       const response = await fetch("/api/exports/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-        body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights, pageSize: page.name }),
+        body: JSON.stringify(appendixTables.length ? {
+          title: reportPdfHeading(title, rows, columns),
+          tables: [{ title: "Report", columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights }, ...appendixTables],
+          pageSize: page.name,
+        } : { title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights, pageSize: page.name }),
       });
       if (!response.ok) {
         const details = await response.json().catch(() => ({}));
@@ -3159,7 +3168,7 @@ function printDashboardReport({ dashboard, section = null, title, pageSize, prin
     .then(async (sent) => { if (!sent) await (await loadCapture()).printDashboard(dashboard, title, section); })
     .catch((error) => alert(error?.message || "The dashboard could not be printed."));
 }
-function printTableReportInBrowser({ title, columns = [], rows = [], highlightRow, reportGrouping, pageSize }) {
+function printTableReportInBrowser({ title, columns = [], rows = [], highlightRow, reportGrouping, appendices = [], pageSize }) {
   // The chosen A3/A4 size sets the fit-to-page scale. @page stays a generic landscape so the browser keeps its
   // Paper size option and the report fills whichever paper the printer really uses.
   const page = printPageSize(pageSize);
@@ -3169,6 +3178,14 @@ function printTableReportInBrowser({ title, columns = [], rows = [], highlightRo
   const headings = serial.columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
   const body = serial.rows.length ? serial.rows.map((row, index) => `<tr${highlightRow?.(rows[index]) ? ' class="highlight-row"' : ""}>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("") : `<tr><td colspan="${serial.columns.length}">No records available</td></tr>`;
   const groupedReport = reportGrouping ? siteReportHtml({ rows, columns: serial.columns, cells: serial.rows, grouping: reportGrouping, escape: escapeExportHtml }) : "";
+  const appendixHtml = appendices.map((appendix) => {
+    const appendixRows = appendix.rows.map((row) => appendix.columns.map((column) => exportCellText(column.value?.(row))));
+    const appendixSerial = withSerialColumn(appendix.columns, appendixRows);
+    const appendixHeadings = appendixSerial.columns.map((column) => `<th>${escapeExportHtml(column.label)}</th>`).join("");
+    const appendixBody = appendixSerial.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExportHtml(cell)}</td>`).join("")}</tr>`).join("");
+    const tableOpen = "<" + "table>";
+    return `<section class="print-appendix"><h2>${escapeExportHtml(appendix.title || "Daily Updates")}</h2><p>${appendixRows.length.toLocaleString("en-IN")} update row${appendixRows.length === 1 ? "" : "s"}</p>${tableOpen}<thead><tr>${appendixHeadings}</tr></thead><tbody>${appendixBody}</tbody></table></section>`;
+  }).join("");
   const frame = document.createElement("iframe");
   frame.title = `${title} print frame`;
   frame.style.position = "fixed";
@@ -3188,7 +3205,7 @@ function printTableReportInBrowser({ title, columns = [], rows = [], highlightRo
     return;
   }
   printDocument.open();
-  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:12mm}h1{font-size:20px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}.site-print-table{margin:16px 0;table-layout:fixed}.site-print-table td{overflow-wrap:anywhere;white-space:pre-wrap}.site-print-table tr{break-inside:avoid}.site-print-title th{background:#eee8f6;color:#522e90;font-size:12px;text-transform:none}.site-print-summary{margin:12px 0 16px;font-size:11px;line-height:1.5;color:#17233c}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}td,th{overflow-wrap:break-word}td{white-space:pre-wrap}tr{break-inside:avoid}html,body{height:auto}body>:last-child{margin-bottom:0}.paper-warning{display:none;margin:6px 0 10px;padding:8px 10px;border:2px solid #c62828;border-radius:4px;color:#c62828;font-size:13px;font-weight:700}@media print{@page{size:landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}@media print and (${page.name === "A3" ? "max-width" : "min-width"}:350mm){.paper-warning{display:block}}</style></head><body><h1>${escapeExportHtml(title)}</h1><div class="paper-warning">Paper size does not match: this report was prepared for ${page.name}. In this print window open More settings and set Paper size to ${page.name}. This notice disappears once it matches.</div><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p>${groupedReport || `<table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table>`}</body></html>`);
+  printDocument.write(`<!doctype html><html><head><title>${escapeExportHtml(title)}</title><style>body{font-family:Arial,sans-serif;color:#17233c;margin:12mm}h1{font-size:20px;margin:0 0 5px}h2{font-size:16px;margin:0 0 5px}p{color:#65758b;font-size:12px;margin:0 0 18px}table{border-collapse:collapse;width:100%;font-size:10px}th,td{padding:8px;border:1px solid #dce4ef;text-align:left;vertical-align:top}th{background:#10284c;color:#fff;font-size:9px;text-transform:uppercase}tr:nth-child(even){background:#f6f8fb}tr.highlight-row td{background:#f8caca}.site-print-table{margin:16px 0;table-layout:fixed}.site-print-table td{overflow-wrap:anywhere;white-space:pre-wrap}.site-print-table tr{break-inside:avoid}.site-print-title th{background:#eee8f6;color:#522e90;font-size:12px;text-transform:none}.site-print-summary{margin:12px 0 16px;font-size:11px;line-height:1.5;color:#17233c}.print-appendix{break-before:page;page-break-before:always;padding-top:2mm}.print-appendix table{table-layout:auto}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}td,th{overflow-wrap:break-word}td{white-space:pre-wrap}tr{break-inside:avoid}html,body{height:auto}body>:last-child{margin-bottom:0}.paper-warning{display:none;margin:6px 0 10px;padding:8px 10px;border:2px solid #c62828;border-radius:4px;color:#c62828;font-size:13px;font-weight:700}@media print{@page{size:landscape;margin:0}body{margin:12mm}thead{display:table-header-group}}@media print and (${page.name === "A3" ? "max-width" : "min-width"}:350mm){.paper-warning{display:block}}</style></head><body><h1>${escapeExportHtml(title)}</h1><div class="paper-warning">Paper size does not match: this report was prepared for ${page.name}. In this print window open More settings and set Paper size to ${page.name}. This notice disappears once it matches.</div><p>${exportRows.length.toLocaleString("en-IN")} record${exportRows.length === 1 ? "" : "s"} · Generated ${escapeExportHtml(formatDisplayDateTime(new Date()))}</p>${groupedReport || `<table><thead><tr>${headings}</tr></thead><tbody>${body}</tbody></table>`}${appendixHtml}</body></html>`);
   printDocument.close();
   window.setTimeout(() => {
     frame.contentWindow?.focus();
@@ -3204,7 +3221,7 @@ function printTableReportInBrowser({ title, columns = [], rows = [], highlightRo
   }, 150);
 }
 // Smart Print exports: exactly the chosen columns, their order and the table's filtered rows, as PDF or Excel.
-async function exportSmartPrintSelection({ format, title, columns = [], rows = [], highlightRow }) {
+async function exportSmartPrintSelection({ format, title, columns = [], rows = [], highlightRow, appendices = [] }) {
   const exportRows = rows.map((row) => columns.map((column) => exportCellText(column.value?.(row))));
   const highlightedRows = new Set(rows.flatMap((row, index) => highlightRow?.(row) ? [index] : []));
   if (format === "xlsx") {
@@ -3213,10 +3230,18 @@ async function exportSmartPrintSelection({ format, title, columns = [], rows = [
     return;
   }
   recordUserActivity({module:"Reports",action:"Download PDF report",targetReference:title,reason:`${rows.length} records`});
+  const appendixTables = appendices.map((appendix) => ({
+    title: appendix.title,
+    columns: appendix.columns.map((column) => ({ label: column.label })),
+    rows: appendix.rows.map((row) => appendix.columns.map((column) => exportCellText(column.value?.(row)))),
+  }));
   const response = await fetch("/api/exports/pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
-    body: JSON.stringify({ title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows] }),
+    body: JSON.stringify(appendixTables.length ? {
+      title: reportPdfHeading(title, rows, columns),
+      tables: [{ title: "Report", columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows] }, ...appendixTables],
+    } : { title: reportPdfHeading(title, rows, columns), columns: columns.map((column) => ({ label: column.label })), rows: exportRows, highlights: [...highlightedRows] }),
   });
   if (!response.ok) {
     const details = await response.json().catch(() => ({}));

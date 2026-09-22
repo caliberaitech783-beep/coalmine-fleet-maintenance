@@ -150,7 +150,7 @@ test('daily update journals stay compact in Smart Print while ordinary columns a
  assert.equal(compactDailyUpdatesForPrint('—'),'—');
 });
 
-test('the visible Smart Print preview uses the compact daily update column',()=>{
+test('Smart Print keeps the main report compact and puts every update in separate appendix rows',()=>{
  class Element {
   constructor(tag){this.tag=tag;this.children=[];this.value='';}
   append(...nodes){this.children.push(...nodes);}
@@ -164,16 +164,30 @@ test('the visible Smart Print preview uses the compact daily update column',()=>
  globalThis.window={localStorage:storage,sessionStorage:storage};
  const all=node=>[node,...node.children.flatMap(all)];
  try{
+  const printed=[];
   openSmartPrint({
    title:'BD Balance',
    columns:[{key:'door',label:'Machine / Door no.',value:row=>row.door},{key:'dailyRemarks',label:'Daily updates',value:row=>row.updates}],
-   rows:[{door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-2026 | By: A | Update: Removed\n#2 | 9:19 PM 03-09-2026 | By: B | Update: Fitted'}],
-   onPrint(){},
+   rows:[{door:'LDM6 - 1064',updates:'#1 | 7:58 PM 02-09-2026 | By: A | Update: Removed | Type: Preventive | Delayed reason: Parts\n#2 | 9:19 PM 03-09-2026 | By: B | Update: Fitted | Type: Preventive | Delayed reason: Testing'}],
+   onPrint:args=>printed.push(args),
    onExport:null,
   });
-  const cells=all(body.children.at(-1)).filter(node=>node.tag==='td').map(node=>node.textContent);
-  assert.deepEqual(cells,['1','LDM6 - 1064','2 updates\nLatest 9:19 PM 03-09-2026']);
-  assert.equal(cells.some(cell=>String(cell).includes('Update: Removed')),false);
+  let nodes=all(body.children.at(-1));
+  const sheets=nodes.filter(node=>String(node.className||'').includes('smart-print-sheet'));
+  assert.equal(sheets.length,2);
+  assert.deepEqual(all(sheets[0]).filter(node=>node.tag==='td').map(node=>node.textContent),['1','LDM6 - 1064','2 updates\nLatest 9:19 PM 03-09-2026']);
+  const updateCells=all(sheets[1]).filter(node=>node.tag==='td').map(node=>node.textContent);
+  assert.ok(updateCells.includes('Removed'));
+  assert.ok(updateCells.includes('Fitted'));
+  assert.equal(updateCells.some(cell=>String(cell).includes('Removed')&&String(cell).includes('Fitted')),false,'updates never share one giant cell');
+  assert.ok(nodes.some(node=>String(node.textContent||'').includes('every update is included')));
+
+  nodes.find(node=>node.textContent==='Print current selection').onclick();
+  nodes=all(body.children.at(-1));nodes.find(node=>String(node.textContent).startsWith('A4 · ')).onclick();
+  nodes=all(body.children.at(-1));nodes.find(node=>node.textContent==='Print now').onclick();
+  assert.equal(printed[0].appendices.length,1);
+  assert.equal(printed[0].appendices[0].rows.length,2);
+  assert.equal(printed[0].columns[1].value(printed[0].rows[0]),'2 updates\nLatest 9:19 PM 03-09-2026');
  }finally{globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
 

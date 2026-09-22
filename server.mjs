@@ -1441,32 +1441,44 @@ app.post('/api/user-activity',requireSession,async(req,res,next)=>{
 app.post('/api/exports/pdf',requireSession,async(req,res,next)=>{
   try{
     const title=String(req.body?.title||'Nerve Center report').replace(/\s+/g,' ').trim().slice(0,2000)||'Nerve Center report';
-    const requestedColumns=Array.isArray(req.body?.columns)?req.body.columns:[];
-    const requestedRows=Array.isArray(req.body?.rows)?req.body.rows:[];
-    // Shared tables already send their Sr. No. column; it does not count against the data-column limit.
-    const dataColumnCount=requestedColumns.length-(String(requestedColumns[0]?.label??'').trim()==='Sr. No.'?1:0);
-    if(dataColumnCount<1||dataColumnCount>48)return res.status(400).json({error:'Select between 1 and 48 report columns.'});
-    if(requestedRows.length>5000)return res.status(413).json({error:'This report has too many rows to export at once. Apply a filter and try again.'});
-    const columns=requestedColumns.map((column,index)=>({label:String(column?.label||`Column ${index+1}`).replace(/\s+/g,' ').trim().slice(0,100)||`Column ${index+1}`}));
-    const rows=[];
     let reportCharacters=0;
-    for(const row of requestedRows){
-      const cells=columns.map((_,index)=>Array.isArray(row)?String(row[index]??'').replace(/\s+/g,' ').trim():'—');
-      // Preserve complete remarks (up to 2,000 characters) and longer work
-      // descriptions. Oversized exports fail visibly instead of losing text.
-      if(cells.some((cell)=>cell.length>10000))return res.status(413).json({error:'A report field exceeds the 10,000-character PDF limit. Export as Excel to preserve the complete text.'});
-      reportCharacters+=cells.reduce((total,cell)=>total+cell.length,0);
-      if(reportCharacters>1000000)return res.status(413).json({error:'This PDF report contains too much text. Apply a filter or export as Excel to preserve all details.'});
-      rows.push(cells);
-    }
-    const highlights=(Array.isArray(req.body?.highlights)?req.body.highlights:[]).map(Number).filter((index)=>Number.isInteger(index)&&index>=0&&index<rows.length);
     const pageSize=String(req.body?.pageSize||'').trim().toUpperCase()==='A4'?'A4':'A3';
-    const pdf=await buildTableExportPdf({title,columns,rows,highlights,pageSize});
+    let reportRows=0;
+    const cleanTable=(input={},index=0)=>{
+      const requestedColumns=Array.isArray(input?.columns)?input.columns:[];
+      const requestedRows=Array.isArray(input?.rows)?input.rows:[];
+      // Shared tables already send their Sr. No. column; it does not count against the data-column limit.
+      const dataColumnCount=requestedColumns.length-(String(requestedColumns[0]?.label??'').trim()==='Sr. No.'?1:0);
+      if(dataColumnCount<1||dataColumnCount>48){const error=new Error('Select between 1 and 48 report columns.');error.status=400;throw error;}
+      reportRows+=requestedRows.length;
+      if(reportRows>5000){const error=new Error('This report has too many rows to export at once. Apply a filter and try again.');error.status=413;throw error;}
+      const columns=requestedColumns.map((column,columnIndex)=>({label:String(column?.label||`Column ${columnIndex+1}`).replace(/\s+/g,' ').trim().slice(0,100)||`Column ${columnIndex+1}`}));
+      const rows=[];
+      for(const row of requestedRows){
+        const cells=columns.map((_,columnIndex)=>Array.isArray(row)?String(row[columnIndex]??'').replace(/\s+/g,' ').trim():'—');
+        if(cells.some((cell)=>cell.length>10000)){const error=new Error('A report field exceeds the 10,000-character PDF limit. Export as Excel to preserve the complete text.');error.status=413;throw error;}
+        reportCharacters+=cells.reduce((total,cell)=>total+cell.length,0);
+        if(reportCharacters>1000000){const error=new Error('This PDF report contains too much text. Apply a filter or export as Excel to preserve all details.');error.status=413;throw error;}
+        rows.push(cells);
+      }
+      const highlights=(Array.isArray(input?.highlights)?input.highlights:[]).map(Number).filter((rowIndex)=>Number.isInteger(rowIndex)&&rowIndex>=0&&rowIndex<rows.length);
+      return {title:String(input?.title||`Report ${index+1}`).replace(/\s+/g,' ').trim().slice(0,200)||`Report ${index+1}`,columns,rows,highlights};
+    };
+    const requestedTables=Array.isArray(req.body?.tables)?req.body.tables:null;
+    if(requestedTables?.length>6)return res.status(400).json({error:'Select no more than 6 report sections.'});
+    let pdf;
+    if(requestedTables?.length){
+      const tables=requestedTables.map(cleanTable);
+      pdf=await buildTableBundlePdf({title,tables,pageSize});
+    }else{
+      const {columns,rows,highlights}=cleanTable({title,columns:req.body?.columns,rows:req.body?.rows,highlights:req.body?.highlights});
+      pdf=await buildTableExportPdf({title,columns,rows,highlights,pageSize});
+    }
     res.set('Cache-Control','no-store');
     res.type('application/pdf');
     res.attachment(reportFilename('Report',title,new Date().toISOString().slice(0,10)));
     res.send(pdf);
-  }catch(error){next(error)}
+  }catch(error){if(error?.status)return res.status(error.status).json({error:error.message});next(error)}
 });
 
 app.get('/api/reports/director/timing',requireSuper,(_req,res)=>{
