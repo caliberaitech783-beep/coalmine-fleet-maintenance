@@ -576,3 +576,184 @@
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Final dashboard phone pass. Keep wide content inside its own scroller while
+   the page, header, filters, and chart controls stay within the viewport. */
+@media screen and (max-width: 700px) {
+  html,
+  body,
+  #root,
+  .app,
+  .content {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .content {
+    overflow-x: clip;
+  }
+
+  .top {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    column-gap: 4px;
+    width: 100%;
+    max-width: 100%;
+    padding-inline: 8px;
+    overflow: hidden;
+  }
+
+  .top > .menubtn {
+    width: 36px;
+    min-width: 36px;
+    padding-inline: 6px;
+  }
+
+  .top > .crumb {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .top > div:last-child {
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .top .live-temperature-chip,
+  .top .ai-feeder-trigger > span,
+  .top .theme-toggle-label {
+    display: none;
+  }
+
+  .top > div:last-child :is(.ai-feeder-trigger, .smart-search-button),
+  .top .notification-center,
+  .top .notification-center > button {
+    width: 36px;
+    min-width: 36px;
+  }
+
+  .top .theme-toggle {
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 3px !important;
+  }
+
+  .top .theme-toggle-track {
+    width: 44px;
+  }
+
+  .top .theme-toggle[aria-pressed="true"] .theme-toggle-thumb {
+    left: 20px;
+  }
+
+  .body:has(> .mine-dashboard) {
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  .body > .mine-dashboard {
+    width: auto;
+    max-width: none;
+    margin: -18px;
+  }
+
+  /* The filter banner is taller than a phone's useful content area. Let it
+     leave the screen with the page instead of covering dashboard panels. */
+  .mine-dashboard > .dashboard-filter-bar {
+    position: static;
+    top: auto;
+  }
+
+  .mine-fleet-chart-heading,
+  .mine-fleet-chart-toggle,
+  .mine-fleet-chart-toggle .mine-fleet-view-option {
+    min-width: 0;
+  }
+
+  .mine-fleet-chart-toggle {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 4px;
+  }
+
+  .mine-fleet-chart-toggle .mine-fleet-view-option {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+  }
+
+  .mine-fleet-chart-toggle .mine-fleet-view-option > button:first-child {
+    flex: 1 0 100%;
+    width: 100%;
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 12px;
+  }
+
+  .mine-fleet-chart-toggle .mine-fleet-toggle-count {
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 16px;
+  }
+
+  .mine-fleet-chart-toggle .mine-fleet-count-trend {
+    min-width: 0;
+    padding-inline: 4px;
+    font-size: 10px;
+  }
+
+  .mine-dashboard .mine-request-lifecycle-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .mine-dashboard .mine-request-lifecycle-controls > .mine-trend-period {
+    grid-area: auto;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .mine-dashboard .mine-request-lifecycle-controls > .mine-lifecycle-custom {
+    grid-area: auto;
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .mine-dashboard .mine-request-lifecycle-controls > label,
+  .mine-dashboard .mine-request-lifecycle-end-controls > label {
+    grid-area: auto;
+    grid-column: auto;
+    min-width: 0;
+  }
+
+  .mine-dashboard .mine-request-lifecycle-end-controls > label:last-child,
+  .mine-dashboard .mine-request-lifecycle-controls > .export-menu {
+    grid-column: 1 / -1;
+  }
+
+  /* Six grouped readings need room for their three-digit value labels. The
+     chart scrolls horizontally inside its card; the page itself does not. */
+  .mine-dashboard .mine-request-chart-days {
+    grid-auto-columns: minmax(150px, 1fr);
+  }
+
+  .mine-dashboard .mine-request-chart-day > span {
+    gap: 14px;
+  }
+}
+
+@media screen and (max-width: 360px) {
+  .mine-dashboard .mine-request-lifecycle-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mine-dashboard .mine-request-lifecycle-controls > label,
+  .mine-dashboard .mine-request-lifecycle-end-controls > label,
+  .mine-dashboard .mine-request-lifecycle-controls > .mine-trend-period,
+  .mine-dashboard .mine-request-lifecycle-controls > .export-menu {
+    grid-column: 1 / -1;
+  }
+}
