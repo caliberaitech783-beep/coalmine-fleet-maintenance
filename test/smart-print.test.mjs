@@ -9,6 +9,12 @@ test('only chosen headings and values reach print in table order',()=>{
  assert.deepEqual(selected.map(c=>c.value({door:'24',status:'Open'})),['24','Open']);
  assert.deepEqual(selectedPrintColumns(options,[]),[]);
 });
+test('job reference is mandatory and prints before the rest of the selected columns',()=>{
+ const columns=[{label:'Door',value:r=>r.door},{label:'Job reference',value:r=>r.ref},{label:'Status',value:r=>r.status}];
+ const options=printColumnOptions(columns);
+ assert.deepEqual(selectedPrintColumns(options,[options[0].id,options[2].id]).map(column=>column.label),['Job reference','Door','Status']);
+ assert.deepEqual(selectedPrintColumns(options,[]).map(column=>column.label),['Job reference']);
+});
 test('saved layouts are sequential, reusable and account scoped',()=>{
  const options=printColumnOptions([{label:'Door'},{label:'Door'}]);
  assert.notEqual(options[0].id,options[1].id);
@@ -95,17 +101,19 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
  globalThis.window={localStorage:storage,sessionStorage:storage};
  const all=node=>[node,...node.children.flatMap(all)];
  try {
-  const columns=[{label:'Door',value:r=>r.door},{label:'Secret',value:r=>r.secret},{label:'Status',value:r=>r.status}];
-  const rows=[{door:'24',secret:'hidden',status:'Open'},{door:'25',secret:'hidden',status:'Closed'}],exported=[];
+  const columns=[{label:'Door',value:r=>r.door},{label:'Secret',value:r=>r.secret},{label:'Job reference',value:r=>r.ref},{label:'Status',value:r=>r.status}];
+  const rows=[{door:'24',secret:'hidden',ref:'REQ-1',status:'Open'},{door:'25',secret:'hidden',ref:'REQ-2',status:'Closed'}],exported=[];
   const highlightRow=row=>row.status==='Open';
   openSmartPrint({title:'Report',columns,rows,highlightRow,onPrint(){},onExport:args=>{exported.push(args);}});
   let nodes=all(body.children.at(-1));
   const checks=nodes.filter(n=>n.tag==='input');
   checks[1].checked=false;checks[1].onchange();
+  checks[2].checked=false;checks[2].onchange();
   nodes=all(body.children.at(-1));
+  assert.equal(checks[2].disabled,true,'Job reference cannot be unchecked');
   // The preview shows the automatic Sr. No. column, only the chosen columns in table order, and highlighted rows.
-  assert.deepEqual(nodes.filter(n=>n.tag==='th').map(n=>n.textContent),['Sr. No.','Door','Status']);
-  assert.deepEqual(nodes.filter(n=>n.tag==='td').map(n=>n.textContent),['1','24','Open','2','25','Closed']);
+  assert.deepEqual(nodes.filter(n=>n.tag==='th').map(n=>n.textContent),['Sr. No.','Job reference','Door','Status']);
+  assert.deepEqual(nodes.filter(n=>n.tag==='td').map(n=>n.textContent),['1','REQ-1','24','Open','2','REQ-2','25','Closed']);
   assert.deepEqual(nodes.filter(n=>n.tag==='tr'&&n.className==='highlight-row').length,1);
   // A single Export button asks only for the format; exports never ask for a page size.
   assert.equal(nodes.filter(n=>n.tag==='button'&&/^Export/.test(n.textContent)).length,1);
@@ -116,7 +124,7 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   all(body.children.at(-1)).find(n=>n.textContent==='Excel (.xlsx)').onclick();
   await new Promise(resolve=>setTimeout(resolve));
   assert.equal(exported[0].format,'xlsx');
-  assert.deepEqual(exported[0].columns,[columns[0],columns[2]]);
+  assert.deepEqual(exported[0].columns,[columns[2],columns[0],columns[3]]);
   assert.equal(exported[0].rows,rows);
   assert.equal(exported[0].highlightRow,highlightRow);
   nodes.find(n=>n.textContent==='Export').onclick();
@@ -124,8 +132,8 @@ test('exports carry the chosen columns, rows and page size, and the preview mirr
   all(body.children.at(-1)).find(n=>n.textContent==='PDF').onclick();
   await new Promise(resolve=>setTimeout(resolve));
   assert.equal(exported[1].format,'pdf');assert.equal(exported[1].pageSize,undefined);
-  assert.deepEqual(exported[1].columns,[columns[0],columns[2]]);
-  assert.match(all(body.children.at(-1)).find(n=>n.className==='smart-print-notice').textContent,/PDF export downloaded with 2 columns and 2 records/);
+  assert.deepEqual(exported[1].columns,[columns[2],columns[0],columns[3]]);
+  assert.match(all(body.children.at(-1)).find(n=>n.className==='smart-print-notice').textContent,/PDF export downloaded with 3 columns and 2 records/);
  } finally {globalThis.document=oldDocument;globalThis.window=oldWindow;}
 });
 test('wide reports are scaled down to the page and never enlarged',()=>{

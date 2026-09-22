@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import RecordDateRange from "./record-date-range.jsx";
 import { primaryRecordDateColumn } from "./record-date-range.mjs";
 import { defaultDurationSort } from "./duration-sort.mjs";
-import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, closedTimeAfterStartedColumns, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder } from "./table-actions-model.mjs";
+import { tableElements, tableCellText, tableModel, projectTableRow, selectTableRows, tableExportModel, dateColumnsFirst, jobReferenceColumnsLast, requestColumnsInWorkflowOrder, closedTimeAfterStartedColumns, SERIAL_COLUMN_KEY, SERIAL_COLUMN_LABEL, restoreColumnOrder, storeColumnOrder, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
 import { mobileTablePageSize } from "./mobile-performance.mjs";
 import { useTableLayouts, TableLayoutSelect } from "./table-layouts.jsx";
 import "./table-actions.css";
@@ -57,8 +57,13 @@ export default function SharedActionsTable({ closedTimeAfterStarted = false, gro
 function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDialog, FilterDialog, ExportMenu, FilterableHeader, exportTitle, printTitle, toolbarTarget, toolbarPortal, summaryTarget, recordDateFilter, disableDateColumnFilter, showRowNumbers, printReport, SavedReports, onClearToolbarFilters, tableProps }) {
   // Remember each table's column arrangement (order and visibility) in this browser so it survives a refresh.
   const columnStorageKey = `nerveCenterTableColumns:${exportTitle || printTitle || tableProps.className || "table"}`;
-  const [visible, setVisibleState] = useState(() => restoreColumnOrder(columnStorageKey, columns.map((column) => column.key)));
-  const setVisible = (keys) => { setVisibleState(keys); storeColumnOrder(columnStorageKey, keys, columns.map((column) => column.key)); };
+  const allColumnKeys = columns.map((column) => column.key);
+  const [visible, setVisibleState] = useState(() => ensureJobReferenceVisibleKeys(restoreColumnOrder(columnStorageKey, allColumnKeys), columns));
+  const setVisible = (keys) => {
+    const next = ensureJobReferenceVisibleKeys(keys, columns);
+    setVisibleState(next);
+    storeColumnOrder(columnStorageKey, next, allColumnKeys);
+  };
   // The column schema identifies this table type; site/date headings can change without hiding its layouts.
   const layoutStore = useTableLayouts("shared-table", columns);
   const [filters, setFilters] = useState({});
@@ -163,7 +168,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
   // Include the existing header's complete value list, not only currently filtered rows.
   const filterRows = filterableColumns.flatMap((column) => (column.header.props.values || []).map((value) => ({ tableActionValue: { key: column.key, value } })));
   const filterColumns = filterableColumns.map((column) => ({ ...column, value: (row) => row.tableActionValue ? row.tableActionValue.key === column.key ? row.tableActionValue.value : "" : column.value(row) }));
-  const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort(defaultSort.key, defaultSort.direction); setVisible(columns.map((column) => column.key)); };
+  const reset = () => { clearFilters(); if(recordDateFilter!==false)recordDateFilter?.onChange(""); applySort(defaultSort.key, defaultSort.direction); setVisible(allColumnKeys); };
   const dateControl = recordDateFilter===false ? null : recordDateFilter || (dateColumn ? { label: dateColumn.label, value: effectiveFilters[dateColumn.key], onChange: (value) => updateFilter(dateColumn.key, value) } : null);
   const dateRangeControl = dateControl && <RecordDateRange {...dateControl} />;
   // Saved reports: named views of this table (visible columns, filters, sort, date range).
@@ -175,7 +180,7 @@ function TableView({ sections, columns, groupBySite, Menu, ColumnsDialog, SortDi
   const printCurrentView = () => { if (canPrintReport) printReport(printModelRef.current); };
   const currentView = () => ({ visible, filters: effectiveFilters, sort: sort.key ? sort : externalSort || sort, dateRange: dateControl?.value || "" });
   const applySavedView = (view) => {
-    setVisible(view.visible.length ? view.visible : columns.map((column) => column.key));
+    setVisible(view.visible.length ? view.visible : allColumnKeys);
     const localOnly = {};
     columns.forEach((column) => {
       if (column.key === disabledDateKey) return;

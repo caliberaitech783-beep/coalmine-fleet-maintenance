@@ -13,19 +13,19 @@ test("workflow request columns use the requested order with all remaining fields
   const {columns} = tableModel(h("thead", {}, h("tr", {}, labels.map(label => h("th", {}, label)))));
   const ordered = requestColumnsInWorkflowOrder(columns);
   const maintenance = requestColumnsInWorkflowOrder(columns, true);
-  assert.deepEqual(maintenance.map(c => c.label), ["Door no.", "Status", "Actions", "Started", "Days of breakdown", "Reason", "Repair category", "Equipment group", "Model", "Closed", "Site location", "Job reference"]);
+  assert.deepEqual(maintenance.map(c => c.label), ["Job reference", "Door no.", "Status", "Actions", "Started", "Days of breakdown", "Reason", "Repair category", "Equipment group", "Model", "Closed", "Site location"]);
   assert.deepEqual(tableSlots(projectTableRow(row("maintenance", ...labels), maintenance.map(c => c.index))).map(s => tableCellText(s.cell)), maintenance.map(c => c.label));
   // Breakdown type and reason sit beside breakdown days (the adjacent-field layout), then the remaining requested order.
-  assert.deepEqual(ordered.map(c => c.label), ["Started", "Closed", "Days of breakdown", "Repair category", "Reason", "Status", "Door no.", "Site location", "Actions", "Equipment group", "Model", "Job reference"]);
+  assert.deepEqual(ordered.map(c => c.label), ["Job reference", "Started", "Closed", "Days of breakdown", "Status", "Door no.", "Site location", "Repair category", "Reason", "Actions", "Equipment group", "Model"]);
   assert.deepEqual(tableSlots(projectTableRow(row("record", ...labels), ordered.map(c => c.index))).map(s => tableCellText(s.cell)), ordered.map(c => c.label));
   assert.deepEqual(columns.map(c => c.label), labels);
 });
 
-test("job references come last outside Reports without changing other columns or values", () => {
+test("job references stay first outside Reports without changing other columns or values", () => {
   const labels = ["Actions", "Job reference", "Site", "Started", "Closed", "Ticket reference"];
   const {columns} = tableModel(h("thead", {}, h("tr", {}, labels.map(label => h("th", {}, label)))));
   const ordered = jobReferenceColumnsLast(dateColumnsFirst(columns));
-  assert.deepEqual(ordered.map(c => c.label), ["Started", "Closed", "Actions", "Site", "Ticket reference", "Job reference"]);
+  assert.deepEqual(ordered.map(c => c.label), ["Job reference", "Started", "Closed", "Actions", "Site", "Ticket reference"]);
   assert.deepEqual(tableSlots(projectTableRow(row("record", ...labels), ordered.map(c => c.index))).map(s => tableCellText(s.cell)), ordered.map(c => c.label));
   assert.deepEqual(columns.map(c => c.label), labels);
   const main = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
@@ -174,10 +174,11 @@ test("Total Fleet lists sort Started oldest-to-latest from the heading instead o
 test("column arrangements are remembered per table and cleared by Reset table", async () => {
   const shared = fs.readFileSync(new URL("../src/shared-actions-table.jsx", import.meta.url), "utf8");
   assert.match(shared, /const columnStorageKey = `nerveCenterTableColumns:\$\{exportTitle \|\| printTitle \|\| tableProps\.className \|\| "table"\}`;/);
-  assert.match(shared, /useState\(\(\) => restoreColumnOrder\(columnStorageKey, columns\.map\(\(column\) => column\.key\)\)\)/);
-  assert.match(shared, /const setVisible = \(keys\) => \{ setVisibleState\(keys\); storeColumnOrder\(columnStorageKey, keys, columns\.map\(\(column\) => column\.key\)\); \};/);
-  assert.match(shared, /const reset = \(\) => \{[^}]*setVisible\(columns\.map\(\(column\) => column\.key\)\); \};/, "Reset table restores and clears the saved arrangement");
-  const {restoreColumnOrder, storeColumnOrder} = await import("../src/table-actions-model.mjs");
+  assert.match(shared, /const allColumnKeys = columns\.map\(\(column\) => column\.key\);/);
+  assert.match(shared, /useState\(\(\) => ensureJobReferenceVisibleKeys\(restoreColumnOrder\(columnStorageKey, allColumnKeys\), columns\)\)/);
+  assert.match(shared, /const next = ensureJobReferenceVisibleKeys\(keys, columns\);/);
+  assert.match(shared, /const reset = \(\) => \{[^}]*setVisible\(allColumnKeys\); \};/, "Reset table restores and clears the saved arrangement");
+  const {restoreColumnOrder, storeColumnOrder, ensureJobReferenceVisibleKeys} = await import("../src/table-actions-model.mjs");
   const store = new Map();
   globalThis.localStorage = {getItem: (k) => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k)};
   try {
@@ -192,6 +193,8 @@ test("column arrangements are remembered per table and cleared by Reset table", 
     assert.equal(store.has("t"), false, "the default arrangement is not stored");
     store.set("t", "not json");
     assert.deepEqual(restoreColumnOrder("t", defaults), defaults, "corrupt storage falls back to the default");
+    const columns = [{key:"door",label:"Door no."},{key:"ref",label:"Job reference"},{key:"status",label:"Status"}];
+    assert.deepEqual(ensureJobReferenceVisibleKeys(["status"], columns), ["ref","status"], "Job reference is restored when a saved layout hid it");
   } finally { delete globalThis.localStorage; }
 });
 

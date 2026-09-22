@@ -76,6 +76,23 @@ export function tableModel(children) {
   return { sections, columns };
 }
 
+export function isJobReferenceColumn(column) {
+  return /^job\s+ref(?:erence)?s?\.?$/i.test(String(column?.label || "").trim());
+}
+
+export function prioritizeJobReferenceColumns(columns) {
+  const jobReferences = columns.filter(isJobReferenceColumn);
+  if (!jobReferences.length) return columns;
+  return [...jobReferences, ...columns.filter((column) => !isJobReferenceColumn(column))];
+}
+
+export function ensureJobReferenceVisibleKeys(keys, columns) {
+  const jobKeys = columns.filter(isJobReferenceColumn).map((column) => column.key);
+  if (!jobKeys.length) return keys;
+  const requested = keys.length ? keys : columns.map((column) => column.key);
+  return [...jobKeys, ...requested.filter((key) => !jobKeys.includes(key))];
+}
+
 // Keep original indices so headers, values, filters and exports stay aligned.
 export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
   const priorities = ["days of breakdown", "status", "door no.", "site location", "repair category", "reason"];
@@ -84,11 +101,12 @@ export function requestColumnsInWorkflowOrder(columns, actionsFirst = false) {
     const index = priorities.indexOf(label);
     return index < 0 ? priorities.length : index;
   };
-  const ordered = jobReferenceColumnsLast(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b)), false));
+  const ordered = prioritizeJobReferenceColumns(dateColumnsFirst([...columns].sort((a, b) => rank(a) - rank(b)), false));
   if (!actionsFirst) return ordered;
   // Maintenance and MIS workflow tables lead with a fixed layout (the table adds Sr. No. in front),
-  // then every remaining column follows in the standard order with Job reference last.
+  // while Job reference stays mandatory near the front of the report.
   const leading = [
+    /^job\s+ref(?:erence)?s?\.?$/i,
     /^(?:machine\s*\/\s*)?door\s*(?:no\.?|number)$/i,
     /^status$/i,
     /^actions$/i,
@@ -125,8 +143,7 @@ export function closedTimeAfterStartedColumns(columns) {
 }
 
 export function jobReferenceColumnsLast(columns) {
-  const isJobReference = (column) => /^job\s+ref(?:erence)?s?\.?$/i.test(column.label.trim());
-  let ordered = [...columns.filter((column) => !isJobReference(column)), ...columns.filter(isJobReference)];
+  let ordered = prioritizeJobReferenceColumns(columns);
   // Apply the same adjacent-field layout to tables, printing and exports without changing source indices.
   const moveAfter = (anchor, matches) => {
     const target = ordered.find(anchor);
@@ -192,8 +209,9 @@ export function selectTableRows(rows, columns, filters, sort) {
 }
 
 export function tableExportModel(rows, columns, visibleKeys, filters = {}, sort = { key: "", direction: "asc" }) {
+  const printableKeys = ensureJobReferenceVisibleKeys(visibleKeys, columns);
   return {
-    columns: visibleKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean),
+    columns: printableKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean),
     rows: selectTableRows(rows, columns, filters, sort),
   };
 }

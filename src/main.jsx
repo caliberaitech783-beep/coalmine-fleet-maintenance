@@ -31,7 +31,7 @@ import './camera-upload.css';
 import {UserLoginHistory,UserLoginActivity} from "./user-login-history.jsx";
 import { filterRecordsByDate } from "./record-date-range.mjs";
 import { isDurationColumn, compareDurationValues, defaultDurationSort } from "./duration-sort.mjs";
-import { closedTimeAfterStartedColumns } from "./table-actions-model.mjs";
+import { closedTimeAfterStartedColumns, ensureJobReferenceVisibleKeys } from "./table-actions-model.mjs";
 import WhatsAppReportSettingsButton from "./whatsapp-report-settings.jsx";
 import UserProfile from "./user-profile.jsx";
 import RecoveryGuide from "./recovery-guide.jsx";
@@ -3558,7 +3558,9 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const [pageSize, setPageSize] = useState(() => mobileTablePageSize() || 50);
   const [page, setPage] = useState(0);
   const columnValue = (row, column) => tableFilterText(column.value?.(row));
-  const displayedColumns = visibleColumnKeys.length ? visibleColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean) : columns;
+  const allColumnKeys = columns.map((column) => column.key);
+  const displayedColumnKeys = ensureJobReferenceVisibleKeys(visibleColumnKeys.length ? visibleColumnKeys : allColumnKeys, columns);
+  const displayedColumns = displayedColumnKeys.map((key) => columns.find((column) => column.key === key)).filter(Boolean);
   const activeFilterColumn = openFilter ? columns.find((column) => column.key === openFilter) : null;
   const columnValues = activeFilterColumn ? {[activeFilterColumn.key]: tableColumnValues(rows, activeFilterColumn)} : {};
   const filteredRows = rows.filter((row) =>
@@ -3602,7 +3604,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const layoutStore = useTableLayouts(layoutKey || reportTitle, columns);
   const currentSavedView = () => ({ visible: displayedColumns.map((column) => column.key), filters: columnFilters, sort, pageSize });
   const applySavedView = (view) => {
-    onVisibleColumnsChange?.(view.visible.length ? view.visible : columns.map((column) => column.key));
+    onVisibleColumnsChange?.(ensureJobReferenceVisibleKeys(view.visible.length ? view.visible : allColumnKeys, columns));
     setColumnFilters(view.filters);
     changeSort(view.sort.key, view.sort.direction);
     if (view.pageSize) setPageSize(view.pageSize);
@@ -3612,8 +3614,8 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
   const reportTableToolbar = (
       <div className="report-table-filter-toolbar">
         <label className="report-row-limit"><span>Rows</span><select aria-label="Rows per page" value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))}><option value="25">25</option><option value="50">50</option><option value="100">100</option></select></label>
-        <TableLayoutSelect store={layoutStore} visibleKeys={displayedColumns.map(column => column.key)} onSelect={keys => onVisibleColumnsChange?.(keys)} />
-        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(mobileTablePageSize() || 50); onVisibleColumnsChange?.(columns.map((column) => column.key)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
+        <TableLayoutSelect store={layoutStore} visibleKeys={displayedColumns.map(column => column.key)} onSelect={keys => onVisibleColumnsChange?.(ensureJobReferenceVisibleKeys(keys, columns))} />
+        <ReportActionsMenu activeFilterCount={activeFilterCount} onColumns={() => setColumnDialogOpen(true)} onFilter={() => setFilterDialogOpen(true)} onSort={() => setSortDialogOpen(true)} onClearSort={() => changeSort("", "asc")} onReset={() => { setColumnFilters({}); const initialSort = defaultDurationSort(columns); changeSort(initialSort.key, initialSort.direction); setPageSize(mobileTablePageSize() || 50); onVisibleColumnsChange?.(ensureJobReferenceVisibleKeys(allColumnKeys, columns)); }} onSaveReport={() => setSavedReportDialog("save")} onSavedReports={() => setSavedReportDialog("saved")} />
         <SavedReportsPanel title={reportTitle} columns={columns} open={savedReportDialog} onOpenChange={setSavedReportDialog} currentView={currentSavedView} onApply={applySavedView} canPrint onPrint={printSavedView} />
         {activeFilterCount > 0 && <button type="button" className="report-active-filter" onClick={() => setFilterDialogOpen(true)}><ListFilter /><span>{activeFilterCount} active filter{activeFilterCount === 1 ? "" : "s"}</span></button>}
       </div>
@@ -3649,7 +3651,7 @@ function ReportTable({ columns = [], visibleColumnKeys = [], onVisibleColumnsCha
       </table>
       <div className="report-table-pagination"><span>{firstVisibleRow}-{lastVisibleRow} of {sortedRows.length.toLocaleString("en-IN")}</span><div><button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={currentPage === 0} aria-label="Previous report page" title="Previous page"><ChevronLeft /></button><b>{currentPage + 1} / {pageCount}</b><button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={currentPage >= pageCount - 1} aria-label="Next report page" title="Next page"><ChevronRight /></button></div></div>
       <TableParameterFilter columns={columns} rows={rows} filters={columnFilters} onFilterChange={updateColumnFilter} onClearFilters={() => setColumnFilters({})} open={filterDialogOpen} onOpenChange={setFilterDialogOpen} hideTrigger dialogMode />
-      {columnDialogOpen && <ReportColumnSelector columns={columns} visibleColumnKeys={displayedColumns.map((column) => column.key)} layoutStore={layoutStore} onApply={(keys) => { onVisibleColumnsChange?.(keys); setColumnDialogOpen(false); }} onClose={() => setColumnDialogOpen(false)} />}
+      {columnDialogOpen && <ReportColumnSelector columns={columns} visibleColumnKeys={displayedColumns.map((column) => column.key)} layoutStore={layoutStore} onApply={(keys) => { onVisibleColumnsChange?.(ensureJobReferenceVisibleKeys(keys, columns)); setColumnDialogOpen(false); }} onClose={() => setColumnDialogOpen(false)} />}
       {sortDialogOpen && <ReportSortDialog columns={displayedColumns} sort={sort} onApply={(key, direction) => { changeSort(key, direction); setSortDialogOpen(false); }} onClose={() => setSortDialogOpen(false)} />}
     </>
   );
@@ -9092,7 +9094,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
   };
   const [formError,setFormError] = useState("");
   const today = requestStartParts("");
-  const [firstTripDone, setFirstTripDone] = useState(false);
+  const [firstTripDone] = useState(true);
   const [tripCardFile, setTripCardFile] = useState(null);
   const [tripCardPreview, setTripCardPreview] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -9139,7 +9141,7 @@ function VerifyRequestForm({ request, equipmentRecords = [], close, onSave }) {
         <div><span>Opening readings</span><b>{requestMeterReadingLabel(request, "opening")}</b><MeterFileCell request={request} stage="opening" /></div>
       </div>
       <div className="formgrid"><VerificationTimeField /></div>
-      <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} onChange={(event) => setFirstTripDone(event.target.checked)} /> First trip done</label>
+      <label className="first-trip-check"><input type="checkbox" checked={firstTripDone} readOnly disabled /> First trip done by MIS</label>
       <div className="formgrid">
         {firstTripDone && <>
           <label>First trip date *<DateInput name="firstTripDate" required defaultValue={today.date} /><small>Enter the actual trip date. It must not be earlier than closure or in the future.</small></label>

@@ -13,7 +13,8 @@ test("MIS queues use lifecycle state, not the closer, verifier or historical ref
       for (const verifiedBy of ["Damini Rai", "Other verifier"]) {
         const verified = {...row, verifiedBy, verifiedAt: "2026-09-08 14:00:00"};
         assert.equal(visibleInMisRequests(verified), false);
-        assert.equal(visibleInMisHistory(verified), true);
+        assert.equal(visibleInMisHistory(verified), false);
+        assert.equal(visibleInMisHistory({...verified, productionFirstTripAt: "2026-09-08 13:45:00"}), true);
       }
     }
   }
@@ -29,6 +30,6 @@ test("open, in-progress and pending idle approvals do not enter either MIS queue
 
 test("MIS queue and history consume the state predicates", () => {
   const source = readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
-  assert.match(source, /isMis \? closedRequests\.filter\(visibleInMisRequests\) : activeRequests/);
-  assert.match(source, /historyRows=isMis\?closedRequests\.filter\(visibleInMisHistory\):isProduction/);
+  assert.match(source, /isMis\s*\?\s*closedRequests\.filter\(visibleInMisRequests\)\s*:\s*activeRequests/);
+  assert.match(source, /historyRows\s*=\s*(?:useMemo\(\(\)\s*=>\s*)?isMis\s*\?\s*closedRequests\.filter\(visibleInMisHistory\)\s*:\s*isProduction/);
 });

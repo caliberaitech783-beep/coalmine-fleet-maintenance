@@ -30,6 +30,7 @@ const pending=Object.freeze({
   arrivalFlaggedAt:'2026-09-08T09:02:00.000Z',arrivalFlaggedBy:'Sanskar Manohare',arrivalFlagRemark:'Recovery vehicle delayed',
   idleReason:'No work',idealRequestedAt:'2026-09-08T10:00:00.000Z',idealRequestedBy:'Sanskar Manohare',idealApprovedAt:null,idealApprovedBy:'',
   maintenanceWork:'Inspection completed',closedAt:null,closedBy:'',verifiedAt:null,verifiedBy:'',verificationStatus:'Pending',
+  productionFirstTripAt:'2026-09-08 16:45:00',
   dailyRemarks:[{remark:'Vehicle arrived',authorName:'Sanskar Manohare'}],misFlaggedAt:null,misFlagRemark:'',
 });
 
@@ -78,7 +79,7 @@ function harness(kind,{row=pending,user={site:'Sasti OB'},notificationFailure=''
   return {
     get saved(){return saved;},get mutations(){return mutations;},queries,logs,notifications,
     async call({session=kind==='verify'?misSession:maintenanceManager,body={}}={}){
-      const req={params:{reference:pending.ref},testSession:session,body:{firstTripDone:false,firstTripCardImage:'data:image/png;base64,iVBORw==',closingMeterReading:'1234',...body}};
+      const req={params:{reference:pending.ref},testSession:session,body:{firstTripDone:true,firstTripDate:'2026-09-08',firstTripTime:'17:30:00',firstTripCardImage:'data:image/png;base64,iVBORw==',closingMeterReading:'1234',...body}};
       const res={statusCode:200,status(code){this.statusCode=code;return this;},json(body){this.body=body;return this;}};
       for(const handler of chain){
         let advanced=false,error;

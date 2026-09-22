@@ -81,7 +81,7 @@ async function runRoute(action, body) {
     }}, tipper),
     withRequestTimelineTransaction: async (_req, _ref, callback) => callback({query: async (sql, values) => {
       writes.push({sql, values}); return {rows: [{...tipper, status: "Closed", verifiedAt: "2026-09-09 12:00:00"}]};
-    }}, {...tipper, status: "Closed"}),
+    }}, {...tipper, status: "Closed", productionFirstTripAt: "2026-09-09 11:30:00"}),
     requestExpectedCompletionValue: (_before, next) => next, validateRequestTimelineChange: () => {}, buildRequestTimelineChanges: () => {},
     arrivalFlagReadySql: "true", delayedReasonRequired: () => false, approvedDelayedReason, parseRequestTimelineTimestamp: value => new Date(value),
     maintenanceWriteFailure: (error, res, next) => error.status ? res.status(error.status).json({error: error.message}) : next(error),
@@ -92,7 +92,7 @@ async function runRoute(action, body) {
     ...siteAccess,currentUserRecord: async () => ({site: tipper.site}), canonicalSiteName: value => value,
     pool: {query: async (sql, values) => {
       if (/^UPDATE/.test(sql)) { writes.push({sql, values}); return {rows: [tipper]}; }
-      return {rows: [{...tipper, status: action === "/verify" ? "Closed" : tipper.status, meter_type: "KMR", opening_meter_file: "saved-opening", closing_meter_file: "saved-closing"}]};
+      return {rows: [{...tipper, status: action === "/verify" ? "Closed" : tipper.status, productionFirstTripAt: action === "/verify" ? "2026-09-09 11:30:00" : "", meter_type: "KMR", opening_meter_file: "saved-opening", closing_meter_file: "saved-closing"}]};
     }},
     sendRequestEventReports: async () => {}, requestStakeholderLogins: async () => [], addTicketNotifications: async () => {},
   });
@@ -127,7 +127,7 @@ test("invalid secondary readings are rejected before any edit or close writes", 
 });
 
 test("verification preserves a trip card already uploaded at closure", async () => {
-  const result = await runRoute("/verify", {firstTripCardImage: "data:image/jpeg;base64,/9j/2Q==", closingMeterReading: "1001", closingMeterReadings: {HMR: "13", KMR: "1001"}});
+  const result = await runRoute("/verify", {firstTripDone: true, firstTripDate: "2026-09-09", firstTripTime: "12:00:00", firstTripCardImage: "data:image/jpeg;base64,/9j/2Q==", closingMeterReading: "1001", closingMeterReadings: {HMR: "13", KMR: "1001"}});
   assert.equal(result.status, 200);
   assert.doesNotMatch(result.writes[0].sql, /closing_meter_file=/);
   assert.deepEqual(JSON.parse(result.writes[0].values[8]), {HMR: "13", KMR: "1001"});

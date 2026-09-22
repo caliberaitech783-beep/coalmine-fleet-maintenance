@@ -137,6 +137,7 @@ test("Reports tables apply the same saved column order through their controlled 
     sortCollator: new Intl.Collator(), matchesSmartSearch: () => true, tableRowMatchesFilters: () => true,
     useSortableRows: rows => [rows, { key: "", direction: "asc" }, () => {}],
     useTableLayouts: key => { capturedKey = key; return { layouts: [] }; }, TableLayoutSelect: Null,
+    ensureJobReferenceVisibleKeys: tableModel.ensureJobReferenceVisibleKeys,
     ReportActionsMenu: Null, SavedReportsPanel: Null, FilterableHeader: Null, TableParameterFilter: Null,
     ReportColumnSelector: Null, ReportSortDialog: Null, ListFilter: Null, ChevronLeft: Null, ChevronRight: Null,
   });

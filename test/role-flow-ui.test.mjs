@@ -84,7 +84,7 @@ const opened = {ref: "REQ-ROLE-CYCLE", owner: "Stupal Moon", requesterLogin: "st
 const accepted = {...opened, status: "In progress", acceptedBy: "Sanskar Manohare", acceptedAt: "2026-09-08 10:10:00"};
 const idle = {...accepted, status: "Idle", idealRequestedBy: "Sanskar Manohare", idleReason: "No work"};
 const closed = {...idle, status: "Closed", closedBy: "maimaintenance manager", idealApprovedBy: "maimaintenance manager", closedAt: "2026-09-08 12:00:00"};
-const verified = {...closed, verifiedAt: "2026-09-08 13:00:00", verifiedBy: "Damini Rai"};
+const verified = {...closed, productionFirstTripAt: "2026-09-08 12:30:00", productionFirstTripBy: "Production Team", verifiedAt: "2026-09-08 13:00:00", verifiedBy: "Damini Rai"};
 const normalProps = (role, row) => ({embedded: true, session: {assignedRole: role, location: "Sasti OB", permissions: {editRequests: role === "Maintenance User", closeRequests: role === "Maintenance User", verifyRequests: role === "MIS User"}}, requests: [row]});
 
 test('Accepted status is enabled only in Maintenance Requests and close eligibility still requires acceptance', () => {

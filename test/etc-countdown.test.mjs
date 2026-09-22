@@ -121,7 +121,7 @@ test('every countdown on the page shares one ticker that stops with the last sub
 test('ETC and its countdown follow Days of breakdown in the maintenance lead layout', () => {
   const labels = ['Actions', 'Job reference', 'Door no.', 'Status', 'Started', 'Time left for ETC', 'ETC', 'Days of breakdown', 'Breakdown reason', 'Daily remarks'];
   const columns = labels.map((label, index) => ({label, index, key: label === 'ETC' ? 'etc' : label === 'Time left for ETC' ? 'etcRemaining' : `${index}:${label}`}));
-  assert.deepEqual(requestColumnsInWorkflowOrder(columns, true).map(column => column.label), ['Door no.', 'Status', 'Actions', 'Started', 'Days of breakdown', 'ETC', 'Time left for ETC', 'Breakdown reason', 'Daily remarks', 'Job reference']);
+  assert.deepEqual(requestColumnsInWorkflowOrder(columns, true).map(column => column.label), ['Job reference', 'Door no.', 'Status', 'Actions', 'Started', 'Days of breakdown', 'ETC', 'Time left for ETC', 'Breakdown reason', 'Daily remarks']);
   const dated = dateColumnsFirst([{key: 'etcRemaining', label: 'Time left for ETC'}, {key: 'etc', label: 'ETC'}, {key: 'start', label: 'Started'}], false);
   assert.deepEqual(dated.map(column => column.key), ['start', 'etcRemaining', 'etc']);
 });
@@ -168,6 +168,7 @@ function renderTable(props) {
     RequestTimelineButton: ({label}) => React.createElement('b', {}, label),
     EtcCountdown: props => React.createElement(EtcCountdown, {...props, now}),
     etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue, dailyUpdatesExportText,
+    WORKFLOW_INITIAL_RENDER_ROWS: 100, WORKFLOW_RENDER_BATCH: 100,
   };
   for (const icon of ['Flag', 'Menu', 'Search', 'ListFilter', 'MapPin', 'Pencil', 'Trash2', 'CheckCircle2', 'MessageCircle', 'ShieldCheck']) scope[icon] = Null;
   const MobileWorkflowTable = new Function(...Object.keys(scope), `${compiledTable};return MobileWorkflowTable;`)(...Object.values(scope));

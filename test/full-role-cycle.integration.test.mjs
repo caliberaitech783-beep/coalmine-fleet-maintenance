@@ -77,7 +77,8 @@ test('real database role cycles, queues, red flags, reports and permission bound
   }
   const change=(row,extra={})=>({category:row.category,complaint:row.complaint,expectedCompletionAt:india(3600000).slice(0,16),meterType:'HMR',...extra});
   const closeBody=(extra={})=>{const [closingDate,closingTime]=india().split('T');return {closingDate,closingTime,maintenanceWork:'Audit repair completed',...extra}};
-  const verification=()=>({firstTripDone:false,firstTripCardImage:image,closingMeterReading:'200'});
+  const verification=()=>({firstTripDone:true,firstTripCardImage:image,closingMeterReading:'200'});
+  const productionFirstTrip=()=>{const [firstTripDate,firstTripTime]=india().split('T');return {firstTripDate,firstTripTime,productionFirstTripRemark:'Production received vehicle and started first trip.'};};
   async function awaitManualTimestampAfter(row,field){
     // Form inputs carry whole seconds; production capture retains PostgreSQL
     // milliseconds. An instant fixture action in the same second would be
@@ -119,6 +120,10 @@ test('real database role cycles, queues, red flags, reports and permission bound
     await assertClosedQueues(closed);
     await call('production','PATCH',`/api/requests/${row.ref}/verify`,verification(),403);
     await call('otherMis','PATCH',`/api/requests/${row.ref}/verify`,verification(),403);
+    await call('mis','PATCH',`/api/requests/${row.ref}/verify`,verification(),409);
+    await awaitManualTimestampAfter(closed,'closedAt');
+    const productionTrip=await call('production','PATCH',`/api/requests/${row.ref}/production-first-trip`,productionFirstTrip());
+    assert.ok(productionTrip.productionFirstTripAt);
     await call('mis','PATCH',`/api/requests/${row.ref}/verify`,{closingMeterReading:'200'},400);
     await call('mis','PATCH',`/api/requests/${row.ref}/mis-flag`,{remark:''},400);
     await call('mis','PATCH',`/api/requests/${row.ref}/mis-flag`,{remark:'Trip record checked for discrepancy'});
@@ -145,6 +150,8 @@ test('real database role cycles, queues, red flags, reports and permission bound
     await assertClosedQueues(approved);
     await call(role,'PATCH',`/api/requests/${row.ref}/ideal-onroad`,{},409);
     await awaitManualTimestampAfter(approved,'closedAt');
+    const productionTrip=await call('production','PATCH',`/api/requests/${row.ref}/production-first-trip`,productionFirstTrip());
+    assert.ok(productionTrip.productionFirstTripAt);
     const [firstTripDate,firstTripTime]=india().split('T');
     const verified=await call('mis','PATCH',`/api/requests/${row.ref}/verify`,{...verification(),firstTripDone:true,firstTripDate,firstTripTime});
     assert.equal(verified.firstTripDone,true);assert.ok(verified.firstTripAt);

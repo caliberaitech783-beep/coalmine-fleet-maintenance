@@ -78,7 +78,7 @@ const equipment = [
 const open = { ref: "OPEN", door: "D1", chassis: "CH1", site: "Sasti OB", status: "In progress" };
 const idle = { ref: "IDLE", door: "D2", chassis: "CH2", site: "Sasti OB", status: "Idle" };
 const closed = { ref: "CLOSED", door: "D3", chassis: "CH3", site: "Sasti OB", status: "Closed" };
-const verified = { ...closed, ref: "VERIFIED", verifiedAt: "2026-09-09 12:00:00", firstTripDone: true };
+const verified = { ...closed, ref: "VERIFIED", verifiedAt: "2026-09-09 12:00:00", firstTripDone: true, productionFirstTripAt: "2026-09-09 11:45:00" };
 
 for (const role of ["Project Manager", "Production Manager"]) test(`${role}: current request source reconciles the 303-asset fixture and a subsequent closure`, () => {
   const assets = Array.from({ length: 303 }, (_, index) => ({ door: `ASSET-${index}`, category: "Vehicle", currentLocation: "Sasti OB", status: index < 64 ? "Breakdown" : "Operational" }));

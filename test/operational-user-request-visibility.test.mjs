@@ -13,7 +13,7 @@ test("Stupal to Sanskar to manager to MIS cycle never disappears at a handoff", 
   const accepted = {...opened, status: "In progress", acceptedBy: "Sanskar Manohare", acceptedAt: "2026-09-08 10:10:00"};
   const idle = {...accepted, status: "Idle", closedBy: "Sanskar Manohare", idleReason: "No work"};
   const approved = {...idle, status: "Closed", idealApprovedBy: "maimaintenance manager", idealApprovedAt: "2026-09-08 12:00:00"};
-  const verified = {...approved, verifiedBy: "Damini Rai", verifiedAt: "2026-09-08 13:00:00"};
+  const verified = {...approved, productionFirstTripAt: "2026-09-08 12:30:00", verifiedBy: "Damini Rai", verifiedAt: "2026-09-08 13:00:00"};
   for (const row of [opened, accepted, idle]) {
     assert.ok(historyVisible.every(visible => !visible(row)));
     assert.equal(visibleInMisRequests(row), false);

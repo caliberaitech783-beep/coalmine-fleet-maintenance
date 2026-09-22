@@ -6,7 +6,7 @@ import {buildDepartmentReports} from '../department-reports.mjs';
 import {buildDirectorReportTables} from '../director-report-bundle.mjs';
 
 const closed = Object.freeze({ref:'REQ-VERIFIED', status:'Closed', start:'2026-09-09 08:00:00', closedAt:'2026-09-09 10:00:00'});
-const verified = Object.freeze({...closed, verifiedAt:'2026-09-09 11:00:00', verifiedBy:'MIS User'});
+const verified = Object.freeze({...closed, productionFirstTripAt:'2026-09-09 10:30:00', verifiedAt:'2026-09-09 11:00:00', verifiedBy:'MIS User'});
 
 test('MIS verification changes the displayed status and history without reopening the maintenance lifecycle', () => {
   assert.equal(requestStatusLabel(closed), 'Closed');

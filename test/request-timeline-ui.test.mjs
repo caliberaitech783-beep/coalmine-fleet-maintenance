@@ -326,17 +326,13 @@ for (const name of ["RequestEditForm", "CloseRequestForm"]) test(`${name} retain
   assert.equal(button(app.render(), "Cancel").props.disabled, false);
 });
 
-test("MIS first-trip conditional time field imports its real validator and toggles without crashing", () => {
+test("MIS first-trip time field imports its real validator and is mandatory", () => {
   assert.match(main, /import\s*\{\s*TIME_24H_PATTERN\s*\}\s*from\s*["']\.\.\/request-time\.mjs["']/);
   const app = harness("VerifyRequestForm");
   let tree = app.render({request: {...request, meterType: "HMR"}, close() {}, onSave: async () => {}});
-  assert.equal(field(tree, "firstTripTime"), undefined);
-  all(tree, node => node.type === "input" && node.props.type === "checkbox")[0].props.onChange({target: {checked: true}});
-  tree = app.render();
   assert.equal(field(tree, "firstTripTime").props.pattern, TIME_24H_PATTERN);
   assert.equal(field(tree, "firstTripDate").props.required, true);
-  all(tree, node => node.type === "input" && node.props.type === "checkbox")[0].props.onChange({target: {checked: false}});
-  assert.equal(field(app.render(), "firstTripTime"), undefined);
+  assert.equal(all(tree, node => node.type === "input" && node.props.type === "checkbox")[0].props.checked, true);
 });
 
 test("MIS verification attachment validation and API rejection remain inline and preserve entered first-trip data", async () => {
@@ -349,7 +345,6 @@ test("MIS verification attachment validation and API rejection remain inline and
   await submit(app.render(), {});
   assert.match(alerts(app.render()), /JPEG, PNG, or WebP/);
   field(app.render(), "firstTripCardImage").props.onChange({target: {files: [{type: "image/png", size: 50}]}});
-  all(app.render(), node => node.type === "input" && node.props.type === "checkbox")[0].props.onChange({target: {checked: true}});
   tree = app.render();
   await submit(tree, {firstTripDate: "2026-09-08", firstTripTime: "10:00:00", closingMeterReading: "10"});
   assert.match(alerts(app.render()), /First trip cannot be before closure/);

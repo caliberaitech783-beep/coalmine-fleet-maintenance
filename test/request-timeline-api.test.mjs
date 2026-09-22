@@ -18,7 +18,7 @@ const routes={
   verify:slice("app.patch('/api/requests/:reference/verify',","app.get('/api/requests/:reference/trip-card',"),
 };
 const now=new Date('2026-09-08T12:00:00Z');
-const active={ref:'REQ-TIMELINE',timelineRequestId:'41',site:'Sasti OB',requesterLogin:'production',status:'In progress',start:new Date('2026-09-08T08:00:00Z'),acceptedAt:new Date('2026-09-08T09:00:00Z'),acceptanceRequired:true,expectedCompletionAt:new Date('2026-09-08T13:00:21.321Z'),closedAt:null,firstTripAt:null,verifiedAt:null,meter_type:'HMR',opening_meter_reading:'',opening_meter_file:'',arrivalFlaggedAt:'2026-09-08T09:00:00Z',arrivalFlagRemark:'Existing delay reason'};
+const active={ref:'REQ-TIMELINE',timelineRequestId:'41',site:'Sasti OB',requesterLogin:'production',status:'In progress',start:new Date('2026-09-08T08:00:00Z'),acceptedAt:new Date('2026-09-08T09:00:00Z'),acceptanceRequired:true,expectedCompletionAt:new Date('2026-09-08T13:00:21.321Z'),closedAt:null,firstTripAt:null,verifiedAt:null,productionFirstTripAt:'2026-09-08 16:45:00',meter_type:'HMR',opening_meter_reading:'',opening_meter_file:'',arrivalFlaggedAt:'2026-09-08T09:00:00Z',arrivalFlagRemark:'Existing delay reason'};
 const maintenance={role:'normal',assignedRole:'Maintenance User',name:'Fixture maintenance',login:'maintenance',permissions:{editRequests:true,closeRequests:true}};
 const mis={role:'normal',assignedRole:'MIS User',name:'Fixture MIS',login:'mis',permissions:{verifyRequests:true}};
 const current=row=>({...structuredClone(row),timelineRecordedAt:now});
@@ -147,6 +147,15 @@ test('valid close and MIS first-trip capture keep actual event time separate fro
   assert.ok(new Date(verify.audits[0][0].newValue)<new Date(verify.audits[0][1].newValue));
 });
 
+test('MIS verification waits for Production first-trip entry and MIS first-trip confirmation',async()=>{
+  const withoutProductionTrip=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z'),productionFirstTripAt:''}});
+  assert.equal((await withoutProductionTrip.call()).status,409);
+  assert.equal(withoutProductionTrip.queries.some(row=>row.sql.startsWith('UPDATE')),false);
+  const withoutMisTrip=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z')}});
+  assert.equal((await withoutMisTrip.call({firstTripDone:false})).status,400);
+  assert.equal(withoutMisTrip.queries.some(row=>row.sql.startsWith('UPDATE')),false);
+});
+
 test('MIS first trip cannot precede closure or lie in the future, and failure cannot save verification',async()=>{
   for(const firstTripTime of ['14:00:00','18:00:00']){
     const app=harness('verify',{row:{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z')}});
@@ -165,7 +174,6 @@ test('rare existing legacy closure and first-trip changes or clearing require th
   for(const [kind,row,body,event] of [
     ['close',{...active,closedAt:new Date('2026-09-08T10:00:00Z')},{},'closedAt'],
     ['verify',{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z'),firstTripAt:new Date('2026-09-08T11:00:00Z')},{},'firstTripAt'],
-    ['verify',{...active,status:'Closed',closedAt:new Date('2026-09-08T10:00:00Z'),firstTripAt:new Date('2026-09-08T11:00:00Z')},{firstTripDone:false},'firstTripAt'],
   ]){
     const denied=harness(kind,{row});const result=await denied.call(body);
     assert.equal(result.status,400);assert.equal(result.body.code,'TIMELINE_CORRECTION_REASON_REQUIRED');

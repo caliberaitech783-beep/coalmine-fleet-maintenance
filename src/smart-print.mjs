@@ -9,9 +9,17 @@ export function printColumnOptions(columns=[]) {
     return {id:JSON.stringify([base,occurrence]),label:String(column.label||`Column ${index+1}`),column};
   });
 }
+const jobReferenceOption=option=>/^job\s+ref(?:erence)?s?\.?$/i.test(String(option?.label||'').trim());
+function normalizePrintColumnIds(options,ids) {
+  const mandatory=options.filter(jobReferenceOption).map(option=>option.id);
+  return [...mandatory,...ids.filter(id=>!mandatory.includes(id))];
+}
 export function selectedPrintColumns(options,ids) {
-  const selected=new Set(ids);
-  return options.filter(option=>selected.has(option.id)).map(option=>option.column);
+  const selected=new Set(normalizePrintColumnIds(options,ids));
+  return [
+    ...options.filter(option=>selected.has(option.id)&&jobReferenceOption(option)),
+    ...options.filter(option=>selected.has(option.id)&&!jobReferenceOption(option)),
+  ].map(option=>option.column);
 }
 const dailyUpdatesColumn=column=>column?.key==='dailyRemarks'||/daily\s+(?:updates?|remarks?)/i.test(String(column?.label||''));
 /** Smart Print keeps one maintenance record to a normal row instead of putting its full update journal in one cell. */
@@ -108,7 +116,7 @@ export function setSmartPrintExporter(exporter) {smartPrintExporter=exporter;}
 
 export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrouping,onPrint,onExport=smartPrintExporter,onListPrinters=smartPrintPrinterSource,formatCell=value=>String(value??''),snapshot=''}) {
   const options=printColumnOptions(columns);
-  let selected=options.map(option=>option.id),layouts=[],storage,key;
+  let selected=normalizePrintColumnIds(options,options.map(option=>option.id)),layouts=[],storage,key;
   let storageError='';
   try{
     storage=window.localStorage;
@@ -155,7 +163,7 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
   // A selected saved layout supplies both its columns and its report name to print and export alike.
   const currentReport=()=>{
     const layout=layouts.find(item=>String(item.number)===layoutSelect.value);
-    return {reportTitle:layout?.name||title,chosen:selectedPrintColumns(options,layout?layout.columns:selected)};
+    return {reportTitle:layout?.name||title,chosen:selectedPrintColumns(options,layout?normalizePrintColumnIds(options,layout.columns):selected)};
   };
   const printableReport=()=>{
     const {reportTitle,chosen}=currentReport();
@@ -299,22 +307,22 @@ export function openSmartPrint({title,columns=[],rows=[],highlightRow,reportGrou
       detailTable.append(detailBody);detail.append(detailTable);preview.append(detail);
     }
   };
-  button('Select all',()=>{selected=options.map(option=>option.id);layoutSelect.value='';render();},controls);
-  button('Clear selection',()=>{selected=[];layoutSelect.value='';render();},controls);
+  button('Select all',()=>{selected=normalizePrintColumnIds(options,options.map(option=>option.id));layoutSelect.value='';render();},controls);
+  button('Clear selection',()=>{selected=normalizePrintColumnIds(options,[]);layoutSelect.value='';render();},controls);
   const save=button('Save as new layout',()=>{
     try{
       const suggestedName=`${title} layout ${Math.max(0,...layouts.map(layout=>Number(layout.number)||0))+1}`;
       const requestedName=window.prompt('Enter a name for this report layout:',suggestedName);
       if(requestedName===null)return;
       const latest=validPrintLayouts(JSON.parse(storage.getItem(key)||'[]'));
-      const layout=nextPrintLayout(latest,selected,requestedName);
+      const layout=nextPrintLayout(latest,normalizePrintColumnIds(options,selected),requestedName);
       storage.setItem(key,JSON.stringify([...latest,layout]));layouts=[...latest,layout];updateLayouts(layout.number);
       notice.textContent=`Saved as “${layout.name}”. Use Print saved layout to print it now.`;
       render();
     }catch(error){notice.textContent=error?.message||'Could not save the layout. Browser storage may be unavailable.';}
   },controls);save.disabled=Boolean(storageError);
-  layoutSelect.onchange=()=>{const layout=layouts.find(item=>String(item.number)===layoutSelect.value);if(layout)selected=layout.columns.filter(id=>options.some(option=>option.id===id));render();};
-  for(const option of options){const label=make('label'),input=make('input');input.type='checkbox';input.checked=true;input.onchange=()=>{selected=input.checked?[...selected,option.id]:selected.filter(id=>id!==option.id);layoutSelect.value='';render();};label.append(input,make('span',option.label));checks.append(label);checkboxes.push({input,id:option.id});}
+  layoutSelect.onchange=()=>{const layout=layouts.find(item=>String(item.number)===layoutSelect.value);if(layout)selected=normalizePrintColumnIds(options,layout.columns.filter(id=>options.some(option=>option.id===id)));render();};
+  for(const option of options){const label=make('label'),input=make('input');input.type='checkbox';input.checked=true;if(jobReferenceOption(option)){input.disabled=true;label.title='Job reference is mandatory in every print layout.';}input.onchange=()=>{selected=normalizePrintColumnIds(options,input.checked?[...selected,option.id]:selected.filter(id=>id!==option.id));layoutSelect.value='';render();};label.append(input,make('span',option.label));checks.append(label);checkboxes.push({input,id:option.id});}
   body.append(notice,checks,preview);dialog.append(pagePrompt);
   if(snapshot){controls.hidden=true;checks.hidden=true;}
   // Keep keyboard navigation in this native top-layer dialog, even when it was

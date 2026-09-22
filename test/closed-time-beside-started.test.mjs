@@ -37,20 +37,19 @@ test("maintenance closed history tables show the closing time right after Starte
     ["delayedReason", "Delayed reason"], ["status", "Status"], ["idleReason", "Idle reason"], ["complaint", "Breakdown reason"], ["closedBy", "Closed by"], ["start", "Started"],
     ["closedAt", "Closing time"], ["breakdownDays", "Days of breakdown"], ["dailyRemarks", "Daily remarks"], ["maintenanceWork", "Work completion action taken"]]);
   const workspace = closedTimeAfterStartedColumns(requestColumnsInWorkflowOrder(workflow, true));
-  assert.deepEqual(labels(workspace).slice(0, 6), ["Door no.", "Status", "Started", "Closing time", "Days of breakdown", "Breakdown reason"]);
+  assert.deepEqual(labels(workspace).slice(0, 7), ["Job reference", "Door no.", "Status", "Started", "Closing time", "Days of breakdown", "Breakdown reason"]);
   // Manager dashboard and Production closed history: the breakdown table opens with the two timestamps.
   const breakdown = header([["ref", "Job reference"], ["equipment", "Equipment group"], ["door", "Door no."], ["make", "Make"], ["model", "Model"], ["site", "Site location"],
     ["complaint", "Breakdown reason"], ["closedBy", "Closed by"], ["maintenanceWork", "Work completion action taken"], ["closingHmr", "Closing HMR"], ["closingKmr", "Closing KMR"],
     ["breakdownDays", "Days of breakdown"], ["category", "Breakdown type"], ["delayedReason", "Delayed reason"], ["start", "Started"], ["closedAt", "Closing time"], ["hours", "Downtime"],
     ["status", "Status"], ["idleReason", "Idle reason"], ["dailyRemarks", "Daily remarks"], ["owner", "Responsibility"]]);
   const manager = closedTimeAfterStartedColumns(requestColumnsInWorkflowOrder(breakdown, false));
-  assert.deepEqual(labels(manager).slice(0, 7), ["Started", "Closing time", "Days of breakdown", "Breakdown type", "Breakdown reason", "Status", "Door no."]);
-  assert.equal(labels(manager).at(-1), "Job reference");
+  assert.deepEqual(labels(manager).slice(0, 4), ["Job reference", "Started", "Closing time", "Days of breakdown"]);
 });
 
 test("every maintenance closed history view asks for the closing time beside Started", () => {
   assert.match(shared, /if \(closedTimeAfterStarted\) closedTimeAfterStartedColumns\(columns\);/);
-  assert.match(main, /import \{ closedTimeAfterStartedColumns \} from "\.\/table-actions-model\.mjs";/);
+  assert.match(main, /import \{ closedTimeAfterStartedColumns, ensureJobReferenceVisibleKeys \} from "\.\/table-actions-model\.mjs";/);
   // Workspace "Closed history" tab (Maintenance, MIS and General users share the workflow table).
   assert.match(main, /tab === "history"[^\n]*<MobileWorkflowTable rows=\{historyRows\}[^\n]*showClosedAt=\{isMaintenance \|\| isMis\} closedAtLabel=\{closedHistoryClosingLabel\}[^\n]*closedTimeAfterStarted \{\.\.\.adminDeleteProps\} \/>/);
   // Production users see the breakdown table version of the same history.
