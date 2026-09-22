@@ -51,7 +51,7 @@ const REQUESTS = [
   {ref: 'REQ-W1', door: 'W1', site: 'Majri OB', equipmentGroup: 'EICHER TIPPERS', status: 'Open', start: '2026-09-15 20:00', complaint: 'Gear box noise', overdueReason: 'Gear box sent to workshop', dailyRemarks: [{createdAt: '2026-09-16 08:00', remark: 'Opened gear box', delayReason: 'Spares not in stock'}]},
   {ref: 'REQ-J9', door: 'J9', site: 'Jayant OB', equipmentGroup: 'DRILL MACHINE', status: 'Open', start: '2026-09-16 02:00', complaint: 'Compressor fault'},
   {ref: 'REQ-IDLE', door: 'E110', site: 'Majri OB', status: 'Idle', start: '2026-09-10 08:00', complaint: 'No operator'},
-  {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OB', status: 'Closed', start: '2026-09-21 08:00', closedAt: '2026-09-21 09:00', complaint: 'Brake liner broken'},
+  {ref: 'REQ-CLOSED', door: 'S55', site: 'Sasti OB', status: 'Closed', start: '2026-09-22 08:00', closedAt: '2026-09-22 09:00', complaint: 'Brake liner broken'},
   {ref: 'REQ-VERIFIED', door: 'S6', site: 'Sasti OB', status: 'Open', verifiedAt: '2026-09-15 09:00', start: '2026-09-08 08:00', complaint: 'Leaf spring broken'},
 ];
 function harness() {

@@ -86,10 +86,9 @@ export function buildInfoPulseBreakdowns(requests = [], cases = []) {
   })).sort((left, right) => standingSince(left.request) - standingSince(right.request) || left.key.localeCompare(right.key));
 }
 
-export const PRODUCTION_FIRST_TRIP_ROLLOUT_START_IST = '2026-09-21 00:00:00';
-
-export function productionFirstTripCutoffMs() {
-  return parseIstTimestamp(PRODUCTION_FIRST_TRIP_ROLLOUT_START_IST);
+export function productionFirstTripCutoffMs(now = Date.now()) {
+  const todayIst = new Date(now + 330 * 60_000).toISOString().slice(0, 10);
+  return parseIstTimestamp(`${todayIst} 00:00:00`);
 }
 
 export function isProductionFirstTripPending(request = {}, options = {}) {
@@ -100,7 +99,7 @@ export function isProductionFirstTripPending(request = {}, options = {}) {
   const closedValue = request.closedAt ?? request.closed_at;
   const closedAt = closedValue instanceof Date ? closedValue.getTime() : parseIstTimestamp(closedValue);
   const productionFirstTripAt = request.productionFirstTripAt ?? request.production_first_trip_at;
-  const cutoff = options.cutoffMs ?? productionFirstTripCutoffMs();
+  const cutoff = options.cutoffMs ?? productionFirstTripCutoffMs(options.now);
   return status === 'closed' && Number.isFinite(closedAt) && closedAt >= cutoff && !String(productionFirstTripAt || '').trim();
 }
 

@@ -5490,7 +5490,7 @@ app.patch('/api/requests/:reference/production-first-trip',requireSession,async(
     const closedAt=request.closed_at instanceof Date?request.closed_at:parseRequestTimelineTimestamp(request.closed_at);
     const closedAtMs=closedAt instanceof Date?closedAt.getTime():Number(closedAt);
     if(!Number.isFinite(closedAtMs))throw Object.assign(new Error('Production first trip can be recorded only after Maintenance makes the vehicle on road.'),{status:409});
-    if(closedAtMs<productionFirstTripCutoffMs())throw Object.assign(new Error('Production first-trip entry is available only for requests made on road from 21-09-2026 onward.'),{status:409});
+    if(closedAtMs<productionFirstTripCutoffMs())throw Object.assign(new Error('Production first-trip entry is available only for requests made on road today.'),{status:409});
     if(closedAt&&firstTripAt.getTime()<closedAt.getTime())throw Object.assign(new Error('Production first-trip time cannot be before the vehicle was made on road.'),{status:400});
     if(firstTripAt.getTime()>Date.now())throw Object.assign(new Error('Production first-trip time cannot be in the future.'),{status:400});
     const actorName=req.session.name||user?.employee||req.session.login||'Production User';
