@@ -63,6 +63,7 @@ function harness(){
     window:{matchMedia:()=>({matches:false})},useMasterRecords:()=>[[],null,true],vehicles:[],MIS_VERIFICATION_MENU:'MIS verification',
     recordsForSite:rows=>rows,requestWithEquipmentMasterDetails:row=>row,visibleInOperationalUserRequests:()=>true,requestsVisibleToMisWorkspace,
     visibleInMisRequests:()=>true,visibleInMisHistory:()=>true,visibleInProductionHistory:()=>true,visibleInMaintenanceHistory:()=>true,preventTableAutoScroll:()=>{},
+    isProductionFirstTripPending:()=>false,
   };
   for(const icon of ['Flag','Menu','Search','ListFilter','MapPin','Pencil','Trash2','CheckCircle2','MessageCircle','ShieldCheck','Wrench','Plus','ChevronRight'])scope[icon]=Null;
   const components=new Function('DateInput',...Object.keys(scope),`${compiled};return {RequestRedFlagForm,MobileWorkflowTable,Normal};`)(DateInput,...Object.values(scope));

@@ -6,6 +6,7 @@ import { transformWithOxc } from "vite";
 import { visibleInProductionHistory } from "../src/production-history.mjs";
 import { visibleInMaintenanceHistory } from "../src/maintenance-history.mjs";
 import { visibleInMisRequests, visibleInMisHistory } from "../src/mis-history.mjs";
+import { isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import { liveEquipmentMetrics, liveEquipmentRoadStatus } from "../dashboard-equipment-metrics.mjs";
 import { recordBelongsToSite, recordsForSite } from "../site-location.mjs";
 import { requestWithEquipmentMasterDetails } from "../request-equipment.mjs";
@@ -59,6 +60,7 @@ function harness(name, extra = {}) {
     useDashboardEquipment: () => ({records: equipment, loaded: true, scope: {restrictToScope: true, allowedSites: ["Sasti OB"]}}),
     visibleInProductionHistory, visibleInMaintenanceHistory, visibleInMisRequests, visibleInMisHistory,
     recordBelongsToSite, recordsForSite, liveEquipmentMetrics, liveEquipmentRoadStatus, managerRoleSelection, requestsVisibleToMisWorkspace,
+    isProductionFirstTripPending,
     requestWithEquipmentMasterDetails: row => row, equipmentGroupLabel: row => row.group,
     BreakdownTable, MobileWorkflowTable, DailyRemarkForm, ManagerIdleConfirmation, RequestEditForm: Null, CloseRequestForm: Null, VerifyRequestForm: Null,
     RequestRedFlagForm: Null, MaintenanceForm: Null, preventTableAutoScroll: () => {},

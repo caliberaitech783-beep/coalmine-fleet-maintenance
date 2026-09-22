@@ -86,9 +86,15 @@ export function buildInfoPulseBreakdowns(requests = [], cases = []) {
   })).sort((left, right) => standingSince(left.request) - standingSince(right.request) || left.key.localeCompare(right.key));
 }
 
-export function productionFirstTripCutoffMs(now = Date.now()) {
-  const todayIst = new Date(now + 330 * 60_000).toISOString().slice(0, 10);
-  return parseIstTimestamp(`${todayIst} 00:00:00`);
+// Production first-trip entry starts fresh on the rollout day. Vehicles made on
+// road before this moment are history and never enter the queue, however long
+// they stay unverified. The date is fixed, not a rolling "today", so an entry
+// made on road late in the evening is still waiting for Production next morning.
+export const PRODUCTION_FIRST_TRIP_ROLLOUT_IST = '2026-09-22 00:00:00';
+export const PRODUCTION_FIRST_TRIP_ROLLOUT_LABEL = '22-09-2026';
+
+export function productionFirstTripCutoffMs() {
+  return parseIstTimestamp(PRODUCTION_FIRST_TRIP_ROLLOUT_IST);
 }
 
 export function isProductionFirstTripPending(request = {}, options = {}) {
