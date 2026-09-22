@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {aiFeederAlerts, parseIstTimestamp} from '../ai-feeder.mjs';
-import {buildInfoPulseBreakdowns, buildInfoPulseCases, buildInfoPulseFirstTripPending, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView, isActiveBreakdown} from '../info-pulse-data.mjs';
+import {buildInfoPulseBreakdowns, buildInfoPulseCases, buildInfoPulseFirstTripPending, infoPulseColumns, infoPulseDate, infoPulseSiteOptions, infoPulseView, isActiveBreakdown, isProductionFirstTripPending, productionFirstTripCutoffMs} from '../info-pulse-data.mjs';
 import {infoPulseRequestScope, scopeInfoPulseRequests} from '../info-pulse-scope.mjs';
 
 const NOW = Date.parse('2026-09-10T12:00:00+05:30');
@@ -121,16 +121,20 @@ test('total breakdowns count every open non-idle request once, longest standing 
   assert.deepEqual(records.filter(isActiveBreakdown).map(row => row.ref), ['quiet', 'old', 'new', 'new', 'majri']);
 });
 
-test('production first-trip pending queue contains closed on-road requests until production records the first trip', () => {
+test('production first-trip pending queue includes only requests made on road from yesterday onward', () => {
   const records = [
-    {...base, ref: 'old-pending', status: 'Closed', closedAt: '2026-09-09 09:00', productionFirstTripAt: '', door: 'D1'},
-    {...base, ref: 'new-pending', status: 'Closed', closedAt: '2026-09-10 09:00', door: 'D2'},
+    {...base, ref: 'too-old', status: 'Closed', closedAt: '2026-09-08 23:59:59', productionFirstTripAt: '', door: 'D0'},
+    {...base, ref: 'yesterday-pending', status: 'Closed', closedAt: '2026-09-09 00:00', productionFirstTripAt: '', door: 'D1'},
+    {...base, ref: 'today-pending', status: 'Closed', closedAt: '2026-09-10 09:00', door: 'D2'},
     {...base, ref: 'done', status: 'Closed', closedAt: '2026-09-09 10:00', productionFirstTripAt: '2026-09-09 11:00'},
     {...base, ref: 'not-on-road', status: 'Closed', closedAt: ''},
     {...base, ref: 'open', status: 'Open'},
   ];
-  const rows = buildInfoPulseFirstTripPending(records);
-  assert.deepEqual(rows.map(row => row.key), ['old-pending', 'new-pending']);
+  const rows = buildInfoPulseFirstTripPending(records, {now: NOW});
+  assert.equal(new Date(productionFirstTripCutoffMs(NOW) + 330 * 60_000).toISOString().slice(0, 19), '2026-09-09T00:00:00');
+  assert.equal(isProductionFirstTripPending(records[0], {now: NOW}), false);
+  assert.equal(isProductionFirstTripPending(records[1], {now: NOW}), true);
+  assert.deepEqual(rows.map(row => row.key), ['yesterday-pending', 'today-pending']);
   assert.equal(rows[0].date, '2026-09-09');
   assert.equal(infoPulseView(rows, {from: '2026-09-10', to: '2026-09-10'}).totals.total, 1);
 });

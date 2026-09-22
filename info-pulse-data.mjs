@@ -86,19 +86,31 @@ export function buildInfoPulseBreakdowns(requests = [], cases = []) {
   })).sort((left, right) => standingSince(left.request) - standingSince(right.request) || left.key.localeCompare(right.key));
 }
 
-function productionFirstTripPending(request = {}) {
+const IST_OFFSET_MS = 330 * 60_000;
+
+export function productionFirstTripCutoffMs(now = Date.now()) {
+  const value = now instanceof Date ? now.getTime() : Number(now);
+  const safeNow = Number.isFinite(value) ? value : Date.now();
+  const istNow = new Date(safeNow + IST_OFFSET_MS);
+  return Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate() - 1, 0, 0, 0) - IST_OFFSET_MS;
+}
+
+export function isProductionFirstTripPending(request = {}, options = {}) {
   const status = String(request.status || '').trim().toLowerCase();
-  return status === 'closed' && String(request.closedAt || '').trim() && !String(request.productionFirstTripAt || '').trim();
+  const closedValue = request.closedAt ?? request.closed_at;
+  const closedAt = closedValue instanceof Date ? closedValue.getTime() : parseIstTimestamp(closedValue);
+  const productionFirstTripAt = request.productionFirstTripAt ?? request.production_first_trip_at;
+  return status === 'closed' && Number.isFinite(closedAt) && closedAt >= productionFirstTripCutoffMs(options.now) && !String(productionFirstTripAt || '').trim();
 }
 
 // Production action queue after Maintenance makes the asset on road. These rows
 // are separate from BD balance because the request is already closed for repair.
-export function buildInfoPulseFirstTripPending(requests = []) {
+export function buildInfoPulseFirstTripPending(requests = [], options = {}) {
   const onRoadAt = request => {
     const timestamp = parseIstTimestamp(request.closedAt);
     return Number.isFinite(timestamp) ? timestamp : Infinity;
   };
-  return uniqueInfoPulseRequests(requests).filter(productionFirstTripPending).map(request => ({
+  return uniqueInfoPulseRequests(requests).filter(request => isProductionFirstTripPending(request, options)).map(request => ({
     key: request.pulseKey,
     request,
     siteKey: canonicalSiteName(request.site || request.location || request.currentLocation) || 'unassigned',

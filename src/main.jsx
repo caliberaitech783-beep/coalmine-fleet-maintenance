@@ -99,7 +99,7 @@ import { equipmentMetrics, equipmentRoadStatus, fleetAssetCounts, fleetAssetRequ
 import { activeOpenCases } from "../dashboard-open-cases.mjs";
 import { breakdownMovementForRange, breakdownOpenedDate, breakdownTypeShare, dailyBreakdownMovement, normalizedBreakdownType } from "../dashboard-breakdown-movement.mjs";
 import { buildRecordedBreakdownTrend, recordedBreakdownRangeLength, localDateKey } from "./dashboard-breakdown-forecast.mjs";
-import { buildInfoPulseBreakdowns, buildInfoPulseFirstTripPending } from "../info-pulse-data.mjs";
+import { buildInfoPulseBreakdowns, buildInfoPulseFirstTripPending, isProductionFirstTripPending } from "../info-pulse-data.mjs";
 import { effectiveInfoPulseEtcTimestamp } from "../ai-feeder.mjs";
 import EtcCountdown from "./etc-countdown.jsx";
 import { etcCountdown, etcDisplayValue, etcRemainingSortValue, etcSortValue } from "./etc-countdown.mjs";
@@ -1277,7 +1277,7 @@ function ManagerDashboard({ managerRole, managerRoles = [], managerLocation = ""
   const verifiedRequests = closedRequests.filter(visibleInMisHistory);
   const pendingVerification=closedRequests.filter(visibleInMisRequests);
   const productionManagerView=["Project Manager","Production Manager"].includes(activeManagerRole);
-  const productionFirstTripRows=productionManagerView?closedRequests.filter((row)=>String(row.closedAt||"").trim()&&!String(row.productionFirstTripAt||"").trim()):[];
+  const productionFirstTripRows=productionManagerView?closedRequests.filter((row)=>isProductionFirstTripPending(row)):[];
   const productionFirstTripReportRows=productionManagerView?closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim()):[];
   // Earliest request start in the counted intake, so the card says from which date the total runs.
   const maintenanceIntakeSince = scopedRequests.map((request) => String(request.start || "").trim()).filter(Boolean).sort()[0] || "";
@@ -9581,7 +9581,7 @@ function AiFeeder({ role = "", session }) {
   const ready = loadState.token === session?.token && loadState.ready;
   // BD balance: every open request that is not idle, closed or verified, longest standing first.
   const breakdowns = useMemo(() => ready ? buildInfoPulseBreakdowns(requests) : [], [requests, ready]);
-  const firstTripPending = useMemo(() => ready ? buildInfoPulseFirstTripPending(requests) : [], [requests, ready]);
+  const firstTripPending = useMemo(() => ready ? buildInfoPulseFirstTripPending(requests, {now}) : [], [requests, ready, now]);
   return <>
     <button type="button" className="ai-feeder-trigger" onClick={() => setOpenMode(current => current || "manual")} title="Info Pulse" aria-label={`Info Pulse, ${ready ? "BD balance " + breakdowns.length : "BD balance unavailable"}`}>
       <PulseIcon /><span>INFO PULSE</span>{ready && breakdowns.length > 0 && <><b className="ai-feeder-trigger-count">{breakdowns.length}</b><i className="ai-feeder-dot" aria-hidden="true" /></>}
@@ -10119,7 +10119,7 @@ function Normal({ logout, requests, session, onCreate, onUpdateRequest, onDelete
   const visibleRows = isMis ? closedRequests.filter(visibleInMisRequests) : activeRequests;
   const historyRows=isMis?closedRequests.filter(visibleInMisHistory):isProduction?closedRequests.filter(visibleInProductionHistory):isMaintenance?closedRequests.filter(visibleInMaintenanceHistory):closedRequests;
   const idleRows=requestRows.filter((row)=>["idle","ideal"].includes(String(row.status||"").trim().toLowerCase()));
-  const productionFirstTripRows=requestRows.filter((row)=>String(row.status||"").trim().toLowerCase()==="closed"&&String(row.closedAt||"").trim()&&!String(row.productionFirstTripAt||"").trim());
+  const productionFirstTripRows=requestRows.filter((row)=>isProductionFirstTripPending(row));
   const productionFirstTripReportRows=closedRequests.filter((row)=>String(row.productionFirstTripAt||row.firstTripAt||"").trim());
   const createLockedByFirstTrip=isProductionManager&&productionFirstTripRows.length>0;
   return <div className={`normal${embedded ? " embedded-workspace" : ""}`} onPointerDown={isMaintenance ? preventTableAutoScroll : undefined}>

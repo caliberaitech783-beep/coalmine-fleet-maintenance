@@ -68,7 +68,8 @@ function harness() {
   return {effects, timers, render(overrides = {}) {
     cursor = 0;
     const requests = overrides.requests || REQUESTS;
-    const tree = Component({breakdowns: data.buildInfoPulseBreakdowns(requests), firstTripPending: data.buildInfoPulseFirstTripPending(requests), scope: {label: 'All regions', sites: null}, now: NOW, updatedAt: NOW, ready: true, error: '', refreshing: false, onRefresh() {}, ...overrides});
+    const now = overrides.now ?? NOW;
+    const tree = Component({breakdowns: data.buildInfoPulseBreakdowns(requests), firstTripPending: data.buildInfoPulseFirstTripPending(requests, {now}), scope: {label: 'All regions', sites: null}, now, updatedAt: NOW, ready: true, error: '', refreshing: false, onRefresh() {}, ...overrides});
     effects.splice(0).forEach(callback => callback());
     return tree;
   }};
@@ -385,7 +386,7 @@ test('the panel header drops the total pill and the trigger badge carries the BD
   assert.match(main, /<h2 id="ai-feeder-title">Open breakdowns<\/h2><\/div>/);
   assert.ok(!main.includes('pulse-heading-total') && !main.includes('headerTarget'));
   assert.match(main, /const breakdowns = useMemo\(\(\) => ready \? buildInfoPulseBreakdowns\(requests\) : \[\], \[requests, ready\]\);/);
-  assert.match(main, /const firstTripPending = useMemo\(\(\) => ready \? buildInfoPulseFirstTripPending\(requests\) : \[\], \[requests, ready\]\);/);
+  assert.match(main, /const firstTripPending = useMemo\(\(\) => ready \? buildInfoPulseFirstTripPending\(requests, \{now\}\) : \[\], \[requests, ready, now\]\);/);
   assert.match(main, /aria-label=\{`Info Pulse, \$\{ready \? "BD balance " \+ breakdowns\.length : "BD balance unavailable"\}`\}/);
   assert.match(main, /<b className="ai-feeder-trigger-count">\{breakdowns\.length\}<\/b>/);
   assert.match(main, /<InfoPulseContent breakdowns=\{breakdowns\} firstTripPending=\{firstTripPending\} session=\{session\} scope=\{scope\} now=\{now\}/);
