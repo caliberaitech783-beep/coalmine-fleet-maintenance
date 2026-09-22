@@ -658,9 +658,10 @@
   }
 
   /* The filter banner is taller than a phone's useful content area. Let it
-     leave the screen with the page instead of covering dashboard panels. */
+     leave the screen with the page, while remaining the positioning anchor
+     for its top-right show/hide button. */
   .mine-dashboard > .dashboard-filter-bar {
-    position: static;
+    position: relative;
     top: auto;
   }
 

@@ -4,6 +4,7 @@ import test from "node:test";
 
 const source = fs.readFileSync(new URL("../src/main.jsx", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/mobile-phone-optimization.css", import.meta.url), "utf8");
+const filterCss = fs.readFileSync(new URL("../src/dashboard-filter-bar.css", import.meta.url), "utf8");
 
 test("the dashboard phone pass stays in the established mobile layer", () => {
   assert.ok(source.includes('import "./mobile-phone-optimization.css"'));
@@ -15,7 +16,8 @@ test("phone dashboard chrome cannot widen or cover the page", () => {
   assert.match(css, /\.top\s*\{[\s\S]*?grid-template-columns:\s*36px minmax\(0, 1fr\) auto/);
   assert.match(css, /\.top \.live-temperature-chip,[\s\S]*?display:\s*none/);
   assert.match(css, /\.body > \.mine-dashboard\s*\{[\s\S]*?margin:\s*-18px/);
-  assert.match(css, /\.mine-dashboard > \.dashboard-filter-bar\s*\{[\s\S]*?position:\s*static/);
+  assert.match(css, /\.mine-dashboard > \.dashboard-filter-bar\s*\{[\s\S]*?position:\s*relative/);
+  assert.match(filterCss, /\.dashboard-filter-bar > \.dashboard-banner-toggle\s*\{[^}]*position:\s*absolute;[^}]*right:\s*8px;[^}]*display:\s*grid/);
 });
 
 test("mobile fleet and lifecycle controls keep labels separated", () => {
